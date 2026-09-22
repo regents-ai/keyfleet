@@ -48,6 +48,8 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     assert Enum.max(rows) <= 101
     assert html =~ "150 of"
+    # Key 151 opens level 9, whose price is the first to round up.
+    assert html =~ "Key 151, 42.99817 USDC"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
 
@@ -75,7 +77,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     assert html =~ "Not yet deployed"
     refute has_element?(view, "#fleet-progress-title")
-    refute html =~ "about $"
+    refute html =~ "Next key"
   end
 
   # Until the fleet has been read up to now, the figures would run low, so
@@ -88,7 +90,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     assert html =~ "Sales figures are catching up."
     refute html =~ "Keys issued"
-    refute html =~ "about $"
+    refute html =~ "Next key"
     assert shown_keys(view) == Enum.to_list(1..100)
   end
 

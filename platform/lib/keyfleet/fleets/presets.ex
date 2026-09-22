@@ -7,15 +7,12 @@ defmodule KeyFleet.Fleets.Presets do
   applied one level or one mint at a time, so a ladder computed here rounds
   exactly where the contract's does.
 
-  Prices shown on the site are in US dollars, held as micro-dollars (six
-  decimal places, the unit USDC counts in): every fleet starts at a $10 base
-  and follows its preset's ladder from there. The contract prices keys in
-  REGENT from its own reference price, so these figures describe the ladder,
-  not the amount a purchase will pull.
+  Prices are in atomic USDC, millionths of one USDC, and are exactly what a
+  purchase pays: every fleet starts at the contract's `Q_USDC`, 10 USDC, and
+  follows its preset's ladder from there.
   """
 
-  @micro_dollars 1_000_000
-  @base_price 10 * @micro_dollars
+  @q_usdc 10_000_000
 
   @fibonacci_levels 20
   @classic_supply 144
@@ -41,8 +38,8 @@ defmodule KeyFleet.Fleets.Presets do
   @doc """
   Where a fleet stands after `total_minted` primary keys: how many it can ever
   issue, how many levels it has and how many are complete (both `nil` for the
-  two presets without levels), and the next key's id and price in
-  micro-dollars, both `nil` once sold out.
+  two presets without levels), and the next key's id and price in atomic USDC,
+  both `nil` once sold out.
   """
   def progress(fleet_id, total_minted) when is_integer(total_minted) and total_minted >= 0 do
     preset = Map.fetch!(@presets, fleet_id)
@@ -55,7 +52,7 @@ defmodule KeyFleet.Fleets.Presets do
       levels: if(preset == :fibonacci, do: @fibonacci_levels),
       completed_levels: completed_levels(preset, total_minted),
       next_token_id: if(sold_out?, do: nil, else: total_minted + 1),
-      next_price: if(sold_out?, do: nil, else: next_price(preset, @base_price, total_minted))
+      next_price: if(sold_out?, do: nil, else: next_price(preset, total_minted))
     }
   end
 
@@ -63,19 +60,17 @@ defmodule KeyFleet.Fleets.Presets do
   def fibonacci_level_of(token_id) when token_id in 1..@fibonacci_max_token_id,
     do: Enum.find_index(@fibonacci_level_ends, &(token_id <= &1)) + 1
 
-  @doc "A Fibonacci level's price: `q` at level 1, then ×1.2 per level, rounded up at each step."
-  def fibonacci_level_price(q, level) when level in 1..@fibonacci_levels,
-    do: step(q, level - 1, 120)
+  @doc "A Fibonacci level's price: 10 USDC at level 1, then ×1.2 per level, rounded up at each step."
+  def fibonacci_level_price(level) when level in 1..@fibonacci_levels,
+    do: step(@q_usdc, level - 1, 120)
 
-  @doc "An Accelerant primary mint's price: `q` for the first, then ×1.05 per mint, rounded up."
-  def accelerant_price(q, mint_index) when mint_index in 0..(@accelerant_max_keys - 1)//1,
-    do: step(q, mint_index, 105)
+  @doc "An Accelerant primary mint's price: 10 USDC for the first, then ×1.05 per mint, rounded up."
+  def accelerant_price(mint_index) when mint_index in 0..(@accelerant_max_keys - 1)//1,
+    do: step(@q_usdc, mint_index, 105)
 
-  defp next_price(:fibonacci, q, minted),
-    do: fibonacci_level_price(q, fibonacci_level_of(minted + 1))
-
-  defp next_price(:classic, q, _minted), do: q
-  defp next_price(:accelerant, q, minted), do: accelerant_price(q, minted)
+  defp next_price(:fibonacci, minted), do: fibonacci_level_price(fibonacci_level_of(minted + 1))
+  defp next_price(:classic, _minted), do: @q_usdc
+  defp next_price(:accelerant, minted), do: accelerant_price(minted)
 
   defp max_supply(:fibonacci), do: @fibonacci_max_token_id
   defp max_supply(:classic), do: @classic_supply

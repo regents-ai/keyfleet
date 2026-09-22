@@ -29,7 +29,7 @@ defmodule KeyFleet.Chain do
   """
   def fresh?(fleet_id), do: fresh_cursor!(fleet_id) != nil
 
-  @doc "The fleet's sales so far and what its next key costs, in micro-dollars."
+  @doc "The fleet's sales so far and what its next key costs, in atomic USDC."
   def progress(fleet_id) do
     minted =
       KeyAttachment

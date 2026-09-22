@@ -55,12 +55,12 @@ defmodule KeyFleetWeb.FleetLive do
             <div :if={@fleet.progress.next_price}>
               <dt>Next key</dt>
               <dd>
-                Key {@fleet.progress.next_token_id}, about {dollars(@fleet.progress.next_price)}
+                Key {@fleet.progress.next_token_id}, {usdc(@fleet.progress.next_price)}
               </dd>
             </div>
           </dl>
           <p :if={@fleet.current? and @fleet.progress.next_price} class="fleet-detail">
-            Priced in REGENT at purchase.
+            Paid in USDC on Base.
           </p>
           <p :if={@fleet.current? and is_nil(@fleet.progress.next_price)} class="fleet-detail">
             Every key has been issued.
@@ -113,11 +113,19 @@ defmodule KeyFleetWeb.FleetLive do
   defp short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
 
-  # Micro-dollars to the nearest cent, half a cent rounding up.
-  defp dollars(micro_dollars) do
-    cents = div(micro_dollars + 5_000, 10_000)
+  # Atomic USDC shown exactly, since it is what the purchase pays.
+  defp usdc(atoms) do
+    fraction =
+      atoms
+      |> rem(1_000_000)
+      |> Integer.to_string()
+      |> String.pad_leading(6, "0")
+      |> String.trim_trailing("0")
 
-    "$#{grouped(div(cents, 100))}.#{cents |> rem(100) |> Integer.to_string() |> String.pad_leading(2, "0")}"
+    case fraction do
+      "" -> "#{grouped(div(atoms, 1_000_000))} USDC"
+      fraction -> "#{grouped(div(atoms, 1_000_000))}.#{fraction} USDC"
+    end
   end
 
   defp grouped(number) do
