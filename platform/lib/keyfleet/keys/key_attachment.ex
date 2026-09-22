@@ -1,6 +1,6 @@
 defmodule KeyFleet.Keys.KeyAttachment do
   require Ash.Query
-  @moduledoc "An immutable ownership epoch; a new epoch starts without an attached agent."
+  @moduledoc "An immutable ownership epoch: who held a key, and from which transfer."
   use Ash.Resource,
     domain: KeyFleet.Keys,
     data_layer: AshPostgres.DataLayer,
@@ -182,8 +182,6 @@ defmodule KeyFleet.Keys.KeyAttachment do
         constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
     end
 
-    attribute :attached_at, :utc_datetime_usec, writable?: false, public?: true
-
     attribute :observed_at, :utc_datetime_usec,
       allow_nil?: false,
       generated?: true,
@@ -195,11 +193,6 @@ defmodule KeyFleet.Keys.KeyAttachment do
     belongs_to :fleet, KeyFleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
-      public? true
-    end
-
-    belongs_to :agent_profile, KeyFleet.Agents.AgentProfile do
-      attribute_writable? false
       public? true
     end
   end

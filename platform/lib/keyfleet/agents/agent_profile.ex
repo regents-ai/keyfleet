@@ -34,6 +34,12 @@ defmodule KeyFleet.Agents.AgentProfile do
       filter expr(wallet_address == ^actor(:wallet_address))
     end
 
+    # The identity an agent presents to the key owners it works for: its name,
+    # what it runs on, and what it says it is doing. Nothing else leaves here.
+    read :public_profile do
+      prepare build(select: [:id, :name, :declared_harness, :current_status])
+    end
+
     update :edit_my_profile do
       atomic_upgrade_with :get_my_profile
 
@@ -52,11 +58,16 @@ defmodule KeyFleet.Agents.AgentProfile do
   end
 
   policies do
-    policy always() do
+    policy action(:public_profile) do
+      authorize_if always()
+    end
+
+    policy action([:ensure_profile, :get_my_profile, :edit_my_profile]) do
       authorize_if KeyFleet.Checks.AgentActor
     end
 
     policy action_type([:read, :update]) do
+      authorize_if action(:public_profile)
       authorize_if expr(wallet_address == ^actor(:wallet_address))
     end
   end

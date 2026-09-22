@@ -8,6 +8,7 @@
 @import "./pages/legal.css";
 @import "./pages/overview.css";
 @import "./pages/account.css";
+@import "./pages/keys.css";
 @import "./components/account_auth_status.css";
 
 :root {

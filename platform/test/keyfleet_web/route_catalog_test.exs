@@ -4,7 +4,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
   alias KeyFleetWeb.{RouteCatalog, Router}
   alias KeyFleetWeb.RouteCatalog.RouteTarget
 
-  @paths ["/", "/app", "/account"]
+  @paths ["/", "/app", "/account", "/app/keys/:fleet_id/:token_id"]
 
   test "contains exactly the approved pages" do
     assert Enum.map(RouteCatalog.entries(), & &1.path_pattern) == @paths
@@ -28,7 +28,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
 
   test "every catalog entry builds the route spec it declares, including /app" do
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             spec = RouteCatalog.fetch!(entry.live_action)
+             spec = RouteCatalog.fetch!(entry.live_action, sample_params(entry))
              spec.route_id == entry.route_spec_id
            end)
 
@@ -68,6 +68,27 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     assert app.local_state == %{}
   end
 
+  test "one key's page names the key it was asked for" do
+    key = RouteCatalog.fetch!(:keys, %{"fleet_id" => "fibonacci_syndicate", "token_id" => "7"})
+
+    assert key.route_id == :keys
+    assert key.destination == "/app/keys/fibonacci_syndicate/7"
+    assert key.page_display_label == "Key"
+    assert key.canonical_root == "/app"
+    assert key.content_transition_kind == :detail
+
+    for params <- [
+          %{"fleet_id" => "Fibonacci_syndicate", "token_id" => "7"},
+          %{"fleet_id" => "fibonacci-syndicate", "token_id" => "7"},
+          %{"fleet_id" => "fibonacci_syndicate", "token_id" => "07"},
+          %{"fleet_id" => "fibonacci_syndicate", "token_id" => "0"},
+          %{"fleet_id" => "fibonacci_syndicate", "token_id" => String.duplicate("9", 19)},
+          %{"fleet_id" => "fibonacci_syndicate"}
+        ] do
+      assert_raise KeyFleetWeb.NotFoundError, fn -> RouteCatalog.fetch!(:keys, params) end
+    end
+  end
+
   test "account is the canonical product detail route" do
     account = RouteCatalog.fetch!(:account)
 
@@ -84,14 +105,15 @@ defmodule KeyFleetWeb.RouteCatalogTest do
   end
 
   test "the product sidebar lists Overview and Account on every product route" do
-    for action <- [:app, :account] do
-      assert RouteCatalog.fetch!(action).sidebar_model == %RouteCatalog.SidebarModel{
-               id: :product,
-               targets: [
-                 %RouteTarget{route_id: :app, label: "Overview", path: "/app"},
-                 %RouteTarget{route_id: :account, label: "Account", path: "/account"}
-               ]
-             }
+    for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
+      assert RouteCatalog.fetch!(entry.live_action, sample_params(entry)).sidebar_model ==
+               %RouteCatalog.SidebarModel{
+                 id: :product,
+                 targets: [
+                   %RouteTarget{route_id: :app, label: "Overview", path: "/app"},
+                   %RouteTarget{route_id: :account, label: "Account", path: "/account"}
+                 ]
+               }
     end
   end
 
@@ -107,14 +129,14 @@ defmodule KeyFleetWeb.RouteCatalogTest do
       ])
 
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             spec = RouteCatalog.fetch!(entry.live_action)
+             spec = RouteCatalog.fetch!(entry.live_action, sample_params(entry))
              MapSet.subset?(MapSet.new(spec.header_controls), allowed_controls)
            end)
   end
 
   test "every route starts at the top" do
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             RouteCatalog.fetch!(entry.live_action).scroll_policy == :top
+             RouteCatalog.fetch!(entry.live_action, sample_params(entry)).scroll_policy == :top
            end)
   end
 
@@ -124,8 +146,8 @@ defmodule KeyFleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 3
-    assert Enum.map(decoded["routes"], & &1["route_id"]) == ["home", "app", "account"]
+    assert length(decoded["routes"]) == 4
+    assert Enum.map(decoded["routes"], & &1["route_id"]) == ["home", "app", "account", "keys"]
     assert decoded["schema_version"] == 1
     assert first.digest == Base.encode16(:crypto.hash(:sha256, first.json), case: :lower)
 
@@ -149,5 +171,15 @@ defmodule KeyFleetWeb.RouteCatalogTest do
 
     assert %{"sidebar_model" => %{"targets" => []}} =
              Enum.find(decoded["routes"], &(&1["route_id"] == "home"))
+
+    assert %{"destination" => "/app/keys/:fleet_id/:token_id"} =
+             Enum.find(decoded["routes"], &(&1["route_id"] == "keys"))
+  end
+
+  defp sample_params(%{parameter_schema: schema}) do
+    Map.new(schema, fn
+      {:fleet_id, _type} -> {"fleet_id", "fibonacci_syndicate"}
+      {:token_id, _type} -> {"token_id", "1"}
+    end)
   end
 end

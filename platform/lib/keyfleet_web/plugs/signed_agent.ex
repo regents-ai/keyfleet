@@ -7,6 +7,10 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
+  @pairings_path "/api/v1/agent/pairings"
+  # The key a pairing names is part of the signed path, so its two segments are
+  # admitted here in their canonical spelling and nowhere else.
+  @pairing_path ~r"\A/api/v1/agent/keys/[a-z][a-z0-9_]{0,62}/[1-9][0-9]{0,17}/pairing\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
   # Separate transport bound from Ash field limits: the broker embeds these raw
   # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
@@ -131,13 +135,21 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   def proof_headers, do: @proof_headers
 
-  defp supported_request?(conn),
-    do:
-      conn.method == "POST" and conn.request_path in [@join_path, @update_path] and
-        conn.query_string == ""
+  # Every admitted request carries a signed JSON body, including the ones whose
+  # whole instruction is their method and path; those send an empty object.
+  defp supported_request?(conn) do
+    conn.query_string == "" and
+      case {conn.method, conn.request_path} do
+        {"POST", @join_path} -> true
+        {"POST", @update_path} -> true
+        {"GET", @pairings_path} -> true
+        {method, path} when method in ["POST", "DELETE"] -> Regex.match?(@pairing_path, path)
+        _unsupported -> false
+      end
+  end
 
-  defp body_limit(@join_path), do: 4096
   defp body_limit(@update_path), do: @update_max_body
+  defp body_limit(_path), do: 4096
 
   defp valid_body?(@join_path, %{"name" => name, "declared_harness" => harness} = params),
     do: map_size(params) == 2 and is_binary(name) and is_binary(harness)
@@ -145,5 +157,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   defp valid_body?(@update_path, params) when is_map(params),
     do: map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable))
 
-  defp valid_body?(_, _), do: false
+  defp valid_body?(@pairings_path, params), do: params == %{}
+
+  defp valid_body?(path, params), do: Regex.match?(@pairing_path, path) and params == %{}
 end

@@ -12,6 +12,9 @@ defmodule KeyFleetWeb.RouteCatalog do
   }
 
   @slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
+  @fleet_id ~r/\A[a-z][a-z0-9_]{0,62}\z/
+  # Eighteen digits at most, so every admitted key number is a database integer.
+  @token_id ~r/\A[1-9][0-9]{0,17}\z/
 
   @entries [
     %Entry{
@@ -34,6 +37,13 @@ defmodule KeyFleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :account
+    },
+    %Entry{
+      path_pattern: "/app/keys/:fleet_id/:token_id",
+      live_action: :keys,
+      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
+      reserved_values: %{},
+      route_spec_id: :keys
     }
   ]
 
@@ -44,7 +54,8 @@ defmodule KeyFleetWeb.RouteCatalog do
        %{}},
     account:
       {:account, :product, "KeyFleet", "Account", "/app", [:profile_actions], :product, :detail,
-       %{}}
+       %{}},
+    keys: {:keys, :product, "KeyFleet", "Key", "/app", [:profile_actions], :product, :detail, %{}}
   }
 
   def entries, do: @entries
@@ -52,7 +63,7 @@ defmodule KeyFleetWeb.RouteCatalog do
   def fetch!(action, params \\ %{}) do
     entry = Enum.find(@entries, &(&1.live_action == action)) || raise(NotFoundError)
     validate_params!(entry, params)
-    build_spec(entry.route_spec_id, params)
+    build_spec(entry.route_spec_id, destination(entry.path_pattern, params))
   end
 
   def design_handoff do
@@ -75,14 +86,16 @@ defmodule KeyFleetWeb.RouteCatalog do
   end
 
   defp valid_parameter?(:slug, value), do: is_binary(value) and Regex.match?(@slug, value)
+  defp valid_parameter?(:fleet_id, value), do: is_binary(value) and Regex.match?(@fleet_id, value)
+  defp valid_parameter?(:token_id, value), do: is_binary(value) and Regex.match?(@token_id, value)
 
-  defp build_spec(action, _params) do
+  defp build_spec(route_spec_id, destination) do
     {route_id, app_id, app_label, page_label, root, controls, background, transition, local_state} =
-      Map.fetch!(@specs, action)
+      Map.fetch!(@specs, route_spec_id)
 
     %Spec{
       route_id: route_id,
-      destination: destination(action),
+      destination: destination,
       app_id: app_id,
       app_display_label: app_label,
       page_display_label: page_label,
@@ -108,8 +121,10 @@ defmodule KeyFleetWeb.RouteCatalog do
     }
   end
 
+  # The handoff describes routes, not visits, so a parameterised route hands over
+  # the pattern its paths are built from.
   defp handoff_route(entry) do
-    spec = fetch!(entry.live_action)
+    spec = build_spec(entry.route_spec_id, entry.path_pattern)
 
     %{
       "app_display_label" => spec.app_display_label,
@@ -148,10 +163,13 @@ defmodule KeyFleetWeb.RouteCatalog do
     %{"type" => "heading", "label" => heading.label}
   end
 
-  defp destination(action) do
-    @entries
-    |> Enum.find(&(&1.live_action == action))
-    |> Map.fetch!(:path_pattern)
+  defp destination(path_pattern, params) do
+    path_pattern
+    |> String.split("/")
+    |> Enum.map_join("/", fn
+      ":" <> key -> Map.fetch!(params, key)
+      segment -> segment
+    end)
   end
 
   defp ordered_json_value(value) when is_map(value) do

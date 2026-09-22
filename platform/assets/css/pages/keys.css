@@ -1,0 +1,160 @@
+@layer regents-product {
+/* The key page stands on the Account grammar: one ground, hairline panels, the
+   display face for headings and a mono voice for kickers. */
+
+.key-page {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.key-heading,
+.key-panel {
+  min-width: 0;
+  border: 1px solid var(--ash-line);
+  background: var(--ash-panel);
+}
+
+.key-page h1,
+.key-page h2 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-weight: 400;
+}
+
+.key-page p {
+  margin: 0;
+}
+
+.key-kicker {
+  color: var(--ash-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.key-heading {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+}
+
+.key-heading h1 {
+  max-width: 18ch;
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.key-heading h1:focus {
+  outline: none;
+}
+
+.key-lede {
+  max-width: 56ch;
+  color: var(--ash-muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.key-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.key-panel {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+  justify-items: start;
+}
+
+.key-panel h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.key-notice {
+  grid-column: 1 / -1;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent);
+}
+
+.key-notice--error {
+  border-inline-start-color: var(--ash-accent-warm);
+}
+
+.key-wallet {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.key-detail {
+  color: var(--ash-muted);
+}
+
+.key-operator {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.key-request-list,
+.key-history ol {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.key-request-list li,
+.key-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ash-line);
+}
+
+.key-history li {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+}
+
+.key-request-list li > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.key-request-list span,
+.key-history span {
+  color: var(--ash-muted);
+}
+
+.key-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.key-history {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 30rem) {
+  .key-request-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+}

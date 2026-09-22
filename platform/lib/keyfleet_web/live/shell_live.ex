@@ -11,9 +11,11 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Accounts
   alias KeyFleet.Accounts.LinkedIdentity.Providers
   alias KeyFleet.Actors.Human
-  alias KeyFleetWeb.{AccountLive, OverviewLive, RouteCatalog}
+  alias KeyFleet.Keys
+  alias KeyFleetWeb.{AccountLive, KeysLive, OverviewLive, RouteCatalog}
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
+  @refused "That didn’t go through."
 
   @impl true
   def mount(params, session, socket) do
@@ -23,7 +25,9 @@ defmodule KeyFleetWeb.ShellLive do
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: [],
-       verified_connections_notice: nil
+       verified_connections_notice: nil,
+       key: nil,
+       key_notice: nil
      )}
   end
 
@@ -34,7 +38,8 @@ defmodule KeyFleetWeb.ShellLive do
     {:noreply,
      socket
      |> assign(:route_spec, route_spec)
-     |> load_verified_connections(route_spec)}
+     |> load_verified_connections(route_spec)
+     |> load_key(route_spec, params)}
   end
 
   @impl true
@@ -63,6 +68,15 @@ defmodule KeyFleetWeb.ShellLive do
          )}
     end
   end
+
+  def handle_event("approve_pairing", %{"id" => id}, socket),
+    do: {:noreply, decide(socket, id, &Keys.approve_pairing/3, "That agent now runs this key.")}
+
+  def handle_event("decline_pairing", %{"id" => id}, socket),
+    do: {:noreply, decide(socket, id, &Keys.decline_pairing/3, "Request turned down.")}
+
+  def handle_event("detach_operator", %{"id" => id}, socket),
+    do: {:noreply, decide(socket, id, &Keys.detach_operator/3, "Operator detached.")}
 
   def handle_event("refresh_verified_connections", params, socket) do
     socket = reload_verified_connections(socket)
@@ -101,6 +115,8 @@ defmodule KeyFleetWeb.ShellLive do
           verified_connections={@verified_connections}
           verified_connections_notice={@verified_connections_notice}
         />
+
+        <KeysLive.page :if={@route_spec.route_id == :keys} key={@key} notice={@key_notice} />
       </:content>
     </.shell>
     """
@@ -108,6 +124,71 @@ defmodule KeyFleetWeb.ShellLive do
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
+
+  defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
+    assign(socket,
+      key: key_view(socket, fleet_id, String.to_integer(token_id)),
+      key_notice: nil
+    )
+  end
+
+  defp load_key(socket, _route_spec, _params), do: assign(socket, key: nil, key_notice: nil)
+
+  defp key_view(socket, fleet_id, token_id) do
+    actor = human_actor(socket)
+    key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
+
+    %{
+      fleet_id: fleet_id,
+      token_id: token_id,
+      fleet_name: key && key.fleet.name,
+      owner_wallet: key && key.owner_wallet,
+      current_epoch: key && key.ownership_epoch,
+      owner?: owns_key?(actor, key),
+      operator: Keys.current_operator!(fleet_id, token_id, actor: actor),
+      requests: Keys.list_pairing_requests!(fleet_id, token_id, actor: actor),
+      history: Keys.pairing_history!(fleet_id, token_id, actor: actor)
+    }
+  end
+
+  defp owns_key?(%Human{wallet_addresses: wallets}, %{owner_wallet: owner}),
+    do: owner in wallets
+
+  defp owns_key?(_actor, _key), do: false
+
+  # The buttons act on what the page is showing; the key itself decides whether
+  # the decision still applies, and the page is redrawn from the answer either
+  # way, so a page left open on a key that has moved on catches up.
+  defp decide(socket, id, decision, message) do
+    with %Human{} = actor <- human_actor(socket),
+         %{} = pairing <- Enum.find(shown_pairings(socket), &(&1.id == id)),
+         {:ok, _decided} <- decision.(pairing, %{}, actor: actor) do
+      redraw_key(socket, %{tone: :success, message: message})
+    else
+      refusal -> redraw_key(socket, %{tone: :error, message: refusal_message(refusal)})
+    end
+  end
+
+  defp refusal_message({:error, %Ash.Error.Invalid{errors: errors}}) do
+    if Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)),
+      do: "This request was already answered.",
+      else: @refused
+  end
+
+  defp refusal_message(_refusal), do: @refused
+
+  defp redraw_key(%{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket, notice) do
+    socket
+    |> assign(:key, key_view(socket, fleet_id, token_id))
+    |> assign(:key_notice, notice)
+  end
+
+  defp redraw_key(socket, notice), do: assign(socket, :key_notice, notice)
+
+  defp shown_pairings(%{assigns: %{key: %{operator: operator, requests: requests}}}),
+    do: [operator | requests] |> Enum.reject(&is_nil/1)
+
+  defp shown_pairings(_socket), do: []
 
   defp load_verified_connections(socket, %{route_id: :account}),
     do: reload_verified_connections(socket)

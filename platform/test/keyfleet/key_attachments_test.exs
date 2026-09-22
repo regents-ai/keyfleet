@@ -23,8 +23,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
   test "replays preserve row identity and database observation time; conflicting epoch values fail" do
     input = event()
     first = Keys.record_epoch!(input, actor: @system)
-    assert first.agent_profile_id == nil
-    assert first.attached_at == nil
     assert %DateTime{} = first.observed_at
     replay = Keys.record_epoch!(input, actor: @system)
     assert {replay.id, replay.observed_at} == {first.id, first.observed_at}
@@ -58,12 +56,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
     assert Keys.key_history!(@fleet, 2) == []
   end
 
-  test "transfers and self-transfers produce unattached current epochs while history stays stable" do
+  test "transfers and self-transfers add current epochs while history stays stable" do
     first = Keys.record_epoch!(event(), actor: @system)
-    attach_fixture!(first)
-    first = Keys.current_key!(@fleet, 1)
-    assert first.agent_profile_id != nil
-    assert first.attached_at != nil
 
     third =
       Keys.record_epoch!(event(ownership_epoch: 2, owner_wallet: wallet("b"), log_index: 2),
@@ -80,8 +74,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
     assert Enum.map(Keys.key_history!(@fleet, 1), & &1.id) == [first.id, second.id, third.id]
     current = Keys.current_key!(@fleet, 1)
     assert current.id == third.id
-    assert current.agent_profile_id == nil
-    assert current.attached_at == nil
     assert persisted_fields(hd(Keys.key_history!(@fleet, 1))) == persisted_fields(first)
     assert Keys.current_key!(@fleet, 99) == nil
 
@@ -135,7 +127,7 @@ defmodule KeyFleet.KeyAttachmentsTest do
     assert_raise Ash.Error.Invalid, fn -> Ash.read!(KeyAttachment) end
   end
 
-  test "only the exact system actor writes and callers cannot supply attachment or generated fields" do
+  test "only the exact system actor writes and callers cannot supply generated fields" do
     for actor <- [
           nil,
           %KeyFleet.Actors.Human{human_account_id: 1},
@@ -151,8 +143,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
 
     for {field, value} <- [
           id: Ash.UUID.generate(),
-          agent_profile_id: Ash.UUID.generate(),
-          attached_at: DateTime.utc_now(),
           observed_at: DateTime.utc_now()
         ] do
       assert {:error, %Ash.Error.Invalid{}} =
@@ -209,12 +199,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
     end
 
     assert_sql_error(event(fleet_id: "unknown", log_index: 4), :foreign_key_violation)
-
-    assert_sql_error(
-      event(log_index: 5, token_id: 5)
-      |> Map.put(:agent_profile_id, Ecto.UUID.dump!(Ash.UUID.generate())),
-      :foreign_key_violation
-    )
 
     for {field, value} <- [
           id: Ecto.UUID.dump!(Ash.UUID.generate()),
@@ -315,8 +299,7 @@ defmodule KeyFleet.KeyAttachmentsTest do
       :block_number,
       :block_hash,
       :transaction_hash,
-      :log_index,
-      :agent_profile_id
+      :log_index
     ]
 
     input = Map.put(input, :id, Ecto.UUID.dump!(Ash.UUID.generate()))
@@ -366,27 +349,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
   defp wallet(char), do: "0x" <> String.duplicate(char, 40)
   defp hash(char), do: "0x" <> String.duplicate(char, 64)
 
-  defp attach_fixture!(row) do
-    profile =
-      Ash.create!(
-        KeyFleet.Agents.AgentProfile,
-        %{name: "Historical agent", declared_harness: "test"},
-        action: :ensure_profile,
-        actor: %KeyFleet.Actors.Agent{
-          wallet_address: wallet("a"),
-          chain_id: 8453,
-          audience: "keyfleet"
-        }
-      )
-
-    # There is intentionally no pairing action yet. SQL exercises the storage
-    # contract reserved for that future action and supplies its database time.
-    Repo.query!(
-      "UPDATE keyfleet_app.key_attachments SET agent_profile_id = $2, attached_at = (now() AT TIME ZONE 'utc') WHERE id = $1",
-      [Ecto.UUID.dump!(row.id), Ecto.UUID.dump!(profile.id)]
-    )
-  end
-
   defp persisted_fields(row),
     do:
       Map.take(row, [
@@ -399,8 +361,6 @@ defmodule KeyFleet.KeyAttachmentsTest do
         :block_hash,
         :transaction_hash,
         :log_index,
-        :agent_profile_id,
-        :attached_at,
         :observed_at
       ])
 end

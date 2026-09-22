@@ -85,6 +85,9 @@ defmodule KeyFleetWeb.Router do
     pipe_through :api
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
+    get "/pairings", AgentPairingController, :index
+    post "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :create
+    delete "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :delete
   end
 
   scope "/", KeyFleetWeb do
@@ -105,6 +108,7 @@ defmodule KeyFleetWeb.Router do
       on_mount: [KeyFleetWeb.Live.LaunchGateHook, {KeyFleetWeb.Live.Session, :load_human}] do
       live "/app", ShellLive, :app
       live "/account", ShellLive, :account
+      live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
     end
   end
 end

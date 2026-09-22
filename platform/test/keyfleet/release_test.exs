@@ -183,6 +183,7 @@ defmodule KeyFleet.ReleaseTest do
              "agent_profiles",
              "fleets",
              "key_attachments",
+             "key_pairings",
              "linked_identities",
              "rooms",
              "schema_migrations",
