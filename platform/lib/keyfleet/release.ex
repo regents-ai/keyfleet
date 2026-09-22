@@ -20,6 +20,52 @@ defmodule KeyFleet.Release do
   end
 
   @doc """
+  Binds the four fleets to the deployment a deployed manifest records, the
+  JSON `contracts/script/RecordKeyfleets.s.sol` writes, and prints what each
+  fleet is now bound to. `bin/seed-deployment <path>` runs it.
+
+  Recording the same manifest again changes nothing; a manifest naming other
+  contracts for a bound fleet is refused and changes nothing. A running app
+  reads only the fleets that were deployed when it started, so it must be
+  restarted before it reads a newly bound fleet.
+  """
+  def seed_deployment(path), do: with_release_repo(fn -> seed_deployment!(path) end)
+
+  @doc "Seeds from `path` through an already running repository, as `seed_deployment/1` does."
+  # The path is the operator's own argument on the machine they are signed in to.
+  # sobelow_skip ["Traversal.FileModule"]
+  def seed_deployment!(path) do
+    fleets = path |> File.read!() |> Jason.decode!() |> KeyFleet.Fleets.record_deployments!()
+
+    for fleet <- fleets do
+      IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
+    end
+
+    :ok
+  end
+
+  @doc """
+  Lets a fleet stopped at a disagreement with the chain be read again, once
+  the record has been corrected by hand. `bin/clear-fleet-stop <fleet id>`
+  runs it; a running app picks the fleet up on its next pass.
+  """
+  def clear_fleet_stop(fleet_id), do: with_release_repo(fn -> clear_fleet_stop!(fleet_id) end)
+
+  @doc "Clears the stop through an already running repository, as `clear_fleet_stop/1` does."
+  def clear_fleet_stop!(fleet_id) do
+    KeyFleet.Chain.clear_divergence!(fleet_id)
+    IO.puts("#{fleet_id} will be read again.")
+  end
+
+  defp with_release_repo(fun) do
+    load_app()
+    Application.put_env(@app, KeyFleet.Repo, migration_config!())
+
+    {:ok, result, _started} = Ecto.Migrator.with_repo(KeyFleet.Repo, fn _repo -> fun.() end)
+    result
+  end
+
+  @doc """
   Prepares an empty staging database for the first deployment.
 
   Staging owns a disposable database, so it has no copy of the tables this

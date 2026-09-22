@@ -15,6 +15,10 @@ config :regent_identity, repo: KeyFleet.Repo, ash_domains: [RegentIdentity]
 # (CVE-2026-82752).
 config :ash, default_string_length_count: :codepoints
 
+# Key ownership is read from each deployed fleet every few seconds, by the
+# JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
+config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.RpcClient, poll_interval_ms: 4_000
+
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
@@ -24,7 +28,8 @@ config :keyfleet,
     KeyFleet.Fleets,
     KeyFleet.Rooms,
     KeyFleet.Agents,
-    KeyFleet.Keys
+    KeyFleet.Keys,
+    KeyFleet.Chain
   ],
   generators: [timestamp_type: :utc_datetime]
 

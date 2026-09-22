@@ -12,6 +12,7 @@ config :keyfleet, KeyFleetWeb.Endpoint,
   server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 
 config :keyfleet, :privy_verifier, KeyFleet.TestPrivyVerifier
+config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.StubClient
 config :keyfleet, :database_startup_enabled, true
 
 # Every test case here reaches one node holding one anonymous bootstrap budget

@@ -9,6 +9,11 @@ defmodule KeyFleet.Keys do
       define :current_key, action: :current, args: [:fleet_id, :token_id], not_found_error?: false
 
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
+      define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
+
+      define :recorded_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
     end
 
     resource KeyFleet.Keys.KeyPairing do
@@ -27,6 +32,7 @@ defmodule KeyFleet.Keys do
       define :pairing_history, action: :pairing_history, args: [:fleet_id, :token_id]
       define :my_pairings, action: :my_pairings
       define :my_effective_pairings, action: :my_effective_pairings, args: [:fleet_id]
+      define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
 
       define :my_open_request,
         action: :my_open_request,

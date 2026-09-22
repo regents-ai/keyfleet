@@ -1,5 +1,8 @@
 defmodule KeyFleet.Fleets.Fleet do
-  @moduledoc "A fixed fleet with a stable machine identity and display name."
+  @moduledoc """
+  A fixed fleet with a stable machine identity and display name, and once it is
+  deployed, the chain and contracts it lives at.
+  """
   use Ash.Resource,
     domain: KeyFleet.Fleets,
     data_layer: AshPostgres.DataLayer,
@@ -15,6 +18,17 @@ defmodule KeyFleet.Fleets.Fleet do
           "id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant')",
         message: "must identify one of the four fixed fleets"
       )
+
+      # A deployment is recorded whole or not at all.
+      check_constraint(:contract_address, "fleets_deployment_whole",
+        check:
+          "num_nulls(chain_id, contract_address, rewards_address, votes_address, deployed_block) IN (0, 5)",
+        message: "must record the whole deployment"
+      )
+
+      for field <- [:contract_address, :rewards_address, :votes_address] do
+        check_constraint(field, "fleets_#{field}_shape", check: "#{field} ~ '^0x[0-9a-f]{40}$'")
+      end
     end
   end
 
@@ -33,6 +47,30 @@ defmodule KeyFleet.Fleets.Fleet do
       upsert? true
       upsert_fields [:name]
     end
+
+    read :deployed do
+      public? false
+      filter expr(not is_nil(contract_address))
+      prepare build(sort: [id: :asc])
+    end
+
+    # Binds the fleet to its deployment once. Recording the same deployment
+    # again changes nothing; a different one is refused.
+    update :record_deployment do
+      public? false
+      require_atomic? false
+      accept [:chain_id, :contract_address, :rewards_address, :votes_address, :deployed_block]
+
+      require_attributes [
+        :chain_id,
+        :contract_address,
+        :rewards_address,
+        :votes_address,
+        :deployed_block
+      ]
+
+      validate KeyFleet.Fleets.Validations.SameDeployment
+    end
   end
 
   policies do
@@ -40,7 +78,7 @@ defmodule KeyFleet.Fleets.Fleet do
       authorize_if always()
     end
 
-    policy action(:bootstrap) do
+    policy action([:bootstrap, :record_deployment]) do
       authorize_if KeyFleet.Checks.SystemActor
     end
   end
@@ -49,5 +87,16 @@ defmodule KeyFleet.Fleets.Fleet do
     attribute :id, :string, primary_key?: true, allow_nil?: false, public?: true
 
     attribute :name, :string, allow_nil?: false, public?: true
+
+    attribute :chain_id, :integer, public?: true, constraints: [min: 1]
+
+    for field <- [:contract_address, :rewards_address, :votes_address] do
+      attribute field, :string,
+        public?: true,
+        constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+    end
+
+    # The first block of the deployment, where reading its history starts.
+    attribute :deployed_block, :integer, public?: true, constraints: [min: 0]
   end
 end

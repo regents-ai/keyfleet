@@ -31,6 +31,10 @@ defmodule KeyFleetWeb.KeysLive do
           {@notice.message}
         </p>
 
+        <p :if={@key.owner? and @key.refreshing? and is_nil(@notice)} class="key-notice">
+          Key ownership is being refreshed; try again in a moment.
+        </p>
+
         <section class="key-panel" aria-labelledby="key-owner-title">
           <h2 id="key-owner-title">Owner</h2>
           <p class="key-wallet"><code>{@key.owner_wallet}</code></p>

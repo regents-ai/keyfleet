@@ -1,0 +1,145 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "name",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "chain_id",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "contract_address",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "rewards_address",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "votes_address",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "deployed_block",
+      "type": "bigint"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "id"
+      ],
+      "base_filter": null,
+      "check": "id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant')",
+      "name": "fleets_fixed_catalog"
+    },
+    {
+      "attribute": [
+        "contract_address"
+      ],
+      "base_filter": null,
+      "check": "num_nulls(chain_id, contract_address, rewards_address, votes_address, deployed_block) IN (0, 5)",
+      "name": "fleets_deployment_whole"
+    },
+    {
+      "attribute": [
+        "contract_address"
+      ],
+      "base_filter": null,
+      "check": "contract_address ~ '^0x[0-9a-f]{40}$'",
+      "name": "fleets_contract_address_shape"
+    },
+    {
+      "attribute": [
+        "rewards_address"
+      ],
+      "base_filter": null,
+      "check": "rewards_address ~ '^0x[0-9a-f]{40}$'",
+      "name": "fleets_rewards_address_shape"
+    },
+    {
+      "attribute": [
+        "votes_address"
+      ],
+      "base_filter": null,
+      "check": "votes_address ~ '^0x[0-9a-f]{40}$'",
+      "name": "fleets_votes_address_shape"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [],
+  "custom_statements": [],
+  "has_create_action": true,
+  "hash": "C4F9E23E6CB6D40499896BDABBE31E5813B9E2E5C0D5A7760E33D1117341D64D",
+  "identities": [],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.KeyFleet.Repo",
+  "schema": null,
+  "table": "fleets"
+}

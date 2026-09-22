@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+manifest="${1:?usage: seed-deployment <path to deployed manifest>}"
+
+KEYFLEET_RELEASE_COMMAND=migrate KEYFLEET_DEPLOYED_MANIFEST="$manifest" exec "$(dirname "$0")/keyfleet" eval 'KeyFleet.Release.seed_deployment(System.fetch_env!("KEYFLEET_DEPLOYED_MANIFEST"))'

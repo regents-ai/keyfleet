@@ -192,6 +192,19 @@ defmodule KeyFleet.Keys.KeyPairing do
       get? true
     end
 
+    # The operator running each of these keys of the fleet today.
+    read :operators_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and token_id in ^arg(:token_ids) and status == :active and
+                 ownership_epoch == current_ownership_epoch
+             )
+
+      prepare build(load: [:agent_profile])
+    end
+
     read :pairing_requests do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]

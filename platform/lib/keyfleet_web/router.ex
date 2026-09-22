@@ -112,6 +112,7 @@ defmodule KeyFleetWeb.Router do
       on_mount: [KeyFleetWeb.Live.LaunchGateHook, {KeyFleetWeb.Live.Session, :load_human}] do
       live "/app", ShellLive, :app
       live "/account", ShellLive, :account
+      live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
       live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
     end

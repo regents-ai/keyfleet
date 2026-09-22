@@ -168,6 +168,29 @@ defmodule KeyFleet.Keys.KeyAttachment do
       get? true
     end
 
+    # Every key the fleet has issued, each with its owner today, a page at a
+    # time by key number: a fleet can issue tens of thousands.
+    read :current_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch)
+      prepare build(sort: [token_id: :asc])
+      pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
+    end
+
+    # What was recorded from a stretch of the fleet's blocks, so a second
+    # reading of the same stretch can be checked against it.
+    read :recorded_in_blocks do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :from_block, :integer, allow_nil?: false
+      argument :to_block, :integer, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and block_number >= ^arg(:from_block) and
+                 block_number <= ^arg(:to_block)
+             )
+    end
+
     # Which of a person's wallets holds a key in this fleet right now, which is
     # what makes them one of the fleet's key holders.
     read :held_in_fleet do

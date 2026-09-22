@@ -3,6 +3,7 @@ defmodule KeyFleet.KeyPairingsTest do
 
   alias KeyFleet.Actors
   alias KeyFleet.Agents
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
   alias KeyFleet.Repo
@@ -14,6 +15,7 @@ defmodule KeyFleet.KeyPairingsTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!(@fleet)
     owner = agent("a")
     %{owner: owner, epoch: epoch!(owner_wallet: owner.wallet_address)}
   end
@@ -93,6 +95,26 @@ defmodule KeyFleet.KeyPairingsTest do
     detached = Keys.detach_operator!(attached, %{}, actor: human(owner))
     assert {detached.status, detached.ended_reason} == {:ended, :detached}
     assert Keys.current_operator!(@fleet, 1) == nil
+  end
+
+  # Holding a key grants nothing while its ownership may be out of date.
+  test "while ownership is being refreshed the owner can neither approve nor attach its agent",
+       %{owner: owner} do
+    request = request!(agent("b"), "Operator")
+    profile!(owner, "Owner agent")
+
+    ChainHelpers.seed_cursor!(@fleet,
+      observed_at: DateTime.add(DateTime.utc_now(), -121, :second)
+    )
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Keys.approve_pairing(request, %{}, actor: human(owner))
+
+    assert {:error, %Ash.Error.Forbidden{errors: [%Keys.Errors.OwnershipRefreshingError{}]}} =
+             Keys.request_pairing(@fleet, 1, %{}, actor: owner)
+
+    assert Keys.current_operator!(@fleet, 1) == nil
+    assert Keys.list_pairing_requests!(@fleet, 1) |> Enum.map(& &1.id) == [request.id]
   end
 
   test "a transfer detaches the operator without writing, and freezes the old owner out", %{

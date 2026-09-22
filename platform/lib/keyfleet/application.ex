@@ -13,6 +13,7 @@ defmodule KeyFleet.Application do
         {KeyFleet.Accounts.RequestRateLimiter, []},
         database_child(),
         {Phoenix.PubSub, name: KeyFleet.PubSub},
+        chain_child(),
         # Start a worker by calling: KeyFleet.Worker.start_link(arg)
         # {KeyFleet.Worker, arg},
         # Start to serve requests, typically the last entry
@@ -29,6 +30,13 @@ defmodule KeyFleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: KeyFleet.Repo
+  end
+
+  # Fleets are read from the chain only where a node is configured, which the
+  # test build never is.
+  defp chain_child do
+    if Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:rpc_url],
+      do: KeyFleet.Chain.Supervisor
   end
 
   # Tell Phoenix to update the endpoint configuration

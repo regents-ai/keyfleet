@@ -3,6 +3,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
   import Plug.Conn
 
   alias KeyFleet.Actors
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
@@ -20,6 +21,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!("fibonacci_syndicate")
     Rooms.bootstrap_core_rooms!()
 
     Keys.record_epoch!(

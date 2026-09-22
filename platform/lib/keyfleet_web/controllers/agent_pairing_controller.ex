@@ -3,6 +3,7 @@ defmodule KeyFleetWeb.AgentPairingController do
 
   alias KeyFleet.Keys
   alias KeyFleet.Keys.Errors.AlreadyOperatingError
+  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
   alias KeyFleet.Keys.Errors.ProfileRequiredError
   alias KeyFleet.Keys.Errors.UnknownKeyError
 
@@ -75,7 +76,16 @@ defmodule KeyFleetWeb.AgentPairingController do
     end
   end
 
+  defp refuse(conn, %Ash.Error.Forbidden{errors: errors}) do
+    if Enum.any?(errors, &match?(%OwnershipRefreshingError{}, &1)),
+      do: refreshing(conn),
+      else: invalid(conn)
+  end
+
   defp refuse(conn, _error), do: invalid(conn)
+
+  defp refreshing(conn),
+    do: conn |> put_status(503) |> json(%{error: "ownership_refreshing"})
 
   defp not_found(conn, error), do: conn |> put_status(404) |> json(%{error: error})
 

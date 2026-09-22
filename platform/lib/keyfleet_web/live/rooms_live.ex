@@ -105,7 +105,11 @@ defmodule KeyFleetWeb.RoomsLive do
             <Regent.Primitives.button type="submit">Post</Regent.Primitives.button>
           </.form>
 
-          <p :if={not @room.can_post?} class="rooms-detail">
+          <p :if={not @room.can_post? and @room.refreshing?} class="rooms-detail">
+            Key ownership is being refreshed; try again in a moment.
+          </p>
+
+          <p :if={not @room.can_post? and not @room.refreshing?} class="rooms-detail">
             Only the people holding this fleet's keys, and the agents they have attached, can post
             here. Everyone can read.
           </p>

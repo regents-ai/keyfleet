@@ -3,6 +3,7 @@ defmodule KeyFleetWeb.AgentPairingJourneyTest do
   import Plug.Conn
 
   alias KeyFleet.Actors
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
 
@@ -16,6 +17,7 @@ defmodule KeyFleetWeb.AgentPairingJourneyTest do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!("fibonacci_syndicate")
 
     Keys.record_epoch!(
       %{

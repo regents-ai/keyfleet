@@ -11,13 +11,17 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Accounts
   alias KeyFleet.Accounts.LinkedIdentity.Providers
   alias KeyFleet.Actors.Human
+  alias KeyFleet.Chain
+  alias KeyFleet.Fleets
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.FleetMember
-  alias KeyFleetWeb.{AccountLive, KeysLive, OverviewLive, RoomsLive, RouteCatalog}
+  alias KeyFleetWeb.{AccountLive, FleetLive, KeysLive, NotFoundError, OverviewLive, RoomsLive}
+  alias KeyFleetWeb.RouteCatalog
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   @refused "That didn’t go through."
+  @refreshing "Key ownership is being refreshed; try again in a moment."
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
   @thread_kept 200
@@ -28,12 +32,15 @@ defmodule KeyFleetWeb.ShellLive do
      socket
      |> stream_configure(:posts, dom_id: &"post-#{&1.id}")
      |> stream(:posts, [])
+     |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
+     |> stream(:fleet_keys, [])
      |> assign(
        theme: session["theme"],
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: [],
        verified_connections_notice: nil,
+       fleet: nil,
        key: nil,
        key_notice: nil,
        room: nil,
@@ -51,6 +58,7 @@ defmodule KeyFleetWeb.ShellLive do
      socket
      |> assign(:route_spec, route_spec)
      |> load_verified_connections(route_spec)
+     |> load_fleet(route_spec, params)
      |> load_key(route_spec, params)
      |> load_room(route_spec, params)}
   end
@@ -145,6 +153,12 @@ defmodule KeyFleetWeb.ShellLive do
           verified_connections_notice={@verified_connections_notice}
         />
 
+        <FleetLive.page
+          :if={@route_spec.route_id == :fleet}
+          fleet={@fleet}
+          keys={@streams.fleet_keys}
+        />
+
         <KeysLive.page :if={@route_spec.route_id == :keys} key={@key} notice={@key_notice} />
 
         <RoomsLive.page
@@ -160,6 +174,93 @@ defmodule KeyFleetWeb.ShellLive do
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
+
+  defp load_fleet(socket, %{route_id: :fleet}, %{"fleet_id" => fleet_id} = params) do
+    actor = human_actor(socket)
+
+    case Fleets.get_fleet!(fleet_id, actor: actor) do
+      nil ->
+        socket
+        |> assign(:fleet, %{fleet_id: fleet_id, name: nil})
+        |> stream(:fleet_keys, [], reset: true)
+
+      fleet ->
+        page = key_page!(fleet_id, params, actor)
+        deployed? = fleet.contract_address != nil
+        current? = deployed? and Chain.fresh?(fleet_id)
+
+        socket
+        |> assign(:fleet, %{
+          fleet_id: fleet_id,
+          name: fleet.name,
+          contract_address: fleet.contract_address,
+          deployed?: deployed?,
+          current?: current?,
+          progress: if(current?, do: Chain.progress(fleet_id)),
+          rooms: Rooms.list_rooms!(fleet_id, actor: actor),
+          no_keys?: page.results == [] and not paged?(params),
+          pages: page_links(fleet_id, page, params)
+        })
+        |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor), reset: true)
+    end
+  end
+
+  defp load_fleet(socket, _route_spec, _params),
+    do: socket |> assign(:fleet, nil) |> stream(:fleet_keys, [], reset: true)
+
+  # A page is named by the key it follows or precedes; a name that isn't one
+  # is a page that doesn't exist.
+  defp key_page!(fleet_id, params, actor) do
+    case Keys.keys_in_fleet(fleet_id, page: key_position(params), actor: actor) do
+      {:ok, page} -> page
+      {:error, %Ash.Error.Invalid{}} -> raise NotFoundError
+    end
+  end
+
+  defp key_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
+  defp key_position(%{"before" => keyset}) when is_binary(keyset), do: [before: keyset]
+  defp key_position(params), do: if(paged?(params), do: raise(NotFoundError), else: [])
+
+  defp paged?(params), do: Map.has_key?(params, "after") or Map.has_key?(params, "before")
+
+  # A page reached by going forward always has one before it, and one reached by
+  # going back always has one after it.
+  defp page_links(_fleet_id, %Ash.Page.Keyset{results: []}, _params),
+    do: %{previous: nil, next: nil}
+
+  defp page_links(fleet_id, %Ash.Page.Keyset{results: keys, more?: more?}, params) do
+    {previous?, next?} =
+      case params do
+        %{"after" => _keyset} -> {true, more?}
+        %{"before" => _keyset} -> {more?, true}
+        _first_page -> {false, more?}
+      end
+
+    %{
+      previous:
+        if(previous?, do: fleet_page_path(fleet_id, before: hd(keys).__metadata__.keyset)),
+      next: if(next?, do: fleet_page_path(fleet_id, after: List.last(keys).__metadata__.keyset))
+    }
+  end
+
+  defp fleet_page_path(fleet_id, position),
+    do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position)}"
+
+  defp fleet_keys(fleet_id, keys, actor) do
+    operators =
+      Map.new(
+        Keys.fleet_operators!(fleet_id, Enum.map(keys, & &1.token_id), actor: actor),
+        &{&1.token_id, &1.agent_profile.name}
+      )
+
+    for key <- keys do
+      %{
+        token_id: key.token_id,
+        owner_wallet: key.owner_wallet,
+        operator_name: operators[key.token_id]
+      }
+    end
+  end
 
   defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
     assign(socket,
@@ -181,6 +282,7 @@ defmodule KeyFleetWeb.ShellLive do
       owner_wallet: key && key.owner_wallet,
       current_epoch: key && key.ownership_epoch,
       owner?: owns_key?(actor, key),
+      refreshing?: not Chain.fresh?(fleet_id),
       operator: Keys.current_operator!(fleet_id, token_id, actor: actor),
       requests: Keys.list_pairing_requests!(fleet_id, token_id, actor: actor),
       history: Keys.pairing_history!(fleet_id, token_id, actor: actor)
@@ -201,17 +303,21 @@ defmodule KeyFleetWeb.ShellLive do
          {:ok, _decided} <- decision.(pairing, %{}, actor: actor) do
       redraw_key(socket, %{tone: :success, message: message})
     else
-      refusal -> redraw_key(socket, %{tone: :error, message: refusal_message(refusal)})
+      refusal -> redraw_key(socket, %{tone: :error, message: refusal_message(refusal, socket)})
     end
   end
 
-  defp refusal_message({:error, %Ash.Error.Invalid{errors: errors}}) do
+  defp refusal_message({:error, %Ash.Error.Forbidden{}}, %{assigns: %{key: %{fleet_id: fleet_id}}}) do
+    if Chain.fresh?(fleet_id), do: @refused, else: @refreshing
+  end
+
+  defp refusal_message({:error, %Ash.Error.Invalid{errors: errors}}, _socket) do
     if Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)),
       do: "This request was already answered.",
       else: @refused
   end
 
-  defp refusal_message(_refusal), do: @refused
+  defp refusal_message(_refusal, _socket), do: @refused
 
   defp redraw_key(%{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket, notice) do
     socket
@@ -246,6 +352,7 @@ defmodule KeyFleetWeb.ShellLive do
         rooms: rooms,
         last_seq: last_seq(posts, 0),
         can_post?: room != nil and FleetMember.member?(actor, fleet_id),
+        refreshing?: not Chain.fresh?(fleet_id),
         draft: ""
       },
       room_notice: nil,
@@ -332,21 +439,29 @@ defmodule KeyFleetWeb.ShellLive do
 
       {:error, refusal} ->
         socket
-        |> assign(:room_notice, %{tone: :error, message: post_refusal(refusal)})
+        |> assign(:room_notice, %{tone: :error, message: post_refusal(refusal, fleet_id)})
         |> update(
           :room,
-          &%{&1 | draft: body, can_post?: &1.can_post? and FleetMember.member?(actor, fleet_id)}
+          &%{
+            &1
+            | draft: body,
+              can_post?: &1.can_post? and FleetMember.member?(actor, fleet_id),
+              refreshing?: not Chain.fresh?(fleet_id)
+          }
         )
     end
   end
 
   defp post(socket, _body), do: socket
 
-  defp post_refusal(%Ash.Error.Forbidden{}),
-    do:
-      "Only the people holding this fleet’s keys, and the agents they have attached, can post here."
+  defp post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
+    if Chain.fresh?(fleet_id),
+      do:
+        "Only the people holding this fleet’s keys, and the agents they have attached, can post here.",
+      else: @refreshing
+  end
 
-  defp post_refusal(_refusal), do: "That post didn’t go through. Try again."
+  defp post_refusal(_refusal, _fleet_id), do: "That post didn’t go through. Try again."
 
   defp load_verified_connections(socket, %{route_id: :account}),
     do: reload_verified_connections(socket)

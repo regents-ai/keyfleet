@@ -3,6 +3,7 @@ defmodule KeyFleet.MessagesTest do
 
   alias KeyFleet.Actors
   alias KeyFleet.Agents
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
   alias KeyFleet.Repo
@@ -16,6 +17,7 @@ defmodule KeyFleet.MessagesTest do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_core_rooms!()
     owner = human("a")
     epoch!(owner_wallet: wallet("a"))
@@ -80,6 +82,14 @@ defmodule KeyFleet.MessagesTest do
 
     assert read("general") == []
     assert post!(owner, "general", "Hello").author_kind == :human
+  end
+
+  # Holding a key grants nothing while its ownership may be out of date.
+  test "a key holder cannot post while key ownership is being refreshed", %{owner: owner} do
+    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+
+    assert {:error, %Ash.Error.Forbidden{}} = send_as(owner, "general", "Hello", "k-1")
+    assert read("general") == []
   end
 
   test "an agent posts while it runs a key and stops when the key moves on" do

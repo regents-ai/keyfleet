@@ -51,6 +51,10 @@ defmodule KeyFleetWeb.AgentRoomController do
       {:ok, message} ->
         conn |> put_status(sent_status(message)) |> json(%{message: message_json(message)})
 
+      {:error, %Ash.Error.Forbidden{} = error} ->
+        # Standing cannot be read while the fleet's key ownership is not fresh.
+        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+
       {:error, error} ->
         refuse(conn, error)
     end
@@ -124,6 +128,9 @@ defmodule KeyFleetWeb.AgentRoomController do
   defp refuse(conn, _error), do: invalid(conn, "invalid_message")
 
   defp forbidden(conn), do: conn |> put_status(403) |> json(%{error: "not_a_member"})
+
+  defp refreshing(conn),
+    do: conn |> put_status(503) |> json(%{error: "ownership_refreshing"})
 
   defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "room_unknown"})
 

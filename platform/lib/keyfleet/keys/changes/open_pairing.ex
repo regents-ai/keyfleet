@@ -3,12 +3,14 @@ defmodule KeyFleet.Keys.Changes.OpenPairing do
   Opens one agent's attachment to a key under the owner the key has right now.
 
   An agent signing from the owner's own wallet attaches straight away; anyone
-  else leaves a request the owner can approve.
+  else leaves a request the owner can approve. Neither happens while the
+  fleet's key ownership is not fresh, since the owner is not known then.
   """
   use Ash.Resource.Change
 
   alias KeyFleet.Actors.Agent
   alias KeyFleet.Keys.Errors.AlreadyOperatingError
+  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
   alias KeyFleet.Keys.Errors.ProfileRequiredError
   alias KeyFleet.Keys.Errors.UnknownKeyError
   alias KeyFleet.Keys.PairingLedger
@@ -20,21 +22,28 @@ defmodule KeyFleet.Keys.Changes.OpenPairing do
       token_id = Ash.Changeset.get_argument(changeset, :token_id)
       PairingLedger.lock_key!(fleet_id, token_id)
 
-      case {KeyFleet.Keys.current_key!(fleet_id, token_id, actor: actor),
+      case {KeyFleet.Chain.fresh?(fleet_id),
+            KeyFleet.Keys.current_key!(fleet_id, token_id, actor: actor),
             KeyFleet.Agents.get_my_profile!(actor: actor)} do
-        {nil, _profile} ->
+        {false, _epoch, _profile} ->
+          Ash.Changeset.add_error(
+            changeset,
+            OwnershipRefreshingError.exception(fleet_id: fleet_id)
+          )
+
+        {true, nil, _profile} ->
           Ash.Changeset.add_error(
             changeset,
             UnknownKeyError.exception(fleet_id: fleet_id, token_id: token_id)
           )
 
-        {_epoch, nil} ->
+        {true, _epoch, nil} ->
           Ash.Changeset.add_error(
             changeset,
             ProfileRequiredError.exception(wallet_address: wallet)
           )
 
-        {epoch, profile} ->
+        {true, epoch, profile} ->
           open(changeset, epoch, profile, wallet, actor)
       end
     end)

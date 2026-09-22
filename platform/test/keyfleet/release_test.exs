@@ -115,6 +115,29 @@ defmodule KeyFleet.ReleaseTest do
     end
   end
 
+  test "the operator launchers pass their one argument to the guarded functions and demand it" do
+    exports = Release.__info__(:functions)
+
+    for {path, command, env} <- [
+          {"rel/overlays/bin/seed-deployment", :seed_deployment, "KEYFLEET_DEPLOYED_MANIFEST"},
+          {"rel/overlays/bin/clear-fleet-stop", :clear_fleet_stop, "KEYFLEET_STOPPED_FLEET"}
+        ] do
+      script = File.read!(path)
+
+      assert script =~ ~s{KeyFleet.Release.#{command}(System.fetch_env!("#{env}"))}
+      assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
+      refute script =~ "DATABASE_POOLED_URL"
+      refute script =~ "DATABASE_DIRECT_URL"
+      assert File.stat!(path).mode |> Bitwise.band(0o100) != 0
+      assert {command, 1} in exports
+
+      # Without its argument the launcher stops before the release starts.
+      assert {output, status} = System.cmd("sh", [path], stderr_to_stdout: true)
+      assert status != 0
+      assert output =~ "usage: #{Path.basename(path)} <"
+    end
+  end
+
   test "bootstrap refuses every role but staging before it opens a connection" do
     for role <- [nil, "", "production", "Staging", "staging ", "rehearsal"] do
       getenv = fn
@@ -181,6 +204,7 @@ defmodule KeyFleet.ReleaseTest do
 
     assert table_names(config, "keyfleet_app") == [
              "agent_profiles",
+             "chain_cursors",
              "fleets",
              "key_attachments",
              "key_pairings",

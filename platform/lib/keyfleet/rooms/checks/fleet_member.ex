@@ -5,7 +5,8 @@ defmodule KeyFleet.Rooms.Checks.FleetMember do
 
   Nobody is enrolled in a fleet and nothing about this is stored. Standing is
   read from the keys themselves every time somebody posts, so a key changing
-  hands moves the right to post with it.
+  hands moves the right to post with it. While the fleet's key ownership is not
+  fresh, nobody has standing.
   """
   use Ash.Policy.SimpleCheck
 
@@ -31,9 +32,9 @@ defmodule KeyFleet.Rooms.Checks.FleetMember do
   The same question the policy asks, so a page can offer somebody the box to
   write in exactly when the post would be taken.
   """
-  def member?(actor, fleet_id)
+  def member?(actor, fleet_id), do: KeyFleet.Chain.fresh?(fleet_id) and holds?(actor, fleet_id)
 
-  def member?(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
+  defp holds?(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
     KeyAttachment
     |> Ash.Query.for_read(
       :held_in_fleet,
@@ -43,7 +44,7 @@ defmodule KeyFleet.Rooms.Checks.FleetMember do
     |> Ash.exists?()
   end
 
-  def member?(%Agent{} = actor, fleet_id) do
+  defp holds?(%Agent{} = actor, fleet_id) do
     if Agent.valid?(actor) do
       KeyPairing
       |> Ash.Query.for_read(:my_effective_pairings, %{fleet_id: fleet_id}, actor: actor)
@@ -53,5 +54,5 @@ defmodule KeyFleet.Rooms.Checks.FleetMember do
     end
   end
 
-  def member?(_actor, _fleet_id), do: false
+  defp holds?(_actor, _fleet_id), do: false
 end

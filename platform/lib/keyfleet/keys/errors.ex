@@ -21,3 +21,11 @@ defmodule KeyFleet.Keys.Errors.AlreadyOperatingError do
   def message(%{fleet_id: fleet_id, token_id: token_id}),
     do: "already the operator of key #{token_id} in #{fleet_id}"
 end
+
+defmodule KeyFleet.Keys.Errors.OwnershipRefreshingError do
+  @moduledoc "Raised when a fleet's key ownership is not fresh enough to act on."
+  use Splode.Error, fields: [:fleet_id], class: :forbidden
+
+  def message(%{fleet_id: fleet_id}),
+    do: "key ownership in #{fleet_id} is being refreshed; try again in a moment"
+end

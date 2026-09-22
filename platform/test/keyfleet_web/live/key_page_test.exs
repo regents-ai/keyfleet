@@ -4,6 +4,7 @@ defmodule KeyFleetWeb.Live.KeyPageTest do
   alias KeyFleet.Accounts
   alias KeyFleet.Actors
   alias KeyFleet.Agents
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
 
@@ -18,6 +19,7 @@ defmodule KeyFleetWeb.Live.KeyPageTest do
 
   setup do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!(@fleet)
 
     Keys.record_epoch!(
       %{
@@ -109,6 +111,16 @@ defmodule KeyFleetWeb.Live.KeyPageTest do
 
     assert html =~ "This key isn’t here yet"
     refute html =~ "Orbit runner"
+  end
+
+  # Reading never waits on ownership being fresh; only acting on a key does.
+  test "a fleet's page lists its keys even while ownership is being refreshed", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+    reader = "0x" <> String.duplicate("d", 40)
+
+    {:ok, view, _html} = conn |> signed_in_as(reader) |> live("/app/fleets/#{@fleet}")
+
+    assert view |> element("#fleet-key-1") |> render() =~ "Held by 0xaaaa…aaaa"
   end
 
   defp signed_in_as(conn, wallet) do

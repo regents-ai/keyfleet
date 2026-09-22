@@ -50,6 +50,17 @@ config :keyfleet, :app_surfaces, app_surfaces?
 
 Logger.info("App surfaces #{if app_surfaces?, do: "enabled", else: "disabled"}")
 
+# Fleets are read from the chain only when a node is named, and never by the
+# test suite.
+if config_env() != :test do
+  config :keyfleet, KeyFleet.Chain,
+    rpc_url:
+      (case System.get_env("KEYFLEET_RPC_URL") do
+         url when url in [nil, ""] -> nil
+         url -> url
+       end)
+end
+
 migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
 database_config =

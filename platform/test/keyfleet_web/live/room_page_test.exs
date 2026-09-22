@@ -4,6 +4,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
   alias KeyFleet.Accounts
   alias KeyFleet.Actors
   alias KeyFleet.Agents
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
@@ -19,6 +20,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
 
   setup do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_core_rooms!()
 
     Keys.record_epoch!(
@@ -139,7 +141,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     {:ok, view, html} =
       conn |> signed_in_as(@owner) |> live("/app/fleets/fibonacci_syndicate/rooms/hull-survey")
 
-    assert has_element?(view, ".rooms-kicker", "Fibonacci Syndicate")
+    assert has_element?(view, ".rooms-kicker", "Keyfleet Syndicate")
     assert html =~ "This room doesn’t exist."
     refute html =~ "Nothing has been said here yet."
     refute has_element?(view, @composer)
