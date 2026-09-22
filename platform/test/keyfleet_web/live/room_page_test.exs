@@ -137,6 +137,28 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     assert html =~ ~s(<a href="https://example.com" rel="noopener noreferrer">)
   end
 
+  test "a visitor who is not signed in is told who can post, whatever ownership is doing",
+       %{conn: conn} do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+
+    {:ok, _view, html} = live(conn, @path)
+
+    assert html =~ "Everyone can read."
+    refute html =~ "being refreshed"
+  end
+
+  test "a key holder of a live fleet is told posting waits while ownership is refreshed",
+       %{conn: conn} do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+
+    {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
+
+    assert html =~ "Key ownership is being refreshed"
+    refute has_element?(view, @composer)
+  end
+
   test "a room the fleet does not have says so and offers no box", %{conn: conn} do
     {:ok, view, html} =
       conn |> signed_in_as(@owner) |> live("/app/fleets/fibonacci_syndicate/rooms/hull-survey")
@@ -175,5 +197,20 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
       )
 
     init_test_session(conn, %{human_account_id: account.id})
+  end
+
+  defp deploy! do
+    @fleet
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8_453,
+        contract_address: "0x" <> String.duplicate("7", 40),
+        rewards_address: "0x" <> String.duplicate("8", 40),
+        votes_address: "0x" <> String.duplicate("9", 40),
+        deployed_block: 1
+      },
+      actor: %Actors.System{}
+    )
   end
 end

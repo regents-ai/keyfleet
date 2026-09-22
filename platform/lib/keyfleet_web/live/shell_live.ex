@@ -352,7 +352,7 @@ defmodule KeyFleetWeb.ShellLive do
         rooms: rooms,
         last_seq: last_seq(posts, 0),
         can_post?: room != nil and FleetMember.member?(actor, fleet_id),
-        refreshing?: not Chain.fresh?(fleet_id),
+        refreshing?: posting_paused?(actor, rooms, fleet_id),
         draft: ""
       },
       room_notice: nil,
@@ -370,6 +370,13 @@ defmodule KeyFleetWeb.ShellLive do
   # Every fleet opens with its rooms, so a fleet with none is one there is not.
   defp fleet_name([room | _rooms]), do: room.fleet.name
   defp fleet_name([]), do: nil
+
+  # Only someone signed in to a live fleet is told that posting waits on key
+  # ownership being refreshed; everyone else is told who can post.
+  defp posting_paused?(%Human{}, [room | _rooms], fleet_id),
+    do: room.fleet.contract_address != nil and not Chain.fresh?(fleet_id)
+
+  defp posting_paused?(_actor, _rooms, _fleet_id), do: false
 
   # One subscription per fleet, taken up on the way into its rooms and dropped
   # on the way out, so a page only hears about the fleet it is showing.
@@ -446,7 +453,7 @@ defmodule KeyFleetWeb.ShellLive do
             &1
             | draft: body,
               can_post?: &1.can_post? and FleetMember.member?(actor, fleet_id),
-              refreshing?: not Chain.fresh?(fleet_id)
+              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
           }
         )
     end
