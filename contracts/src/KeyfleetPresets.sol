@@ -17,7 +17,7 @@ library KeyfleetPresets {
     }
 
     /// @notice How a single gross purchase amount is divided. The five parts always sum to gross.
-    /// @param protocol Regents treasury share, taken on every purchase.
+    /// @param protocol Protocol share for the Regents staking contract, taken on every purchase.
     /// @param referral Referrer share, zero when no referrer is supplied.
     /// @param capital Fleet capital share.
     /// @param reserve Level-completion reserve, used by Fibonacci Cascade only.
@@ -67,7 +67,7 @@ library KeyfleetPresets {
     uint256 internal constant ACCELERANT_STEP_NUMERATOR = 105;
     uint256 internal constant ACCELERANT_STEP_DENOMINATOR = 100;
 
-    /// @notice Regents treasury share of gross, in basis points.
+    /// @notice Protocol share of gross for the Regents staking contract, in basis points.
     uint256 internal constant PROTOCOL_BPS = 500;
     /// @notice Referrer share of gross, in basis points, applied only when a referrer is supplied.
     uint256 internal constant REFERRAL_BPS = 1000;

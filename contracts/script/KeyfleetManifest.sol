@@ -33,10 +33,12 @@ abstract contract KeyfleetManifest is Script {
     /// @param regent The REGENT token, which the record step lists among the deposit assets the
     /// Regents Safe is expected to admit. No fleet holds it. It must hold code, and on Base it must
     /// be `BASE_REGENT`.
-    /// @param usdc The USDC every key is paid in, and the only fee that takes the staking route.
+    /// @param usdc The USDC every key is paid in, and the only asset whose fee and protocol share
+    /// take the staking route.
     /// On Base it must be `BASE_USDC`.
-    /// @param treasury The Regents treasury, paid its share of every purchase.
-    /// @param staking The Regents revenue staking contract that registers USDC fees.
+    /// @param treasury The Regents treasury, paid the deposit fee on every asset other than USDC.
+    /// @param staking The Regents revenue staking contract that registers the 2% USDC deposit fee
+    /// and the 5% protocol share of every purchase.
     /// @param regentSafe The Safe that administers deposit admission, bound into a new registry.
     /// @param autolaunchFactory The one Autolaunch factory the fleets may ever launch through.
     /// @param assetRegistry An existing shared registry, or zero to deploy one for this release.

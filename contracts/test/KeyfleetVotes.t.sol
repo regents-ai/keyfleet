@@ -817,32 +817,35 @@ contract KeyfleetVotesTest is Test {
         votes.execute(proposalId);
     }
 
-    /// @dev Invariant: a vote reaches free working capital and nothing else. A Cascade fleet whose
-    /// whole USDC balance is an incomplete level's completion reserve has no free capital, so the
-    /// vote is refused even though the tokens are sitting in the fleet.
-    function test_aVoteCannotBorrowTheCascadeCompletionReserve() public {
+    /// @dev Invariant: a vote cannot borrow an incomplete level's reserve or spend the protocol share
+    /// owed to stakers. The fleet holds both, yet a passed proposal for that whole balance finds no
+    /// free capital to move and both figures are left exactly as they were.
+    function test_aVoteCannotBorrowTheCascadeReserveOrSpendTheOwedShare() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 1);
 
         uint256 reserve = fleet.cascadeReserve();
+        uint256 owed = fleet.protocolShareOwed();
         assertGt(reserve, 0, "the first Cascade key funds the reserve");
+        assertGt(owed, 0, "and leaves a share owed to stakers");
         assertEq(fleet.freeCapital(address(usdc)), 0, "and none of it is free capital");
-        assertEq(usdc.balanceOf(address(fleet)), reserve, "the fleet is holding it");
+        assertEq(usdc.balanceOf(address(fleet)), reserve + owed, "the fleet is holding both");
 
         vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(usdc), reserve, dave, bytes32(0));
+        uint256 proposalId = votes.proposeTransferCapital(1, address(usdc), reserve + owed, dave, bytes32(0));
         _vote(votes, proposalId, 1, true);
         _close(votes, proposalId);
         assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "the vote itself passed");
 
         vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), reserve, uint256(0))
+            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), reserve + owed, uint256(0))
         );
         votes.execute(proposalId);
 
         assertEq(fleet.cascadeReserve(), reserve, "the reserve is untouched");
-        assertEq(usdc.balanceOf(address(fleet)), reserve);
+        assertEq(fleet.protocolShareOwed(), owed, "and so is the owed share");
+        assertEq(usdc.balanceOf(address(fleet)), reserve + owed);
         assertEq(usdc.balanceOf(dave), 0);
     }
 

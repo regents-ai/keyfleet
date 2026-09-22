@@ -32,7 +32,8 @@ contract MockToken is ERC20 {
 /// reports how much it observed arriving. `setPaused` reproduces `whenNotPaused`, `setShortfall`
 /// reproduces a contract that accepts the tokens but reports less than it took, `setCreditWithoutPulling`
 /// reproduces one that reports the whole amount without ever pulling it, and `setCallback` reproduces
-/// one that calls back into the fleet while the fleet is mid-deposit.
+/// one that calls back into a chosen fleet entry point while the fleet is mid-registration. Like the
+/// live contract, it refuses to register an amount of zero.
 contract MockStaking is IRegentRevenueStaking {
     using SafeERC20 for IERC20;
 
@@ -51,6 +52,7 @@ contract MockStaking is IRegentRevenueStaking {
     uint256 public callCount;
 
     Keyfleet private _callbackFleet;
+    bytes4 private _callbackTarget;
 
     constructor(IERC20 usdc) {
         USDC = usdc;
@@ -68,13 +70,22 @@ contract MockStaking is IRegentRevenueStaking {
         creditWithoutPulling = value;
     }
 
-    function setCallback(Keyfleet fleet) external {
+    /// @dev `target` is the selector of the fleet entry point to call back into.
+    function setCallback(Keyfleet fleet, bytes4 target) external {
         _callbackFleet = fleet;
+        _callbackTarget = target;
     }
 
     function depositUSDC(uint256 amount, bytes32 sourceTag, bytes32 sourceRef) external returns (uint256 received) {
+        require(amount != 0, "AMOUNT_ZERO");
         if (paused) revert StakingPaused();
-        if (address(_callbackFleet) != address(0)) _callbackFleet.depositCapital(address(USDC), amount);
+        if (_callbackTarget == Keyfleet.depositCapital.selector) {
+            _callbackFleet.depositCapital(address(USDC), amount);
+        } else if (_callbackTarget == Keyfleet.purchase.selector) {
+            _callbackFleet.purchase(address(this), address(0), type(uint256).max, block.timestamp);
+        } else if (_callbackTarget == Keyfleet.sendProtocolShare.selector) {
+            _callbackFleet.sendProtocolShare();
+        }
 
         if (creditWithoutPulling) {
             received = amount;
@@ -148,6 +159,7 @@ contract KeyfleetDepositsTest is Test {
         address indexed asset, address indexed depositor, uint256 amount, uint256 net, bytes32 paymentRef
     );
     event SurplusRecognized(address indexed asset, address indexed caller, uint256 amount, uint256 net);
+    event ProtocolShareSent(address indexed caller, uint256 amount);
 
     function setUp() public {
         regent = new MockToken("Regent", "REGENT");
@@ -263,6 +275,29 @@ contract KeyfleetDepositsTest is Test {
         assertEq(fleet.freeCapital(address(other)), 49, "the whole receipt became capital");
     }
 
+    /// @dev Invariant: a USDC receipt too small to carry a fee never calls the staking contract, which
+    /// refuses to register zero. Both a deposit and a recognized surplus of 49 atomic units are kept
+    /// whole as capital.
+    function test_usdcReceiptBelowFiftyUnitsNeverCallsStaking() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _admit(fleet, address(usdc));
+
+        _fund(fleet, usdc, 49);
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit FeeCharged(address(usdc), 49, 0, address(staking));
+        vm.prank(payer);
+        fleet.depositCapital(address(usdc), 49);
+        assertEq(fleet.freeCapital(address(usdc)), 49, "the whole deposit became capital");
+
+        usdc.mint(address(fleet), 49);
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit FeeCharged(address(usdc), 49, 0, address(staking));
+        assertEq(fleet.recognizeSurplus(address(usdc)), 49, "the whole surplus became capital");
+        assertEq(fleet.freeCapital(address(usdc)), 98);
+
+        assertEq(staking.callCount(), 0, "the staking contract was never called");
+    }
+
     /// @dev Invariant: a deposit of nothing is refused, so no empty receipt can be recorded.
     function test_zeroAmountIsRejected() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
@@ -330,7 +365,7 @@ contract KeyfleetDepositsTest is Test {
 
     /// @dev Invariant: the fleet believes the amount the staking contract reports, not the amount it
     /// sent, so a contract that takes the fee but registers less than all of it is refused.
-    function test_underReportingStakingRevertsFeeRegistrationFailed() public {
+    function test_underReportingStakingRevertsStakingRegistrationFailed() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _admit(fleet, address(usdc));
         staking.setShortfall(1);
@@ -338,7 +373,7 @@ contract KeyfleetDepositsTest is Test {
         usdc.mint(payer, 10_000e6);
         vm.startPrank(payer);
         usdc.approve(address(fleet), 10_000e6);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.FeeRegistrationFailed.selector, 200e6, 200e6 - 1));
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, 200e6, 200e6 - 1));
         fleet.depositCapital(address(usdc), 10_000e6);
         vm.stopPrank();
 
@@ -733,10 +768,19 @@ contract KeyfleetDepositsTest is Test {
         assertEq(rewards.backed(address(usdc)), 980e6 + 20_000_000, "the reimbursement joins the revenue");
         assertEq(rewards.accrued(address(usdc), 1), 490e6 + 10_000_000, "key 1 earned revenue and repayment");
 
-        assertEq(usdc.balanceOf(address(fleet)), fleet.freeCapital(address(usdc)), "the fleet holds only capital");
+        uint256 owed = 2 * 500_000 + 3 * 600_000;
+        assertEq(fleet.protocolShareOwed(), owed, "the owed share is 5% of each purchase");
+        assertEq(
+            usdc.balanceOf(address(fleet)),
+            fleet.freeCapital(address(usdc)) + owed,
+            "the fleet holds only capital and the owed share"
+        );
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds only backing");
-        assertEq(usdc.balanceOf(treasury), 2 * 500_000 + 3 * 600_000, "the treasury holds only purchase shares");
         assertEq(staking.registered(), 2 * 20e6, "staking holds only the two deposit fees");
+
+        fleet.sendProtocolShare();
+        assertEq(staking.registered(), 2 * 20e6 + owed, "and then the owed share as well");
+        assertEq(usdc.balanceOf(address(fleet)), fleet.freeCapital(address(usdc)), "leaving the fleet only capital");
 
         vm.prank(alice);
         assertEq(rewards.claim(address(usdc), _one(1), address(0)), 500e6, "both are paid in one claim");
@@ -790,7 +834,7 @@ contract KeyfleetDepositsTest is Test {
     function test_reentryFromTheStakingContractIsRejected() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _admit(fleet, address(usdc));
-        staking.setCallback(fleet);
+        staking.setCallback(fleet, Keyfleet.depositCapital.selector);
 
         _fund(fleet, usdc, 10_000e6);
         vm.prank(payer);
@@ -811,7 +855,7 @@ contract KeyfleetDepositsTest is Test {
 
         _fund(fleet, usdc, 10_000e6);
         vm.prank(payer);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.FeeRegistrationFailed.selector, 200e6, 200e6));
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, 200e6, 200e6));
         fleet.depositCapital(address(usdc), 10_000e6);
 
         assertEq(usdc.balanceOf(payer), 10_000e6, "the payer keeps every unit");
@@ -879,7 +923,11 @@ contract KeyfleetDepositsTest is Test {
             fleet.recognizeSurplus(address(usdc));
             _assertCovered(fleet, usdc);
             assertGt(fleet.cascadeReserve(), 0, "the reserve survived recognition");
+            assertGt(fleet.protocolShareOwed(), 0, "and so did the owed share");
         }
+
+        fleet.sendProtocolShare();
+        _assertCovered(fleet, usdc);
     }
 
     function _assertCovered(Keyfleet fleet, MockToken token) private view {
@@ -888,6 +936,188 @@ contract KeyfleetDepositsTest is Test {
             fleet.accountedBalance(address(token)),
             "the fleet holds at least what it booked"
         );
+    }
+
+    // --- 7. protocol share -------------------------------------------------
+
+    /// @dev Invariant: on every preset, anyone at all, holding no key, may send the whole owed share,
+    /// and it reaches the staking contract as registered revenue under the fleet's source tag and the
+    /// protocol-share reference, with the approval fully consumed. Nothing is left owed and the fleet
+    /// is left holding exactly its capital and reserve. A second send has nothing to send.
+    function test_anyoneSendsTheWholeOwedShareToStaking() public {
+        address stranger = address(0x5791);
+        uint256 registeredBefore;
+        for (uint256 p = 0; p < 4; ++p) {
+            Keyfleet fleet = _deploy(KeyfleetPresets.Preset(p));
+            _buyMany(fleet, 5);
+            uint256 owed = fleet.protocolShareOwed();
+            assertGt(owed, 0, "the purchases left a share owed");
+            assertEq(fleet.balanceOf(stranger), 0, "the caller holds no key");
+
+            vm.expectEmit(true, true, true, true, address(fleet));
+            emit ProtocolShareSent(stranger, owed);
+            vm.prank(stranger);
+            assertEq(fleet.sendProtocolShare(), owed, "the whole owed share was sent");
+
+            assertEq(staking.registered(), registeredBefore + owed, "staking registered exactly the owed share");
+            assertEq(staking.lastAmount(), owed, "in one registration");
+            assertEq(staking.lastTag(), keccak256("keyfleet"), "under the keyfleet source tag");
+            assertEq(staking.lastRef(), keccak256("keyfleet.protocol-share"), "carrying the protocol-share reference");
+            assertEq(fleet.PROTOCOL_SHARE_REF(), keccak256("keyfleet.protocol-share"));
+            assertEq(staking.lastPayer(), address(fleet), "paid by the fleet itself");
+            assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval is left behind");
+            assertEq(fleet.protocolShareOwed(), 0, "nothing is owed any more");
+            assertEq(
+                usdc.balanceOf(address(fleet)),
+                fleet.freeCapital(address(usdc)) + fleet.cascadeReserve(),
+                "the fleet holds only capital and reserve"
+            );
+            registeredBefore = staking.registered();
+
+            vm.prank(stranger);
+            vm.expectRevert(Keyfleet.ZeroAmount.selector);
+            fleet.sendProtocolShare();
+        }
+    }
+
+    /// @dev Invariant: a paused staking contract stops the send and never a purchase. The whole
+    /// share stays owed, purchases keep adding to it, and once staking reopens one send registers
+    /// everything that built up.
+    function test_pausedStakingStopsTheSendButNeverAPurchase() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buy(fleet, alice);
+        uint256 owed = fleet.protocolShareOwed();
+        staking.setPaused(true);
+
+        vm.expectRevert(MockStaking.StakingPaused.selector);
+        fleet.sendProtocolShare();
+        assertEq(fleet.protocolShareOwed(), owed, "the whole share is still owed");
+        assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval survives the revert");
+
+        _buy(fleet, bob);
+        assertEq(fleet.totalMinted(), 2, "a purchase goes through while staking is paused");
+        assertEq(fleet.protocolShareOwed(), 2 * owed, "and adds its share on top");
+        assertEq(
+            usdc.balanceOf(address(fleet)),
+            fleet.freeCapital(address(usdc)) + fleet.protocolShareOwed(),
+            "the fleet holds capital and the owed share"
+        );
+
+        staking.setPaused(false);
+        assertEq(fleet.sendProtocolShare(), 2 * owed, "one send registers everything that built up");
+        assertEq(staking.registered(), 2 * owed);
+        assertEq(fleet.protocolShareOwed(), 0);
+    }
+
+    /// @dev Invariant: the send believes the staking contract only when it reports receiving the
+    /// whole owed share and has spent its approval, so one that under-reports or credits without
+    /// pulling is refused, the share stays owed, and a later purchase still accrues on top.
+    function test_stakingThatMisreportsTheShareIsRefusedAndTheShareStaysOwed() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buy(fleet, alice);
+        uint256 owed = fleet.protocolShareOwed();
+
+        staking.setShortfall(1);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, owed, owed - 1));
+        fleet.sendProtocolShare();
+        assertEq(fleet.protocolShareOwed(), owed, "an under-report leaves the share owed");
+        staking.setShortfall(0);
+
+        staking.setCreditWithoutPulling(true);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, owed, owed));
+        fleet.sendProtocolShare();
+        assertEq(fleet.protocolShareOwed(), owed, "a credit without a pull leaves the share owed");
+        assertEq(usdc.allowance(address(fleet), address(staking)), 0, "and no approval behind");
+
+        _buy(fleet, bob);
+        assertEq(fleet.protocolShareOwed(), 2 * owed, "a later purchase accrues on top");
+        assertEq(staking.registered(), 0, "nothing was ever registered");
+        assertEq(usdc.balanceOf(address(staking)), 0, "and nothing was ever taken");
+    }
+
+    /// @dev Invariant: the send calls the staking contract, so the guard has to hold against it. A
+    /// staking contract that called back into a purchase or into a second send could otherwise act
+    /// on a fleet whose owed share it had not finished taking.
+    function test_reentryFromTheStakingContractDuringASendIsRejected() public {
+        bytes4[2] memory targets = [Keyfleet.purchase.selector, Keyfleet.sendProtocolShare.selector];
+        for (uint256 i = 0; i < targets.length; ++i) {
+            Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+            _buy(fleet, alice);
+            uint256 owed = fleet.protocolShareOwed();
+            staking.setCallback(fleet, targets[i]);
+
+            vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+            fleet.sendProtocolShare();
+
+            assertEq(fleet.protocolShareOwed(), owed, "the share is still owed");
+            assertEq(fleet.totalMinted(), 1, "no key was bought from inside the send");
+        }
+        assertEq(staking.registered(), 0, "nothing was registered");
+    }
+
+    /// @dev Invariant: the owed share is accounted for, so it is never surplus. A stray transfer
+    /// alone shows as surplus, and recognizing it books that transfer and leaves the owed share
+    /// exactly where it was.
+    function test_theOwedShareIsNeverSurplus() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _admit(fleet, address(usdc));
+        _buy(fleet, alice);
+        _buy(fleet, bob);
+        uint256 owed = fleet.protocolShareOwed();
+        uint256 capital = fleet.freeCapital(address(usdc));
+
+        assertEq(fleet.accountedBalance(address(usdc)), capital + owed, "the owed share is accounted for");
+        assertEq(fleet.surplus(address(usdc)), 0, "so purchases leave no surplus");
+        vm.expectRevert(Keyfleet.NoSurplus.selector);
+        fleet.recognizeSurplus(address(usdc));
+
+        usdc.mint(address(fleet), 10_000);
+        assertEq(fleet.surplus(address(usdc)), 10_000, "only the stray transfer is surplus");
+        assertEq(fleet.recognizeSurplus(address(usdc)), 9_800);
+        assertEq(fleet.protocolShareOwed(), owed, "recognition left the owed share untouched");
+        assertEq(fleet.freeCapital(address(usdc)), capital + 9_800, "and booked only the stray transfer");
+        assertEq(fleet.surplus(address(usdc)), 0);
+    }
+
+    /// @dev Invariant: a send takes exactly the owed share and nothing else the fleet holds. USDC
+    /// that arrived by a plain transfer and has not been recognized stays behind as surplus.
+    function test_aSendTakesOnlyTheOwedShareAndLeavesStraysAsSurplus() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buy(fleet, alice);
+        uint256 owed = fleet.protocolShareOwed();
+        uint256 capital = fleet.freeCapital(address(usdc));
+        usdc.mint(address(fleet), 10_000);
+
+        assertEq(fleet.sendProtocolShare(), owed, "the send reports the owed share");
+        assertEq(staking.registered(), owed, "staking registered exactly the owed share");
+        assertEq(usdc.balanceOf(address(staking)), owed, "and took exactly that");
+        assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still surplus");
+        assertEq(fleet.freeCapital(address(usdc)), capital, "and capital is unchanged");
+        assertEq(usdc.balanceOf(address(fleet)), capital + 10_000);
+    }
+
+    /// @dev Invariant: a vote can only spend free capital, so the owed share is out of its reach
+    /// even though the fleet holds it. Asking for one unit more than the free capital is refused,
+    /// and the whole free capital can still leave while the owed share stays behind.
+    function test_aVoteCannotSpendTheOwedShare() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buy(fleet, alice);
+        uint256 owed = fleet.protocolShareOwed();
+        uint256 capital = fleet.freeCapital(address(usdc));
+        assertEq(usdc.balanceOf(address(fleet)), capital + owed, "the fleet holds both");
+        address votes = address(fleet.VOTES());
+
+        vm.prank(votes);
+        vm.expectRevert(
+            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), capital + 1, capital)
+        );
+        fleet.transferCapital(address(usdc), capital + 1, bob);
+
+        vm.prank(votes);
+        fleet.transferCapital(address(usdc), capital, bob);
+        assertEq(usdc.balanceOf(address(fleet)), owed, "only the owed share is left");
+        assertEq(fleet.protocolShareOwed(), owed);
+        assertEq(fleet.sendProtocolShare(), owed, "and it still goes to the stakers");
     }
 }
 
@@ -899,6 +1129,9 @@ contract KeyfleetDepositsGasTest is Test {
     using stdStorage for StdStorage;
 
     uint64 private constant VOTING_WINDOW = 24 hours;
+    /// @dev `sendProtocolShare` measured 217,710 gas in execution; the ceiling is that plus twenty
+    /// percent, rounded up to the nearest thousand.
+    uint256 private constant SEND_CEILING = 262_000;
 
     StdStorage private fleetStore;
 
@@ -953,6 +1186,27 @@ contract KeyfleetDepositsGasTest is Test {
         revenueAsset.mint(payer, 1_000_000e18);
         vm.prank(payer);
         revenueAsset.approve(address(fleet), type(uint256).max);
+    }
+
+    /// @dev A send touches one fleet slot and one registration. It is measured with the fleet, USDC
+    /// and the staking stand-in all cold, against the mock staking contract, whose own bookkeeping
+    /// is most of the figure, so this is a regression bound and the fork figure in the contracts
+    /// README is the one to publish.
+    function test_sendProtocolShareGas() public {
+        uint256 owed = fleet.protocolShareOwed();
+        assertGt(owed, 0, "the twenty purchases left a share owed");
+
+        vm.cool(address(fleet));
+        vm.cool(address(usdc));
+        vm.cool(address(staking));
+
+        uint256 before = gasleft();
+        fleet.sendProtocolShare();
+        uint256 used = before - gasleft();
+
+        emit log_named_uint("sendProtocolShare gas", used);
+        assertLt(used, SEND_CEILING, "the send stays under its ceiling");
+        assertEq(staking.registered(), owed, "the whole owed share was registered");
     }
 
     function _levelStart(uint256 level) private pure returns (uint256) {

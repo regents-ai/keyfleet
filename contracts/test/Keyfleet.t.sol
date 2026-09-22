@@ -207,8 +207,8 @@ contract KeyfleetTest is Test {
     function _assertBalanceInvariant(Keyfleet fleet) private view {
         assertEq(
             usdc.balanceOf(address(fleet)),
-            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve(),
-            "fleet USDC balance equals capital plus reserve"
+            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve() + fleet.protocolShareOwed(),
+            "fleet USDC balance equals capital plus reserve plus the owed protocol share"
         );
     }
 
@@ -460,9 +460,9 @@ contract KeyfleetTest is Test {
 
     // --- 3. Syndicate and Classic ledgers ---------------------------------
 
-    /// @dev Invariant: without a referrer the treasury takes 5% and every remaining unit is free
-    /// capital; the fleet's USDC balance is exactly the capital it recorded.
-    function test_syndicatePurchaseWithoutReferrerPaysTreasuryAndCapital() public {
+    /// @dev Invariant: without a referrer 5% is owed to REGENT stakers and every remaining unit is
+    /// free capital; the fleet's USDC balance is exactly those two figures.
+    function test_syndicatePurchaseWithoutReferrerOwesStakersAndBooksCapital() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
 
         uint256 price = _fundNext(fleet);
@@ -471,7 +471,7 @@ contract KeyfleetTest is Test {
         vm.prank(buyer);
         fleet.purchase(alice, address(0), 2 * price, block.timestamp);
 
-        assertEq(usdc.balanceOf(treasury), Q / 20, "5% to the treasury");
+        assertEq(fleet.protocolShareOwed(), Q / 20, "5% owed to stakers");
         assertEq(fleet.freeCapital(address(usdc)), Q - Q / 20, "95% to capital");
         assertEq(fleet.cascadeReserve(), 0, "Syndicate holds no reserve");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no reward backing without a referral");
@@ -486,7 +486,7 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, alice, carol);
 
-        assertEq(usdc.balanceOf(treasury), Q / 20, "5% to the treasury");
+        assertEq(fleet.protocolShareOwed(), Q / 20, "5% owed to stakers");
         assertEq(rewards.credits(address(usdc), carol), Q / 10, "10% credited to the referrer");
         assertEq(rewards.backed(address(usdc)), Q / 10, "the credit is fully backed");
         assertEq(usdc.balanceOf(address(rewards)), Q / 10, "the backing tokens are in the ledger");
@@ -514,8 +514,9 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev Invariant: across many purchases with and without referrers, every USDC unit paid ends
-    /// up in exactly one of the four places that can hold it.
-    function test_everyPaidUnitLandsInCapitalTreasuryOrRewardBacking() public {
+    /// up in exactly one of the four places that can hold it, and none of it leaves the fleet and
+    /// its ledger.
+    function test_everyPaidUnitLandsInCapitalReserveOwedShareOrRewardBacking() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 totalPaid;
         for (uint256 i = 0; i < 20; ++i) {
@@ -526,10 +527,15 @@ contract KeyfleetTest is Test {
         }
 
         assertEq(
-            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve() + usdc.balanceOf(treasury)
+            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve() + fleet.protocolShareOwed()
                 + usdc.balanceOf(address(fleet.REWARDS())),
             totalPaid,
-            "buckets, treasury and reward backing account for every unit"
+            "buckets, owed share and reward backing account for every unit"
+        );
+        assertEq(
+            usdc.balanceOf(address(fleet)) + usdc.balanceOf(address(fleet.REWARDS())),
+            totalPaid,
+            "and all of it is still held by the fleet or its ledger"
         );
     }
 
@@ -545,6 +551,28 @@ contract KeyfleetTest is Test {
         assertEq(fleet.freeCapital(address(other)), 0, "a stray token is not capital");
         assertEq(other.balanceOf(address(fleet)), 500e18, "and it is not moved either");
         _assertBalanceInvariant(fleet);
+    }
+
+    /// @dev Invariant: on every preset, with and without a referrer, each purchase adds exactly 5%
+    /// of its gross, floored, to the protocol share owed to stakers, and the fleet and its ledger
+    /// together still hold every unit paid: the fleet's balance is capital plus reserve plus the
+    /// owed share, and the ledger's balance is exactly what it has backed.
+    function test_everyPresetOwesStakersFivePercentOfEachPurchase() public {
+        for (uint256 p = 0; p < 4; ++p) {
+            Keyfleet fleet = _deploy(KeyfleetPresets.Preset(p));
+            KeyfleetRewards rewards = fleet.REWARDS();
+            uint256 owed;
+            for (uint256 i = 0; i < 12; ++i) {
+                uint256 price = fleet.nextPrice();
+                _buy(fleet, _wallet(i), i % 3 == 0 ? carol : address(0));
+                owed += (price * 500) / 10_000;
+                assertEq(fleet.protocolShareOwed(), owed, "each purchase adds its floored 5%");
+                _assertBalanceInvariant(fleet);
+                assertEq(
+                    usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds its backing"
+                );
+            }
+        }
     }
 
     // --- 4. Accelerant ----------------------------------------------------
@@ -662,7 +690,7 @@ contract KeyfleetTest is Test {
 
         assertEq(rewards.credits(address(usdc), dave), price / 10, "referrer takes 10%");
         assertEq(rewards.credits(address(usdc), alice), price - price / 20 - price / 10 - price / 10, "75% rebate");
-        assertEq(usdc.balanceOf(treasury), Q / 20 + price / 20, "5% of each purchase");
+        assertEq(fleet.protocolShareOwed(), Q / 20 + price / 20, "5% of each purchase is owed to stakers");
         _assertBalanceInvariant(fleet);
     }
 
@@ -1049,12 +1077,10 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev Measures the first referred purchase on a fresh fleet, which is the most expensive
-    /// primary purchase in this slice: every accounting slot it touches is written from zero. The
-    /// treasury already holds USDC, as it will in production after its first sale, and every
-    /// account the purchase touches starts cold.
+    /// primary purchase in this slice: every accounting slot it touches, the owed protocol share
+    /// included, is written from zero, and every account the purchase touches starts cold.
     function _measureFirstReferredPurchase(KeyfleetPresets.Preset preset) private returns (uint256 used) {
         Keyfleet fleet = _deploy(preset);
-        usdc.mint(treasury, 1);
 
         uint256 price = fleet.nextPrice();
         usdc.mint(buyer, price);
@@ -1069,10 +1095,12 @@ contract KeyfleetTest is Test {
 
     /// @dev The published execution-gas ceiling covers the worst primary purchase: the first referred
     /// one on a fresh Cascade fleet, with every account it touches starting cold. It is measured
-    /// against the plain ERC-20 mock standing in for USDC: 345,059 gas in execution, and the ceiling
-    /// is that plus twenty percent. That makes it a regression bound on the fleet's own work, not
-    /// the figure to publish: real Base USDC is a proxy and costs more per transfer, and the
-    /// fork-measured totals in the contracts README are the published ones.
+    /// against the plain ERC-20 mock standing in for USDC: 361,516 gas in execution, and the ceiling
+    /// is that plus twenty percent, rounded up to the nearest thousand. The first purchase after each
+    /// `sendProtocolShare` pays the write of the owed share from zero again. That makes it a
+    /// regression bound on the fleet's own work, not the figure to publish: real Base USDC is a
+    /// proxy and costs more per transfer, and the fork-measured totals in the contracts README are
+    /// the published ones.
     /// The level-completing Cascade purchase is measured alongside it for information; it is cheaper,
     /// because by then the buckets it writes are warm.
     function test_firstReferredPurchaseOnAFreshFleetIsTheWorstCase() public {
@@ -1086,7 +1114,7 @@ contract KeyfleetTest is Test {
         console2.log("first referred purchase gas, Accelerant:", accelerant);
         console2.log("first referred purchase gas, Classic:", classic);
 
-        assertLt(cascade, 414_000, "the worst primary purchase stays under the published ceiling");
+        assertLt(cascade, 434_000, "the worst primary purchase stays under the published ceiling");
         assertGt(cascade, syndicate, "Cascade is the most expensive preset");
         assertGt(cascade, accelerant);
         assertGt(cascade, classic);
@@ -1113,9 +1141,9 @@ contract KeyfleetTest is Test {
     // --- 11. fuzz invariant -----------------------------------------------
 
     /// @dev Invariant: across random purchase and transfer sequences on any preset, the fleet's
-    /// USDC balance is always exactly its free capital plus its Cascade reserve. Reward backing
-    /// sits in the ledger and the treasury share has left, so nothing else can hide here.
-    function testFuzz_usdcBalanceAlwaysEqualsCapitalPlusReserve(uint256 seed) public {
+    /// USDC balance is always exactly its free capital plus its Cascade reserve plus the protocol
+    /// share owed to stakers. Reward backing sits in the ledger, so nothing else can hide here.
+    function testFuzz_usdcBalanceAlwaysEqualsCapitalPlusReservePlusOwedShare(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset(seed % 4));
         usdc.mint(buyer, 1e30);
         vm.prank(buyer);

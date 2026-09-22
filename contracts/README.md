@@ -54,8 +54,8 @@ cumulative supply through level 20, 46365. The per-wallet holding limit is one k
 for levels 1 through 7 and the level supply divided by 10, rounded down, from
 level 8 up.
 
-Purchase splits are stated in basis points of gross: `PROTOCOL_BPS` 500 to the
-Regents treasury on every purchase, `REFERRAL_BPS` 1000 charged only when a
+Purchase splits are stated in basis points of gross: `PROTOCOL_BPS` 500 for
+the Regents staking contract on every purchase, `REFERRAL_BPS` 1000 charged only when a
 referrer is supplied, and `ACCELERANT_CAPITAL_BPS` 1000 on Accelerant purchases
 that have a predecessor. Each fee is rounded down and the preset's main part
 absorbs the dust, so the five parts always sum to exactly the gross amount.
@@ -63,6 +63,9 @@ Syndicate and Classic send the remainder to capital, Cascade sends it to the
 level-completion reserve, an Accelerant purchase with a predecessor pays capital
 its 10% and rebates the rest to the holder of the preceding key, and the first
 Accelerant mint sends the remainder to capital. A gross amount of zero reverts.
+The product spec (§63) sent the 5% protocol share to the Regents treasury; the
+founder's decision of 22 September 2026 sends it to the Regents staking contract
+instead, and that decision is what the fleet implements.
 
 `KeyfleetRewards` is the per-fleet reward ledger. One instance is deployed per
 fleet and permanently bound to that fleet's address at construction. The fleet is
@@ -163,14 +166,14 @@ and an earlier purchase can move a Fibonacci level or step the Accelerant price.
 check is taken around the pull: USDC is fixed at deployment, and on Base the
 deployment scripts pin it to Base USDC, which is non-rebasing and without a
 transfer fee, so the amount transferred is the amount credited by construction. USDC can be paused and
-can block an address; while it is paused, or for a blocked buyer, fleet or
-treasury, purchases revert, and that is accepted. Every preset price is at least
+can block an address; while it is paused, or for a blocked buyer or fleet,
+purchases revert, and that is accepted. Every preset price is at least
 ten USDC, so the 10% referral share, which the ledger refuses to record as zero,
 always exists.
 
 Within a purchase the order is fixed: the buyer's USDC is pulled, the split is
-taken from `KeyfleetPresets`, the treasury's share is transferred out
-immediately, the referral is moved into the ledger and credited, the preset's own
+taken from `KeyfleetPresets`, the stakers' share is added to
+`protocolShareOwed`, the referral is moved into the ledger and credited, the preset's own
 bookkeeping runs, the key is enrolled in the ledger, the key is minted, and only
 then can a Cascade level complete. Every reward obligation is recorded in the
 same transaction that moves the tokens backing it into the ledger, and nothing is
@@ -202,13 +205,30 @@ whoever holds those keys at that moment. The remainder becomes free capital and
 the reserve is emptied. There is no guaranteed repayment and no refund for an
 unfinished level: repayment requires the next level to complete.
 
+The 5% protocol share of every purchase is registered as revenue with the
+Regents staking contract, which credits REGENT stakers their staked share and
+keeps the rest as treasury residual. A purchase only sets it aside: it adds the share to `protocolShareOwed` and never
+calls the staking contract. `sendProtocolShare()` is how it leaves. Anyone may
+call it at any time, with no threshold and no timer, and it always sends the
+whole owed amount through the same registration a USDC deposit fee uses:
+`depositUSDC(amount, SOURCE_TAG, PROTOCOL_SHARE_REF)`, where
+`PROTOCOL_SHARE_REF` is `keccak256("keyfleet.protocol-share")`, with the same
+two checks described below. It emits `ProtocolShareSent` with the caller and the
+amount, and reverts with `ZeroAmount` when nothing is owed. The Regents staking
+contract rejects `depositUSDC` while it is paused, which is why the share is not
+paid inside the purchase: a paused, under-reporting or non-pulling staking
+contract reverts the send and leaves the whole amount owed, while purchases
+carry on adding to it. The owed share is never spendable capital and never
+surplus, and no vote can reach it.
+
 Working capital is `freeCapital`, keyed by asset: purchases write the USDC
 entry and deposits write the entry of any admitted asset, USDC included, so
 purchase capital and deposited USDC capital are one spendable figure. The Cascade
-completion reserve is a separate USDC-only figure and is never spendable capital.
-Reward backing is not counted here at all, because it lives in the ledger. The
-invariant is that the fleet's balance of an asset is at least what it has booked
-for that asset, which is `freeCapital[asset]` plus, for USDC, `cascadeReserve`. Anyone
+completion reserve and the owed protocol share are separate USDC-only figures and
+are never spendable capital. Reward backing is not counted here at all, because
+it lives in the ledger. The invariant is that the fleet's balance of an asset is
+at least what it has booked for that asset, which is `freeCapital[asset]` plus,
+for USDC, `cascadeReserve` and `protocolShareOwed`. Anyone
 may send tokens to the fleet, and anything above those buckets is ignored until
 it is recognized, because a bare transfer is not capital. The purchase suite
 asserts the tighter form, exact equality, after every step of randomized purchase
@@ -233,18 +253,30 @@ split the next purchase would perform, and both revert once the fleet is sold ou
 `remainingSupply` counts down to zero.
 
 Purchases were measured paying real Base USDC on an anvil fork of Base at block
-51,660,773, in total gas per transaction, the 21,000 base cost included: the
-first referred Syndicate purchase 380,413; the first unreferred Cascade purchase
-306,442; the referred Cascade purchase that completes level 1 344,464; a referred
-Classic purchase 339,962; and Accelerant mints 1, 2 (referred) and 3 at 266,155,
-315,418 and 228,158. The most expensive primary purchase is the first referred
+51,661,303, in total gas per transaction, the 21,000 base cost included: the
+first referred Syndicate purchase 382,189; the first unreferred Cascade purchase
+325,318; the referred Cascade purchase that completes level 1 343,740; a referred
+Classic purchase 358,838; and Accelerant mints 1, 2 (referred) and 3 at 285,031,
+314,694 and 247,034. A purchase made while nothing is owed to stakers, which is
+the first purchase of a fleet and the first after each `sendProtocolShare`,
+writes the owed share from zero and costs about 17,100 gas more than one made
+while a share is already owed: a cold write from zero costs 22,100 and a cold
+write of a slot already holding a value costs 5,000; a referred Classic purchase straight after a send
+measured 239,138. The most expensive primary purchase is the first referred
 purchase on a fresh fleet, because every accounting slot it touches is written
 from zero, and among the presets Cascade's is the dearest. The suite measures that
 purchase against a plain ERC-20 standing in for USDC, with every account starting
-cold, at 345,059 gas in execution, and asserts a ceiling of 414,000, the
-measurement plus twenty percent. That ceiling is a regression bound on the fleet's
-own work, not a figure to quote: Base USDC is a proxy and costs more per transfer
-than the stand-in, so the fork figures above are the ones to publish.
+cold, at 361,516 gas in execution, and asserts a ceiling of 434,000, the
+measurement plus twenty percent rounded up to the nearest thousand. That ceiling
+is a regression bound on the fleet's own work, not a figure to quote: Base USDC is
+a proxy and costs more per transfer than the stand-in, so the fork figures above
+are the ones to publish.
+
+On the same fork, against the real Regents staking contract, `sendProtocolShare`
+measured 121,915 gas in total the first time any fleet sent and 108,970 for each
+fleet after that. The suite measures it against the mock staking contract at
+217,710 gas in execution, most of it the mock's own bookkeeping, and asserts a
+ceiling of 262,000 as a regression bound only.
 
 Non-key money arrives by one of two named paths, and both take the same 2%
 external-receipt fee before anything is booked. `depositCapital(asset, amount)`
@@ -274,7 +306,8 @@ calls `depositUSDC(fee, SOURCE_TAG, paymentRef)`, where `SOURCE_TAG` is
 `keccak256("keyfleet")` and the payment reference is the payer's own, or zero for
 a capital deposit or a recognized surplus. The call must report receiving the
 whole fee back, and the approval it was given must be spent down to nothing;
-either check failing reverts with `FeeRegistrationFailed`. The second check is
+either check failing reverts with `StakingRegistrationFailed`. The protocol-share
+send goes through the same registration and the same two checks. The second check is
 what stops a staking contract that credits the fee without ever pulling it, which
 would otherwise leave the tokens in the fleet under a live approval for a later
 call to recognize as surplus and book twice. A paused staking contract likewise
@@ -318,8 +351,9 @@ Tokens that simply arrive, with no deposit call behind them, create nothing.
 admission-checked like any other receipt, works from the fleet's balance minus
 what it has already recorded a purpose for, charges the same 2%, and books the
 net as free working capital. What it treats as accounted is `freeCapital[asset]`
-plus, for USDC, the Cascade completion reserve, so an incomplete level's
-reserve can never be turned into spendable capital by anyone. Reward backing sits
+plus, for USDC, the Cascade completion reserve and the owed protocol share, so
+an incomplete level's reserve can never be turned into spendable capital by
+anyone and the stakers' share can never be swept into it. Reward backing sits
 in the ledger and is not part of this balance at all, so no recorded liability
 can be reclassified. `accountedBalance(asset)` and `surplus(asset)` report the
 two figures, and a fully accounted balance reverts with `NoSurplus`. Unknown
@@ -334,7 +368,7 @@ revenue and bare transfers against `balanceOf(fleet) >= accountedBalance(asset)`
 The worst case of a revenue deposit is a Fibonacci fleet with all twenty levels
 complete taking an asset it has never seen before, with every slot it touches
 cold: twenty cohort indexes move and the asset is registered in the ledger. That
-measured 788,159 gas in execution. The suite asserts a ceiling of 946,000, which
+measured 788,126 gas in execution. The suite asserts a ceiling of 946,000, which
 is the measurement plus twenty percent, and that is the execution figure the
 deployment manifest should quote, with the 21,000 base transaction cost on top of
 it. The cost is bounded by the preset, not by how many keys or holders the fleet
@@ -403,9 +437,10 @@ cannot execute it twice. `execute` is guarded by OpenZeppelin `ReentrancyGuard`.
 `Keyfleet.transferCapital(asset, amount, recipient)` is what a passed
 `TransferCapital` calls, and the fleet's own controller is its only permitted
 caller. It spends free working capital and nothing else: the Cascade completion
-reserve is a separate figure this path never reads, and reward backing does not
-sit in the fleet at all, so no vote can borrow an incomplete level's reserve or
-withdraw a member's claim. The shortfall is checked explicitly and reverts with
+reserve and the owed protocol share are separate figures this path never reads,
+and reward backing does not sit in the fleet at all, so no vote can borrow an
+incomplete level's reserve, spend the stakers' share or withdraw a member's
+claim. The shortfall is checked explicitly and reverts with
 `InsufficientFreeCapital`, naming the asset, the amount asked for and the amount
 available, rather than leaving it to a bare arithmetic panic. That revert rolls
 the execution mark back with it, so a proposal the capital could not cover stays
@@ -417,8 +452,8 @@ disabling deposits in an asset does not freeze capital already booked in it.
 This deliberately does not solve a majority takeover. A majority of snapshot
 weight can authorize a harmful free-capital transfer, and no hidden creator
 signer is introduced to disguise that. What is protected regardless of any vote
-is claim and reserve solvency, which the suite demonstrates directly against both
-buckets.
+is claim and reserve solvency and the stakers' owed share, which the suite
+demonstrates directly against each of them.
 
 Two calls cost more than a flat amount, and neither of them grows with how many
 keys the fleet has sold. Creating a proposal grows with the preset's twenty
@@ -536,13 +571,13 @@ and an auction and spends far more.
 
 No token a fleet holds is ever swapped or
 converted. The fleet has no administrator, no upgrade path, no pause and no
-burn: the only ways tokens leave it are the treasury share of a purchase, the
-deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
+burn: the only ways tokens leave it are the owed protocol share sent to the
+staking contract, the deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
 ledger, the revenue backing moved into the ledger, and a capital transfer the
 keys have voted for. An Autolaunch moves nothing out at all.
 
 `KeyfleetDirectory` names the four fleets of one release and does nothing else.
-It deploys nothing: `Keyfleet` initcode is 37,806 bytes, so a contract carrying
+It deploys nothing: `Keyfleet` initcode is 38,094 bytes, so a contract carrying
 a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
 deploying all four would exceed the 49,152-byte initcode limit. The script
 deploys the fleets and hands them to the directory, whose constructor is its
@@ -593,7 +628,7 @@ steps, what each refuses, and what the Safe does next.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus, voting, Autolaunch, fleet-directory and
+fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, fleet-directory and
 deployment tests. Foundry must be installed; the compiler may be downloaded on
 first use. Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
 vendored as git submodules under `contracts/lib`, so clone with submodules or

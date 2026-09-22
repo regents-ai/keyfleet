@@ -22,6 +22,11 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// in its constructor, and the tokens backing an obligation are moved into that ledger in the same
 /// transaction that records it.
 ///
+/// The 5% protocol share of every purchase is set aside here in `protocolShareOwed`, and anyone may
+/// send the whole of it with `sendProtocolShare` to be registered as revenue with the Regents
+/// staking contract, which credits REGENT stakers their staked share and keeps the rest as treasury
+/// residual. A paused staking contract delays that send and never a purchase.
+///
 /// It also takes the two non-key deposit paths and the surplus reconciliation. Every new external
 /// receipt pays one 2% fee: in USDC to the Regents staking contract as registered revenue, in any
 /// other admitted asset to the Regents treasury in that asset. Internal movements into the ledger
@@ -29,8 +34,9 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
 /// itself in its constructor. It is the only caller of `transferCapital` and of `executeAutolaunch`,
-/// and free working capital is the only thing it can reach: the Cascade completion reserve and the
-/// ledger's reward backing are not free capital and there is no path from a vote to either of them.
+/// and free working capital is the only thing it can reach: the Cascade completion reserve, the owed
+/// protocol share and the ledger's reward backing are not free capital and there is no path from a
+/// vote to any of them.
 ///
 /// A passed Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1` once, with this fleet
 /// as both launcher and treasury, and records what the factory says it created. That call moves no
@@ -38,9 +44,10 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// is prepared for it here.
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
-/// this contract are the protocol share on a purchase, the referral and Accelerant rebate paid into
-/// the ledger, the Cascade reimbursement paid into the ledger, the deposit fee and revenue backing
-/// of a USDC deposit, and a capital transfer the keys have voted for.
+/// this contract are the owed protocol share sent to the staking contract, the referral and
+/// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, the
+/// deposit fee and revenue backing of a USDC deposit, and a capital transfer the keys have voted
+/// for.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -142,10 +149,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error UsdcDecimalsWrong(uint8 decimals);
     /// @notice The asset is not currently admitted for deposits into this fleet.
     error AssetNotAdmitted(address asset);
-    /// @notice A deposit or a recognized surplus of zero is rejected.
+    /// @notice A deposit of zero, or a protocol-share send with nothing owed, is rejected.
     error ZeroAmount();
-    /// @notice The staking contract did not register the whole USDC fee, so the deposit is refused.
-    error FeeRegistrationFailed(uint256 fee, uint256 received);
+    /// @notice The staking contract did not register the whole USDC amount it was given, so the
+    /// deposit or protocol-share send is refused.
+    error StakingRegistrationFailed(uint256 amount, uint256 received);
     /// @notice No cohort can receive revenue yet: no key is minted, or no Fibonacci level is complete.
     error NoEligibleKeys();
     /// @notice This fleet's balance of the asset is fully accounted for, so there is nothing to recognize.
@@ -171,7 +179,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param receiver The address the key was minted to.
     /// @param referrer The supplied referrer, or the zero address when none was supplied.
     /// @param gross The USDC price paid.
-    /// @param protocol USDC sent to the Regents treasury.
+    /// @param protocol USDC set aside for the staking contract in `protocolShareOwed`.
     /// @param referral USDC credited to the referrer in the ledger.
     /// @param capital USDC added to this fleet's free capital.
     /// @param reserve USDC added to the Cascade completion reserve.
@@ -206,6 +214,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param destination The staking contract for USDC, the Regents treasury for everything else.
     event FeeCharged(address indexed asset, uint256 amount, uint256 fee, address indexed destination);
 
+    /// @notice The whole owed protocol share was registered with the staking contract.
+    /// @param caller Whoever sent it; anyone may.
+    /// @param amount The USDC the staking contract registered, which was the whole owed amount.
+    event ProtocolShareSent(address indexed caller, uint256 amount);
+
     /// @notice A non-key receipt became free working capital.
     event CapitalDeposited(address indexed asset, address indexed depositor, uint256 amount, uint256 net);
 
@@ -234,15 +247,19 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     uint256 public constant DEPOSIT_FEE_BPS = 200;
     /// @notice Revenue source label every fleet reports to the staking contract.
     bytes32 public constant SOURCE_TAG = keccak256("keyfleet");
+    /// @notice Source reference every protocol-share send reports to the staking contract. A USDC
+    /// deposit fee reports the payer's own reference instead, or zero.
+    bytes32 public constant PROTOCOL_SHARE_REF = keccak256("keyfleet.protocol-share");
 
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
-    /// @notice The USDC every primary purchase is paid in, and the one asset whose deposit fee is
-    /// registered as staking revenue. The constructor requires it to be the registry's `BASE_USDC`
-    /// and to report six decimals; the deployment scripts require it to be Base USDC
-    /// `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` on Base.
+    /// @notice The USDC every primary purchase is paid in, and the one asset whose deposit fee and
+    /// protocol share are registered as staking revenue. The constructor requires it to be the
+    /// registry's `BASE_USDC` and to report six decimals; the deployment scripts require it to be
+    /// Base USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` on Base.
     IERC20 public immutable USDC;
-    /// @notice The Regents treasury multisig, paid its share of every purchase immediately.
+    /// @notice The Regents treasury multisig, paid the 2% fee on deposits of every asset other
+    /// than USDC, in that asset.
     address public immutable TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
@@ -251,7 +268,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     KeyfleetVotes public immutable VOTES;
     /// @notice The shared deposit-admission registry, consulted on every new external receipt.
     KeyfleetAssetRegistry public immutable ASSET_REGISTRY;
-    /// @notice The Regents revenue staking contract that registers this fleet's USDC fees.
+    /// @notice The Regents revenue staking contract that registers this fleet's 2% USDC deposit
+    /// fees and its 5% protocol share of every purchase as revenue. It credits REGENT stakers their
+    /// staked share and keeps the rest as treasury residual.
     IRegentRevenueStaking public immutable STAKING;
     /// @notice The one Autolaunch factory this fleet may ever launch through. The strategy is read
     /// from it on every call rather than stored, so a fleet can never disagree with its factory
@@ -268,6 +287,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     mapping(address asset => uint256 amount) public freeCapital;
     /// @notice Cascade only: USDC held back for the next level completion. Never spendable capital.
     uint256 public cascadeReserve;
+    /// @notice USDC set aside from purchases as staking revenue and not yet sent to the staking
+    /// contract. Never spendable capital and never surplus.
+    uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
     /// @notice Fibonacci only: keys of one level an address currently holds, against `holdingLimit`.
@@ -290,10 +312,12 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// Cascade reimbursements are all denominated in it.
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param usdc The USDC the shared registry is bound to, reporting six decimals: every key is
-    /// paid in it, and it is the only asset whose deposit fee takes the staking route.
-    /// @param treasury The Regents treasury multisig.
+    /// paid in it, and it is the only asset whose deposit fee and protocol share take the staking
+    /// route.
+    /// @param treasury The Regents treasury multisig, paid non-USDC deposit fees.
     /// @param assetRegistry The shared deposit-admission registry.
-    /// @param staking The Regents revenue staking contract that registers USDC fees.
+    /// @param staking The Regents revenue staking contract that registers the USDC deposit fees and
+    /// the protocol share.
     /// @param factory The one Autolaunch factory this fleet may launch through.
     /// @param votingWindow Seconds a proposal stays open, within the controller's one-hour to
     /// thirty-day bounds. Production is 24 hours and a testnet fleet uses a shorter window the app
@@ -398,11 +422,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
 
     /// @notice Balance of an asset this fleet has already recorded a purpose for.
     /// @dev Reward backing is not counted: it lives in the ledger, not in this balance. For USDC this
-    /// is free capital plus the Cascade completion reserve, two separate figures that purchases and
-    /// USDC deposits both write to without ever reading each other.
+    /// is free capital plus the Cascade completion reserve plus the owed protocol share, three
+    /// separate figures that purchases and USDC deposits write to without ever reading each other.
     function accountedBalance(address asset) public view returns (uint256) {
         uint256 accounted = freeCapital[asset];
-        if (asset == address(USDC)) accounted += cascadeReserve;
+        if (asset == address(USDC)) accounted += cascadeReserve + protocolShareOwed;
         return accounted;
     }
 
@@ -420,6 +444,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// which is neither rebasing nor fee-charging, so the transferred amount is the credited amount
     /// by construction. A paused USDC, or one that blacklists the caller or this fleet, stops
     /// purchases until it lifts; that is accepted.
+    ///
+    /// The 5% protocol share is added to `protocolShareOwed` and nothing is sent: the staking
+    /// contract is never called from a purchase, so a paused staking contract cannot stop one.
     ///
     /// A referral is credited in the ledger, never pushed. Every key costs at least ten USDC, so the
     /// 10% share is never the zero credit the ledger rejects.
@@ -455,7 +482,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         KeyfleetPresets.PurchaseSplit memory split =
             KeyfleetPresets.splitPurchase(PRESET, gross, referrer != address(0), hasPredecessor);
 
-        USDC.safeTransfer(TREASURY, split.protocol);
+        protocolShareOwed += split.protocol;
         if (referrer != address(0)) {
             USDC.safeTransfer(address(REWARDS), split.referral);
             REWARDS.credit(address(USDC), referrer, split.referral);
@@ -572,9 +599,10 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// the 2% receipt fee.
     /// @dev Permissionless, because it can only ever recognize what nobody has a claim on: it works
     /// from `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is
-    /// free capital plus, for USDC, the Cascade completion reserve. Reward backing sits in the
-    /// ledger and is not part of this balance at all, so no recorded liability can be reclassified,
-    /// and an incomplete level's reserve can never be drawn on.
+    /// free capital plus, for USDC, the Cascade completion reserve and the owed protocol share.
+    /// Reward backing sits in the ledger and is not part of this balance at all, so no recorded
+    /// liability can be reclassified, an incomplete level's reserve can never be drawn on, and the
+    /// stakers' share can never be swept into capital.
     /// @param asset The admitted asset to reconcile.
     /// @return net Atomic units added to free working capital.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 net) {
@@ -586,6 +614,23 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         emit SurplusRecognized(asset, msg.sender, amount, net);
     }
 
+    /// @notice Sends the whole owed protocol share to the Regents staking contract as registered
+    /// revenue.
+    /// @dev Permissionless and all-or-nothing: anyone may call it at any time, and it always sends
+    /// exactly `protocolShareOwed`. The owed figure is zeroed before the staking call and restored
+    /// by the revert if registration fails, so a paused, under-reporting or non-pulling staking
+    /// contract leaves the whole amount owed for a later call, while purchases carry on adding to
+    /// it. Guarded, so a staking contract that calls back cannot reach another entry point while
+    /// this one is half done.
+    /// @return amount The USDC registered with the staking contract.
+    function sendProtocolShare() external nonReentrant returns (uint256 amount) {
+        amount = protocolShareOwed;
+        if (amount == 0) revert ZeroAmount();
+        protocolShareOwed = 0;
+        _registerWithStaking(amount, PROTOCOL_SHARE_REF);
+        emit ProtocolShareSent(msg.sender, amount);
+    }
+
     /// @dev Admission is checked on every new external receipt and nowhere else. Disablement stops
     /// new receipts only: booked capital, recorded reward indexes and pending claims are untouched
     /// by it, because none of them passes through here.
@@ -594,13 +639,10 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     }
 
     /// @dev Takes the one external-receipt fee and returns what the fleet keeps. The fee is floored,
-    /// so a receipt below fifty atomic units pays nothing and is kept whole. USDC is registered as
-    /// staking revenue, which requires both a received amount equal to the fee and the approval it
-    /// was given to be spent down to nothing. A paused, under-reporting or non-pulling staking
-    /// contract therefore reverts the whole deposit rather than letting a plain transfer pass as
-    /// registered revenue or leaving an unspent approval and an unpulled fee behind, which a later
-    /// call would otherwise recognize as surplus.
-    /// Every other asset pays the treasury in that same asset.
+    /// so a receipt below fifty atomic units pays nothing and is kept whole. A USDC fee is
+    /// registered as staking revenue through `_registerWithStaking`, so a staking contract that
+    /// cannot register it reverts the whole deposit. Every other asset pays the treasury in that
+    /// same asset.
     function _chargeFee(address asset, uint256 amount, bytes32 paymentRef) private returns (uint256 net) {
         if (amount == 0) revert ZeroAmount();
         uint256 fee = (amount * DEPOSIT_FEE_BPS) / KeyfleetPresets.BPS_DENOMINATOR;
@@ -609,18 +651,26 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         address destination;
         if (asset == address(USDC)) {
             destination = address(STAKING);
-            if (fee != 0) {
-                USDC.forceApprove(destination, fee);
-                uint256 received = STAKING.depositUSDC(fee, SOURCE_TAG, paymentRef);
-                if (received != fee || USDC.allowance(address(this), destination) != 0) {
-                    revert FeeRegistrationFailed(fee, received);
-                }
-            }
+            if (fee != 0) _registerWithStaking(fee, paymentRef);
         } else {
             destination = TREASURY;
             if (fee != 0) IERC20(asset).safeTransfer(destination, fee);
         }
         emit FeeCharged(asset, amount, fee, destination);
+    }
+
+    /// @dev Registers `amount` of this fleet's USDC with the staking contract under `SOURCE_TAG`.
+    /// Registration requires both a received amount equal to `amount` and the approval it was given
+    /// to be spent down to nothing. A paused, under-reporting or non-pulling staking contract
+    /// therefore reverts the caller rather than letting a plain transfer pass as registered revenue
+    /// or leaving an unspent approval and unpulled USDC behind, which a later call would otherwise
+    /// recognize as surplus.
+    function _registerWithStaking(uint256 amount, bytes32 sourceRef) private {
+        USDC.forceApprove(address(STAKING), amount);
+        uint256 received = STAKING.depositUSDC(amount, SOURCE_TAG, sourceRef);
+        if (received != amount || USDC.allowance(address(this), address(STAKING)) != 0) {
+            revert StakingRegistrationFailed(amount, received);
+        }
     }
 
     // --- votes -----------------------------------------------------------
@@ -630,9 +680,10 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// admission check here: the asset is one this fleet already booked capital in, and the spec is
     /// explicit that disabling deposits in an asset does not freeze capital already booked in it.
     ///
-    /// Free capital is the only bucket reachable from here. The Cascade completion reserve is a
-    /// separate figure this function never reads, and reward backing does not sit in this contract
-    /// at all, so no vote can borrow an incomplete level's reserve or withdraw a member's claim.
+    /// Free capital is the only bucket reachable from here. The Cascade completion reserve and the
+    /// owed protocol share are separate figures this function never reads, and reward backing does
+    /// not sit in this contract at all, so no vote can borrow an incomplete level's reserve, spend
+    /// the stakers' share or withdraw a member's claim.
     /// The shortfall is checked explicitly rather than left to the subtraction, so a vote that
     /// outran the capital reverts with the three figures rather than a bare panic; the proposal
     /// itself survives and can execute later once the capital is there.

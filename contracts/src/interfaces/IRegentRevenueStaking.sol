@@ -6,7 +6,8 @@ pragma solidity 0.8.26;
 /// Nothing else of that contract's surface is declared here, so a fleet cannot stake, withdraw,
 /// pause or configure anything on it. The live contract pulls the USDC with `transferFrom`, so the
 /// caller approves it first, and it rejects the call while it is paused, which is what makes a
-/// failed registration revert the whole deposit instead of silently skipping the fee.
+/// failed registration revert the whole deposit, or the whole protocol-share send, instead of
+/// silently skipping the payment.
 interface IRegentRevenueStaking {
     /// @notice Registers `amount` of USDC as revenue and returns the amount actually received.
     /// @param amount Atomic USDC units to pull from the caller.

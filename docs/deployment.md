@@ -30,8 +30,8 @@ name of the manifest, and no value either step invents for itself.
 | `chainId` | The only chain this manifest may be deployed to or recorded on. |
 | `regent` | The REGENT token, listed among the deposit assets the Safe is to admit. No fleet holds it. Must hold code; on Base must be `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
 | `usdc` | The USDC every key is paid in. On Base must be `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`; a fleet refuses a USDC that is not its registry's or does not report six decimals. |
-| `treasury` | Where the 5% protocol share of every purchase goes. |
-| `staking` | The Regents revenue staking contract that registers USDC fees. |
+| `treasury` | Where the 2% fee on deposits of any asset other than USDC goes. |
+| `staking` | The Regents revenue staking contract. It registers the 2% USDC deposit fee and the 5% protocol share of every purchase as revenue, credits REGENT stakers their staked share and keeps the rest as treasury residual. |
 | `regentSafe` | The Safe that administers deposit admission. |
 | `autolaunchFactory` | The one Autolaunch factory the fleets may ever launch through. |
 | `assetRegistry` | An existing shared registry, or zero to deploy one with the release. |
@@ -156,7 +156,7 @@ key minted to it fails.
 
 REGENT, USDC and the staking contract are Base's own on either fork; the
 Autolaunch factory has no code on this one either. The deployment comes to about
-32.3 million gas in all, each fleet about 7.9 million of it, or about 10.3
+32.6 million gas in all, each fleet about 8.0 million of it, or about 10.4
 million at Forge's default 130% gas estimate. `--gas-limit 100000000` holds the
 whole deployment in one block; at anvil's default block gas limit the broadcast
 has stalled with the last fleet still pending.
@@ -250,13 +250,15 @@ Both flags are required for admission, and a local approval can never override a
 global disablement. A launched Autolaunch token is admitted the same way and only
 after the launch is proven; nothing about a launch admits a token by itself.
 
-## Open founder decisions
-
-**Where the 5% protocol share of every purchase goes.** (a) The Regents treasury
-Safe, as built (recommended); or (b) REGENT stakers, through
-`STAKING.depositUSDC`, as the 2% deposit fee already is.
-
 ## Decided
+
+**The 5% protocol share goes to the Regents staking contract.** Every purchase
+sets its 5% aside in the fleet's `protocolShareOwed`, and anyone may call
+`sendProtocolShare()` on the fleet to register the whole owed amount as revenue
+with the staking contract through `depositUSDC`, as the 2% USDC deposit fee
+already is. The staking contract credits REGENT stakers their staked share and
+keeps the rest as treasury residual. A paused staking contract delays that send
+and never a purchase.
 
 **D6 — the key price.** Every key is paid in USDC on Base. The first key of every
 ladder costs 10 USDC (`Q_USDC`, 10,000,000 atomic USDC); Fibonacci levels step by
@@ -275,8 +277,9 @@ example `https://keyfleet.ai/metadata/syndicate/`, and the lab manifest uses
 
 **D7 — the treasury address.** The treasury is the Regents Safe
 `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, the same address that administers
-deposit admission. It receives the 5% protocol share of every purchase and the
-non-USDC deposit fees, and it is immutable per fleet.
+deposit admission. It receives the non-USDC deposit fees, and it is immutable per
+fleet.
 
-These are inputs to the manifest only. None changes a line of
-contract code, and the script deploys whatever the manifest says.
+The protocol-share decision is built into the contracts. The others are inputs
+to the manifest only: none of them changes a line of contract code, and the
+script deploys whatever the manifest says.
