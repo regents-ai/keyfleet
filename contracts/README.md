@@ -129,9 +129,118 @@ as backed, which assumes reward assets are ordinary non-rebasing tokens whose
 balances only change through transfers; `KeyfleetAssetRegistry` is where that
 admission decision is made.
 
+`Keyfleet` is one fleet: its keys, its primary purchases and the REGENT
+accounting behind them. It is an OpenZeppelin ERC721 with 1-based, contiguous
+token ids and no enumerable or per-token URI storage. `tokenURI` is a fixed base
+string plus the id; the base is set once at construction and has no setter. The
+constructor takes the preset, the reference price `q`, REGENT, the Regents
+treasury, the shared asset registry, and the name, symbol and metadata base. It
+rejects a `q` outside `1..MAX_Q` and any zero address, and then deploys the
+fleet's own `KeyfleetRewards` and registers REGENT as its first reward asset, so
+a fleet and its ledger are born bound to each other and no deployment step can
+point a fleet at someone else's ledger. Everything the constructor sets is
+immutable. The asset registry address is stored for the deposit slice and is not
+read here.
+
+`purchase(receiver, referrer, maxPrice, deadline)` is the only way a primary key
+is created. A zero receiver mints to the caller; a referrer may be any address,
+including the caller, and a zero referrer means no referral deduction at all. The
+deadline, the supply bound and the quoted price against `maxPrice` are all
+checked before any token moves, because the displayed next slot is not reserved
+and an earlier purchase can move a Fibonacci level or step the Accelerant price.
+Payment is REGENT and nothing else. No balance-delta check is taken around the
+pull: REGENT is one fixed, known, non-rebasing, fee-free token chosen at
+deployment, so the amount transferred is the amount credited by construction. A
+fee-on-transfer token would be mispriced here, which is why REGENT is immutable.
+One consequence of paying a referral as a backed credit, which the ledger refuses
+to record as zero, is that a referred purchase needs a reference price of at
+least ten atomic REGENT units for the 10% share to exist; every preset price is
+at least `q`, so this binds only at absurdly small reference prices.
+
+Within a purchase the order is fixed: the buyer's REGENT is pulled, the split is
+taken from `KeyfleetPresets`, the treasury's share is transferred out
+immediately, the referral is moved into the ledger and credited, the preset's own
+bookkeeping runs, the key is enrolled in the ledger, the key is minted, and only
+then can a Cascade level complete. Every reward obligation is recorded in the
+same transaction that moves the tokens backing it into the ledger, and nothing is
+ever pushed to a list of recipients. `purchase` is guarded by OpenZeppelin
+`ReentrancyGuard`, so a receiver contract cannot buy again from inside
+`onERC721Received`. Enrollment happens before the mint, so a router or custody
+wrapper may forward a key straight on from inside that hook: the forwarded key
+settles a freshly enrolled key, which owes nothing, and simply moves. Anything
+the purchase does after the mint, including a Cascade level completion, sees the
+forwarded holder.
+
+Syndicate and Classic send the whole post-fee amount to free capital. Cascade
+sends it to the completion reserve instead and records the gross paid for that
+level. Accelerant sends 10% of gross to capital and credits the rest to the
+current holder of the preceding key, read before the mint, so a secondary sale
+before the next primary mint moves the rebate with the key; the first Accelerant
+mint has no predecessor and sends everything post-fee to capital. Accelerant is
+also the one preset that persists a price: `currentPrice` starts at `q` and is
+stepped with `accelerantNextPrice` after each primary mint, so only primary mints
+advance the ladder and secondary sales never do.
+
+A Cascade level completes in the transaction that mints its last key, once and
+only once; resales can never reopen it. Level 1 has no predecessor, so its whole
+reserve becomes free capital. From level 2 the reserve first repays the preceding
+level's original gross mint cost, as far as it stretches, by moving that amount
+into the ledger and allocating it to the preceding level's cohort, which means
+whoever holds those keys at that moment. The remainder becomes free capital and
+the reserve is emptied. There is no guaranteed repayment and no refund for an
+unfinished level: repayment requires the next level to complete.
+
+Working capital is `freeCapital`, keyed by asset so the deposit slice can add
+admitted assets to the same bucket; this slice only ever writes the REGENT entry.
+The Cascade completion reserve is a separate REGENT-only figure and is never
+spendable capital. Reward backing is not counted here at all, because it lives in
+the ledger. The invariant this slice holds is that the fleet's REGENT balance is
+at least `freeCapital[REGENT]` plus `cascadeReserve`: anyone may send REGENT to
+the fleet, and anything above the two buckets is simply ignored, because a bare
+transfer is not capital and nothing here recognizes it. Surplus recognition
+belongs to a later slice. Since nothing in this slice donates, the suite asserts
+the tighter form, exact equality, after every step of randomized purchase and
+transfer sequences on all four presets.
+
+Before any ownership change the fleet settles the key to its outgoing owner, so
+accrued rewards stay with the address that earned them and the incoming owner
+continues from the cohort's current index. Only that key is settled, because the
+ledger's accruals are per key. Each key also carries an ownership epoch: 1 at
+mint and one more on every transfer, including a key returning to an earlier
+owner, which therefore carries a strictly higher epoch than it did before. There
+is no burn function, so a key's epoch only ever rises.
+
+The two Fibonacci presets apply the per-wallet holding limit from
+`KeyfleetPresets` on a mint and on an incoming transfer alike: one key per wallet
+in levels 1 through 7, then a tenth of the level supply from level 8, which is
+five of level 8's fifty-five keys. Selling frees the slot again. `levelOf` and
+`holdingLimit` report the library's answers and revert on the two Fleet.Tech
+presets, which have no levels and no per-wallet cap; Classic still has its 144
+seats. `nextPrice` and `quote(hasReferrer)` state the price and the exact split
+the next purchase would perform, and both revert once the fleet is sold out;
+`remainingSupply` counts down to zero.
+
+The most expensive primary purchase in this slice is the first referred purchase
+on a fresh fleet, because every accounting slot it touches is written from zero.
+On a Cascade fleet, with the treasury already holding REGENT as it will after its
+first sale, that measured 330,980 gas in execution; Syndicate measured 302,091,
+Accelerant 279,308 and Classic 278,765. The suite asserts a ceiling of 397,000
+for the Cascade figure, which is the measurement plus twenty percent, and that is
+the execution figure the deployment manifest should quote, with the 21,000 base
+transaction cost on top of it. Later purchases are cheaper; the Cascade key that
+completes a level, which also pays and allocates the preceding level's repayment,
+measured 273,084 because the buckets it writes are warm by then.
+
+Deposits, surplus recognition, votes, capital transfers, Autolaunch, the
+deploying factory and any ETH or USDC conversion are outside this slice, and
+nothing is prepared for them here beyond the stored registry address. The fleet
+has no administrator, no upgrade path, no pause, no burn and no withdrawal: the
+only ways REGENT leaves it are the treasury share of a purchase and the referral,
+Accelerant rebate and Cascade repayment paid into the ledger.
+
 Run `make check-contracts` from the repository root to check formatting, build,
-and run the focused authorization, admission, preset-arithmetic and reward-ledger
-tests. Foundry must be installed; the compiler may be downloaded on first use.
+and run the focused authorization, admission, preset-arithmetic, reward-ledger
+and fleet-purchase tests. Foundry must be installed; the compiler may be downloaded on first use.
 Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are vendored as git
 submodules under `contracts/lib`, so clone with submodules or run
 `git submodule update --init`.
