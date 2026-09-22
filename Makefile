@@ -7,4 +7,4 @@ check-platform:
 check-cli:
 	cd cli && pnpm build && pnpm typecheck && pnpm test
 check-contracts:
-	@echo "contracts/ is empty; add a Foundry project there and replace this target with its checks."
+	cd contracts && forge fmt --check && forge build && forge test
