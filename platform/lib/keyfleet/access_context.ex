@@ -1,0 +1,25 @@
+defmodule KeyFleet.AccessContext do
+  @moduledoc "Principal-aware access context for public shell routes."
+
+  alias __MODULE__.AccountControl
+  alias KeyFleet.PublicIdentity
+
+  @enforce_keys [:principal, :capabilities]
+  defstruct @enforce_keys
+
+  def anonymous, do: %__MODULE__{principal: :anonymous, capabilities: [:view_public]}
+
+  def human(account), do: %__MODULE__{principal: {:human, account}, capabilities: [:view_public]}
+
+  def account_control(%__MODULE__{principal: :anonymous}) do
+    %AccountControl{kind: :sign_in, label: "Sign In"}
+  end
+
+  def account_control(%__MODULE__{principal: {:human, account}}) do
+    %AccountControl{
+      kind: :signed_in,
+      label: PublicIdentity.label(account),
+      avatar_src: PublicIdentity.avatar_src(account)
+    }
+  end
+end

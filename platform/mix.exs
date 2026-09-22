@@ -1,9 +1,9 @@
-defmodule AshTemplate.MixProject do
+defmodule KeyFleet.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :ash_template,
+      app: :keyfleet,
       version: "0.1.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -20,7 +20,7 @@ defmodule AshTemplate.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {AshTemplate.Application, []},
+      mod: {KeyFleet.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -90,12 +90,12 @@ defmodule AshTemplate.MixProject do
         "compile",
         "regent_ui.assets",
         "regent_identity.assets",
-        "esbuild ash_template"
+        "esbuild keyfleet"
       ],
       "assets.deploy": [
         "regent_ui.assets",
         "regent_identity.assets",
-        "esbuild ash_template --minify",
+        "esbuild keyfleet --minify",
         "phx.digest"
       ],
       "test.external": ["test --only external"],
@@ -109,7 +109,7 @@ defmodule AshTemplate.MixProject do
         "xref graph --label compile-connected --fail-above 28",
         "test --warnings-as-errors",
         "ash.codegen --check",
-        "ash_template.route_handoff --check"
+        "key_fleet.route_handoff --check"
       ]
     ]
   end

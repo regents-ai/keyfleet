@@ -18,7 +18,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "MIX_ENV=test ASH_TEMPLATE_BROWSER_TEST=1 mix phx.server",
+      "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
     url: `${baseURL}/`,
     reuseExistingServer: false,
     timeout: 120_000,

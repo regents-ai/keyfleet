@@ -42,6 +42,6 @@ if [ "$actual_elixir_utils_commit" != "$expected_elixir_utils_commit" ]; then
   exit 66
 fi
 
-export ASH_TEMPLATE_ACCEPTANCE_RUN_ID=$run_id
+export KEYFLEET_ACCEPTANCE_RUN_ID=$run_id
 mix deps.get
-MIX_ENV=test mix ash_template.setup_local --run-id "$run_id"
+MIX_ENV=test mix key_fleet.setup_local --run-id "$run_id"

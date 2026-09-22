@@ -1,6 +1,6 @@
 # Contracts
 
-An optional Foundry workspace. It is empty: Ash Template ships no Solidity, and
+An optional Foundry workspace. It is empty: KeyFleet ships no Solidity, and
 `make check-contracts` only says so.
 
 When the product needs contracts, run `forge init --no-git --force .` here,

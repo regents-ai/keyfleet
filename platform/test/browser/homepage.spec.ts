@@ -37,7 +37,7 @@ test("[U2] homepage is server-readable and lists all three highlights", async ({
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "Ash Template", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "KeyFleet", level: 1})).toBeVisible()
   await expect(page.locator(".rl-hero-copy .rl-hero-description")).toHaveText(
     "A starting point for your next product",
   )

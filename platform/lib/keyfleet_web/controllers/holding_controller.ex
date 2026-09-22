@@ -1,0 +1,33 @@
+defmodule KeyFleetWeb.HoldingController do
+  @moduledoc "Renders the page shown where a product area is not open yet."
+
+  use KeyFleetWeb, :controller
+
+  def show(conn, _params), do: render(conn, :show, page_title: "Not open yet")
+end
+
+defmodule KeyFleetWeb.HoldingHTML do
+  @moduledoc false
+
+  use KeyFleetWeb, :html
+
+  def show(assigns) do
+    ~H"""
+    <Regent.Structure.frame class="rl-root">
+      <main class="rl-hero rg-inset">
+        <div class="rl-hero-copy">
+          <p class="rl-overline">KeyFleet</p>
+          <h1 class="rg-hero-title">Not open yet</h1>
+          <p>
+            This part of the site isn't open to visitors yet. Everything we have shown so far
+            is on the homepage.
+          </p>
+          <div class="rl-hero-actions">
+            <a href={~p"/"} class="rg-button"><span class="rg-button__label">Go to the homepage</span></a>
+          </div>
+        </div>
+      </main>
+    </Regent.Structure.frame>
+    """
+  end
+end

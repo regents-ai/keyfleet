@@ -1,4 +1,4 @@
-app = "ash-template-staging"
+app = "keyfleet-staging"
 primary_region = "iad"
 
 [build]
@@ -9,7 +9,7 @@ primary_region = "iad"
 
 [env]
   PORT = "4000"
-  ASH_TEMPLATE_DEPLOYMENT_ROLE = "staging"
+  KEYFLEET_DEPLOYMENT_ROLE = "staging"
 
 [metrics]
   port = 4000

@@ -1,9 +1,9 @@
 # Local Privy sign-in
 
-This flow uses only a loopback PostgreSQL database named `ash_template_dev`. Database startup stays off unless explicitly enabled.
+This flow uses only a loopback PostgreSQL database named `keyfleet_dev`. Database startup stays off unless explicitly enabled.
 
 ```sh
-createdb ash_template_dev
+createdb keyfleet_dev
 cp .env.example .env
 touch .env.local
 printf '%s\n' 'source_env .env' 'source_env_if_exists .env.local' > .envrc
@@ -30,7 +30,7 @@ Review the files, then load them and start the app:
 
 ```sh
 direnv allow
-mix ash_template.setup_local_auth
+mix key_fleet.setup_local_auth
 mix phx.server
 ```
 

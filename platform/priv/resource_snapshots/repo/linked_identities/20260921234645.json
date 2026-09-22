@@ -192,7 +192,7 @@
     "global": null,
     "strategy": null
   },
-  "repo": "Elixir.AshTemplate.Repo",
+  "repo": "Elixir.KeyFleet.Repo",
   "schema": null,
   "table": "linked_identities"
 }

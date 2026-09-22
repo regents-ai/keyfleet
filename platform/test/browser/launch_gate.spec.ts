@@ -2,8 +2,8 @@ import {expect, test} from "@playwright/test"
 
 // The harness boots one server with the default environment, where product surfaces are
 // open, so this file holds the open state honest end to end. The closed state is proven
-// against the same router and holding page in test/ash_template_web/launch_gate_test.exs
-// and test/ash_template_web/controllers/holding_controller_test.exs, which flip the
+// against the same router and holding page in test/keyfleet_web/launch_gate_test.exs
+// and test/keyfleet_web/controllers/holding_controller_test.exs, which flip the
 // setting between requests.
 
 test("[U3] the marketing page is served with product surfaces open", async ({page, request}) => {
@@ -12,7 +12,7 @@ test("[U3] the marketing page is served with product surfaces open", async ({pag
   expect(response.headers()["cache-control"]).not.toContain("no-store")
 
   await page.goto("/")
-  await expect(page.getByRole("heading", {name: "Ash Template", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "KeyFleet", level: 1})).toBeVisible()
 })
 
 test("[U4] product routes render the shell while surfaces are open", async ({page, request}) => {

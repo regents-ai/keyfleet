@@ -1,11 +1,11 @@
-# Ash Template platform
+# KeyFleet platform
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](../LICENSE)
 [![Elixir 1.19](https://img.shields.io/badge/elixir-1.19-lightgrey)](https://elixir-lang.org)
 [![Phoenix 1.8](https://img.shields.io/badge/phoenix-1.8-lightgrey)](https://www.phoenixframework.org)
 [![Ash 3.33](https://img.shields.io/badge/ash-3.33-lightgrey)](https://ash-hq.org)
 
-The Phoenix/Ash web application of Ash Template. It serves the public home
+The Phoenix/Ash web application of KeyFleet. It serves the public home
 page, Privy wallet sign-in, the signed-in Overview (`/app`) and Account
 (`/account`) pages, the public pages, health and metrics, and the public HTTP
 API.
@@ -35,12 +35,12 @@ Run these from `platform/` after acquiring the shared dependencies. You need
 Erlang, Elixir, Node and PostgreSQL at the versions pinned in `.tool-versions`.
 
 ```sh
-createdb ash_template_dev
+createdb keyfleet_dev
 cp .env.example .env
 touch .env.local
 printf '%s\n' 'source_env .env' 'source_env_if_exists .env.local' > .envrc
 mix setup
-mix ash_template.setup_local_auth
+mix key_fleet.setup_local_auth
 mix phx.server
 ```
 
@@ -49,7 +49,7 @@ credentials; [docs/local-privy-auth.md](docs/local-privy-auth.md) says where
 they come from. Put real values only in the ignored `.env.local`, never in
 `.env.example`, and commit none of the three.
 
-The local server talks to one loopback PostgreSQL database, `ash_template_dev`,
+The local server talks to one loopback PostgreSQL database, `keyfleet_dev`,
 on `127.0.0.1`. The only thing that leaves the machine is sign-in verification
 with Privy.
 
@@ -63,18 +63,18 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret. |
-| `ASH_TEMPLATE_APP_SURFACES` | Yes in production | `on` opens the signed-in pages. Anything else keeps them closed, so a typo closes rather than opens. Boot fails in production if unset. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the signed-in pages. Anything else keeps them closed, so a typo closes rather than opens. Boot fails in production if unset. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | No | Error reporting. Unset means no reporting. |
-| `ASH_TEMPLATE_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |
+| `KEYFLEET_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |
 | `DATABASE_POOLED_URL` | Yes in production | Pooled PostgreSQL connection string for an approved host. |
 | `DATABASE_DIRECT_URL` | Only when migrating | Direct PostgreSQL connection string used by the migration release command. |
-| `ASH_TEMPLATE_DATABASE_TARGET_MODE` | Only when migrating | Must be `production` for the production migration command. |
-| `ASH_TEMPLATE_DATABASE_CLUSTER_ID` | For a remote target | Must match the approved cluster. Set neither this nor the name to stay on the loopback database. |
-| `ASH_TEMPLATE_DATABASE_CLUSTER_NAME` | For a remote target | Must match the approved cluster name. |
-| `ASH_TEMPLATE_RELEASE_COMMAND` | Set by the release | `migrate` switches the boot into migration mode. |
+| `KEYFLEET_DATABASE_TARGET_MODE` | Only when migrating | Must be `production` for the production migration command. |
+| `KEYFLEET_DATABASE_CLUSTER_ID` | For a remote target | Must match the approved cluster. Set neither this nor the name to stay on the loopback database. |
+| `KEYFLEET_DATABASE_CLUSTER_NAME` | For a remote target | Must match the approved cluster name. |
+| `KEYFLEET_RELEASE_COMMAND` | Set by the release | `migrate` switches the boot into migration mode. |
 
 ## Public HTTP surface
 
@@ -95,8 +95,8 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 ## Repository layout
 
 ```text
-lib/ash_template/       Ash domains: accounts, sign-in, legal documents
-lib/ash_template_web/   Endpoint, router, live pages, controllers, components
+lib/keyfleet/       Ash domains: accounts, sign-in, legal documents
+lib/keyfleet_web/   Endpoint, router, live pages, controllers, components
 lib/mix/tasks/          Local setup, reset, contract sync and route-handoff checks
 contracts/              The OpenAPI contract
 config/                 Compile-time and runtime configuration
@@ -132,7 +132,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 
 The test database name carries whatever `MIX_TEST_PARTITION` holds, just
 before its `_test` ending. Set it whenever more than one test run can happen on
-a machine: `MIX_TEST_PARTITION=_a1b` gives `ash_template_a1b_test`. Run
+a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
 `MIX_ENV=test mix ecto.create` once for a new value; the suite builds the
 schema itself on its first run.
 
@@ -140,8 +140,8 @@ schema itself on its first run.
 
 Deploying runs `/app/bin/migrate` as its release command, so a deploy writes
 database migrations. Every deployment names its venue in
-`ASH_TEMPLATE_DEPLOYMENT_ROLE`, and each role admits only its own database
-hosts. Production boot also fails unless `ASH_TEMPLATE_APP_SURFACES`,
+`KEYFLEET_DEPLOYMENT_ROLE`, and each role admits only its own database
+hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
 `PHX_HOST` and a 64-byte `SECRET_KEY_BASE` are set.
 `/app/bin/pending-migrations` reports what a deployed database and the release
 image disagree about, without applying anything.

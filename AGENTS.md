@@ -1,13 +1,7 @@
-# Ash Template
-
-<!-- template-only -->
-This monorepo is a product template. Keep the placeholder names (`ash_template`,
-`AshTemplate`, `ash-template`, `ASH_TEMPLATE_`, "Ash Template") exactly as they
-are; `scripts/init.sh` renames them for a real product.
-<!-- /template-only -->
+# KeyFleet
 
 - `platform/`: Phoenix/Ash application. Read its instructions for web changes.
-- `cli/`: pnpm workspace for the `ash-template` command. Only `help` and
+- `cli/`: pnpm workspace for the `keyfleet` command. Only `help` and
   `version` exist.
 - `contracts/`: optional Foundry workspace, empty until contracts are needed.
 - `plugins/`: home for standalone runtime plugin packages; none exist yet.
@@ -25,5 +19,5 @@ are; `scripts/init.sh` renames them for a real product.
 
 The public agent entry point is served at `/llms.txt` from
 [platform/priv/public/llms.md](platform/priv/public/llms.md); keep it
-consistent with the routes in `platform/lib/ash_template_web/router.ex` and the
+consistent with the routes in `platform/lib/keyfleet_web/router.ex` and the
 HTTP contract in `platform/contracts/api-contract.openapiv3.yaml`.

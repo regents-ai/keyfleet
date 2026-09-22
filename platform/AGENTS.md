@@ -1,13 +1,9 @@
-# Ash Template platform
+# KeyFleet platform
 
-This is the Phoenix/Ash component of the Ash Template monorepo. Run Mix and npm
-here. `lib/ash_template/` owns domains; `lib/ash_template_web/` owns routes and
+This is the Phoenix/Ash component of the KeyFleet monorepo. Run Mix and npm
+here. `lib/keyfleet/` owns domains; `lib/keyfleet_web/` owns routes and
 live pages. `contracts/` holds the OpenAPI contract, synced to `priv/static/`
-with `mix ash_template.sync_api_contract`.
-
-<!-- template-only -->
-Keep the placeholder names until `scripts/init.sh` renames them.
-<!-- /template-only -->
+with `mix key_fleet.sync_api_contract`.
 
 Follow the root instructions and the workspace's `regent-workflow`. Use the
 assignment's acceptance and applicable focused checks. Browser fixtures belong to

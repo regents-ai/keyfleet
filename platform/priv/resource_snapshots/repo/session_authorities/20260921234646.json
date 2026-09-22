@@ -143,7 +143,7 @@
     "global": null,
     "strategy": null
   },
-  "repo": "Elixir.AshTemplate.Repo",
+  "repo": "Elixir.KeyFleet.Repo",
   "schema": null,
   "table": "session_authorities"
 }

@@ -18,22 +18,22 @@ privy_verification_key =
       |> String.replace("\\n", "\n")
   end
 
-config :ash_template, :privy,
+config :keyfleet, :privy,
   app_id: System.get_env("PRIVY_APP_ID"),
   verification_key: privy_verification_key
 
 # The browser acceptance server signs in through a deterministic test-only
 # verifier. Production can never take this branch.
-if config_env() == :test and System.get_env("ASH_TEMPLATE_BROWSER_TEST") == "1" do
-  config :ash_template, :privy, app_id: "browser-test-public-id", verification_key: nil
+if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
+  config :keyfleet, :privy, app_id: "browser-test-public-id", verification_key: nil
 end
 
 # Production must say out loud whether the product surfaces are open. Anything
 # but "on" keeps them closed, so a typo closes rather than opens.
 app_surfaces_setting =
-  case {config_env(), System.get_env("ASH_TEMPLATE_APP_SURFACES")} do
+  case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
     {:prod, nil} ->
-      raise ~s(ASH_TEMPLATE_APP_SURFACES must be set to "on" or "off")
+      raise ~s(KEYFLEET_APP_SURFACES must be set to "on" or "off")
 
     {_env, nil} ->
       "on"
@@ -44,26 +44,26 @@ app_surfaces_setting =
 
 app_surfaces? = app_surfaces_setting == "on"
 
-config :ash_template, :app_surfaces, app_surfaces?
+config :keyfleet, :app_surfaces, app_surfaces?
 
 Logger.info("App surfaces #{if app_surfaces?, do: "enabled", else: "disabled"}")
 
-migrating? = System.get_env("ASH_TEMPLATE_RELEASE_COMMAND") == "migrate"
+migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
 database_config =
   if config_env() == :prod and migrating? do
-    AshTemplate.DatabaseConfig.release_config!()
+    KeyFleet.DatabaseConfig.release_config!()
   else
-    AshTemplate.DatabaseConfig.runtime_config!(config_env())
+    KeyFleet.DatabaseConfig.runtime_config!(config_env())
   end
 
 if database_config do
-  config :ash_template, :database_startup_enabled, true
-  config :ash_template, AshTemplate.Repo, database_config
+  config :keyfleet, :database_startup_enabled, true
+  config :keyfleet, KeyFleet.Repo, database_config
 end
 
 if config_env() == :prod do
-  config :ash_template, :session_options, secure: true, http_only: true
+  config :keyfleet, :session_options, secure: true, http_only: true
 
   unless migrating? do
     host = String.trim(System.fetch_env!("PHX_HOST"))
@@ -77,7 +77,7 @@ if config_env() == :prod do
       raise "SECRET_KEY_BASE must be at least 64 bytes"
     end
 
-    config :ash_template, AshTemplateWeb.Endpoint,
+    config :keyfleet, KeyFleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],
       http: [

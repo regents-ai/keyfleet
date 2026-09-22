@@ -7,7 +7,7 @@
 # General application configuration
 import Config
 
-config :regent_identity, repo: AshTemplate.Repo, ash_domains: [RegentIdentity]
+config :regent_identity, repo: KeyFleet.Repo, ash_domains: [RegentIdentity]
 
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
@@ -17,51 +17,51 @@ config :ash, default_string_length_count: :codepoints
 
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
-config :ash_template,
+config :keyfleet,
   local_showcase: false,
-  ash_domains: [AshTemplate.Accounts],
+  ash_domains: [KeyFleet.Accounts],
   generators: [timestamp_type: :utc_datetime]
 
-config :ash_template, ecto_repos: [AshTemplate.Repo]
+config :keyfleet, ecto_repos: [KeyFleet.Repo]
 
-config :ash_template, AshTemplate.Repo,
-  database: "ash_template_disabled",
+config :keyfleet, KeyFleet.Repo,
+  database: "keyfleet_disabled",
   hostname: "127.0.0.1",
   port: 1,
   pool_size: 1,
-  migration_default_prefix: "ash_template_app"
+  migration_default_prefix: "keyfleet_app"
 
-config :ash_template, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
+config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 
-config :ash_template, :app_surfaces, true
+config :keyfleet, :app_surfaces, true
 
-config :ash_template, :session_options,
+config :keyfleet, :session_options,
   store: :cookie,
-  key: "_ash_template_key",
+  key: "_keyfleet_key",
   signing_salt: "OLoeAaio",
   same_site: "Lax",
   secure: false,
   http_only: true
 
 # Configure the endpoint
-config :ash_template, AshTemplateWeb.Endpoint,
+config :keyfleet, KeyFleetWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [
-      html: AshTemplateWeb.ErrorHTML,
-      json: AshTemplateWeb.ErrorJSON,
-      md: AshTemplateWeb.ErrorMD
+      html: KeyFleetWeb.ErrorHTML,
+      json: KeyFleetWeb.ErrorJSON,
+      md: KeyFleetWeb.ErrorMD
     ],
     layout: false
   ],
-  pubsub_server: AshTemplate.PubSub,
+  pubsub_server: KeyFleet.PubSub,
   live_view: [signing_salt: "RH19ZPg2"]
 
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
-  ash_template: [
+  keyfleet: [
     args:
       ~w(js/app.ts js/privy_bridge.tsx --bundle --splitting --format=esm --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --loader:.woff2=file --loader:.woff=file --loader:.ttf=file),
     cd: Path.expand("../assets", __DIR__),
@@ -77,7 +77,7 @@ config :sentry,
   environment_name: config_env(),
   json_library: Jason,
   enable_metrics: false,
-  tags: %{app: "ash_template"}
+  tags: %{app: "keyfleet"}
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

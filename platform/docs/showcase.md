@@ -8,7 +8,7 @@ headers do not grant access. Gallery styles and metadata use the same guard.
 ## What it shows
 
 The workshop renders the active components installed from `regent_ui` and
-`AshTemplateWeb.Components`, plus both layouts, composed in the shared
+`KeyFleetWeb.Components`, plus both layouts, composed in the shared
 `Regent.Structure` frames, rows, section bars and panels. The shell preview
 includes working navigation and theme behavior but omits sign-in controls.
 
@@ -35,7 +35,7 @@ signature.
 
 For real testing, use the configured development server and a Privy-allowed
 localhost origin with `PRIVY_APP_ID` and `PRIVY_VERIFICATION_KEY` set. Prepare
-the local database (`ash_template_dev`), run `mix ash_template.setup_local_auth`,
+the local database (`keyfleet_dev`), run `mix key_fleet.setup_local_auth`,
 then `mix assets.build` and `mix phx.server`. Do not use browser-test
 configuration as proof of real Privy sign-in.
 
@@ -63,7 +63,7 @@ created with `MIX_ENV=test mix ecto.create`.
 Run the disposable test server with that partition and port:
 
 ```sh
-env MIX_ENV=test ASH_TEMPLATE_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(AshTemplate.Repo, :auto)'
+env MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, :auto)'
 ```
 
 That command belongs only in the isolated test context. Use its printed URL and
@@ -72,7 +72,7 @@ append `/showcase`.
 ## Focused verification
 
 ```sh
-mix test test/ash_template_web/showcase
+mix test test/keyfleet_web/showcase
 npm run typecheck
 npm test
 PORT=<port> npx playwright test --config playwright.showcase.config.ts

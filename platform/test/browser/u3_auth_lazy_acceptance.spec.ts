@@ -381,7 +381,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
 
   await establishLocalSession(page)
   const sessionCookieBefore = (await page.context().cookies()).find(
-    cookie => cookie.name === "_ash_template_key",
+    cookie => cookie.name === "_keyfleet_key",
   )?.value
 
   let renderedCsrfToken = ""
@@ -418,7 +418,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   // rendered with are the ones it still holds afterwards.
   expect(sessionPosts).toBe(0)
   const sessionCookieAfter = (await page.context().cookies()).find(
-    cookie => cookie.name === "_ash_template_key",
+    cookie => cookie.name === "_keyfleet_key",
   )?.value
   expect(sessionCookieBefore).toBeTruthy()
   expect(sessionCookieAfter).toBe(sessionCookieBefore)
@@ -485,7 +485,7 @@ test("a held pre-logout session response cannot restore browser or LiveView acce
     return ((await response.json()) as {csrf_token: string}).csrf_token
   })
   const sessionCookieBefore = (await page.context().cookies()).find(
-    cookie => cookie.name === "_ash_template_key",
+    cookie => cookie.name === "_keyfleet_key",
   )?.value
 
   const heldPost = page.evaluate(
@@ -507,7 +507,7 @@ test("a held pre-logout session response cannot restore browser or LiveView acce
     {token: csrfToken, identityToken: identityTokenFor("valid")},
   )
   await postProcessed
-  expect(heldSetCookie).toContain("_ash_template_key=")
+  expect(heldSetCookie).toContain("_keyfleet_key=")
 
   // The held response has already renewed this browser's session, so sign out
   // adopts the rotated token before it revokes the lineage the response is
@@ -529,7 +529,7 @@ test("a held pre-logout session response cannot restore browser or LiveView acce
   releaseHeldResponse?.()
   await expect(heldPost).resolves.toEqual({status: 200, sessionChanged: "true"})
   const staleSessionCookie = (await page.context().cookies()).find(
-    cookie => cookie.name === "_ash_template_key",
+    cookie => cookie.name === "_keyfleet_key",
   )?.value
   expect(staleSessionCookie).toBeTruthy()
   expect(staleSessionCookie).not.toBe(sessionCookieBefore)
@@ -660,7 +660,7 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
   // The retired logout-epoch cookie is gone; revocation is the only authority.
   expect(
     (await page.context().cookies()).map(cookie => cookie.name),
-  ).not.toContain("_ash_template_logout_epoch")
+  ).not.toContain("_keyfleet_logout_epoch")
   expect(eventOrder.indexOf("delete-response")).toBeLessThan(
     eventOrder.indexOf("document-2"),
   )
@@ -1233,7 +1233,7 @@ for (const refused of ["signed out", "replaced"] as const) {
 
     await context.clearCookies()
     await context.addCookies(held)
-    const refusedCookie = held.find(cookie => cookie.name === "_ash_template_key")?.value
+    const refusedCookie = held.find(cookie => cookie.name === "_keyfleet_key")?.value
     const documents = trackDocuments(page)
 
     await page.goto("/account")
@@ -1244,7 +1244,7 @@ for (const refused of ["signed out", "replaced"] as const) {
     // The socket connects once the cookie is retired, and the single reload that
     // follows renders the page for the browser's new state. Nothing loops.
     expect(documents.map(url => new URL(url).pathname)).toEqual(["/account", "/account"])
-    const kept = (await context.cookies()).find(cookie => cookie.name === "_ash_template_key")
+    const kept = (await context.cookies()).find(cookie => cookie.name === "_keyfleet_key")
     expect(kept?.value).not.toBe(refusedCookie)
 
     await page.goto("/app")

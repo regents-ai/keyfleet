@@ -2,7 +2,7 @@ import "../css/app.css"
 
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import {hooks as colocatedHooks} from "phoenix-colocated/ash_template"
+import {hooks as colocatedHooks} from "phoenix-colocated/keyfleet"
 
 import {composeHooks, type Hook} from "./hook_composition"
 import {

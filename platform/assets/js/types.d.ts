@@ -11,7 +11,7 @@ declare module "phoenix_live_view" {
   }
 }
 
-declare module "phoenix-colocated/ash_template" {
+declare module "phoenix-colocated/keyfleet" {
   export const hooks: Record<string, Record<string, (...args: unknown[]) => unknown>>
 }
 

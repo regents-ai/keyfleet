@@ -1,5 +1,5 @@
 import Config
-config :ash_template, :local_showcase, true
+config :keyfleet, :local_showcase, true
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -7,7 +7,7 @@ config :ash_template, :local_showcase, true
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :ash_template, AshTemplateWeb.Endpoint,
+config :keyfleet, KeyFleetWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   url: [host: "localhost", port: 4000],
@@ -17,7 +17,7 @@ config :ash_template, AshTemplateWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "6ihHqnWB0px5FXmoddiKg3V2NLeiM0k0UsFs5DwmIADSX35FFdeSs5VNICCc3iU5",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:ash_template, ~w(--sourcemap=inline --watch)]}
+    esbuild: {Esbuild, :install_and_run, [:keyfleet, ~w(--sourcemap=inline --watch)]}
   ]
 
 # ## SSL Support
@@ -44,15 +44,15 @@ config :ash_template, AshTemplateWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
-config :ash_template, AshTemplateWeb.Endpoint,
+config :keyfleet, KeyFleetWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
       # Router, Controllers, LiveViews and LiveComponents
-      ~r"lib/ash_template_web/router\.ex$"E,
-      ~r"lib/ash_template_web/(controllers|live|components)/.*\.(ex|heex)$"E
+      ~r"lib/keyfleet_web/router\.ex$"E,
+      ~r"lib/keyfleet_web/(controllers|live|components)/.*\.(ex|heex)$"E
     ]
   ]
 

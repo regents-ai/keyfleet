@@ -1,0 +1,39 @@
+defmodule KeyFleetWeb.Layouts do
+  @moduledoc "Root document layout for the public page and persistent shell."
+
+  use KeyFleetWeb, :html
+
+  embed_templates("layouts/*")
+
+  attr(:flash, :map, required: true)
+  attr(:inner_content, :any, required: true)
+
+  def app(assigns) do
+    ~H"""
+    {@inner_content}
+    <div id="flash-region" aria-live="polite">
+      <Regent.Primitives.notice :if={message = Phoenix.Flash.get(@flash, :info)}>
+        {message}
+      </Regent.Primitives.notice>
+      <Regent.Primitives.notice :if={message = Phoenix.Flash.get(@flash, :error)} tone="error">
+        {message}
+      </Regent.Primitives.notice>
+    </div>
+    """
+  end
+
+  attr(:theme, :string, default: "dark")
+
+  @doc "Product and source discovery without loading a browser integration."
+  def product_links(assigns) do
+    ~H"""
+    <footer aria-label="Project links" class="product-links">
+      <KeyFleetWeb.Components.Shell.theme_toggle id="footer-theme-control" theme={@theme} />
+      <div class="rl-header-links">
+        <KeyFleetWeb.Components.RegentLinks.header_links id="footer-token-menu" />
+      </div>
+      <a href="/llms.txt">For agents</a>
+    </footer>
+    """
+  end
+end

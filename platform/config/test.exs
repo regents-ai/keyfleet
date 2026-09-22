@@ -1,31 +1,31 @@
 import Config
-config :ash_template, :local_showcase, true
+config :keyfleet, :local_showcase, true
 port = String.to_integer(System.get_env("PORT", "4002"))
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :ash_template, AshTemplateWeb.Endpoint,
+config :keyfleet, KeyFleetWeb.Endpoint,
   url: [host: "127.0.0.1", port: port],
   http: [ip: {127, 0, 0, 1}, port: port],
   check_origin: ["http://127.0.0.1:#{port}"],
   secret_key_base: "ylCJZnscmD6l7Ykq52GK0o6GrbPmb8374FAcei9yvkWU1ww5Nv+S2v/Z7ihcqZd2",
-  server: System.get_env("ASH_TEMPLATE_BROWSER_TEST") == "1"
+  server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 
-config :ash_template, :privy_verifier, AshTemplate.TestPrivyVerifier
-config :ash_template, :database_startup_enabled, true
+config :keyfleet, :privy_verifier, KeyFleet.TestPrivyVerifier
+config :keyfleet, :database_startup_enabled, true
 
 # Every test case here reaches one node holding one anonymous bootstrap budget
 # for the loopback address they all share, so the release-sized allowance is
 # raised rather than let unrelated cases spend one another's. The focused
 # controller tests restore the release 30/300 themselves.
-config :ash_template, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
+config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
 
-config :ash_template, AshTemplate.Repo,
+config :keyfleet, KeyFleet.Repo,
   username: System.get_env("USER"),
   password: nil,
   hostname: "127.0.0.1",
   port: 5432,
-  database: "ash_template#{System.get_env("MIX_TEST_PARTITION")}_test",
+  database: "keyfleet#{System.get_env("MIX_TEST_PARTITION")}_test",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10,
   # A case that sends two callers at one row shares one sandboxed connection

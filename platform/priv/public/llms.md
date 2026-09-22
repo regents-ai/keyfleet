@@ -1,8 +1,8 @@
-# Ash Template
+# KeyFleet
 
 > A product where people sign in with a wallet, keep a small account and read plain documentation.
 
-## When to use Ash Template
+## When to use KeyFleet
 
 - Read the public documentation without an account.
 - Read or update the profile of the person whose sign-in credentials you hold.
@@ -19,7 +19,7 @@
 - `GET /api/v1/profile`, `PATCH /api/v1/profile`, `POST /api/v1/profile/sync`: the signed-in person's own profile. Every request carries both a Privy access bearer token and a `Privy-Id-Token` header. Missing or invalid credentials return 401; a profile that has not been created yet returns 404 until `POST /api/v1/profile/sync` creates it.
 - [YAML contract]({{origin}}/api-contract.openapiv3.yaml): the full served contract, including the browser session endpoints the site itself uses.
 
-Ash Template does not offer a hosted MCP endpoint or browser tool registry. A page address is not proof of a browser tool.
+KeyFleet does not offer a hosted MCP endpoint or browser tool registry. A page address is not proof of a browser tool.
 
 ## Operator, help and boundaries
 

@@ -21,3 +21,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-09-22 — PostgreSQL 17 pin
 
 - Pinned `postgres 17.7` in `platform/.tool-versions`, the server every environment runs.
+
+## 2026-09-22 — Renamed to KeyFleet
+
+- Renamed the Ash Template placeholder to KeyFleet (`keyfleet`, `KeyFleet`,
+  `keyfleet`, `KEYFLEET_`) with `scripts/init.sh`, which removed itself.

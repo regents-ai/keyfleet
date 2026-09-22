@@ -1,11 +1,11 @@
 {
-  "name": "ash-template-cli-workspace",
+  "name": "keyfleet-cli-workspace",
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "build": "pnpm --filter @ash-template/cli build",
-    "typecheck": "pnpm --filter @ash-template/cli typecheck",
-    "test": "pnpm --filter @ash-template/cli test"
+    "build": "pnpm --filter @keyfleet/cli build",
+    "typecheck": "pnpm --filter @keyfleet/cli typecheck",
+    "test": "pnpm --filter @keyfleet/cli test"
   },
   "devDependencies": {
     "@types/node": "24.12.0",

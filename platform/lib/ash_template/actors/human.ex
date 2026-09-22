@@ -1,5 +1,0 @@
-defmodule AshTemplate.Actors.Human do
-  @moduledoc false
-  @enforce_keys [:human_account_id]
-  defstruct [:human_account_id, wallet_addresses: [], role: :human]
-end

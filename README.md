@@ -1,34 +1,15 @@
-# Ash Template
+# KeyFleet
 
-The Ash Template monorepo: a public website with wallet sign-in and a small
+The KeyFleet monorepo: a public website with wallet sign-in and a small
 account area, a public HTTP API, a command-line tool, and room for contracts
 and runtime plugins.
-
-<!-- template-only -->
-This is a product template, cut from the Regents product and stripped back to
-the parts every product starts with. The placeholder product is called
-**Ash Template**; run the rename script before building anything on it:
-
-```sh
-scripts/init.sh keyfleet KeyFleet "KeyFleet"
-```
-
-`scripts/init.sh <snake_name> <ModuleName> ["Display Name"]` replaces the
-OTP application `ash_template`, the Elixir modules `AshTemplate`, the
-kebab-case name `ash-template`, the environment prefix `ASH_TEMPLATE_` and
-the display name "Ash Template" everywhere they appear, including the CLI
-package and command names. It drops the passages that describe the template
-itself, records the rename in the changelog and removes itself, then prints
-the follow-up commands: format the renamed code, regenerate the route catalog
-digest, run the gate.
-<!-- /template-only -->
 
 ## Components
 
 | Component | What it holds | Check |
 | --- | --- | --- |
 | [platform/](platform/README.md) | The Phoenix/Ash web application: home page, Privy wallet sign-in, the signed-in Overview and Account pages, public pages, health and metrics, and the served API. | `make check-platform` |
-| [cli/](cli/README.md) | A pnpm workspace with one package, `@ash-template/cli`, publishing the `ash-template` command. It only prints usage and version today. | `make check-cli` |
+| [cli/](cli/README.md) | A pnpm workspace with one package, `@keyfleet/cli`, publishing the `keyfleet` command. It only prints usage and version today. | `make check-cli` |
 | [contracts/](contracts/README.md) | An optional Foundry workspace. Empty until the product needs contracts. | `make check-contracts` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
 

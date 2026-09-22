@@ -1,7 +1,7 @@
 # Plugins
 
 This folder is the home for runtime plugin packages: anything an agent runtime
-installs on its own rather than through the `ash-template` command. None exist
+installs on its own rather than through the `keyfleet` command. None exist
 yet.
 
 When one is needed, put it at `plugins/<runtime>/` with its own README,

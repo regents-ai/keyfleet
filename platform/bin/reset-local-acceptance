@@ -21,5 +21,5 @@ fi
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
-export ASH_TEMPLATE_ACCEPTANCE_RUN_ID=$run_id
-MIX_ENV=test mix ash_template.reset_local --run-id "$run_id"
+export KEYFLEET_ACCEPTANCE_RUN_ID=$run_id
+MIX_ENV=test mix key_fleet.reset_local --run-id "$run_id"

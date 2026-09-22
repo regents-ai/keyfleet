@@ -1,4 +1,4 @@
-defmodule AshTemplate.TestLocalAcceptanceDatabaseAdapter do
+defmodule KeyFleet.TestLocalAcceptanceDatabaseAdapter do
   @moduledoc false
 
   def child_spec(initial) do

@@ -121,7 +121,7 @@ test("the public homepage presents the hero and its chapters", async ({page}) =>
     "src",
     "/images/home/hero-bg-dark.svg",
   )
-  await expect(page.locator("#home-title")).toHaveText("Ash Template")
+  await expect(page.locator("#home-title")).toHaveText("KeyFleet")
   // The cards name the three highlights; the chapters below them are a separate story.
   await expect(page.locator("[data-home-hero-card]")).toHaveCount(3)
   expect(
@@ -215,7 +215,7 @@ test("anonymous Sign In stays separate from the brand link", async ({page}) => {
   const brand = page.locator("#shell-brand")
   const accountControl = page.locator("#account-control")
 
-  await expect(brand).toContainText("Ash Template")
+  await expect(brand).toContainText("KeyFleet")
   await expect(brand).toHaveAttribute("href", "/")
   await expect(brand.getByRole("button")).toHaveCount(0)
   await expect(accountControl.getByRole("button", {name: "Sign In"})).toBeVisible()
@@ -298,7 +298,7 @@ test("the Overview welcomes a visitor, offers the way in, and reaches the Accoun
 
   const overview = page.locator("#overview-page")
   await expect(overview.getByRole("heading", {level: 1, name: "Welcome."})).toBeVisible()
-  await expect(page.locator("#shell-brand")).toContainText("Ash Template")
+  await expect(page.locator("#shell-brand")).toContainText("KeyFleet")
 
   // A visitor is offered the sign-in, never an invented account.
   await expect(overview.getByRole("heading", {level: 2, name: "Sign in to get started"})).toBeVisible()

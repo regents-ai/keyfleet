@@ -1,6 +1,6 @@
-# About Ash Template
+# About KeyFleet
 
-Ash Template is a product where people sign in with a wallet, keep a small account, and read plain documentation.
+KeyFleet is a product where people sign in with a wallet, keep a small account, and read plain documentation.
 
 ## What you can do here
 
