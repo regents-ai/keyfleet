@@ -81,6 +81,11 @@ defmodule KeyFleetWeb.Router do
     forward "/profile", RegentIdentity.HTTP, otp_app: :keyfleet
   end
 
+  scope "/api/v1/agent", KeyFleetWeb do
+    pipe_through :api
+    post "/join/status", AgentJoinController, :status
+  end
+
   scope "/", KeyFleetWeb do
     pipe_through :browser
 

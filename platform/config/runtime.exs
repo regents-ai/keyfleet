@@ -2,6 +2,8 @@ import Config
 
 require Logger
 
+config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL")
+
 config :sentry,
   dsn: System.get_env("SENTRY_DSN"),
   release: System.get_env("SENTRY_RELEASE"),

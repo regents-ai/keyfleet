@@ -56,6 +56,12 @@ defmodule KeyFleet.MixProject do
       {:regent_ui,
        path: System.get_env("REGENT_UI_PATH", Path.join(shared, "design-system/regent_ui"))},
       {:regent_agent_access, path: Path.join(shared, "elixir-utils/agent_access")},
+      {:siwa,
+       path:
+         System.get_env(
+           "REGENT_SIWA_PATH",
+           Path.join(shared, "elixir-utils/siwa/siwa-elixir/apps/siwa")
+         )},
       {:picosat_elixir, "~> 0.2.3"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
