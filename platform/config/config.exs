@@ -29,7 +29,8 @@ config :keyfleet,
     KeyFleet.Rooms,
     KeyFleet.Agents,
     KeyFleet.Keys,
-    KeyFleet.Chain
+    KeyFleet.Chain,
+    KeyFleet.Graph
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -49,13 +50,15 @@ config :keyfleet, :app_surfaces, true
 # Each fleet's work graph lives in a Python host run from graph_host/'s uv
 # environment (`uv sync` there), one SQLite file per fleet under :data_dir.
 # A new host replays its fleet's whole log before it answers, so it gets far
-# longer than a command does.
+# longer than a command does. A write's ownership check reads a few indexed
+# rows at its turn, which takes milliseconds.
 config :keyfleet, :graph,
   enabled: false,
   data_dir: Path.expand("../tmp/graph", __DIR__),
   python: Path.expand("../graph_host/.venv/bin/python", __DIR__),
   hello_timeout: 60_000,
   reply_timeout: 5_000,
+  check_timeout: 1_000,
   restart_min: 1_000,
   restart_max: 30_000
 

@@ -117,6 +117,163 @@ paths:
       operationId: getBrowserSession
       responses:
         "200": {$ref: "#/components/responses/Session"}
+  /api/v1/agent/fleets/{fleet_id}/graph/get:
+    post:
+      operationId: getWorkspaceObject
+      description: One object in a fleet's workspace, with its links. Any signed agent may read.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceGetRequest"}
+      responses:
+        "200":
+          description: The object and its links
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WorkspaceObjectView"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/changes:
+    post:
+      operationId: listWorkspaceChanges
+      description: The workspace's log after a place in it, oldest first. Any signed agent may read.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceChangesRequest"}
+      responses:
+        "200":
+          description: A page of the log
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WorkspaceChanges"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/create:
+    post:
+      operationId: createWorkspaceObject
+      description: Adds an object to the fleet's workspace as one of the fleet's keys.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceCreateRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "409": {$ref: "#/components/responses/WorkspaceConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/patch:
+    post:
+      operationId: patchWorkspaceObject
+      description: Changes fields of an object at the version the caller last read.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspacePatchRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "409": {$ref: "#/components/responses/WorkspaceConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/link:
+    post:
+      operationId: linkWorkspaceObjects
+      description: Links two objects; linking the same pair the same way again answers the existing link.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceLinkRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "409": {$ref: "#/components/responses/WorkspaceConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/unlink:
+    post:
+      operationId: unlinkWorkspaceObjects
+      description: Removes one link.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceUnlinkRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "409": {$ref: "#/components/responses/WorkspaceConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+  /api/v1/agent/fleets/{fleet_id}/graph/archive:
+    post:
+      operationId: archiveWorkspaceObject
+      description: Archives an object at the version the caller last read.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceArchiveRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "409": {$ref: "#/components/responses/WorkspaceConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
 components:
   parameters:
     ExpectedSubject:
@@ -131,6 +288,11 @@ components:
       required: false
       description: If supplied, must match the id of the profile being updated
       schema: {type: string, minLength: 1}
+    FleetId:
+      name: fleet_id
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[a-z][a-z0-9_]{0,62}$'}
   securitySchemes:
     privyAccessToken:
       type: http
@@ -139,6 +301,11 @@ components:
     privyIdentityToken: {type: apiKey, in: header, name: privy-id-token}
     cookieSession: {type: apiKey, in: cookie, name: _keyfleet_key}
     csrfToken: {type: apiKey, in: header, name: x-csrf-token}
+    siwaReceipt:
+      type: apiKey
+      in: header
+      name: x-siwa-receipt
+      description: A SIWA wallet receipt for audience keyfleet on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
   responses:
     Session:
       description: Current browser session
@@ -251,7 +418,283 @@ components:
               value: {error: {code: profile_unconfigured}}
             unavailable:
               value: {error: {code: profile_unavailable}}
+    AgentUnauthorized:
+      description: The signed request was missing or invalid, or its body does not fit the operation exactly; nothing else about the request was trusted
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentError"}
+          examples:
+            unauthorized:
+              value: {error: unauthorized}
+    AgentRequestTooLarge:
+      description: The request body is larger than the operation admits
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentError"}
+          examples:
+            tooLarge:
+              value: {error: request_too_large}
+    AgentOutOfRange:
+      description: A number in the request is outside the range the operation admits
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentError"}
+          examples:
+            outOfRange:
+              value: {error: out_of_range}
+    WorkspaceWritten:
+      description: The write was applied, or had already been applied under the same command id with the same body
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/WorkspaceWrite"}
+    WorkspaceRefused:
+      description: >-
+        The workspace refused the request. 400 bad_request: the body does not fit the operation,
+        including a scope other than the fleet's. 403 not_a_key_holder: the signing wallet does not
+        own or run the named key today. 403 forbidden_scope: the object is outside the fleet scope.
+        404 fleet_unknown: there is no such fleet. 404 not_found: there is no such object or link.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/WorkspaceError"}
+    WorkspaceConflict:
+      description: The object changed since the version the caller named; details carry the current version and the object as it now stands
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/WorkspaceError"}
+    WorkspaceInvalid:
+      description: >-
+        The write does not fit the workspace. invalid: a field value is not admitted.
+        forbidden_field: the write names a field members may not set. duplicate_mismatch: the
+        command id was already used with a different body. out_of_range: a number is outside the
+        range the operation admits.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/AgentError"}
+    WorkspaceUnavailable:
+      description: The fleet's workspace or the sign-in check is not answering right now; nothing was changed
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/AgentError"}
+    WorkspaceWriteUnavailable:
+      description: >-
+        ownership_refreshing: key ownership is being brought up to date and writes wait until it is;
+        nothing was written. graph_unavailable: the fleet's workspace is not taking requests right
+        now; nothing was written. indeterminate: the workspace did not confirm the write in time and
+        it may have been applied; retry with the same command id and the same body, which answers
+        the original result if it was.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/AgentError"}
   schemas:
+    AgentError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [unauthorized, authentication_unavailable, request_too_large, out_of_range]
+    WorkspaceError:
+      type: object
+      additionalProperties: false
+      required: [error, message, details]
+      properties:
+        error:
+          type: string
+          enum: [bad_request, forbidden_scope, not_found, conflict, invalid, forbidden_field, duplicate_mismatch, fleet_unknown, not_a_key_holder, ownership_refreshing, graph_unavailable, indeterminate, invalid_request]
+        message: {type: string}
+        details: {type: object}
+    WorkspaceGetRequest:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: {$ref: "#/components/schemas/WorkspaceId"}
+    WorkspaceChangesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        after_seq: {type: integer, minimum: 0, maximum: 9223372036854775807, default: 0}
+        limit: {type: integer, minimum: 1, maximum: 500, default: 100}
+    WorkspaceCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, type, scope, data]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note]}
+        scope: {type: string, const: fleet}
+        data:
+          type: object
+          description: The object's fields for its type. Any object may link back to room posts with discussion, a list of {room, seq}.
+    WorkspacePatchRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, id, expected_version]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        id: {$ref: "#/components/schemas/WorkspaceId"}
+        expected_version: {$ref: "#/components/schemas/WorkspaceVersion"}
+        set: {type: object, description: Fields to set, by name}
+        unset:
+          type: array
+          maxItems: 64
+          items: {type: string, maxLength: 64}
+        reason: {type: string, maxLength: 1000}
+        evidence:
+          type: array
+          maxItems: 20
+          items: {$ref: "#/components/schemas/WorkspaceId"}
+    WorkspaceLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, source, target, type]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        source: {$ref: "#/components/schemas/WorkspaceId"}
+        target: {$ref: "#/components/schemas/WorkspaceId"}
+        type: {type: string, enum: [supports, contradicts, depends_on, implements, produces, references]}
+        note: {type: string, maxLength: 500}
+    WorkspaceUnlinkRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, relation_id]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+    WorkspaceArchiveRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, id, expected_version]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        id: {$ref: "#/components/schemas/WorkspaceId"}
+        expected_version: {$ref: "#/components/schemas/WorkspaceVersion"}
+        reason: {type: string, maxLength: 1000}
+    WorkspaceKey:
+      type: integer
+      minimum: 1
+      maximum: 9223372036854775807
+      description: The token id of the fleet key the write acts as; the signing wallet must own it or run it for its owner today
+    WorkspaceCommandId:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Chosen by the caller; the same command id with the same body answers the original result instead of writing twice
+    WorkspaceId: {type: string, minLength: 1, maxLength: 128}
+    WorkspaceVersion: {type: integer, minimum: 1, maximum: 9223372036854775807}
+    WorkspaceWrite:
+      type: object
+      additionalProperties: false
+      required: [result, replayed, head_seq]
+      properties:
+        result:
+          oneOf:
+            - type: object
+              description: create, patch and archive
+              additionalProperties: false
+              required: [id, version]
+              properties:
+                id: {$ref: "#/components/schemas/WorkspaceId"}
+                version: {$ref: "#/components/schemas/WorkspaceVersion"}
+            - type: object
+              description: link
+              additionalProperties: false
+              required: [relation_id, existing]
+              properties:
+                relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+                existing: {type: boolean}
+            - type: object
+              description: unlink
+              additionalProperties: false
+              required: [relation_id]
+              properties:
+                relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+        replayed: {type: boolean, description: True when this command id had already been applied}
+        head_seq: {type: integer, minimum: 0}
+    WorkspaceObjectView:
+      type: object
+      additionalProperties: false
+      required: [object, relations, relations_has_more]
+      properties:
+        object: {$ref: "#/components/schemas/WorkspaceObject"}
+        relations:
+          type: array
+          items: {$ref: "#/components/schemas/WorkspaceRelation"}
+        relations_has_more: {type: boolean}
+    WorkspaceObject:
+      type: object
+      additionalProperties: false
+      required: [id, type, data, sys, version]
+      properties:
+        id: {$ref: "#/components/schemas/WorkspaceId"}
+        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note]}
+        data: {type: object}
+        version: {$ref: "#/components/schemas/WorkspaceVersion"}
+        sys:
+          type: object
+          additionalProperties: false
+          required: [scope, created_by, archived]
+          properties:
+            scope: {type: string, const: fleet}
+            archived: {type: boolean}
+            created_by:
+              type: object
+              additionalProperties: false
+              required: [key, ownership_epoch, kind, wallet]
+              properties:
+                key:
+                  type: object
+                  additionalProperties: false
+                  required: [chain_id, contract, token_id]
+                  properties:
+                    chain_id: {type: integer, minimum: 1}
+                    contract: {type: string, pattern: '^0x[0-9a-f]{40}$'}
+                    token_id: {type: integer, minimum: 0}
+                ownership_epoch: {type: integer, minimum: 0}
+                kind: {type: string, enum: [human, agent]}
+                wallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
+    WorkspaceRelation:
+      type: object
+      additionalProperties: false
+      required: [id, type, source, target, data]
+      properties:
+        id: {$ref: "#/components/schemas/WorkspaceId"}
+        type: {type: string, enum: [supports, contradicts, depends_on, implements, produces, references]}
+        source: {$ref: "#/components/schemas/WorkspaceId"}
+        target: {$ref: "#/components/schemas/WorkspaceId"}
+        data: {type: object}
+    WorkspaceChanges:
+      type: object
+      additionalProperties: false
+      required: [events, next_seq, has_more, head_seq]
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            required: [seq, type, payload]
+            properties:
+              seq: {type: integer, minimum: 1}
+              type: {type: string}
+              payload: {type: object}
+        next_seq: {type: integer, minimum: 0, description: Pass as after_seq to read on}
+        has_more: {type: boolean}
+        head_seq: {type: integer, minimum: 0}
     ProfileEnvelope:
       type: object
       additionalProperties: false

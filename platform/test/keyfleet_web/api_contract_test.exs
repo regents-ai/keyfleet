@@ -4,10 +4,19 @@ defmodule KeyFleetWeb.ApiContractTest do
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   @served_contract Application.app_dir(:keyfleet, "priv/static/api-contract.openapiv3.yaml")
 
+  @graph "/api/v1/agent/fleets/{fleet_id}/graph/"
+
   test "the canonical contract declares the complete admitted browser auth surface" do
     contract = YamlElixir.read_from_file!(@contract)
 
     assert Map.keys(contract["paths"]) |> Enum.sort() == [
+             @graph <> "archive",
+             @graph <> "changes",
+             @graph <> "create",
+             @graph <> "get",
+             @graph <> "link",
+             @graph <> "patch",
+             @graph <> "unlink",
              "/api/v1/profile",
              "/api/v1/profile/sync",
              "/auth/csrf",
@@ -172,6 +181,13 @@ defmodule KeyFleetWeb.ApiContractTest do
                "type" => "apiKey",
                "in" => "header",
                "name" => "x-csrf-token"
+             },
+             "siwaReceipt" => %{
+               "type" => "apiKey",
+               "in" => "header",
+               "name" => "x-siwa-receipt",
+               "description" =>
+                 "A SIWA wallet receipt for audience keyfleet on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once."
              }
            }
 
@@ -265,6 +281,40 @@ defmodule KeyFleetWeb.ApiContractTest do
                }
              },
              "CsrfForbidden" => %{"description" => "CSRF token was absent or invalid"}
+           }
+  end
+
+  # The fields each workspace body admits, as the signed-request check admits them.
+  test "each workspace operation is a signed POST whose body admits exactly its own fields" do
+    contract = YamlElixir.read_from_file!(@contract)
+    schemas = contract["components"]["schemas"]
+    command = ~w(as_key command_id)
+
+    for {op, required, optional} <- [
+          {"get", ~w(id), []},
+          {"changes", [], ~w(after_seq limit)},
+          {"create", command ++ ~w(type scope data), []},
+          {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
+          {"link", command ++ ~w(source target type), ~w(note)},
+          {"unlink", command ++ ~w(relation_id), []},
+          {"archive", command ++ ~w(id expected_version), ~w(reason)}
+        ] do
+      assert %{"post" => operation} = path = contract["paths"][@graph <> op]
+      assert Map.keys(path) == ["post"]
+      assert operation["security"] == [%{"siwaReceipt" => []}]
+
+      "#/components/schemas/" <> name =
+        operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+
+      schema = schemas[name]
+      assert schema["additionalProperties"] == false
+      assert Enum.sort(Map.get(schema, "required", [])) == Enum.sort(required)
+      assert Enum.sort(Map.keys(schema["properties"])) == Enum.sort(required ++ optional)
+    end
+
+    assert schemas["WorkspaceCreateRequest"]["properties"]["scope"] == %{
+             "type" => "string",
+             "const" => "fleet"
            }
   end
 

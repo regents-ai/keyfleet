@@ -52,6 +52,9 @@ def _deep(depth):
 
 FORBIDDEN_FIELDS = ["sys", "paid", "approved", "admin", "treasury_balance"]
 
+# Embeddings, overrides and isolates, which can reorder how text displays.
+BIDI_CONTROLS = [chr(code) for code in [*range(0x202A, 0x202F), *range(0x2066, 0x206A)]]
+
 REFUSALS = [
     ("conflict", request("patch", {"id": "goal#1", "expected_version": 1, "set": {"title": "x"}}, command("c"))),
     ("conflict", request("archive", {"id": "goal#1", "expected_version": 1}, command("c"))),
@@ -73,6 +76,14 @@ REFUSALS = [
     ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "cr\rlf"}}, command("c"))),
     ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "c1\x85c1"}}, command("c"))),
     ("invalid", request("link", {"source": "finding#3", "target": "goal#1", "type": "supports", "note": "a\tb"}, command("c"))),
+    *[
+        ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": f"pay{bidi}moc.exe"}}, command("c")))
+        for bidi in BIDI_CONTROLS
+    ],
+    *[
+        ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": f"line\n{bidi}two"}}, command("c")))
+        for bidi in BIDI_CONTROLS
+    ],
     *[
         ("forbidden_field", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, field: True}}, command("c")))
         for field in FORBIDDEN_FIELDS
@@ -447,3 +458,12 @@ def test_the_private_seams_of_the_pinned_activegraph_hold(db):
     assert outside.execute("SELECT COUNT(*) FROM events").fetchone()[0] == durable
     store._conn.execute("ROLLBACK")
     assert store._conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == durable
+
+
+def test_right_to_left_text_is_kept_as_written(db):
+    host = Host("fleet_a", str(db))
+    title = "خدمة العملاء \U0001F680"
+
+    created = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": title}}, "rtl")
+
+    assert _call(host, request("get", {"id": created["id"]}))["result"]["object"]["data"]["title"] == title

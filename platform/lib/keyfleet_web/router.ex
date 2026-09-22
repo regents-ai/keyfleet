@@ -92,6 +92,13 @@ defmodule KeyFleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
+    post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
+    post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
+    post "/fleets/:fleet_id/graph/create", AgentGraphController, :create
+    post "/fleets/:fleet_id/graph/patch", AgentGraphController, :patch
+    post "/fleets/:fleet_id/graph/link", AgentGraphController, :link
+    post "/fleets/:fleet_id/graph/unlink", AgentGraphController, :unlink
+    post "/fleets/:fleet_id/graph/archive", AgentGraphController, :archive
   end
 
   scope "/", KeyFleetWeb do

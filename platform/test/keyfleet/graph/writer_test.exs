@@ -23,7 +23,7 @@ defmodule KeyFleet.Graph.WriterTest do
     await_ready(fleet)
 
     pending =
-      Task.async(fn -> Writer.command(fleet, "create", command("hang-after-1"), @note) end)
+      Task.async(fn -> Writer.command(fleet, "create", @note, authorized("hang-after-1")) end)
 
     shell_kill(await_marker(ctx.marker))
 
@@ -32,7 +32,7 @@ defmodule KeyFleet.Graph.WriterTest do
     assert writer(fleet) == writer
 
     assert {:ok, %{"replayed" => true, "result" => %{"id" => "note#1", "version" => 1}}} =
-             Writer.command(fleet, "create", command("hang-after-1"), @note)
+             Writer.command(fleet, "create", @note, authorized("hang-after-1"))
 
     for other <- others do
       assert {:ok, %{"result" => %{"run_id" => "kf_" <> ^other}}} =
@@ -46,7 +46,7 @@ defmodule KeyFleet.Graph.WriterTest do
     start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir), reply_timeout: 2_000)
     await_ready(fleet)
 
-    assert Writer.command(fleet, "create", command("hang-in-1"), @note) ==
+    assert Writer.command(fleet, "create", @note, authorized("hang-in-1")) ==
              {:error, :indeterminate}
 
     refute ctx.marker |> File.read!() |> host_alive?()
@@ -54,10 +54,10 @@ defmodule KeyFleet.Graph.WriterTest do
     await_ready(fleet)
 
     assert {:ok, %{"replayed" => false, "result" => %{"id" => "note#1", "version" => 1}}} =
-             Writer.command(fleet, "create", command("hang-in-1"), @note)
+             Writer.command(fleet, "create", @note, authorized("hang-in-1"))
 
     assert {:ok, %{"replayed" => true}} =
-             Writer.command(fleet, "create", command("hang-in-1"), @note)
+             Writer.command(fleet, "create", @note, authorized("hang-in-1"))
 
     assert {:error, %{"code" => "not_found"}} = Writer.request(fleet, "get", %{id: "note#2"})
   end
@@ -109,7 +109,7 @@ defmodule KeyFleet.Graph.WriterTest do
                Writer.request(fleet, "get", %{id: <<0xFF, 0xFE>>})
 
       assert {:error, %{"code" => "bad_request"}} =
-               Writer.command(fleet, "create", Map.put(command("c1"), :auth, {:tuple}), @note)
+               Writer.command(fleet, "create", %{type: <<0xFF>>}, authorized("c1"))
     end
 
     assert {writer(fleet), writer(other), Process.whereis(KeyFleet.Graph.Registry)} == before
@@ -215,12 +215,79 @@ defmodule KeyFleet.Graph.WriterTest do
     refute Process.whereis(KeyFleet.Graph.Supervisor) in [nil, graph]
   end
 
+  test "a write's authority is asked at its turn, and a refusal then sends nothing to the host",
+       ctx do
+    [fleet] = Enum.take(@fleets, 1)
+    start_graph(ctx, [fleet])
+    await_ready(fleet)
+    writer = writer(fleet)
+    test = self()
+
+    :sys.suspend(writer)
+
+    pending =
+      Task.async(fn ->
+        Writer.command(fleet, "create", @note, fn within ->
+          send(test, {:asked, self(), within})
+          {:error, :key_changed_hands}
+        end)
+      end)
+
+    await(fn -> Process.info(writer, :message_queue_len) == {:message_queue_len, 1} end)
+    refute_received {:asked, _pid, _within}
+    :sys.resume(writer)
+
+    assert Task.await(pending) == {:error, :key_changed_hands}
+    check_timeout = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
+    assert_received {:asked, ^writer, ^check_timeout}
+
+    assert {:ok, %{"result" => %{"events" => events}}} =
+             Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+
+    refute Enum.any?(events, &(&1["type"] in ["object.created", "keyfleet.command"]))
+  end
+
+  test "a helper process a write's check links to the writer finishes without stopping it",
+       ctx do
+    [fleet] = Enum.take(@fleets, 1)
+    start_graph(ctx, [fleet])
+    await_ready(fleet)
+    writer = writer(fleet)
+
+    check = fn _within ->
+      :ok = fn -> :ok end |> Task.async() |> Task.await()
+      {:ok, command("linked-1")}
+    end
+
+    assert {:ok, %{"replayed" => false}} = Writer.command(fleet, "create", @note, check)
+    assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
+    assert writer(fleet) == writer
+  end
+
+  test "a check whose database read exits is answered unavailable, sends nothing and leaves the writer running",
+       ctx do
+    [fleet] = Enum.take(@fleets, 1)
+    start_graph(ctx, [fleet])
+    await_ready(fleet)
+    writer = writer(fleet)
+
+    pool_down = fn _within -> exit({:noproc, {DBConnection.Holder, :checkout, []}}) end
+
+    assert Writer.command(fleet, "create", @note, pool_down) == {:error, :unavailable}
+    assert writer(fleet) == writer
+
+    assert {:ok, %{"result" => %{"events" => events}}} =
+             Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+
+    refute Enum.any?(events, &(&1["type"] in ["object.created", "keyfleet.command"]))
+  end
+
   test "a fleet with no running writer answers unavailable", ctx do
     assert Writer.request("fleet_without_graph", "hello", %{}) == {:error, :unavailable}
 
     start_graph(ctx, Enum.take(@fleets, 1))
 
-    assert Writer.command("fleet_without_graph", "create", command("c1"), @note) ==
+    assert Writer.command("fleet_without_graph", "create", @note, authorized("c1")) ==
              {:error, :unavailable}
   end
 
@@ -333,6 +400,8 @@ defmodule KeyFleet.Graph.WriterTest do
     assert_receive {^port, {:data, "held\n"}}, 10_000
     port
   end
+
+  defp authorized(id), do: fn _within -> {:ok, command(id)} end
 
   defp command(id) do
     token_id = 17

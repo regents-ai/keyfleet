@@ -75,8 +75,12 @@ class _Shape(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_CONTROL_EXCEPT_LINES = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+# The bidirectional embedding, override and isolate controls count as control
+# characters too: they can make stored text display in a different order from
+# the one it is read in.
+_BIDI = "\u202a-\u202e\u2066-\u2069"
+_CONTROL = re.compile(rf"[\x00-\x1f\x7f-\x9f{_BIDI}]")
+_CONTROL_EXCEPT_LINES = re.compile(rf"[\x00-\x08\x0b-\x1f\x7f-\x9f{_BIDI}]")
 
 
 def _refuse(pattern: re.Pattern, what: str):

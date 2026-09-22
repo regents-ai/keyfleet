@@ -19,6 +19,8 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
   @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
+  @graph_ops ~w(get changes create patch link unlink archive)
+  @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
   # Separate transport bound from Ash field limits: the broker embeds these raw
   # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
@@ -29,12 +31,35 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # the 2 KiB beside it. Inside the broker's 64 KiB envelope each such pair
   # grows to fourteen bytes, which still fits.
   @send_max_body 4_000 * 12 + 2 * 1024
+  # A workspace write holds a few thousand characters of text at most, and
+  # fits the broker's envelope the same way a post does.
+  @graph_write_max_body @send_max_body
   # One catch-up names up to a hundred rooms.
   @sync_max_body 32 * 1024
   @max_sync_rooms 100
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
+  @max_graph_page 500
+  # What each workspace operation's body holds: its required fields, then the
+  # ones it may add. A write names the key it acts as and its command id.
+  @command_fields %{"as_key" => :key, "command_id" => :text}
+  @graph_bodies %{
+    "get" => {%{"id" => :text}, %{}},
+    "changes" => {%{}, %{"after_seq" => :seq, "limit" => :graph_page}},
+    "create" =>
+      {Map.merge(@command_fields, %{"type" => :text, "scope" => :text, "data" => :object}), %{}},
+    "patch" =>
+      {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
+       %{"set" => :object, "unset" => :texts, "reason" => :text, "evidence" => :texts}},
+    "link" =>
+      {Map.merge(@command_fields, %{"source" => :text, "target" => :text, "type" => :text}),
+       %{"note" => :text}},
+    "unlink" => {Map.merge(@command_fields, %{"relation_id" => :text}), %{}},
+    "archive" =>
+      {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
+       %{"reason" => :text}}
+  }
   @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
@@ -128,7 +153,12 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
       when map_size(data) == 9 and map_size(principal) == 4 and is_binary(expires) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
-    actor = %Agent{wallet_address: wallet, chain_id: 8453, audience: "keyfleet"}
+    actor = %Agent{
+      wallet_address: wallet,
+      chain_id: 8453,
+      audience: "keyfleet",
+      credential_ref: credential_ref(conn)
+    }
 
     if Agent.valid?(actor),
       do: {:ok, assign(conn, :agent_actor, actor)},
@@ -137,6 +167,13 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   def accept(_conn, _data, _context), do: invalid_principal()
   defp invalid_principal, do: {:error, %{reason: :invalid_principal}}
+
+  # The receipt and key id each appear exactly once; `before_verify` saw to it.
+  defp credential_ref(conn) do
+    [receipt] = get_req_header(conn, "x-siwa-receipt")
+    [key_id] = get_req_header(conn, "x-key-id")
+    "sha256:" <> Base.encode16(:crypto.hash(:sha256, [receipt, "\n", key_id]), case: :lower)
+  end
 
   @impl Siwa.AgentAuthPlug.Hooks
   def deny(conn, metadata) do
@@ -176,7 +213,10 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   defp supported?("GET", path), do: Regex.match?(@rooms_path, path)
 
   defp supported?("POST", path) do
-    Enum.any?([@pairing_path, @read_path, @send_path, @sync_path], &Regex.match?(&1, path))
+    Enum.any?(
+      [@pairing_path, @read_path, @send_path, @sync_path, @graph_path],
+      &Regex.match?(&1, path)
+    )
   end
 
   defp supported?("DELETE", path), do: Regex.match?(@pairing_path, path)
@@ -188,6 +228,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@send_path, path) -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
+      graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
     end
   end
@@ -210,9 +251,52 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
       Regex.match?(@read_path, path) -> check_read_body(params)
       Regex.match?(@send_path, path) -> admit(valid_send_body?(params))
       Regex.match?(@sync_path, path) -> check_sync_body(params)
+      op = graph_op(path) -> check_graph_body(op, params)
       true -> :invalid
     end
   end
+
+  defp graph_op(path) do
+    case Regex.run(@graph_path, path, capture: :all_but_first) do
+      [op] -> op
+      nil -> nil
+    end
+  end
+
+  # Nothing outside an operation's own fields is admitted, so a request can
+  # never name its own author, standing or scope rules.
+  defp check_graph_body(op, params) when is_map(params) do
+    {required, optional} = Map.fetch!(@graph_bodies, op)
+    fields = Map.merge(required, optional)
+
+    cond do
+      not (Enum.all?(Map.keys(required), &Map.has_key?(params, &1)) and
+               Enum.all?(params, fn {key, value} -> shaped?(fields[key], value) end)) ->
+        :invalid
+
+      Enum.all?(params, fn {key, value} -> in_bounds?(fields[key], value) end) ->
+        :ok
+
+      true ->
+        :out_of_range
+    end
+  end
+
+  defp check_graph_body(_op, _params), do: :invalid
+
+  defp shaped?(:text, value), do: is_binary(value)
+  defp shaped?(:object, value), do: is_map(value)
+  defp shaped?(:texts, value), do: is_list(value) and Enum.all?(value, &is_binary/1)
+
+  defp shaped?(kind, value) when kind in [:key, :version, :seq, :graph_page],
+    do: is_integer(value)
+
+  defp shaped?(nil, _value), do: false
+
+  defp in_bounds?(kind, value) when kind in [:key, :version], do: value in 1..@max_seq
+  defp in_bounds?(:seq, value), do: value in 0..@max_seq
+  defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
+  defp in_bounds?(_kind, _value), do: true
 
   # A read names how far it has already read and how much it wants; a post names
   # the words, the key the sender filed them under and what it answers.

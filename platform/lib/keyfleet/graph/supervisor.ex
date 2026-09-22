@@ -19,7 +19,8 @@ defmodule KeyFleet.Graph.Supervisor do
   Options default to the `:graph` application environment: `:data_dir` holds
   one SQLite file per fleet, `:python` is the graph host's interpreter,
   `:hello_timeout` and `:reply_timeout` are how long a writer waits for a new
-  host to answer and for a reply, and `:restart_min` and `:restart_max` bound
+  host to answer and for a reply, `:check_timeout` is how long a write's
+  ownership check may spend reading, and `:restart_min` and `:restart_max` bound
   the delay before a failed host is replaced. `:fleets` defaults to the fixed
   catalog.
   """
@@ -27,7 +28,15 @@ defmodule KeyFleet.Graph.Supervisor do
 
   alias KeyFleet.Graph.Writer
 
-  @writer_opts [:data_dir, :python, :hello_timeout, :reply_timeout, :restart_min, :restart_max]
+  @writer_opts [
+    :data_dir,
+    :python,
+    :hello_timeout,
+    :reply_timeout,
+    :check_timeout,
+    :restart_min,
+    :restart_max
+  ]
 
   def start_link(opts \\ []) do
     Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
