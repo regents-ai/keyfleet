@@ -14,13 +14,13 @@ defmodule KeyFleetWeb.BoundaryTest do
     end
   end
 
-  test "the only application migrations are the extensions install and the app baseline" do
+  test "the application migrations start with the extensions install and the app baseline" do
     assert [extensions_migration] =
              Path.wildcard("priv/repo/migrations/*_initial_app_extensions_1.exs")
 
     assert [baseline_migration] = Path.wildcard("priv/repo/migrations/*_initial_app.exs")
 
-    assert Enum.sort(Path.wildcard("priv/repo/migrations/*")) ==
+    assert "priv/repo/migrations/*" |> Path.wildcard() |> Enum.sort() |> Enum.take(2) ==
              Enum.sort([extensions_migration, baseline_migration])
 
     assert_extension_migration(extensions_migration)

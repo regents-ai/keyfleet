@@ -3,10 +3,10 @@ defmodule KeyFleet.Fleets do
   use Ash.Domain
 
   @catalog [
-    {"fibonacci_syndicate", "Fibonacci Syndicate"},
-    {"fibonacci_cascade", "Fibonacci Cascade"},
-    {"fleet_tech_classic", "Fleet.Tech Classic"},
-    {"fleet_tech_accelerant", "Fleet.Tech Accelerant"}
+    %{id: "fibonacci_syndicate", name: "Fibonacci Syndicate"},
+    %{id: "fibonacci_cascade", name: "Fibonacci Cascade"},
+    %{id: "fleet_tech_classic", name: "Fleet.Tech Classic"},
+    %{id: "fleet_tech_accelerant", name: "Fleet.Tech Accelerant"}
   ]
 
   resources do
@@ -18,22 +18,21 @@ defmodule KeyFleet.Fleets do
   @doc """
   Seeds the fixed catalog from trusted application setup code.
 
-  Reruns preserve machine identities and restore canonical display names.
-  This internal entry point must never be exposed as a user action.
+  Reruns preserve machine identities and restore canonical display names. The
+  whole catalog commits together. This internal entry point must never be exposed
+  as a user action.
   """
   def bootstrap_catalog! do
-    KeyFleet.Repo.transaction(fn ->
-      Enum.map(@catalog, fn {id, name} ->
-        KeyFleet.Fleets.Fleet
-        |> Ash.Changeset.for_create(:bootstrap, %{id: id, name: name},
-          actor: %KeyFleet.Actors.System{}
-        )
-        |> Ash.create!()
-      end)
-    end)
-    |> case do
-      {:ok, fleets} -> fleets
-      {:error, reason} -> raise "Fleet catalog bootstrap failed: #{inspect(reason)}"
-    end
+    %Ash.BulkResult{records: fleets} =
+      Ash.bulk_create!(@catalog, KeyFleet.Fleets.Fleet, :bootstrap,
+        actor: %KeyFleet.Actors.System{},
+        return_records?: true,
+        return_errors?: true,
+        stop_on_error?: true,
+        transaction: :all,
+        sorted?: true
+      )
+
+    fleets
   end
 end

@@ -180,7 +180,11 @@ defmodule KeyFleet.ReleaseTest do
     assert applied_versions(config) == release_versions()
 
     assert table_names(config, "keyfleet_app") == [
+             "agent_profiles",
+             "fleets",
+             "key_attachments",
              "linked_identities",
+             "rooms",
              "schema_migrations",
              "session_authorities"
            ]

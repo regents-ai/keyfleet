@@ -177,7 +177,15 @@
           {CredoAsh.Check.Warning.PoliciesWithoutAuthorizer, []},
           {CredoAsh.Check.Warning.AuthorizerWithoutPolicies, []},
           {CredoAsh.Check.Warning.UnprotectedResource, []},
-          {CredoAsh.Check.Warning.AshCallInLoop, []},
+          {CredoAsh.Check.Warning.AshCallInLoop,
+           [
+             files: %{
+               excluded: [
+                 # Adversarial test cases deliberately issue one call per actor or argument.
+                 "test/**/*.exs"
+               ]
+             }
+           ]},
           {CredoAsh.Check.Warning.ActorOnExecution, []},
           {CredoAsh.Check.Warning.DirectRepoCall, []},
           {CredoAsh.Check.Warning.UnjustifiedAuthorizeFalse, []},

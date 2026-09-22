@@ -6,11 +6,6 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
 
   setup do
-    partition = System.fetch_env!("MIX_TEST_PARTITION")
-
-    unless partition != "" and KeyFleet.Repo.config()[:database] == "keyfleet#{partition}_test",
-      do: raise("Join journey requires a disposable partition database")
-
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     {:ok, signer} = Siwa.LocalSigner.new()

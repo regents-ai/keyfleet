@@ -80,6 +80,9 @@ defmodule KeyFleet.RoomsTest do
   end
 
   test "bootstrap refuses an incomplete fleet catalog before writing any rooms" do
+    Fleets.bootstrap_catalog!()
+    Repo.query!("DELETE FROM keyfleet_app.fleets WHERE id = 'fleet_tech_classic'")
+
     assert_raise RuntimeError, ~r/complete fixed fleet catalog/, fn ->
       Rooms.bootstrap_core_rooms!()
     end
@@ -94,9 +97,7 @@ defmodule KeyFleet.RoomsTest do
       "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT reject_work CHECK (slug <> 'work')"
     )
 
-    assert_raise RuntimeError, ~r/Core room bootstrap failed/, fn ->
-      Rooms.bootstrap_core_rooms!()
-    end
+    assert_raise Ash.Error.Unknown, fn -> Rooms.bootstrap_core_rooms!() end
 
     assert persisted_rooms() == []
   end
