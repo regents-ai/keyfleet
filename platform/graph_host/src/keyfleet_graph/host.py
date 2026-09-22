@@ -1,0 +1,459 @@
+"""One fleet's graph: the run, the pack, the command ledger and the ops.
+
+Every accepted write commits as one SQLite transaction holding its domain
+events, its `keyfleet.command` ledger event and the runtime's settling
+events, so a command is either wholly durable or absent. The in-memory
+projection is outside that transaction, so any exception raised once a
+transaction has begun is left to end the process: the supervisor restarts
+it and `Runtime.load` rebuilds memory from what is durable.
+
+Refusals are decided before the transaction begins, write nothing and are
+not remembered; each is a pure function of the request and the current state.
+"""
+
+import hashlib
+import json
+from contextlib import contextmanager
+from importlib import metadata
+from typing import Any, Callable, Iterator, Optional
+
+from activegraph import Event, Graph, Runtime
+from activegraph.store.sqlite import SQLiteEventStore
+from pydantic import BaseModel, ValidationError
+from pydantic_core import from_json
+
+from keyfleet_graph import protocol
+from keyfleet_graph.pack import (
+    MEMBER_MODELS,
+    PACK,
+    PACK_NAME,
+    PACK_VERSION,
+    RECORD_MODELS,
+    RELATION_ENDPOINTS,
+    RelationData,
+)
+from keyfleet_graph.protocol import Command
+
+LEDGER_EVENT = "keyfleet.command"
+LEDGER_ACTOR = "keyfleet:gateway"
+RELATION_PAGE = 200
+# A `changes` page stops at this many bytes of encoded events, or after the
+# first event when that one alone is larger.
+CHANGES_PAGE_BYTES = 512 * 1024
+
+# The settling quantum only drains lifecycle bookkeeping: the pack carries no
+# behaviors, so any work left after it is a fault.
+_QUANTUM_EVENTS = 64
+_QUANTUM_SECONDS = 1.0
+
+
+class Refusal(Exception):
+    def __init__(self, code: str, message: str, details: Optional[dict[str, Any]] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.details = details or {}
+
+
+def upstream_version() -> str:
+    dist = metadata.distribution("activegraph")
+    commit = json.loads(dist.read_text("direct_url.json"))["vcs_info"]["commit_id"]
+    return f"{dist.version}+{commit[:7]}"
+
+
+def body_hash(body: dict[str, Any]) -> str:
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+class Host:
+    def __init__(self, fleet: str, db_path: str):
+        self.run_id = f"kf_{fleet}"
+        self.runtime = _open_runtime(db_path, self.run_id)
+        self.graph = self.runtime.graph
+        self._conn = self.graph.store._conn
+        # WAL with NORMAL may lose the last commits on power loss; a confirmed
+        # command must survive it.
+        self._conn.execute("PRAGMA synchronous=FULL")
+        self._upstream = upstream_version()
+        with self._transaction():
+            self.runtime.load_pack(PACK)
+            self._settle()
+        self._ledger = {
+            (event.payload["principal"], event.payload["command_id"]): event.payload
+            for event in self.graph.events
+            if event.type == LEDGER_EVENT
+        }
+
+    # ---------- request handling ----------
+
+    def handle(self, frame: bytes | protocol.TooLarge) -> dict[str, Any]:
+        req = None
+        try:
+            message = _decode(frame)
+            req = _request_id(message)
+            request = _parse(message)
+            if request.op in protocol.READ_OPS:
+                body = _parse_body(protocol.READ_OPS[request.op], request.body)
+                return {"v": 1, "req": req, "ok": True, "result": self._read(request.op, body)}
+            return self._write(request)
+        except Refusal as refusal:
+            error = {"code": refusal.code, "message": refusal.message, "details": refusal.details}
+            return {"v": 1, "req": req, "ok": False, "error": error}
+
+    def _read(self, op: str, body: BaseModel) -> dict[str, Any]:
+        if op == "hello":
+            return {
+                "run_id": self.run_id,
+                "pack": f"{PACK_NAME}@{PACK_VERSION}",
+                "activegraph": self._upstream,
+                "head_seq": self._head_seq(),
+            }
+        if op == "get":
+            obj = self._object(body.id, "id")
+            relations = self.graph.relations(source=obj.id) + [
+                rel for rel in self.graph.relations(target=obj.id) if rel.source != obj.id
+            ]
+            return {
+                "object": _object_view(obj),
+                "relations": [_relation_view(rel) for rel in relations[:RELATION_PAGE]],
+                "relations_has_more": len(relations) > RELATION_PAGE,
+            }
+        events = self._events_after(body.after_seq, body.limit + 1)
+        page = _byte_page(events[: body.limit])
+        return {
+            "events": page,
+            "next_seq": page[-1]["seq"] if page else body.after_seq,
+            "has_more": len(events) > len(page),
+            "head_seq": self._head_seq(),
+        }
+
+    def _write(self, request: protocol.Request) -> dict[str, Any]:
+        command = request.command
+        if command is None:
+            raise Refusal("bad_request", f"{request.op} needs a command")
+        body = _parse_body(protocol.WRITE_OPS[request.op], request.body)
+        digest = body_hash(request.body)
+        key = (command.principal, command.id)
+        prior = self._ledger.get(key)
+        if prior is not None:
+            if prior["body_hash"] != digest or prior["op"] != request.op:
+                raise Refusal(
+                    "duplicate_mismatch",
+                    "this command id was already used with a different body",
+                    {"command_id": command.id},
+                )
+            return self._accepted(request.req, prior["result"], replayed=True, events=[])
+
+        apply = _PLANNERS[request.op](self, command, body)
+        head = self._head_seq()
+        with self._transaction():
+            result = apply()
+            payload = {
+                "principal": command.principal,
+                "command_id": command.id,
+                "body_hash": digest,
+                "op": request.op,
+                "result": result,
+                "events": [event["id"] for event in self._events_after(head)],
+                "auth": command.auth.model_dump(mode="json"),
+            }
+            self.graph.emit(
+                Event(
+                    id=self.graph.ids.event(),
+                    type=LEDGER_EVENT,
+                    payload=payload,
+                    actor=LEDGER_ACTOR,
+                    timestamp=self.graph.clock.now(),
+                )
+            )
+            self._settle()
+        self._ledger[key] = payload
+        return self._accepted(request.req, result, replayed=False, events=self._events_after(head))
+
+    def _accepted(self, req: str, result: Any, *, replayed: bool, events: list) -> dict[str, Any]:
+        return {
+            "v": 1,
+            "req": req,
+            "ok": True,
+            "replayed": replayed,
+            "result": result,
+            "events": events,
+            "head_seq": self._head_seq(),
+        }
+
+    # ---------- planners: every check, then the closure that writes ----------
+
+    def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[], dict]:
+        member = MEMBER_MODELS.get(body.type)
+        if member is None:
+            raise _invalid("type", f"unknown object type {body.type!r}")
+        if body.scope not in command.writable_scopes:
+            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": body.scope})
+        _check_fields(member, body.data.keys(), body.data, command)
+        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.scope)})
+
+        def apply() -> dict:
+            obj = self.graph.add_object(body.type, record, actor=command.principal)
+            return {"id": obj.id, "version": obj.version}
+
+        return apply
+
+    def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[], dict]:
+        obj = self._live(body.id, "id")
+        _check_version(obj, body.expected_version)
+        _check_scope(command, obj)
+        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command)
+        merged = {**obj.data, **body.set}
+        for field in body.unset:
+            merged.pop(field, None)
+        record = _validate(RECORD_MODELS[obj.type], merged)
+        updates = {field: value for field, value in record.items() if obj.data.get(field) != value}
+        if not updates:
+            raise _invalid("set", "the patch changes nothing")
+
+        def apply() -> dict:
+            self.graph.patch_object(
+                obj.id, updates, actor=command.principal, rationale=body.reason, evidence=body.evidence
+            )
+            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
+
+        return apply
+
+    def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[], dict]:
+        obj = self._live(body.id, "id")
+        _check_version(obj, body.expected_version)
+        _check_scope(command, obj)
+        archived = {**obj.data["sys"], "archived": True}
+
+        def apply() -> dict:
+            self.graph.patch_object(obj.id, {"sys": archived}, actor=command.principal, rationale=body.reason)
+            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
+
+        return apply
+
+    def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[], dict]:
+        source = self._live(body.source, "source")
+        target = self._live(body.target, "target")
+        _check_scope(command, source, target)
+        endpoints = RELATION_ENDPOINTS.get(body.type)
+        if endpoints is None:
+            raise _invalid("type", f"unknown relation type {body.type!r}")
+        sources, targets = endpoints
+        if source.type not in sources or target.type not in targets:
+            raise _invalid("type", f"{body.type} cannot link a {source.type} to a {target.type}")
+        if body.type == "depends_on" and source.id == target.id:
+            raise _invalid("target", "an object cannot depend on itself")
+        data = _validate(RelationData, {"note": body.note}, exclude_none=True)
+
+        def apply() -> dict:
+            existing = self.graph.relations(source=source.id, target=target.id, type=body.type)
+            if existing:
+                return {"relation_id": existing[0].id, "existing": True}
+            rel = self.graph.add_relation(source.id, target.id, body.type, data, actor=command.principal)
+            return {"relation_id": rel.id, "existing": False}
+
+        return apply
+
+    def _plan_unlink(self, command: Command, body: protocol.UnlinkBody) -> Callable[[], dict]:
+        rel = self.graph.get_relation(body.relation_id)
+        if rel is None:
+            raise Refusal("not_found", "no such relation", {"id": body.relation_id})
+        _check_scope(command, self.graph.get_object(rel.source), self.graph.get_object(rel.target))
+
+        def apply() -> dict:
+            self.graph.remove_relation(rel.id, actor=command.principal)
+            return {"relation_id": rel.id}
+
+        return apply
+
+    # ---------- state helpers ----------
+
+    def _object(self, object_id: str, path: str):
+        obj = self.graph.get_object(object_id)
+        if obj is None:
+            raise Refusal("not_found", f"no such object ({path})", {"id": object_id})
+        return obj
+
+    def _live(self, object_id: str, path: str):
+        obj = self._object(object_id, path)
+        if obj.data["sys"]["archived"]:
+            raise _invalid(path, "the object is archived")
+        return obj
+
+    def _head_seq(self) -> int:
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) FROM events WHERE run_id = ?", (self.run_id,)
+        ).fetchone()
+        return int(row[0])
+
+    def _events_after(self, seq: int, limit: int = -1) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT seq, id, type, actor, timestamp, payload FROM events"
+            " WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?",
+            (self.run_id, seq, limit),
+        )
+        return [
+            {
+                "seq": row["seq"],
+                "id": row["id"],
+                "type": row["type"],
+                "actor": row["actor"],
+                "timestamp": row["timestamp"],
+                "payload": json.loads(row["payload"]),
+            }
+            for row in rows
+        ]
+
+    @contextmanager
+    def _transaction(self) -> Iterator[None]:
+        # Relies on the pinned store's autocommit connection (isolation_level
+        # None): an explicit BEGIN then holds every append until COMMIT. The
+        # private-seam test fails if a new upstream changes either detail.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+        self._conn.execute("COMMIT")
+
+    def _settle(self) -> None:
+        quantum = self.runtime.run_quantum(max_queue_events=_QUANTUM_EVENTS, max_seconds=_QUANTUM_SECONDS)
+        if not quantum.idle:
+            raise RuntimeError("the runtime did not settle inside one quantum")
+
+
+_PLANNERS = {
+    "create": Host._plan_create,
+    "patch": Host._plan_patch,
+    "archive": Host._plan_archive,
+    "link": Host._plan_link,
+    "unlink": Host._plan_unlink,
+}
+
+
+def _open_runtime(db_path: str, run_id: str) -> Runtime:
+    probe = SQLiteEventStore(db_path, run_id)
+    fresh = probe.get_run() is None
+    probe.close()
+    if fresh:
+        return Runtime(Graph(run_id=run_id), persist_to=db_path, behaviors=[], tools=[])
+    return Runtime.load(db_path, run_id, behaviors=[], tools=[])
+
+
+def _decode(frame: bytes | protocol.TooLarge) -> Any:
+    """Parse the frame once, with the JSON parser's nesting limit and no NaN or infinity literals."""
+    if isinstance(frame, protocol.TooLarge):
+        raise Refusal("bad_request", "the request is larger than 1 MiB")
+    try:
+        return from_json(frame, allow_inf_nan=False)
+    except ValueError as error:
+        raise Refusal("bad_request", "the request is not JSON", {"errors": [{"path": "", "message": str(error)}]}) from None
+
+
+def _request_id(message: Any) -> Optional[str]:
+    """The id to answer under, even when the rest of the envelope is refused."""
+    req = message.get("req") if isinstance(message, dict) else None
+    if isinstance(req, str) and 0 < len(req) <= 128:
+        return req
+    return None
+
+
+def _parse(message: Any) -> protocol.Request:
+    try:
+        request = protocol.Request.model_validate(message)
+    except ValidationError as error:
+        raise Refusal("bad_request", "malformed envelope", {"errors": _errors(error)}) from None
+    if request.op in protocol.READ_OPS:
+        if request.command is not None:
+            raise Refusal("bad_request", f"{request.op} takes no command")
+    elif request.op not in protocol.WRITE_OPS:
+        raise Refusal("bad_request", f"unknown op {request.op!r}")
+    return request
+
+
+def _parse_body(model: type[BaseModel], body: dict[str, Any]) -> BaseModel:
+    try:
+        return model.model_validate(body)
+    except ValidationError as error:
+        raise Refusal("bad_request", "malformed body", {"errors": _errors(error)}) from None
+
+
+def _validate(model: type[BaseModel], data: dict[str, Any], *, exclude_none: bool = False) -> dict:
+    try:
+        return model.model_validate(data).model_dump(mode="json", exclude_none=exclude_none)
+    except ValidationError as error:
+        raise Refusal("invalid", "the data does not fit the schema", {"errors": _errors(error)}) from None
+
+
+def _errors(error: ValidationError) -> list[dict[str, str]]:
+    return [
+        {"path": ".".join(str(part) for part in item["loc"]), "message": item["msg"]}
+        for item in error.errors()
+    ]
+
+
+def _invalid(path: str, message: str) -> Refusal:
+    return Refusal("invalid", message, {"errors": [{"path": path, "message": message}]})
+
+
+def _check_version(obj, expected_version: int) -> None:
+    if obj.version != expected_version:
+        raise Refusal(
+            "conflict",
+            "the object changed since that version",
+            {"current_version": obj.version, "object": _object_view(obj)},
+        )
+
+
+def _check_scope(command: Command, *objects) -> None:
+    for obj in objects:
+        scope = obj.data["sys"]["scope"]
+        if scope not in command.writable_scopes:
+            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": scope})
+
+
+def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command) -> None:
+    unknown = sorted(field for field in fields if field not in member.model_fields)
+    if unknown:
+        raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
+    if values.get("assignee_key") not in (None, command.auth.key.token_id):
+        raise Refusal(
+            "forbidden_field",
+            "a task may be assigned only to the acting key, or cleared",
+            {"fields": ["assignee_key"]},
+        )
+
+
+def _sys(command: Command, scope: str) -> dict[str, Any]:
+    auth = command.auth
+    return {
+        "scope": scope,
+        "created_by": {
+            "key": auth.key.model_dump(mode="json"),
+            "ownership_epoch": auth.ownership_epoch,
+            "kind": auth.kind,
+            "wallet": auth.operator_wallet,
+        },
+        "archived": False,
+    }
+
+
+def _byte_page(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    page, size = [], 0
+    for event in events:
+        size += len(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        if page and size > CHANGES_PAGE_BYTES:
+            break
+        page.append(event)
+    return page
+
+
+def _object_view(obj) -> dict[str, Any]:
+    data = {field: value for field, value in obj.data.items() if field != "sys"}
+    return {"id": obj.id, "type": obj.type, "data": data, "sys": obj.data["sys"], "version": obj.version}
+
+
+def _relation_view(rel) -> dict[str, Any]:
+    return {"id": rel.id, "type": rel.type, "source": rel.source, "target": rel.target, "data": rel.data}

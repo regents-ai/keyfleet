@@ -14,6 +14,12 @@ primary_region = "iad"
   port = 4000
   path = "/metrics"
 
+# Each fleet's work graph is a file on this volume, so the app runs on exactly
+# one machine: a second machine would get its own, empty volume.
+[mounts]
+  source = "keyfleet_graph"
+  destination = "/data"
+
 [http_service]
   internal_port = 4000
   force_https = true

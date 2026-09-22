@@ -46,6 +46,19 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 
 config :keyfleet, :app_surfaces, true
 
+# Each fleet's work graph lives in a Python host run from graph_host/'s uv
+# environment (`uv sync` there), one SQLite file per fleet under :data_dir.
+# A new host replays its fleet's whole log before it answers, so it gets far
+# longer than a command does.
+config :keyfleet, :graph,
+  enabled: false,
+  data_dir: Path.expand("../tmp/graph", __DIR__),
+  python: Path.expand("../graph_host/.venv/bin/python", __DIR__),
+  hello_timeout: 60_000,
+  reply_timeout: 5_000,
+  restart_min: 1_000,
+  restart_max: 30_000
+
 config :keyfleet, :session_options,
   store: :cookie,
   key: "_keyfleet_key",

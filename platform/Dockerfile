@@ -2,6 +2,7 @@ FROM docker.io/library/gcc@sha256:9ca91b05c7b07d2979f16413e8b2cd6ec8a7c80ffca412
 FROM docker.io/hexpm/elixir@sha256:d21e3b8bab8bc2e8d51eb4bb03b1d73aad6b91c5c90b3ecc778eb5d136c2e3e6 AS elixir
 FROM docker.io/library/node@sha256:5aea649bacdc35e8e20571131c4f3547477dfe66e677d45c005af6dbd1edfaa7 AS node
 FROM docker.io/library/debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS slim
+FROM ghcr.io/astral-sh/uv@sha256:95f2aa1fe59274951cfe9b0cbc7972e879ff1004bc8945d130a32eb0dbd85945 AS uv
 
 FROM native AS assets
 
@@ -47,6 +48,30 @@ COPY platform/contracts contracts
 COPY --from=assets /workspace/platform/node_modules node_modules
 RUN mix compile && mix assets.deploy && mix release
 
+# The graph host: a standalone CPython and the packages uv.lock pins, installed
+# from the sealed Python supply in the context without reaching the network.
+# The builder base is used for its git, which uv needs to check the pinned
+# ActiveGraph commit out of the supply's cache. The interpreter is a
+# self-contained build, so the virtual environment runs on the slim base as is.
+FROM native AS graph-host
+
+ENV UV_OFFLINE=1 \
+  UV_CACHE_DIR=/workspace/uv-cache \
+  UV_PYTHON_CACHE_DIR=/workspace/python-cache \
+  UV_PYTHON_INSTALL_DIR=/opt/python \
+  UV_PYTHON_PREFERENCE=only-managed \
+  UV_PROJECT_ENVIRONMENT=/opt/graph_host/.venv \
+  UV_COMPILE_BYTECODE=1 \
+  UV_LINK_MODE=copy
+WORKDIR /workspace/platform/graph_host
+
+COPY --from=uv /uv /usr/local/bin/uv
+COPY uv-cache /workspace/uv-cache
+COPY python-cache /workspace/python-cache
+COPY platform/graph_host/pyproject.toml platform/graph_host/uv.lock platform/graph_host/.python-version ./
+COPY platform/graph_host/src src
+RUN uv python install && uv sync --frozen --no-dev --no-editable
+
 # The release carries its own ERTS, so the runtime image needs no Elixir and no
 # Erlang install. Two things it does still need are absent from the slim base:
 # the OpenSSL library the crypto NIF links against, and the CA bundle outbound
@@ -89,6 +114,11 @@ RUN groupadd --system --gid 1001 app \
   && useradd --system --uid 1001 --gid app --home-dir /app app
 
 COPY --from=build --chown=app:app /workspace/platform/_build/prod/rel/keyfleet ./
+
+# The graph host stays root-owned: the app runs it and never changes it.
+COPY --from=graph-host /opt/python /opt/python
+COPY --from=graph-host /opt/graph_host/.venv /opt/graph_host/.venv
+COPY platform/graph_host/third_party /opt/graph_host/third_party
 
 USER app
 

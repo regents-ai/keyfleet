@@ -1,5 +1,6 @@
 import Config
 config :keyfleet, :local_showcase, true
+config :keyfleet, :graph, enabled: true
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

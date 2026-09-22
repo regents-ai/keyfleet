@@ -20,6 +20,9 @@ defmodule KeyFleet.Fleets do
     end
   end
 
+  @doc "The machine ids of the fixed catalog, in catalog order."
+  def catalog_ids, do: Enum.map(@catalog, & &1.id)
+
   @doc """
   Seeds the fixed catalog from trusted application setup code.
 

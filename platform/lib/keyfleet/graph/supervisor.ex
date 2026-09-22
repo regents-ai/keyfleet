@@ -1,0 +1,62 @@
+defmodule KeyFleet.Graph.Supervisor do
+  @moduledoc """
+  Runs one graph writer per catalog fleet beside the registry that names them.
+
+  A writer replaces its own failed host with backoff and never exits because a
+  host failed, so one fleet's failing host leaves the other fleets alone. The
+  registry starts first under `rest_for_one`, so a writer crash never takes it
+  down, and the writers share a `one_for_one` supervisor.
+
+  Every level restarts what it runs, so a burst of writer crashes can never
+  leave the graph stopped while the site keeps serving. The writers'
+  supervisor allows three restarts per fleet in five seconds, which lets one
+  fleet's writer crash a few times without touching the others; past that
+  this supervisor restarts all the writers, past its own limit the
+  application restarts the whole graph, and a crash loop that outlasts even
+  that stops the application, so the machine restarts with it. While a level
+  restarts, graph requests answer `{:error, :unavailable}`.
+
+  Options default to the `:graph` application environment: `:data_dir` holds
+  one SQLite file per fleet, `:python` is the graph host's interpreter,
+  `:hello_timeout` and `:reply_timeout` are how long a writer waits for a new
+  host to answer and for a reply, and `:restart_min` and `:restart_max` bound
+  the delay before a failed host is replaced. `:fleets` defaults to the fixed
+  catalog.
+  """
+  use Supervisor
+
+  alias KeyFleet.Graph.Writer
+
+  @writer_opts [:data_dir, :python, :hello_timeout, :reply_timeout, :restart_min, :restart_max]
+
+  def start_link(opts \\ []) do
+    Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  @impl true
+  def init(opts) do
+    opts = Keyword.merge(Application.fetch_env!(:keyfleet, :graph), opts)
+    writer_opts = Keyword.take(opts, @writer_opts)
+
+    writers =
+      opts
+      |> Keyword.get_lazy(:fleets, &KeyFleet.Fleets.catalog_ids/0)
+      |> Enum.map(&{Writer, [{:fleet_id, &1} | writer_opts]})
+
+    Supervisor.init(
+      [
+        {Registry, keys: :unique, name: KeyFleet.Graph.Registry},
+        %{
+          id: :writers,
+          type: :supervisor,
+          start: {Supervisor, :start_link, [writers, writers_options(writers)]}
+        }
+      ],
+      strategy: :rest_for_one
+    )
+  end
+
+  # Three restarts per fleet in five seconds; see the moduledoc.
+  defp writers_options(writers),
+    do: [strategy: :one_for_one, max_restarts: 3 * length(writers), max_seconds: 5]
+end

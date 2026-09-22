@@ -39,11 +39,11 @@ defmodule KeyFleet.ReleasePackageTest do
 
     # A miniature stand-in for the real parent context, holding one file for
     # every rule: package sources, the sibling Privy source, the narrow slice of
-    # the RegentUI source the build compiles and styles from, the sealed offline
-    # inputs, and the things that must never enter -- host
-    # build artifacts under a dependency's priv, a sibling's tests, lockfile,
-    # tooling files, digested output and JavaScript, environment files, and
-    # everything outside the declared allowlist. A real context carries one
+    # the RegentUI source the build compiles, styles and bundles from, the sealed
+    # offline inputs, and the things that must never enter -- host build
+    # artifacts under a dependency's priv, a sibling's tests, lockfile, tooling
+    # files and digested output, environment files, and everything outside the
+    # declared allowlist. A real context carries one
     # bundler executable; the rules admit either architecture's name.
     write_files(context, [
       {"platform/lib/app.ex", "defmodule App do\nend\n"},
@@ -56,6 +56,14 @@ defmodule KeyFleet.ReleasePackageTest do
       {"platform/mix.lock", "%{}\n"},
       {"platform/package.json", "{}\n"},
       {"platform/package-lock.json", "{}\n"},
+      {"platform/graph_host/pyproject.toml", "[project]\n"},
+      {"platform/graph_host/uv.lock", "version = 1\n"},
+      {"platform/graph_host/.python-version", "3.12\n"},
+      {"platform/graph_host/src/keyfleet_graph/host.py", "HOST = 1\n"},
+      {"platform/graph_host/src/keyfleet_graph/__pycache__/host.pyc", "bytecode\n"},
+      {"platform/graph_host/third_party/activegraph/LICENSE", "Apache License\n"},
+      {"platform/graph_host/tests/test_host.py", "def test(): pass\n"},
+      {"platform/graph_host/.venv/bin/python", "local interpreter\n"},
       {"platform/deps/dependency/lib/dependency.ex", "defmodule Dependency do\nend\n"},
       {"platform/deps/dependency/priv/static/dependency.js", "export const dep = 1\n"},
       {"platform/deps/dependency/priv/templates/generator.eex", "<%= @thing %>\n"},
@@ -87,6 +95,8 @@ defmodule KeyFleet.ReleasePackageTest do
       {"rustler-precompiled/nif.tar.gz", "precompiled artifact\n"},
       {"esbuild-linux-arm64", "bundler\n"},
       {"esbuild-linux-x64", "bundler\n"},
+      {"uv-cache/archive-v0/pydantic", "cache payload\n"},
+      {"python-cache/cpython.tar.gz", "interpreter archive\n"},
       {"stray.txt", "outside the allowlist\n"}
     ])
 
@@ -114,20 +124,8 @@ defmodule KeyFleet.ReleasePackageTest do
     assert status == 0, out
 
     assert admitted_files(output) == [
-             "platform/assets/js/app.ts",
-             "platform/config/config.exs",
-             "platform/contracts/base-mainnet.json",
-             "platform/deps/dependency/lib/dependency.ex",
-             "platform/deps/dependency/priv/static/dependency.js",
-             "platform/deps/dependency/priv/templates/generator.eex",
-             "platform/lib/app.ex",
-             "platform/mix.exs",
-             "platform/mix.lock",
-             "platform/package-lock.json",
-             "platform/package.json",
-             "platform/priv/static/app.css",
-             "platform/rel/overlays/bin/migrate",
              "design-system/regent_ui/assets/css/regent.css",
+             "design-system/regent_ui/assets/js/regent.ts",
              "design-system/regent_ui/lib/regent_ui.ex",
              "design-system/regent_ui/mix.exs",
              "elixir-utils/privy/lib/privy.ex",
@@ -135,7 +133,27 @@ defmodule KeyFleet.ReleasePackageTest do
              "esbuild-linux-x64",
              "mix-cache/archives/hex",
              "npm-cache/_cacache/content",
-             "rustler-precompiled/nif.tar.gz"
+             "platform/assets/js/app.ts",
+             "platform/config/config.exs",
+             "platform/contracts/base-mainnet.json",
+             "platform/deps/dependency/lib/dependency.ex",
+             "platform/deps/dependency/priv/static/dependency.js",
+             "platform/deps/dependency/priv/templates/generator.eex",
+             "platform/graph_host/.python-version",
+             "platform/graph_host/pyproject.toml",
+             "platform/graph_host/src/keyfleet_graph/host.py",
+             "platform/graph_host/third_party/activegraph/LICENSE",
+             "platform/graph_host/uv.lock",
+             "platform/lib/app.ex",
+             "platform/mix.exs",
+             "platform/mix.lock",
+             "platform/package-lock.json",
+             "platform/package.json",
+             "platform/priv/static/app.css",
+             "platform/rel/overlays/bin/migrate",
+             "python-cache/cpython.tar.gz",
+             "rustler-precompiled/nif.tar.gz",
+             "uv-cache/archive-v0/pydantic"
            ]
   end
 
@@ -288,16 +306,20 @@ defmodule KeyFleet.ReleasePackageTest do
 
   # The guard is the `offender=` scan and the refusal on the line right after it.
   # Where it sits is half of what makes it a guard: it has to run after the
-  # sealed archive is unpacked, so it sees those files, and before the previous
+  # sealed archives are unpacked, so it sees their files, and before the previous
   # destination is removed, so a refusal leaves that context in place.
   defp context_guard do
     lines = script_lines()
 
     [index] = script_line_indexes(lines, &String.starts_with?(&1, "offender="))
-    [unpack] = script_line_indexes(lines, &String.starts_with?(&1, "tar -xf "))
+    unpacks = script_line_indexes(lines, &String.starts_with?(&1, "tar -xf "))
     [delete] = script_line_indexes(lines, &String.contains?(&1, ~s(rm -rf -- "$destination")))
 
-    assert index > unpack, "the scan must run after the sealed archive is unpacked"
+    assert unpacks != []
+
+    assert Enum.all?(unpacks, &(index > &1)),
+           "the scan must run after every sealed archive is unpacked"
+
     assert index < delete, "the scan must run before the previous destination is removed"
 
     refusal = Enum.at(lines, index + 1)

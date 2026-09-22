@@ -14,6 +14,7 @@ defmodule KeyFleet.Application do
         database_child(),
         {Phoenix.PubSub, name: KeyFleet.PubSub},
         chain_child(),
+        graph_child(),
         # Start a worker by calling: KeyFleet.Worker.start_link(arg)
         # {KeyFleet.Worker, arg},
         # Start to serve requests, typically the last entry
@@ -37,6 +38,11 @@ defmodule KeyFleet.Application do
   defp chain_child do
     if Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:rpc_url],
       do: KeyFleet.Chain.Supervisor
+  end
+
+  defp graph_child do
+    if Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :enabled),
+      do: KeyFleet.Graph.Supervisor
   end
 
   # Tell Phoenix to update the endpoint configuration

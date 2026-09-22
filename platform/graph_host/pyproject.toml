@@ -1,0 +1,29 @@
+[project]
+name = "keyfleet-graph"
+version = "0.1.0"
+description = "The private per-fleet ActiveGraph host that KeyFleet's writers drive over a port."
+requires-python = ">=3.11"
+dependencies = [
+  "activegraph==1.10.0",
+  "pydantic>=2,<3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+# ActiveGraph is built from source; its build backend is pinned so the build
+# is the same wherever it runs.
+build-constraint-dependencies = ["setuptools==84.0.0"]
+
+# Reviewed upstream tree; see THIRD_PARTY_NOTICES.md at the platform root.
+[tool.uv.sources]
+activegraph = { git = "https://github.com/yoheinakajima/activegraph", rev = "8aedb1866cf5dce056af97529152ffd6f468a1ed" }
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

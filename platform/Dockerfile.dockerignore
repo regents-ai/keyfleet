@@ -10,10 +10,17 @@
 !platform/mix.lock
 !platform/package.json
 !platform/package-lock.json
+# The graph host enters as its project files, lockfile, source and upstream
+# licence files. Its tests and any local environment stay out.
+!platform/graph_host/pyproject.toml
+!platform/graph_host/uv.lock
+!platform/graph_host/.python-version
+!platform/graph_host/src/**
+!platform/graph_host/third_party/**
 # The RegentUI source enters as narrowly as the build uses it: the project file
-# and modules Mix compiles, and the stylesheets platform/assets/css/app.css
-# imports. Its own tests, lockfile, tooling files, digested priv/static output
-# and JavaScript are not build inputs and stay out.
+# and modules Mix compiles, the stylesheets and scripts platform/assets imports,
+# and the images and fonts they reference. Its own tests, lockfile, tooling
+# files and digested priv/static output are not build inputs and stay out.
 !design-system/regent_ui/mix.exs
 !design-system/regent_ui/lib/**
 !design-system/regent_ui/assets/css/**
@@ -29,6 +36,8 @@
 !rustler-precompiled/**
 !esbuild-linux-arm64
 !esbuild-linux-x64
+!uv-cache/**
+!python-cache/**
 
 # Dependencies enter as source. A dependency's priv carries compiler output,
 # including extensionless host binaries. Two subtrees under it are shipped
@@ -38,6 +47,9 @@
 platform/deps/**/priv/**
 !platform/deps/**/priv/static/**
 !platform/deps/**/priv/templates/**
+
+# Bytecode is output, not source.
+**/__pycache__
 
 # The copied source trees must never carry runtime environment files.
 **/.env

@@ -90,7 +90,13 @@ defmodule KeyFleet.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "cmd npm ci", "assets.setup", "assets.build"],
+      setup: [
+        "deps.get",
+        "cmd npm ci",
+        "cmd --cd graph_host uv sync --frozen",
+        "assets.setup",
+        "assets.build"
+      ],
       "assets.setup": ["esbuild.install --if-missing"],
       "assets.build": [
         "compile",
@@ -113,6 +119,7 @@ defmodule KeyFleet.MixProject do
         "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
         # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the floor.
         "xref graph --label compile-connected --fail-above 28",
+        "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
         "key_fleet.route_handoff --check"

@@ -76,6 +76,28 @@ production.
 | `KEYFLEET_DATABASE_CLUSTER_NAME` | For a remote target | Must match the approved cluster name. |
 | `KEYFLEET_RELEASE_COMMAND` | Set by the release | `migrate` switches the boot into migration mode. |
 
+Each fleet's shared work graph is a file on the machine's `/data` volume, written
+by one graph process per fleet. **The app must stay at exactly one machine**
+(`fly scale count 1`, deploy with `--ha=false`): a second machine would mount its
+own empty volume and the graphs would split without any error. In development
+`mix setup` installs the graph process's Python environment under `graph_host/`
+with `uv`, and the graph files go to `tmp/graph/`.
+
+The app runs as uid 1001, and a new Fly volume starts out owned by root. Before
+the first deploy with the graph on, set up the volume once for each app, first
+with `fly.toml` (production) and then with `fly.staging.toml` (staging, app
+`keyfleet-staging`). Both files mount the volume `keyfleet_graph` at `/data` and
+name `iad` as the primary region. `fly.toml` does not name its app, so until it
+does, add `--app` with the production app's name to each production command.
+
+1. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`
+2. `fly deploy --ha=false --config fly.toml`. The site starts, and every fleet's
+   graph answers as unavailable.
+3. `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`
+4. Every fleet's graph answers again within 30 seconds, with no restart.
+
+Then the same four steps with `--config fly.staging.toml`.
+
 ## Public HTTP surface
 
 `contracts/api-contract.openapiv3.yaml` is the source of truth for the API and
@@ -147,8 +169,20 @@ hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
 image disagree about, without applying anything.
 
 The image is built from `Dockerfile`; `scripts/build-release-context.sh`
-assembles its offline build context. The Fly configuration lives in `fly.toml`
-and `fly.staging.toml`.
+assembles its offline build context from sealed supplies, checking each against
+its checksums, and the build itself never reaches the network. The Fly
+configuration lives in `fly.toml` and `fly.staging.toml`.
+
+The graph host's Python supply is sealed by
+`scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for
+`amd64`, whenever `graph_host/uv.lock` or `graph_host/.python-version` changes.
+Sealing is the one step that uses the network. It installs the graph host from
+the lockfile in a container of the target architecture, repeats the install
+from the sealed files alone with the network off, and writes
+`regent-graph-host-<arch>-<yyyymmdd>` into the supply root: the uv package
+cache, the CPython download, and their checksums in `SUPPLY-ADDENDUM.txt`.
+It prints the supply name to set as `ARM64_GRAPH_HOST_SUPPLY` or
+`AMD64_GRAPH_HOST_SUPPLY` in `scripts/build-release-context.sh`.
 
 ## License
 

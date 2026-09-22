@@ -13,6 +13,8 @@
 #     rustler-precompiled/     the precompiled native artifact for the target
 #     esbuild-linux-arm64      the bundler executable for the target, under the
 #       or esbuild-linux-x64   architecture-specific name Mix looks it up by
+#     uv-cache/                the graph host's locked packages, as a uv cache
+#     python-cache/            the standalone CPython archive uv installs from
 #
 # Every input comes from the sealed supply and is checked against its manifest
 # first. The script refuses rather than assemble a context it cannot vouch for,
@@ -36,6 +38,8 @@ readonly ARM64_ESBUILD_SUPPLY="regent-ece.2-esbuild-linux-arm64-0.25.4-20260812"
 readonly AMD64_SUPPLY="regent-49a-amd64-slim-20260812"
 readonly AMD64_NATIVE_SUPPLY="regent-49a-mdex-native-x86-64-0.2.5-20260812"
 readonly MIX_SUPPLY="regent-ece.2-mix-hex-rebar-20260812"
+readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20260922"
+readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20260922"
 
 usage() {
   printf 'usage: %s <destination> <arch> [supply-root]\n' "${0##*/}" >&2
@@ -72,6 +76,7 @@ case "$arch" in
     native_supply_dir="$BASE_SUPPLY"
     native_manifest_name="SUPPLY-MANIFEST.txt"
     native_triple="aarch64-unknown-linux-gnu"
+    graph_host_supply_dir="$ARM64_GRAPH_HOST_SUPPLY"
     ;;
   amd64)
     esbuild_supply_dir="$AMD64_SUPPLY"
@@ -80,6 +85,7 @@ case "$arch" in
     native_supply_dir="$AMD64_NATIVE_SUPPLY"
     native_manifest_name="SUPPLY-ADDENDUM.txt"
     native_triple="x86_64-unknown-linux-gnu"
+    graph_host_supply_dir="$AMD64_GRAPH_HOST_SUPPLY"
     ;;
   *) usage ;;
 esac
@@ -88,12 +94,15 @@ base_supply="$supply_root/$BASE_SUPPLY"
 esbuild_supply="$supply_root/$esbuild_supply_dir"
 native_supply="$supply_root/$native_supply_dir"
 mix_supply="$supply_root/$MIX_SUPPLY"
+graph_host_supply="$supply_root/$graph_host_supply_dir"
 manifest="$base_supply/SUPPLY-MANIFEST.txt"
 mix_addendum="$mix_supply/SUPPLY-ADDENDUM.txt"
 esbuild_addendum="$esbuild_supply/SUPPLY-ADDENDUM.txt"
 native_manifest="$native_supply/$native_manifest_name"
+graph_host_addendum="$graph_host_supply/SUPPLY-ADDENDUM.txt"
 
 for required in "$manifest" "$mix_addendum" "$esbuild_addendum" "$native_manifest" \
+  "$graph_host_addendum" \
   "$privy_source" "$identity_source" "$regent_ui_source" "$agent_access_source"; do
   [ -e "$required" ] || die "missing supply input: $required"
 done
@@ -158,6 +167,20 @@ read_manifest_value native_sha256 "$native_manifest" mdex_native_sha256
 expect_contains "$native_artifact is built for $arch" "$native_artifact" "$native_triple"
 expect_sha256 "$native_artifact" "$native_supply/$native_artifact" "$native_sha256"
 
+# The graph host's packages are the ones its lockfile pins, and its interpreter
+# is the standalone CPython build for this architecture.
+read_manifest_value uv_lock_sha256 "$graph_host_addendum" uv_lock_sha256
+expect_sha256 "graph_host/uv.lock against the uv cache" \
+  "$repo_root/graph_host/uv.lock" "$uv_lock_sha256"
+
+read_manifest_value uv_cache_sha256 "$graph_host_addendum" uv_cache_sha256
+expect_sha256 "UV-CACHE.tar" "$graph_host_supply/UV-CACHE.tar" "$uv_cache_sha256"
+
+read_manifest_value python_archive "$graph_host_addendum" python_archive
+read_manifest_value python_cache_sha256 "$graph_host_addendum" python_cache_sha256
+expect_contains "$python_archive is built for $arch" "$python_archive" "$native_triple"
+expect_sha256 "PYTHON-CACHE.tar" "$graph_host_supply/PYTHON-CACHE.tar" "$python_cache_sha256"
+
 printf 'assembling context at %s\n' "$destination"
 
 mkdir -p "$(dirname -- "$destination")"
@@ -179,7 +202,8 @@ mkdir -p "$staging/regents/identity" "$staging/platform" "$staging/elixir-utils/
 env_filters=(--exclude '.env*')
 
 rsync -a "${env_filters[@]}" --exclude '.git' --exclude '_build/' \
-  --exclude 'node_modules/' "$repo_root/" "$staging/platform/"
+  --exclude 'node_modules/' --exclude '.venv/' --exclude '__pycache__/' \
+  "$repo_root/" "$staging/platform/"
 rsync -a "${env_filters[@]}" --exclude '.git' \
   "$privy_source/" "$staging/elixir-utils/privy/"
 rsync -a "${env_filters[@]}" --exclude '.git' --exclude '_build/' \
@@ -205,6 +229,13 @@ install -m 0755 "$esbuild_supply/$esbuild_binary" "$staging/$esbuild_binary"
 # The archive already carries the mix-cache/ prefix.
 tar -xf "$mix_supply/MIX-CACHE.tar" -C "$staging"
 [ -d "$staging/mix-cache" ] || die "MIX-CACHE.tar did not yield mix-cache/"
+
+# These archives carry the uv-cache/ and python-cache/ prefixes.
+tar -xf "$graph_host_supply/UV-CACHE.tar" -C "$staging"
+[ -d "$staging/uv-cache" ] || die "UV-CACHE.tar did not yield uv-cache/"
+tar -xf "$graph_host_supply/PYTHON-CACHE.tar" -C "$staging"
+[ -f "$staging/python-cache/$python_archive" ] ||
+  die "PYTHON-CACHE.tar did not yield python-cache/$python_archive"
 
 install -m 0644 "$repo_root/Dockerfile" "$staging/Dockerfile"
 install -m 0644 "$repo_root/Dockerfile.dockerignore" "$staging/Dockerfile.dockerignore"
