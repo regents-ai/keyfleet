@@ -150,7 +150,7 @@ defmodule KeyFleet.RuntimeConfigTest do
   end
 
   # The deployment files are the only place the role is named, so each one has to
-  # carry its own venue's value and the staging file has to name the staging app.
+  # carry its own venue's value and each names its own app.
   test "PKG-RUNTIME each deployment file names the venue it deploys" do
     assert env_section(@fly_production_config) =~
              ~s(\n  KEYFLEET_DEPLOYMENT_ROLE = "production"\n)
@@ -158,6 +158,7 @@ defmodule KeyFleet.RuntimeConfigTest do
     assert env_section(@fly_staging_config) =~
              ~s(\n  KEYFLEET_DEPLOYMENT_ROLE = "staging"\n)
 
+    assert File.read!(@fly_production_config) =~ ~s(app = "keyfleet"\n)
     assert File.read!(@fly_staging_config) =~ ~s(app = "keyfleet-staging"\n)
   end
 

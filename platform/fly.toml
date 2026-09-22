@@ -1,3 +1,4 @@
+app = "keyfleet"
 primary_region = "iad"
 
 [build]

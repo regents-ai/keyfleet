@@ -85,10 +85,9 @@ with `uv`, and the graph files go to `tmp/graph/`.
 
 The app runs as uid 1001, and a new Fly volume starts out owned by root. Before
 the first deploy with the graph on, set up the volume once for each app, first
-with `fly.toml` (production) and then with `fly.staging.toml` (staging, app
-`keyfleet-staging`). Both files mount the volume `keyfleet_graph` at `/data` and
-name `iad` as the primary region. `fly.toml` does not name its app, so until it
-does, add `--app` with the production app's name to each production command.
+with `fly.toml` (production, app `keyfleet`) and then with `fly.staging.toml`
+(staging, app `keyfleet-staging`). Both files mount the volume `keyfleet_graph`
+at `/data` and name `iad` as the primary region.
 
 1. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`
 2. `fly deploy --ha=false --config fly.toml`. The site starts, and every fleet's
