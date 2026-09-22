@@ -10,6 +10,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -107,11 +108,13 @@ contract KeyfleetTest is Test {
     StdStorage private fleetStore;
 
     MockERC20 private regent;
+    MockERC20 private usdc;
     MockERC20 private other;
     KeyfleetAssetRegistry private registry;
 
     address private buyer = address(0xB0B0B0);
     address private treasury = address(0x7EA5);
+    IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
@@ -134,8 +137,9 @@ contract KeyfleetTest is Test {
 
     function setUp() public {
         regent = new MockERC20("Regent", "REGENT");
+        usdc = new MockERC20("USD Coin", "USDC");
         other = new MockERC20("Other", "OTH");
-        registry = new KeyfleetAssetRegistry(address(0x5AFE), address(0x115DC));
+        registry = new KeyfleetAssetRegistry(address(0x5AFE), address(usdc));
     }
 
     // --- helpers ---------------------------------------------------------
@@ -145,7 +149,7 @@ contract KeyfleetTest is Test {
     }
 
     function _deploy(KeyfleetPresets.Preset preset, uint256 q) private returns (Keyfleet) {
-        return new Keyfleet(preset, q, regent, treasury, registry, "Keyfleet Alpha", "KFA", BASE_URI);
+        return new Keyfleet(preset, q, regent, usdc, treasury, registry, staking, "Keyfleet Alpha", "KFA", BASE_URI);
     }
 
     /// @dev Mints the buyer exactly the next price, so the buyer's balance is zero between buys, and
@@ -203,8 +207,10 @@ contract KeyfleetTest is Test {
         assertEq(assets.length, 1, "only REGENT registered");
         assertEq(assets[0], address(regent), "REGENT is the first reward asset");
         assertEq(address(fleet.REGENT()), address(regent));
+        assertEq(address(fleet.USDC()), address(usdc));
         assertEq(fleet.TREASURY(), treasury);
         assertEq(address(fleet.ASSET_REGISTRY()), address(registry));
+        assertEq(address(fleet.STAKING()), address(staking));
         assertEq(fleet.Q(), Q);
         assertEq(uint256(fleet.PRESET()), uint256(KeyfleetPresets.Preset.FibonacciSyndicate));
         assertEq(fleet.totalMinted(), 0);
@@ -215,15 +221,19 @@ contract KeyfleetTest is Test {
     /// construction, because none of them can be changed afterwards.
     function test_constructorRejectsZeroAddressesAndOutOfRangeReferencePrices() public {
         vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        new Keyfleet(KeyfleetPresets.Preset.FleetTechClassic, 0, regent, treasury, registry, "n", "s", BASE_URI);
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic, 0, regent, usdc, treasury, registry, staking, "n", "s", BASE_URI
+        );
 
         vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             KeyfleetPresets.MAX_Q + 1,
             regent,
+            usdc,
             treasury,
             registry,
+            staking,
             "n",
             "s",
             BASE_URI
@@ -231,19 +241,81 @@ contract KeyfleetTest is Test {
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic, Q, IERC20(address(0)), treasury, registry, "n", "s", BASE_URI
+            KeyfleetPresets.Preset.FleetTechClassic,
+            Q,
+            IERC20(address(0)),
+            usdc,
+            treasury,
+            registry,
+            staking,
+            "n",
+            "s",
+            BASE_URI
         );
-
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        new Keyfleet(KeyfleetPresets.Preset.FleetTechClassic, Q, regent, address(0), registry, "n", "s", BASE_URI);
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             Q,
             regent,
+            IERC20(address(0)),
+            treasury,
+            registry,
+            staking,
+            "n",
+            "s",
+            BASE_URI
+        );
+
+        vm.expectRevert(Keyfleet.ZeroAddress.selector);
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic, Q, regent, usdc, address(0), registry, staking, "n", "s", BASE_URI
+        );
+
+        vm.expectRevert(Keyfleet.ZeroAddress.selector);
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            Q,
+            regent,
+            usdc,
             treasury,
             KeyfleetAssetRegistry(address(0)),
+            staking,
+            "n",
+            "s",
+            BASE_URI
+        );
+
+        vm.expectRevert(Keyfleet.ZeroAddress.selector);
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            Q,
+            regent,
+            usdc,
+            treasury,
+            registry,
+            IRegentRevenueStaking(address(0)),
+            "n",
+            "s",
+            BASE_URI
+        );
+    }
+
+    /// @dev Invariant: a fleet's USDC is the canonical Base USDC the shared registry is bound to.
+    /// A look-alike token cannot be wired in at deployment and so can never take the staking fee
+    /// route, whatever its symbol says.
+    function test_constructorRejectsAUsdcThatIsNotTheRegistrysCanonicalOne() public {
+        MockERC20 lookalike = new MockERC20("USD Coin", "USDC");
+
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.UsdcNotCanonical.selector, address(lookalike), address(usdc)));
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            Q,
+            regent,
+            lookalike,
+            treasury,
+            registry,
+            staking,
             "n",
             "s",
             BASE_URI

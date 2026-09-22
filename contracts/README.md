@@ -16,16 +16,17 @@ scope, affected addresses, and new flag value, including repeated assignments.
 Disabling one scope leaves the other scope unchanged.
 
 This registry controls new deposit admission only. It holds no deposit accounting
-or claim history and cannot transfer tokens or spend fleet funds. Fleet contracts
-must consult it when accepting deposits; those contracts are outside this slice.
-There is no administrator transfer, upgrade path, or deployment script.
+or claim history and cannot transfer tokens or spend fleet funds. `Keyfleet`
+consults it on every new external receipt, as described below, and a fleet's own
+USDC address is checked against `BASE_USDC` when the fleet is deployed. There is
+no administrator transfer, upgrade path, or deployment script.
 
 `KeyfleetPresets` is a pure internal library and the single source of truth for
 the supply, price, holding-limit and purchase-split arithmetic of the four
 presets: `FibonacciSyndicate`, `FibonacciCascade`, `FleetTechClassic` and
 `FleetTechAccelerant`. It has no storage, holds no tokens, and makes no external
-calls. Every function is `internal pure` with checked arithmetic. Fleet contracts
-that hold state are outside this slice.
+calls. Every function is `internal pure` with checked arithmetic. `Keyfleet`
+holds the state and calls into it; the library never calls back.
 
 Prices are derived from a reference price `q` in atomic REGENT units, accepted
 only within `1 <= q <= MAX_Q` where `MAX_Q` is `1e24`; anything outside reverts.
@@ -133,14 +134,16 @@ admission decision is made.
 accounting behind them. It is an OpenZeppelin ERC721 with 1-based, contiguous
 token ids and no enumerable or per-token URI storage. `tokenURI` is a fixed base
 string plus the id; the base is set once at construction and has no setter. The
-constructor takes the preset, the reference price `q`, REGENT, the Regents
-treasury, the shared asset registry, and the name, symbol and metadata base. It
-rejects a `q` outside `1..MAX_Q` and any zero address, and then deploys the
-fleet's own `KeyfleetRewards` and registers REGENT as its first reward asset, so
-a fleet and its ledger are born bound to each other and no deployment step can
-point a fleet at someone else's ledger. Everything the constructor sets is
-immutable. The asset registry address is stored for the deposit slice and is not
-read here.
+constructor takes the preset, the reference price `q`, REGENT, USDC, the Regents
+treasury, the shared asset registry, the Regents revenue staking contract, and
+the name, symbol and metadata base. It rejects a `q` outside `1..MAX_Q`, any zero
+address, and a USDC address that is not the canonical Base USDC the registry is
+bound to, so a look-alike token can never be wired in at deployment and can never
+take the staking fee route. It then deploys the fleet's own `KeyfleetRewards` and
+registers
+REGENT as its first reward asset, so a fleet and its ledger are born bound to
+each other and no deployment step can point a fleet at someone else's ledger.
+Everything the constructor sets is immutable.
 
 `purchase(receiver, referrer, maxPrice, deadline)` is the only way a primary key
 is created. A zero receiver mints to the caller; a referrer may be any address,
@@ -190,17 +193,16 @@ whoever holds those keys at that moment. The remainder becomes free capital and
 the reserve is emptied. There is no guaranteed repayment and no refund for an
 unfinished level: repayment requires the next level to complete.
 
-Working capital is `freeCapital`, keyed by asset so the deposit slice can add
-admitted assets to the same bucket; this slice only ever writes the REGENT entry.
-The Cascade completion reserve is a separate REGENT-only figure and is never
-spendable capital. Reward backing is not counted here at all, because it lives in
-the ledger. The invariant this slice holds is that the fleet's REGENT balance is
-at least `freeCapital[REGENT]` plus `cascadeReserve`: anyone may send REGENT to
-the fleet, and anything above the two buckets is simply ignored, because a bare
-transfer is not capital and nothing here recognizes it. Surplus recognition
-belongs to a later slice. Since nothing in this slice donates, the suite asserts
-the tighter form, exact equality, after every step of randomized purchase and
-transfer sequences on all four presets.
+Working capital is `freeCapital`, keyed by asset: purchases write the REGENT
+entry and deposits write the entry of any admitted asset. The Cascade completion
+reserve is a separate REGENT-only figure and is never spendable capital. Reward
+backing is not counted here at all, because it lives in the ledger. The invariant
+is that the fleet's balance of an asset is at least what it has booked for that
+asset, which is `freeCapital[asset]` plus, for REGENT, `cascadeReserve`. Anyone
+may send tokens to the fleet, and anything above those buckets is ignored until
+it is recognized, because a bare transfer is not capital. The purchase suite
+asserts the tighter form, exact equality, after every step of randomized purchase
+and transfer sequences on all four presets, because nothing in it donates.
 
 Before any ownership change the fleet settles the key to its outgoing owner, so
 accrued rewards stay with the address that earned them and the incoming owner
@@ -220,8 +222,8 @@ seats. `nextPrice` and `quote(hasReferrer)` state the price and the exact split
 the next purchase would perform, and both revert once the fleet is sold out;
 `remainingSupply` counts down to zero.
 
-The most expensive primary purchase in this slice is the first referred purchase
-on a fresh fleet, because every accounting slot it touches is written from zero.
+The most expensive primary purchase is the first referred purchase on a fresh
+fleet, because every accounting slot it touches is written from zero.
 On a Cascade fleet, with the treasury already holding REGENT as it will after its
 first sale, that measured 330,980 gas in execution; Syndicate measured 302,091,
 Accelerant 279,308 and Classic 278,765. The suite asserts a ceiling of 397,000
@@ -231,16 +233,113 @@ transaction cost on top of it. Later purchases are cheaper; the Cascade key that
 completes a level, which also pays and allocates the preceding level's repayment,
 measured 273,084 because the buckets it writes are warm by then.
 
-Deposits, surplus recognition, votes, capital transfers, Autolaunch, the
-deploying factory and any ETH or USDC conversion are outside this slice, and
-nothing is prepared for them here beyond the stored registry address. The fleet
-has no administrator, no upgrade path, no pause, no burn and no withdrawal: the
-only ways REGENT leaves it are the treasury share of a purchase and the referral,
-Accelerant rebate and Cascade repayment paid into the ledger.
+Non-key money arrives by one of two named paths, and both take the same 2%
+external-receipt fee before anything is booked. `depositCapital(asset, amount)`
+turns the net into free working capital. `depositRevenue(asset, amount,
+paymentRef)` turns the net into member reward backing and records the payer's
+reference in the event. Only a new external receipt is charged: moving tokens
+into the ledger, settling a key and paying a claim are internal movements and are
+never charged again, and a primary purchase keeps its own 5% and 10% rules
+instead. The fee is a flat `DEPOSIT_FEE_BPS` of 200 basis points of the accepted
+gross, rounded down, so a receipt below fifty atomic units pays nothing and is
+kept whole rather than rounded up against the payer.
+
+Both paths, and surplus recognition, first ask `KeyfleetAssetRegistry` whether
+the asset is allowed for this fleet, before anything moves. Disabling an asset
+afterwards stops new receipts and nothing else: booked capital stays booked,
+recorded reward indexes and pending claims are untouched, and the asset stays on
+the ledger's append-only historical list so past earnings still settle and pay
+out. Current deposit eligibility and historical claim eligibility are separate
+questions, and only the registry answers the first one. No balance-delta check is
+taken around a deposit pull, for the same reason as on a purchase: rejecting
+fee-on-transfer, rebasing and hostile-callback tokens is the registry's job, done
+once at admission, not a general token framework inside the fleet.
+
+USDC's fee is registered revenue, not a plain transfer to a staking address. The
+fleet approves the staking contract for exactly the fee with `forceApprove` and
+calls `depositUSDC(fee, SOURCE_TAG, paymentRef)`, where `SOURCE_TAG` is
+`keccak256("keyfleet")` and the payment reference is the payer's own, or zero for
+a capital deposit or a recognized surplus. The call must report receiving the
+whole fee back, and the approval it was given must be spent down to nothing;
+either check failing reverts with `FeeRegistrationFailed`. The second check is
+what stops a staking contract that credits the fee without ever pulling it, which
+would otherwise leave the tokens in the fleet under a live approval for a later
+call to recognize as surplus and book twice. A paused staking contract likewise
+reverts the whole deposit, which is deliberate: there is no deferred-fee
+subsystem and no fallback that would let a bare transfer be labelled registered
+revenue. Only the canonical USDC address, checked against the registry at
+construction, takes this route. Every other admitted asset pays its fee to the
+Regents treasury in that same asset, which must not be the fleet itself: a fee
+paid back to the fleet would simply be recognized as surplus again, and the
+deploying factory slice is where that address is fixed.
+`FeeCharged` reports the gross, the fee and the destination on every receipt,
+including the ones whose fee floored to zero.
+
+A revenue deposit moves the whole net amount into the ledger and allocates it in
+the same transaction, so an obligation is never recorded without the tokens
+behind it, and allocation writes one index per eligible cohort rather than
+iterating over keys or holders. Classic and Accelerant have a single cohort, so
+the net is shared equally by every key minted at that moment. The two Fibonacci
+presets share it equally across the fully minted levels first and then equally
+per key inside each level, which is why a small early level earns more per key
+than a large later one. A level counts as complete when its last token id has
+been minted, derived from the mint count alone, so no extra bookkeeping can drift
+out of step with it; `completedLevels()` reports the figure and refuses to answer
+for the two Fleet.Tech presets. An unfinished level earns nothing, and a key
+minted later starts at the index the deposit left behind. The remainder of the
+equal split across levels goes to the last completed level, so the whole net
+amount is backed and nothing is stranded in the fleet. At most twenty levels can
+ever be eligible. Revenue is refused with `NoEligibleKeys` when no key is minted
+or no Fibonacci level is complete; `depositCapital` stays available in that
+state. A net amount smaller than the number of eligible levels cannot be divided
+and is refused by the ledger, which binds below twenty atomic units.
+
+The first revenue deposit of an asset registers it in the ledger. Counting from
+REGENT, which the constructor registers, a fleet can therefore take revenue in
+seven further assets, and the ninth is refused outright by the ledger's lifetime
+bound: that fleet can never take revenue in it, though it can still take it as
+capital, which registers nothing.
+
+Tokens that simply arrive, with no deposit call behind them, create nothing.
+`recognizeSurplus(asset)` is the permissionless way to reconcile them: it is
+admission-checked like any other receipt, works from the fleet's balance minus
+what it has already recorded a purpose for, charges the same 2%, and books the
+net as free working capital. What it treats as accounted is `freeCapital[asset]`
+plus, for REGENT, the Cascade completion reserve, so an incomplete level's
+reserve can never be turned into spendable capital by anyone. Reward backing sits
+in the ledger and is not part of this balance at all, so no recorded liability
+can be reclassified. `accountedBalance(asset)` and `surplus(asset)` report the
+two figures, and a fully accounted balance reverts with `NoSurplus`. Unknown
+assets remain unsupported: nothing here can turn one into capital.
+
+All three entry points are guarded by OpenZeppelin `ReentrancyGuard`, so a token
+that calls back into the fleet from inside a transfer cannot book a receipt twice
+or read a half-updated balance. The suite proves that with a token that re-enters
+each of them in turn, and holds the general invariant by fuzzing receipts,
+revenue and bare transfers against `balanceOf(fleet) >= accountedBalance(asset)`.
+
+The worst case of a revenue deposit is a Fibonacci fleet with all twenty levels
+complete taking an asset it has never seen before, with every slot it touches
+cold: twenty cohort indexes move and the asset is registered in the ledger. That
+measured 788,253 gas in execution. The suite asserts a ceiling of 946,000, which
+is the measurement plus twenty percent, and that is the execution figure the
+deployment manifest should quote, with the 21,000 base transaction cost on top of
+it. The cost is bounded by the preset, not by how many keys or holders the fleet
+has, so revenue can always be paid in however large the fleet gets. The figure is
+measured against a plain ERC-20; a proxied token such as the real Base USDC adds
+its own delegatecall overhead to each of the two transfers a deposit makes, and a
+USDC deposit adds the staking contract's registration cost on top of that.
+
+Votes, capital transfers, Autolaunch, the deploying factory and any ETH or
+currency conversion are outside this slice. The fleet has no administrator, no
+upgrade path, no pause, no burn and no withdrawal: the only ways tokens leave it
+are the treasury share of a purchase, the deposit fee, the referral, Accelerant
+rebate and Cascade repayment paid into the ledger, and the revenue backing moved
+into the ledger.
 
 Run `make check-contracts` from the repository root to check formatting, build,
-and run the focused authorization, admission, preset-arithmetic, reward-ledger
-and fleet-purchase tests. Foundry must be installed; the compiler may be downloaded on first use.
+and run the focused authorization, admission, preset-arithmetic, reward-ledger,
+fleet-purchase and deposit-and-surplus tests. Foundry must be installed; the compiler may be downloaded on first use.
 Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are vendored as git
 submodules under `contracts/lib`, so clone with submodules or run
 `git submodule update --init`.

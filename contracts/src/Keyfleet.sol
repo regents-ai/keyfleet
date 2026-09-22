@@ -5,6 +5,7 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 import {KeyfleetAssetRegistry} from "./KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
@@ -16,13 +17,18 @@ import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 /// `KeyfleetRewards` ledger this contract deploys for itself in its constructor, and the tokens
 /// backing an obligation are moved into that ledger in the same transaction that records it.
 ///
-/// This slice covers primary purchases only. Deposits, surplus recognition, votes, capital
-/// transfers, Autolaunch and the deploying factory are later slices, and nothing speculative is
-/// prepared for them here beyond the stored `ASSET_REGISTRY` address they will consult.
+/// It also takes the two non-key deposit paths and the surplus reconciliation. Every new external
+/// receipt pays one 2% fee: in USDC to the Regents staking contract as registered revenue, in any
+/// other admitted asset to the Regents treasury in that asset. Internal movements into the ledger
+/// and claims out of it are not receipts and are never charged again.
+///
+/// Votes, capital transfers, Autolaunch and the deploying factory are later slices, and nothing
+/// speculative is prepared for them here.
 ///
 /// There is no administrator, no upgrade path, no pause, no burn and no withdrawal: the only ways
 /// REGENT leaves this contract are the protocol share on a purchase, the referral and Accelerant
-/// rebate paid into the ledger, and the Cascade reimbursement paid into the ledger.
+/// rebate paid into the ledger, the Cascade reimbursement paid into the ledger, and the deposit fee
+/// and revenue backing of a REGENT deposit.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -38,6 +44,18 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error HoldingLimitExceeded(address account, uint256 level, uint256 limit);
     /// @notice Levels exist only on the two Fibonacci presets.
     error NotFibonacciPreset();
+    /// @notice The supplied USDC is not the canonical Base USDC the shared registry is bound to.
+    error UsdcNotCanonical(address supplied, address canonical);
+    /// @notice The asset is not currently admitted for deposits into this fleet.
+    error AssetNotAdmitted(address asset);
+    /// @notice A deposit or a recognized surplus of zero is rejected.
+    error ZeroAmount();
+    /// @notice The staking contract did not register the whole USDC fee, so the deposit is refused.
+    error FeeRegistrationFailed(uint256 fee, uint256 received);
+    /// @notice No cohort can receive revenue yet: no key is minted, or no Fibonacci level is complete.
+    error NoEligibleKeys();
+    /// @notice This fleet's balance of the asset is fully accounted for, so there is nothing to recognize.
+    error NoSurplus();
 
     /// @notice A primary key was bought. The five split parts always sum to `gross`.
     /// @param tokenId The key that was minted.
@@ -73,26 +91,56 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param surplus REGENT released to free capital.
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
 
+    /// @notice The 2% external-receipt fee was routed. A fee of zero is still reported.
+    /// @param asset The asset received.
+    /// @param amount The gross receipt the fee was taken from.
+    /// @param fee The fee, floored, so `amount - fee` is what the fleet kept.
+    /// @param destination The staking contract for USDC, the Regents treasury for everything else.
+    event FeeCharged(address indexed asset, uint256 amount, uint256 fee, address indexed destination);
+
+    /// @notice A non-key receipt became free working capital.
+    event CapitalDeposited(address indexed asset, address indexed depositor, uint256 amount, uint256 net);
+
+    /// @notice A non-key receipt became member reward backing in the ledger.
+    /// @param paymentRef The payer's own payment reference, also the staking source reference for USDC.
+    event RevenueDeposited(
+        address indexed asset, address indexed depositor, uint256 amount, uint256 net, bytes32 paymentRef
+    );
+
+    /// @notice An unaccounted balance was reconciled into free working capital.
+    event SurplusRecognized(address indexed asset, address indexed caller, uint256 amount, uint256 net);
+
+    /// @notice External-receipt fee, in basis points of the gross receipt.
+    uint256 public constant DEPOSIT_FEE_BPS = 200;
+    /// @notice Revenue source label every fleet reports to the staking contract.
+    bytes32 public constant SOURCE_TAG = keccak256("keyfleet");
+
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
     /// @notice Reference price in atomic REGENT units, within `1 <= Q <= KeyfleetPresets.MAX_Q`.
     uint256 public immutable Q;
     /// @notice The REGENT token. Every primary purchase is paid in it and nothing else.
     IERC20 public immutable REGENT;
+    /// @notice The one USDC address whose deposit fee is registered as staking revenue. It is the
+    /// canonical Base USDC the shared registry is bound to, checked at construction, because symbol
+    /// equality proves nothing about token identity.
+    IERC20 public immutable USDC;
     /// @notice The Regents treasury multisig, paid its share of every purchase immediately.
     address public immutable TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
-    /// @notice The shared deposit-admission registry, stored for the deposit slice to consult.
+    /// @notice The shared deposit-admission registry, consulted on every new external receipt.
     KeyfleetAssetRegistry public immutable ASSET_REGISTRY;
+    /// @notice The Regents revenue staking contract that registers this fleet's USDC fees.
+    IRegentRevenueStaking public immutable STAKING;
 
     /// @notice Primary keys minted so far. Token ids are `1..totalMinted`.
     uint256 public totalMinted;
     /// @notice Accelerant only: the REGENT price of the next primary mint, stepped by 105/100 after
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
-    /// @notice Free working capital held by this fleet, per asset. Only REGENT is written in this
-    /// slice; the deposit slice adds the admitted deposit assets to the same bucket.
+    /// @notice Free working capital held by this fleet, per asset. Purchases write the REGENT
+    /// entry; `depositCapital` and `recognizeSurplus` write the entry of any admitted asset.
     mapping(address asset => uint256 amount) public freeCapital;
     /// @notice Cascade only: REGENT held back for the next level completion. Never spendable capital.
     uint256 public cascadeReserve;
@@ -116,8 +164,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param q Reference price in atomic REGENT units.
     /// @param regent The REGENT token.
+    /// @param usdc The canonical Base USDC recorded by the shared registry, and the only asset whose
+    /// deposit fee takes the staking route.
     /// @param treasury The Regents treasury multisig.
     /// @param assetRegistry The shared deposit-admission registry.
+    /// @param staking The Regents revenue staking contract that registers USDC fees.
     /// @param name_ ERC721 collection name.
     /// @param symbol_ ERC721 collection symbol.
     /// @param baseTokenURI_ Fixed metadata base, returned by `_baseURI` for the life of the fleet.
@@ -125,21 +176,30 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         KeyfleetPresets.Preset preset,
         uint256 q,
         IERC20 regent,
+        IERC20 usdc,
         address treasury,
         KeyfleetAssetRegistry assetRegistry,
+        IRegentRevenueStaking staking,
         string memory name_,
         string memory symbol_,
         string memory baseTokenURI_
     ) ERC721(name_, symbol_) {
         if (q == 0 || q > KeyfleetPresets.MAX_Q) revert KeyfleetPresets.QOutOfBounds();
-        if (address(regent) == address(0) || treasury == address(0) || address(assetRegistry) == address(0)) {
+        if (
+            address(regent) == address(0) || address(usdc) == address(0) || treasury == address(0)
+                || address(assetRegistry) == address(0) || address(staking) == address(0)
+        ) {
             revert ZeroAddress();
         }
+        address canonicalUsdc = assetRegistry.BASE_USDC();
+        if (address(usdc) != canonicalUsdc) revert UsdcNotCanonical(address(usdc), canonicalUsdc);
         PRESET = preset;
         Q = q;
         REGENT = regent;
+        USDC = usdc;
         TREASURY = treasury;
         ASSET_REGISTRY = assetRegistry;
+        STAKING = staking;
         _baseTokenURI = baseTokenURI_;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = q;
 
@@ -192,6 +252,30 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     function holdingLimit(uint256 level) public view returns (uint256) {
         if (!_isFibonacci()) revert NotFibonacciPreset();
         return KeyfleetPresets.fibonacciHoldingLimit(level);
+    }
+
+    /// @notice Fibonacci levels that are fully minted and therefore eligible for revenue.
+    /// @dev Derived from `totalMinted` alone, because token ids are contiguous and a level's last
+    /// id is fixed by the preset. Reverts on the two Fleet.Tech presets, which have no levels.
+    function completedLevels() public view returns (uint256) {
+        if (!_isFibonacci()) revert NotFibonacciPreset();
+        uint256 minted = totalMinted;
+        if (minted == 0) return 0;
+        uint256 level = KeyfleetPresets.fibonacciLevelOf(minted);
+        return KeyfleetPresets.fibonacciLevelEnd(level) == minted ? level : level - 1;
+    }
+
+    /// @notice Balance of an asset this fleet has already recorded a purpose for.
+    /// @dev Reward backing is not counted: it lives in the ledger, not in this balance.
+    function accountedBalance(address asset) public view returns (uint256) {
+        uint256 accounted = freeCapital[asset];
+        if (asset == address(REGENT)) accounted += cascadeReserve;
+        return accounted;
+    }
+
+    /// @notice Balance of an asset that arrived without being deposited, and so backs nothing.
+    function surplus(address asset) public view returns (uint256) {
+        return IERC20(asset).balanceOf(address(this)) - accountedBalance(asset);
     }
 
     // --- purchase --------------------------------------------------------
@@ -285,6 +369,126 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         }
     }
 
+    // --- deposits --------------------------------------------------------
+
+    /// @notice Pays an admitted asset in as free working capital, after the 2% receipt fee.
+    /// @dev The caller must have approved this contract for `amount`. Admission is checked before
+    /// anything moves. No balance-delta check is taken around the pull: admission to the registry
+    /// is where fee-on-transfer and rebasing behaviour is rejected, exactly as REGENT's fixed
+    /// address is what makes a purchase safe to price.
+    /// @param asset The admitted asset being paid in.
+    /// @param amount Atomic units to pull from the caller.
+    function depositCapital(address asset, uint256 amount) external nonReentrant {
+        _requireAdmitted(asset);
+        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 net = _chargeFee(asset, amount, bytes32(0));
+        freeCapital[asset] += net;
+        emit CapitalDeposited(asset, msg.sender, amount, net);
+    }
+
+    /// @notice Pays an admitted asset in as member reward backing, after the 2% receipt fee.
+    /// @dev The whole net amount is moved into the ledger and allocated in the same transaction, so
+    /// an obligation is never recorded without the tokens behind it. Allocation writes one index per
+    /// eligible cohort and never iterates over keys or holders.
+    ///
+    /// Classic and Accelerant have one cohort, so the net amount is shared equally by every key
+    /// minted at this moment. The two Fibonacci presets share it equally across the fully minted
+    /// levels and then equally per key within each level; an unfinished level receives nothing, and
+    /// keys minted later start at the index this deposit left behind. The remainder of the equal
+    /// split is added to the last completed level, so the whole net amount is backed and nothing is
+    /// stranded in the fleet. At most twenty levels can be eligible.
+    ///
+    /// The first deposit of an asset registers it in the ledger. The ledger's lifetime bound of
+    /// eight reward assets is counted from REGENT, so the ninth distinct asset reverts with the
+    /// ledger's `AssetBoundReached` and this fleet can never take revenue in it.
+    ///
+    /// A net amount smaller than the number of eligible Fibonacci levels cannot be split equally and
+    /// reverts with the ledger's `ZeroAmount`; that bites below twenty atomic units of the asset.
+    /// @param asset The admitted asset being paid in.
+    /// @param amount Atomic units to pull from the caller.
+    /// @param paymentRef The payer's payment reference, recorded in the event and, for USDC, passed
+    /// to the staking contract as the fee's source reference.
+    function depositRevenue(address asset, uint256 amount, bytes32 paymentRef) external nonReentrant {
+        _requireAdmitted(asset);
+        uint256 levels;
+        if (_isFibonacci()) {
+            levels = completedLevels();
+            if (levels == 0) revert NoEligibleKeys();
+        } else if (totalMinted == 0) {
+            revert NoEligibleKeys();
+        }
+
+        IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 net = _chargeFee(asset, amount, paymentRef);
+        if (!REWARDS.isRewardAsset(asset)) REWARDS.registerAsset(asset);
+        IERC20(asset).safeTransfer(address(REWARDS), net);
+
+        if (_isFibonacci()) {
+            uint256 share = net / levels;
+            for (uint256 level = 1; level <= levels; ++level) {
+                REWARDS.allocateToCohort(asset, level, level == levels ? net - share * (levels - 1) : share);
+            }
+        } else {
+            REWARDS.allocateToCohort(asset, 0, net);
+        }
+        emit RevenueDeposited(asset, msg.sender, amount, net, paymentRef);
+    }
+
+    /// @notice Books an admitted asset that arrived by bare transfer as free working capital, after
+    /// the 2% receipt fee.
+    /// @dev Permissionless, because it can only ever recognize what nobody has a claim on: it works
+    /// from `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is
+    /// free capital plus, for REGENT, the Cascade completion reserve. Reward backing sits in the
+    /// ledger and is not part of this balance at all, so no recorded liability can be reclassified,
+    /// and an incomplete level's reserve can never be drawn on.
+    /// @param asset The admitted asset to reconcile.
+    /// @return net Atomic units added to free working capital.
+    function recognizeSurplus(address asset) external nonReentrant returns (uint256 net) {
+        _requireAdmitted(asset);
+        uint256 amount = surplus(asset);
+        if (amount == 0) revert NoSurplus();
+        net = _chargeFee(asset, amount, bytes32(0));
+        freeCapital[asset] += net;
+        emit SurplusRecognized(asset, msg.sender, amount, net);
+    }
+
+    /// @dev Admission is checked on every new external receipt and nowhere else. Disablement stops
+    /// new receipts only: booked capital, recorded reward indexes and pending claims are untouched
+    /// by it, because none of them passes through here.
+    function _requireAdmitted(address asset) private view {
+        if (!ASSET_REGISTRY.isTokenAllowed(address(this), asset)) revert AssetNotAdmitted(asset);
+    }
+
+    /// @dev Takes the one external-receipt fee and returns what the fleet keeps. The fee is floored,
+    /// so a receipt below fifty atomic units pays nothing and is kept whole. USDC is registered as
+    /// staking revenue, which requires both a received amount equal to the fee and the approval it
+    /// was given to be spent down to nothing. A paused, under-reporting or non-pulling staking
+    /// contract therefore reverts the whole deposit rather than letting a plain transfer pass as
+    /// registered revenue or leaving an unspent approval and an unpulled fee behind, which a later
+    /// call would otherwise recognize as surplus.
+    /// Every other asset pays the treasury in that same asset.
+    function _chargeFee(address asset, uint256 amount, bytes32 paymentRef) private returns (uint256 net) {
+        if (amount == 0) revert ZeroAmount();
+        uint256 fee = (amount * DEPOSIT_FEE_BPS) / KeyfleetPresets.BPS_DENOMINATOR;
+        net = amount - fee;
+
+        address destination;
+        if (asset == address(USDC)) {
+            destination = address(STAKING);
+            if (fee != 0) {
+                USDC.forceApprove(destination, fee);
+                uint256 received = STAKING.depositUSDC(fee, SOURCE_TAG, paymentRef);
+                if (received != fee || USDC.allowance(address(this), destination) != 0) {
+                    revert FeeRegistrationFailed(fee, received);
+                }
+            }
+        } else {
+            destination = TREASURY;
+            if (fee != 0) IERC20(asset).safeTransfer(destination, fee);
+        }
+        emit FeeCharged(asset, amount, fee, destination);
+    }
+
     // --- internals -------------------------------------------------------
 
     /// @dev Releases a completed Cascade level's reserve. Level 1 has no predecessor, so its whole
@@ -303,9 +507,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
             REGENT.safeTransfer(address(REWARDS), reimbursement);
             REWARDS.allocateToCohort(address(REGENT), level - 1, reimbursement);
         }
-        uint256 surplus = reserve - reimbursement;
-        freeCapital[address(REGENT)] += surplus;
-        emit LevelCompleted(level, reimbursement, surplus);
+        uint256 released = reserve - reimbursement;
+        freeCapital[address(REGENT)] += released;
+        emit LevelCompleted(level, reimbursement, released);
     }
 
     /// @dev Settles the outgoing owner, enforces the Fibonacci holding limit on the incoming owner
