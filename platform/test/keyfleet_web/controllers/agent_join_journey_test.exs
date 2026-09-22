@@ -155,11 +155,13 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
           ~s({"wallet_address":"forged"}),
           ~s({"last_activity_at":"forged"}),
           ~s({"status_updated_at":"forged"}),
-          ~s({"unknown":"forged"}),
-          String.duplicate(" ", 24 * 1024 + 1)
+          ~s({"unknown":"forged"})
         ] do
       assert send_request(c, %{request | body: body}).status == 401
     end
+
+    oversized = %{request | body: String.duplicate(" ", 24 * 1024 + 1)}
+    assert send_request(c, oversized).status == 413
 
     valid = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
 
@@ -193,7 +195,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
     assert send_request(c, at_limit).status == 200
     assert_receive {:broker_payload, %{"body" => ^padded} = payload}
     assert byte_size(Jason.encode!(payload)) < 65_536
-    assert send_request(c, %{at_limit | body: padded <> " "}).status == 401
+    assert send_request(c, %{at_limit | body: padded <> " "}).status == 413
     refute_receive {:broker_payload, _}
   end
 
@@ -219,7 +221,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
         redirect: false
       )
 
-    assert oversized.status == 401
+    assert oversized.status == 413
     refute_receive {:broker_payload, _}
     conn = Plug.Test.conn("POST", @path, @body)
     assert {:error, _} = KeyFleetWeb.Plugs.SignedAgent.before_verify(conn, %{})
@@ -270,11 +272,12 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
           "[1]",
           "not json",
           ~s({"name":"a","declared_harness":"b","wallet":"x"}),
-          ~s({"name":1,"declared_harness":"b"}),
-          String.duplicate(" ", 4097)
+          ~s({"name":1,"declared_harness":"b"})
         ] do
       assert send_request(c, %{signed | body: body}).status == 401
     end
+
+    assert send_request(c, %{signed | body: String.duplicate(" ", 4097)}).status == 413
 
     for header <- [
           "x-agent-registry-address",

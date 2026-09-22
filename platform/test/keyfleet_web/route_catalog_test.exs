@@ -4,7 +4,13 @@ defmodule KeyFleetWeb.RouteCatalogTest do
   alias KeyFleetWeb.{RouteCatalog, Router}
   alias KeyFleetWeb.RouteCatalog.RouteTarget
 
-  @paths ["/", "/app", "/account", "/app/keys/:fleet_id/:token_id"]
+  @paths [
+    "/",
+    "/app",
+    "/account",
+    "/app/keys/:fleet_id/:token_id",
+    "/app/fleets/:fleet_id/rooms/:slug"
+  ]
 
   test "contains exactly the approved pages" do
     assert Enum.map(RouteCatalog.entries(), & &1.path_pattern) == @paths
@@ -146,8 +152,16 @@ defmodule KeyFleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 4
-    assert Enum.map(decoded["routes"], & &1["route_id"]) == ["home", "app", "account", "keys"]
+    assert length(decoded["routes"]) == 5
+
+    assert Enum.map(decoded["routes"], & &1["route_id"]) == [
+             "home",
+             "app",
+             "account",
+             "keys",
+             "rooms"
+           ]
+
     assert decoded["schema_version"] == 1
     assert first.digest == Base.encode16(:crypto.hash(:sha256, first.json), case: :lower)
 
@@ -180,6 +194,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     Map.new(schema, fn
       {:fleet_id, _type} -> {"fleet_id", "fibonacci_syndicate"}
       {:token_id, _type} -> {"token_id", "1"}
+      {:slug, _type} -> {"slug", "general"}
     end)
   end
 end

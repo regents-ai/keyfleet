@@ -70,6 +70,30 @@ defmodule KeyFleet.Keys.KeyAttachment do
         DROP TRIGGER immutable_key_epochs ON keyfleet_app.key_attachments;
         """)
       end
+
+      # Emptying the table is refused too; a row trigger never sees TRUNCATE.
+      statement :untruncatable_epochs_function do
+        up("""
+        CREATE FUNCTION keyfleet_app.refuse_key_epoch_truncate() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          RAISE EXCEPTION 'key ownership epochs cannot be deleted' USING ERRCODE = '23514';
+        END;
+        $$;
+        """)
+
+        down("DROP FUNCTION keyfleet_app.refuse_key_epoch_truncate();")
+      end
+
+      statement :untruncatable_epochs_trigger do
+        up("""
+        CREATE TRIGGER untruncatable_key_epochs BEFORE TRUNCATE ON keyfleet_app.key_attachments
+        FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_key_epoch_truncate();
+        """)
+
+        down("""
+        DROP TRIGGER untruncatable_key_epochs ON keyfleet_app.key_attachments;
+        """)
+      end
     end
   end
 
@@ -143,6 +167,21 @@ defmodule KeyFleet.Keys.KeyAttachment do
 
       get? true
     end
+
+    # Which of a person's wallets holds a key in this fleet right now, which is
+    # what makes them one of the fleet's key holders.
+    read :held_in_fleet do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :owner_wallets, {:array, :string}, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and owner_wallet in ^arg(:owner_wallets) and
+                 ownership_epoch == current_ownership_epoch
+             )
+
+      prepare build(sort: [token_id: :asc])
+    end
   end
 
   policies do
@@ -195,6 +234,20 @@ defmodule KeyFleet.Keys.KeyAttachment do
       allow_nil? false
       public? true
     end
+  end
+
+  calculations do
+    # The key's latest recorded owner, read as one scalar subquery because the
+    # table has no scope-free read action to aggregate over.
+    calculate :current_ownership_epoch,
+              :integer,
+              expr(
+                fragment(
+                  "(SELECT max(epoch.ownership_epoch) FROM keyfleet_app.key_attachments AS epoch WHERE epoch.fleet_id = ? AND epoch.token_id = ?)",
+                  fleet_id,
+                  token_id
+                )
+              )
   end
 
   identities do

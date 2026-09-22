@@ -185,6 +185,7 @@ defmodule KeyFleet.ReleaseTest do
              "key_attachments",
              "key_pairings",
              "linked_identities",
+             "messages",
              "rooms",
              "schema_migrations",
              "session_authorities"

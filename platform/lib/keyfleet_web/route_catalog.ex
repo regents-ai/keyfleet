@@ -44,6 +44,13 @@ defmodule KeyFleetWeb.RouteCatalog do
       parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
       reserved_values: %{},
       route_spec_id: :keys
+    },
+    %Entry{
+      path_pattern: "/app/fleets/:fleet_id/rooms/:slug",
+      live_action: :rooms,
+      parameter_schema: %{fleet_id: :fleet_id, slug: :slug},
+      reserved_values: %{},
+      route_spec_id: :rooms
     }
   ]
 
@@ -55,7 +62,10 @@ defmodule KeyFleetWeb.RouteCatalog do
     account:
       {:account, :product, "KeyFleet", "Account", "/app", [:profile_actions], :product, :detail,
        %{}},
-    keys: {:keys, :product, "KeyFleet", "Key", "/app", [:profile_actions], :product, :detail, %{}}
+    keys:
+      {:keys, :product, "KeyFleet", "Key", "/app", [:profile_actions], :product, :detail, %{}},
+    rooms:
+      {:rooms, :product, "KeyFleet", "Rooms", "/app", [:profile_actions], :product, :detail, %{}}
   }
 
   def entries, do: @entries

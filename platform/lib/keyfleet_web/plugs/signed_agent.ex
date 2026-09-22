@@ -11,10 +11,30 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # The key a pairing names is part of the signed path, so its two segments are
   # admitted here in their canonical spelling and nowhere else.
   @pairing_path ~r"\A/api/v1/agent/keys/[a-z][a-z0-9_]{0,62}/[1-9][0-9]{0,17}/pairing\z"
+  # The fleet and the room a request is about are part of the signed path, in
+  # the same canonical spelling the product's own addresses use.
+  @fleet ~S"[a-z][a-z0-9_]{0,62}"
+  @slug ~S"[a-z0-9][a-z0-9-]{0,62}"
+  @rooms_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms\z"
+  @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
+  @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
+  @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
   # Separate transport bound from Ash field limits: the broker embeds these raw
   # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
   @update_max_body 24 * 1024
+  # A post is at most 4,000 characters. The longest a client can write one is a
+  # character outside the Basic Multilingual Plane escaped as a surrogate pair,
+  # `\ud83d\ude00`: twelve bytes. The send key and the rest of the object fit in
+  # the 2 KiB beside it. Inside the broker's 64 KiB envelope each such pair
+  # grows to fourteen bytes, which still fits.
+  @send_max_body 4_000 * 12 + 2 * 1024
+  # One catch-up names up to a hundred rooms.
+  @sync_max_body 32 * 1024
+  @max_sync_rooms 100
+  # Places in a room are counted in a Postgres bigint.
+  @max_seq 9_223_372_036_854_775_807
+  @max_page 200
   @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
@@ -39,9 +59,9 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
       cap = body_limit(conn.request_path)
 
       case read_body(conn, length: cap, read_length: cap + 1) do
-        {:ok, raw, conn} -> verify_body(conn, raw)
-        {:more, _raw, conn} -> deny(conn, %{reason: :invalid_request})
+        {:ok, raw, conn} when byte_size(raw) <= cap -> verify_body(conn, raw)
         {:error, _reason} -> deny(conn, %{reason: :invalid_request})
+        {_read, _raw, conn} -> answer(conn, 413, "request_too_large")
       end
     else
       _ -> deny(conn, %{reason: :invalid_request})
@@ -49,9 +69,8 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   end
 
   defp verify_body(conn, raw) do
-    with true <- byte_size(raw) > 0 and byte_size(raw) <= body_limit(conn.request_path),
-         {:ok, params} <- Jason.decode(raw),
-         true <- valid_body?(conn.request_path, params) do
+    with {:ok, params} <- Jason.decode(raw),
+         :ok <- check_body(conn.request_path, params) do
       conn = %{conn | body_params: params, params: params} |> assign(:raw_body, raw)
 
       Siwa.AgentAuthPlug.call(conn,
@@ -62,6 +81,8 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
         body: :always
       )
     else
+      :out_of_range -> answer(conn, 422, "out_of_range")
+      :room_named_twice -> answer(conn, 422, "invalid_request")
       _ -> deny(conn, %{reason: :invalid_request})
     end
   end
@@ -126,6 +147,10 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
     status = if unavailable?, do: 503, else: 401
     code = if status == 503, do: "authentication_unavailable", else: "unauthorized"
 
+    answer(conn, status, code)
+  end
+
+  defp answer(conn, status, code) do
     conn
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_content_type("application/json")
@@ -136,28 +161,113 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   def proof_headers, do: @proof_headers
 
   # Every admitted request carries a signed JSON body, including the ones whose
-  # whole instruction is their method and path; those send an empty object.
-  defp supported_request?(conn) do
-    conn.query_string == "" and
-      case {conn.method, conn.request_path} do
-        {"POST", @join_path} -> true
-        {"POST", @update_path} -> true
-        {"GET", @pairings_path} -> true
-        {method, path} when method in ["POST", "DELETE"] -> Regex.match?(@pairing_path, path)
-        _unsupported -> false
-      end
+  # whole instruction is their method and path; those send an empty object. What
+  # a request asks for is always in that body, never in the address, so the
+  # signature covers all of it.
+  defp supported_request?(%{query_string: ""} = conn),
+    do: supported?(conn.method, conn.request_path)
+
+  defp supported_request?(_conn), do: false
+
+  defp supported?("POST", @join_path), do: true
+  defp supported?("POST", @update_path), do: true
+  defp supported?("GET", @pairings_path), do: true
+
+  defp supported?("GET", path), do: Regex.match?(@rooms_path, path)
+
+  defp supported?("POST", path) do
+    Enum.any?([@pairing_path, @read_path, @send_path, @sync_path], &Regex.match?(&1, path))
   end
 
+  defp supported?("DELETE", path), do: Regex.match?(@pairing_path, path)
+  defp supported?(_method, _path), do: false
+
   defp body_limit(@update_path), do: @update_max_body
-  defp body_limit(_path), do: 4096
 
-  defp valid_body?(@join_path, %{"name" => name, "declared_harness" => harness} = params),
-    do: map_size(params) == 2 and is_binary(name) and is_binary(harness)
+  defp body_limit(path) do
+    cond do
+      Regex.match?(@send_path, path) -> @send_max_body
+      Regex.match?(@sync_path, path) -> @sync_max_body
+      true -> 4096
+    end
+  end
 
-  defp valid_body?(@update_path, params) when is_map(params),
-    do: map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable))
+  # A body of the wrong shape is refused like any request the product does not
+  # admit. One of the right shape whose numbers fall outside what a room can
+  # hold, or that names the same room twice, is told so.
+  defp check_body(@join_path, %{"name" => name, "declared_harness" => harness} = params),
+    do: admit(map_size(params) == 2 and is_binary(name) and is_binary(harness))
 
-  defp valid_body?(@pairings_path, params), do: params == %{}
+  defp check_body(@update_path, params) when is_map(params),
+    do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
-  defp valid_body?(path, params), do: Regex.match?(@pairing_path, path) and params == %{}
+  defp check_body(@pairings_path, params), do: admit(params == %{})
+
+  defp check_body(path, params) do
+    cond do
+      Regex.match?(@pairing_path, path) -> admit(params == %{})
+      Regex.match?(@rooms_path, path) -> admit(params == %{})
+      Regex.match?(@read_path, path) -> check_read_body(params)
+      Regex.match?(@send_path, path) -> admit(valid_send_body?(params))
+      Regex.match?(@sync_path, path) -> check_sync_body(params)
+      true -> :invalid
+    end
+  end
+
+  # A read names how far it has already read and how much it wants; a post names
+  # the words, the key the sender filed them under and what it answers.
+  defp check_read_body(params) when is_map(params) do
+    if Enum.all?(params, fn {key, value} -> key in ~w(after_seq limit) and is_integer(value) end) do
+      in_range(
+        Map.get(params, "after_seq", 0) in 0..@max_seq and
+          Map.get(params, "limit", 1) in 1..@max_page
+      )
+    else
+      :invalid
+    end
+  end
+
+  defp check_read_body(_params), do: :invalid
+
+  defp valid_send_body?(%{"body" => body, "idempotency_key" => key} = params) do
+    is_binary(body) and is_binary(key) and
+      Enum.all?(Map.keys(params), &(&1 in ~w(body idempotency_key reply_to_id))) and
+      answers_a_post?(Map.get(params, "reply_to_id"))
+  end
+
+  defp valid_send_body?(_params), do: false
+
+  defp check_sync_body(%{"rooms" => rooms} = params)
+       when map_size(params) == 1 and is_list(rooms) do
+    cond do
+      not Enum.all?(rooms, &cursor?/1) ->
+        :invalid
+
+      length(rooms) > @max_sync_rooms or
+          not Enum.all?(rooms, &(&1["after_seq"] in 0..@max_seq)) ->
+        :out_of_range
+
+      length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->
+        :room_named_twice
+
+      true ->
+        :ok
+    end
+  end
+
+  defp check_sync_body(_params), do: :invalid
+
+  defp cursor?(%{"slug" => slug, "after_seq" => after_seq} = room),
+    do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)
+
+  defp cursor?(_room), do: false
+
+  defp answers_a_post?(nil), do: true
+  defp answers_a_post?(value), do: is_binary(value) and match?({:ok, _}, Ecto.UUID.cast(value))
+
+  defp admit(true), do: :ok
+  defp admit(false), do: :invalid
+
+  defp in_range(true), do: :ok
+  defp in_range(false), do: :out_of_range
 end

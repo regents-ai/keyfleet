@@ -8,6 +8,12 @@ defmodule KeyFleet.Rooms.Room do
   postgres do
     table "rooms"
     repo(KeyFleet.Repo)
+
+    check_constraints do
+      # `KeyFleet.Rooms.Sequence` moves this column with a statement of its own,
+      # so the floor is kept where that statement cannot step over it.
+      check_constraint(:head_seq, "rooms_nonnegative_head", check: "head_seq >= 0")
+    end
   end
 
   actions do
@@ -15,6 +21,13 @@ defmodule KeyFleet.Rooms.Room do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare build(sort: [slug: :asc])
+    end
+
+    read :in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :slug, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and slug == ^arg(:slug))
+      get? true
     end
 
     create :bootstrap do
@@ -28,7 +41,7 @@ defmodule KeyFleet.Rooms.Room do
   end
 
   policies do
-    policy action(:for_fleet) do
+    policy action([:for_fleet, :in_fleet]) do
       authorize_if always()
     end
 
@@ -41,6 +54,15 @@ defmodule KeyFleet.Rooms.Room do
     uuid_primary_key :id
     attribute :slug, :string, allow_nil?: false, public?: true
     attribute :name, :string, allow_nil?: false, public?: true
+
+    # How many posts this room has taken, which is also the place the newest one
+    # holds. Only `KeyFleet.Rooms.Sequence` moves it.
+    attribute :head_seq, :integer,
+      allow_nil?: false,
+      public?: true,
+      writable?: false,
+      default: 0,
+      constraints: [min: 0]
   end
 
   relationships do

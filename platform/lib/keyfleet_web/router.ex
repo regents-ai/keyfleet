@@ -88,6 +88,10 @@ defmodule KeyFleetWeb.Router do
     get "/pairings", AgentPairingController, :index
     post "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :create
     delete "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :delete
+    get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
+    post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
+    post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
+    post "/fleets/:fleet_id/sync", AgentRoomController, :sync
   end
 
   scope "/", KeyFleetWeb do
@@ -109,6 +113,7 @@ defmodule KeyFleetWeb.Router do
       live "/app", ShellLive, :app
       live "/account", ShellLive, :account
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
+      live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
     end
   end
 end

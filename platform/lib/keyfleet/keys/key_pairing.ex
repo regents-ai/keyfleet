@@ -73,6 +73,30 @@ defmodule KeyFleet.Keys.KeyPairing do
         DROP TRIGGER immutable_key_pairings ON keyfleet_app.key_pairings;
         """)
       end
+
+      # Emptying the table is refused too; a row trigger never sees TRUNCATE.
+      statement :untruncatable_pairings_function do
+        up("""
+        CREATE FUNCTION keyfleet_app.refuse_key_pairing_truncate() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          RAISE EXCEPTION 'key pairings cannot be deleted' USING ERRCODE = '23514';
+        END;
+        $$;
+        """)
+
+        down("DROP FUNCTION keyfleet_app.refuse_key_pairing_truncate();")
+      end
+
+      statement :untruncatable_pairings_trigger do
+        up("""
+        CREATE TRIGGER untruncatable_key_pairings BEFORE TRUNCATE ON keyfleet_app.key_pairings
+        FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_key_pairing_truncate();
+        """)
+
+        down("""
+        DROP TRIGGER untruncatable_key_pairings ON keyfleet_app.key_pairings;
+        """)
+      end
     end
   end
 
@@ -198,6 +222,18 @@ defmodule KeyFleet.Keys.KeyPairing do
       prepare build(load: [:effective?], sort: [requested_at: :desc])
     end
 
+    # Whether this operator is running any key in the fleet right now, which is
+    # what lets it work alongside that fleet's key holders.
+    read :my_effective_pairings do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and operator_wallet == ^actor(:wallet_address) and
+                 status == :active and ownership_epoch == current_ownership_epoch
+             )
+    end
+
     read :my_open_request do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
@@ -216,7 +252,7 @@ defmodule KeyFleet.Keys.KeyPairing do
       authorize_if always()
     end
 
-    policy action([:my_pairings, :my_open_request]) do
+    policy action([:my_pairings, :my_open_request, :my_effective_pairings]) do
       authorize_if KeyFleet.Checks.AgentActor
     end
 

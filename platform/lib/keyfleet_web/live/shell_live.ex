@@ -12,22 +12,34 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Accounts.LinkedIdentity.Providers
   alias KeyFleet.Actors.Human
   alias KeyFleet.Keys
-  alias KeyFleetWeb.{AccountLive, KeysLive, OverviewLive, RouteCatalog}
+  alias KeyFleet.Rooms
+  alias KeyFleet.Rooms.Checks.FleetMember
+  alias KeyFleetWeb.{AccountLive, KeysLive, OverviewLive, RoomsLive, RouteCatalog}
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   @refused "That didn’t go through."
+  @thread_page 100
+  # A page left open keeps the latest two hundred posts.
+  @thread_kept 200
 
   @impl true
   def mount(params, session, socket) do
     {:ok,
-     assign(socket,
+     socket
+     |> stream_configure(:posts, dom_id: &"post-#{&1.id}")
+     |> stream(:posts, [])
+     |> assign(
        theme: session["theme"],
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: [],
        verified_connections_notice: nil,
        key: nil,
-       key_notice: nil
+       key_notice: nil,
+       room: nil,
+       room_notice: nil,
+       room_topic: nil,
+       send_key: nil
      )}
   end
 
@@ -39,7 +51,8 @@ defmodule KeyFleetWeb.ShellLive do
      socket
      |> assign(:route_spec, route_spec)
      |> load_verified_connections(route_spec)
-     |> load_key(route_spec, params)}
+     |> load_key(route_spec, params)
+     |> load_room(route_spec, params)}
   end
 
   @impl true
@@ -78,6 +91,10 @@ defmodule KeyFleetWeb.ShellLive do
   def handle_event("detach_operator", %{"id" => id}, socket),
     do: {:noreply, decide(socket, id, &Keys.detach_operator/3, "Operator detached.")}
 
+  def handle_event("send_message", %{"post" => %{"body" => body}}, socket) do
+    {:noreply, post(socket, body)}
+  end
+
   def handle_event("refresh_verified_connections", params, socket) do
     socket = reload_verified_connections(socket)
 
@@ -91,6 +108,18 @@ defmodule KeyFleetWeb.ShellLive do
 
     {:noreply, assign(socket, verified_connections_notice: notice)}
   end
+
+  # A notice that the open room has taken a post it is not showing yet is only a
+  # nudge to look again. The new posts are read back from the room itself.
+  @impl true
+  def handle_info(
+        {:room_head, room_id, seq},
+        %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
+      )
+      when seq > last_seq,
+      do: {:noreply, show_new_posts(socket)}
+
+  def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -117,6 +146,13 @@ defmodule KeyFleetWeb.ShellLive do
         />
 
         <KeysLive.page :if={@route_spec.route_id == :keys} key={@key} notice={@key_notice} />
+
+        <RoomsLive.page
+          :if={@route_spec.route_id == :rooms}
+          room={@room}
+          posts={@streams.posts}
+          notice={@room_notice}
+        />
       </:content>
     </.shell>
     """
@@ -189,6 +225,128 @@ defmodule KeyFleetWeb.ShellLive do
     do: [operator | requests] |> Enum.reject(&is_nil/1)
 
   defp shown_pairings(_socket), do: []
+
+  # The page starts listening before it reads, so a post that lands while it
+  # loads still reaches it; a notice for a post it already read is passed over.
+  defp load_room(socket, %{route_id: :rooms}, %{"fleet_id" => fleet_id, "slug" => slug}) do
+    socket = listen_to(socket, fleet_id)
+    actor = human_actor(socket)
+    rooms = Rooms.list_rooms!(fleet_id, actor: actor, load: [:fleet])
+    room = Enum.find(rooms, &(&1.slug == slug))
+    posts = latest_posts(room, actor)
+
+    socket
+    |> assign(
+      room: %{
+        fleet_id: fleet_id,
+        slug: slug,
+        room_id: room && room.id,
+        name: room && room.name,
+        fleet_name: fleet_name(rooms),
+        rooms: rooms,
+        last_seq: last_seq(posts, 0),
+        can_post?: room != nil and FleetMember.member?(actor, fleet_id),
+        draft: ""
+      },
+      room_notice: nil,
+      send_key: Ash.UUID.generate()
+    )
+    |> stream(:posts, posts, reset: true, limit: -@thread_kept)
+  end
+
+  defp load_room(socket, _route_spec, _params) do
+    socket
+    |> listen_to(nil)
+    |> assign(room: nil, room_notice: nil, send_key: nil)
+  end
+
+  # Every fleet opens with its rooms, so a fleet with none is one there is not.
+  defp fleet_name([room | _rooms]), do: room.fleet.name
+  defp fleet_name([]), do: nil
+
+  # One subscription per fleet, taken up on the way into its rooms and dropped
+  # on the way out, so a page only hears about the fleet it is showing.
+  defp listen_to(socket, fleet_id) do
+    topic = fleet_id && Rooms.fleet_topic(fleet_id)
+
+    if connected?(socket) and topic != socket.assigns.room_topic do
+      stop_listening(socket.assigns.room_topic)
+      start_listening(topic)
+      assign(socket, :room_topic, topic)
+    else
+      socket
+    end
+  end
+
+  defp stop_listening(nil), do: :ok
+  defp stop_listening(topic), do: Phoenix.PubSub.unsubscribe(KeyFleet.PubSub, topic)
+
+  defp start_listening(nil), do: :ok
+  defp start_listening(topic), do: Phoenix.PubSub.subscribe(KeyFleet.PubSub, topic)
+
+  # Places in a room's order run unbroken, so the newest hundred posts start one
+  # hundred places back from where the room has got to.
+  defp latest_posts(nil, _actor), do: []
+
+  defp latest_posts(room, actor),
+    do: posts_after(room.fleet_id, room.slug, max(room.head_seq - @thread_page, 0), actor)
+
+  # Only the posts after the last one on the page are read and added to it.
+  defp show_new_posts(%{assigns: %{room: room}} = socket) do
+    posts = posts_after(room.fleet_id, room.slug, room.last_seq, human_actor(socket))
+
+    socket
+    |> assign(:room, %{room | last_seq: last_seq(posts, room.last_seq)})
+    |> stream(:posts, posts, limit: -@thread_kept)
+  end
+
+  defp posts_after(fleet_id, slug, after_seq, actor) do
+    Rooms.read_messages!(fleet_id, slug, %{after_seq: after_seq, limit: @thread_page},
+      actor: actor,
+      load: [:reply_to_seq]
+    )
+  end
+
+  defp last_seq([], shown), do: shown
+  defp last_seq(posts, _shown), do: List.last(posts).seq
+
+  # The post is written straight to the room, and the page then reads back what
+  # the room holds after the last post it was showing.
+  defp post(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, body) do
+    actor = human_actor(socket)
+
+    case Rooms.send_message(
+           %{
+             fleet_id: fleet_id,
+             slug: slug,
+             body: body,
+             idempotency_key: socket.assigns.send_key
+           },
+           actor: actor
+         ) do
+      {:ok, _message} ->
+        socket
+        |> assign(send_key: Ash.UUID.generate(), room_notice: nil)
+        |> update(:room, &%{&1 | draft: ""})
+        |> show_new_posts()
+
+      {:error, refusal} ->
+        socket
+        |> assign(:room_notice, %{tone: :error, message: post_refusal(refusal)})
+        |> update(
+          :room,
+          &%{&1 | draft: body, can_post?: &1.can_post? and FleetMember.member?(actor, fleet_id)}
+        )
+    end
+  end
+
+  defp post(socket, _body), do: socket
+
+  defp post_refusal(%Ash.Error.Forbidden{}),
+    do:
+      "Only the people holding this fleet’s keys, and the agents they have attached, can post here."
+
+  defp post_refusal(_refusal), do: "That post didn’t go through. Try again."
 
   defp load_verified_connections(socket, %{route_id: :account}),
     do: reload_verified_connections(socket)
