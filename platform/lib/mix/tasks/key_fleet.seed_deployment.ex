@@ -4,7 +4,8 @@ defmodule Mix.Tasks.KeyFleet.SeedDeployment do
   @moduledoc """
   Reads the deployed manifest `contracts/script/RecordKeyfleets.s.sol` wrote
   and binds each fleet to its contract, reward ledger and vote contract, with
-  the manifest's chain and deployment block. A release runs the same step as
+  the manifest's chain and deployment block, and opens each fleet's core rooms.
+  A release runs the same step as
   `bin/seed-deployment`.
 
       mix key_fleet.seed_deployment ../contracts/deployments/base.deployed.json

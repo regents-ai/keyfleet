@@ -12,6 +12,7 @@ defmodule KeyFleet.ChainTest do
   alias KeyFleet.Keys
   alias KeyFleet.Release
   alias KeyFleet.Repo
+  alias KeyFleet.Rooms
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -231,7 +232,9 @@ defmodule KeyFleet.ChainTest do
     # Rerunning the seed with the same manifest is harmless; a manifest naming
     # other contracts for a bound fleet is refused and changes nothing.
     @tag :tmp_dir
-    test "the deployed manifest binds all four fleets once", %{tmp_dir: dir} do
+    test "the deployed manifest binds all four fleets once and opens their rooms", %{
+      tmp_dir: dir
+    } do
       path = Path.join(dir, "deployed.json")
       File.write!(path, Jason.encode!(manifest("1")))
 
@@ -244,6 +247,8 @@ defmodule KeyFleet.ChainTest do
       assert bound["fleet_tech_classic"].contract_address == "0x" <> String.duplicate("c1", 20)
       assert bound["fibonacci_cascade"].votes_address == "0x" <> String.duplicate("e1", 20)
       assert Enum.all?(Map.values(bound), &(&1.deployed_block == 42 and &1.chain_id == 8_453))
+
+      assert Enum.all?(Map.keys(bound), &(length(Rooms.list_rooms!(&1)) == 3))
 
       File.write!(path, Jason.encode!(manifest("2")))
       assert_raise Ash.Error.Invalid, fn -> Release.seed_deployment!(path) end

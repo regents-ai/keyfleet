@@ -26,7 +26,8 @@ an operator fixes the record by hand, as below.
    fly ssh console -C "/app/bin/seed-deployment /tmp/base.deployed.json"
    ```
 
-   It prints each fleet with its contract and first block. Running it again
+   It opens each fleet's core rooms and prints each fleet with its contract
+   and first block. Running it again
    with the same manifest changes nothing; a manifest naming other contracts for
    a bound fleet is refused and changes nothing. In development the same step
    is `mix key_fleet.seed_deployment ../contracts/deployments/<name>.deployed.json`.
