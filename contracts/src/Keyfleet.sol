@@ -341,6 +341,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
 
     // --- views -----------------------------------------------------------
 
+    /// @notice The metadata base every `tokenURI` of this fleet starts with, fixed at construction.
+    function baseTokenURI() external view returns (string memory) {
+        return _baseTokenURI;
+    }
+
     /// @notice Primary keys this fleet will ever mint.
     function maxSupply() public view returns (uint256) {
         if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.CLASSIC_SUPPLY;

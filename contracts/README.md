@@ -19,7 +19,9 @@ This registry controls new deposit admission only. It holds no deposit accountin
 or claim history and cannot transfer tokens or spend fleet funds. `Keyfleet`
 consults it on every new external receipt, as described below, and a fleet's own
 USDC address is checked against `BASE_USDC` when the fleet is deployed. There is
-no administrator transfer, upgrade path, or deployment script.
+no administrator transfer and no upgrade path. The deployment script deploys one
+registry for a release and sets no flag on it, so every admission decision that
+has ever been taken was taken by the Safe.
 
 `KeyfleetPresets` is a pure internal library and the single source of truth for
 the supply, price, holding-limit and purchase-split arithmetic of the four
@@ -120,8 +122,8 @@ The ledger deliberately has no administrator, no upgrade path, no pause, and no
 withdrawal other than a claim, including for the retained remainder. It does not
 transfer keys, read prices or levels, decide cohort membership, or enforce
 deposit admission; those belong to the fleet and to `KeyfleetAssetRegistry`.
-Reward assets cannot be removed or replaced, keys cannot be unenrolled or moved
-between cohorts, and there is no deployment script.
+Reward assets cannot be removed or replaced and keys cannot be unenrolled or
+moved between cohorts.
 
 Two obligations sit with the fleet. `settleKey` reverts for a key that was never
 enrolled, so the fleet must enroll every key when it mints it, before the first
@@ -133,7 +135,8 @@ admission decision is made.
 `Keyfleet` is one fleet: its keys, its primary purchases and the REGENT
 accounting behind them. It is an OpenZeppelin ERC721 with 1-based, contiguous
 token ids and no enumerable or per-token URI storage. `tokenURI` is a fixed base
-string plus the id; the base is set once at construction and has no setter. The
+string plus the id; the base is set once at construction, has no setter, and is
+readable before any key exists through `baseTokenURI()`. The
 constructor takes the preset, the reference price `q`, REGENT, USDC, the Regents
 treasury, the shared asset registry, the Regents revenue staking contract, the
 pinned Autolaunch factory, the voting window in seconds, and one `Metadata` value
@@ -273,7 +276,7 @@ revenue. Only the canonical USDC address, checked against the registry at
 construction, takes this route. Every other admitted asset pays its fee to the
 Regents treasury in that same asset, which must not be the fleet itself: a fee
 paid back to the fleet would simply be recognized as surplus again, and the
-deploying factory slice is where that address is fixed.
+deployment manifest is where that address is fixed.
 `FeeCharged` reports the gross, the fee and the destination on every receipt,
 including the ones whose fee floored to zero.
 
@@ -523,16 +526,64 @@ figure is a regression bound on this side of the call and not a prediction: most
 of it is the mock's own writing, and the real factory deploys a token, an escrow
 and an auction and spends far more.
 
-The deploying factory and any ETH or currency conversion are outside
-this slice. The fleet has no administrator, no upgrade path, no pause and no
+Any ETH or currency conversion is outside
+this release. The fleet has no administrator, no upgrade path, no pause and no
 burn: the only ways tokens leave it are the treasury share of a purchase, the
 deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
 ledger, the revenue backing moved into the ledger, and a capital transfer the
 keys have voted for. An Autolaunch moves nothing out at all.
 
+`KeyfleetDirectory` names the four fleets of one release and does nothing else.
+It deploys nothing: `Keyfleet` initcode is 38,025 bytes, so a contract carrying
+a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
+deploying all four would exceed the 49,152-byte initcode limit. The script
+deploys the fleets and hands them to the directory, whose constructor is its
+only check: each slot must hold the preset that belongs to it — Syndicate,
+Cascade, Classic, Accelerant, in that order — and all four must share the same
+REGENT, treasury, asset registry, staking contract, Autolaunch factory and
+voting window, or it reverts with the slot that did not fit. USDC needs no
+comparison of its own: a fleet refuses any USDC but its registry's, and the
+registry is compared. `fleets()` and `isFleet(address)` are the whole of its
+surface. It has no owner, no setter and no upgrade path, holds no authority over
+any fleet, and a different set of fleets means a different directory. The app
+seeds from this one address, and a later factory that reads a fleet's public
+immutables learns exactly what this constructor learned.
+
+A release is deployed in two steps. `script/DeployKeyfleets.s.sol` deploys the
+shared registry when the manifest does not name one, then the four fleets, then
+the directory, and writes nothing: Forge simulates a script in full before it
+broadcasts, so any file this step wrote would also be written by a dry run or a
+broadcast that failed partway. It refuses a manifest whose `chainId` is not the
+chain it is running on, and an Autolaunch factory address that holds no code — a
+manifest may waive that for a lab, and the waiver is ignored on Base. It sets no
+allowlist flag and moves no token: admitting USDC and REGENT is the Safe's own
+transaction afterwards.
+
+`script/RecordKeyfleets.s.sol` runs after the broadcast, against the same chain.
+It reads Forge's broadcast log, refuses a transaction without a receipt or a
+receipt that failed, takes the directory from the broadcast, and reads the
+release back from the chain through that directory, refusing any value that
+differs from the manifest. Only then does it write
+`deployments/<name>.deployed.json`, the published deployment manifest the app and
+the product copy are seeded from: addresses, the deployment block, the numeric
+bounds, the fee basis points, the fixed vote window, the Autolaunch binding with
+the code hashes of the factory and strategy, the asset flags awaiting the Safe,
+and the terms the release discloses. Addresses and fleet values come from the
+chain; the supply and split constants come from the `KeyfleetPresets` the script
+was compiled with, and the runtime code hash of the directory and of each fleet
+is recorded so they can be checked against the deployed code.
+
+Both scripts share `script/KeyfleetManifest.sol`, which reads the inputs
+`deployments/base.json` and `deployments/anvil.json`, one per chain. Their cores —
+`deploy`, `parseManifest`, `parseBroadcast` and `record` — take and return
+values, so the suite runs the real deployment and the real record against local
+mocks without reading or writing a file. `docs/deployment.md` is how to run both
+steps, what each refuses, and what the Safe does next.
+
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus, voting and Autolaunch tests. Foundry must be installed; the compiler may be downloaded on first use.
-Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are vendored as git
-submodules under `contracts/lib`, so clone with submodules or run
-`git submodule update --init`.
+fleet-purchase, deposit-and-surplus, voting, Autolaunch, fleet-directory and
+deployment tests. Foundry must be installed; the compiler may be downloaded on
+first use. Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
+vendored as git submodules under `contracts/lib`, so clone with submodules or
+run `git submodule update --init`.
