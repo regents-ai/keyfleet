@@ -9,8 +9,13 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -30,7 +35,6 @@ contract StrategyPublishingFactory {
 contract DeployKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant SAFE = address(0x5AFE);
     address private constant TREASURY = address(0x7EA5);
@@ -66,10 +70,8 @@ contract DeployKeyfleetsTest is Test {
         for (uint256 slot = 0; slot < 4; ++slot) {
             Keyfleet fleet = deployment.fleets[slot];
             assertTrue(fleet.PRESET() == presets[slot], "Preset of slot");
-            assertEq(fleet.Q(), manifest.fleets[slot].q, "Q");
             assertEq(fleet.name(), manifest.fleets[slot].name, "Name");
             assertEq(fleet.symbol(), manifest.fleets[slot].symbol, "Symbol");
-            assertEq(address(fleet.REGENT()), address(regent), "REGENT");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
             assertEq(address(fleet.USDC()), deployment.registry.BASE_USDC(), "USDC is the registry's");
             assertEq(fleet.TREASURY(), TREASURY, "Treasury");
@@ -82,9 +84,10 @@ contract DeployKeyfleetsTest is Test {
             assertTrue(deployment.directory.isFleet(address(fleet)), "Directory names the fleet");
 
             uint256 price = fleet.nextPrice();
-            regent.mint(BUYER, price);
+            assertEq(price, KeyfleetPresets.Q_USDC, "The first key costs 10 USDC");
+            usdc.mint(BUYER, price);
             vm.startPrank(BUYER);
-            regent.approve(address(fleet), price);
+            usdc.approve(address(fleet), price);
             fleet.purchase(BUYER, address(0), price, block.timestamp);
             vm.stopPrank();
             assertEq(
@@ -135,13 +138,42 @@ contract DeployKeyfleetsTest is Test {
     }
 
     function test_baseIgnoresTheEmptyAutolaunchFactoryAllowance() public {
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.chainId = BASE_CHAIN_ID;
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.autolaunchFactory = address(0xFAC7);
         manifest.autolaunchFactoryMayBeEmpty = true;
-        vm.chainId(BASE_CHAIN_ID);
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AutolaunchFactoryMissing.selector, address(0xFAC7)));
+        script.deploy(manifest);
+    }
+
+    /// @dev Invariant: on Base the only USDC a release can be paid in is Base USDC, whose six
+    /// decimals every key price assumes; a look-alike never reaches a fleet.
+    function test_baseManifestNamingAnyUsdcButBaseUsdcIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        manifest.usdc = address(usdc);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc)));
+        script.deploy(manifest);
+    }
+
+    /// @dev Invariant: on Base the REGENT the Safe is told to admit is Base REGENT.
+    function test_baseManifestNamingAnyRegentButBaseRegentIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        manifest.regent = address(regent);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.RegentNotBaseRegent.selector, address(regent)));
+        script.deploy(manifest);
+    }
+
+    /// @dev Invariant: on every chain the manifest's REGENT holds code, the zero address included.
+    function test_regentWithoutCodeIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.regent = address(0xBEEF);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0xBEEF)));
+        script.deploy(manifest);
+
+        manifest.regent = address(0);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0)));
         script.deploy(manifest);
     }
 
@@ -176,10 +208,10 @@ contract DeployKeyfleetsTest is Test {
             ' "autolaunchFactory": "0x00000000000000000000000000000000000000a6",',
             ' "regentSafe": "0x00000000000000000000000000000000000000a5",',
             ' "fleets": {',
-            '  "accelerant": {"symbol": "D", "q": "4000000000000000000000", "baseTokenURI": "u/d/", "name": "Fleet D"},',
-            '  "syndicate": {"name": "Fleet A", "symbol": "A", "baseTokenURI": "u/a/", "q": "1000000000000000000000"},',
-            '  "classic": {"q": "3000000000000000000000", "name": "Fleet C", "symbol": "C", "baseTokenURI": "u/c/"},',
-            '  "cascade": {"baseTokenURI": "u/b/", "name": "Fleet B", "q": "2000000000000000000000", "symbol": "B"}',
+            '  "accelerant": {"symbol": "D", "baseTokenURI": "u/d/", "name": "Fleet D"},',
+            '  "syndicate": {"name": "Fleet A", "symbol": "A", "baseTokenURI": "u/a/"},',
+            '  "classic": {"name": "Fleet C", "symbol": "C", "baseTokenURI": "u/c/"},',
+            '  "cascade": {"baseTokenURI": "u/b/", "name": "Fleet B", "symbol": "B"}',
             " }}"
         );
 
@@ -200,7 +232,6 @@ contract DeployKeyfleetsTest is Test {
         string[4] memory lower = ["a", "b", "c", "d"];
         for (uint256 slot = 0; slot < 4; ++slot) {
             KeyfleetManifest.FleetSpec memory fleet = manifest.fleets[slot];
-            assertEq(fleet.q, (slot + 1) * 1000e18, "q of the slot's own key");
             assertEq(fleet.name, string.concat("Fleet ", letters[slot]), "name of the slot's own key");
             assertEq(fleet.symbol, letters[slot], "symbol of the slot's own key");
             assertEq(fleet.baseTokenURI, string.concat("u/", lower[slot], "/"), "base of the slot's own key");
@@ -209,6 +240,8 @@ contract DeployKeyfleetsTest is Test {
 
     function test_committedManifestsPassTheDeploymentRefusals() public {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil");
+        vm.etch(anvil.usdc, address(usdc).code);
+        vm.etch(anvil.regent, address(regent).code);
         DeployKeyfleets.Deployment memory lab = script.deploy(anvil);
         assertGt(address(lab.directory).code.length, 0, "The anvil manifest deploys on its chain");
 
@@ -239,6 +272,18 @@ contract DeployKeyfleetsTest is Test {
         script.parseManifest(json);
     }
 
+    /// @dev A Base manifest on Base, paid in Base USDC and naming Base REGENT, both stood in for by
+    /// the local mocks' code.
+    function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
+        vm.chainId(BASE_CHAIN_ID);
+        vm.etch(script.BASE_USDC(), address(usdc).code);
+        vm.etch(script.BASE_REGENT(), address(regent).code);
+        manifest = _manifest();
+        manifest.chainId = BASE_CHAIN_ID;
+        manifest.usdc = script.BASE_USDC();
+        manifest.regent = script.BASE_REGENT();
+    }
+
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = ANVIL_CHAIN_ID;
         manifest.regent = address(regent);
@@ -250,9 +295,9 @@ contract DeployKeyfleetsTest is Test {
         manifest.assetRegistry = address(0);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
-        manifest.fleets[0] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
-        manifest.fleets[1] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
-        manifest.fleets[2] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Classic", "KEYFLEET", "https://k/classic/");
-        manifest.fleets[3] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Accelerant", "KEYFLEET", "https://k/accelerant/");
+        manifest.fleets[0] = KeyfleetManifest.FleetSpec("Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
+        manifest.fleets[1] = KeyfleetManifest.FleetSpec("Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
+        manifest.fleets[2] = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
+        manifest.fleets[3] = KeyfleetManifest.FleetSpec("Keyfleet Accelerant", "KEYFLEET", "https://k/accelerant/");
     }
 }

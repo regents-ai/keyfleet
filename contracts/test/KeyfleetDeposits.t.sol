@@ -14,8 +14,13 @@ import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -119,7 +124,6 @@ contract ReenteringToken is ERC20 {
 }
 
 contract KeyfleetDepositsTest is Test {
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
@@ -158,8 +162,6 @@ contract KeyfleetDepositsTest is Test {
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
         return new Keyfleet(
             preset,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -179,9 +181,9 @@ contract KeyfleetDepositsTest is Test {
 
     function _buy(Keyfleet fleet, address receiver) private returns (uint256 tokenId) {
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         tokenId = fleet.purchase(receiver, address(0), 2 * price, block.timestamp);
         vm.stopPrank();
     }
@@ -283,6 +285,7 @@ contract KeyfleetDepositsTest is Test {
         _admit(fleet, address(usdc));
         _buy(fleet, alice);
         bytes32 paymentRef = keccak256("invoice-4711");
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
 
         _fund(fleet, usdc, 10_000e6);
         vm.expectEmit(true, true, true, true, address(fleet));
@@ -297,7 +300,7 @@ contract KeyfleetDepositsTest is Test {
         assertEq(staking.lastRef(), paymentRef, "carrying the payer's reference");
         assertEq(staking.lastPayer(), address(fleet), "paid by the fleet itself");
         assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval is left behind");
-        assertEq(usdc.balanceOf(treasury), 0, "the treasury takes no USDC fee");
+        assertEq(usdc.balanceOf(treasury), treasuryBefore, "the treasury takes no USDC deposit fee");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 9_800e6, "the net backs member rewards");
     }
 
@@ -308,6 +311,8 @@ contract KeyfleetDepositsTest is Test {
         _admit(fleet, address(usdc));
         _buy(fleet, alice);
         staking.setPaused(true);
+        uint256 balanceBefore = usdc.balanceOf(address(fleet));
+        uint256 capitalBefore = fleet.freeCapital(address(usdc));
 
         usdc.mint(payer, 10_000e6);
         vm.startPrank(payer);
@@ -319,8 +324,8 @@ contract KeyfleetDepositsTest is Test {
         vm.stopPrank();
 
         assertEq(usdc.balanceOf(payer), 10_000e6, "the payer keeps every unit");
-        assertEq(usdc.balanceOf(address(fleet)), 0, "the fleet took nothing");
-        assertEq(fleet.freeCapital(address(usdc)), 0, "and recorded nothing");
+        assertEq(usdc.balanceOf(address(fleet)), balanceBefore, "the fleet took nothing");
+        assertEq(fleet.freeCapital(address(usdc)), capitalBefore, "and recorded nothing");
     }
 
     /// @dev Invariant: the fleet believes the amount the staking contract reports, not the amount it
@@ -472,6 +477,7 @@ contract KeyfleetDepositsTest is Test {
         _admit(fibonacci, address(usdc));
         _buy(fibonacci, alice);
         assertEq(fibonacci.completedLevels(), 0, "level 1 is not complete with one of its two keys");
+        uint256 balanceBefore = usdc.balanceOf(address(fibonacci));
 
         _fund(fibonacci, usdc, 10_000e6);
         vm.prank(payer);
@@ -479,7 +485,7 @@ contract KeyfleetDepositsTest is Test {
         fibonacci.depositRevenue(address(usdc), 10_000e6, bytes32(0));
 
         assertEq(usdc.balanceOf(payer), 20_000e6, "the payer keeps every unit of both attempts");
-        assertEq(usdc.balanceOf(address(fibonacci)), 0, "the fleet pulled nothing");
+        assertEq(usdc.balanceOf(address(fibonacci)), balanceBefore, "the fleet pulled nothing");
         assertEq(staking.callCount(), 0, "and no fee was registered");
     }
 
@@ -587,7 +593,7 @@ contract KeyfleetDepositsTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev Invariant: the ledger's lifetime bound of eight reward assets is counted from REGENT, so
+    /// @dev Invariant: the ledger's lifetime bound of eight reward assets is counted from USDC, so
     /// seven further assets are accepted, the last of them being the eighth the ledger will ever
     /// hold, and the ninth distinct asset is refused outright.
     function test_theNinthRewardAssetIsRefused() public {
@@ -600,7 +606,7 @@ contract KeyfleetDepositsTest is Test {
             _admit(fleet, address(token));
             _depositRevenue(fleet, token, 10_000, bytes32(0));
         }
-        assertEq(rewards.rewardAssets().length, rewards.MAX_REWARD_ASSETS(), "REGENT plus seven deposit assets");
+        assertEq(rewards.rewardAssets().length, rewards.MAX_REWARD_ASSETS(), "USDC plus seven deposit assets");
 
         MockToken ninth = new MockToken("Rev", "REV");
         _admit(fleet, address(ninth));
@@ -628,7 +634,7 @@ contract KeyfleetDepositsTest is Test {
         _depositRevenue(fleet, other, 10_000, bytes32(0));
         _depositRevenue(fleet, other, 10_000, bytes32(0));
 
-        assertEq(rewards.rewardAssets().length, 2, "REGENT and this one asset");
+        assertEq(rewards.rewardAssets().length, 2, "USDC and this one asset");
         assertEq(rewards.backed(address(other)), 3 * 9_800);
     }
 
@@ -639,27 +645,27 @@ contract KeyfleetDepositsTest is Test {
     /// never be turned into spendable capital by anyone.
     function test_recognizeSurplusBooksOnlyTheUnaccountedPartAndSparesTheCascadeReserve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
-        _admit(fleet, address(regent));
+        _admit(fleet, address(usdc));
         _buy(fleet, alice);
         uint256 reserve = fleet.cascadeReserve();
         assertGt(reserve, 0, "the first Cascade key funds the reserve");
-        assertEq(fleet.surplus(address(regent)), 0, "an accounted balance shows no surplus");
+        assertEq(fleet.surplus(address(usdc)), 0, "an accounted balance shows no surplus");
 
-        regent.mint(address(fleet), 10_000);
-        assertEq(fleet.surplus(address(regent)), 10_000, "a bare transfer is the whole surplus");
+        usdc.mint(address(fleet), 10_000);
+        assertEq(fleet.surplus(address(usdc)), 10_000, "a bare transfer is the whole surplus");
 
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit SurplusRecognized(address(regent), bob, 10_000, 9_800);
+        emit SurplusRecognized(address(usdc), bob, 10_000, 9_800);
         vm.prank(bob);
-        uint256 net = fleet.recognizeSurplus(address(regent));
+        uint256 net = fleet.recognizeSurplus(address(usdc));
 
         assertEq(net, 9_800);
-        assertEq(fleet.freeCapital(address(regent)), 9_800, "only the unaccounted part became capital");
+        assertEq(fleet.freeCapital(address(usdc)), 9_800, "only the unaccounted part became capital");
         assertEq(fleet.cascadeReserve(), reserve, "the reserve is untouched");
-        assertEq(fleet.surplus(address(regent)), 0, "nothing is left unaccounted");
+        assertEq(fleet.surplus(address(usdc)), 0, "nothing is left unaccounted");
 
         vm.expectRevert(Keyfleet.NoSurplus.selector);
-        fleet.recognizeSurplus(address(regent));
+        fleet.recognizeSurplus(address(usdc));
     }
 
     /// @dev Invariant: recognition cannot reclassify a recorded liability, because reward backing
@@ -690,6 +696,56 @@ contract KeyfleetDepositsTest is Test {
         assertEq(staking.registered(), 200e6, "the fee was registered revenue");
         assertEq(staking.lastRef(), bytes32(0), "with no payment reference");
         assertEq(fleet.freeCapital(address(usdc)), 9_800e6);
+    }
+
+    /// @dev Invariant: keys are paid in USDC and USDC is also a deposit asset, yet free capital, the
+    /// Cascade completion reserve and reward backing stay three separate figures. A USDC capital
+    /// deposit moves only capital, a USDC revenue deposit moves only backing, neither leaves a
+    /// surplus behind, and the reimbursement a level completion pays lands beside the revenue in the
+    /// ledger without disturbing it.
+    function test_usdcDepositsAndUsdcPurchasesKeepCapitalReserveAndBackingApart() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        _admit(fleet, address(usdc));
+        _buy(fleet, alice);
+        _buy(fleet, bob);
+        _buy(fleet, _wallet(3));
+        assertEq(fleet.freeCapital(address(usdc)), 19_000_000, "level 1 released its reserve to capital");
+        assertEq(fleet.cascadeReserve(), 11_400_000, "key 3 opened the level 2 reserve");
+
+        _depositCapital(fleet, usdc, 1_000e6);
+        assertEq(fleet.freeCapital(address(usdc)), 19_000_000 + 980e6, "a capital deposit moves only capital");
+        assertEq(fleet.cascadeReserve(), 11_400_000, "and leaves the reserve alone");
+
+        _depositRevenue(fleet, usdc, 1_000e6, bytes32(0));
+        assertEq(rewards.backed(address(usdc)), 980e6, "a revenue deposit moves only backing");
+        assertEq(fleet.freeCapital(address(usdc)), 19_000_000 + 980e6, "and leaves capital alone");
+        assertEq(fleet.cascadeReserve(), 11_400_000, "and the reserve");
+        assertEq(fleet.surplus(address(usdc)), 0, "neither deposit left anything unaccounted");
+        vm.expectRevert(Keyfleet.NoSurplus.selector);
+        fleet.recognizeSurplus(address(usdc));
+
+        _buy(fleet, _wallet(4));
+        _buy(fleet, _wallet(5));
+        assertTrue(fleet.levelCompleted(2), "level 2 completed");
+        assertEq(fleet.cascadeReserve(), 0);
+        assertEq(fleet.freeCapital(address(usdc)), 19_000_000 + 980e6 + 14_200_000, "only the surplus is capital");
+        assertEq(rewards.backed(address(usdc)), 980e6 + 20_000_000, "the reimbursement joins the revenue");
+        assertEq(rewards.accrued(address(usdc), 1), 490e6 + 10_000_000, "key 1 earned revenue and repayment");
+
+        assertEq(usdc.balanceOf(address(fleet)), fleet.freeCapital(address(usdc)), "the fleet holds only capital");
+        assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds only backing");
+        assertEq(usdc.balanceOf(treasury), 2 * 500_000 + 3 * 600_000, "the treasury holds only purchase shares");
+        assertEq(staking.registered(), 2 * 20e6, "staking holds only the two deposit fees");
+
+        vm.prank(alice);
+        assertEq(rewards.claim(address(usdc), _one(1), address(0)), 500e6, "both are paid in one claim");
+        assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "and the ledger still balances");
+    }
+
+    function _one(uint256 tokenId) private pure returns (uint256[] memory ids) {
+        ids = new uint256[](1);
+        ids[0] = tokenId;
     }
 
     // --- 6. guards and invariants -----------------------------------------
@@ -792,14 +848,14 @@ contract KeyfleetDepositsTest is Test {
         uint96 capitalAmount,
         uint96 revenueAmount,
         uint96 donation,
-        uint96 regentDonation
+        uint96 usdcDonation
     ) public {
         capitalAmount = uint96(bound(capitalAmount, 1, type(uint96).max));
         revenueAmount = uint96(bound(revenueAmount, 1, type(uint96).max));
 
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         _admit(fleet, address(other));
-        _admit(fleet, address(regent));
+        _admit(fleet, address(usdc));
         // Three Cascade keys: level 1 completes and empties its reserve, and key 3 starts refilling
         // it for level 2, so there is both a completed cohort and a live reserve to protect.
         _buyMany(fleet, 3);
@@ -817,11 +873,11 @@ contract KeyfleetDepositsTest is Test {
             _assertCovered(fleet, other);
         }
 
-        if (regentDonation > 0) {
-            regent.mint(address(fleet), regentDonation);
-            _assertCovered(fleet, regent);
-            fleet.recognizeSurplus(address(regent));
-            _assertCovered(fleet, regent);
+        if (usdcDonation > 0) {
+            usdc.mint(address(fleet), usdcDonation);
+            _assertCovered(fleet, usdc);
+            fleet.recognizeSurplus(address(usdc));
+            _assertCovered(fleet, usdc);
             assertGt(fleet.cascadeReserve(), 0, "the reserve survived recognition");
         }
     }
@@ -842,12 +898,10 @@ contract KeyfleetDepositsTest is Test {
 contract KeyfleetDepositsGasTest is Test {
     using stdStorage for StdStorage;
 
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
 
     StdStorage private fleetStore;
 
-    MockToken private regent;
     MockToken private usdc;
     MockToken private revenueAsset;
     KeyfleetAssetRegistry private registry;
@@ -861,15 +915,12 @@ contract KeyfleetDepositsGasTest is Test {
     address private payer = address(0xDEDE);
 
     function setUp() public {
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         revenueAsset = new MockToken("Revenue", "REV");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
         staking = new MockStaking(usdc);
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FibonacciSyndicate,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -890,9 +941,9 @@ contract KeyfleetDepositsGasTest is Test {
             uint256 start = _levelStart(level);
             fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(start - 1);
             uint256 price = fleet.nextPrice();
-            regent.mint(payer, price);
+            usdc.mint(payer, price);
             vm.startPrank(payer);
-            regent.approve(address(fleet), price);
+            usdc.approve(address(fleet), price);
             uint256 tokenId = fleet.purchase(payer, address(0), price, block.timestamp);
             vm.stopPrank();
             assertEq(tokenId, start, "bought the first key of the level");

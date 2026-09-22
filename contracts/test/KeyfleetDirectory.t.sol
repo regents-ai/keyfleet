@@ -11,17 +11,20 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 }
 
 /// @dev The directory only reads fleets, so the staking contract and the Autolaunch factory are
 /// bare addresses here: a fleet stores both without calling either at construction.
 contract KeyfleetDirectoryTest is Test {
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
 
-    MockToken private regent;
     MockToken private usdc;
     KeyfleetAssetRegistry private registry;
 
@@ -32,7 +35,7 @@ contract KeyfleetDirectoryTest is Test {
 
     /// @dev The values a directory requires every fleet to share, so a test changes exactly one.
     struct Wiring {
-        MockToken regent;
+        MockToken usdc;
         address treasury;
         KeyfleetAssetRegistry registry;
         address staking;
@@ -46,7 +49,6 @@ contract KeyfleetDirectoryTest is Test {
     Keyfleet private accelerant;
 
     function setUp() public {
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         registry = new KeyfleetAssetRegistry(SAFE, address(usdc));
 
@@ -90,9 +92,10 @@ contract KeyfleetDirectoryTest is Test {
         new KeyfleetDirectory(syndicate, cascade, classic, classic);
     }
 
-    function test_fleetPaidInADifferentRegentIsRefused() public {
+    function test_fleetPaidInADifferentUsdcIsRefused() public {
         Wiring memory wiring = _wiring();
-        wiring.regent = new MockToken("Other Regent", "REGENT");
+        wiring.usdc = new MockToken("Other USD Coin", "USDC");
+        wiring.registry = new KeyfleetAssetRegistry(SAFE, address(wiring.usdc));
         Keyfleet stray = _deploy(KeyfleetPresets.Preset.FibonacciCascade, wiring);
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetDirectory.FleetMismatch.selector, uint8(1)));
@@ -156,7 +159,7 @@ contract KeyfleetDirectoryTest is Test {
 
     function _wiring() private view returns (Wiring memory) {
         return Wiring({
-            regent: regent,
+            usdc: usdc,
             treasury: TREASURY,
             registry: registry,
             staking: STAKING,
@@ -168,9 +171,7 @@ contract KeyfleetDirectoryTest is Test {
     function _deploy(KeyfleetPresets.Preset preset, Wiring memory wiring) private returns (Keyfleet) {
         return new Keyfleet(
             preset,
-            Q,
-            IERC20(address(wiring.regent)),
-            IERC20(address(usdc)),
+            IERC20(address(wiring.usdc)),
             wiring.treasury,
             wiring.registry,
             IRegentRevenueStaking(wiring.staking),

@@ -6,6 +6,7 @@ import {DeployKeyfleets} from "../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {KeyfleetDirectory} from "../src/KeyfleetDirectory.sol";
+import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {MockToken, StrategyPublishingFactory} from "./DeployKeyfleets.t.sol";
 
 /// @dev Stands in for the Autolaunch strategy: the record step reads only its address and its code.
@@ -14,7 +15,6 @@ contract StandInStrategy {}
 contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant SAFE = address(0x5AFE);
     address private constant TREASURY = address(0x7EA5);
@@ -50,8 +50,9 @@ contract RecordKeyfleetsTest is Test {
             vm.parseJsonBytes32(json, ".directoryCodeHash"), address(deployment.directory).codehash, "Directory code"
         );
         assertEq(vm.parseJsonAddress(json, ".assetRegistry"), address(deployment.registry), "Registry");
-        assertEq(vm.parseJsonAddress(json, ".regent"), address(regent), "REGENT");
+        assertEq(vm.parseJsonAddress(json, ".regent"), manifest.regent, "REGENT as the manifest names it");
         assertEq(vm.parseJsonAddress(json, ".usdc"), address(usdc), "USDC");
+        assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "Every first key costs 10 USDC");
         assertEq(vm.parseJsonAddress(json, ".treasury"), TREASURY, "Treasury");
         assertEq(vm.parseJsonAddress(json, ".staking"), STAKING, "Staking");
         assertEq(vm.parseJsonAddress(json, ".regentSafe"), SAFE, "Regents Safe");
@@ -86,7 +87,6 @@ contract RecordKeyfleetsTest is Test {
                 manifest.fleets[slot].baseTokenURI,
                 "Metadata base read from the fleet"
             );
-            assertEq(vm.parseUint(vm.parseJsonString(json, string.concat(key, ".q"))), Q, "q");
             assertEq(vm.parseJsonUint(json, string.concat(key, ".maxSupply")), supplies[slot], "Supply");
 
             address[] memory perFleet =
@@ -96,7 +96,6 @@ contract RecordKeyfleetsTest is Test {
             assertEq(perFleet[1], address(regent), "REGENT per fleet");
         }
 
-        assertEq(vm.parseUint(vm.parseJsonString(json, ".bounds.maxQ")), 1e24, "MAX_Q");
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciLevels"), 20, "Levels");
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciMaxTokenId"), 46_365, "Highest token id");
         assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 144, "Classic seats");
@@ -165,10 +164,6 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, directory, _released("usdc"));
 
         manifest = _manifest();
-        manifest.regent = address(0xBEEF);
-        _expectRecordRefused(manifest, directory, _released("regent"));
-
-        manifest = _manifest();
         manifest.treasury = address(0xBEEF);
         _expectRecordRefused(manifest, directory, _released("treasury"));
 
@@ -183,10 +178,6 @@ contract RecordKeyfleetsTest is Test {
         manifest = _manifest();
         manifest.votingWindow = 2 hours;
         _expectRecordRefused(manifest, directory, _released("votingWindow"));
-
-        manifest = _manifest();
-        manifest.fleets[0].q = Q + 1;
-        _expectRecordRefused(manifest, directory, _fleet(0, "q"));
 
         manifest = _manifest();
         manifest.fleets[1].name = "Another name";
@@ -214,15 +205,48 @@ contract RecordKeyfleetsTest is Test {
     }
 
     function test_emptyFactoryWaiverIsNeverRecordedOnBase() public {
-        vm.chainId(BASE_CHAIN_ID);
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.chainId = BASE_CHAIN_ID;
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.autolaunchFactoryMayBeEmpty = true;
         KeyfleetDirectory directory = deployer.deploy(manifest).directory;
 
         string memory json = recorder.record(manifest, _summary(directory));
 
         assertFalse(vm.parseJsonBool(json, ".autolaunch.factoryMayBeEmpty"), "Base ignores the waiver");
+    }
+
+    /// @dev Invariant: a Base record never publishes a USDC or a REGENT other than Base's own, even
+    /// for a release that was deployed correctly.
+    function test_recordOnBaseRefusesAnyUsdcOrRegentButBase() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        KeyfleetDirectory directory = deployer.deploy(manifest).directory;
+
+        manifest.usdc = address(usdc);
+        _expectRecordRefused(
+            manifest, directory, abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc))
+        );
+
+        manifest = _baseManifest();
+        manifest.regent = address(regent);
+        _expectRecordRefused(
+            manifest, directory, abi.encodeWithSelector(KeyfleetManifest.RegentNotBaseRegent.selector, address(regent))
+        );
+    }
+
+    /// @dev Invariant: the REGENT the record step tells the Safe to admit always holds code, so a
+    /// zero or mistyped address is never published into `regent` or `initialAssetFlags`.
+    function test_recordRefusesARegentWithoutCode() public {
+        KeyfleetDirectory directory = deployer.deploy(_manifest()).directory;
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+
+        manifest.regent = address(0xBEEF);
+        _expectRecordRefused(
+            manifest, directory, abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0xBEEF))
+        );
+
+        manifest.regent = address(0);
+        _expectRecordRefused(
+            manifest, directory, abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0))
+        );
     }
 
     function test_recordRefusesADirectoryWithoutCode() public {
@@ -309,6 +333,18 @@ contract RecordKeyfleetsTest is Test {
         return RecordKeyfleets.BroadcastSummary({directory: directory, deploymentBlock: DEPLOYMENT_BLOCK});
     }
 
+    /// @dev A Base manifest on Base, paid in Base USDC and naming Base REGENT, both stood in for by
+    /// the local mocks' code.
+    function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
+        vm.chainId(BASE_CHAIN_ID);
+        vm.etch(deployer.BASE_USDC(), address(usdc).code);
+        vm.etch(deployer.BASE_REGENT(), address(regent).code);
+        manifest = _manifest();
+        manifest.chainId = BASE_CHAIN_ID;
+        manifest.usdc = deployer.BASE_USDC();
+        manifest.regent = deployer.BASE_REGENT();
+    }
+
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = ANVIL_CHAIN_ID;
         manifest.regent = address(regent);
@@ -320,9 +356,9 @@ contract RecordKeyfleetsTest is Test {
         manifest.assetRegistry = address(0);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
-        manifest.fleets[0] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
-        manifest.fleets[1] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
-        manifest.fleets[2] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Classic", "KEYFLEET", "https://k/classic/");
-        manifest.fleets[3] = KeyfleetManifest.FleetSpec(Q, "Keyfleet Accelerant", "KEYFLEET", "https://k/accelerant/");
+        manifest.fleets[0] = KeyfleetManifest.FleetSpec("Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
+        manifest.fleets[1] = KeyfleetManifest.FleetSpec("Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
+        manifest.fleets[2] = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
+        manifest.fleets[3] = KeyfleetManifest.FleetSpec("Keyfleet Accelerant", "KEYFLEET", "https://k/accelerant/");
     }
 }

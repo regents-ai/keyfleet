@@ -6,24 +6,24 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
 /// @notice The four fixed fleets of the release, named once and never again.
 /// @dev This is the whole of the "minimal deployment factory/registry" the release asks for. It
-/// deploys nothing: `Keyfleet` initcode is 38,025 bytes, so a contract carrying a `new Keyfleet`
+/// deploys nothing: `Keyfleet` initcode is 37,806 bytes, so a contract carrying a `new Keyfleet`
 /// would exceed the 24,576-byte runtime limit, and a constructor deploying all four would exceed
 /// the 49,152-byte initcode limit. The deployment script creates the fleets and this contract
 /// records which four they are, so the app seeds from one address instead of four pasted ones.
 ///
 /// The constructor is the only check there is: each slot must hold the preset that belongs to it,
-/// and all four must share the same REGENT, treasury, asset registry, staking contract, Autolaunch
-/// factory and voting window. A directory therefore only ever names a coherent set. USDC needs no
-/// comparison of its own: a fleet refuses any USDC but its registry's `BASE_USDC`, and the registry
-/// is compared. The fleets themselves are unchanged by it: it holds no authority over any of them,
-/// takes no tokens, and a later factory reading a fleet's public immutables learns exactly what
-/// this contract learned.
+/// and all four must share the same treasury, asset registry, staking contract, Autolaunch factory
+/// and voting window. A directory therefore only ever names a coherent set. USDC, the money every
+/// key is paid in, needs no comparison of its own: a fleet refuses any USDC but its registry's
+/// `BASE_USDC`, and the registry is compared. The fleets themselves are unchanged by it: it holds
+/// no authority over any of them, takes no tokens, and a later factory reading a fleet's public
+/// immutables learns exactly what this contract learned.
 ///
 /// There is no owner, no setter, no way to add or remove a fleet, and no upgrade path. A different
 /// set of fleets means a different directory.
 contract KeyfleetDirectory {
     /// @notice The fleet in `slot` does not belong in this directory: its preset is not the one the
-    /// slot is for, or one of its six shared values differs from slot 0's.
+    /// slot is for, or one of its five shared values differs from slot 0's.
     error FleetMismatch(uint8 slot);
 
     /// @notice Fibonacci Syndicate, slot 0.
@@ -37,8 +37,8 @@ contract KeyfleetDirectory {
 
     /// @notice Records the four fleets after checking that they form a coherent set.
     /// @dev Slot 0 is the reference the other three are compared against; its own preset is checked
-    /// like everyone else's. A fleet's `Q`, name, symbol and metadata base are deliberately not
-    /// compared: they differ per fleet by design.
+    /// like everyone else's. A fleet's name, symbol and metadata base are deliberately not compared:
+    /// they differ per fleet by design.
     /// @param syndicate A fleet whose preset is `FibonacciSyndicate`.
     /// @param cascade A fleet whose preset is `FibonacciCascade`.
     /// @param classic A fleet whose preset is `FleetTechClassic`.
@@ -74,14 +74,14 @@ contract KeyfleetDirectory {
         if (fleet.PRESET() != expected) revert FleetMismatch(slot);
     }
 
-    /// @dev The six values every fleet of one release shares. A difference in any of them means the
-    /// two fleets answer to different money, a different treasury, a different admission list or a
-    /// different vote clock, and are not the same release.
+    /// @dev The five values every fleet of one release shares. A difference in any of them means
+    /// the two fleets answer to a different treasury, different money through a different admission
+    /// list, a different staking contract, a different factory or a different vote clock, and are
+    /// not the same release.
     function _requireSameWiring(Keyfleet anchor, Keyfleet fleet, uint8 slot) private view {
         if (
-            fleet.REGENT() != anchor.REGENT() || fleet.TREASURY() != anchor.TREASURY()
-                || fleet.ASSET_REGISTRY() != anchor.ASSET_REGISTRY() || fleet.STAKING() != anchor.STAKING()
-                || fleet.FACTORY() != anchor.FACTORY()
+            fleet.TREASURY() != anchor.TREASURY() || fleet.ASSET_REGISTRY() != anchor.ASSET_REGISTRY()
+                || fleet.STAKING() != anchor.STAKING() || fleet.FACTORY() != anchor.FACTORY()
                 || fleet.VOTES().VOTING_WINDOW() != anchor.VOTES().VOTING_WINDOW()
         ) {
             revert FleetMismatch(slot);

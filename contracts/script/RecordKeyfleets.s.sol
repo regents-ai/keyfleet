@@ -12,14 +12,16 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// @notice Step two of two: after `DeployKeyfleets` has broadcast, reads the deployment back from
 /// the chain, checks it against the input manifest, and writes the published deployment manifest.
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
-/// the directory and the blocks the transactions landed in. Every address, every fleet value, the
+/// the directory and the blocks the transactions landed in. Every fleet address and value, the
 /// vote window, the deposit fee and the reward-ledger bounds are read from the chain through that
-/// directory. The supply, price and split constants are the ones this script was compiled with
-/// from `KeyfleetPresets`, and the runtime code hash of the directory and of every fleet is
-/// recorded so they can be re-verified against the deployed code. `factoryMayBeEmpty` is the
-/// manifest's waiver as it applies on this chain. A receipt that failed, a transaction with no
-/// receipt, a directory with no code, or any value that differs from the manifest stops the step
-/// before it writes.
+/// directory. REGENT is the one address taken from the manifest, because no fleet holds it: it is
+/// published only as a deposit asset the Regents Safe is expected to admit, so it must hold code,
+/// and on Base it must be Base REGENT, as on Base the USDC must be Base USDC. The supply, USDC price
+/// and split constants are the ones this script was compiled with from `KeyfleetPresets`, and the
+/// runtime code hash of the directory and of every fleet is recorded so they can be re-verified
+/// against the deployed code. `factoryMayBeEmpty` is the manifest's waiver as it applies on this
+/// chain. A receipt that failed, a transaction with no receipt, a directory with no code, or any
+/// value that differs from the manifest stops the step before it writes.
 ///
 /// `parseBroadcast` and `record` take values and return values, so the suite runs them against
 /// fleets deployed in the test; `run` is the only part that reads or writes a file or reads the
@@ -95,12 +97,12 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice Reads the release back from the chain through the broadcast's directory, checks it
     /// against the manifest, and returns the deployed manifest's JSON.
     /// @dev The values all four fleets share are compared once, on slot 0: the directory's
-    /// constructor already refused any fleet whose preset is not its slot's or whose REGENT,
-    /// treasury, registry, staking contract, Autolaunch factory or voting window differs from slot
-    /// 0's. A fleet's USDC is not compared on its own: a fleet refuses at construction any USDC but
-    /// its registry's `BASE_USDC`, and the registry is compared.
+    /// constructor already refused any fleet whose preset is not its slot's or whose treasury,
+    /// registry, staking contract, Autolaunch factory or voting window differs from slot 0's. A
+    /// fleet's USDC is not compared on its own: a fleet refuses at construction any USDC but its
+    /// registry's `BASE_USDC`, and the registry is compared.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
-        _requireChainAndFactory(manifest);
+        _requireManifestFitsChain(manifest);
         if (address(summary.directory).code.length == 0) revert DirectoryMissing(address(summary.directory));
 
         Keyfleet[4] memory fleets = summary.directory.fleets();
@@ -111,7 +113,6 @@ contract RecordKeyfleets is KeyfleetManifest {
         }
         if (registry.REGENT_SAFE() != manifest.regentSafe) revert RecordedMismatch("regentSafe");
         if (registry.BASE_USDC() != manifest.usdc) revert RecordedMismatch("usdc");
-        if (address(anchor.REGENT()) != manifest.regent) revert RecordedMismatch("regent");
         if (anchor.TREASURY() != manifest.treasury) revert RecordedMismatch("treasury");
         if (address(anchor.STAKING()) != manifest.staking) revert RecordedMismatch("staking");
         if (address(anchor.FACTORY()) != manifest.autolaunchFactory) revert RecordedMismatch("autolaunchFactory");
@@ -127,8 +128,9 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeAddress(root, "directory", address(summary.directory));
         vm.serializeBytes32(root, "directoryCodeHash", address(summary.directory).codehash);
         vm.serializeAddress(root, "assetRegistry", address(registry));
-        vm.serializeAddress(root, "regent", address(anchor.REGENT()));
+        vm.serializeAddress(root, "regent", manifest.regent);
         vm.serializeAddress(root, "usdc", registry.BASE_USDC());
+        vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
         vm.serializeAddress(root, "treasury", anchor.TREASURY());
         vm.serializeAddress(root, "staking", address(anchor.STAKING()));
         vm.serializeAddress(root, "regentSafe", registry.REGENT_SAFE());
@@ -137,13 +139,12 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(root, "bounds", _boundsJson(anchor.REWARDS()));
         vm.serializeString(root, "fees", _feesJson(anchor));
         vm.serializeString(root, "autolaunch", _autolaunchJson(manifest, address(anchor.FACTORY())));
-        vm.serializeString(root, "initialAssetFlags", _initialAssetFlagsJson(registry.BASE_USDC(), anchor));
+        vm.serializeString(root, "initialAssetFlags", _initialAssetFlagsJson(registry.BASE_USDC(), manifest.regent));
         return vm.serializeString(root, "disclosures", _disclosuresJson());
     }
 
     /// @dev The values the manifest decides for one fleet alone, read back off the chain.
     function _requireFleetMatches(FleetSpec memory spec, Keyfleet fleet, uint8 slot) private view {
-        if (fleet.Q() != spec.q) revert RecordedFleetMismatch(slot, "q");
         if (!_equal(fleet.name(), spec.name)) revert RecordedFleetMismatch(slot, "name");
         if (!_equal(fleet.symbol(), spec.symbol)) revert RecordedFleetMismatch(slot, "symbol");
         if (!_equal(fleet.baseTokenURI(), spec.baseTokenURI)) revert RecordedFleetMismatch(slot, "baseTokenURI");
@@ -162,7 +163,6 @@ contract RecordKeyfleets is KeyfleetManifest {
             vm.serializeString(fleetKey, "name", fleet.name());
             vm.serializeString(fleetKey, "symbol", fleet.symbol());
             vm.serializeString(fleetKey, "baseTokenURI", fleet.baseTokenURI());
-            vm.serializeString(fleetKey, "q", vm.toString(fleet.Q()));
             string memory fleetJson = vm.serializeUint(fleetKey, "maxSupply", fleet.maxSupply());
             fleetsJson = vm.serializeString("fleets", keys[slot], fleetJson);
         }
@@ -170,11 +170,9 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @dev The published numeric bounds. The two reward-ledger bounds are read from the chain; the
     /// others are this script's compiled `KeyfleetPresets`, which the fleets' recorded code hashes
-    /// let anyone re-verify. `maxQ` is a decimal string for the same reason the input manifest
-    /// states `q` as one.
+    /// let anyone re-verify.
     function _boundsJson(KeyfleetRewards rewards) private returns (string memory) {
         string memory bounds = "bounds";
-        vm.serializeString(bounds, "maxQ", vm.toString(KeyfleetPresets.MAX_Q));
         vm.serializeUint(bounds, "fibonacciLevels", KeyfleetPresets.MAX_FIBONACCI_LEVEL);
         vm.serializeUint(bounds, "fibonacciMaxTokenId", KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
         vm.serializeUint(bounds, "classicSupply", KeyfleetPresets.CLASSIC_SUPPLY);
@@ -221,10 +219,10 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @dev The flags the Regents Safe is expected to set after deployment: USDC and REGENT in the
     /// global catalogue and for each fleet. The deployment sets none of them.
-    function _initialAssetFlagsJson(address usdc, Keyfleet anchor) private returns (string memory) {
+    function _initialAssetFlagsJson(address usdc, address regent) private returns (string memory) {
         address[] memory tokens = new address[](2);
         tokens[0] = usdc;
-        tokens[1] = address(anchor.REGENT());
+        tokens[1] = regent;
 
         string[4] memory keys = _fleetKeys();
         string memory perFleetJson;

@@ -58,7 +58,7 @@ contract DeployKeyfleets is KeyfleetManifest {
     /// there is no window in which a fleet exists without them. The directory's constructor
     /// refuses a set whose presets are out of order or whose shared wiring differs.
     function deploy(Manifest memory manifest) public returns (Deployment memory deployment) {
-        _requireChainAndFactory(manifest);
+        _requireManifestFitsChain(manifest);
 
         deployment.registry = manifest.assetRegistry == address(0)
             ? new KeyfleetAssetRegistry(manifest.regentSafe, manifest.usdc)
@@ -71,8 +71,6 @@ contract DeployKeyfleets is KeyfleetManifest {
         for (uint8 slot = 0; slot < 4; ++slot) {
             deployment.fleets[slot] = new Keyfleet(
                 presets[slot],
-                manifest.fleets[slot].q,
-                IERC20(manifest.regent),
                 IERC20(manifest.usdc),
                 manifest.treasury,
                 deployment.registry,

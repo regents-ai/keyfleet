@@ -11,25 +11,21 @@
   "votingWindow": 86400,
   "fleets": {
     "syndicate": {
-      "q": "1000000000000000000",
       "name": "Keyfleet Syndicate",
       "symbol": "KEYFLEET",
       "baseTokenURI": "https://keyfleet.ai/metadata/syndicate/"
     },
     "cascade": {
-      "q": "1000000000000000000",
       "name": "Keyfleet Cascade",
       "symbol": "KEYFLEET",
       "baseTokenURI": "https://keyfleet.ai/metadata/cascade/"
     },
     "classic": {
-      "q": "1000000000000000000",
       "name": "Keyfleet Classic",
       "symbol": "KEYFLEET",
       "baseTokenURI": "https://keyfleet.ai/metadata/classic/"
     },
     "accelerant": {
-      "q": "1000000000000000000",
       "name": "Keyfleet Accelerant",
       "symbol": "KEYFLEET",
       "baseTokenURI": "https://keyfleet.ai/metadata/accelerant/"

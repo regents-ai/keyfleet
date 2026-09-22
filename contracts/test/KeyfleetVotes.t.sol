@@ -14,8 +14,13 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -121,14 +126,12 @@ contract FlagReadingToken is ERC20 {
 contract KeyfleetVotesTest is Test {
     using stdStorage for StdStorage;
 
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
     uint256 private constant SCALE = 1e18;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     StdStorage private fleetStore;
 
-    MockToken private regent;
     MockToken private usdc;
     MockToken private other;
     KeyfleetAssetRegistry private registry;
@@ -166,7 +169,6 @@ contract KeyfleetVotesTest is Test {
     event CapitalTransferred(address indexed asset, uint256 amount, address indexed recipient);
 
     function setUp() public {
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         other = new MockToken("Other", "OTH");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
@@ -182,8 +184,6 @@ contract KeyfleetVotesTest is Test {
     function _deploy(KeyfleetPresets.Preset preset, uint64 votingWindow) private returns (Keyfleet) {
         return new Keyfleet(
             preset,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -196,9 +196,9 @@ contract KeyfleetVotesTest is Test {
 
     function _buy(Keyfleet fleet, address receiver) private returns (uint256 tokenId) {
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         tokenId = fleet.purchase(receiver, address(0), 2 * price, block.timestamp);
         vm.stopPrank();
     }
@@ -818,7 +818,7 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Invariant: a vote reaches free working capital and nothing else. A Cascade fleet whose
-    /// whole REGENT balance is an incomplete level's completion reserve has no free capital, so the
+    /// whole USDC balance is an incomplete level's completion reserve has no free capital, so the
     /// vote is refused even though the tokens are sitting in the fleet.
     function test_aVoteCannotBorrowTheCascadeCompletionReserve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
@@ -827,23 +827,23 @@ contract KeyfleetVotesTest is Test {
 
         uint256 reserve = fleet.cascadeReserve();
         assertGt(reserve, 0, "the first Cascade key funds the reserve");
-        assertEq(fleet.freeCapital(address(regent)), 0, "and none of it is free capital");
-        assertEq(regent.balanceOf(address(fleet)), reserve, "the fleet is holding it");
+        assertEq(fleet.freeCapital(address(usdc)), 0, "and none of it is free capital");
+        assertEq(usdc.balanceOf(address(fleet)), reserve, "the fleet is holding it");
 
         vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(regent), reserve, dave, bytes32(0));
+        uint256 proposalId = votes.proposeTransferCapital(1, address(usdc), reserve, dave, bytes32(0));
         _vote(votes, proposalId, 1, true);
         _close(votes, proposalId);
         assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "the vote itself passed");
 
         vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(regent), reserve, uint256(0))
+            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), reserve, uint256(0))
         );
         votes.execute(proposalId);
 
         assertEq(fleet.cascadeReserve(), reserve, "the reserve is untouched");
-        assertEq(regent.balanceOf(address(fleet)), reserve);
-        assertEq(regent.balanceOf(dave), 0);
+        assertEq(usdc.balanceOf(address(fleet)), reserve);
+        assertEq(usdc.balanceOf(dave), 0);
     }
 
     /// @dev Invariant: a vote cannot withdraw a member's claim. Reward backing does not sit in the

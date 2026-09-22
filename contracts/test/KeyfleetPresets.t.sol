@@ -33,24 +33,24 @@ contract PresetsHarness {
         return KeyfleetPresets.fibonacciLevelOf(tokenId);
     }
 
-    function fibonacciLevelPrice(uint256 q, uint256 level) external pure returns (uint256) {
-        return KeyfleetPresets.fibonacciLevelPrice(q, level);
+    function fibonacciLevelPrice(uint256 level) external pure returns (uint256) {
+        return KeyfleetPresets.fibonacciLevelPrice(level);
     }
 
     function fibonacciHoldingLimit(uint256 level) external pure returns (uint256) {
         return KeyfleetPresets.fibonacciHoldingLimit(level);
     }
 
-    function classicPrice(uint256 q) external pure returns (uint256) {
-        return KeyfleetPresets.classicPrice(q);
+    function classicPrice() external pure returns (uint256) {
+        return KeyfleetPresets.classicPrice();
     }
 
     function accelerantNextPrice(uint256 previousPrice) external pure returns (uint256) {
         return KeyfleetPresets.accelerantNextPrice(previousPrice);
     }
 
-    function accelerantPrice(uint256 q, uint256 mintIndex) external pure returns (uint256) {
-        return KeyfleetPresets.accelerantPrice(q, mintIndex);
+    function accelerantPrice(uint256 mintIndex) external pure returns (uint256) {
+        return KeyfleetPresets.accelerantPrice(mintIndex);
     }
 
     function splitPurchase(KeyfleetPresets.Preset preset, uint256 gross, bool hasReferrer, bool hasPredecessor)
@@ -65,7 +65,8 @@ contract PresetsHarness {
 contract KeyfleetPresetsTest {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    uint256 private constant MAX_Q = 1e24;
+    /// @dev Ten USDC in atomic units, the first key of every ladder.
+    uint256 private constant Q_USDC = 10_000_000;
     uint256 private constant MAX_LEVEL = 20;
     uint256 private constant MAX_TOKEN_ID = 46_365;
     uint256 private constant BPS = 10_000;
@@ -111,8 +112,8 @@ contract KeyfleetPresetsTest {
     }
 
     /// @dev The ceil-rounded 1.2x ladder written out independently of the library implementation.
-    function _referenceFibonacciPrice(uint256 q, uint256 level) private pure returns (uint256) {
-        uint256 price = q;
+    function _referenceFibonacciPrice(uint256 level) private pure returns (uint256) {
+        uint256 price = Q_USDC;
         for (uint256 i = 1; i < level; ++i) {
             uint256 numerator = price * 120;
             price = numerator % 100 == 0 ? numerator / 100 : (numerator / 100) + 1;
@@ -121,8 +122,8 @@ contract KeyfleetPresetsTest {
     }
 
     /// @dev The ceil-rounded 1.05x ladder written out independently of the library implementation.
-    function _referenceAccelerantPrice(uint256 q, uint256 mintIndex) private pure returns (uint256) {
-        uint256 price = q;
+    function _referenceAccelerantPrice(uint256 mintIndex) private pure returns (uint256) {
+        uint256 price = Q_USDC;
         for (uint256 i = 0; i < mintIndex; ++i) {
             uint256 numerator = price * 105;
             price = numerator % 100 == 0 ? numerator / 100 : (numerator / 100) + 1;
@@ -177,9 +178,9 @@ contract KeyfleetPresetsTest {
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciHoldingLimit(21);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelPrice(1e18, 0);
+        presets.fibonacciLevelPrice(0);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelPrice(1e18, 21);
+        presets.fibonacciLevelPrice(21);
     }
 
     // --- 2. token to level boundaries ----------------------------------------------------------
@@ -222,27 +223,25 @@ contract KeyfleetPresetsTest {
 
     // --- 3. fibonacci prices -------------------------------------------------------------------
 
-    /// @dev Invariant: level 1 costs the reference price and every further level compounds it by
-    ///      1.2 with upward rounding applied at each step.
+    /// @dev Invariant: level 1 costs ten USDC and every further level compounds it by 1.2 with
+    ///      upward rounding applied at each step. The first five figures are the ones the platform
+    ///      mirrors.
     function testFibonacciLevelPricesCompoundByOnePointTwoWithUpwardRounding() public view {
-        uint256 q = 10e18;
-        require(presets.fibonacciLevelPrice(q, 1) == 10e18, "Level 1 costs q");
-        require(presets.fibonacciLevelPrice(q, 2) == 12e18, "Level 2 literal");
-        require(presets.fibonacciLevelPrice(q, 3) == 14.4e18, "Level 3 literal");
-        require(presets.fibonacciLevelPrice(q, 4) == 17.28e18, "Level 4 literal");
-        require(presets.fibonacciLevelPrice(q, 5) == 20.736e18, "Level 5 literal");
+        require(presets.fibonacciLevelPrice(1) == 10_000_000, "Level 1 costs 10 USDC");
+        require(presets.fibonacciLevelPrice(2) == 12_000_000, "Level 2 literal");
+        require(presets.fibonacciLevelPrice(3) == 14_400_000, "Level 3 literal");
+        require(presets.fibonacciLevelPrice(4) == 17_280_000, "Level 4 literal");
+        require(presets.fibonacciLevelPrice(5) == 20_736_000, "Level 5 literal");
+        require(presets.fibonacciLevelPrice(MAX_LEVEL) == 319_480_010, "Level 20 literal");
         for (uint256 level = 1; level <= MAX_LEVEL; ++level) {
-            require(presets.fibonacciLevelPrice(q, level) == _referenceFibonacciPrice(q, level), "Price ladder");
+            require(presets.fibonacciLevelPrice(level) == _referenceFibonacciPrice(level), "Price ladder");
         }
     }
 
-    /// @dev Invariant: with an odd reference price every step rounds up rather than truncating.
-    function testFibonacciLevelPricesRoundUpOnOddReferencePrices() public view {
-        require(presets.fibonacciLevelPrice(7, 1) == 7, "Level 1 costs q");
-        require(presets.fibonacciLevelPrice(7, 2) == 9, "ceil(7 x 1.2) is 9");
-        require(presets.fibonacciLevelPrice(7, 3) == 11, "ceil(9 x 1.2) is 11");
-        require(presets.fibonacciLevelPrice(7, 4) == 14, "ceil(11 x 1.2) is 14");
-        require(presets.fibonacciLevelPrice(1, 2) == 2, "ceil(1 x 1.2) is 2");
+    /// @dev Invariant: the first step whose 1.2x is fractional rounds up rather than truncating.
+    function testFibonacciLevelPricesRoundUpWhereTheStepIsFractional() public view {
+        require(presets.fibonacciLevelPrice(8) == 35_831_808, "Level 8 is exact");
+        require(presets.fibonacciLevelPrice(9) == 42_998_170, "ceil(42,998,169.6) is 42,998,170");
     }
 
     // --- 4. holding limits ---------------------------------------------------------------------
@@ -263,74 +262,46 @@ contract KeyfleetPresetsTest {
 
     // --- 5. classic ----------------------------------------------------------------------------
 
-    /// @dev Invariant: Classic has a fixed 144-key supply and every primary key costs the reference price.
-    function testClassicSupplyIsFixedAndEveryPrimaryKeyCostsTheReferencePrice() public view {
+    /// @dev Invariant: Classic has a fixed 144-key supply and every primary key costs ten USDC.
+    function testClassicSupplyIsFixedAndEveryPrimaryKeyCostsTenUsdc() public view {
         require(KeyfleetPresets.CLASSIC_SUPPLY == 144, "Classic supply");
-        require(presets.classicPrice(1) == 1, "Lowest reference price");
-        require(presets.classicPrice(10e18) == 10e18, "Classic price is q");
-        require(presets.classicPrice(MAX_Q) == MAX_Q, "Highest reference price");
+        require(presets.classicPrice() == 10_000_000, "Classic price is 10 USDC");
     }
 
     // --- 6. accelerant -------------------------------------------------------------------------
 
-    /// @dev Invariant: each primary mint costs the previous one compounded by 1.05, rounded up.
+    /// @dev Invariant: each primary mint costs the previous one compounded by 1.05, rounded up. The
+    ///      first three figures are the ones the platform mirrors.
     function testAccelerantPriceCompoundsByOnePointZeroFivePerPrimaryMint() public view {
-        require(presets.accelerantPrice(100, 0) == 100, "First mint costs q");
-        require(presets.accelerantPrice(100, 1) == 105, "Second mint");
-        require(presets.accelerantPrice(100, 2) == 111, "ceil(110.25) is 111");
-        require(presets.accelerantPrice(100, 3) == 117, "ceil(116.55) is 117");
-        uint256 q = 10e18;
-        require(presets.accelerantPrice(q, 0) == q, "Index 0 is q");
-        require(presets.accelerantPrice(q, 1) == (q * 105) / 100, "Index 1 is ceil(q x 1.05)");
+        require(presets.accelerantPrice(0) == 10_000_000, "First mint costs 10 USDC");
+        require(presets.accelerantPrice(1) == 10_500_000, "Second mint");
+        require(presets.accelerantPrice(2) == 11_025_000, "Third mint");
+        require(presets.accelerantPrice(3) == 11_576_250, "Fourth mint is exact");
+        require(presets.accelerantPrice(4) == 12_155_063, "ceil(12,155,062.5) is 12,155,063");
+        require(presets.accelerantNextPrice(2) == 3, "ceil(2.1) is 3");
     }
 
     /// @dev Invariant: stepping one price at a time gives the same ladder as pricing an index directly.
     function testAccelerantNextPriceMatchesPricingByIndex() public view {
-        uint256 q = 3_333_333_333;
-        uint256 walked = q;
+        uint256 walked = Q_USDC;
         for (uint256 index = 0; index < 48; ++index) {
-            require(presets.accelerantPrice(q, index) == walked, "Chained price matches indexed price");
-            require(presets.accelerantPrice(q, index) == _referenceAccelerantPrice(q, index), "Price ladder");
+            require(presets.accelerantPrice(index) == walked, "Chained price matches indexed price");
+            require(presets.accelerantPrice(index) == _referenceAccelerantPrice(index), "Price ladder");
             walked = presets.accelerantNextPrice(walked);
         }
     }
 
     /// @dev Invariant: the last of the 2000 keys prices without overflow and index 2000 is rejected.
-    function testAccelerantLastKeyPricesAtTheHighestReferencePriceAndTwoThousandIsRejected() public {
+    function testAccelerantLastKeyPricesWithoutOverflowAndTwoThousandIsRejected() public {
         require(KeyfleetPresets.MAX_ACCELERANT_KEYS == 2000, "Published Accelerant supply bound");
-        uint256 last = presets.accelerantPrice(MAX_Q, 1999);
-        require(last > MAX_Q, "Last key costs more than the first");
+        uint256 last = presets.accelerantPrice(1999);
+        require(last == _referenceAccelerantPrice(1999), "Last key on the ladder");
         require(last < type(uint256).max / 105, "One more step would still not overflow");
         vm.expectRevert(KeyfleetPresets.MintIndexOutOfBounds.selector);
-        presets.accelerantPrice(MAX_Q, 2000);
+        presets.accelerantPrice(2000);
     }
 
-    // --- 7. reference price bounds -------------------------------------------------------------
-
-    /// @dev Invariant: every function taking a reference price rejects 0 and anything above MAX_Q,
-    ///      and accepts MAX_Q itself at the most expensive point of each ladder.
-    function testReferencePriceBoundsAreEnforcedEverywhereQIsAccepted() public {
-        require(KeyfleetPresets.MAX_Q == MAX_Q, "Published bound");
-
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.fibonacciLevelPrice(0, 1);
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.fibonacciLevelPrice(MAX_Q + 1, 1);
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.classicPrice(0);
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.classicPrice(MAX_Q + 1);
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.accelerantPrice(0, 0);
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        presets.accelerantPrice(MAX_Q + 1, 0);
-
-        uint256 topLevel = presets.fibonacciLevelPrice(MAX_Q, MAX_LEVEL);
-        require(topLevel == _referenceFibonacciPrice(MAX_Q, MAX_LEVEL), "Level 20 at the bound");
-        require(topLevel < type(uint256).max / 120, "One more step would still not overflow");
-        require(presets.fibonacciLevelPrice(1, MAX_LEVEL) > 0, "Lowest reference price at the bound");
-        require(presets.accelerantPrice(1, KeyfleetPresets.MAX_ACCELERANT_KEYS - 1) > 0, "Lowest price, last key");
-    }
+    // --- 7. ceilDiv ------------------------------------------------------------------------------
 
     /// @dev Invariant: ceilDiv rejects a zero denominator and rounds up otherwise.
     function testCeilDivRoundsUpAndRejectsAZeroDenominator() public {
@@ -471,12 +442,12 @@ contract KeyfleetPresetsTest {
     // --- 9. rounding direction -----------------------------------------------------------------
 
     /// @dev Invariant: each Fibonacci step rounds up, never down, and never by more than one unit.
-    function testFuzzFibonacciStepAlwaysRoundsUpByLessThanOneUnit(uint256 qSeed, uint256 levelSeed) public view {
-        uint256 q = (qSeed % MAX_Q) + 1;
-        uint256 level = (levelSeed % (MAX_LEVEL - 1)) + 2;
-        uint256 previous = presets.fibonacciLevelPrice(q, level - 1);
-        uint256 current = presets.fibonacciLevelPrice(q, level);
-        require(current * 100 >= previous * 120, "Never rounds down");
-        require(current * 100 - previous * 120 < 100, "Never rounds up by a whole unit");
+    function testFibonacciStepAlwaysRoundsUpByLessThanOneUnit() public view {
+        for (uint256 level = 2; level <= MAX_LEVEL; ++level) {
+            uint256 previous = presets.fibonacciLevelPrice(level - 1);
+            uint256 current = presets.fibonacciLevelPrice(level);
+            require(current * 100 >= previous * 120, "Never rounds down");
+            require(current * 100 - previous * 120 < 100, "Never rounds up by a whole unit");
+        }
     }
 }

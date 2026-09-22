@@ -5,6 +5,8 @@ pragma solidity 0.8.26;
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
 ///      the published product contract and is reproduced in the deployment manifest. All arithmetic is
 ///      checked; the bounds below keep every intermediate product far inside 256 bits.
+///
+///      Every price here is in atomic USDC, millionths of one USDC, and is what a fleet charges.
 library KeyfleetPresets {
     /// @notice The four fleet presets.
     enum Preset {
@@ -28,8 +30,6 @@ library KeyfleetPresets {
         uint256 rebate;
     }
 
-    /// @notice Reference price `q` is rejected outside `1 <= q <= MAX_Q`.
-    error QOutOfBounds();
     /// @notice Fibonacci level is rejected outside `1 <= level <= MAX_FIBONACCI_LEVEL`.
     error LevelOutOfBounds();
     /// @notice Fibonacci token id is rejected outside `1 <= tokenId <= FIBONACCI_MAX_TOKEN_ID`.
@@ -41,8 +41,10 @@ library KeyfleetPresets {
     /// @notice Division by zero in `ceilDiv`.
     error ZeroDenominator();
 
-    /// @notice Largest accepted reference price, in atomic REGENT units.
-    uint256 internal constant MAX_Q = 1e24;
+    /// @notice The reference price Q, 10 USDC, in atomic USDC.
+    uint256 internal constant Q_USDC = 10_000_000;
+    /// @notice The decimals `Q_USDC` is written in. A fleet refuses a USDC reporting any other.
+    uint8 internal constant USDC_DECIMALS = 6;
 
     /// @notice Highest Fibonacci level, whose supply is 17711 keys.
     uint256 internal constant MAX_FIBONACCI_LEVEL = 20;
@@ -132,13 +134,12 @@ library KeyfleetPresets {
         return level;
     }
 
-    /// @notice Price of a Fibonacci level key. Level 1 costs exactly `q`; every further level compounds
-    ///         the previous level's price by 120/100 with upward rounding at each step.
+    /// @notice USDC price of a Fibonacci level key. Level 1 costs exactly `Q_USDC`; every further level
+    ///         compounds the previous level's price by 120/100 with upward rounding at each step.
     /// @dev Computed iteratively from level 1, never as a closed-form power, so the rounding is exact.
-    function fibonacciLevelPrice(uint256 q, uint256 level) internal pure returns (uint256) {
-        _requireQ(q);
+    function fibonacciLevelPrice(uint256 level) internal pure returns (uint256) {
         _requireLevel(level);
-        uint256 price = q;
+        uint256 price = Q_USDC;
         for (uint256 i = 1; i < level; ++i) {
             price = ceilDiv(price * FIBONACCI_STEP_NUMERATOR, FIBONACCI_STEP_DENOMINATOR);
         }
@@ -154,28 +155,26 @@ library KeyfleetPresets {
         return fibonacciLevelSupply(level) / FIBONACCI_HOLDING_DIVISOR;
     }
 
-    /// @notice Price of any Fleet.Tech Classic primary key, which is the reference price itself.
-    function classicPrice(uint256 q) internal pure returns (uint256) {
-        _requireQ(q);
-        return q;
+    /// @notice USDC price of any Fleet.Tech Classic primary key, which is the reference price itself.
+    function classicPrice() internal pure returns (uint256) {
+        return Q_USDC;
     }
 
-    /// @notice Price of the Accelerant primary mint after one priced at `previousPrice`.
-    /// @dev Takes a price, not a reference price, so it is not bounded by `MAX_Q`.
+    /// @notice USDC price of the Accelerant primary mint after one priced at `previousPrice`.
     function accelerantNextPrice(uint256 previousPrice) internal pure returns (uint256) {
         return ceilDiv(previousPrice * ACCELERANT_STEP_NUMERATOR, ACCELERANT_STEP_DENOMINATOR);
     }
 
-    /// @notice Price of the Accelerant primary mint at `mintIndex`, where index 0 is the first mint.
+    /// @notice USDC price of the Accelerant primary mint at `mintIndex`, where index 0 is the first
+    ///         mint and costs `Q_USDC`.
     /// @dev Only primary mints advance the price. Secondary sales of an Accelerant key never advance it,
     ///      so the fleet contract must count primary mints, not transfers, when choosing `mintIndex`.
     ///      The cost is linear in `mintIndex` (about 950k gas at index 1999), so a fleet contract must
     ///      persist its current price and step it with `accelerantNextPrice`, enforcing
     ///      `MAX_ACCELERANT_KEYS` itself; this function is for one-off quotes and views.
-    function accelerantPrice(uint256 q, uint256 mintIndex) internal pure returns (uint256) {
-        _requireQ(q);
+    function accelerantPrice(uint256 mintIndex) internal pure returns (uint256) {
         if (mintIndex >= MAX_ACCELERANT_KEYS) revert MintIndexOutOfBounds();
-        uint256 price = q;
+        uint256 price = Q_USDC;
         for (uint256 i = 0; i < mintIndex; ++i) {
             price = accelerantNextPrice(price);
         }
@@ -185,7 +184,7 @@ library KeyfleetPresets {
     /// @notice Divides a gross purchase into its parts. Each fee is floored and the preset's main part
     ///         absorbs the dust, so the five parts always sum to exactly `gross`.
     /// @param preset The fleet preset being purchased from.
-    /// @param gross The purchase amount, which must be nonzero.
+    /// @param gross The USDC purchase amount, which must be nonzero.
     /// @param hasReferrer Whether a referrer is supplied; without one nothing is deducted for referral.
     /// @param hasPredecessor Whether an Accelerant purchase has a preceding key; ignored by other presets.
     function splitPurchase(Preset preset, uint256 gross, bool hasReferrer, bool hasPredecessor)
@@ -206,10 +205,6 @@ library KeyfleetPresets {
         } else {
             split.capital = remainder;
         }
-    }
-
-    function _requireQ(uint256 q) private pure {
-        if (q == 0 || q > MAX_Q) revert QOutOfBounds();
     }
 
     function _requireLevel(uint256 level) private pure {

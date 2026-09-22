@@ -13,8 +13,13 @@ import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -205,12 +210,10 @@ contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
 }
 
 contract KeyfleetAutolaunchTest is Test {
-    uint256 private constant Q = 10e18;
     uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
-    MockToken private regent;
     MockToken private usdc;
     KeyfleetAssetRegistry private registry;
     MockLBPStrategy private strategy;
@@ -230,7 +233,6 @@ contract KeyfleetAutolaunchTest is Test {
     event LaunchSynced(Keyfleet.LaunchState state);
 
     function setUp() public {
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
         strategy = new MockLBPStrategy();
@@ -244,8 +246,6 @@ contract KeyfleetAutolaunchTest is Test {
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
         return new Keyfleet(
             preset,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -261,9 +261,9 @@ contract KeyfleetAutolaunchTest is Test {
     function _fleetWithOneKey(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
         fleet = _deploy(preset);
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         fleet.purchase(alice, address(0), 2 * price, block.timestamp);
         vm.stopPrank();
     }
@@ -338,8 +338,6 @@ contract KeyfleetAutolaunchTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -476,8 +474,8 @@ contract KeyfleetAutolaunchTest is Test {
     function test_executionLaunchesWithTheFleetAsLauncherAndTreasuryAndRecordsTheFactorysAnswer() public {
         Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
         Keyfleet.LaunchEnvelope memory envelope = _envelope();
-        uint256 capitalBefore = fleet.freeCapital(address(regent));
-        uint256 balanceBefore = regent.balanceOf(address(fleet));
+        uint256 capitalBefore = fleet.freeCapital(address(usdc));
+        uint256 balanceBefore = usdc.balanceOf(address(fleet));
 
         uint256 proposalId = _proposeAndPass(fleet, envelope);
         vm.expectEmit(true, true, true, true, address(fleet));
@@ -512,10 +510,10 @@ contract KeyfleetAutolaunchTest is Test {
         assertEq(record.lpTokenId, 0);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated));
 
-        assertEq(regent.allowance(address(fleet), address(factory)), 0, "no allowance was granted to the factory");
-        assertEq(regent.allowance(address(fleet), record.subject), 0, "nor to anything the launch created");
-        assertEq(regent.balanceOf(address(fleet)), balanceBefore, "and not one atomic unit left the fleet");
-        assertEq(fleet.freeCapital(address(regent)), capitalBefore, "the fleet's capital is exactly as it was");
+        assertEq(usdc.allowance(address(fleet), address(factory)), 0, "no allowance was granted to the factory");
+        assertEq(usdc.allowance(address(fleet), record.subject), 0, "nor to anything the launch created");
+        assertEq(usdc.balanceOf(address(fleet)), balanceBefore, "and not one atomic unit left the fleet");
+        assertEq(fleet.freeCapital(address(usdc)), capitalBefore, "the fleet's capital is exactly as it was");
     }
 
     /// @dev Invariant: only the fleet's own voting controller may launch. No holder, no proposer and
@@ -704,7 +702,7 @@ contract KeyfleetAutolaunchTest is Test {
 
         Keyfleet second = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 secondId = _proposeAndPass(second, _envelope());
-        factory.armReentry(address(second), abi.encodeCall(Keyfleet.depositCapital, (address(regent), 1e18)));
+        factory.armReentry(address(second), abi.encodeCall(Keyfleet.depositCapital, (address(usdc), 1e18)));
         second.VOTES().execute(secondId);
 
         assertTrue(factory.reentryFired(), "the factory called back a second time");

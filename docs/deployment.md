@@ -28,8 +28,8 @@ name of the manifest, and no value either step invents for itself.
 | Key | What it fixes |
 | --- | --- |
 | `chainId` | The only chain this manifest may be deployed to or recorded on. |
-| `regent` | The REGENT token every primary purchase is paid in. |
-| `usdc` | Canonical Base USDC. A fleet refuses any other USDC at construction. |
+| `regent` | The REGENT token, listed among the deposit assets the Safe is to admit. No fleet holds it. Must hold code; on Base must be `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
+| `usdc` | The USDC every key is paid in. On Base must be `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`; a fleet refuses a USDC that is not its registry's or does not report six decimals. |
 | `treasury` | Where the 5% protocol share of every purchase goes. |
 | `staking` | The Regents revenue staking contract that registers USDC fees. |
 | `regentSafe` | The Safe that administers deposit admission. |
@@ -37,12 +37,11 @@ name of the manifest, and no value either step invents for itself.
 | `assetRegistry` | An existing shared registry, or zero to deploy one with the release. |
 | `autolaunchFactoryMayBeEmpty` | Whether the factory may still be undeployed. Ignored on Base. |
 | `votingWindow` | Seconds a proposal stays open. 86,400 on both manifests. |
-| `fleets.*` | Per fleet: `q`, ERC-721 `name`, `symbol` and `baseTokenURI`. |
+| `fleets.*` | Per fleet: ERC-721 `name`, `symbol` and `baseTokenURI`. |
 
-`q` is written as a decimal string because a reference price in atomic REGENT
-units is far above the range a JSON number carries exactly. Each fleet carries
-its own `baseTokenURI`: all four mint token ids from 1, so a single shared base
-would make `tokenURI` ambiguous across the release.
+The key price is not a manifest value: it is fixed in the contracts (see D6).
+Each fleet carries its own `baseTokenURI`: all four mint token ids from 1, so a
+single shared base would make `tokenURI` ambiguous across the release.
 
 Every address in the two manifests is recorded, not derived. The Autolaunch
 factory address is the one the rehearsed ceremony predicts and is replaced by the
@@ -51,7 +50,9 @@ deployed manifest of that ceremony once it has run.
 ## Running it
 
 All commands run from `contracts/`. Both steps take the same
-`KEYFLEET_MANIFEST` and the same RPC.
+`KEYFLEET_MANIFEST` and the same RPC. For the anvil manifest, `RPC_URL` is one of
+the Base forks under Rehearsing: the manifest names Base's own USDC and REGENT,
+and a plain `anvil` without a fork holds neither, so the deployment is refused.
 
 ```sh
 cd contracts
@@ -99,8 +100,17 @@ deploying address matters only for paying gas.
 
 There are two places to rehearse, and they rehearse different things.
 
-**A plain Base fork, for the Base manifest.** `anvil --fork-url "$BASE_RPC_URL"`
-keeps Base's chain id, 8453, so the Base manifest deploys and records there
+Every purchase is paid in Base USDC, so a rehearsal that buys keys runs on a fork
+of Base, where the real USDC exists, and funds the buying wallet from an address
+that already holds USDC on the fork.
+
+**A plain Base fork, for the Base manifest.**
+
+```sh
+anvil --fork-url "$BASE_RPC_URL" --gas-limit 100000000
+```
+
+This keeps Base's chain id, 8453, so the Base manifest deploys and records there
 exactly as it would on Base, against the real REGENT, USDC, staking contract and
 Safe. It also applies Base's rule that the Autolaunch factory must already hold
 code: until the Autolaunch ceremony has run on Base, the deployment step refuses
@@ -121,21 +131,56 @@ Autolaunch factory at a fresh address, so the factory address in `anvil.json`
 holds no code there. The anvil manifest permits that, which means fleets
 deployed to the lab are pinned to an address with no factory behind it and can
 never launch. The lab rehearses deployment, recording, purchases and votes; it
-cannot rehearse an Autolaunch.
+cannot rehearse an Autolaunch. It starts anvil without a gas limit of its own, so
+blocks keep the forked Base block's gas limit. Its `fund` command hands out
+REGENT only; a wallet gets USDC for a purchase the same way as on the plain fork
+below.
+
+**A plain fork on chain 31337, for the anvil manifest without the lab.**
+
+```sh
+anvil --fork-url "$BASE_RPC_URL" --chain-id 31337 --gas-limit 100000000
+export RPC_URL=http://127.0.0.1:8545
+
+# USDC for a purchase, from a fork address that holds it. Amounts are atomic
+# USDC: 10000000 is 10 USDC, the price of the first key of every fleet.
+cast rpc anvil_impersonateAccount <address holding USDC> --rpc-url "$RPC_URL"
+cast send 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 "transfer(address,uint256)" \
+  <wallet> <atomic USDC> --from <address holding USDC> --unlocked --rpc-url "$RPC_URL"
+cast rpc anvil_stopImpersonatingAccount <address holding USDC> --rpc-url "$RPC_URL"
+```
+
+Buy with a fresh address on either fork, not one of anvil's default accounts:
+on a Base fork account 1 carries delegated code whose NFT callback reverts, so a
+key minted to it fails.
+
+REGENT, USDC and the staking contract are Base's own on either fork; the
+Autolaunch factory has no code on this one either. The deployment comes to about
+32.3 million gas in all, each fleet about 7.9 million of it, or about 10.3
+million at Forge's default 130% gas estimate. `--gas-limit 100000000` holds the
+whole deployment in one block; at anvil's default block gas limit the broadcast
+has stalled with the last fleet still pending.
 
 ## What the deployment step refuses
 
 - A manifest whose `chainId` is not the chain it is running on.
+- On Base, a `usdc` other than Base USDC
+  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, or a `regent` other than Base
+  REGENT `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. Every key price is written
+  in six-decimal USDC, so a look-alike with other decimals would misprice every
+  key.
+- On any chain, a `regent` address that holds no code, the zero address included.
 - An Autolaunch factory address that holds no code. A lab manifest may waive this
   with `"autolaunchFactoryMayBeEmpty": true`; the waiver is ignored on Base, and
   the deployed manifest records that a waiver was in force so a lab deployment is
   never mistaken for a production one.
 - A supplied `assetRegistry` bound to a different Safe than the manifest names.
-- A USDC address that is not the one the registry is bound to, which the fleet
-  itself refuses at construction.
+- A USDC address that is not the one the registry is bound to, or that does not
+  report six decimals, both of which the fleet itself refuses at construction.
 - A set of fleets the directory will not name: a fleet in the wrong slot, or one
-  whose REGENT, treasury, asset registry, staking contract, Autolaunch factory or
-  voting window differs from the others.
+  whose treasury, asset registry, staking contract, Autolaunch factory or voting
+  window differs from the others. USDC is compared through the registry, since a
+  fleet accepts only its registry's USDC.
 
 ## What the record step refuses
 
@@ -143,13 +188,15 @@ cannot rehearse an Autolaunch.
   succeed.
 - A broadcast that created no directory, or a directory with no code on the
   chain it is run against.
-- The same chain and Autolaunch factory refusals as the deployment step.
+- The same chain, USDC, REGENT and Autolaunch factory refusals as the deployment
+  step.
 - Any value that differs from the manifest, read back from the chain: the
-  asset registry, its Safe and its USDC, REGENT, the treasury, the staking
-  contract, the Autolaunch factory and the voting window, and for each fleet its
-  `q`, name, symbol and metadata base. The directory only accepts four fleets of
-  the right presets that share one registry, REGENT, treasury, staking contract,
-  factory and voting window, so those shared values are read once.
+  asset registry, its Safe and its USDC, the treasury, the staking contract,
+  the Autolaunch factory and the voting window, and for each fleet its name,
+  symbol and metadata base. The directory only accepts four fleets of the right
+  presets that share one registry, treasury, staking contract, factory and voting
+  window, so those shared values are read once. REGENT is held by no fleet, so it
+  is published as the manifest names it, once the refusals above have passed.
 
 ## What the record step writes
 
@@ -165,9 +212,10 @@ constants came from. It carries:
   transaction landed in, so a reader starting there misses no purchase made the
   moment a fleet appeared;
 - the directory and its code hash, the registry, and the four fleets with each
-  one's code hash, reward ledger, voting controller, name, symbol, metadata base,
-  `q` and supply;
-- REGENT, USDC, the treasury, the staking contract and the Regents Safe;
+  one's code hash, reward ledger, voting controller, name, symbol, metadata base
+  and supply;
+- REGENT, USDC, `qUsdc` — the first key's price, 10000000 atomic USDC, which is
+  10 USDC — the treasury, the staking contract and the Regents Safe;
 - the numeric bounds, the fee basis points and the fixed vote window;
 - the Autolaunch binding: the ABI name `RegentsAutolaunchFactoryV1`, the factory
   and the strategy it publishes, and the code hash of each, so the binding can be
@@ -204,18 +252,18 @@ after the launch is proven; nothing about a launch admits a token by itself.
 
 ## Open founder decisions
 
-**D6 — the reference price `q`.** The founder has chosen one `q` for all four
-fleets, taken from a live on-chain REGENT price rather than fixed by hand. How
-that price is read is its own slice of work, not part of this release tooling,
-and that slice replaces the manifests' `q`. Until then both manifests carry a
-placeholder of `1000000000000000000`, one whole REGENT, which is not a decision
-and would put a Classic seat at about one dollar. The open question is the
-design of the price reading, which that slice brings with its own options and
-recommendation. Today `q` is immutable per fleet because the price ladder and the
-Cascade reserve derive from it, so a price that keeps following REGENT after
-deployment would change the contracts.
+**Where the 5% protocol share of every purchase goes.** (a) The Regents treasury
+Safe, as built (recommended); or (b) REGENT stakers, through
+`STAKING.depositUSDC`, as the 2% deposit fee already is.
 
 ## Decided
+
+**D6 — the key price.** Every key is paid in USDC on Base. The first key of every
+ladder costs 10 USDC (`Q_USDC`, 10,000,000 atomic USDC); Fibonacci levels step by
+1.2, Accelerant primary mints by 1.05, and every Classic key costs 10 USDC. The
+price is fixed in the contracts, so neither manifest carries it. The 5% protocol
+share, the referral credit, capital, the Cascade reserve and repayment and the
+Accelerant rebate are all USDC.
 
 **Names, symbols and metadata base.** Every fleet's symbol is `KEYFLEET`. The
 collections are named Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic and

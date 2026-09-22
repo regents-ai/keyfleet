@@ -16,8 +16,13 @@ import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockERC20 is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -26,6 +31,12 @@ contract MockERC20 is ERC20 {
 
 /// @dev Buys a key and tries to buy another from inside `onERC721Received`. It holds allowance and
 /// balance, so a successful second purchase would mean the guard is missing.
+/// @dev A USDC look-alike with ERC-20's default eighteen decimals, against which every ten-USDC
+/// price would be ten million wei.
+contract EighteenDecimalToken is ERC20 {
+    constructor() ERC20("USD Coin", "USDC") {}
+}
+
 contract ReenteringReceiver is IERC721Receiver {
     Keyfleet private immutable FLEET;
     bool private _entered;
@@ -103,13 +114,13 @@ contract ForwardingReceiver is IERC721Receiver {
 contract KeyfleetTest is Test {
     using stdStorage for StdStorage;
 
-    uint256 private constant Q = 10e18;
+    /// @dev The reference price, 10 USDC in atomic units.
+    uint256 private constant Q = KeyfleetPresets.Q_USDC;
     uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     StdStorage private fleetStore;
 
-    MockERC20 private regent;
     MockERC20 private usdc;
     MockERC20 private other;
     KeyfleetAssetRegistry private registry;
@@ -140,7 +151,6 @@ contract KeyfleetTest is Test {
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
 
     function setUp() public {
-        regent = new MockERC20("Regent", "REGENT");
         usdc = new MockERC20("USD Coin", "USDC");
         other = new MockERC20("Other", "OTH");
         registry = new KeyfleetAssetRegistry(address(0x5AFE), address(usdc));
@@ -149,14 +159,8 @@ contract KeyfleetTest is Test {
     // --- helpers ---------------------------------------------------------
 
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return _deploy(preset, Q);
-    }
-
-    function _deploy(KeyfleetPresets.Preset preset, uint256 q) private returns (Keyfleet) {
         return new Keyfleet(
             preset,
-            q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -169,12 +173,12 @@ contract KeyfleetTest is Test {
 
     /// @dev Mints the buyer exactly the next price, so the buyer's balance is zero between buys, and
     /// authorizes twice that, so a purchase that charged more than it quoted would be caught by the
-    /// buyer running out of REGENT rather than hidden behind an exact cap.
+    /// buyer running out of USDC rather than hidden behind an exact cap.
     function _buy(Keyfleet fleet, address receiver, address referrer) private returns (uint256 tokenId) {
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         tokenId = fleet.purchase(receiver, referrer, 2 * price, block.timestamp);
         vm.stopPrank();
     }
@@ -187,9 +191,9 @@ contract KeyfleetTest is Test {
     /// immediately before the purchase call itself.
     function _fundNext(Keyfleet fleet) private returns (uint256 price) {
         price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.prank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
     }
 
     function _wallet(uint256 index) private pure returns (address) {
@@ -202,9 +206,9 @@ contract KeyfleetTest is Test {
 
     function _assertBalanceInvariant(Keyfleet fleet) private view {
         assertEq(
-            regent.balanceOf(address(fleet)),
-            fleet.freeCapital(address(regent)) + fleet.cascadeReserve(),
-            "fleet REGENT balance equals capital plus reserve"
+            usdc.balanceOf(address(fleet)),
+            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve(),
+            "fleet USDC balance equals capital plus reserve"
         );
     }
 
@@ -217,71 +221,25 @@ contract KeyfleetTest is Test {
         KeyfleetRewards rewards = fleet.REWARDS();
 
         assertEq(rewards.FLEET(), address(fleet), "ledger bound to this fleet");
-        assertTrue(rewards.isRewardAsset(address(regent)), "REGENT registered");
+        assertTrue(rewards.isRewardAsset(address(usdc)), "USDC registered");
         address[] memory assets = rewards.rewardAssets();
-        assertEq(assets.length, 1, "only REGENT registered");
-        assertEq(assets[0], address(regent), "REGENT is the first reward asset");
-        assertEq(address(fleet.REGENT()), address(regent));
+        assertEq(assets.length, 1, "only USDC registered");
+        assertEq(assets[0], address(usdc), "USDC is the first reward asset");
         assertEq(address(fleet.USDC()), address(usdc));
         assertEq(fleet.TREASURY(), treasury);
         assertEq(address(fleet.ASSET_REGISTRY()), address(registry));
         assertEq(address(fleet.STAKING()), address(staking));
-        assertEq(fleet.Q(), Q);
         assertEq(uint256(fleet.PRESET()), uint256(KeyfleetPresets.Preset.FibonacciSyndicate));
         assertEq(fleet.totalMinted(), 0);
         assertEq(fleet.currentPrice(), 0, "only Accelerant persists a price");
     }
 
-    /// @dev Invariant: the reference price and the three bound addresses are validated once, at
-    /// construction, because none of them can be changed afterwards.
-    function test_constructorRejectsZeroAddressesAndOutOfRangeReferencePrices() public {
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic,
-            0,
-            regent,
-            usdc,
-            treasury,
-            registry,
-            staking,
-            factory,
-            VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
-        );
-
-        vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
-        new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic,
-            KeyfleetPresets.MAX_Q + 1,
-            regent,
-            usdc,
-            treasury,
-            registry,
-            staking,
-            factory,
-            VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
-        );
-
+    /// @dev Invariant: every bound address is validated once, at construction, because none of them
+    /// can be changed afterwards.
+    function test_constructorRejectsZeroAddresses() public {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            IERC20(address(0)),
-            usdc,
-            treasury,
-            registry,
-            staking,
-            factory,
-            VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
-        );
-
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             IERC20(address(0)),
             treasury,
             registry,
@@ -294,8 +252,6 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             usdc,
             address(0),
             registry,
@@ -308,8 +264,6 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             usdc,
             treasury,
             KeyfleetAssetRegistry(address(0)),
@@ -322,8 +276,6 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             usdc,
             treasury,
             registry,
@@ -332,9 +284,21 @@ contract KeyfleetTest is Test {
             VOTING_WINDOW,
             Keyfleet.Metadata("n", "s", BASE_URI)
         );
+
+        vm.expectRevert(Keyfleet.ZeroAddress.selector);
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            usdc,
+            treasury,
+            registry,
+            staking,
+            IRegentsAutolaunchFactoryV1(address(0)),
+            VOTING_WINDOW,
+            Keyfleet.Metadata("n", "s", BASE_URI)
+        );
     }
 
-    /// @dev Invariant: a fleet's USDC is the canonical Base USDC the shared registry is bound to.
+    /// @dev Invariant: a fleet's USDC is the USDC the shared registry is bound to.
     /// A look-alike token cannot be wired in at deployment and so can never take the staking fee
     /// route, whatever its symbol says.
     function test_constructorRejectsAUsdcThatIsNotTheRegistrysCanonicalOne() public {
@@ -343,11 +307,28 @@ contract KeyfleetTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.UsdcNotCanonical.selector, address(lookalike), address(usdc)));
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
-            Q,
-            regent,
             lookalike,
             treasury,
             registry,
+            staking,
+            factory,
+            VOTING_WINDOW,
+            Keyfleet.Metadata("n", "s", BASE_URI)
+        );
+    }
+
+    /// @dev Invariant: every price is written in six-decimal atomic USDC, so a fleet refuses a USDC
+    /// reporting any other decimals, even one its own registry is bound to.
+    function test_constructorRejectsAUsdcThatDoesNotReportSixDecimals() public {
+        EighteenDecimalToken eighteen = new EighteenDecimalToken();
+        KeyfleetAssetRegistry boundToIt = new KeyfleetAssetRegistry(address(0x5AFE), address(eighteen));
+
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.UsdcDecimalsWrong.selector, uint8(18)));
+        new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            IERC20(address(eighteen)),
+            treasury,
+            boundToIt,
             staking,
             factory,
             VOTING_WINDOW,
@@ -375,9 +356,9 @@ contract KeyfleetTest is Test {
     /// slot that moved, so each one is checked before any token moves.
     function test_purchaseHonoursDeadlineMaximumPriceAndDefaultReceiver() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        regent.mint(buyer, 10 * Q);
+        usdc.mint(buyer, 10 * Q);
         vm.prank(buyer);
-        regent.approve(address(fleet), type(uint256).max);
+        usdc.approve(address(fleet), type(uint256).max);
 
         vm.warp(1000);
         vm.prank(buyer);
@@ -392,6 +373,17 @@ contract KeyfleetTest is Test {
         uint256 tokenId = fleet.purchase(address(0), address(0), 2 * Q, block.timestamp);
         assertEq(fleet.ownerOf(tokenId), buyer, "zero receiver mints to the caller");
         assertEq(tokenId, 1, "token ids start at one");
+    }
+
+    /// @dev Invariant: a zero receiver means the caller, whoever the referrer is: the key goes to the
+    /// buyer and the referrer receives only its 10% credit.
+    function test_zeroReceiverWithAReferrerMintsToTheCallerNotTheReferrer() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        uint256 tokenId = _buy(fleet, address(0), carol);
+
+        assertEq(fleet.ownerOf(tokenId), buyer, "the caller holds the key");
+        assertEq(fleet.balanceOf(carol), 0, "the referrer holds no key");
+        assertEq(fleet.REWARDS().credits(address(usdc), carol), Q / 10, "the referrer is credited its share");
     }
 
     /// @dev Invariant: Classic stops at 144 seats and the price never moves.
@@ -409,9 +401,9 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.nextPrice();
 
-        regent.mint(buyer, Q);
+        usdc.mint(buyer, Q);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), Q);
+        usdc.approve(address(fleet), Q);
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.purchase(alice, address(0), Q, block.timestamp);
         vm.stopPrank();
@@ -419,13 +411,12 @@ contract KeyfleetTest is Test {
 
     /// @dev Invariant: Accelerant stops at 2000 keys, and the last key costs the compounded price.
     function test_accelerantSellsExactlyTwoThousandKeysAndThenStops() public {
-        uint256 q = 1e9;
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant, q);
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
         assertEq(fleet.maxSupply(), 2000);
 
-        regent.mint(buyer, 1e60);
+        usdc.mint(buyer, 1e60);
         vm.prank(buyer);
-        regent.approve(address(fleet), type(uint256).max);
+        usdc.approve(address(fleet), type(uint256).max);
 
         for (uint256 i = 0; i < KeyfleetPresets.MAX_ACCELERANT_KEYS; ++i) {
             vm.prank(buyer);
@@ -434,6 +425,11 @@ contract KeyfleetTest is Test {
 
         assertEq(fleet.totalMinted(), 2000);
         assertEq(fleet.remainingSupply(), 0);
+        assertEq(
+            fleet.currentPrice(),
+            KeyfleetPresets.accelerantNextPrice(KeyfleetPresets.accelerantPrice(1999)),
+            "the price stepped once per primary mint"
+        );
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.nextPrice();
         vm.prank(buyer);
@@ -454,9 +450,9 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.nextPrice();
 
-        regent.mint(buyer, type(uint128).max);
+        usdc.mint(buyer, type(uint128).max);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), type(uint256).max);
+        usdc.approve(address(fleet), type(uint256).max);
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.purchase(alice, address(0), type(uint256).max, block.timestamp);
         vm.stopPrank();
@@ -465,7 +461,7 @@ contract KeyfleetTest is Test {
     // --- 3. Syndicate and Classic ledgers ---------------------------------
 
     /// @dev Invariant: without a referrer the treasury takes 5% and every remaining unit is free
-    /// capital; the fleet's REGENT balance is exactly the capital it recorded.
+    /// capital; the fleet's USDC balance is exactly the capital it recorded.
     function test_syndicatePurchaseWithoutReferrerPaysTreasuryAndCapital() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
 
@@ -475,10 +471,10 @@ contract KeyfleetTest is Test {
         vm.prank(buyer);
         fleet.purchase(alice, address(0), 2 * price, block.timestamp);
 
-        assertEq(regent.balanceOf(treasury), Q / 20, "5% to the treasury");
-        assertEq(fleet.freeCapital(address(regent)), Q - Q / 20, "95% to capital");
+        assertEq(usdc.balanceOf(treasury), Q / 20, "5% to the treasury");
+        assertEq(fleet.freeCapital(address(usdc)), Q - Q / 20, "95% to capital");
         assertEq(fleet.cascadeReserve(), 0, "Syndicate holds no reserve");
-        assertEq(regent.balanceOf(address(fleet.REWARDS())), 0, "no reward backing without a referral");
+        assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no reward backing without a referral");
         _assertBalanceInvariant(fleet);
     }
 
@@ -490,17 +486,17 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, alice, carol);
 
-        assertEq(regent.balanceOf(treasury), Q / 20, "5% to the treasury");
-        assertEq(rewards.credits(address(regent), carol), Q / 10, "10% credited to the referrer");
-        assertEq(rewards.backed(address(regent)), Q / 10, "the credit is fully backed");
-        assertEq(regent.balanceOf(address(rewards)), Q / 10, "the backing tokens are in the ledger");
-        assertEq(fleet.freeCapital(address(regent)), Q - Q / 20 - Q / 10, "85% to capital");
+        assertEq(usdc.balanceOf(treasury), Q / 20, "5% to the treasury");
+        assertEq(rewards.credits(address(usdc), carol), Q / 10, "10% credited to the referrer");
+        assertEq(rewards.backed(address(usdc)), Q / 10, "the credit is fully backed");
+        assertEq(usdc.balanceOf(address(rewards)), Q / 10, "the backing tokens are in the ledger");
+        assertEq(fleet.freeCapital(address(usdc)), Q - Q / 20 - Q / 10, "85% to capital");
         _assertBalanceInvariant(fleet);
 
         vm.prank(carol);
-        uint256 paid = rewards.claim(address(regent), _none(), address(0));
+        uint256 paid = rewards.claim(address(usdc), _none(), address(0));
         assertEq(paid, Q / 10);
-        assertEq(regent.balanceOf(carol), Q / 10, "the referrer pulls the credit");
+        assertEq(usdc.balanceOf(carol), Q / 10, "the referrer pulls the credit");
     }
 
     /// @dev Invariant: a referrer may be any address including the buyer; nothing rejects a
@@ -508,16 +504,16 @@ contract KeyfleetTest is Test {
     function test_selfReferralIsAcceptedAndCreditedToTheBuyer() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         fleet.purchase(buyer, buyer, 2 * price, block.timestamp);
         vm.stopPrank();
 
-        assertEq(fleet.REWARDS().credits(address(regent), buyer), price / 10, "the buyer referred itself");
+        assertEq(fleet.REWARDS().credits(address(usdc), buyer), price / 10, "the buyer referred itself");
     }
 
-    /// @dev Invariant: across many purchases with and without referrers, every REGENT unit paid ends
+    /// @dev Invariant: across many purchases with and without referrers, every USDC unit paid ends
     /// up in exactly one of the four places that can hold it.
     function test_everyPaidUnitLandsInCapitalTreasuryOrRewardBacking() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
@@ -530,16 +526,16 @@ contract KeyfleetTest is Test {
         }
 
         assertEq(
-            fleet.freeCapital(address(regent)) + fleet.cascadeReserve() + regent.balanceOf(treasury)
-                + regent.balanceOf(address(fleet.REWARDS())),
+            fleet.freeCapital(address(usdc)) + fleet.cascadeReserve() + usdc.balanceOf(treasury)
+                + usdc.balanceOf(address(fleet.REWARDS())),
             totalPaid,
             "buckets, treasury and reward backing account for every unit"
         );
     }
 
-    /// @dev Invariant: a primary purchase touches the REGENT bucket only. Other assets stay at zero
+    /// @dev Invariant: a primary purchase touches the USDC bucket only. Other assets stay at zero
     /// until the deposit slice introduces them.
-    function test_purchasesNeverTouchANonRegentBucket() public {
+    function test_purchasesNeverTouchANonUsdcBucket() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         other.mint(address(fleet), 500e18);
 
@@ -561,20 +557,23 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, alice);
 
-        assertEq(fleet.freeCapital(address(regent)), Q - Q / 20, "95% to capital");
-        assertEq(regent.balanceOf(address(fleet.REWARDS())), 0, "no rebate on the first mint");
+        assertEq(fleet.freeCapital(address(usdc)), Q - Q / 20, "95% to capital");
+        assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no rebate on the first mint");
         _assertBalanceInvariant(fleet);
     }
 
     /// @dev Invariant: only primary mints advance the Accelerant price, and each one advances it by
-    /// exactly 105/100 rounded up.
+    /// exactly 105/100 rounded up. The first three USDC prices are pinned because the platform
+    /// mirrors them.
     function test_accelerantPriceStepsFivePercentPerPrimaryMintOnly() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
+        uint256[3] memory pinned = [uint256(10_000_000), 10_500_000, 11_025_000];
 
         uint256 expected = Q;
         for (uint256 i = 0; i < 6; ++i) {
+            if (i < 3) assertEq(fleet.nextPrice(), pinned[i], "pinned USDC price");
             assertEq(fleet.nextPrice(), expected, "quoted price follows the ladder");
-            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(Q, i), "and matches the library");
+            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(i), "and matches the library");
             _buy(fleet, _wallet(i));
             expected = KeyfleetPresets.accelerantNextPrice(expected);
         }
@@ -601,10 +600,29 @@ contract KeyfleetTest is Test {
         uint256 rebate = price - protocol - capital;
         _buy(fleet, carol);
 
-        assertEq(rewards.credits(address(regent), bob), rebate, "the current holder is rebated");
-        assertEq(rewards.credits(address(regent), alice), 0, "the original minter is not");
-        assertEq(regent.balanceOf(address(rewards)), rebate, "the rebate is backed in the ledger");
-        assertEq(fleet.freeCapital(address(regent)), (Q - Q / 20) + capital, "capital takes its 10%");
+        assertEq(rewards.credits(address(usdc), bob), rebate, "the current holder is rebated");
+        assertEq(rewards.credits(address(usdc), alice), 0, "the original minter is not");
+        assertEq(usdc.balanceOf(address(rewards)), rebate, "the rebate is backed in the ledger");
+        assertEq(fleet.freeCapital(address(usdc)), (Q - Q / 20) + capital, "capital takes its 10%");
+        _assertBalanceInvariant(fleet);
+    }
+
+    /// @dev Invariant: each Accelerant rebate goes to the holder of the key immediately before the
+    /// new one, never to the holder of the first key. The third mint costs 11,025,000 and rebates
+    /// 9,371,250 to the holder of key 2.
+    function test_accelerantThirdMintRebatesTheHolderOfKeyTwoNotKeyOne() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
+        KeyfleetRewards rewards = fleet.REWARDS();
+
+        _buy(fleet, alice);
+        _buy(fleet, bob);
+        uint256 aliceAfterTwo = rewards.credits(address(usdc), alice);
+        assertEq(fleet.nextPrice(), 11_025_000, "third mint price");
+        _buy(fleet, carol);
+
+        assertEq(rewards.credits(address(usdc), bob), 9_371_250, "the holder of key 2 is rebated");
+        assertEq(rewards.credits(address(usdc), alice), aliceAfterTwo, "the holder of key 1 gains nothing");
+        assertEq(rewards.credits(address(usdc), carol), 0, "the new holder rebates no one");
         _assertBalanceInvariant(fleet);
     }
 
@@ -615,8 +633,8 @@ contract KeyfleetTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
         KeyfleetRewards rewards = fleet.REWARDS();
         ForwardingReceiver receiver = new ForwardingReceiver(fleet);
-        regent.mint(address(receiver), 100 * Q);
-        receiver.approveFleet(regent);
+        usdc.mint(address(receiver), 100 * Q);
+        receiver.approveFleet(usdc);
 
         receiver.disableForward();
         assertEq(receiver.buy(), 1);
@@ -627,8 +645,8 @@ contract KeyfleetTest is Test {
         assertEq(receiver.buy(), 2);
 
         assertEq(fleet.ownerOf(1), alice, "the preceding key left inside the same purchase");
-        assertEq(rewards.credits(address(regent), address(receiver)), rebate, "the rebate was already bound");
-        assertEq(rewards.credits(address(regent), alice), 0, "the new holder gets no part of it");
+        assertEq(rewards.credits(address(usdc), address(receiver)), rebate, "the rebate was already bound");
+        assertEq(rewards.credits(address(usdc), alice), 0, "the new holder gets no part of it");
         assertEq(fleet.ownerOf(2), address(receiver));
         _assertBalanceInvariant(fleet);
     }
@@ -642,9 +660,9 @@ contract KeyfleetTest is Test {
         uint256 price = fleet.nextPrice();
         _buy(fleet, bob, dave);
 
-        assertEq(rewards.credits(address(regent), dave), price / 10, "referrer takes 10%");
-        assertEq(rewards.credits(address(regent), alice), price - price / 20 - price / 10 - price / 10, "75% rebate");
-        assertEq(regent.balanceOf(treasury), Q / 20 + price / 20, "5% of each purchase");
+        assertEq(rewards.credits(address(usdc), dave), price / 10, "referrer takes 10%");
+        assertEq(rewards.credits(address(usdc), alice), price - price / 20 - price / 10 - price / 10, "75% rebate");
+        assertEq(usdc.balanceOf(treasury), Q / 20 + price / 20, "5% of each purchase");
         _assertBalanceInvariant(fleet);
     }
 
@@ -656,7 +674,7 @@ contract KeyfleetTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
 
         _buy(fleet, alice);
-        assertEq(fleet.freeCapital(address(regent)), 0, "nothing is capital before completion");
+        assertEq(fleet.freeCapital(address(usdc)), 0, "nothing is capital before completion");
         assertEq(fleet.cascadeReserve(), Q - Q / 20, "the post-fee amount is reserved");
         assertFalse(fleet.levelCompleted(1));
 
@@ -668,7 +686,7 @@ contract KeyfleetTest is Test {
 
         assertTrue(fleet.levelCompleted(1), "level 1 completed on its last key");
         assertEq(fleet.cascadeReserve(), 0, "the reserve is emptied");
-        assertEq(fleet.freeCapital(address(regent)), 2 * (Q - Q / 20), "and released to capital");
+        assertEq(fleet.freeCapital(address(usdc)), 2 * (Q - Q / 20), "and released to capital");
         assertEq(fleet.levelGrossPaid(1), 2 * Q, "gross paid for level 1 is recorded");
         _assertBalanceInvariant(fleet);
     }
@@ -681,7 +699,7 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, alice);
         _buy(fleet, bob);
-        uint256 capitalAfterLevelOne = fleet.freeCapital(address(regent));
+        uint256 capitalAfterLevelOne = fleet.freeCapital(address(usdc));
 
         uint256 levelTwoPrice = fleet.nextPrice();
         assertEq(levelTwoPrice, (Q * 120) / 100, "level 2 costs 20% more");
@@ -699,11 +717,11 @@ contract KeyfleetTest is Test {
 
         assertTrue(fleet.levelCompleted(2));
         assertEq(fleet.cascadeReserve(), 0, "the reserve is emptied again");
-        assertEq(fleet.freeCapital(address(regent)), capitalAfterLevelOne + surplus, "only the surplus is capital");
-        assertEq(regent.balanceOf(address(rewards)), reimbursement, "the repayment is backed in the ledger");
-        assertEq(rewards.accrued(address(regent), 1), Q, "each level-1 key earns its own gross back");
-        assertEq(rewards.accrued(address(regent), 2), Q);
-        assertEq(rewards.accrued(address(regent), 3), 0, "level-2 keys are not repaid by their own level");
+        assertEq(fleet.freeCapital(address(usdc)), capitalAfterLevelOne + surplus, "only the surplus is capital");
+        assertEq(usdc.balanceOf(address(rewards)), reimbursement, "the repayment is backed in the ledger");
+        assertEq(rewards.accrued(address(usdc), 1), Q, "each level-1 key earns its own gross back");
+        assertEq(rewards.accrued(address(usdc), 2), Q);
+        assertEq(rewards.accrued(address(usdc), 3), 0, "level-2 keys are not repaid by their own level");
         _assertBalanceInvariant(fleet);
     }
 
@@ -724,23 +742,23 @@ contract KeyfleetTest is Test {
         _buy(fleet, _wallet(2));
         _buy(fleet, _wallet(3));
 
-        assertEq(rewards.accrued(address(regent), 1), Q, "key 1 accrued the repayment");
+        assertEq(rewards.accrued(address(usdc), 1), Q, "key 1 accrued the repayment");
         vm.prank(carol);
-        assertEq(rewards.claim(address(regent), _ids(1), address(0)), Q, "the holder at completion is repaid");
+        assertEq(rewards.claim(address(usdc), _ids(1), address(0)), Q, "the holder at completion is repaid");
         vm.prank(alice);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(address(regent), _none(), address(0));
+        rewards.claim(address(usdc), _none(), address(0));
 
         // Bob keeps his accrual when he sells key 2 afterwards.
         vm.prank(bob);
         fleet.transferFrom(bob, dave, 2);
-        assertEq(rewards.credits(address(regent), bob), Q, "settlement kept the repayment with Bob");
-        assertEq(rewards.accrued(address(regent), 2), 0, "and the key carries nothing to Dave");
+        assertEq(rewards.credits(address(usdc), bob), Q, "settlement kept the repayment with Bob");
+        assertEq(rewards.accrued(address(usdc), 2), 0, "and the key carries nothing to Dave");
         vm.prank(dave);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(address(regent), _ids(2), address(0));
+        rewards.claim(address(usdc), _ids(2), address(0));
         vm.prank(bob);
-        assertEq(rewards.claim(address(regent), _none(), address(0)), Q, "Bob claims after selling every key");
+        assertEq(rewards.claim(address(usdc), _none(), address(0)), Q, "Bob claims after selling every key");
         _assertBalanceInvariant(fleet);
     }
 
@@ -750,7 +768,7 @@ contract KeyfleetTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         _buy(fleet, alice);
         _buy(fleet, bob);
-        uint256 capital = fleet.freeCapital(address(regent));
+        uint256 capital = fleet.freeCapital(address(usdc));
 
         vm.prank(alice);
         fleet.transferFrom(alice, carol, 1);
@@ -758,7 +776,7 @@ contract KeyfleetTest is Test {
         fleet.transferFrom(bob, dave, 2);
 
         assertTrue(fleet.levelCompleted(1));
-        assertEq(fleet.freeCapital(address(regent)), capital, "resales change no bucket");
+        assertEq(fleet.freeCapital(address(usdc)), capital, "resales change no bucket");
         assertEq(fleet.cascadeReserve(), 0);
         _assertBalanceInvariant(fleet);
     }
@@ -775,9 +793,9 @@ contract KeyfleetTest is Test {
         assertEq(fleet.heldPerLevel(alice, 1), 1);
 
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.HoldingLimitExceeded.selector, alice, 1, 1));
         fleet.purchase(alice, address(0), 2 * price, block.timestamp);
         vm.stopPrank();
@@ -818,9 +836,9 @@ contract KeyfleetTest is Test {
         assertEq(fleet.heldPerLevel(alice, 8), 5);
 
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.HoldingLimitExceeded.selector, alice, 8, 5));
         fleet.purchase(alice, address(0), 2 * price, block.timestamp);
         vm.stopPrank();
@@ -879,14 +897,14 @@ contract KeyfleetTest is Test {
     function test_reenteringPurchaseFromTheReceiverHookIsRejected() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         ReenteringReceiver receiver = new ReenteringReceiver(fleet);
-        regent.mint(address(receiver), 10 * Q);
-        receiver.approveFleet(regent);
+        usdc.mint(address(receiver), 10 * Q);
+        receiver.approveFleet(usdc);
 
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         receiver.buy();
 
         assertEq(fleet.totalMinted(), 0, "nothing was minted");
-        assertEq(regent.balanceOf(address(fleet)), 0, "and nothing was taken");
+        assertEq(usdc.balanceOf(address(fleet)), 0, "and nothing was taken");
     }
 
     /// @dev Invariant: because a key is enrolled before it is minted, a router-style receiver may
@@ -897,8 +915,8 @@ contract KeyfleetTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetRewards rewards = fleet.REWARDS();
         ForwardingReceiver receiver = new ForwardingReceiver(fleet);
-        regent.mint(address(receiver), 100 * Q);
-        receiver.approveFleet(regent);
+        usdc.mint(address(receiver), 100 * Q);
+        receiver.approveFleet(usdc);
 
         // The key it is handed goes straight on to Alice.
         receiver.setForward(alice, 0);
@@ -927,9 +945,9 @@ contract KeyfleetTest is Test {
 
         assertEq(fleet.ownerOf(2), dave, "the level-1 key moved inside the completing purchase");
         assertEq(fleet.ownershipEpoch(2), 2);
-        assertEq(rewards.accrued(address(regent), 2), Q, "the repayment followed the key to Dave");
-        assertEq(rewards.credits(address(regent), address(receiver)), 0, "the router earned nothing");
-        assertEq(rewards.accrued(address(regent), 1), Q, "Alice's level-1 key was repaid too");
+        assertEq(rewards.accrued(address(usdc), 2), Q, "the repayment followed the key to Dave");
+        assertEq(rewards.credits(address(usdc), address(receiver)), 0, "the router earned nothing");
+        assertEq(rewards.accrued(address(usdc), 1), Q, "Alice's level-1 key was repaid too");
         assertEq(fleet.ownerOf(5), address(receiver), "the router kept the key it bought");
         assertEq(fleet.ownershipEpoch(5), 1);
         assertEq(fleet.heldPerLevel(address(receiver), 1), 0);
@@ -942,9 +960,9 @@ contract KeyfleetTest is Test {
     /// handed a key.
     function test_mintingToAContractWithoutTheReceiverHookReverts() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        regent.mint(buyer, Q);
+        usdc.mint(buyer, Q);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), Q);
+        usdc.approve(address(fleet), Q);
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721InvalidReceiver.selector, address(registry)));
         fleet.purchase(address(registry), address(0), 2 * Q, block.timestamp);
         vm.stopPrank();
@@ -1021,17 +1039,28 @@ contract KeyfleetTest is Test {
 
     // --- 10. gas ----------------------------------------------------------
 
+    /// @dev Makes every account and slot a purchase reads cold again, as it is at the start of the
+    /// buyer's own transaction, so a measurement is not flattered by the test's earlier reads.
+    function _coolPurchasePath(Keyfleet fleet, address receiver) private {
+        vm.cool(address(fleet));
+        vm.cool(address(fleet.REWARDS()));
+        vm.cool(address(usdc));
+        vm.cool(receiver);
+    }
+
     /// @dev Measures the first referred purchase on a fresh fleet, which is the most expensive
     /// primary purchase in this slice: every accounting slot it touches is written from zero. The
-    /// treasury already holds REGENT, as it will in production after its first sale.
+    /// treasury already holds USDC, as it will in production after its first sale, and every
+    /// account the purchase touches starts cold.
     function _measureFirstReferredPurchase(KeyfleetPresets.Preset preset) private returns (uint256 used) {
         Keyfleet fleet = _deploy(preset);
-        regent.mint(treasury, 1);
+        usdc.mint(treasury, 1);
 
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
+        _coolPurchasePath(fleet, alice);
         uint256 before = gasleft();
         fleet.purchase(alice, carol, 2 * price, block.timestamp);
         used = before - gasleft();
@@ -1039,7 +1068,11 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev The published execution-gas ceiling covers the worst primary purchase: the first referred
-    /// one on a fresh Cascade fleet. Measured 330,980 gas; the ceiling is that plus twenty percent.
+    /// one on a fresh Cascade fleet, with every account it touches starting cold. It is measured
+    /// against the plain ERC-20 mock standing in for USDC: 345,059 gas in execution, and the ceiling
+    /// is that plus twenty percent. That makes it a regression bound on the fleet's own work, not
+    /// the figure to publish: real Base USDC is a proxy and costs more per transfer, and the
+    /// fork-measured totals in the contracts README are the published ones.
     /// The level-completing Cascade purchase is measured alongside it for information; it is cheaper,
     /// because by then the buckets it writes are warm.
     function test_firstReferredPurchaseOnAFreshFleetIsTheWorstCase() public {
@@ -1053,7 +1086,7 @@ contract KeyfleetTest is Test {
         console2.log("first referred purchase gas, Accelerant:", accelerant);
         console2.log("first referred purchase gas, Classic:", classic);
 
-        assertLt(cascade, 397_000, "the worst primary purchase stays under the published ceiling");
+        assertLt(cascade, 414_000, "the worst primary purchase stays under the published ceiling");
         assertGt(cascade, syndicate, "Cascade is the most expensive preset");
         assertGt(cascade, accelerant);
         assertGt(cascade, classic);
@@ -1064,9 +1097,10 @@ contract KeyfleetTest is Test {
         _buy(fleet, carol);
         _buy(fleet, dave);
         uint256 price = fleet.nextPrice();
-        regent.mint(buyer, price);
+        usdc.mint(buyer, price);
         vm.startPrank(buyer);
-        regent.approve(address(fleet), price);
+        usdc.approve(address(fleet), price);
+        _coolPurchasePath(fleet, _wallet(9));
         uint256 before = gasleft();
         fleet.purchase(_wallet(9), _wallet(8), 2 * price, block.timestamp);
         uint256 completing = before - gasleft();
@@ -1079,13 +1113,13 @@ contract KeyfleetTest is Test {
     // --- 11. fuzz invariant -----------------------------------------------
 
     /// @dev Invariant: across random purchase and transfer sequences on any preset, the fleet's
-    /// REGENT balance is always exactly its free capital plus its Cascade reserve. Reward backing
+    /// USDC balance is always exactly its free capital plus its Cascade reserve. Reward backing
     /// sits in the ledger and the treasury share has left, so nothing else can hide here.
-    function testFuzz_regentBalanceAlwaysEqualsCapitalPlusReserve(uint256 seed) public {
+    function testFuzz_usdcBalanceAlwaysEqualsCapitalPlusReserve(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset(seed % 4));
-        regent.mint(buyer, 1e30);
+        usdc.mint(buyer, 1e30);
         vm.prank(buyer);
-        regent.approve(address(fleet), type(uint256).max);
+        usdc.approve(address(fleet), type(uint256).max);
 
         for (uint256 i = 0; i < 24; ++i) {
             seed = uint256(keccak256(abi.encode(seed, i)));
