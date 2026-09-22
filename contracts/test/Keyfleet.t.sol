@@ -103,6 +103,7 @@ contract KeyfleetTest is Test {
     using stdStorage for StdStorage;
 
     uint256 private constant Q = 10e18;
+    uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     StdStorage private fleetStore;
@@ -149,7 +150,9 @@ contract KeyfleetTest is Test {
     }
 
     function _deploy(KeyfleetPresets.Preset preset, uint256 q) private returns (Keyfleet) {
-        return new Keyfleet(preset, q, regent, usdc, treasury, registry, staking, "Keyfleet Alpha", "KFA", BASE_URI);
+        return new Keyfleet(
+            preset, q, regent, usdc, treasury, registry, staking, VOTING_WINDOW, "Keyfleet Alpha", "KFA", BASE_URI
+        );
     }
 
     /// @dev Mints the buyer exactly the next price, so the buyer's balance is zero between buys, and
@@ -222,7 +225,17 @@ contract KeyfleetTest is Test {
     function test_constructorRejectsZeroAddressesAndOutOfRangeReferencePrices() public {
         vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
         new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic, 0, regent, usdc, treasury, registry, staking, "n", "s", BASE_URI
+            KeyfleetPresets.Preset.FleetTechClassic,
+            0,
+            regent,
+            usdc,
+            treasury,
+            registry,
+            staking,
+            VOTING_WINDOW,
+            "n",
+            "s",
+            BASE_URI
         );
 
         vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
@@ -234,6 +247,7 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI
@@ -248,6 +262,7 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI
@@ -262,6 +277,7 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI
@@ -269,7 +285,17 @@ contract KeyfleetTest is Test {
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         new Keyfleet(
-            KeyfleetPresets.Preset.FleetTechClassic, Q, regent, usdc, address(0), registry, staking, "n", "s", BASE_URI
+            KeyfleetPresets.Preset.FleetTechClassic,
+            Q,
+            regent,
+            usdc,
+            address(0),
+            registry,
+            staking,
+            VOTING_WINDOW,
+            "n",
+            "s",
+            BASE_URI
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -281,6 +307,7 @@ contract KeyfleetTest is Test {
             treasury,
             KeyfleetAssetRegistry(address(0)),
             staking,
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI
@@ -295,6 +322,7 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             IRegentRevenueStaking(address(0)),
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI
@@ -316,6 +344,7 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            VOTING_WINDOW,
             "n",
             "s",
             BASE_URI

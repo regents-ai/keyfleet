@@ -119,6 +119,7 @@ contract ReenteringToken is ERC20 {
 
 contract KeyfleetDepositsTest is Test {
     uint256 private constant Q = 10e18;
+    uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private regent;
@@ -152,7 +153,9 @@ contract KeyfleetDepositsTest is Test {
     // --- helpers ---------------------------------------------------------
 
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return new Keyfleet(preset, Q, regent, usdc, treasury, registry, staking, "Keyfleet Alpha", "KFA", BASE_URI);
+        return new Keyfleet(
+            preset, Q, regent, usdc, treasury, registry, staking, VOTING_WINDOW, "Keyfleet Alpha", "KFA", BASE_URI
+        );
     }
 
     function _admit(Keyfleet fleet, address token) private {
@@ -828,6 +831,7 @@ contract KeyfleetDepositsGasTest is Test {
     using stdStorage for StdStorage;
 
     uint256 private constant Q = 10e18;
+    uint64 private constant VOTING_WINDOW = 24 hours;
 
     StdStorage private fleetStore;
 
@@ -856,6 +860,7 @@ contract KeyfleetDepositsGasTest is Test {
             treasury,
             registry,
             staking,
+            VOTING_WINDOW,
             "Keyfleet Alpha",
             "KFA",
             "https://keys.regents.sh/alpha/"

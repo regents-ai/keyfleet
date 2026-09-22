@@ -9,6 +9,7 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 import {KeyfleetAssetRegistry} from "./KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
+import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 
 /// @notice One fleet: the keys, the primary purchases, and the REGENT accounting behind them.
 /// @dev The keys are an ordinary OpenZeppelin ERC721 with 1-based, contiguous token ids. Every
@@ -22,13 +23,18 @@ import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 /// other admitted asset to the Regents treasury in that asset. Internal movements into the ledger
 /// and claims out of it are not receipts and are never charged again.
 ///
-/// Votes, capital transfers, Autolaunch and the deploying factory are later slices, and nothing
-/// speculative is prepared for them here.
+/// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
+/// itself in its constructor. It is the only caller of `transferCapital`, and free working capital
+/// is the only thing it can reach: the Cascade completion reserve and the ledger's reward backing
+/// are not free capital and there is no path from a vote to either of them.
 ///
-/// There is no administrator, no upgrade path, no pause, no burn and no withdrawal: the only ways
-/// REGENT leaves this contract are the protocol share on a purchase, the referral and Accelerant
-/// rebate paid into the ledger, the Cascade reimbursement paid into the ledger, and the deposit fee
-/// and revenue backing of a REGENT deposit.
+/// Autolaunch and the deploying factory are later slices, and nothing speculative is prepared for
+/// them here.
+///
+/// There is no administrator, no upgrade path, no pause and no burn. The only ways REGENT leaves
+/// this contract are the protocol share on a purchase, the referral and Accelerant rebate paid into
+/// the ledger, the Cascade reimbursement paid into the ledger, the deposit fee and revenue backing
+/// of a REGENT deposit, and a capital transfer the keys have voted for.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -56,6 +62,10 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error NoEligibleKeys();
     /// @notice This fleet's balance of the asset is fully accounted for, so there is nothing to recognize.
     error NoSurplus();
+    /// @notice Only this fleet's own voting controller may move free working capital out.
+    error OnlyVotes();
+    /// @notice The vote asked for more free working capital than this fleet holds in that asset.
+    error InsufficientFreeCapital(address asset, uint256 requested, uint256 available);
 
     /// @notice A primary key was bought. The five split parts always sum to `gross`.
     /// @param tokenId The key that was minted.
@@ -110,6 +120,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice An unaccounted balance was reconciled into free working capital.
     event SurplusRecognized(address indexed asset, address indexed caller, uint256 amount, uint256 net);
 
+    /// @notice A vote moved free working capital out of this fleet.
+    event CapitalTransferred(address indexed asset, uint256 amount, address indexed recipient);
+
     /// @notice External-receipt fee, in basis points of the gross receipt.
     uint256 public constant DEPOSIT_FEE_BPS = 200;
     /// @notice Revenue source label every fleet reports to the staking contract.
@@ -129,6 +142,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     address public immutable TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
+    /// @notice The voting controller this fleet deployed for itself and the only caller of
+    /// `transferCapital`. Its `VOTING_WINDOW()` is the window the app should label.
+    KeyfleetVotes public immutable VOTES;
     /// @notice The shared deposit-admission registry, consulted on every new external receipt.
     KeyfleetAssetRegistry public immutable ASSET_REGISTRY;
     /// @notice The Regents revenue staking contract that registers this fleet's USDC fees.
@@ -156,11 +172,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
 
     string private _baseTokenURI;
 
-    /// @notice Deploys a fleet and, atomically, the reward ledger bound to it.
-    /// @dev The ledger is constructed here rather than passed in, so there is no window in which a
-    /// fleet points at a ledger bound to someone else. REGENT is registered as the ledger's first
-    /// reward asset immediately, because referrals, Accelerant rebates and Cascade reimbursements
-    /// are all denominated in it.
+    /// @notice Deploys a fleet and, atomically, the reward ledger and voting controller bound to it.
+    /// @dev Both satellites are constructed here rather than passed in, so there is no window in
+    /// which a fleet points at a ledger or a controller bound to someone else. REGENT is registered
+    /// as the ledger's first reward asset immediately, because referrals, Accelerant rebates and
+    /// Cascade reimbursements are all denominated in it.
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param q Reference price in atomic REGENT units.
     /// @param regent The REGENT token.
@@ -169,6 +185,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param treasury The Regents treasury multisig.
     /// @param assetRegistry The shared deposit-admission registry.
     /// @param staking The Regents revenue staking contract that registers USDC fees.
+    /// @param votingWindow Seconds a proposal stays open, within the controller's one-hour to
+    /// thirty-day bounds. Production is 24 hours and a testnet fleet uses a shorter window the app
+    /// labels from `VOTES.VOTING_WINDOW`.
     /// @param name_ ERC721 collection name.
     /// @param symbol_ ERC721 collection symbol.
     /// @param baseTokenURI_ Fixed metadata base, returned by `_baseURI` for the life of the fleet.
@@ -180,6 +199,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         address treasury,
         KeyfleetAssetRegistry assetRegistry,
         IRegentRevenueStaking staking,
+        uint64 votingWindow,
         string memory name_,
         string memory symbol_,
         string memory baseTokenURI_
@@ -206,6 +226,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         KeyfleetRewards rewards = new KeyfleetRewards(address(this));
         rewards.registerAsset(address(regent));
         REWARDS = rewards;
+        VOTES = new KeyfleetVotes(this, votingWindow);
     }
 
     // --- views -----------------------------------------------------------
@@ -487,6 +508,34 @@ contract Keyfleet is ERC721, ReentrancyGuard {
             if (fee != 0) IERC20(asset).safeTransfer(destination, fee);
         }
         emit FeeCharged(asset, amount, fee, destination);
+    }
+
+    // --- votes -----------------------------------------------------------
+
+    /// @notice Moves free working capital out of this fleet, on the authority of a passed vote.
+    /// @dev The voting controller this fleet deployed is the only caller, which is why there is no
+    /// admission check here: the asset is one this fleet already booked capital in, and the spec is
+    /// explicit that disabling deposits in an asset does not freeze capital already booked in it.
+    ///
+    /// Free capital is the only bucket reachable from here. The Cascade completion reserve is a
+    /// separate figure this function never reads, and reward backing does not sit in this contract
+    /// at all, so no vote can borrow an incomplete level's reserve or withdraw a member's claim.
+    /// The shortfall is checked explicitly rather than left to the subtraction, so a vote that
+    /// outran the capital reverts with the three figures rather than a bare panic; the proposal
+    /// itself survives and can execute later once the capital is there.
+    ///
+    /// Guarded like every other entry point that moves tokens, so an asset that calls back from
+    /// inside the transfer cannot book a receipt against a balance this call has already spent.
+    /// @param asset The asset to move.
+    /// @param amount Atomic units to move.
+    /// @param recipient Who receives them.
+    function transferCapital(address asset, uint256 amount, address recipient) external nonReentrant {
+        if (msg.sender != address(VOTES)) revert OnlyVotes();
+        uint256 available = freeCapital[asset];
+        if (available < amount) revert InsufficientFreeCapital(asset, amount, available);
+        freeCapital[asset] = available - amount;
+        emit CapitalTransferred(asset, amount, recipient);
+        IERC20(asset).safeTransfer(recipient, amount);
     }
 
     // --- internals -------------------------------------------------------

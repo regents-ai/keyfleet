@@ -135,15 +135,16 @@ accounting behind them. It is an OpenZeppelin ERC721 with 1-based, contiguous
 token ids and no enumerable or per-token URI storage. `tokenURI` is a fixed base
 string plus the id; the base is set once at construction and has no setter. The
 constructor takes the preset, the reference price `q`, REGENT, USDC, the Regents
-treasury, the shared asset registry, the Regents revenue staking contract, and
-the name, symbol and metadata base. It rejects a `q` outside `1..MAX_Q`, any zero
-address, and a USDC address that is not the canonical Base USDC the registry is
-bound to, so a look-alike token can never be wired in at deployment and can never
-take the staking fee route. It then deploys the fleet's own `KeyfleetRewards` and
-registers
-REGENT as its first reward asset, so a fleet and its ledger are born bound to
-each other and no deployment step can point a fleet at someone else's ledger.
-Everything the constructor sets is immutable.
+treasury, the shared asset registry, the Regents revenue staking contract, the
+voting window in seconds, and the name, symbol and metadata base. It rejects a
+`q` outside `1..MAX_Q`, any zero address, a voting window outside the
+controller's bounds of one hour to thirty days, and a USDC address that is not
+the canonical Base USDC the registry is bound to, so a look-alike token can never
+be wired in at deployment and can never take the staking fee route. It then deploys the fleet's own `KeyfleetRewards` and
+registers REGENT as its first reward asset, and its own `KeyfleetVotes`, so a
+fleet, its ledger and its vote are born bound to each other and no deployment
+step can point a fleet at someone else's. Everything the constructor sets is
+immutable.
 
 `purchase(receiver, referrer, maxPrice, deadline)` is the only way a primary key
 is created. A zero receiver mints to the caller; a referrer may be any address,
@@ -330,16 +331,108 @@ measured against a plain ERC-20; a proxied token such as the real Base USDC adds
 its own delegatecall overhead to each of the two transfers a deposit makes, and a
 USDC deposit adds the staking contract's registration cost on top of that.
 
-Votes, capital transfers, Autolaunch, the deploying factory and any ETH or
-currency conversion are outside this slice. The fleet has no administrator, no
-upgrade path, no pause, no burn and no withdrawal: the only ways tokens leave it
-are the treasury share of a purchase, the deposit fee, the referral, Accelerant
-rebate and Cascade repayment paid into the ledger, and the revenue backing moved
-into the ledger.
+`KeyfleetVotes` is the one collective decision, and there is only one. The fleet
+deploys it in its own constructor, exactly as it does the reward ledger, so a
+fleet and its controller are born bound to each other. The constructor takes the
+window in seconds and accepts one hour to thirty days, `MIN_VOTING_WINDOW` to
+`MAX_VOTING_WINDOW`, rejecting anything outside that with
+`VotingWindowOutOfBounds`: a window too short to notice and a window long enough
+to outlive the question are both deployment mistakes, and neither can be
+corrected afterwards. Production is 24 hours and a testnet fleet uses a shorter
+one, which the app should label from `VOTES.VOTING_WINDOW()`.
+There is no setter, no councils or moderators, no rule amendment, no quorum
+tuning, no pause and no cancellation.
+
+Weight comes from the preset and nothing else. A Fleet.Tech key is one whole
+vote, `WEIGHT_SCALE = 1e18`. A Fibonacci key is `WEIGHT_SCALE` divided by its
+level supply, rounded down, so a level carries one vote shared equally by its
+keys: half a vote for each of level 1's two keys, a seventeen-thousandth for each
+of level 20's. The floor is the fixed-precision approximation the product asks
+for; it loses less than one atomic unit per key in a level, so all twenty levels
+together are worth a shade under twenty votes rather than exactly twenty.
+
+A proposal freezes everything it will be judged by in the transaction that
+creates it. Its eligible set is the token ids `1..snapshotMinted`, where
+`snapshotMinted` is the fleet's minted count at that moment, and its total weight
+is computed there and then by walking at most twenty levels and never a single
+key. A key minted afterwards is outside that snapshot: it cannot vote on that
+proposal and was never counted in the weight it has to clear. Proposing needs
+standing, so the proposer names an eligible key and must be its owner or that
+owner's registered delegate; naming a key is not a vote and leaves it free to
+vote.
+
+A key votes at most once per proposal. Transfers move the right to vote a key
+that has not voted yet, and can never recharge one that has, so neither a resale
+nor a later mint can produce a second vote. A vote may be cast by the key's
+current owner or by the one address that owner registered with
+`setVotingDelegate(address)`, which zero clears; an attached chat credential
+gets nothing from this, because financial authority is registered on chain and
+only there. A batch of keys is voted whole or not at all.
+
+There are two kinds in this slice. A `Decision` records agreement and has no
+automatic external effect; its text is carried in the creation event and stored
+nowhere, and an optional digest pins the exact artifact or commit. A
+`TransferCapital` names an asset, a nonzero amount and a nonzero recipient, and
+nothing is checked against the fleet's balance at creation, because a proposal
+the free capital cannot cover is meant to fail at execution rather than at
+proposal time. Autolaunch is a later slice.
+
+Voting is open strictly before `closesAt` and execution strictly from it, so the
+two never overlap. A proposal passes only if `yesWeight * 2 > totalWeight`: YES
+must exceed half of the whole eligible snapshot weight, so a key that stayed
+silent counts against it exactly as a NO would, and exactly half fails.
+`state(proposalId)` reports Active, Defeated, Passed or Executed. Execution is
+permissionless, because the result is the vote's and not the caller's, and the
+proposal is marked executed before the fleet is called so a token that calls back
+cannot execute it twice. `execute` is guarded by OpenZeppelin `ReentrancyGuard`.
+
+`Keyfleet.transferCapital(asset, amount, recipient)` is what a passed
+`TransferCapital` calls, and the fleet's own controller is its only permitted
+caller. It spends free working capital and nothing else: the Cascade completion
+reserve is a separate figure this path never reads, and reward backing does not
+sit in the fleet at all, so no vote can borrow an incomplete level's reserve or
+withdraw a member's claim. The shortfall is checked explicitly and reverts with
+`InsufficientFreeCapital`, naming the asset, the amount asked for and the amount
+available, rather than leaving it to a bare arithmetic panic. That revert rolls
+the execution mark back with it, so a proposal the capital could not cover stays
+executable and pays out later once the capital exists. Admission is not
+rechecked here, because the asset is one the fleet already booked capital in and
+disabling deposits in an asset does not freeze capital already booked in it.
+`CapitalTransferred` reports every payout.
+
+This deliberately does not solve a majority takeover. A majority of snapshot
+weight can authorize a harmful free-capital transfer, and no hidden creator
+signer is introduced to disguise that. What is protected regardless of any vote
+is claim and reserve solvency, which the suite demonstrates directly against both
+buckets.
+
+Two calls cost more than a flat amount, and neither of them grows with how many
+keys the fleet has sold. Creating a proposal grows with the preset's twenty
+levels: the worst case is a Fibonacci fleet at the level-20 ceiling with every
+slot it touches cold, which measured 185,888 gas in execution, while the same
+call on a fleet holding two keys in a single level measured 146,480, so the other
+nineteen levels cost about two thousand gas each. The suite asserts a ceiling of
+223,000, which is the measurement plus twenty percent, and that is the execution
+figure the deployment manifest should quote, with the 21,000 base transaction
+cost on top of it. Voting grows with how many keys the caller names in the one
+call, at about 25,000 gas a key, almost all of it the one-vote-per-key record and
+the ownership read behind it; a Fibonacci fleet, which also looks each key's
+level up, came out at 25,900. Ten keys in one vote measured 271,944 gas, so a
+holder with more keys than one block can comfortably carry simply splits the vote
+across several calls, which the one-vote-per-key rule makes safe to do in any
+order. Nothing else in the controller depends on the size of the fleet: executing
+a proposal costs the same on a fleet of two keys and one at the ceiling.
+
+Autolaunch, the deploying factory and any ETH or currency conversion are outside
+this slice. The fleet has no administrator, no upgrade path, no pause and no
+burn: the only ways tokens leave it are the treasury share of a purchase, the
+deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
+ledger, the revenue backing moved into the ledger, and a capital transfer the
+keys have voted for.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase and deposit-and-surplus tests. Foundry must be installed; the compiler may be downloaded on first use.
+fleet-purchase, deposit-and-surplus and voting tests. Foundry must be installed; the compiler may be downloaded on first use.
 Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are vendored as git
 submodules under `contracts/lib`, so clone with submodules or run
 `git submodule update --init`.
