@@ -19,7 +19,7 @@ config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
   local_showcase: false,
-  ash_domains: [KeyFleet.Accounts, KeyFleet.Fleets, KeyFleet.Rooms],
+  ash_domains: [KeyFleet.Accounts, KeyFleet.Fleets, KeyFleet.Rooms, KeyFleet.Agents],
   generators: [timestamp_type: :utc_datetime]
 
 config :keyfleet, ecto_repos: [KeyFleet.Repo]
