@@ -2,6 +2,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
   use ExUnit.Case, async: false
   import Plug.Conn
   @path "/api/v1/agent/join/status"
+  @update_path "/api/v1/agent/profile/update"
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
 
   setup do
@@ -23,6 +24,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
         assert conn.request_path == "/api/shared/siwa/http-verify"
         assert get_req_header(conn, "x-siwa-audience") == ["keyfleet"]
         {:ok, raw, conn} = read_body(conn)
+        assert byte_size(raw) <= 65_536
         payload = Jason.decode!(raw)
         send(test, {:broker_payload, payload})
 
@@ -103,6 +105,103 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
              401
   end
 
+  test "signed edits preserve ownership and database activity/status timestamp semantics", c do
+    initial = send_request(c, signed(c, @body)).body["profile"]
+
+    edit =
+      ~s({ "name": "Updated", "current_status": "Working", "avatar": null, "proficiencies": ["Elixir"] })
+
+    request = signed(c, edit, "keyfleet", 8453, @update_path)
+
+    assert send_request(c, %{request | body: String.replace(edit, "Updated", "Tampered")}).status ==
+             401
+
+    response = send_request(c, request)
+    assert response.status == 200
+    updated = response.body["profile"]
+    assert updated["id"] == initial["id"]
+    assert updated["wallet_address"] == initial["wallet_address"]
+    assert updated["name"] == "Updated"
+    assert updated["avatar"] == nil
+    assert updated["proficiencies"] == ["Elixir"]
+    assert later?(updated["last_activity_at"], initial["last_activity_at"])
+    assert later?(updated["status_updated_at"], initial["status_updated_at"])
+    assert send_request(c, request).status == 401
+    renamed = update(c, %{name: "Renamed"}).body["profile"]
+    assert renamed["status_updated_at"] == updated["status_updated_at"]
+    assert later?(renamed["last_activity_at"], updated["last_activity_at"])
+    repeated = update(c, %{current_status: "Working"}).body["profile"]
+    assert later?(repeated["status_updated_at"], renamed["status_updated_at"])
+    assert update(c, %{name: nil}).status == 422
+    assert send_request(c, signed(c, @body)).body["profile"] == repeated
+
+    {:ok, other_signer} = Siwa.LocalSigner.new()
+    other = %{c | signer: other_signer}
+    missing = update(other, %{name: "Cannot target first wallet"})
+    assert missing.status == 404
+    assert missing.body == %{"error" => "profile_not_found"}
+    assert update(other, %{id: initial["id"], name: "Denied"}).status == 401
+    own = send_request(other, signed(other, @body)).body["profile"]
+    other_edit = update(other, %{name: "Second wallet"}).body["profile"]
+    assert other_edit["id"] == own["id"]
+    assert other_edit["id"] != initial["id"]
+    assert send_request(c, signed(c, @body)).body["profile"] == repeated
+  end
+
+  test "update rejects empty or immutable input before verification and enforces the envelope budget",
+       c do
+    request = signed(c, "{}", "keyfleet", 8453, @update_path)
+
+    for body <- [
+          "{}",
+          "[]",
+          "",
+          ~s({"id":"forged"}),
+          ~s({"wallet_address":"forged"}),
+          ~s({"last_activity_at":"forged"}),
+          ~s({"status_updated_at":"forged"}),
+          ~s({"unknown":"forged"}),
+          String.duplicate(" ", 24 * 1024 + 1)
+        ] do
+      assert send_request(c, %{request | body: body}).status == 401
+    end
+
+    valid = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
+
+    for {method, path} <- [
+          {:get, @update_path},
+          {:post, @update_path <> "?id=forged"},
+          {:post, "/api/v1/agent/profile/%75pdate"}
+        ] do
+      assert Req.request!(
+               method: method,
+               url: c.app <> path,
+               headers: valid.headers,
+               body: valid.body,
+               retry: false,
+               redirect: false
+             ).status == 401
+    end
+
+    assert send_request(c, %{
+             valid
+             | headers: Map.put(valid.headers, "x-agent-token-id", "forged")
+           }).status == 401
+
+    refute_receive {:broker_payload, _}
+    assert send_request(c, signed(c, @body)).status == 200
+    assert_receive {:broker_payload, _}
+    # JSON escaping nearly doubles this real profile input inside the broker envelope.
+    raw = Jason.encode!(%{proficiencies: List.duplicate(String.duplicate("\\", 2000), 6)})
+    padded = raw <> String.duplicate(" ", 24 * 1024 - byte_size(raw))
+    at_limit = signed(c, padded, "keyfleet", 8453, @update_path)
+    assert send_request(c, at_limit).status == 200
+    assert_receive {:broker_payload, %{"body" => ^padded} = payload}
+    assert byte_size(Jason.encode!(payload)) < 65_536
+    assert send_request(c, %{at_limit | body: padded <> " "}).status == 401
+    refute_receive {:broker_payload, _}
+  end
+
   test "chunked bytes remain signed and oversized streams never reach verification", c do
     request = signed(c, @body)
 
@@ -128,7 +227,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
     assert oversized.status == 401
     refute_receive {:broker_payload, _}
     conn = Plug.Test.conn("POST", @path, @body)
-    assert {:error, _} = KeyFleetWeb.Plugs.AgentJoin.before_verify(conn, %{})
+    assert {:error, _} = KeyFleetWeb.Plugs.SignedAgent.before_verify(conn, %{})
   end
 
   test "verification transport never retries or follows redirects", c do
@@ -192,7 +291,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
                401
     end
 
-    for header <- KeyFleetWeb.Plugs.AgentJoin.proof_headers() do
+    for header <- KeyFleetWeb.Plugs.SignedAgent.proof_headers() do
       assert send_request(c, %{signed | headers: Map.delete(signed.headers, header)}).status ==
                401
 
@@ -274,7 +373,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
 
     for data <- invalid do
       assert {:error, _} =
-               KeyFleetWeb.Plugs.AgentJoin.accept(Plug.Test.conn("POST", @path), data, nil)
+               KeyFleetWeb.Plugs.SignedAgent.accept(Plug.Test.conn("POST", @path), data, nil)
     end
   end
 
@@ -296,7 +395,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
     end
   end
 
-  defp signed(c, body, audience \\ "keyfleet", chain \\ 8453) do
+  defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path) do
     {:ok, %{token: receipt}} =
       Siwa.Receipt.create(
         %{
@@ -316,7 +415,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
       Siwa.RequestAuth.sign_authenticated_request(
         %{
           method: "POST",
-          path: @path,
+          path: path,
           body: body,
           headers: %{
             "content-type" => "application/json",
@@ -336,7 +435,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
 
   defp send_request(c, request),
     do:
-      Req.post!(c.app <> @path,
+      Req.post!(c.app <> request.path,
         headers: request.headers,
         body: request.body,
         retry: false,
@@ -351,6 +450,15 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
 
     {:ok, {_, port}} = ThousandIsland.listener_info(pid)
     "http://127.0.0.1:#{port}"
+  end
+
+  defp update(c, params),
+    do: send_request(c, signed(c, Jason.encode!(params), "keyfleet", 8453, @update_path))
+
+  defp later?(new, old) do
+    {:ok, new, _} = DateTime.from_iso8601(new)
+    {:ok, old, _} = DateTime.from_iso8601(old)
+    DateTime.compare(new, old) == :gt
   end
 
   defp answer(conn, status, body),

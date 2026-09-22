@@ -1,12 +1,16 @@
-defmodule KeyFleetWeb.Plugs.AgentJoin do
-  @moduledoc "Captures the bounded signed join request before any parser or method rewrite."
+defmodule KeyFleetWeb.Plugs.SignedAgent do
+  @moduledoc "Captures bounded signed agent requests before any parser or method rewrite."
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
   alias KeyFleet.Actors.Agent
 
-  @path "/api/v1/agent/join/status"
-  @max_body 4096
+  @join_path "/api/v1/agent/join/status"
+  @update_path "/api/v1/agent/profile/update"
+  @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
+  # Separate transport bound from Ash field limits: the broker embeds these raw
+  # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
+  @update_max_body 24 * 1024
   @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
@@ -20,11 +24,13 @@ defmodule KeyFleetWeb.Plugs.AgentJoin do
   end
 
   defp authenticate(conn) do
-    with true <- conn.method == "POST" and conn.request_path == @path and conn.query_string == "",
+    with true <- supported_request?(conn),
          [type] <- get_req_header(conn, "content-type"),
          {:ok, "application", "json", _} <- Plug.Conn.Utils.media_type(type),
          %Plug.Conn.Unfetched{} <- conn.body_params do
-      case read_body(conn, length: @max_body, read_length: @max_body + 1) do
+      cap = body_limit(conn.request_path)
+
+      case read_body(conn, length: cap, read_length: cap + 1) do
         {:ok, raw, conn} -> verify_body(conn, raw)
         {:more, _raw, conn} -> deny(conn, %{reason: :invalid_request})
         {:error, _reason} -> deny(conn, %{reason: :invalid_request})
@@ -35,9 +41,9 @@ defmodule KeyFleetWeb.Plugs.AgentJoin do
   end
 
   defp verify_body(conn, raw) do
-    with true <- byte_size(raw) > 0 and byte_size(raw) <= @max_body,
-         {:ok, %{"name" => name, "declared_harness" => harness} = params} <- Jason.decode(raw),
-         true <- map_size(params) == 2 and is_binary(name) and is_binary(harness) do
+    with true <- byte_size(raw) > 0 and byte_size(raw) <= body_limit(conn.request_path),
+         {:ok, params} <- Jason.decode(raw),
+         true <- valid_body?(conn.request_path, params) do
       conn = %{conn | body_params: params, params: params} |> assign(:raw_body, raw)
 
       Siwa.AgentAuthPlug.call(conn,
@@ -57,7 +63,7 @@ defmodule KeyFleetWeb.Plugs.AgentJoin do
     names = Enum.map(conn.req_headers, fn {name, _} -> String.downcase(name) end)
 
     valid? =
-      conn.method == "POST" and conn.request_path == @path and conn.query_string == "" and
+      supported_request?(conn) and
         is_binary(conn.assigns[:raw_body]) and
         Enum.all?(@proof_headers, &(Enum.count(names, fn name -> name == &1 end) == 1)) and
         not Enum.any?(names, fn name ->
@@ -120,4 +126,20 @@ defmodule KeyFleetWeb.Plugs.AgentJoin do
   end
 
   def proof_headers, do: @proof_headers
+
+  defp supported_request?(conn),
+    do:
+      conn.method == "POST" and conn.request_path in [@join_path, @update_path] and
+        conn.query_string == ""
+
+  defp body_limit(@join_path), do: 4096
+  defp body_limit(@update_path), do: @update_max_body
+
+  defp valid_body?(@join_path, %{"name" => name, "declared_harness" => harness} = params),
+    do: map_size(params) == 2 and is_binary(name) and is_binary(harness)
+
+  defp valid_body?(@update_path, params) when is_map(params),
+    do: map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable))
+
+  defp valid_body?(_, _), do: false
 end

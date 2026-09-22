@@ -83,7 +83,8 @@ defmodule KeyFleetWeb.Router do
 
   scope "/api/v1/agent", KeyFleetWeb do
     pipe_through :api
-    post "/join/status", AgentJoinController, :status
+    post "/join/status", AgentProfileController, :status
+    post "/profile/update", AgentProfileController, :update
   end
 
   scope "/", KeyFleetWeb do
