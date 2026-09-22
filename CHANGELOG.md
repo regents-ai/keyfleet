@@ -26,3 +26,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Renamed the Ash Template placeholder to KeyFleet (`keyfleet`, `KeyFleet`,
   `keyfleet`, `KEYFLEET_`) with `scripts/init.sh`, which removed itself.
+
+## 2026-09-22 — mint 1.10.1
+
+- Moved the mint HTTP client to 1.10.1, which closes the medium-severity
+  EEF-CVE-2026-82672 (HTTP/1 response smuggling through an unvalidated
+  chunk-size line). Lockfile-only change.
