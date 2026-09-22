@@ -8,6 +8,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -132,6 +133,8 @@ contract KeyfleetVotesTest is Test {
     MockToken private other;
     KeyfleetAssetRegistry private registry;
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
+    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
+    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
     address private safe = address(0x5AFE);
     address private treasury = address(0x7EA5);
@@ -178,7 +181,16 @@ contract KeyfleetVotesTest is Test {
 
     function _deploy(KeyfleetPresets.Preset preset, uint64 votingWindow) private returns (Keyfleet) {
         return new Keyfleet(
-            preset, Q, regent, usdc, treasury, registry, staking, votingWindow, "Keyfleet Alpha", "KFA", BASE_URI
+            preset,
+            Q,
+            regent,
+            usdc,
+            treasury,
+            registry,
+            staking,
+            factory,
+            votingWindow,
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
         );
     }
 

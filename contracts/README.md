@@ -136,8 +136,9 @@ token ids and no enumerable or per-token URI storage. `tokenURI` is a fixed base
 string plus the id; the base is set once at construction and has no setter. The
 constructor takes the preset, the reference price `q`, REGENT, USDC, the Regents
 treasury, the shared asset registry, the Regents revenue staking contract, the
-voting window in seconds, and the name, symbol and metadata base. It rejects a
-`q` outside `1..MAX_Q`, any zero address, a voting window outside the
+pinned Autolaunch factory, the voting window in seconds, and one `Metadata` value
+holding the name, symbol and metadata base. It rejects a `q` outside `1..MAX_Q`,
+any zero address, a voting window outside the
 controller's bounds of one hour to thirty days, and a USDC address that is not
 the canonical Base USDC the registry is bound to, so a look-alike token can never
 be wired in at deployment and can never take the staking fee route. It then deploys the fleet's own `KeyfleetRewards` and
@@ -226,13 +227,13 @@ the next purchase would perform, and both revert once the fleet is sold out;
 The most expensive primary purchase is the first referred purchase on a fresh
 fleet, because every accounting slot it touches is written from zero.
 On a Cascade fleet, with the treasury already holding REGENT as it will after its
-first sale, that measured 330,980 gas in execution; Syndicate measured 302,091,
-Accelerant 279,308 and Classic 278,765. The suite asserts a ceiling of 397,000
+first sale, that measured 331,122 gas in execution; Syndicate measured 302,233,
+Accelerant 279,450 and Classic 278,907. The suite asserts a ceiling of 397,000
 for the Cascade figure, which is the measurement plus twenty percent, and that is
 the execution figure the deployment manifest should quote, with the 21,000 base
 transaction cost on top of it. Later purchases are cheaper; the Cascade key that
 completes a level, which also pays and allocates the preceding level's repayment,
-measured 273,084 because the buckets it writes are warm by then.
+measured 273,256 because the buckets it writes are warm by then.
 
 Non-key money arrives by one of two named paths, and both take the same 2%
 external-receipt fee before anything is booked. `depositCapital(asset, amount)`
@@ -322,7 +323,7 @@ revenue and bare transfers against `balanceOf(fleet) >= accountedBalance(asset)`
 The worst case of a revenue deposit is a Fibonacci fleet with all twenty levels
 complete taking an asset it has never seen before, with every slot it touches
 cold: twenty cohort indexes move and the asset is registered in the ledger. That
-measured 788,253 gas in execution. The suite asserts a ceiling of 946,000, which
+measured 788,137 gas in execution. The suite asserts a ceiling of 946,000, which
 is the measurement plus twenty percent, and that is the execution figure the
 deployment manifest should quote, with the 21,000 base transaction cost on top of
 it. The cost is bounded by the preset, not by how many keys or holders the fleet
@@ -369,13 +370,15 @@ current owner or by the one address that owner registered with
 gets nothing from this, because financial authority is registered on chain and
 only there. A batch of keys is voted whole or not at all.
 
-There are two kinds in this slice. A `Decision` records agreement and has no
+There are three kinds. A `Decision` records agreement and has no
 automatic external effect; its text is carried in the creation event and stored
 nowhere, and an optional digest pins the exact artifact or commit. A
 `TransferCapital` names an asset, a nonzero amount and a nonzero recipient, and
 nothing is checked against the fleet's balance at creation, because a proposal
 the free capital cannot cover is meant to fail at execution rather than at
-proposal time. Autolaunch is a later slice.
+proposal time. An `Autolaunch` carries the exact launch the fleet would create,
+and is described below. There are no arbitrary calls, no arbitrary approvals and
+no way to add a fourth kind.
 
 Voting is open strictly before `closesAt` and execution strictly from it, so the
 two never overlap. A proposal passes only if `yesWeight * 2 > totalWeight`: YES
@@ -409,8 +412,8 @@ buckets.
 Two calls cost more than a flat amount, and neither of them grows with how many
 keys the fleet has sold. Creating a proposal grows with the preset's twenty
 levels: the worst case is a Fibonacci fleet at the level-20 ceiling with every
-slot it touches cold, which measured 185,888 gas in execution, while the same
-call on a fleet holding two keys in a single level measured 146,480, so the other
+slot it touches cold, which measured 185,903 gas in execution, while the same
+call on a fleet holding two keys in a single level measured 146,495, so the other
 nineteen levels cost about two thousand gas each. The suite asserts a ceiling of
 223,000, which is the measurement plus twenty percent, and that is the execution
 figure the deployment manifest should quote, with the 21,000 base transaction
@@ -423,16 +426,113 @@ across several calls, which the one-vote-per-key rule makes safe to do in any
 order. Nothing else in the controller depends on the size of the fleet: executing
 a proposal costs the same on a fleet of two keys and one at the ceiling.
 
-Autolaunch, the deploying factory and any ETH or currency conversion are outside
+The third kind of proposal is `Autolaunch`: the one launch a fleet may create
+through the pinned `RegentsAutolaunchFactoryV1`, with the fleet itself as both
+the recorded launcher and the treasury. The factory address is fixed when the
+fleet is deployed and there is no setter. The strategy is never stored: the fleet
+reads it from the factory on every call, so a fleet can never disagree with its
+factory about which strategy is canonical. Only two minimal interfaces are
+declared for either of them, copied field for field from the frozen ABI, so
+nothing of the factory's governance surface or the strategy's writing surface is
+reachable from a fleet.
+
+Any fleet may propose an Autolaunch as soon as it has a key to propose with. The
+vote is the only gate in front of it: there is no level requirement, no
+separate opening step and no administrator who has to agree first.
+
+A proposal carries a launch envelope: the SUBJECT's name, symbol, description,
+website and image, the required REGENT raise, a digest of the narrative behind
+the launch, and an execution expiry. There is deliberately no treasury field.
+The fleet passes `address(this)` and no proposal can name anyone else. The chain,
+the factory, the start block, the auction length, the supply split and the pool
+settings are not in the envelope either, because the factory and the strategy fix
+all of them and presenting them as choices would be a promise the vote could not
+keep. The envelope is stored whole, is never edited, and any change to it is a
+new proposal. `keccak256(abi.encode(envelope))` is emitted when the proposal is
+created and recorded again on the fleet when it executes, so what was approved
+and what was launched can be compared byte for byte.
+
+Everything that would make the approved call impossible on its own terms is
+checked when the proposal is made, so the keys are never asked to vote on a
+launch that could never happen: the five strings must be nonempty and within the
+factory's byte caps, which are byte caps and not character caps; the raise must be
+positive and no larger than the largest raise an auction can ever settle on; the
+expiry must fall after the vote closes; and the fleet must not have created a
+launch already. The factory and the strategy are the authority on those caps and
+on that ceiling, and the controller asks them for the figures in the proposing
+call rather than keeping a copy of them, so a fleet can never judge an envelope by
+a stale number and refuse a launch the real target would have taken. Both check
+their own rules again on the call itself. Nothing about the factory's own state is
+predicted at proposal time, because it is not the fleet's to predict.
+
+Execution goes through `Keyfleet.executeAutolaunch(proposalId, envelope)`, a
+typed entry point whose only permitted caller is the fleet's own controller.
+There is no `execute(target, calldata)` anywhere. It rechecks the launch state
+and the expiry, calls the factory once, and then believes only the factory's own
+record: the launch the factory recorded must name this fleet as launcher and as
+treasury and must carry the same SUBJECT, auction and escrow the call returned,
+and the factory must map that SUBJECT back to the same launch id. Anything else
+reverts with `LaunchProvenanceMismatch` and nothing is written down. A returned
+address, a submitted token, an event or a backend answer is never taken as proof
+of a launch. The record also carries the proposal that authorized the launch, so
+the authorising vote can be read straight off the fleet without replaying an
+event. The call moves no tokens and grants no allowance: the factory charges gas
+and nothing else.
+
+A revert anywhere in that path — a paused factory, a treasury the factory
+refuses, a raise the strategy refuses, an expired envelope, a launch that already
+exists — reverts the controller's execution with it, including the mark that the
+proposal executed. The attempt consumes nothing, and a proposal that failed
+against a closed factory stays executable and lands unchanged once the factory is
+open, as long as its envelope has not expired. One created launch per fleet is
+the rule, and it holds from both ends: a second proposal is refused outright once
+a launch exists, and a second proposal made earlier cannot execute afterwards.
+
+Creation is not graduation. The fleet tracks `NotCreated`, `AuctionCreated`,
+`Graduated` and `EconomicallyFailed`, and `syncLaunch()` is the permissionless
+way to move between them. It reads the strategy's own lifecycle for the recorded
+auction and copies nothing else. An auction that has ended but has not been
+migrated is still `Active` on the strategy, which is deliberately not treated as
+failure: the sync leaves the state alone and emits nothing until the strategy
+settles. Graduation additionally records the splitter, the canonical receiver,
+the pool and the locked LP position. A terminal state is terminal, and a later
+sync reverts with `LaunchSettled` rather than churning. A sync can never replace
+the recorded SUBJECT, auction or escrow, redirect the treasury, admit an asset
+for deposits or authorize a second launch. `launchRecord()` reports what the
+fleet stored and `launchDistribution()` passes the strategy's live record
+straight through for the app to read.
+
+Deposit admission is untouched by all of this and defaults off. A launched
+SUBJECT is an ordinary token to the fleet until the Regents Safe admits it in the
+shared registry, exactly like any other asset.
+
+**Two separate 2% deductions, and the app must say so.** Autolaunch's own
+splitter skims 2% of the revenue it recognizes before it pays the fleet, and
+Keyfleet charges its own 2% on the new external receipt when that payout is
+deposited into the fleet. They are two different charges, taken by two different
+contracts, for two different things, and they compose: money arriving through
+both systems is reduced twice. The app must present them as two deductions and
+must never describe the pair as a single 2% charge. Nor does a gross REGENT raise
+mean spendable USDC; the actual liquidity, vesting and treasury outcomes are read
+from the strategy rather than inferred from the raise.
+
+Executing an Autolaunch measured 740,156 gas against a mock factory, and the
+suite asserts a ceiling of 889,000, which is the measurement plus twenty percent
+rounded up to the nearest thousand. That
+figure is a regression bound on this side of the call and not a prediction: most
+of it is the mock's own writing, and the real factory deploys a token, an escrow
+and an auction and spends far more.
+
+The deploying factory and any ETH or currency conversion are outside
 this slice. The fleet has no administrator, no upgrade path, no pause and no
 burn: the only ways tokens leave it are the treasury share of a purchase, the
 deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
 ledger, the revenue backing moved into the ledger, and a capital transfer the
-keys have voted for.
+keys have voted for. An Autolaunch moves nothing out at all.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus and voting tests. Foundry must be installed; the compiler may be downloaded on first use.
+fleet-purchase, deposit-and-surplus, voting and Autolaunch tests. Foundry must be installed; the compiler may be downloaded on first use.
 Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are vendored as git
 submodules under `contracts/lib`, so clone with submodules or run
 `git submodule update --init`.

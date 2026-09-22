@@ -11,6 +11,7 @@ import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.s
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -116,6 +117,8 @@ contract KeyfleetTest is Test {
     address private buyer = address(0xB0B0B0);
     address private treasury = address(0x7EA5);
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
+    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
+    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
@@ -151,7 +154,16 @@ contract KeyfleetTest is Test {
 
     function _deploy(KeyfleetPresets.Preset preset, uint256 q) private returns (Keyfleet) {
         return new Keyfleet(
-            preset, q, regent, usdc, treasury, registry, staking, VOTING_WINDOW, "Keyfleet Alpha", "KFA", BASE_URI
+            preset,
+            q,
+            regent,
+            usdc,
+            treasury,
+            registry,
+            staking,
+            factory,
+            VOTING_WINDOW,
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
         );
     }
 
@@ -232,10 +244,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(KeyfleetPresets.QOutOfBounds.selector);
@@ -247,10 +258,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -262,10 +272,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -277,10 +286,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -292,10 +300,9 @@ contract KeyfleetTest is Test {
             address(0),
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -307,10 +314,9 @@ contract KeyfleetTest is Test {
             treasury,
             KeyfleetAssetRegistry(address(0)),
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -322,10 +328,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             IRegentRevenueStaking(address(0)),
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
     }
 
@@ -344,10 +349,9 @@ contract KeyfleetTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "n",
-            "s",
-            BASE_URI
+            Keyfleet.Metadata("n", "s", BASE_URI)
         );
     }
 

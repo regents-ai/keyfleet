@@ -12,6 +12,7 @@ import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
@@ -127,6 +128,8 @@ contract KeyfleetDepositsTest is Test {
     MockToken private other;
     KeyfleetAssetRegistry private registry;
     MockStaking private staking;
+    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
+    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
     address private safe = address(0x5AFE);
     address private treasury = address(0x7EA5);
@@ -154,7 +157,16 @@ contract KeyfleetDepositsTest is Test {
 
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
         return new Keyfleet(
-            preset, Q, regent, usdc, treasury, registry, staking, VOTING_WINDOW, "Keyfleet Alpha", "KFA", BASE_URI
+            preset,
+            Q,
+            regent,
+            usdc,
+            treasury,
+            registry,
+            staking,
+            factory,
+            VOTING_WINDOW,
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
         );
     }
 
@@ -840,6 +852,8 @@ contract KeyfleetDepositsGasTest is Test {
     MockToken private revenueAsset;
     KeyfleetAssetRegistry private registry;
     MockStaking private staking;
+    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
+    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
     Keyfleet private fleet;
 
     address private safe = address(0x5AFE);
@@ -860,10 +874,9 @@ contract KeyfleetDepositsGasTest is Test {
             treasury,
             registry,
             staking,
+            factory,
             VOTING_WINDOW,
-            "Keyfleet Alpha",
-            "KFA",
-            "https://keys.regents.sh/alpha/"
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/")
         );
 
         vm.startPrank(safe);

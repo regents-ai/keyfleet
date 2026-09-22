@@ -5,7 +5,9 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IRegentLBPStrategy} from "./interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "./KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
@@ -24,12 +26,14 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// and claims out of it are not receipts and are never charged again.
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
-/// itself in its constructor. It is the only caller of `transferCapital`, and free working capital
-/// is the only thing it can reach: the Cascade completion reserve and the ledger's reward backing
-/// are not free capital and there is no path from a vote to either of them.
+/// itself in its constructor. It is the only caller of `transferCapital` and of `executeAutolaunch`,
+/// and free working capital is the only thing it can reach: the Cascade completion reserve and the
+/// ledger's reward backing are not free capital and there is no path from a vote to either of them.
 ///
-/// Autolaunch and the deploying factory are later slices, and nothing speculative is prepared for
-/// them here.
+/// A passed Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1` once, with this fleet
+/// as both launcher and treasury, and records what the factory says it created. That call moves no
+/// tokens and grants no allowance. The deploying factory is a later slice, and nothing speculative
+/// is prepared for it here.
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways REGENT leaves
 /// this contract are the protocol share on a purchase, the referral and Accelerant rebate paid into
@@ -37,6 +41,86 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// of a REGENT deposit, and a capital transfer the keys have voted for.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
+
+    /// @notice How far this fleet's one Autolaunch has got.
+    /// @dev `AuctionCreated` covers everything between the factory call and the strategy's terminal
+    /// record, including an auction that has ended but has not been migrated yet. The two terminal
+    /// states are final: nothing moves out of them and no second launch follows.
+    enum LaunchState {
+        NotCreated,
+        AuctionCreated,
+        Graduated,
+        EconomicallyFailed
+    }
+
+    /// @notice The exact launch the keys approve, fixed when the proposal is created.
+    /// @dev There is no treasury field: the fleet passes itself, so no proposal can name anyone
+    /// else. The chain, the factory and the schedule are not here either — the factory and the
+    /// strategy fix all three, and pretending they were per-launch choices would be a lie the vote
+    /// could not enforce.
+    /// The five metadata strings and the raise are bounded by the factory and the strategy, which
+    /// publish those figures; the voting controller reads them from the target when a proposal is
+    /// made rather than holding a copy of them.
+    /// @param name SUBJECT name, nonempty and within the factory's `MAX_NAME_BYTES`.
+    /// @param symbol SUBJECT symbol, nonempty and within the factory's `MAX_SYMBOL_BYTES`.
+    /// @param description SUBJECT description, nonempty and within `MAX_DESCRIPTION_BYTES`.
+    /// @param website SUBJECT website, nonempty and within the factory's `MAX_WEBSITE_BYTES`.
+    /// @param image SUBJECT image reference, nonempty and within the factory's `MAX_IMAGE_BYTES`.
+    /// @param requiredRegentRaised The REGENT raise the auction must reach to graduate, positive and
+    /// within the strategy's `MAX_REACHABLE_RAISE`.
+    /// @param narrativeDigest Digest of the content-addressed narrative behind the launch; it also
+    /// becomes the proposal's digest, and zero means none.
+    /// @param executionExpiry Last block timestamp at which the approved launch may execute.
+    struct LaunchEnvelope {
+        string name;
+        string symbol;
+        string description;
+        string website;
+        string image;
+        uint128 requiredRegentRaised;
+        bytes32 narrativeDigest;
+        uint64 executionExpiry;
+    }
+
+    /// @notice What the factory and the strategy say this fleet's launch is.
+    /// @dev Every address here is read back from the pinned factory or the strategy it is bound to;
+    /// none of them is ever taken from a proposal, a caller or an event. The four graduation fields
+    /// stay zero until `syncLaunch` reads a graduated distribution.
+    /// @param launchId The factory's id for this launch.
+    /// @param proposalId The proposal that authorized it, so the authorising vote can be read back
+    /// on chain without replaying an event.
+    /// @param subject The SUBJECT token the factory created.
+    /// @param createdAtBlock Block the launch was created in.
+    /// @param auction The canonical auction, and the key every strategy read uses.
+    /// @param escrow The escrow holding the pending allocation.
+    /// @param splitter The revenue splitter, recorded at graduation.
+    /// @param receiver The canonical payment receiver, recorded at graduation.
+    /// @param envelopeHash `keccak256(abi.encode(envelope))` of the approved envelope.
+    /// @param poolId The official pool, recorded at graduation.
+    /// @param lpTokenId The locked LP position, recorded at graduation.
+    struct LaunchRecord {
+        uint256 launchId;
+        uint256 proposalId;
+        address subject;
+        uint64 createdAtBlock;
+        address auction;
+        address escrow;
+        address splitter;
+        address receiver;
+        bytes32 envelopeHash;
+        bytes32 poolId;
+        uint256 lpTokenId;
+    }
+
+    /// @notice The ERC721 identity a fleet is deployed with, fixed for its lifetime.
+    /// @param name ERC721 collection name.
+    /// @param symbol ERC721 collection symbol.
+    /// @param baseTokenURI Metadata base, returned by `_baseURI` for the life of the fleet.
+    struct Metadata {
+        string name;
+        string symbol;
+        string baseTokenURI;
+    }
 
     /// @notice A constructor address argument was zero.
     error ZeroAddress();
@@ -66,6 +150,16 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error OnlyVotes();
     /// @notice The vote asked for more free working capital than this fleet holds in that asset.
     error InsufficientFreeCapital(address asset, uint256 requested, uint256 available);
+    /// @notice This fleet already created its one launch.
+    error LaunchAlreadyCreated();
+    /// @notice This fleet has not created a launch, so there is nothing to sync or read.
+    error LaunchNotCreated();
+    /// @notice The launch has already graduated or failed, and a terminal state never changes.
+    error LaunchSettled();
+    /// @notice The approved launch's execution expiry has passed.
+    error ProposalExpired(uint64 executionExpiry);
+    /// @notice The factory does not record the launch it just said it created.
+    error LaunchProvenanceMismatch();
 
     /// @notice A primary key was bought. The five split parts always sum to `gross`.
     /// @param tokenId The key that was minted.
@@ -123,6 +217,15 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice A vote moved free working capital out of this fleet.
     event CapitalTransferred(address indexed asset, uint256 amount, address indexed recipient);
 
+    /// @notice A passed Autolaunch proposal created this fleet's one launch. The four launch
+    /// addresses are the factory's own, read back after the call and not the proposal's.
+    event AutolaunchExecuted(
+        uint256 indexed proposalId, uint256 indexed launchId, address indexed subject, address auction, address escrow
+    );
+
+    /// @notice A sync recorded a terminal launch state. An unsettled launch emits nothing.
+    event LaunchSynced(LaunchState state);
+
     /// @notice External-receipt fee, in basis points of the gross receipt.
     uint256 public constant DEPOSIT_FEE_BPS = 200;
     /// @notice Revenue source label every fleet reports to the staking contract.
@@ -149,6 +252,10 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     KeyfleetAssetRegistry public immutable ASSET_REGISTRY;
     /// @notice The Regents revenue staking contract that registers this fleet's USDC fees.
     IRegentRevenueStaking public immutable STAKING;
+    /// @notice The one Autolaunch factory this fleet may ever launch through. The strategy is read
+    /// from it on every call rather than stored, so a fleet can never disagree with its factory
+    /// about which strategy is canonical.
+    IRegentsAutolaunchFactoryV1 public immutable FACTORY;
 
     /// @notice Primary keys minted so far. Token ids are `1..totalMinted`.
     uint256 public totalMinted;
@@ -169,8 +276,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice Cascade only: whether a level has been fully minted and its reserve released. A level
     /// completes once; resales never reset it.
     mapping(uint256 level => bool completed) public levelCompleted;
+    /// @notice How far this fleet's one Autolaunch has got.
+    LaunchState public launchState;
 
     string private _baseTokenURI;
+    LaunchRecord private _launch;
 
     /// @notice Deploys a fleet and, atomically, the reward ledger and voting controller bound to it.
     /// @dev Both satellites are constructed here rather than passed in, so there is no window in
@@ -185,12 +295,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param treasury The Regents treasury multisig.
     /// @param assetRegistry The shared deposit-admission registry.
     /// @param staking The Regents revenue staking contract that registers USDC fees.
+    /// @param factory The one Autolaunch factory this fleet may launch through.
     /// @param votingWindow Seconds a proposal stays open, within the controller's one-hour to
     /// thirty-day bounds. Production is 24 hours and a testnet fleet uses a shorter window the app
     /// labels from `VOTES.VOTING_WINDOW`.
-    /// @param name_ ERC721 collection name.
-    /// @param symbol_ ERC721 collection symbol.
-    /// @param baseTokenURI_ Fixed metadata base, returned by `_baseURI` for the life of the fleet.
+    /// @param metadata The ERC721 name, symbol and metadata base.
     constructor(
         KeyfleetPresets.Preset preset,
         uint256 q,
@@ -199,15 +308,15 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         address treasury,
         KeyfleetAssetRegistry assetRegistry,
         IRegentRevenueStaking staking,
+        IRegentsAutolaunchFactoryV1 factory,
         uint64 votingWindow,
-        string memory name_,
-        string memory symbol_,
-        string memory baseTokenURI_
-    ) ERC721(name_, symbol_) {
+        Metadata memory metadata
+    ) ERC721(metadata.name, metadata.symbol) {
         if (q == 0 || q > KeyfleetPresets.MAX_Q) revert KeyfleetPresets.QOutOfBounds();
         if (
             address(regent) == address(0) || address(usdc) == address(0) || treasury == address(0)
                 || address(assetRegistry) == address(0) || address(staking) == address(0)
+                || address(factory) == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -220,7 +329,8 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         TREASURY = treasury;
         ASSET_REGISTRY = assetRegistry;
         STAKING = staking;
-        _baseTokenURI = baseTokenURI_;
+        FACTORY = factory;
+        _baseTokenURI = metadata.baseTokenURI;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = q;
 
         KeyfleetRewards rewards = new KeyfleetRewards(address(this));
@@ -536,6 +646,129 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         freeCapital[asset] = available - amount;
         emit CapitalTransferred(asset, amount, recipient);
         IERC20(asset).safeTransfer(recipient, amount);
+    }
+
+    // --- autolaunch ------------------------------------------------------
+
+    /// @notice What the factory and the strategy say this fleet's launch is.
+    /// @dev All-zero until an Autolaunch executes; the four graduation fields stay zero until a
+    /// sync reads a graduated distribution.
+    function launchRecord() external view returns (LaunchRecord memory) {
+        return _launch;
+    }
+
+    /// @notice The strategy's complete record of this fleet's auction, read live.
+    /// @dev A pass-through for the app: this contract stores nothing from it except the four
+    /// artifacts `syncLaunch` records at graduation. Reverts before a launch exists.
+    function launchDistribution() external view returns (IRegentLBPStrategy.Distribution memory) {
+        if (launchState == LaunchState.NotCreated) revert LaunchNotCreated();
+        return FACTORY.strategy().distribution(_launch.auction);
+    }
+
+    /// @notice Creates this fleet's one launch, on the authority of a passed vote.
+    /// @dev The voting controller this fleet deployed is the only caller, and it passes the exact
+    /// envelope the keys approved. `treasury` is `address(this)` and there is no field a proposal
+    /// could put anything else in. Nothing is approved and no token moves: the factory charges the
+    /// caller gas and nothing more.
+    ///
+    /// Every address recorded here is read back from the factory after the call, never taken from
+    /// the return values alone and never from an event: the recorded launch must name this fleet as
+    /// both launcher and treasury and must carry the same three addresses the call returned, and
+    /// the factory must map the SUBJECT back to the same launch id. Anything else reverts the whole
+    /// execution.
+    ///
+    /// Every revert here — an expired envelope, a launch that already exists, a paused factory, a
+    /// raise the strategy refuses — reverts the controller's execution with it, including the mark
+    /// that the proposal executed. The proposal therefore stays executable and consumes nothing,
+    /// which is what lets a fleet wait for the factory to open and try again before its envelope
+    /// expires.
+    ///
+    /// Guarded, so a launch artifact that calls back cannot reach another entry point while this
+    /// one is half done.
+    /// @param proposalId The proposal being executed, recorded in the launch record and the event.
+    /// @param envelope The exact launch the keys approved.
+    function executeAutolaunch(uint256 proposalId, LaunchEnvelope calldata envelope) external nonReentrant {
+        if (msg.sender != address(VOTES)) revert OnlyVotes();
+        if (launchState != LaunchState.NotCreated) revert LaunchAlreadyCreated();
+        if (block.timestamp > envelope.executionExpiry) revert ProposalExpired(envelope.executionExpiry);
+
+        (uint256 launchId, address subject, address auction, address escrow) = FACTORY.launch(
+            IRegentsAutolaunchFactoryV1.LaunchParams({
+                name: envelope.name,
+                symbol: envelope.symbol,
+                description: envelope.description,
+                website: envelope.website,
+                image: envelope.image,
+                treasury: address(this),
+                requiredRegentRaised: envelope.requiredRegentRaised
+            })
+        );
+
+        IRegentsAutolaunchFactoryV1.Launch memory recorded = FACTORY.launches(launchId);
+        if (
+            recorded.launcher != address(this) || recorded.treasury != address(this) || recorded.subject != subject
+                || recorded.auction != auction || recorded.escrow != escrow
+                || FACTORY.launchIdOfSubject(subject) != launchId
+        ) {
+            revert LaunchProvenanceMismatch();
+        }
+
+        _launch = LaunchRecord({
+            launchId: launchId,
+            proposalId: proposalId,
+            subject: subject,
+            createdAtBlock: uint64(block.number),
+            auction: auction,
+            escrow: escrow,
+            splitter: address(0),
+            receiver: address(0),
+            envelopeHash: keccak256(abi.encode(envelope)),
+            poolId: bytes32(0),
+            lpTokenId: 0
+        });
+        launchState = LaunchState.AuctionCreated;
+
+        emit AutolaunchExecuted(proposalId, launchId, subject, auction, escrow);
+    }
+
+    /// @notice Records the strategy's verdict on this fleet's auction, once it has one.
+    /// @dev Permissionless, because it only ever copies what the strategy already decided. It
+    /// cannot replace the recorded SUBJECT, auction or escrow, cannot redirect the treasury, cannot
+    /// admit an asset for deposits and cannot authorize a second launch; the Safe admits deposit
+    /// assets in the shared registry, and nothing here touches that.
+    ///
+    /// An auction that has ended but has not been migrated is still `Active` on the strategy, which
+    /// is deliberately not economic failure: this call leaves the state alone and emits nothing
+    /// until the strategy settles. Graduation additionally records the splitter, the canonical
+    /// receiver, the pool and the locked LP position.
+    ///
+    /// A terminal state is final. Calling again after graduation or failure reverts with
+    /// `LaunchSettled` rather than silently doing nothing, so a caller is told the launch is closed
+    /// instead of paying gas for a no-op forever.
+    ///
+    /// Unguarded, and safe to be: the only two calls it makes are reads of the strategy, so there is
+    /// nothing here for a launch artifact to reenter into.
+    /// @return state The state after this call.
+    function syncLaunch() external returns (LaunchState state) {
+        state = launchState;
+        if (state == LaunchState.NotCreated) revert LaunchNotCreated();
+        if (state != LaunchState.AuctionCreated) revert LaunchSettled();
+
+        IRegentLBPStrategy.Distribution memory distribution = FACTORY.strategy().distribution(_launch.auction);
+        if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Graduated) {
+            _launch.splitter = distribution.splitter;
+            _launch.receiver = distribution.receiver;
+            _launch.poolId = distribution.poolId;
+            _launch.lpTokenId = distribution.lpTokenId;
+            state = LaunchState.Graduated;
+        } else if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Failed) {
+            state = LaunchState.EconomicallyFailed;
+        } else {
+            return state;
+        }
+
+        launchState = state;
+        emit LaunchSynced(state);
     }
 
     // --- internals -------------------------------------------------------

@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
@@ -18,11 +19,16 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// the token ids `1..snapshotMinted` recorded when it was created, so later mints are ineligible for
 /// it and a transfer can never produce a second vote for the same key.
 ///
-/// There are two kinds. A `Decision` records agreement and has no external side effect; its text is
-/// carried in the creation event only and an optional digest pins the exact artifact or commit. A
+/// There are three kinds. A `Decision` records agreement and has no external side effect; its text
+/// is carried in the creation event only and an optional digest pins the exact artifact or commit. A
 /// `TransferCapital` moves an accounted asset out of the fleet's *free* capital to a named
 /// recipient, once. The fleet's Cascade completion reserve and the reward ledger's backing are not
-/// free capital and are unreachable from here by construction.
+/// free capital and are unreachable from here by construction. An `Autolaunch` carries the exact
+/// launch envelope the keys approve and, when it passes, has the fleet call the pinned Autolaunch
+/// factory once with itself as launcher and treasury.
+///
+/// There are no arbitrary calls here. The three kinds are the whole surface, every payload is fixed
+/// at creation, and any change to a payload is a new proposal rather than an edit.
 ///
 /// There is no administrator, no upgrade path, no pause, no cancellation, no quorum tuning and no
 /// delegation by signature. This deliberately does not solve a majority takeover: a majority of
@@ -32,7 +38,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice What a proposal does when it passes.
     enum Kind {
         Decision,
-        TransferCapital
+        TransferCapital,
+        Autolaunch
     }
 
     /// @notice Where a proposal stands right now.
@@ -44,7 +51,9 @@ contract KeyfleetVotes is ReentrancyGuard {
     }
 
     /// @notice One proposal. Everything a vote is counted against is fixed at creation.
-    /// @param kind Decision or TransferCapital.
+    /// @dev An Autolaunch proposal's payload is not here: it is a whole envelope, kept in its own
+    /// mapping so the record every proposal shares stays one fixed-size read.
+    /// @param kind Decision, TransferCapital or Autolaunch.
     /// @param proposer The address that created it.
     /// @param createdAt Block timestamp of creation.
     /// @param closesAt Last moment plus one: voting is open strictly before this, execution from it.
@@ -99,10 +108,23 @@ contract KeyfleetVotes is ReentrancyGuard {
     error AlreadyExecuted();
     /// @notice YES did not exceed half of the total eligible snapshot weight.
     error NotPassed(uint256 yesWeight, uint256 totalWeight);
+    /// @notice One of the launch envelope's five metadata strings was empty. Fields are numbered
+    /// `0..4` in the order name, symbol, description, website, image, as the factory numbers them.
+    error EmptyMetadataField(uint256 field);
+    /// @notice One of the launch envelope's five metadata strings was over its byte cap.
+    error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found);
+    /// @notice The required raise was zero or above the largest raise the strategy says an auction
+    /// can reach.
+    error RaiseOutOfBounds(uint128 requiredRegentRaised);
+    /// @notice The launch envelope would expire at or before the vote on it closes, so it could
+    /// never execute.
+    error ExpiryNotAfterClose(uint64 executionExpiry, uint64 closesAt);
+    /// @notice This proposal is not an Autolaunch, so it carries no launch envelope.
+    error NotAnAutolaunch(uint256 proposalId);
 
     /// @notice A proposal was created. `text` is carried here and stored nowhere.
     /// @param proposalId The new proposal.
-    /// @param kind Decision or TransferCapital.
+    /// @param kind Decision, TransferCapital or Autolaunch.
     /// @param proposer The address that created it.
     /// @param closesAt When voting closes and execution becomes possible.
     /// @param snapshotMinted Keys minted at creation; the eligible ids are `1..snapshotMinted`.
@@ -124,6 +146,11 @@ contract KeyfleetVotes is ReentrancyGuard {
     event TransferCapitalProposed(
         uint256 indexed proposalId, address indexed asset, uint256 amount, address indexed recipient
     );
+
+    /// @notice The payload of an Autolaunch proposal, emitted beside its `ProposalCreated`.
+    /// @param envelopeHash `keccak256(abi.encode(envelope))`, which fixes exactly what was approved.
+    /// The envelope itself is stored and readable with `launchEnvelope`.
+    event AutolaunchProposed(uint256 indexed proposalId, bytes32 envelopeHash, uint64 executionExpiry);
 
     /// @notice An owner set or cleared the address that may vote their keys for them.
     event VotingDelegateSet(address indexed owner, address indexed delegate);
@@ -163,6 +190,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     mapping(uint256 proposalId => mapping(uint256 tokenId => bool used)) public hasVoted;
 
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
+    mapping(uint256 proposalId => Keyfleet.LaunchEnvelope envelope) private _envelopes;
 
     /// @notice Binds this controller to the fleet that deploys it.
     /// @param fleet The fleet whose keys vote here.
@@ -196,6 +224,13 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice The whole proposal record.
     function proposal(uint256 proposalId) external view returns (Proposal memory) {
         return _require(proposalId);
+    }
+
+    /// @notice The exact launch envelope an Autolaunch proposal approves.
+    /// @dev Fixed at creation and never edited: changing anything in it means a new proposal.
+    function launchEnvelope(uint256 proposalId) external view returns (Keyfleet.LaunchEnvelope memory) {
+        if (_require(proposalId).kind != Kind.Autolaunch) revert NotAnAutolaunch(proposalId);
+        return _envelopes[proposalId];
     }
 
     /// @notice Where a proposal stands: open, defeated, passed and waiting, or already executed.
@@ -258,6 +293,56 @@ contract KeyfleetVotes is ReentrancyGuard {
         emit TransferCapitalProposed(proposalId, asset, amount, recipient);
     }
 
+    /// @notice Proposes the exact launch the fleet would create through the pinned Autolaunch
+    /// factory, with itself as launcher and treasury.
+    /// @dev Everything that could make the approved call impossible on its own terms is checked
+    /// here, so the keys are never asked to vote on a launch that could never happen: the five
+    /// metadata strings against the byte caps, the raise against the largest one an auction can
+    /// reach, an expiry that would fall at or before the vote closes, and a fleet that has already
+    /// created its launch.
+    ///
+    /// The caps and the raise ceiling are not copied into this repository. They are read from the
+    /// pinned factory and from the strategy it is bound to, in this call, so the figures a proposal
+    /// is judged by are always the ones the target itself publishes and this controller can never
+    /// hold a stale opinion of what the target will accept. The factory and the strategy check
+    /// their own rules again on the call itself and remain the authority on both of theirs.
+    ///
+    /// Nothing about the factory's own state is checked here, because it is not this fleet's to
+    /// predict: a factory that is paused when the proposal is made may well be open when it
+    /// executes, and the execution reverts harmlessly if it is not.
+    ///
+    /// The envelope's narrative digest becomes the proposal's digest, which is what pins the launch
+    /// to the content-addressed narrative the keys read. The envelope itself is stored whole and
+    /// never edited; any change to it is a new proposal.
+    /// @param tokenId An eligible key the caller owns or is the registered delegate of.
+    /// @param envelope The exact launch to approve.
+    /// @return proposalId The new proposal.
+    function proposeAutolaunch(uint256 tokenId, Keyfleet.LaunchEnvelope calldata envelope)
+        external
+        returns (uint256 proposalId)
+    {
+        IRegentsAutolaunchFactoryV1 factory = FLEET.FACTORY();
+        _requireBytes(0, bytes(envelope.name).length, factory.MAX_NAME_BYTES());
+        _requireBytes(1, bytes(envelope.symbol).length, factory.MAX_SYMBOL_BYTES());
+        _requireBytes(2, bytes(envelope.description).length, factory.MAX_DESCRIPTION_BYTES());
+        _requireBytes(3, bytes(envelope.website).length, factory.MAX_WEBSITE_BYTES());
+        _requireBytes(4, bytes(envelope.image).length, factory.MAX_IMAGE_BYTES());
+        if (
+            envelope.requiredRegentRaised == 0
+                || envelope.requiredRegentRaised > factory.strategy().MAX_REACHABLE_RAISE()
+        ) {
+            revert RaiseOutOfBounds(envelope.requiredRegentRaised);
+        }
+        if (FLEET.launchState() != Keyfleet.LaunchState.NotCreated) revert Keyfleet.LaunchAlreadyCreated();
+
+        proposalId = _propose(tokenId, Kind.Autolaunch, "", envelope.narrativeDigest);
+        uint64 closesAt = _proposals[proposalId].closesAt;
+        if (envelope.executionExpiry <= closesAt) revert ExpiryNotAfterClose(envelope.executionExpiry, closesAt);
+
+        _envelopes[proposalId] = envelope;
+        emit AutolaunchProposed(proposalId, keccak256(abi.encode(envelope)), envelope.executionExpiry);
+    }
+
     // --- voting ----------------------------------------------------------
 
     /// @notice Votes a set of keys for or against a proposal, while its window is open.
@@ -303,6 +388,12 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// never execute it twice. A TransferCapital that the fleet's free capital cannot cover reverts
     /// the whole call, which rolls that mark back as well: the proposal stays executable and can be
     /// executed later once the capital exists, which is exactly what the spec asks for.
+    ///
+    /// An Autolaunch behaves the same way, and it is the reason the rule matters most. Any revert
+    /// inside the fleet or the factory — a paused factory, a raise the strategy refuses, a launch
+    /// that already exists — undoes the mark with everything else, so the attempt consumes nothing
+    /// and the proposal stays executable until its envelope expires or the fleet's launch state
+    /// moves on.
     /// @param proposalId The proposal to execute.
     function execute(uint256 proposalId) external nonReentrant {
         Proposal storage stored = _require(proposalId);
@@ -315,8 +406,10 @@ contract KeyfleetVotes is ReentrancyGuard {
 
         if (stored.kind == Kind.Decision) {
             emit DecisionRecorded(proposalId, stored.digest);
-        } else {
+        } else if (stored.kind == Kind.TransferCapital) {
             FLEET.transferCapital(stored.asset, stored.amount, stored.recipient);
+        } else {
+            FLEET.executeAutolaunch(proposalId, _envelopes[proposalId]);
         }
     }
 
@@ -348,6 +441,15 @@ contract KeyfleetVotes is ReentrancyGuard {
         emit ProposalCreated(
             proposalId, kind, msg.sender, stored.closesAt, snapshotMinted, stored.totalWeight, digest, text
         );
+    }
+
+    /// @dev One metadata field against the factory's own rule: nonempty and within the byte cap the
+    /// factory published. Solidity strings are bytes, and the caps are byte caps, so a field of
+    /// multi-byte characters holds fewer of them than the number suggests. Nothing is normalized,
+    /// shortened or checked for content here; the factory does not do any of that either.
+    function _requireBytes(uint256 field, uint256 length, uint256 maximum) private pure {
+        if (length == 0) revert EmptyMetadataField(field);
+        if (length > maximum) revert MetadataFieldTooLong(field, maximum, length);
     }
 
     /// @dev Total weight of the token ids `1..minted`, computed by walking at most twenty levels and
