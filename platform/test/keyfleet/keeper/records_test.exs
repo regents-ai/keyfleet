@@ -7,6 +7,7 @@ defmodule KeyFleet.Keeper.RecordsTest do
 
   @fleet "fibonacci_syndicate"
   @target "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+  @keeper "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
   @system %System{}
 
   setup do
@@ -31,6 +32,35 @@ defmodule KeyFleet.Keeper.RecordsTest do
       assert Keeper.settle(tx, %{status: :replaced}) == {:error, :settled}
       assert Keeper.settle(settled, mined(result: "other")) == {:error, :settled}
       assert fields(Ash.get!(Transaction, tx.id, actor: @system)) == fields(settled)
+    end
+
+    test "names the wallet that sent it, as a lowercase address" do
+      tx = sent!()
+      assert tx.from_address == @keeper
+
+      assert {:error, _error} =
+               Keeper.record_sent_tx(tx_attrs(tx_hash: hash("w"), from_address: nil),
+                 actor: @system
+               )
+
+      for from_address <- [String.upcase(@keeper), String.slice(@keeper, 2..-1//1), "0x12"] do
+        assert {:error, _error} =
+                 Keeper.record_sent_tx(tx_attrs(tx_hash: hash("w"), from_address: from_address),
+                   actor: @system
+                 )
+
+        assert_refused(
+          """
+          INSERT INTO keyfleet_app.keeper_txs
+            (id, job, fleet_id, function, target, from_address, args, chain_id, nonce, tx_hash,
+             max_fee, max_priority_fee, gas_limit)
+          SELECT gen_random_uuid(), job, fleet_id, function, target, $2, args, chain_id, nonce,
+                 $3, max_fee, max_priority_fee, gas_limit
+          FROM keyfleet_app.keeper_txs WHERE id = $1
+          """,
+          [Ecto.UUID.dump!(tx.id), from_address, hash("w")]
+        )
+      end
     end
 
     test "is settled by one update that finds it only while it has no outcome" do
@@ -67,6 +97,7 @@ defmodule KeyFleet.Keeper.RecordsTest do
             fleet_id: "fibonacci_cascade",
             function: "release",
             target: "0x" <> String.duplicate("1", 40),
+            from_address: "0x" <> String.duplicate("2", 40),
             args: %{"arg" => 2},
             chain_id: 1,
             nonce: 9,
@@ -153,6 +184,35 @@ defmodule KeyFleet.Keeper.RecordsTest do
       assert fields(Ash.get!(Run, run.id, actor: @system)) == fields(run)
     end
 
+    test "names why it stopped the keeper, and only a stop names a reason" do
+      assert {:error, _error} = Keeper.record_run(run_attrs(outcome: :stopped), actor: @system)
+
+      assert {:error, _error} =
+               Keeper.record_run(run_attrs(stop_reason: :foreign_nonce), actor: @system)
+
+      assert {:error, _error} =
+               Keeper.record_run(run_attrs(outcome: :stopped, stop_reason: :unknown),
+                 actor: @system
+               )
+
+      for {outcome, reason} <- [{"stopped", nil}, {"sent", "foreign_nonce"}, {"stopped", "other"}] do
+        assert_refused(
+          """
+          INSERT INTO keyfleet_app.keeper_runs
+            (id, job, started_at, finished_at, outcome, stop_reason, sent, skipped)
+          VALUES ($1, 'reveal', now(), now(), $2, $3, 0, 0)
+          """,
+          [Ecto.UUID.dump!(Ash.UUID.generate()), outcome, reason]
+        )
+      end
+
+      assert %{outcome: :stopped, stop_reason: :replaced_externally} =
+               Keeper.record_run!(
+                 run_attrs(outcome: :stopped, stop_reason: :replaced_externally),
+                 actor: @system
+               )
+    end
+
     test "ends no earlier than it started" do
       now = DateTime.utc_now()
 
@@ -188,6 +248,7 @@ defmodule KeyFleet.Keeper.RecordsTest do
         fleet_id: @fleet,
         function: :request_reveal,
         target: @target,
+        from_address: @keeper,
         args: %{"arg" => 1},
         chain_id: 8453,
         nonce: 0,

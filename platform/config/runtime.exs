@@ -52,13 +52,42 @@ Logger.info("App surfaces #{if app_surfaces?, do: "enabled", else: "disabled"}")
 
 # Fleets are read from the chain only when a node is named, and never by the
 # test suite.
+rpc_url =
+  case System.get_env("KEYFLEET_RPC_URL") do
+    url when url in [nil, ""] -> nil
+    url -> url
+  end
+
 if config_env() != :test do
-  config :keyfleet, KeyFleet.Chain,
-    rpc_url:
-      (case System.get_env("KEYFLEET_RPC_URL") do
-         url when url in [nil, ""] -> nil
-         url -> url
-       end)
+  config :keyfleet, KeyFleet.Chain, rpc_url: rpc_url
+end
+
+# Only production reads the keeper's key, and signs through the same node;
+# development and tests never start the keeper. The key is never printed,
+# not even when it is malformed.
+if config_env() == :prod do
+  keeper_key =
+    case System.get_env("KEYFLEET_KEEPER_PRIVATE_KEY") do
+      nil ->
+        nil
+
+      key ->
+        cond do
+          String.trim(key) == "" ->
+            nil
+
+          KeyFleet.Keeper.Wallet.private_key(key) == :error ->
+            raise "KEYFLEET_KEEPER_PRIVATE_KEY is malformed"
+
+          is_nil(rpc_url) ->
+            raise "KEYFLEET_KEEPER_PRIVATE_KEY is set but KEYFLEET_RPC_URL is not"
+
+          true ->
+            key
+        end
+    end
+
+  config :keyfleet, KeyFleet.Keeper, private_key: keeper_key
 end
 
 # Each fleet's trait table ships with the release, named by its hash; the

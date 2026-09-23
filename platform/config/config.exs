@@ -19,6 +19,10 @@ config :ash, default_string_length_count: :codepoints
 # JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
 config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.RpcClient, poll_interval_ms: 4_000
 
+# The keeper sends through the same node, and looks for each receipt once a
+# second. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY` is set.
+config :keyfleet, KeyFleet.Keeper, node: KeyFleet.Keeper.RpcNode, receipt_poll_ms: 1_000
+
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,

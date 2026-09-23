@@ -4,9 +4,7 @@ defmodule KeyFleet.Chain.RpcClient do
 
   require Logger
 
-  alias KeyFleet.Chain.Abi
-
-  @timeout 20_000
+  alias KeyFleet.Chain.{Abi, JsonRpc}
 
   @impl true
   def chain_id do
@@ -93,23 +91,15 @@ defmodule KeyFleet.Chain.RpcClient do
   end
 
   defp request(method, params) do
-    case Req.post(Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:rpc_url],
-           json: %{jsonrpc: "2.0", id: 1, method: method, params: params},
-           receive_timeout: @timeout,
-           retry: false
-         ) do
-      {:ok, %{status: 200, body: %{"result" => result}}} ->
+    case JsonRpc.request(method, params) do
+      {:ok, result} ->
         {:ok, result}
 
-      {:ok, %{status: 200, body: %{"error" => %{} = error}}} ->
+      {:error, {:rpc_error, error}} ->
         refused_or_failed(method, error)
 
-      {:ok, %{status: status}} ->
-        Logger.warning("chain read failed #{inspect(%{method: method, status: status})}")
-        {:error, :chain_unavailable}
-
-      {:error, reason} ->
-        Logger.warning("chain read failed #{inspect(%{method: method, reason: reason})}")
+      {:error, {:unavailable, detail}} ->
+        Logger.warning("chain read failed #{inspect(Map.put(detail, :method, method))}")
         {:error, :chain_unavailable}
     end
   end
@@ -117,23 +107,16 @@ defmodule KeyFleet.Chain.RpcClient do
   # Nodes report a call the contract refused with error code 3, or with a
   # message that says so; anything else is the node failing.
   defp refused_or_failed(method, error) do
-    if refused?(error) do
+    if JsonRpc.reverted?(error) do
       {:error, :reverted}
     else
       Logger.warning(
-        "chain read failed #{inspect(%{method: method, code: error["code"], message: error["message"]})}"
+        "chain read failed #{inspect(%{method: method, code: error.code, message: error.message})}"
       )
 
       {:error, :chain_unavailable}
     end
   end
-
-  defp refused?(%{"code" => 3}), do: true
-
-  defp refused?(%{"message" => message}) when is_binary(message),
-    do: message |> String.downcase() |> String.contains?("execution reverted")
-
-  defp refused?(_error), do: false
 
   defp hex_quantity(value), do: "0x" <> (value |> Integer.to_string(16) |> String.downcase())
 end

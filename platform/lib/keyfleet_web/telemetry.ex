@@ -23,7 +23,13 @@ defmodule KeyFleetWeb.Telemetry do
 
   def prometheus_metrics do
     [
-      counter("keyfleet.privy.browser_failure.total", tags: [:reason])
+      counter("keyfleet.privy.browser_failure.total", tags: [:reason]),
+      # Each keeper transaction's outcome, each time the keeper stopped or
+      # paused sending, and its wallet's balance and last 24 hours' spending.
+      counter("keyfleet.keeper.tx.total", tags: [:function, :outcome]),
+      counter("keyfleet.keeper.paused.total", tags: [:job, :reason]),
+      last_value("keyfleet.keeper.wallet_balance_wei"),
+      last_value("keyfleet.keeper.spent_24h_wei")
     ]
   end
 

@@ -31,9 +31,8 @@ defmodule KeyFleet.Keeper.Wallet do
   `{:error, :malformed_key}` for anything else, including zero and numbers
   not below the curve order.
   """
-  def new("0x" <> hex) when byte_size(hex) == 64 do
-    with {:ok, <<number::256>> = private_key} <- Base.decode16(hex, case: :mixed),
-         true <- number > 0 and number < @curve_order,
+  def new(key) do
+    with {:ok, private_key} <- private_key(key),
          {:ok, <<4, public_key::binary-size(64)>>} <-
            ExSecp256k1.create_public_key(private_key) do
       {:ok, %__MODULE__{address: address(public_key), private_key: private_key}}
@@ -42,7 +41,22 @@ defmodule KeyFleet.Keeper.Wallet do
     end
   end
 
-  def new(_value), do: {:error, :malformed_key}
+  @doc """
+  The 32 bytes of a private key given as `new/1` takes it, or `:error`.
+  It does no curve arithmetic, so the runtime configuration can check a
+  key before anything else is loaded.
+  """
+  def private_key("0x" <> hex) when byte_size(hex) == 64 do
+    case Base.decode16(hex, case: :mixed) do
+      {:ok, <<number::256>> = private_key} when number > 0 and number < @curve_order ->
+        {:ok, private_key}
+
+      _malformed ->
+        :error
+    end
+  end
+
+  def private_key(_value), do: :error
 
   @doc """
   Signs a call and returns `{:ok, {raw, hash}}`: the raw transaction for

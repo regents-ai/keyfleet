@@ -59,6 +59,125 @@ defmodule KeyFleet.Release do
     IO.puts("#{fleet_id} will be read again.")
   end
 
+  @doc """
+  Prints the keeper's wallet, whether it is stopped, each job's last
+  recorded round, and on the chain its node serves, its balance, what it
+  spent in the last 24 hours and its last 20 transactions there.
+  `bin/keeper-status` runs it.
+  """
+  def keeper_status, do: with_release_repo(fn -> keeper_status!() end)
+
+  @doc "Prints the keeper's status through an already running repository, as `keeper_status/0` does."
+  def keeper_status! do
+    case Application.fetch_env!(@app, KeyFleet.Keeper)[:private_key] do
+      nil ->
+        IO.puts("Keeper off: KEYFLEET_KEEPER_PRIVATE_KEY is not set.")
+
+      key ->
+        {:ok, wallet} = KeyFleet.Keeper.Wallet.new(key)
+        IO.puts("Keeper wallet #{wallet.address}")
+        print_keeper_stop()
+        print_keeper_runs()
+        {:ok, _started} = Application.ensure_all_started(:req)
+        print_keeper_chain(KeyFleet.Keeper.Node.configured(), wallet.address)
+    end
+  end
+
+  @doc """
+  Clears the keeper's stop, once the wallet is the keeper's alone again, and
+  prints the stop it cleared. The keeper sends again once the site is
+  restarted. `bin/keeper-resume` runs it.
+  """
+  def keeper_resume, do: with_release_repo(fn -> keeper_resume!() end)
+
+  @doc "Clears the keeper's stop through an already running repository, as `keeper_resume/0` does."
+  def keeper_resume! do
+    case KeyFleet.Keeper.resume() do
+      {:ok, nil} ->
+        IO.puts("The keeper is not stopped.")
+
+      {:ok, stop} ->
+        IO.puts(
+          "Cleared the keeper's stop (#{stop.stop_reason}) from #{stop.finished_at}. " <>
+            "Restart the site for the keeper to send again."
+        )
+    end
+  end
+
+  defp print_keeper_stop do
+    case KeyFleet.Keeper.stopped() do
+      {:ok, nil} ->
+        IO.puts("Not stopped")
+
+      {:ok, stop} ->
+        IO.puts("Stopped (#{stop.stop_reason}) at #{stop.finished_at}: #{stop.notes}")
+
+        IO.puts(
+          "Once the wallet is the keeper's alone, run bin/keeper-resume and restart the site."
+        )
+    end
+  end
+
+  defp print_keeper_runs do
+    for job <- [:reveal, :income] do
+      case KeyFleet.Keeper.last_run!(job, actor: %KeyFleet.Actors.System{}) do
+        nil ->
+          IO.puts("#{job}: no round recorded")
+
+        run ->
+          IO.puts(
+            "#{job}: #{run.outcome} at #{run.finished_at}, #{run.sent} sent, #{run.skipped} skipped"
+          )
+      end
+    end
+
+    :ok
+  end
+
+  defp print_keeper_chain(node, address) do
+    with {:ok, chain_id} <- node.chain_id(),
+         {:ok, balance} <- node.balance(address) do
+      {:ok, %{settled: settled, waiting: waiting}} = KeyFleet.Keeper.spend(chain_id, address)
+      waiting = Enum.sum(Map.values(waiting))
+
+      IO.puts("Chain #{chain_id}, balance #{KeyFleet.Keeper.eth(balance)} ETH")
+
+      IO.puts(
+        "Spent in the last 24 hours: #{KeyFleet.Keeper.eth(settled)} ETH, and up to " <>
+          "#{KeyFleet.Keeper.eth(waiting)} ETH more waiting (limit 0.01 ETH)"
+      )
+
+      print_keeper_txs(chain_id, address)
+    else
+      {:error, reason} -> IO.puts("The node did not answer: #{inspect(reason)}")
+    end
+  end
+
+  defp print_keeper_txs(chain_id, address) do
+    IO.puts("Last 20 transactions:")
+
+    for tx <-
+          KeyFleet.Keeper.list_latest_txs!(chain_id, address, actor: %KeyFleet.Actors.System{}) do
+      IO.puts(
+        Enum.join(
+          [
+            tx.sent_at,
+            tx.job,
+            tx.fleet_id,
+            tx.function,
+            tx.target,
+            "nonce #{tx.nonce}",
+            tx.status || "waiting",
+            tx.tx_hash
+          ],
+          " "
+        )
+      )
+    end
+
+    :ok
+  end
+
   defp with_release_repo(fun) do
     load_app()
     Application.put_env(@app, KeyFleet.Repo, migration_config!())

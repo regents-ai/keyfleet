@@ -4,6 +4,9 @@ defmodule KeyFleet.Keeper.Run do
   ended. Rounds that change nothing leave no record. A run is written once,
   when it ends, and never changed or deleted. Only the keeper reads or writes
   here.
+
+  A run `:stopped` with a `stop_reason` stops the keeper, across restarts,
+  until a later run `:resumed` clears it; `bin/keeper-resume` writes that.
   """
   use Ash.Resource,
     domain: KeyFleet.Keeper,
@@ -18,8 +21,10 @@ defmodule KeyFleet.Keeper.Run do
     :paused_vrf_balance,
     :paused_spend_ceiling,
     :stopped,
+    :resumed,
     :error
   ]
+  @stop_reasons [:foreign_nonce, :replaced_externally, :tx_hash_mismatch]
 
   postgres do
     table "keeper_runs"
@@ -32,6 +37,15 @@ defmodule KeyFleet.Keeper.Run do
 
       check_constraint(:outcome, "keeper_runs_outcome",
         check: "outcome IN (#{Enum.map_join(@outcomes, ", ", &"'#{&1}'")})"
+      )
+
+      check_constraint(:stop_reason, "keeper_runs_stop_reason",
+        check: "stop_reason IN (#{Enum.map_join(@stop_reasons, ", ", &"'#{&1}'")})"
+      )
+
+      # A stop, and only a stop, says why.
+      check_constraint(:stop_reason, "keeper_runs_stop_has_reason",
+        check: "(outcome = 'stopped') = (stop_reason IS NOT NULL)"
       )
 
       check_constraint(:finished_at, "keeper_runs_finished_after_start",
@@ -80,8 +94,23 @@ defmodule KeyFleet.Keeper.Run do
   actions do
     defaults [:read]
 
+    # A job's most recent run.
+    read :last do
+      argument :job, :atom, allow_nil?: false, constraints: [one_of: @jobs]
+      get? true
+      filter expr(job == ^arg(:job))
+      prepare build(sort: [finished_at: :desc], limit: 1)
+    end
+
+    # The latest stop or resume: the keeper is stopped while it is a stop.
+    read :stop_state do
+      get? true
+      filter expr(outcome in [:stopped, :resumed])
+      prepare build(sort: [finished_at: :desc], limit: 1)
+    end
+
     create :record do
-      accept [:job, :started_at, :finished_at, :outcome, :sent, :skipped, :notes]
+      accept [:job, :started_at, :finished_at, :outcome, :stop_reason, :sent, :skipped, :notes]
     end
   end
 
@@ -98,6 +127,7 @@ defmodule KeyFleet.Keeper.Run do
     attribute :started_at, :utc_datetime_usec, allow_nil?: false
     attribute :finished_at, :utc_datetime_usec, allow_nil?: false
     attribute :outcome, :atom, allow_nil?: false, constraints: [one_of: @outcomes]
+    attribute :stop_reason, :atom, constraints: [one_of: @stop_reasons]
 
     # How many transactions the round sent, and how many it passed over.
     for field <- [:sent, :skipped] do

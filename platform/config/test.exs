@@ -13,6 +13,7 @@ config :keyfleet, KeyFleetWeb.Endpoint,
 
 config :keyfleet, :privy_verifier, KeyFleet.TestPrivyVerifier
 config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.StubClient
+config :keyfleet, KeyFleet.Keeper, node: KeyFleet.Keeper.StubNode, receipt_poll_ms: 0
 
 config :keyfleet, KeyFleet.Traits,
   directory: Path.expand("../test/support/fixtures/trait_tables", __DIR__)

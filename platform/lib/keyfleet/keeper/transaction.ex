@@ -35,7 +35,11 @@ defmodule KeyFleet.Keeper.Transaction do
         check: "status IN (#{Enum.map_join(@statuses, ", ", &"'#{&1}'")})"
       )
 
-      check_constraint(:target, "keeper_txs_target_shape", check: "target ~ '^0x[0-9a-f]{40}$'")
+      for field <- [:target, :from_address] do
+        check_constraint(field, "keeper_txs_#{field}_shape",
+          check: "#{field} ~ '^0x[0-9a-f]{40}$'"
+        )
+      end
 
       for field <- [:tx_hash, :replaces_tx_hash] do
         check_constraint(field, "keeper_txs_#{field}_shape",
@@ -75,8 +79,8 @@ defmodule KeyFleet.Keeper.Transaction do
     end
 
     custom_indexes do
-      # The transactions still waiting for an outcome.
-      index([:chain_id, :nonce], where: "status IS NULL")
+      # Each wallet's transactions still waiting for an outcome.
+      index([:chain_id, :from_address, :nonce], where: "status IS NULL")
     end
 
     custom_statements do
@@ -87,13 +91,13 @@ defmodule KeyFleet.Keeper.Transaction do
           IF TG_OP <> 'UPDATE' THEN
             RAISE EXCEPTION 'keeper transactions cannot be deleted' USING ERRCODE = '23514';
           END IF;
-          IF ROW(NEW.id, NEW.job, NEW.fleet_id, NEW.function, NEW.target, NEW.args, NEW.chain_id,
-                 NEW.nonce, NEW.tx_hash, NEW.replaces_tx_hash, NEW.max_fee, NEW.max_priority_fee,
-                 NEW.gas_limit, NEW.sent_at)
+          IF ROW(NEW.id, NEW.job, NEW.fleet_id, NEW.function, NEW.target, NEW.from_address,
+                 NEW.args, NEW.chain_id, NEW.nonce, NEW.tx_hash, NEW.replaces_tx_hash, NEW.max_fee,
+                 NEW.max_priority_fee, NEW.gas_limit, NEW.sent_at)
              IS DISTINCT FROM
-             ROW(OLD.id, OLD.job, OLD.fleet_id, OLD.function, OLD.target, OLD.args, OLD.chain_id,
-                 OLD.nonce, OLD.tx_hash, OLD.replaces_tx_hash, OLD.max_fee, OLD.max_priority_fee,
-                 OLD.gas_limit, OLD.sent_at) THEN
+             ROW(OLD.id, OLD.job, OLD.fleet_id, OLD.function, OLD.target, OLD.from_address,
+                 OLD.args, OLD.chain_id, OLD.nonce, OLD.tx_hash, OLD.replaces_tx_hash, OLD.max_fee,
+                 OLD.max_priority_fee, OLD.gas_limit, OLD.sent_at) THEN
             RAISE EXCEPTION 'what a keeper transaction sent cannot be changed' USING ERRCODE = '23514';
           END IF;
           IF OLD.status IS NOT NULL THEN
@@ -137,6 +141,7 @@ defmodule KeyFleet.Keeper.Transaction do
         :fleet_id,
         :function,
         :target,
+        :from_address,
         :args,
         :chain_id,
         :nonce,
@@ -170,6 +175,55 @@ defmodule KeyFleet.Keeper.Transaction do
       argument :id, :uuid, allow_nil?: false
       filter expr(id == ^arg(:id) and is_nil(status))
     end
+
+    # Every transaction the wallet sent on the chain still waiting for an
+    # outcome.
+    read :outstanding do
+      argument :chain_id, :integer, allow_nil?: false
+      argument :from_address, :string, allow_nil?: false
+
+      filter expr(
+               chain_id == ^arg(:chain_id) and from_address == ^arg(:from_address) and
+                 is_nil(status)
+             )
+    end
+
+    # What counts toward the wallet's spending on the chain: every
+    # transaction it sent since `since`, and every one still waiting.
+    read :toward_spend do
+      argument :chain_id, :integer, allow_nil?: false
+      argument :from_address, :string, allow_nil?: false
+      argument :since, :utc_datetime_usec, allow_nil?: false
+
+      filter expr(
+               chain_id == ^arg(:chain_id) and from_address == ^arg(:from_address) and
+                 (is_nil(status) or sent_at >= ^arg(:since))
+             )
+    end
+
+    # The wallet's newest transactions on the chain.
+    read :latest do
+      argument :chain_id, :integer, allow_nil?: false
+      argument :from_address, :string, allow_nil?: false
+      filter expr(chain_id == ^arg(:chain_id) and from_address == ^arg(:from_address))
+      prepare build(sort: [sent_at: :desc, nonce: :desc, max_fee: :desc], limit: 20)
+    end
+
+    # The wallet's settled transaction at the highest nonce on the chain.
+    # Every settled nonce was taken on the chain, by this transaction or
+    # another, so a node whose latest nonce is not past it is behind.
+    read :last_settled do
+      argument :chain_id, :integer, allow_nil?: false
+      argument :from_address, :string, allow_nil?: false
+      get? true
+
+      filter expr(
+               chain_id == ^arg(:chain_id) and from_address == ^arg(:from_address) and
+                 not is_nil(status)
+             )
+
+      prepare build(sort: [nonce: :desc], limit: 1)
+    end
   end
 
   policies do
@@ -185,6 +239,11 @@ defmodule KeyFleet.Keeper.Transaction do
     attribute :function, :atom, allow_nil?: false, constraints: [one_of: @functions]
 
     attribute :target, :string,
+      allow_nil?: false,
+      constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+
+    # The keeper wallet that signed it.
+    attribute :from_address, :string,
       allow_nil?: false,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
