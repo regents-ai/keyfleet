@@ -158,11 +158,16 @@ defmodule KeyFleet.Graph.Checks.KeyActorTest do
   end
 
   # Every key of a Fibonacci fleet, and a transfer of every tenth, written
-  # straight to the table: one at a time would take minutes.
+  # straight to the table and numbered as the chain reader numbers them: one
+  # at a time would take minutes.
   defp sell_all!(fleet) do
-    rows =
+    epochs =
       for token_id <- 1..46_365,
-          epoch <- if(rem(token_id, 10) == 0, do: [0, 1], else: [0]) do
+          epoch <- if(rem(token_id, 10) == 0, do: [0, 1], else: [0]),
+          do: {token_id, epoch}
+
+    rows =
+      for {{token_id, epoch}, seq} <- Enum.with_index(epochs, 1) do
         %{
           id: Ecto.UUID.bingenerate(),
           fleet_id: fleet,
@@ -174,13 +179,19 @@ defmodule KeyFleet.Graph.Checks.KeyActorTest do
           transaction_hash:
             "0x" <>
               Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}/#{epoch}"), case: :lower),
-          log_index: 0
+          log_index: 0,
+          record_seq: seq
         }
       end
 
     rows
     |> Enum.chunk_every(5_000)
     |> Enum.each(&KeyFleet.Repo.insert_all("key_attachments", &1))
+
+    KeyFleet.Repo.query!(
+      "UPDATE keyfleet_app.chain_cursors SET ownership_seq = $2 WHERE fleet_id = $1",
+      [fleet, length(rows)]
+    )
   end
 
   defp deploy(fleet, contract) do

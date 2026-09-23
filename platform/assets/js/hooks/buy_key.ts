@@ -11,7 +11,6 @@ import {
 
 type BuyKeyHook = Hook & {
   el: HTMLElement
-  pushEvent(event: string, payload: unknown): void
   cleanup?: () => void
 }
 
@@ -36,7 +35,6 @@ export function buyKeyHook(
   return {
     mounted(this: BuyKeyHook) {
       const root = this.el
-      let alive = true
 
       const press = (event: Event) => {
         if (!(event.target as Element | null)?.closest("[data-buy-key]")) return
@@ -61,19 +59,11 @@ export function buyKeyHook(
           return
         }
 
-        void purchase(order, wallet, update => {
-          show(update)
-          if (update.kind === "bought" && alive) {
-            this.pushEvent("key_bought", {token_id: update.tokenId.toString()})
-          }
-        })
+        void purchase(order, wallet, show)
       }
 
       root.addEventListener("click", press)
-      this.cleanup = () => {
-        alive = false
-        root.removeEventListener("click", press)
-      }
+      this.cleanup = () => root.removeEventListener("click", press)
     },
 
     destroyed(this: BuyKeyHook) {

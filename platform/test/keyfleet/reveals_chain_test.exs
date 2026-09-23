@@ -31,7 +31,8 @@ defmodule KeyFleet.RevealsChainTest do
 
   describe "recording reveals" do
     # Each reveal is numbered in chain order and the pass names the keys it
-    # revealed; reading the same blocks again records and names nothing.
+    # revealed and sold in one notice; reading the same blocks again records
+    # and names nothing.
     test "each reveal is recorded once with its seed and the keys are named", %{fleet: fleet} do
       Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
 
@@ -44,6 +45,7 @@ defmodule KeyFleet.RevealsChainTest do
 
       assert Scanner.step(fleet, StubClient) == :ok
       assert_received {:keys_changed, @fleet, [2, 1]}
+      refute_received {:keys_changed, _fleet, _token_ids}
 
       assert %{
                request_id: request_id,

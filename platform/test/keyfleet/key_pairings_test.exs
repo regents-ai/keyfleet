@@ -44,6 +44,49 @@ defmodule KeyFleet.KeyPairingsTest do
              Keys.request_pairing(@fleet, 1, %{}, actor: owner)
   end
 
+  # The fleet's pages redraw a key's agent mark when an agent starts or stops
+  # running it; a request still waiting for the owner changes nothing shown.
+  test "a key gaining or losing the agent running it is announced; a waiting request is not", %{
+    owner: owner
+  } do
+    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+
+    request = request!(agent("b"), "Operator agent")
+    refute_received {:keys_changed, _fleet, _token_ids}
+
+    approved = Keys.approve_pairing!(request, %{}, actor: human(owner))
+    assert_received {:keys_changed, @fleet, [1]}
+
+    Keys.detach_operator!(approved, %{}, actor: human(owner))
+    assert_received {:keys_changed, @fleet, [1]}
+
+    declined = request!(agent("c"), "Declined agent")
+    Keys.decline_pairing!(declined, %{}, actor: human(owner))
+    refute_received {:keys_changed, _fleet, _token_ids}
+
+    profile!(owner, "Owner agent")
+    Keys.request_pairing!(@fleet, 1, %{}, actor: owner)
+    assert_received {:keys_changed, @fleet, [1]}
+  end
+
+  # The key map marks the keys an agent runs today and the keys a person's
+  # wallets hold today; a key that changed hands is neither any more.
+  test "a fleet's keys run by an agent and held by a wallet are read under today's owner", %{
+    owner: owner
+  } do
+    epoch!(token_id: 2, block_number: 11, log_index: 1, owner_wallet: wallet("e"))
+    attach!(agent("b"), "Operator agent")
+
+    assert run_keys() == [1]
+    assert held_keys([owner.wallet_address, wallet("e")]) == [1, 2]
+
+    epoch!(ownership_epoch: 1, owner_wallet: wallet("e"), block_number: 20)
+
+    assert run_keys() == []
+    assert held_keys([owner.wallet_address]) == []
+    assert held_keys([wallet("e")]) == [1, 2]
+  end
+
   test "a request needs a recorded key and a profile", %{owner: owner} do
     stranger = agent("c")
     profile!(owner, "Owner agent")
@@ -228,6 +271,15 @@ defmodule KeyFleet.KeyPairingsTest do
 
     assert Keys.current_operator!(@fleet, 1).id == attached.id
   end
+
+  # Other suites commit Syndicate keys outside the sandbox; only this test's
+  # keys are read.
+  @these_keys [query: [filter: [token_id: [in: [1, 2]]]]]
+
+  defp run_keys, do: Enum.map(Keys.keys_run_in_fleet!(@fleet, @these_keys), & &1.token_id)
+
+  defp held_keys(wallets),
+    do: Enum.map(Keys.keys_held_in_fleet!(@fleet, wallets, @these_keys), & &1.token_id)
 
   defp agent(character) do
     %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}

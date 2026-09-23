@@ -1,6 +1,10 @@
 defmodule KeyFleet.Keys.KeyAttachment do
   require Ash.Query
-  @moduledoc "An immutable ownership epoch: who held a key, and from which transfer."
+
+  @moduledoc """
+  An immutable ownership epoch: who held a key, and from which transfer.
+  `record_seq` is the fleet's count of epochs when it was recorded.
+  """
   use Ash.Resource,
     domain: KeyFleet.Keys,
     data_layer: AshPostgres.DataLayer,
@@ -24,6 +28,10 @@ defmodule KeyFleet.Keys.KeyAttachment do
 
       check_constraint(:log_index, "key_attachments_nonnegative_log", check: "log_index >= 0")
 
+      check_constraint(:record_seq, "key_attachments_positive_record_seq",
+        check: "record_seq > 0"
+      )
+
       check_constraint(:owner_wallet, "key_attachments_owner_shape",
         check: "owner_wallet ~ '^0x[0-9a-f]{40}$'"
       )
@@ -42,6 +50,8 @@ defmodule KeyFleet.Keys.KeyAttachment do
       # post in, name or create a room, made on every such action, reads a few
       # entries.
       index([:fleet_id, :owner_wallet, :token_id])
+      # What a stretch of blocks recorded, which every pass reads again.
+      index([:fleet_id, :block_number])
     end
 
     custom_statements do
@@ -53,10 +63,12 @@ defmodule KeyFleet.Keys.KeyAttachment do
             RAISE EXCEPTION 'key ownership epochs cannot be deleted' USING ERRCODE = '23514';
           END IF;
           IF ROW(NEW.id, NEW.fleet_id, NEW.token_id, NEW.ownership_epoch, NEW.owner_wallet,
-                 NEW.block_number, NEW.block_hash, NEW.transaction_hash, NEW.log_index, NEW.observed_at)
+                 NEW.block_number, NEW.block_hash, NEW.transaction_hash, NEW.log_index, NEW.observed_at,
+                 NEW.record_seq)
              IS DISTINCT FROM
              ROW(OLD.id, OLD.fleet_id, OLD.token_id, OLD.ownership_epoch, OLD.owner_wallet,
-                 OLD.block_number, OLD.block_hash, OLD.transaction_hash, OLD.log_index, OLD.observed_at) THEN
+                 OLD.block_number, OLD.block_hash, OLD.transaction_hash, OLD.log_index, OLD.observed_at,
+                 OLD.record_seq) THEN
             RAISE EXCEPTION 'key ownership projection fields are immutable' USING ERRCODE = '23514';
           END IF;
           RETURN NEW;
@@ -127,7 +139,19 @@ defmodule KeyFleet.Keys.KeyAttachment do
       return_skipped_upsert? true
 
       change {KeyFleet.Chain.Changes.RecordOnce,
-              identity: [:fleet_id, :token_id, :ownership_epoch], block: :block_number}
+              identity: [:fleet_id, :token_id, :ownership_epoch],
+              block: :block_number,
+              number: :ownership_seq}
+    end
+
+    # The keys of the epochs recorded after the fleet's epoch number
+    # `after_seq`, oldest first.
+    read :recorded_since do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :after_seq, :integer, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
+      prepare build(select: [:token_id], sort: [record_seq: :asc])
     end
 
     read :history do
@@ -211,6 +235,20 @@ defmodule KeyFleet.Keys.KeyAttachment do
              )
     end
 
+    # Every key a person's wallets hold in this fleet right now, by number,
+    # for the key map.
+    read :held_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :owner_wallets, {:array, :string}, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and owner_wallet in ^arg(:owner_wallets) and
+                 ownership_epoch == current_ownership_epoch
+             )
+
+      prepare build(select: [:token_id], sort: [token_id: :asc])
+    end
+
     # The lowest-numbered key a person's wallets hold in this fleet right now.
     # Keys rank by the order they were sold, so it is their highest-ranked key,
     # and it is who they are in the fleet: everything they write there is
@@ -267,6 +305,11 @@ defmodule KeyFleet.Keys.KeyAttachment do
         constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
     end
 
+    attribute :record_seq, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: 9_223_372_036_854_775_807]
+
     attribute :observed_at, :utc_datetime_usec,
       allow_nil?: false,
       generated?: true,
@@ -299,5 +342,6 @@ defmodule KeyFleet.Keys.KeyAttachment do
   identities do
     identity :unique_key_epoch, [:fleet_id, :token_id, :ownership_epoch]
     identity :unique_chain_event, [:transaction_hash, :log_index]
+    identity :unique_record_seq, [:fleet_id, :record_seq]
   end
 end

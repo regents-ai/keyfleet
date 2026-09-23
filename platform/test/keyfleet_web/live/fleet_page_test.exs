@@ -3,6 +3,8 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
   alias KeyFleet.Accounts
   alias KeyFleet.Actors
+  alias KeyFleet.Agents
+  alias KeyFleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Fleets.Presets
@@ -14,11 +16,14 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
   @path "/app/fleets/fibonacci_cascade"
   @issued 150
   @owner "0x" <> String.duplicate("a", 40)
+  @stranger "0x" <> String.duplicate("b", 40)
+  @operator "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 
   setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.open_cursor!(@fleet)
 
     for token_id <- 1..@issued, do: issue!(@fleet, token_id)
 
@@ -94,7 +99,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     assert html =~ "Sales figures are catching up."
     refute html =~ "Keys issued"
-    refute html =~ "Next key"
+    refute has_element?(view, ".fleet-facts dt", "Next key")
     assert shown_keys(view) == Enum.to_list(1..100)
   end
 
@@ -152,14 +157,31 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     test "a sold-out fleet says so and offers nothing to buy", %{conn: conn} do
       deploy!("fleet_tech_classic")
-      for token_id <- 1..144, do: issue!("fleet_tech_classic", token_id)
       ChainHelpers.seed_cursor!("fleet_tech_classic")
+      for token_id <- 1..144, do: issue!("fleet_tech_classic", token_id)
 
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
 
       assert text(view, "#buy-key-sold-out") == "All 144 keys in this fleet have been sold."
-      refute has_element?(view, "#buy-key-order")
+      refute has_element?(view, "#buy-key-offer")
       refute has_element?(view, "#buy-key-button")
+    end
+
+    # The buyer's messages about their purchases stay when the last key sells
+    # while the page is open.
+    test "a fleet that sells out while open keeps the buyer's messages", %{conn: conn} do
+      deploy!("fleet_tech_classic")
+      ChainHelpers.seed_cursor!("fleet_tech_classic")
+      for token_id <- 1..143, do: issue!("fleet_tech_classic", token_id)
+      {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
+      assert text(view, "#buy-key-number") == "144"
+
+      issue!("fleet_tech_classic", 144)
+      send(view.pid, {:keys_changed, "fleet_tech_classic", [144]})
+
+      assert text(view, "#buy-key-sold-out") == "All 144 keys in this fleet have been sold."
+      refute has_element?(view, "#buy-key-button")
+      assert has_element?(view, ~s(#buy-key-order[phx-hook="BuyKey"] > #buy-key-status))
     end
 
     # Stopping here would hold back a press the contract can answer: a key
@@ -254,6 +276,218 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     end
   end
 
+  describe "the key map" do
+    # Each fleet draws its keys in its own shape, and only once it is deployed.
+    test "every fleet's map draws its own layout", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      refute has_element?(view, "#fleet-map")
+
+      for {fleet_id, layout} <- [
+            {"fibonacci_syndicate", "fibonacci"},
+            {"fibonacci_cascade", "fibonacci"},
+            {"fleet_tech_classic", "classic"},
+            {"fleet_tech_accelerant", "accelerant"}
+          ] do
+        deploy!(fleet_id)
+        ChainHelpers.seed_cursor!(fleet_id)
+        {:ok, view, _html} = live(conn, "/app/fleets/#{fleet_id}")
+
+        assert has_element?(
+                 view,
+                 ~s(#key-map-#{fleet_id}[phx-hook="KeyMap"][data-layout="#{layout}"])
+               )
+      end
+    end
+
+    # Level 9 holds key 151, the next on sale, so the map goes to levels 1 to 9
+    # and level 10 after it.
+    test "offers the next key, the viewer's keys and each level the map draws", %{
+      conn: conn
+    } do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+
+      assert has_element?(view, "#key-map-next", "Next key")
+      assert has_element?(view, "#key-map-mine", "Your keys")
+
+      assert option_values(view, "#key-map-level-choice option") ==
+               Enum.map(1..10, &to_string/1)
+
+      {:ok, view, _html} = live(build_conn(), @path)
+      refute has_element?(view, "#key-map-mine")
+
+      deploy!("fleet_tech_classic")
+      ChainHelpers.seed_cursor!("fleet_tech_classic")
+      {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
+      refute has_element?(view, "#key-map-level")
+    end
+
+    # Every sold key's two marks travel as bitsets small enough to send at the
+    # largest fleet's size.
+    test "loads with the keys the viewer holds and the keys agents run", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      issue!(@fleet, 151, @stranger)
+      pair!(7)
+
+      {:ok, view, _html} = live(conn, @path)
+      render_hook(view, "keymap_ready", %{})
+
+      assert_reply(view, %{minted: 151, max_supply: 46_365, mine: mine, agent: agent} = reply)
+      assert byte_size(Jason.encode!(reply)) <= 20_000
+      assert marked(mine) == Enum.to_list(1..150)
+      assert marked(agent) == [7]
+    end
+
+    test "someone signed out holds none of the keys", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      assert {:ok, _view, _html} = live(conn, @path)
+
+      {:ok, view, _html} = live(build_conn(), @path)
+      render_hook(view, "keymap_ready", %{})
+
+      assert_reply(view, %{mine: mine})
+      assert Base.decode64!(mine) == <<0::size(5_796 * 8)>>
+    end
+
+    # Every key sold and the next one can be chosen; the choice goes into the
+    # address with the key list's page, and back and forward move through it.
+    test "a key chosen goes into the address, and back and forward follow it", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      second_page = view |> element("#fleet-keys-next") |> render() |> href()
+      view |> element("#fleet-keys-next") |> render_click()
+      assert_patch(view, second_page)
+
+      render_hook(view, "select_key", %{"token_id" => 151})
+      assert_patch(view, second_page <> "&key=151")
+      assert text(view, "#key-map-selected") == "Key 151 chosen."
+      assert has_element?(view, ~s(#key-map-fibonacci_cascade[data-selected="151"]))
+
+      for refused <- [0, 152, -1, "12", 1.5, nil] do
+        render_hook(view, "select_key", %{"token_id" => refused})
+        refute_patched(view)
+      end
+
+      render_patch(view, @path <> "?key=12")
+      assert_push_event(view, "keymap:select", %{token_id: 12})
+      assert text(view, "#key-map-selected") == "Key 12 chosen."
+      assert has_element?(view, "#fleet-keys-next[href$='&key=12']")
+
+      render_patch(view, @path <> "?key=152")
+      assert_push_event(view, "keymap:select", %{token_id: nil})
+      assert text(view, "#key-map-selected") == "No key chosen yet."
+    end
+
+    # A key sold, moved or paired reaches an open page as that key's new marks.
+    test "a key sold by the chain reader reaches the map as a change", %{conn: conn} do
+      fleet = deploy!("fleet_tech_accelerant", 5_000_000)
+      {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_accelerant")
+
+      StubClient.put_chain(chain_head(5_000_010), [
+        ownership_log(1, 1, @owner, 5_000_003),
+        ownership_log(2, 1, @stranger, 5_000_004)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_push_event(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
+      assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
+
+      StubClient.put_chain(chain_head(5_000_020), [
+        ownership_log(1, 1, @owner, 5_000_003),
+        ownership_log(2, 1, @stranger, 5_000_004),
+        ownership_log(1, 2, @stranger, 5_000_015)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_push_event(view, "keymap:patch", %{minted: 2, keys: [[1, 0]]})
+    end
+
+    test "an agent starting or stopping on a key reaches the map as a change", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+
+      pairing = pair!(7)
+      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
+
+      Keys.detach_operator!(pairing, %{}, actor: owner())
+      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
+    end
+
+    test "more than 2,000 keys changed at once tells the map to load again", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+
+      send(view.pid, {:keys_changed, @fleet, Enum.to_list(1..2_000)})
+      assert_push_event(view, "keymap:patch", %{keys: keys})
+      assert length(keys) == 2_000
+
+      send(view.pid, {:keys_changed, @fleet, Enum.to_list(1..2_001)})
+      assert_push_event(view, "keymap:reset", %{})
+    end
+
+    test "a change in another fleet leaves the page as it is", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      shown = render(view)
+
+      send(view.pid, {:keys_changed, "fibonacci_syndicate", [7, 151]})
+
+      refute_push_event(view, "keymap:patch", _patch)
+      refute_push_event(view, "keymap:reset", _reset)
+      assert render(view) == shown
+    end
+
+    # The key list reads its page again only when a changed key is on it, and
+    # a key sold onto the last page joins it.
+    test "the key list shows a changed key's new holder when that key is on the page", %{
+      conn: conn
+    } do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa…aaaa"
+
+      move!(7, @stranger)
+      send(view.pid, {:keys_changed, @fleet, [120]})
+      assert_push_event(view, "keymap:patch", %{keys: [[120, 1]]})
+      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa…aaaa"
+
+      send(view.pid, {:keys_changed, @fleet, [7]})
+      assert_push_event(view, "keymap:patch", %{keys: [[7, 0]]})
+      assert text(view, "#fleet-key-7") =~ "Held by 0xbbbb…bbbb"
+      assert shown_keys(view) == Enum.to_list(1..100)
+
+      second_page = view |> element("#fleet-keys-next") |> render() |> href()
+      view |> element("#fleet-keys-next") |> render_click()
+      assert_patch(view, second_page)
+
+      issue!(@fleet, 151, @stranger)
+      send(view.pid, {:keys_changed, @fleet, [151]})
+      assert_push_event(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
+      assert shown_keys(view) == Enum.to_list(101..151)
+      assert text(view, "#buy-key-number") == "152"
+    end
+
+    test "a key in the address that isn't one on the map is no choice", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+
+      for key <- ["abc", "-1", "0", "152", "99999999999999999999999", "1.5", ""] do
+        {:ok, view, _html} = live(conn, @path <> "?" <> URI.encode_query(key: key))
+
+        assert text(view, "#key-map-selected") == "No key chosen yet."
+        refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
+      end
+    end
+  end
+
   # The button's only job is to reach the wallet, whatever the page shows.
   test "the Buy button is never disabled", %{conn: conn} do
     deploy!()
@@ -285,110 +519,23 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     end
   end
 
-  describe "after a purchase" do
-    setup %{conn: conn} do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet)
-      {:ok, view, _html} = live(conn, @path)
-      %{view: view}
-    end
+  # A key bought reaches the open page when the chain reader records it: the
+  # list, the sales figures, the map and the next key on offer all move on.
+  test "a key bought appears once the chain reader records it", %{conn: conn} do
+    fleet = deploy!("fleet_tech_accelerant", 5_000_000)
+    {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_accelerant")
+    assert text(view, "#buy-key-number") == "1"
 
-    # The receipt names the key; the page shows it once the chain reader has
-    # recorded it, and never before.
-    test "the page reads the fleet again until the key bought is recorded, then stops", %{
-      view: view
-    } do
-      render_hook(view, "key_bought", %{"token_id" => "151"})
-      catch_up_read(view)
-      assert text(view, "#buy-key-number") == "151"
-      assert catch_up(view).reads == 29
+    StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
+    assert Scanner.step(fleet, StubClient) == :ok
 
-      issue!(@fleet, 151)
-      catch_up_read(view)
-
-      assert text(view, "#buy-key-number") == "152"
-      assert render(view) =~ "151 of 46,365"
-      assert catch_up(view) == nil
-    end
-
-    test "the page gives up after thirty reads of a key the chain reader never records", %{
-      view: view
-    } do
-      render_hook(view, "key_bought", %{"token_id" => "151"})
-
-      for _read <- 1..29, do: catch_up_read(view)
-      assert catch_up(view).reads == 1
-
-      catch_up_read(view)
-      assert catch_up(view) == nil
-    end
-
-    # A notice any visitor can send costs the server at most one read every two
-    # seconds, however many arrive.
-    test "any number of notices start one run of reads, two seconds apart", %{view: view} do
-      :erlang.trace(view.pid, true, [:receive])
-
-      for token_id <- 151..200 do
-        render_hook(view, "key_bought", %{"token_id" => Integer.to_string(token_id)})
-      end
-
-      refute_receive {:trace, _pid, :receive, {:catch_up_fleet, _ref}}, 1_800
-      assert_receive {:trace, _pid, :receive, {:catch_up_fleet, _ref}}, 1_000
-      refute_receive {:trace, _pid, :receive, {:catch_up_fleet, _ref}}, 500
-      :erlang.trace(view.pid, false, [:receive])
-
-      assert %{token_id: 200, reads: 29} = catch_up(view)
-    end
-
-    test "a read from a run the page has already moved past is ignored", %{view: view} do
-      render_hook(view, "key_bought", %{"token_id" => "151"})
-      %{ref: replaced} = catch_up(view)
-      catch_up_read(view)
-      running = catch_up(view)
-
-      send(view.pid, {:catch_up_fleet, replaced})
-      render(view)
-
-      assert catch_up(view) == running
-    end
-
-    test "a later notice moves the run on to the higher key and starts its count again", %{
-      view: view
-    } do
-      render_hook(view, "key_bought", %{"token_id" => "152"})
-      %{ref: ref} = catch_up(view)
-      catch_up_read(view)
-      catch_up_read(view)
-
-      render_hook(view, "key_bought", %{"token_id" => "151"})
-      assert %{token_id: 152, reads: 30} = catch_up(view)
-
-      render_hook(view, "key_bought", %{"token_id" => "153"})
-      assert %{token_id: 153, reads: 30} = catch_up(view)
-      refute catch_up(view).ref == ref
-    end
-
-    test "a notice that names no key starts nothing", %{view: view} do
-      for token_id <- ["0", "-1", "abc", "1.5", "", "151abc", 151, nil] do
-        render_hook(view, "key_bought", %{"token_id" => token_id})
-      end
-
-      render_hook(view, "key_bought", %{})
-
-      assert catch_up(view) == nil
-      assert text(view, "#buy-key-number") == "151"
-    end
+    assert_push_event(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
+    assert text(view, "#buy-key-number") == "2"
+    assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 1 of 2,000"
+    assert shown_keys(view) == [1]
   end
 
-  test "a notice on a fleet that isn't deployed starts nothing", %{conn: conn} do
-    {:ok, view, _html} = live(conn, @path)
-
-    render_hook(view, "key_bought", %{"token_id" => "1"})
-
-    assert catch_up(view) == nil
-  end
-
-  defp deploy!(fleet_id \\ @fleet) do
+  defp deploy!(fleet_id \\ @fleet, deployed_block \\ 1) do
     fleet_id
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
@@ -398,20 +545,20 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: @usdc,
-        deployed_block: 1,
+        deployed_block: deployed_block,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
       actor: %Actors.System{}
     )
   end
 
-  defp issue!(fleet_id, token_id) do
+  defp issue!(fleet_id, token_id, owner \\ @owner) do
     Keys.record_epoch!(
       %{
         fleet_id: fleet_id,
         token_id: token_id,
         ownership_epoch: 0,
-        owner_wallet: @owner,
+        owner_wallet: owner,
         block_number: 10 + token_id,
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash:
@@ -422,14 +569,80 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     )
   end
 
-  # The page's one run of reads after a purchase, if it is following one.
-  defp catch_up(view), do: :sys.get_state(view.pid).socket.assigns.catch_up
-
-  # Makes the run's next read happen now rather than two seconds from now.
-  defp catch_up_read(view) do
-    send(view.pid, {:catch_up_fleet, catch_up(view).ref})
-    render(view)
+  # Key `token_id` of Cascade changes hands to `owner`.
+  defp move!(token_id, owner) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        ownership_epoch: 1,
+        owner_wallet: owner,
+        block_number: 500 + token_id,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash:
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/1"), case: :lower),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
   end
+
+  # An agent asks to run key `token_id` of Cascade, and its owner approves.
+  defp pair!(token_id) do
+    agent = %Actors.Agent{wallet_address: @operator, chain_id: 8_453, audience: "keyfleet"}
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+    request = Keys.request_pairing!(@fleet, token_id, %{}, actor: agent)
+    Keys.approve_pairing!(request, %{}, actor: owner())
+  end
+
+  defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+
+  # The keys a bitset from the map's first load marks.
+  defp marked(bitset) do
+    for <<byte <- Base.decode64!(bitset)>>, bit <- 0..7, reduce: {[], 1} do
+      {keys, key} ->
+        if Bitwise.band(byte, Bitwise.bsl(1, bit)) != 0,
+          do: {[key | keys], key + 1},
+          else: {keys, key + 1}
+    end
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  defp option_values(view, selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute("value")
+  end
+
+  defp href(link) do
+    [href] = link |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> LazyHTML.attribute("href")
+    href
+  end
+
+  defp chain_head(number),
+    do: %{number: number, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()}
+
+  defp ownership_log(token_id, epoch, "0x" <> owner, block) do
+    %{
+      "address" => @contract,
+      "topics" => [
+        OwnershipLog.topic(),
+        word(token_id),
+        word(0),
+        "0x" <> String.duplicate("0", 24) <> owner
+      ],
+      "data" => word(epoch),
+      "blockNumber" => "0x" <> Integer.to_string(block, 16),
+      "blockHash" => "0x" <> String.duplicate("b", 64),
+      "transactionHash" => word(block),
+      "logIndex" => "0x0"
+    }
+  end
+
+  defp word(value), do: "0x" <> String.pad_leading(Integer.to_string(value, 16), 64, "0")
 
   # The attributes the page hands the Buy button's wallet hook.
   defp order(view) do

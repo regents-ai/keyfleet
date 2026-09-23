@@ -11,13 +11,13 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
   attribute holding the block the record was made from, the refusal carries
   that block as `recorded_block`.
 
-  With `:number`, `:proposal_seq` or `:reveal_seq`, a record read again keeps
-  the number it has and a new one takes the fleet's next number in the same
-  transaction, from `KeyFleet.Chain`.
+  With `:number`, `:proposal_seq`, `:reveal_seq` or `:ownership_seq`, a
+  record read again keeps the number it has and a new one takes the fleet's
+  next number in the same transaction, from `KeyFleet.Chain`.
   """
   use Ash.Resource.Change
 
-  require Ash.Query
+  import Ecto.Query, only: [from: 2]
 
   @impl true
   def change(changeset, opts, _context) do
@@ -47,19 +47,19 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
     end
   end
 
+  # Read straight from the table, since a resource may offer no unscoped read.
   defp number(changeset, identity, sequence) do
-    changeset.resource
-    |> Ash.Query.do_filter(identity)
-    |> Ash.Query.select([:record_seq])
-    |> Ash.read_one!()
-    |> case do
-      nil -> take(sequence, Ash.Changeset.get_attribute(changeset, :fleet_id))
-      recorded -> recorded.record_seq
-    end
+    recorded =
+      KeyFleet.Repo.one(
+        from(record in changeset.resource, where: ^identity, select: record.record_seq)
+      )
+
+    recorded || take(sequence, Ash.Changeset.get_attribute(changeset, :fleet_id))
   end
 
   defp take(:proposal_seq, fleet_id), do: KeyFleet.Chain.take_proposal_seq!(fleet_id)
   defp take(:reveal_seq, fleet_id), do: KeyFleet.Chain.take_reveal_seq!(fleet_id)
+  defp take(:ownership_seq, fleet_id), do: KeyFleet.Chain.take_ownership_seq!(fleet_id)
 
   defp same_as_recorded(changeset, row, opts) do
     fields =

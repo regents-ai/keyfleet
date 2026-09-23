@@ -2,22 +2,39 @@ import {createCamera} from "./camera"
 import {axialToPixel, nearestCopy, pixelToAxial, SQRT3, type Cell, type Point} from "./lattice"
 import {buildMap, type KeyMapGrid, type LayoutKind} from "./layouts"
 import {
+  applyPatch,
   decodeSnapshot,
   describeKey,
+  drawnKeys,
   keyMarks,
   keyNear,
+  lastChoosable,
+  levelHeading,
+  levelSale,
+  levelStart,
+  nextHeldKey,
   nextKey,
-  shownKeys,
+  onSaleLevel,
   startKey,
   step,
   type Direction,
+  type KeyMapPatch,
   type KeyMapSnapshot,
   type KeyMapState,
 } from "./state"
 import {createTiles} from "./tiles"
 
 export type KeyMapStage = {
+  /** Every key's marks. The key the page has chosen is read from `data-selected`. */
   load(snapshot: KeyMapSnapshot): void
+  /** Marks for the keys that changed; ignored until the first load. */
+  patch(patch: KeyMapPatch): void
+  /** The key the page has chosen, or none. */
+  select(key: number | null): void
+  focusNext(): void
+  /** The keyboard cursor moves to your next key, coming back round to the first. */
+  focusMine(): void
+  focusLevel(level: number): void
   destroy(): void
 }
 
@@ -62,9 +79,14 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
   const cursorKey = () => (cursor && grid ? grid.valueAt(...cursor) : 0)
 
+  const drawn = (of: KeyMapState) => drawnKeys(options.layout, of)
+  const choosable = (key: number) => key >= 1 && key <= lastChoosable(state!)
+
   const tiles = createTiles(layer, {
     marks: key => keyMarks(state!, key, selected, cursorKey()),
     caption: key => (key === nextKey(state!) ? "Next" : ""),
+    sale: level => levelSale(onSaleLevel(grid!, state!), level),
+    heading: level => levelHeading(level, levelSale(onSaleLevel(grid!, state!), level)),
   })
 
   const periods = (): [Point, Point] => [axialToPixel(...grid!.periodA, size), axialToPixel(...grid!.periodB, size)]
@@ -103,7 +125,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
       const x = clientX - rect.left - root.clientLeft - width / 2 + camera.x
       const y = clientY - rect.top - root.clientTop - height / 2 + camera.y
       const value = grid.valueAt(...pixelToAxial(x, y, size))
-      if (value > 0) choose(value)
+      if (choosable(value)) choose(value)
     },
     reducedMotion: () => motion.matches,
   })
@@ -128,10 +150,41 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     cursor = cell
     tiles.refresh()
     status.textContent = describeKey(grid!, state!, cursorKey())
+    bringIntoView(cell, centre)
+  }
+
+  const bringIntoView = (cell: Cell, centre: boolean) => {
     const [x, y] = axialToPixel(...cell, size)
     const margin = SQRT3 * size
     const hidden = Math.abs(x - camera.x) > width / 2 - margin || Math.abs(y - camera.y) > height / 2 - margin
     if (centre || hidden) camera.glideTo(x, y)
+  }
+
+  // The cursor goes to a key shown on the map, in the view's middle.
+  const focusKey = (key: number) => {
+    if (grid && state && key >= 1 && key <= drawn(state)) moveCursor(nearestCell(key), true)
+  }
+
+  // Draws `next`. The view stays on the keys it was showing: the camera is
+  // held as an offset from the key nearest the middle, then restored from
+  // that key's home cell. The first drawing opens on the chosen key, or else
+  // the next key.
+  const show = (next: KeyMapState) => {
+    const anchor = grid && keyNear(grid, centreCell())
+    const kept = anchor && grid!.valueAt(...anchor) <= drawn(next) ? anchor : null
+    const cursorWas = cursorKey()
+    const key = kept ? grid!.valueAt(...kept) : selected || startKey(next)
+    const [fromX, fromY] = kept ? axialToPixel(...kept, size) : [camera.x, camera.y]
+    grid = buildMap(options.layout, drawn(next))
+    state = next
+    tiles.clear()
+    placedAt = ""
+    const [x, y] = axialToPixel(...grid.home(key), size)
+    if (kept) camera.shift(x - fromX, y - fromY)
+    else camera.jumpTo(x, y)
+    cursor = cursorWas && cursorWas <= drawn(next) ? nearestCell(cursorWas) : null
+    if (!cursor) status.textContent = ""
+    render()
   }
 
   // Shortcuts with Alt, Control or Command belong to the browser. Space never
@@ -149,7 +202,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
       moveCursor(nearestCell(startKey(state)), true)
     } else if (event.key === "Enter" || event.key === " ") {
       if (cursor || event.key === " ") event.preventDefault()
-      if (cursor) choose(cursorKey())
+      if (cursor && choosable(cursorKey())) choose(cursorKey())
     } else if (event.key === "Escape" && cursor) {
       cursor = null
       status.textContent = ""
@@ -178,24 +231,40 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
   return {
     load(snapshot) {
-      const next = decodeSnapshot(snapshot)
-      // A reload keeps the view on the same keys: the camera is held as an
-      // offset from the key nearest the middle, then restored from its home cell.
-      // The first load opens on the next key.
-      const anchor = grid && keyNear(grid, centreCell())
-      const key = anchor ? grid!.valueAt(...anchor) : startKey(next)
-      const [fromX, fromY] = anchor ? axialToPixel(...anchor, size) : [camera.x, camera.y]
-      grid = buildMap(options.layout, shownKeys(next))
-      state = next
-      // The page, not the map, keeps the chosen key; a fresh load starts clear.
-      selected = 0
-      cursor = null
-      status.textContent = ""
-      tiles.clear()
-      placedAt = ""
-      const [x, y] = axialToPixel(...grid.home(key), size)
-      camera.jumpTo(x + camera.x - fromX, y + camera.y - fromY)
+      // The page, not the map, keeps the chosen key.
+      selected = Number(root.dataset.selected) || 0
+      show(decodeSnapshot(snapshot))
       root.classList.add("key-map--ready")
+    },
+
+    patch(patch) {
+      if (!state) return
+      const next = applyPatch(state, patch)
+      if (drawn(next) !== drawn(state)) return show(next)
+      state = next
+      tiles.refresh()
+    },
+
+    select(key) {
+      selected = key ?? 0
+      if (!grid || !state) return
+      tiles.refresh()
+      if (choosable(selected)) bringIntoView(nearestCell(selected), false)
+    },
+
+    focusNext() {
+      if (state) focusKey(nextKey(state))
+    },
+
+    focusMine() {
+      if (!state) return
+      const key = nextHeldKey(state, cursorKey())
+      if (key) focusKey(key)
+      else status.textContent = "You don’t hold any keys in this fleet."
+    },
+
+    focusLevel(level) {
+      focusKey(levelStart(level))
     },
 
     destroy() {

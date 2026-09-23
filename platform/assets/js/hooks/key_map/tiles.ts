@@ -1,11 +1,16 @@
 import {axialToPixel, SQRT3} from "./lattice"
 import type {KeyMapGrid} from "./layouts"
+import {grouped, levelTone, type LevelSale} from "./state"
 
 export type TileFaces = {
   /** A tile's marks for `data-state`. */
   marks(key: number): string
   /** The small line under a key's number. */
   caption(key: number): string
+  /** How a level stands, for `data-level` on its keys, heading and outline. */
+  sale(level: number): LevelSale
+  /** A level heading's words. */
+  heading(level: number): string
 }
 
 export type Tiles = {
@@ -14,16 +19,63 @@ export type Tiles = {
    * pooled element, and hides the rest of the pool.
    */
   place(grid: KeyMapGrid, size: number, left: number, top: number, right: number, bottom: number): void
-  /** Rewrites the marks and captions on every placed key. */
+  /** Rewrites the marks, captions and level outlines on every placed tile. */
   refresh(): void
   /** Frees every tile, so the next placement positions each one afresh. */
   clear(): void
 }
 
-type Tile = {el: HTMLElement; value: number; label: HTMLElement; caption: HTMLElement}
+type Tile = {
+  el: HTMLElement
+  value: number
+  level: number
+  label: HTMLElement
+  caption: HTMLElement
+  // The outline along the tile's cell where its level ends, made the first
+  // time the tile needs one.
+  edge: SVGPathElement | null
+}
 
 // Cells stay within a few copies of the origin, so both coordinates fit in 21 bits.
 const cellId = (q: number, r: number) => (r + 2 ** 20) * 2 ** 21 + (q + 2 ** 20)
+
+const svg = "http://www.w3.org/2000/svg"
+
+// The six neighbours across a cell's edges, clockwise from the upper right
+// edge, which runs from the top corner.
+const neighbours: readonly (readonly [number, number])[] = [
+  [1, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [0, -1],
+]
+
+/** The edges of a key's cell, as bits in `neighbours` order, where its level ends. */
+export function levelEdges(grid: KeyMapGrid, q: number, r: number, level: number) {
+  let edges = 0
+  neighbours.forEach(([dq, dr], index) => {
+    const value = grid.valueAt(q + dq, r + dr)
+    if (value <= 0 || grid.levelOf(value) !== level) edges |= 1 << index
+  })
+  return edges
+}
+
+// The path along a cell's edges in `edges`, around its centre, for a cell of
+// circumradius `size`. It runs along the cell's own edges, halfway across the
+// gap between tiles, so a level's outline joins up from tile to tile.
+function edgePath(edges: number, size: number) {
+  const corner = (index: number) => {
+    const angle = (Math.PI / 3) * index - Math.PI / 2
+    return `${(size * Math.cos(angle)).toFixed(2)} ${(size * Math.sin(angle)).toFixed(2)}`
+  }
+  let path = ""
+  for (let index = 0; index < 6; index++) {
+    if (edges & (1 << index)) path += `M${corner(index)}L${corner(index + 1)}`
+  }
+  return path
+}
 
 /**
  * The pool only grows to the most cells covered at once: the stage plus one
@@ -37,6 +89,39 @@ const cellId = (q: number, r: number) => (r + 2 ** 20) * 2 ** 21 + (q + 2 ** 20)
 export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
   let placed = new Map<number, Tile>()
   const spare: Tile[] = []
+  // Edge paths by edge bits, for the cell size they were drawn at.
+  let paths = new Map<number, string>()
+  let pathSize = 0
+
+  // Draws the outline along `edges` around the tile, in a drawing inside the
+  // tile itself, so the outline moves with the tile and moving the map never
+  // redraws it. A tile inside its level, or on a map without levels, draws
+  // none.
+  const outline = (tile: Tile, edges: number, size: number) => {
+    if (!edges) {
+      tile.edge?.removeAttribute("d")
+      return
+    }
+    if (size !== pathSize) {
+      paths = new Map()
+      pathSize = size
+    }
+    let path = paths.get(edges)
+    if (path === undefined) {
+      path = edgePath(edges, size)
+      paths.set(edges, path)
+    }
+    if (!tile.edge) {
+      const frame = document.createElementNS(svg, "svg")
+      frame.setAttribute("class", "km-edges")
+      tile.edge = document.createElementNS(svg, "path")
+      tile.edge.setAttribute("class", "km-edge")
+      frame.append(tile.edge)
+      tile.el.prepend(frame)
+    }
+    tile.edge.setAttribute("d", path)
+    tile.edge.dataset.level = faces.sale(tile.level)
+  }
 
   const make = (): Tile => {
     const el = document.createElement("div")
@@ -44,34 +129,50 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
     const caption = document.createElement("span")
     el.append(label, caption)
     layer.append(el)
-    return {el, value: 0, label, caption}
+    return {el, value: 0, level: 0, label, caption, edge: null}
   }
 
   const free = (tile: Tile) => {
     tile.el.hidden = true
+    tile.edge?.removeAttribute("d")
     spare.push(tile)
   }
 
   const face = (tile: Tile) => {
-    if (tile.value <= 0) return
+    const {el} = tile
+    if (tile.level) {
+      const sale = faces.sale(tile.level)
+      if (el.dataset.level !== sale) el.dataset.level = sale
+      if (tile.edge && tile.edge.dataset.level !== sale) tile.edge.dataset.level = sale
+    }
+    if (tile.value <= 0) {
+      const heading = faces.heading(tile.level)
+      if (tile.label.textContent !== heading) tile.label.textContent = heading
+      return
+    }
     const marks = faces.marks(tile.value)
     const caption = faces.caption(tile.value)
-    if (tile.el.dataset.state !== marks) tile.el.dataset.state = marks
+    if (el.dataset.state !== marks) el.dataset.state = marks
     if (tile.caption.textContent !== caption) tile.caption.textContent = caption
   }
 
-  const paint = (tile: Tile, value: number) => {
+  const paint = (tile: Tile, value: number, grid: KeyMapGrid) => {
     const {el} = tile
     el.hidden = false
     if (tile.value !== value) {
       tile.value = value
+      tile.level = value > 0 ? grid.levelOf(value) : -value
       el.className = value > 0 ? "km-tile" : "km-level"
-      if (value > 0) el.dataset.key = String(value)
-      else {
+      if (value > 0) {
+        el.dataset.key = String(value)
+        tile.label.textContent = grouped(value)
+      } else {
         delete el.dataset.key
         delete el.dataset.state
       }
-      tile.label.textContent = value > 0 ? value.toLocaleString("en-US") : `Level ${-value}`
+      if (value > 0 && tile.level) el.dataset.tone = String(levelTone(tile.level))
+      else delete el.dataset.tone
+      if (!tile.level) delete el.dataset.level
       tile.caption.textContent = ""
     }
     face(tile)
@@ -94,7 +195,6 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
           if (tile) {
             placed.delete(id)
             next.set(id, tile)
-            if (tile.value !== value) paint(tile, value)
           } else needed.push(q, r, value)
         }
       }
@@ -102,9 +202,10 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
       for (let index = 0; index < needed.length; index += 3) {
         const [q, r, value] = [needed[index], needed[index + 1], needed[index + 2]]
         const tile = spare.pop() ?? make()
-        paint(tile, value)
+        paint(tile, value, grid)
         const [x, y] = axialToPixel(q, r, size)
         tile.el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+        outline(tile, value > 0 && tile.level ? levelEdges(grid, q, r, tile.level) : 0, size)
         next.set(cellId(q, r), tile)
       }
       placed = next

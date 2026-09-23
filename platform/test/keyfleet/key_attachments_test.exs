@@ -2,7 +2,7 @@ defmodule KeyFleet.KeyAttachmentsTest do
   use ExUnit.Case, async: false
   require Ash.Query
 
-  alias KeyFleet.{Fleets, Keys, Repo}
+  alias KeyFleet.{ChainHelpers, Fleets, Keys, Repo}
   alias KeyFleet.Keys.KeyAttachment
 
   @fleet "fibonacci_syndicate"
@@ -11,10 +11,10 @@ defmodule KeyFleet.KeyAttachmentsTest do
 
   setup context do
     if context[:independent_connections] do
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &Fleets.bootstrap_catalog!/0)
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &open_fleets!/0)
     else
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-      Fleets.bootstrap_catalog!()
+      open_fleets!()
     end
 
     :ok
@@ -187,7 +187,12 @@ defmodule KeyFleet.KeyAttachmentsTest do
   test "SQL constraints protect identities, references, shape, bounds and immutable history" do
     row = Keys.record_epoch!(event(), actor: @system)
 
-    for overrides <- [%{}, %{token_id: 2}, %{transaction_hash: hash("b")}] do
+    for overrides <- [
+          %{},
+          %{token_id: 2},
+          %{transaction_hash: hash("b")},
+          %{token_id: 4, transaction_hash: hash("d"), log_index: 4, record_seq: row.record_seq}
+        ] do
       assert_sql_error(event() |> Map.merge(overrides), :unique_violation)
     end
 
@@ -210,7 +215,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
           block_hash: hash("b"),
           transaction_hash: hash("b"),
           log_index: 1,
-          observed_at: ~N[2000-01-01 00:00:00.000000]
+          observed_at: ~N[2000-01-01 00:00:00.000000],
+          record_seq: row.record_seq + 1
         ] do
       sql = "UPDATE keyfleet_app.key_attachments SET #{field} = $2 WHERE id = $1"
 
@@ -268,9 +274,16 @@ defmodule KeyFleet.KeyAttachmentsTest do
     end)
   end
 
-  # A key these races commit is removed when the test ends, so no other test
-  # reads it as sold. Key records refuse deletion; their guard is set aside
-  # inside this one transaction, which no other connection sees.
+  # The chain reader keeps a fleet's cursor before it records any key.
+  defp open_fleets! do
+    Fleets.bootstrap_catalog!()
+    for fleet <- [@fleet, @other_fleet], do: ChainHelpers.open_cursor!(fleet)
+  end
+
+  # A key these races commit is removed when the test ends, with the cursors
+  # they opened, so no other test reads it as sold. Key records refuse
+  # deletion; their guard is set aside inside this one transaction, which no
+  # other connection sees.
   defp forget(token_id) do
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       Repo.transaction(fn ->
@@ -286,6 +299,10 @@ defmodule KeyFleet.KeyAttachmentsTest do
         Repo.query!(
           "ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs"
         )
+
+        Repo.query!("DELETE FROM keyfleet_app.chain_cursors WHERE fleet_id = ANY($1)", [
+          [@fleet, @other_fleet]
+        ])
       end)
     end)
   end
@@ -325,10 +342,14 @@ defmodule KeyFleet.KeyAttachmentsTest do
       :block_number,
       :block_hash,
       :transaction_hash,
-      :log_index
+      :log_index,
+      :record_seq
     ]
 
-    input = Map.put(input, :id, Ecto.UUID.dump!(Ash.UUID.generate()))
+    input =
+      input
+      |> Map.put(:id, Ecto.UUID.dump!(Ash.UUID.generate()))
+      |> Map.put_new(:record_seq, 2)
 
     sql =
       "INSERT INTO keyfleet_app.key_attachments (" <>
@@ -352,7 +373,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
       block_hash: hash("A"),
       block_hash: "0x123",
       transaction_hash: hash("A"),
-      transaction_hash: "0x123"
+      transaction_hash: "0x123",
+      record_seq: 0
     ]
   end
 

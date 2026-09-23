@@ -67,6 +67,74 @@ defmodule KeyFleet.ChainTest do
       assert Chain.fresh?(@fleet)
     end
 
+    # A page showing the fleet hears which keys were sold or changed hands in
+    # the blocks a pass read for the first time; reading them again says nothing.
+    test "a pass names the keys sold or changing hands in the blocks it read first", %{
+      fleet: fleet
+    } do
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+
+      StubClient.put_chain(head(@deployed + 10), [
+        log(1, 1, "a", @deployed + 3, 0),
+        log(2, 1, "a", @deployed + 4, 0),
+        log(2, 2, "b", @deployed + 8, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_changed, @fleet, [1, 2]}
+
+      StubClient.put_chain(head(@deployed + 20), [
+        log(1, 1, "a", @deployed + 3, 0),
+        log(2, 1, "a", @deployed + 4, 0),
+        log(2, 2, "b", @deployed + 8, 0),
+        log(1, 2, "c", @deployed + 15, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_changed, @fleet, [1]}
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:keys_changed, _fleet, _token_ids}
+    end
+
+    # A node that left a sale out of a block, then has it when the pass reads
+    # that block again, is heard about like any other sale.
+    test "a key sold that only the second reading finds is named too", %{fleet: fleet} do
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_changed, @fleet, [1]}
+
+      StubClient.put_chain(head(@deployed + 12), [
+        log(1, 1, "a", @deployed + 3, 0),
+        log(2, 1, "b", @deployed + 6, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_changed, @fleet, [2]}
+      refute_received {:keys_changed, _fleet, _token_ids}
+      assert Keys.current_key!(@fleet, 2).owner_wallet == "0x" <> String.duplicate("b", 40)
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:keys_changed, _fleet, _token_ids}
+    end
+
+    # The node answers in halves; the first half is recorded before the second
+    # turns out to hold a log the reader cannot make sense of.
+    test "a pass that fails partway still names the keys it recorded", %{fleet: fleet} do
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      malformed = %{log(2, 1, "b", @deployed + 8, 0) | "data" => "0x01"}
+
+      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0), malformed],
+        max_logs: 1
+      )
+
+      assert {:error, _reason} = Scanner.step(fleet, StubClient)
+      assert_received {:keys_changed, @fleet, [1]}
+      assert Keys.current_key!(@fleet, 2) == nil
+    end
+
     # One log the reader cannot make sense of holds the whole range back.
     test "a malformed log records nothing and leaves the cursor where it was", %{fleet: fleet} do
       malformed = %{log(2, 1, "b", @deployed + 4, 0) | "data" => "0x01"}

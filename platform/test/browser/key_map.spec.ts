@@ -136,8 +136,10 @@ test.describe("key map", () => {
     const {stage} = await openMap(page, "Fibonacci")
     const centre = await stageCentre(page)
     await page.mouse.move(centre.x, centre.y)
-    // Up into level 20, where every cell holds a key.
-    await page.mouse.wheel(0, -3_000)
+    // The map opens on the next key, the sixth in a 28-key row of level 19.
+    // Eight 96 px cells across and 36 rows down is the middle of that level,
+    // where every cell holds a key.
+    await page.mouse.wheel(768, 3_000)
     for (let step = 0; step < 16; step++) {
       await page.mouse.wheel(37, 23)
       await nextFrame(page)

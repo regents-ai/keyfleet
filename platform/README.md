@@ -149,6 +149,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
 | `npx playwright test` | Runs the browser suite against a test server. |
+| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs one Docker build-context test that needs tools outside the hermetic suite. |
 

@@ -56,6 +56,9 @@ defmodule KeyFleet.Fleets.Presets do
     }
   end
 
+  @doc "A fleet's preset: `:fibonacci`, `:classic` or `:accelerant`."
+  def preset(fleet_id), do: Map.fetch!(@presets, fleet_id)
+
   @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
   def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
 

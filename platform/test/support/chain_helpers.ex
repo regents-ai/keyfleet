@@ -13,6 +13,13 @@ defmodule KeyFleet.ChainHelpers do
   @head_hash "0x" <> String.duplicate("c", 64)
 
   @doc """
+  A fleet's cursor opened and not yet read, as the chain reader keeps it
+  before it records anything for the fleet.
+  """
+  def open_cursor!(fleet_id),
+    do: Chain.open_cursor!(%{fleet_id: fleet_id, next_block: 0}, actor: %System{})
+
+  @doc """
   A fleet's cursor read up to block 1_000 just now; `attrs` overrides any of
   `next_block`, `head_block`, `observed_at` and `rescan_from`.
   """

@@ -567,7 +567,6 @@ function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string
   }
   const purchases: KeyOrder[] = []
   const reports: ((update: BuyUpdate) => void)[] = []
-  const pushEvent = vi.fn()
   const hook = buyKeyHook(
     () => wallet,
     async (bought, _wallet, report) => {
@@ -576,15 +575,13 @@ function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string
       await new Promise(() => undefined)
     },
   )
-  const context = {el, pushEvent}
+  const context = {el}
   hook.mounted!.call(context)
   return {
     press: () => listener!({target: button} as unknown as Event),
     purchases,
     reports,
     entries,
-    pushEvent,
-    destroy: () => hook.destroyed!.call(context),
     button,
   }
 }
@@ -627,7 +624,7 @@ group("the Buy button", () => {
     expect(hook.entries[0].dataset.tone).toBe("error")
   })
 
-  it("shows each press's progress and tells the page which key was bought", () => {
+  it("shows each press's progress, through to the key bought", () => {
     const hook = mountHook(fakeWallet())
     hook.press()
 
@@ -635,7 +632,9 @@ group("the Buy button", () => {
     expect(hook.entries[0].textContent).toBe("Confirm the purchase in your wallet.")
 
     hook.reports[0]({kind: "bought", tokenId: 41n, hash: hash(1)})
-    expect(hook.pushEvent).toHaveBeenCalledWith("key_bought", {token_id: "41"})
+    expect(hook.entries[0].textContent).toBe(
+      "Confirmed. Key 41 is yours. It shows as yours on the map in a few seconds.",
+    )
 
     hook.reports[0]({kind: "failed", reason: "rejected"})
     expect(hook.entries[0].dataset.tone).toBe("error")
@@ -647,14 +646,5 @@ group("the Buy button", () => {
 
     expect(hook.purchases).toHaveLength(7)
     expect(hook.entries).toHaveLength(5)
-  })
-
-  it("stops telling the page about purchases once it has left", () => {
-    const hook = mountHook(fakeWallet())
-    hook.press()
-    hook.destroy()
-
-    hook.reports[0]({kind: "bought", tokenId: 41n, hash: hash(1)})
-    expect(hook.pushEvent).not.toHaveBeenCalled()
   })
 })

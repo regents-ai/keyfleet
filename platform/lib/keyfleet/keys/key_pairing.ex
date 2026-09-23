@@ -111,6 +111,7 @@ defmodule KeyFleet.Keys.KeyPairing do
 
       validate KeyFleet.Graph.Validations.KnownFleet
       change KeyFleet.Keys.Changes.OpenPairing
+      change KeyFleet.Keys.Changes.AnnounceOperator
     end
 
     update :approve_pairing do
@@ -121,6 +122,7 @@ defmodule KeyFleet.Keys.KeyPairing do
       change KeyFleet.Keys.Changes.TakeOverKey
       change set_attribute(:status, :active)
       change set_attribute(:approved_at, &DateTime.utc_now/0)
+      change KeyFleet.Keys.Changes.AnnounceOperator
     end
 
     update :decline_pairing do
@@ -148,6 +150,7 @@ defmodule KeyFleet.Keys.KeyPairing do
       change set_attribute(:status, :ended)
       change set_attribute(:ended_reason, :detached)
       change set_attribute(:ended_at, &DateTime.utc_now/0)
+      change KeyFleet.Keys.Changes.AnnounceOperator
     end
 
     # Reached only through `KeyFleet.Keys.PairingLedger`, on behalf of an owner
@@ -204,6 +207,13 @@ defmodule KeyFleet.Keys.KeyPairing do
              )
 
       prepare build(load: [:agent_profile])
+    end
+
+    # Every key of the fleet an agent runs today, by number, for the key map.
+    read :run_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and effective?)
+      prepare build(select: [:token_id], sort: [token_id: :asc])
     end
 
     read :pairing_requests do

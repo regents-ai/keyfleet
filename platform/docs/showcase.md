@@ -93,8 +93,8 @@ The Chromium run is the one that gates a change. It checks the key map by mouse,
 wheel, keyboard and touch, and measures its frame times, scripting time, build
 time and tile count on a laptop with the largest and the middle fleet, and on a
 phone with the processor slowed four times. The `firefox` and `webkit` projects
-run the same key map checks, but need browser builds that match this Playwright
-release (`npx playwright install firefox webkit`), which are not installed here.
+run the same key map checks, and need browser builds that match this Playwright
+release (`npx playwright install firefox webkit`).
 
 The dedicated browser configuration avoids the product suite's seeding and
 global teardown. Failures retain screenshots and traces in `test-results/`.

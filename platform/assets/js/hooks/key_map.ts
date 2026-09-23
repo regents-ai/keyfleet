@@ -1,20 +1,27 @@
 import type {Hook} from "../hook_composition"
 import type {KeyMapStage} from "./key_map/key_map_stage"
 import type {LayoutKind} from "./key_map/layouts"
-import type {KeyMapSnapshot} from "./key_map/state"
+import type {KeyMapPatch, KeyMapSnapshot} from "./key_map/state"
 
 type KeyMapHook = {
   el: HTMLElement
   pushEvent<Reply>(event: string, payload: unknown, onReply: (reply: Reply) => void): void
+  handleEvent<Payload>(event: string, callback: (payload: Payload) => void): void
   ready?: () => void
   cleanup?: () => void
 }
 
 /**
  * A fleet's key map. The map itself loads as its own chunk; this hook asks the
- * page for the fleet's keys on mount and after every reconnect, and reports the
- * key a viewer chooses. Mount it on a `phx-update="ignore"` element carrying
- * `data-layout`.
+ * page for the fleet's keys on mount, after every reconnect and whenever the
+ * page says too much changed to send, applies the changes the page sends in
+ * between, and reports the key a viewer chooses. Mount it on a
+ * `phx-update="ignore"` element carrying `data-layout`, and `data-selected`
+ * while the page has a key chosen.
+ *
+ * The page's controls reach the map as `keymap:next`, `keymap:mine` and
+ * `keymap:level` events on the element; `keymap:level` comes from a form whose
+ * `level` field names the level.
  */
 export const KeyMap: Hook = {
   mounted(this: KeyMapHook) {
@@ -30,8 +37,26 @@ export const KeyMap: Hook = {
       })
       this.ready?.()
     })
+
+    this.handleEvent<KeyMapPatch>("keymap:patch", patch => stage?.patch(patch))
+    this.handleEvent<{token_id: number | null}>("keymap:select", ({token_id}) => stage?.select(token_id))
+    this.handleEvent("keymap:reset", () => this.ready?.())
+
+    const next = () => stage?.focusNext()
+    const mine = () => stage?.focusMine()
+    const level = (event: Event) => {
+      const form = (event as CustomEvent<{dispatcher: HTMLFormElement}>).detail.dispatcher
+      stage?.focusLevel(Number(new FormData(form).get("level")))
+    }
+    this.el.addEventListener("keymap:next", next)
+    this.el.addEventListener("keymap:mine", mine)
+    this.el.addEventListener("keymap:level", level)
+
     this.cleanup = () => {
       alive = false
+      this.el.removeEventListener("keymap:next", next)
+      this.el.removeEventListener("keymap:mine", mine)
+      this.el.removeEventListener("keymap:level", level)
       stage?.destroy()
     }
   },

@@ -388,7 +388,7 @@ export function describe(update: BuyUpdate, order: Pick<KeyOrder, "priceLabel" |
         ? "Approval sent. Waiting for Base to include it."
         : "Purchase sent. Waiting for Base to include it."
     case "bought":
-      return `Confirmed. Key ${update.tokenId.toLocaleString("en-US")} is yours. It joins the list below once the page has read it.`
+      return `Confirmed. Key ${update.tokenId.toLocaleString("en-US")} is yours. It shows as yours on the map in a few seconds.`
     case "failed":
       return failureWords(update, order)
   }

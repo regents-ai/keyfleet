@@ -189,10 +189,14 @@ that fleet at or after `F` is removed,
 every pairing made under one of those ownership records is ended, and the
 cursor goes back to `F`, so the reader records the chain's current history from
 there. Ended pairings stay as history; agents ask again and the key's owner
-approves again. The proposal, budget and reveal records made again from `F` on
-get new record numbers, higher than any removed, so every reader of the list
-sees them as new. A key whose reveal is removed shows as still being revealed
-until its reveal is read again.
+approves again. The ownership, proposal, budget and reveal records made again
+from `F` on get new record numbers, higher than any removed, so every reader of
+the list sees them as new. A key whose reveal is removed shows as still being
+revealed until its reveal is read again.
+
+Nothing tells a fleet page already open that records were removed: it keeps
+showing the removed owners and reveals until it reconnects or is loaded again,
+and it hears about the records made again from `F` as the reader makes them.
 
 A pass that was already running when the fleet stopped cannot undo the
 correction. A pass records each piece, and moves the cursor, only while the

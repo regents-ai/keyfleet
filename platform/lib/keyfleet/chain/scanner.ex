@@ -46,9 +46,11 @@ defmodule KeyFleet.Chain.Scanner do
 
   A pass that reaches the head also notes the head's time, which is how far
   votes are known to be counted. A pass that made a new proposal or budget
-  record says so on `KeyFleet.Proposals.topic/1`, and one that revealed keys
-  names them on `KeyFleet.Keys.topic/1`, even if it then failed or
-  stopped the fleet; both are only hints to read again.
+  record says so on `KeyFleet.Proposals.topic/1`. One that recorded keys
+  revealed, sold or changing hands names them all in one notice on
+  `KeyFleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
+  even if the pass then failed or stopped the fleet, and each is only a hint
+  to read again.
   """
 
   require Logger
@@ -285,6 +287,7 @@ defmodule KeyFleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
+  # Every key revealed, sold or changing hands in the pass is named once.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
 
@@ -296,17 +299,26 @@ defmodule KeyFleet.Chain.Scanner do
       )
     end
 
-    if now.reveal_seq > before.reveal_seq do
-      token_ids =
-        fleet_id
-        |> Keys.reveals_recorded_since!(before.reveal_seq, actor: @system)
-        |> Enum.map(& &1.token_id)
+    revealed =
+      if now.reveal_seq > before.reveal_seq,
+        do: Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system),
+        else: []
 
-      Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
-        Keys.topic(fleet_id),
-        {:keys_changed, fleet_id, token_ids}
-      )
+    owned =
+      if now.ownership_seq > before.ownership_seq,
+        do: Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system),
+        else: []
+
+    case Enum.uniq_by(revealed ++ owned, & &1.token_id) do
+      [] ->
+        :ok
+
+      records ->
+        Phoenix.PubSub.broadcast(
+          KeyFleet.PubSub,
+          Keys.topic(fleet_id),
+          {:keys_changed, fleet_id, Enum.map(records, & &1.token_id)}
+        )
     end
   end
 

@@ -134,12 +134,35 @@
   grid-column: 1 / -1;
 }
 
+.fleet-map {
+  grid-column: 1 / -1;
+  justify-items: stretch;
+}
+
+.fleet-map-controls,
+.fleet-map-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.fleet-map-level select {
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--ash-line);
+  background: var(--ash-panel);
+  color: var(--ash-ink);
+  font: inherit;
+}
+
 .fleet-pages {
   display: flex;
   gap: 1rem;
 }
 
-#buy-key-order {
+#buy-key-order,
+.fleet-buy-offer {
   display: grid;
   gap: 1rem;
   justify-items: start;

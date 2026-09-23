@@ -80,6 +80,18 @@ defmodule KeyFleet.Chain do
     seq
   end
 
+  @doc "Takes the next number for one of the fleet's ownership epochs, as `take_proposal_seq!/1` does."
+  def take_ownership_seq!(fleet_id) do
+    %Postgrex.Result{rows: [[seq]]} =
+      KeyFleet.Repo.query!(
+        "UPDATE keyfleet_app.chain_cursors SET ownership_seq = ownership_seq + 1 " <>
+          "WHERE fleet_id = $1 RETURNING ownership_seq",
+        [fleet_id]
+      )
+
+    seq
+  end
+
   @doc """
   Moves the fleet's cursor as `changes` say, in one update that requires the
   stored cursor still to stand where `cursor` does and the fleet not to be

@@ -20,10 +20,13 @@ defmodule KeyFleet.Keys do
         not_found_error?: false
 
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
+      define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
 
       define :recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :epochs_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
     end
 
     resource KeyFleet.Keys.KeyReveal do
@@ -54,6 +57,7 @@ defmodule KeyFleet.Keys do
         not_found_error?: false
 
       define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
+      define :keys_run_in_fleet, action: :run_in_fleet, args: [:fleet_id]
 
       define :my_open_request,
         action: :my_open_request,
@@ -62,7 +66,11 @@ defmodule KeyFleet.Keys do
     end
   end
 
-  @doc "Where the reader says which of a fleet's keys have just been revealed."
+  @doc """
+  Where a fleet's pages hear which of its keys have just changed: sold, changed
+  hands, revealed, or gained or lost the agent running them, as
+  `{:keys_changed, fleet_id, token_ids}`.
+  """
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"
 
   @doc """

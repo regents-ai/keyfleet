@@ -131,17 +131,19 @@ defmodule KeyFleetWeb.ShowcaseTest do
     assert html =~ "No key chosen yet."
 
     render_hook(view, "keymap_ready", %{})
-    assert_reply(view, %{minted: 46_364, max_supply: 46_365, mine: mine, agent: agent})
+    assert_reply(view, %{minted: 17_768, max_supply: 46_365, mine: mine, agent: agent})
     mine = Base.decode64!(mine)
     agent = Base.decode64!(agent)
     assert byte_size(mine) == 5_796 and byte_size(agent) == 5_796
     assert held?(mine, 13) and not held?(mine, 14) and held?(agent, 3)
+    # Only sold keys have owners and agents.
+    refute held?(mine, 17_861) or held?(agent, 17_776)
 
-    assert render_hook(view, "select_key", %{"token_id" => 46_365}) =~ "Key 46,365 chosen."
-    assert render_hook(view, "select_key", %{"token_id" => 46_366}) =~ "Key 46,365 chosen."
-    assert render_hook(view, "select_key", %{"token_id" => 0}) =~ "Key 46,365 chosen."
-    assert render_hook(view, "select_key", %{"token_id" => "7"}) =~ "Key 46,365 chosen."
-    assert render_hook(view, "select_key", %{}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => 17_769}) =~ "Key 17,769 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => 17_770}) =~ "Key 17,769 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => 0}) =~ "Key 17,769 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => "7"}) =~ "Key 17,769 chosen."
+    assert render_hook(view, "select_key", %{}) =~ "Key 17,769 chosen."
     assert render_hook(view, "show_fleet", %{"value" => "hexagon"}) =~ ~s(id="key-map-fibonacci")
 
     html = view |> element("button", "Classic") |> render_click()
