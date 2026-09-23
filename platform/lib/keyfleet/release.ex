@@ -21,9 +21,9 @@ defmodule KeyFleet.Release do
 
   @doc """
   Binds the four fleets to the deployment a deployed manifest records, the
-  JSON `contracts/script/RecordKeyfleets.s.sol` writes, opens each fleet's core
-  rooms and the room of every level that has already sold a key, and prints
-  what each fleet is now bound to. `bin/seed-deployment <path>` runs it.
+  JSON `contracts/script/RecordKeyfleets.s.sol` writes, opens each fleet's
+  fixed and open rooms, and prints what each fleet is now bound to.
+  `bin/seed-deployment <path>` runs it.
 
   Recording the same manifest again changes nothing; a manifest naming other
   contracts for a bound fleet is refused and changes nothing. A running app
@@ -37,8 +37,7 @@ defmodule KeyFleet.Release do
   # sobelow_skip ["Traversal.FileModule"]
   def seed_deployment!(path) do
     fleets = path |> File.read!() |> Jason.decode!() |> KeyFleet.Fleets.record_deployments!()
-    KeyFleet.Rooms.bootstrap_core_rooms!()
-    KeyFleet.Rooms.bootstrap_level_rooms!()
+    KeyFleet.Rooms.bootstrap_rooms!()
 
     for fleet <- fleets do
       IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")

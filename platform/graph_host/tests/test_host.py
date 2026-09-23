@@ -489,3 +489,16 @@ def test_right_to_left_text_is_kept_as_written(db):
     created = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": title}}, "rtl")
 
     assert host.graph.get_object(created["id"]).data["title"] == title
+
+
+def test_emoji_joined_with_a_zero_width_joiner_are_kept_as_written(db):
+    host = Host("fleet_a", str(db))
+    family = "Crew \U0001F469‍\U0001F469‍\U0001F467"
+    mechanic = "\U0001F9D1‍\U0001F527 on shift"
+
+    goal = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": family}}, "zwj1")
+    note = _ok(host, "create", {"type": "note", "scope": "fleet", "data": {"title": mechanic, "body": f"{family}\n{mechanic}"}}, "zwj2")
+
+    assert host.graph.get_object(goal["id"]).data["title"] == family
+    stored = host.graph.get_object(note["id"]).data
+    assert (stored["title"], stored["body"]) == (mechanic, f"{family}\n{mechanic}")

@@ -31,7 +31,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
 
     Keys.record_epoch!(
       %{
@@ -106,29 +106,29 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     listed = send_signed(c, "GET", @rooms_path)
     assert listed.status == 200
 
-    assert listed.body["rooms"] == [
-             %{
-               "slug" => "general",
-               "name" => "General",
-               "kind" => "core",
-               "level" => nil,
-               "head_seq" => 0
-             },
-             %{
-               "slug" => "planning",
-               "name" => "Planning",
-               "kind" => "core",
-               "level" => nil,
-               "head_seq" => 0
-             },
-             %{
-               "slug" => "work",
-               "name" => "Work",
-               "kind" => "core",
-               "level" => nil,
-               "head_seq" => 0
-             }
-           ]
+    assert listed.body["rooms"] ==
+             Enum.map(
+               [
+                 {"welcome", "Welcome and intros", "fixed"},
+                 {"general", "General", "fixed"},
+                 {"business", "Business", "fixed"},
+                 {"voting", "Voting", "fixed"},
+                 {"coding", "Coding", "fixed"}
+               ] ++ Enum.map(1..5, &{"open-#{&1}", "Open room #{&1}", "open"}),
+               fn {slug, name, kind} ->
+                 %{
+                   "slug" => slug,
+                   "name" => name,
+                   "kind" => kind,
+                   "topic" => nil,
+                   "topic_set_by" => nil,
+                   "topic_set_at" => nil,
+                   "head_seq" => 0
+                 }
+               end
+             )
+
+    assert KeyFleet.ContractSchema.errors(listed.body, "RoomList") == []
 
     assert send_signed(c, "POST", @read_general).body["messages"] == []
 
@@ -168,7 +168,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     assert missing.body == %{"error" => "room_unknown"}
 
     elsewhere =
-      send_signed(c, "POST", room_path("work", "send"), send_body("Hull survey log", "k-3"))
+      send_signed(c, "POST", room_path("coding", "send"), send_body("Hull survey log", "k-3"))
 
     assert elsewhere.status == 201
 
@@ -198,10 +198,10 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
                201
     end
 
-    assert send_signed(c, "POST", room_path("work", "send"), send_body("Work 1", "w-1")).status ==
+    assert send_signed(c, "POST", room_path("coding", "send"), send_body("Coding 1", "w-1")).status ==
              201
 
-    first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "work" => 0}))
+    first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "coding" => 0}))
     assert first.status == 200
     assert first.body["proposals"] == []
     assert first.body["next_poll_seconds"] in 15..30
@@ -216,14 +216,14 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
     assert KeyFleet.ContractSchema.errors(first.body["graph"], "WorkspaceChanges") == []
 
-    assert [general, work] = first.body["rooms"]
-    assert %{"slug" => "general", "head_seq" => 3, "cursor" => 3} = general
+    assert [coding, general] = first.body["rooms"]
+    assert %{"slug" => "general", "kind" => "fixed", "head_seq" => 3, "cursor" => 3} = general
     assert Enum.map(general["messages"], & &1["body"]) == ["General 1", "General 2", "General 3"]
-    assert %{"slug" => "work", "head_seq" => 1, "cursor" => 1} = work
+    assert %{"slug" => "coding", "head_seq" => 1, "cursor" => 1} = coding
 
-    second = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 3, "work" => 1}))
+    second = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 3, "coding" => 1}))
     assert Enum.map(second.body["rooms"], & &1["messages"]) == [[], []]
-    assert Enum.map(second.body["rooms"], & &1["cursor"]) == [3, 1]
+    assert Enum.map(second.body["rooms"], & &1["cursor"]) == [1, 3]
 
     assert Enum.map(
              send_signed(c, "POST", @read_general, ~s({"after_seq": 2})).body["messages"],
@@ -258,7 +258,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
           {"POST", @send_general, ~s({"idempotency_key":"k-9"})},
           {"POST", @send_general,
            ~s({"body":"Hello","idempotency_key":"k-9","reply_to_id":"seven"})},
-          {"POST", @send_general, ~s({"body":"Hello","idempotency_key":"k-9","slug":"work"})},
+          {"POST", @send_general, ~s({"body":"Hello","idempotency_key":"k-9","slug":"coding"})},
           {"DELETE", @send_general, "{}"},
           {"POST", @sync_path, "{}"},
           {"POST", @sync_path, ~s({"rooms":[{"slug":"general"}]})},
@@ -312,51 +312,50 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     assert {refused.status, refused.body} == {422, %{"error" => "invalid_request"}}
   end
 
-  describe "level and topic rooms" do
-    # Syndicate keys other suites commit outside the sandbox would count as
-    # sold, so the levels are read on the Cascade fleet.
+  describe "created and open rooms" do
+    # Rooms other suites create outside the sandbox would count against the
+    # Syndicate's limit, so these rooms are made on the Cascade fleet.
     setup do
       ChainHelpers.seed_cursor!(@cascade)
       sell!(@cascade, 1..4)
       :ok
     end
 
-    test "an agent posts in the level rooms its key may, and opens topic rooms by the same rule",
-         c do
+    test "an agent creates a room every member posts in", c do
       pair(c, @cascade, 3)
 
-      opened = create_room(c, %{slug: "hull-survey", name: "Hull survey"})
+      created = create_room(c, %{slug: "hull-survey", name: "Hull survey"})
 
-      assert {opened.status, opened.body} ==
+      assert {created.status, created.body} ==
                {201,
                 %{
                   "room" => %{
                     "slug" => "hull-survey",
                     "name" => "Hull survey",
-                    "kind" => "topic",
-                    "level" => nil,
+                    "kind" => "created",
+                    "topic" => nil,
+                    "topic_set_by" => nil,
+                    "topic_set_at" => nil,
                     "head_seq" => 0
                   }
                 }}
 
-      assert KeyFleet.ContractSchema.errors(opened.body["room"], "Room") == []
+      assert KeyFleet.ContractSchema.errors(created.body["room"], "Room") == []
 
-      follows = create_room(c, %{slug: "level-two-plans", name: "Plans", level: 2})
-
-      assert {follows.status, follows.body["room"]["kind"], follows.body["room"]["level"]} ==
-               {201, "topic", 2}
-
-      # Key 3 is a level 2 key, and key 5 is not sold yet.
       for {body, status, error} <- [
-            {%{slug: "early", name: "Early", level: 1}, 403, "not_a_member"},
-            {%{slug: "later", name: "Later", level: 3}, 403, "not_a_member"},
             {%{slug: "hull-survey", name: "Again"}, 409, "room_taken"},
-            {%{slug: "level-2", name: "Mine"}, 422, "invalid_room"},
-            {%{slug: "level-9", name: "Mine"}, 422, "invalid_room"},
             {%{slug: "general", name: "Mine"}, 422, "invalid_room"},
+            {%{slug: "welcome", name: "Mine"}, 422, "invalid_room"},
+            {%{slug: "open-1", name: "Mine"}, 422, "invalid_room"},
             {%{slug: "Hull", name: "Hull"}, 422, "invalid_room"},
             {%{slug: "hull", name: ""}, 422, "invalid_room"},
-            {%{slug: "hull", name: "Hull", level: 21}, 422, "invalid_room"}
+            {%{slug: "hull", name: "Hull\u200B"}, 422, "invalid_room"},
+            {%{slug: "hull", name: "Hull\u2028survey"}, 422, "invalid_room"},
+            {%{slug: "hull", name: " coding "}, 409, "name_taken"},
+            {%{slug: "hull", name: "Ｃｏｄｉｎｇ"}, 409, "name_taken"},
+            {%{slug: "hull", name: "Welcome and Intros"}, 409, "name_taken"},
+            {%{slug: "hull", name: "Open room 2"}, 409, "name_taken"},
+            {%{slug: "hull", name: "HULL survey"}, 409, "name_taken"}
           ] do
         refused = create_room(c, body)
         assert {refused.status, refused.body} == {status, %{"error" => error}}, inspect(body)
@@ -372,70 +371,116 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
       assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
 
-      for {slug, status} <- [
-            {"level-2", 201},
-            {"level-two-plans", 201},
-            {"hull-survey", 201},
-            {"general", 201},
-            {"level-1", 403},
-            {"level-3", 404}
-          ] do
-        sent = send_signed(c, "POST", cascade_room(slug, "send"), send_body("Standing by", slug))
-        assert sent.status == status, slug
-      end
+      sent = send_signed(c, "POST", cascade_room("hull-survey", "send"), send_body("Hi", "k-1"))
+      assert sent.status == 201
+
+      # A person holding one of the fleet's keys posts there as well.
+      Rooms.send_message!(
+        %{fleet_id: @cascade, slug: "hull-survey", body: "Hello", idempotency_key: "h-1"},
+        actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+      )
 
       listed = send_signed(c, "GET", "/api/v1/agent/fleets/#{@cascade}/rooms")
 
-      assert Enum.map(listed.body["rooms"], &{&1["slug"], &1["kind"], &1["level"]}) == [
-               {"general", "core", nil},
-               {"planning", "core", nil},
-               {"work", "core", nil},
-               {"level-1", "level", 1},
-               {"level-2", "level", 2},
-               {"hull-survey", "topic", nil},
-               {"level-two-plans", "topic", 2}
-             ]
+      assert Enum.map(listed.body["rooms"], &{&1["slug"], &1["kind"]}) ==
+               Enum.map(~w(welcome general business voting coding), &{&1, "fixed"}) ++
+                 Enum.map(1..5, &{"open-#{&1}", "open"}) ++ [{"hull-survey", "created"}]
 
       synced =
         send_signed(
           c,
           "POST",
           "/api/v1/agent/fleets/#{@cascade}/sync",
-          sync_body(%{"level-2" => 0, "level-two-plans" => 0, "general" => 0})
+          sync_body(%{"hull-survey" => 0, "open-1" => 0})
         )
 
-      assert Enum.map(
-               synced.body["rooms"],
-               &{&1["slug"], &1["kind"], &1["level"], &1["head_seq"]}
-             ) ==
-               [
-                 {"general", "core", nil, 1},
-                 {"level-2", "level", 2, 1},
-                 {"level-two-plans", "topic", 2, 1}
-               ]
-
-      # Once level 2 sells out, level 1's keys join it, and level 2 still never
-      # reaches down to level 1.
-      sell!(@cascade, [5])
-
-      assert send_signed(c, "POST", cascade_room("level-1", "send"), send_body("Hi", "k-1")).status ==
-               403
-
-      assert Enum.map(
-               send_signed(c, "POST", cascade_room("level-2", "read")).body["messages"],
-               & &1["body"]
-             ) ==
-               ["Standing by"]
+      assert Enum.map(synced.body["rooms"], &{&1["slug"], &1["kind"], &1["head_seq"]}) ==
+               [{"hull-survey", "created", 2}, {"open-1", "open", 0}]
     end
 
-    test "while key ownership is not fresh, an agent neither posts nor opens a room", c do
+    test "an agent names an open room, and the room says who named it", c do
+      pair(c, @cascade, 3)
+
+      named = name_room(c, "open-2", "Hull survey")
+      assert named.status == 200
+      assert KeyFleet.ContractSchema.errors(named.body["room"], "Room") == []
+
+      assert %{
+               "slug" => "open-2",
+               "kind" => "open",
+               "topic" => "Hull survey",
+               "topic_set_by" => signer,
+               "topic_set_at" => set_at,
+               "head_seq" => 1
+             } = named.body["room"]
+
+      assert signer == c.signer.address
+      assert {:ok, _at, 0} = DateTime.from_iso8601(set_at)
+
+      read = send_signed(c, "POST", cascade_room("open-2", "read"))
+      assert KeyFleet.ContractSchema.errors(read.body, "RoomMessages") == []
+
+      assert [%{"kind" => "room_named", "body" => "Hull survey", "author_wallet" => ^signer}] =
+               read.body["messages"]
+
+      assert read.body["room"]["topic"] == "Hull survey"
+
+      # Naming it the same again changes nothing; a new name adds a line.
+      again = name_room(c, "open-2", "Hull survey")
+      assert {again.status, again.body["room"]["head_seq"]} == {200, 1}
+      assert again.body["room"]["topic_set_at"] == set_at
+
+      # A room is renamed at most once a minute.
+      too_soon = name_room(c, "open-2", "Dry dock")
+      assert {too_soon.status, too_soon.body} == {429, %{"error" => "rename_too_soon"}}
+      assert [wait] = Req.Response.get_header(too_soon, "retry-after")
+      assert String.to_integer(wait) in 59..60
+
+      a_minute_passes("open-2")
+      renamed = name_room(c, "open-2", "Dry dock")
+      assert {renamed.body["room"]["topic"], renamed.body["room"]["head_seq"]} == {"Dry dock", 2}
+
+      for {slug, topic, status, error} <- [
+            {"general", "Mine", 422, "room_not_open"},
+            {"open-9", "Mine", 404, "room_unknown"},
+            {"open-3", "", 422, "invalid_topic"},
+            {"open-3", "   ", 422, "invalid_topic"},
+            {"open-3", String.duplicate("h", 81), 422, "invalid_topic"},
+            {"open-3", "Hull\nsurvey", 422, "invalid_topic"},
+            {"open-3", "Hull\u200Bsurvey", 422, "invalid_topic"},
+            {"open-3", "Hull\u2028survey", 422, "invalid_topic"},
+            {"open-3", "Hull \u202Esurvey", 422, "invalid_topic"},
+            {"open-3", "General", 409, "name_taken"},
+            {"open-3", "Ｇｅｎｅｒａｌ", 409, "name_taken"},
+            {"open-3", "DRY DOCK", 409, "name_taken"}
+          ] do
+        refused = name_room(c, slug, topic)
+        assert {refused.status, refused.body} == {status, %{"error" => error}}, inspect(topic)
+      end
+
+      create_room(c, %{slug: "hull", name: "Hull"})
+      refused = name_room(c, "hull", "Mine")
+      assert {refused.status, refused.body} == {422, %{"error" => "room_not_open"}}
+
+      elsewhere =
+        send_signed(
+          c,
+          "POST",
+          "/api/v1/agent/fleets/hull_survey/rooms/open-1/topic",
+          ~s({"topic":"Hull"})
+        )
+
+      assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
+    end
+
+    test "while key ownership is not fresh, an agent neither posts, creates nor names a room",
+         c do
       pair(c, @cascade, 3)
       ChainHelpers.seed_cursor!(@cascade, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
       for {path, body} <- [
             {@create_cascade, ~s({"slug":"hull","name":"Hull"})},
-            {@create_cascade, ~s({"slug":"hull","name":"Hull","level":2})},
-            {cascade_room("level-2", "send"), send_body("Standing by", "k-1")},
+            {cascade_topic("open-1"), ~s({"topic":"Hull"})},
             {cascade_room("general", "send"), send_body("Standing by", "k-2")}
           ] do
         refused = send_signed(c, "POST", path, body)
@@ -443,7 +488,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
       end
 
       # Reading stays open to everyone.
-      assert send_signed(c, "POST", cascade_room("level-2", "read")).status == 200
+      assert send_signed(c, "POST", cascade_room("open-1", "read")).status == 200
     end
 
     test "a room the database refuses for a reason of its own is answered, not a crash", c do
@@ -458,76 +503,107 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
       assert create_room(c, %{slug: "keel", name: "Keel"}).status == 201
     end
 
-    test "an agent running no key opens no room", c do
+    test "an agent running no key creates no room and names none", c do
       assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
       refused = create_room(c, %{slug: "hull", name: "Hull"})
       assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
+
+      refused = name_room(c, "open-1", "Hull")
+      assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
     end
 
-    # Three core rooms, all twenty levels and a hundred topics: 123 rooms.
-    test "a full fleet opens no more topic rooms, and one catch-up reads all of its rooms", c do
+    # Five fixed rooms, five open rooms and a hundred created ones: 110 rooms.
+    test "a full fleet creates no more rooms, and one catch-up reads all of its rooms", c do
       pair(c, @cascade, 3)
-      sell!(@cascade, [28_655])
-      member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 
+      # Who may create a room is shown above; these only fill the fleet.
       for n <- 1..100 do
-        Rooms.create_topic_room!(%{fleet_id: @cascade, slug: "topic-#{n}", name: "Topic #{n}"},
-          actor: member
+        Rooms.create_room!(%{fleet_id: @cascade, slug: "made-#{n}", name: "Made #{n}"},
+          authorize?: false
         )
       end
 
-      refused = create_room(c, %{slug: "topic-101", name: "Topic 101"})
+      refused = create_room(c, %{slug: "made-101", name: "Made 101"})
       assert {refused.status, refused.body} == {409, %{"error" => "room_limit_reached"}}
 
       every_room = Map.new(Rooms.list_rooms!(@cascade), &{&1.slug, 0})
-      assert map_size(every_room) == 123
+      assert map_size(every_room) == 110
 
       synced =
         send_signed(c, "POST", "/api/v1/agent/fleets/#{@cascade}/sync", sync_body(every_room))
 
       assert synced.status == 200
-      assert length(synced.body["rooms"]) == 123
+      assert length(synced.body["rooms"]) == 110
 
-      one_more = Map.put(every_room, "topic-101", 0)
+      one_more = Map.put(every_room, "made-101", 0)
 
       refused =
         send_signed(c, "POST", "/api/v1/agent/fleets/#{@cascade}/sync", sync_body(one_more))
 
       assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
 
+      member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
       assert Rooms.sync(@cascade, cursors, 0, member) == {:error, :invalid_request}
     end
 
-    test "only a slug, a name and a whole-number level reach opening a room", c do
+    test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do
       pair(c, @cascade, 3)
+      topic = cascade_topic("open-1")
 
       for {method, path, body} <- [
             {"POST", @create_cascade, ~s({"slug":"hull"})},
             {"POST", @create_cascade, ~s({"name":"Hull"})},
             {"POST", @create_cascade, ~s({"slug":7,"name":"Hull"})},
             {"POST", @create_cascade, ~s({"slug":"hull","name":["Hull"]})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","level":"2"})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","level":null})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","level":2.0})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","kind":"level"})},
+            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","kind":"open"})},
+            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","topic":"Hull"})},
             {"POST", @create_cascade,
              ~s({"slug":"hull","name":"Hull","fleet_id":"fleet_tech_classic"})},
-            {"POST", @create_cascade <> "?level=2", ~s({"slug":"hull","name":"Hull"})},
+            {"POST", @create_cascade <> "?kind=open", ~s({"slug":"hull","name":"Hull"})},
             {"POST", @create_cascade <> "/", ~s({"slug":"hull","name":"Hull"})},
             {"GET", @create_cascade, ~s({"slug":"hull","name":"Hull"})},
             {"POST", "/api/v1/agent/fleets/Fibonacci_cascade/rooms/create",
-             ~s({"slug":"hull","name":"Hull"})}
+             ~s({"slug":"hull","name":"Hull"})},
+            {"POST", topic, "{}"},
+            {"POST", topic, ~s({"topic":7})},
+            {"POST", topic, ~s({"topic":null})},
+            {"POST", topic, ~s({"topic":["Hull"]})},
+            {"POST", topic, ~s({"topic":"Hull","slug":"open-2"})},
+            {"POST", topic, ~s({"topic":"Hull","topic_set_by":"0x00"})},
+            {"POST", topic <> "?topic=Hull", ~s({"topic":"Hull"})},
+            {"POST", topic <> "/", ~s({"topic":"Hull"})},
+            {"GET", topic, ~s({"topic":"Hull"})},
+            {"POST", cascade_topic("Open-1"), ~s({"topic":"Hull"})}
           ] do
         assert send_signed(c, method, path, body).status == 401, "#{method} #{path} #{body}"
       end
 
       assert create_room(c, %{slug: "hull", name: "Hull"}).status == 201
+
+      # The created room's name is taken, whatever its case.
+      taken = name_room(c, "open-1", "hULL")
+      assert {taken.status, taken.body} == {409, %{"error" => "name_taken"}}
+      assert name_room(c, "open-1", "Hull works").status == 200
     end
   end
 
+  # Moves the room's last naming back a minute, so it may be renamed.
+  defp a_minute_passes(slug) do
+    KeyFleet.Repo.query!(
+      "UPDATE keyfleet_app.rooms SET topic_set_at = topic_set_at - interval '61 seconds' " <>
+        "WHERE fleet_id = $1 AND slug = $2",
+      [@cascade, slug]
+    )
+  end
+
   defp create_room(c, body), do: send_signed(c, "POST", @create_cascade, Jason.encode!(body))
+
+  defp name_room(c, slug, topic),
+    do: send_signed(c, "POST", cascade_topic(slug), Jason.encode!(%{topic: topic}))
+
+  defp cascade_topic(slug), do: "/api/v1/agent/fleets/#{@cascade}/rooms/#{slug}/topic"
 
   defp cascade_room(slug, action),
     do: "/api/v1/agent/fleets/#{@cascade}/rooms/#{slug}/messages/#{action}"
@@ -549,8 +625,6 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
         actor: %Actors.System{}
       )
     end
-
-    :ok = Rooms.ensure_level_rooms(fleet)
   end
 
   defp pair(c, fleet, token_id) do

@@ -27,7 +27,7 @@ defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
     owner = Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
     on_exit(fn -> Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
 
     start_supervised!(
       {KeyFleet.Graph.Supervisor,

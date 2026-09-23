@@ -1,11 +1,11 @@
-defmodule KeyFleet.TopicRoomRaceTest do
+defmodule KeyFleet.CreatedRoomRaceTest do
   use ExUnit.Case, async: false
 
   alias KeyFleet.Fleets
   alias KeyFleet.Repo
   alias KeyFleet.Rooms
 
-  # Each opening runs on a connection of its own and commits, so the rooms
+  # Each creation runs on a connection of its own and commits, so the rooms
   # this test leaves behind are removed when it ends.
   @fleet "fleet_tech_classic"
 
@@ -13,17 +13,17 @@ defmodule KeyFleet.TopicRoomRaceTest do
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       Fleets.bootstrap_catalog!()
 
-      # The first 98 topic rooms, written straight to the table: only the
-      # last two openings are under test.
+      # The first 98 created rooms, written straight to the table: only the
+      # last two creations are under test.
       Repo.insert_all(
         "rooms",
         for n <- 1..98 do
           %{
             id: Ecto.UUID.bingenerate(),
             fleet_id: @fleet,
-            slug: "topic-#{n}",
-            name: "Topic #{n}",
-            kind: "topic"
+            slug: "made-#{n}",
+            name: "Made #{n}",
+            kind: "created"
           }
         end
       )
@@ -31,26 +31,26 @@ defmodule KeyFleet.TopicRoomRaceTest do
 
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-        Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = $1 AND kind = 'topic'", [
+        Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = $1 AND kind = 'created'", [
           @fleet
         ])
       end)
     end)
   end
 
-  test "members opening the last free topic rooms at the same moment get exactly those rooms" do
+  test "agents creating the last free rooms at the same moment get exactly those rooms" do
     results = race(for n <- 1..6, do: "late-#{n}")
 
-    assert length(for {:ok, _room} <- results, do: :opened) == 2
+    assert length(for {:ok, _room} <- results, do: :created) == 2
 
     assert length(
-             for {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.TopicRoomLimitError{}]}} <-
+             for {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.CreatedRoomLimitError{}]}} <-
                    results,
                  do: :refused
            ) == 4
 
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      assert Rooms.count_topic_rooms!(@fleet) == 100
+      assert Rooms.count_created_rooms!(@fleet) == 100
     end)
   end
 
@@ -65,13 +65,13 @@ defmodule KeyFleet.TopicRoomRaceTest do
 
           receive do
             :go ->
-              # Who may open a room is shown elsewhere; this race is about the
+              # Who may create a room is shown elsewhere; this race is about the
               # count alone, so it runs without an actor holding a key.
-              Rooms.create_topic_room(%{fleet_id: @fleet, slug: slug, name: slug},
+              Rooms.create_room(%{fleet_id: @fleet, slug: slug, name: slug},
                 authorize?: false
               )
           after
-            10_000 -> raise "opening barrier timed out"
+            10_000 -> raise "creation barrier timed out"
           end
         end)
       end

@@ -41,7 +41,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     deploy(@fleet, @contract)
     for {token_id, wallet} <- @owners, do: record_owner(token_id, 0, wallet)
 
@@ -60,7 +60,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     [ann, bea] = pair_agents(c)
 
     posted =
-      send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/work/messages/send", %{
+      send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/voting/messages/send", %{
         body: "Customer interview notes are in.",
         idempotency_key: "m-1"
       })
@@ -95,7 +95,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
         data: %{
           title: "Interview notes",
           body: "See the post.",
-          discussion: [%{room: "work", seq: 1}]
+          discussion: [%{room: "voting", seq: 1}]
         }
       })
 
@@ -143,7 +143,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     assert source == task["id"]
 
     assert graph(c, ann, "get", %{id: note["id"]}).body["object"]["data"]["discussion"] ==
-             [%{"room" => "work", "seq" => 1}]
+             [%{"room" => "voting", "seq" => 1}]
 
     # The same command again answers the original result and writes nothing.
     again =
@@ -200,15 +200,15 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     [ann, bea] = pair_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
-    left = sync(c, ann, %{"general" => 0, "work" => 0}, 0)
+    left = sync(c, ann, %{"general" => 0, "voting" => 0}, 0)
     assert left.status == 200
-    [general, work] = left.body["rooms"]
+    [general, voting] = left.body["rooms"]
     graph_cursor = left.body["graph"]["next_cursor"]
     assert graph_cursor == left.body["graph"]["watermark"]
 
     # Ann is away while Bea writes in the workspace and in the chat.
     posted =
-      send_signed(c, bea, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/work/messages/send", %{
+      send_signed(c, bea, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/voting/messages/send", %{
         body: "The goal is done.",
         idempotency_key: "m-1"
       })
@@ -227,7 +227,9 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
     assert achieved.status == 200
 
-    back = sync(c, ann, %{"general" => general["cursor"], "work" => work["cursor"]}, graph_cursor)
+    back =
+      sync(c, ann, %{"general" => general["cursor"], "voting" => voting["cursor"]}, graph_cursor)
+
     assert back.status == 200
     assert back.body["next_poll_seconds"] in 15..30
     assert [%{"messages" => []}, %{"messages" => [missed]}] = back.body["rooms"]

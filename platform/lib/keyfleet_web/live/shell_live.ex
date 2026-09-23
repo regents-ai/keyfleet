@@ -19,6 +19,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.RoomPoster
+  alias KeyFleet.Rooms.Errors.RenameTooSoonError
 
   alias KeyFleetWeb.{
     AccountLive,
@@ -36,9 +37,8 @@ defmodule KeyFleetWeb.ShellLive do
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   @refused "That didn’t go through."
   @refreshing "Key ownership is being refreshed; try again in a moment."
+  @naming_failed "That room couldn’t be named. Try again."
   @thread_page 100
-  # The form for opening a topic room, before anything is typed into it.
-  @empty_opener %{name: "", address: "", level: "", refusal: nil}
   # A page left open keeps the latest two hundred posts.
   @thread_kept 200
   # How long a workspace page waits after a notice of changes before it reads
@@ -150,23 +150,13 @@ defmodule KeyFleetWeb.ShellLive do
     end
   end
 
-  def handle_event("edit_room_opener", %{"topic" => topic}, socket) do
-    {:noreply, edit_opener(socket, topic)}
+  def handle_event("name_room", %{"room" => %{"topic" => topic}}, socket)
+      when is_binary(topic) do
+    {:noreply, name_room(socket, topic)}
   end
 
-  def handle_event("edit_room_opener", _params, socket), do: {:noreply, socket}
-
-  def handle_event(
-        "open_room",
-        %{"topic" => %{"name" => name, "address" => address, "level" => level}},
-        socket
-      )
-      when is_binary(name) and is_binary(address) and is_binary(level) do
-    {:noreply, open_room(socket, name, address, level)}
-  end
-
-  def handle_event("open_room", _params, socket),
-    do: {:noreply, refuse_opening(socket, "That room couldn’t be opened. Try again.")}
+  def handle_event("name_room", _params, socket),
+    do: {:noreply, refuse_naming(socket, @naming_failed)}
 
   def handle_event("refresh_verified_connections", params, socket) do
     socket = reload_verified_connections(socket)
@@ -194,13 +184,14 @@ defmodule KeyFleetWeb.ShellLive do
 
   def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
 
-  # A room opened in the fleet on show joins its list of rooms.
-  def handle_info({:rooms_opened, fleet_id}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
+  # A room created or named in the fleet on show changes its list of rooms, and
+  # the room on show when it is the one named.
+  def handle_info({:rooms_changed, fleet_id}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
     rooms = Rooms.list_rooms!(fleet_id, actor: human_actor(socket), load: [:fleet])
-    {:noreply, update(socket, :room, &%{&1 | rooms: rooms})}
+    {:noreply, update(socket, :room, &show_rooms(&1, rooms))}
   end
 
-  def handle_info({:rooms_opened, _fleet_id}, socket), do: {:noreply, socket}
+  def handle_info({:rooms_changed, _fleet_id}, socket), do: {:noreply, socket}
 
   # A notice that the open fleet's workspace has moved past what the page last
   # read is only a nudge to read it again, once, a moment later: the notices
@@ -559,26 +550,23 @@ defmodule KeyFleetWeb.ShellLive do
 
     room = Enum.find(rooms, &(&1.slug == slug))
     posts = latest_posts(room, actor)
-    standing = RoomPoster.standing(actor, fleet_id)
 
     socket
     |> assign(
-      room: %{
-        fleet_id: fleet_id,
-        slug: slug,
-        room_id: room && room.id,
-        name: room && room.name,
-        fleet_name: fleet_name(rooms),
-        rooms: rooms,
-        last_seq: last_seq(posts, 0),
-        level: room && room.level,
-        can_post?: room != nil and RoomPoster.may_post_in?(standing, room.level),
-        can_open?: standing.member?,
-        open_levels: standing.levels,
-        opener: @empty_opener,
-        refreshing?: posting_paused?(actor, rooms, fleet_id),
-        draft: ""
-      },
+      room:
+        show_rooms(
+          %{
+            fleet_id: fleet_id,
+            slug: slug,
+            fleet_name: fleet_name(rooms),
+            last_seq: last_seq(posts, 0),
+            can_post?: room != nil and RoomPoster.may_post?(actor, fleet_id),
+            naming: "",
+            refreshing?: posting_paused?(actor, rooms, fleet_id),
+            draft: ""
+          },
+          rooms
+        ),
       room_notice: nil,
       send_key: Ash.UUID.generate()
     )
@@ -589,6 +577,21 @@ defmodule KeyFleetWeb.ShellLive do
     socket
     |> listen_to(nil)
     |> assign(room: nil, room_notice: nil, send_key: nil)
+  end
+
+  # The fleet's rooms, and what the page shows of the one it is on.
+  defp show_rooms(%{slug: slug} = shown, rooms) do
+    room = Enum.find(rooms, &(&1.slug == slug))
+
+    Map.merge(shown, %{
+      rooms: rooms,
+      room_id: room && room.id,
+      kind: room && room.kind,
+      name: room && RoomsLive.room_label(room),
+      topic: room && room.topic,
+      topic_set_by: room && room.topic_set_by,
+      topic_set_at: room && room.topic_set_at
+    })
   end
 
   # Every fleet opens with its rooms, so a fleet with none is one there is not.
@@ -676,7 +679,7 @@ defmodule KeyFleetWeb.ShellLive do
           &%{
             &1
             | draft: body,
-              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id, &1.level),
+              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
               refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
           }
         )
@@ -685,95 +688,65 @@ defmodule KeyFleetWeb.ShellLive do
 
   defp post(socket, _body), do: socket
 
-  # The address follows the name as it is typed, until the person writes an
-  # address of their own.
-  defp edit_opener(%{assigns: %{room: %{opener: opener}}} = socket, %{
-         "name" => name,
-         "address" => address,
-         "level" => level
-       })
-       when is_binary(name) and is_binary(address) and is_binary(level) do
-    address =
-      if address == suggested_address(opener.name), do: suggested_address(name), else: address
+  # The room is named straight away, and the page then reads back the room and
+  # the line the naming added to it.
+  defp name_room(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, topic) do
+    actor = human_actor(socket)
 
-    update(socket, :room, &%{&1 | opener: %{opener | name: name, address: address, level: level}})
-  end
+    case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
+      {:ok, _room} ->
+        rooms = Rooms.list_rooms!(fleet_id, actor: actor, load: [:fleet])
 
-  defp edit_opener(socket, _topic), do: socket
-
-  defp open_room(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket, name, address, level) do
-    input = %{fleet_id: fleet_id, slug: address, name: name, level: chosen_level(level)}
-    opener = %{name: name, address: address, level: level, refusal: nil}
-    socket = update(socket, :room, &%{&1 | opener: opener})
-
-    case Rooms.create_topic_room(input, actor: human_actor(socket)) do
-      # The new room's page starts with an empty form.
-      {:ok, room} ->
-        push_patch(socket, to: "/app/fleets/#{fleet_id}/rooms/#{room.slug}")
+        socket
+        |> assign(:room_notice, nil)
+        |> update(:room, &(&1 |> show_rooms(rooms) |> Map.put(:naming, "")))
+        |> show_new_posts()
 
       {:error, refusal} ->
-        refuse_opening(socket, open_refusal(refusal, fleet_id, level))
+        socket
+        |> refuse_naming(naming_refusal(refusal, fleet_id))
+        |> update(
+          :room,
+          &%{
+            &1
+            | naming: topic,
+              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
+              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
+          }
+        )
     end
   end
 
-  defp open_room(socket, _name, _address, _level), do: socket
+  defp name_room(socket, _topic), do: socket
 
-  defp refuse_opening(%{assigns: %{room: %{opener: _opener}}} = socket, refusal),
-    do: update(socket, :room, &put_in(&1.opener.refusal, refusal))
+  defp refuse_naming(%{assigns: %{room: %{}}} = socket, refusal),
+    do: assign(socket, :room_notice, %{tone: :error, message: refusal})
 
-  defp refuse_opening(socket, _refusal), do: socket
+  defp refuse_naming(socket, _refusal), do: socket
 
-  # The first choice is the whole fleet.
-  defp chosen_level(""), do: nil
-  defp chosen_level(level), do: level
-
-  defp suggested_address(name) do
-    name
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.slice(0, 63)
-    |> String.trim("-")
+  defp naming_refusal(%Ash.Error.Forbidden{}, fleet_id) do
+    if Chain.fresh?(fleet_id),
+      do: "Only the people holding this fleet’s keys can name a room.",
+      else: @refreshing
   end
 
-  defp open_refusal(%Ash.Error.Forbidden{}, fleet_id, level) do
+  defp naming_refusal(%Ash.Error.Invalid{errors: errors} = refusal, _fleet_id) do
     cond do
-      not Chain.fresh?(fleet_id) -> @refreshing
-      level == "" -> "Only the people holding this fleet’s keys can open a room."
-      true -> "Only the people who can post in that level can open a room that follows it."
-    end
-  end
+      Rooms.taken?(refusal, :name) ->
+        "That name is already another room’s name in this fleet."
 
-  defp open_refusal(%Ash.Error.Invalid{errors: errors}, _fleet_id, _level) do
-    cond do
-      Enum.any?(errors, &match?(%Rooms.Errors.TopicRoomLimitError{}, &1)) ->
-        "This fleet already has as many topic rooms as it can hold."
+      Enum.any?(errors, &match?(%RenameTooSoonError{}, &1)) ->
+        "This room was renamed a moment ago. Try again in a minute."
 
-      Enum.any?(errors, &taken?/1) ->
-        "That address is already in use in this fleet. Try another."
-
-      Enum.any?(errors, &match?(%{field: :slug}, &1)) ->
-        "An address uses lowercase letters, numbers and single dashes, like hull-survey, " <>
-          "and can’t be general, planning, work or a level’s address."
-
-      Enum.any?(errors, &match?(%{field: :name}, &1)) ->
-        "Choose another name of up to 80 characters, on one line, that isn’t General, " <>
-          "Planning, Work or a level’s name."
-
-      Enum.any?(errors, &match?(%{field: :level}, &1)) ->
-        "Choose who can post from the list."
+      Enum.any?(errors, &match?(%{field: :topic}, &1)) ->
+        "Choose a name of up to 80 characters, on one line, using only visible characters."
 
       true ->
-        "That room couldn’t be opened. Try again."
+        @naming_failed
     end
   end
 
-  defp open_refusal(_refusal, _fleet_id, _level), do: "That room couldn’t be opened. Try again."
-
-  # The fleet already has a room at this address.
-  defp taken?(%Ash.Error.Changes.InvalidAttribute{private_vars: private_vars}),
-    do: Keyword.get(private_vars || [], :constraint_type) == :unique
-
-  defp taken?(_error), do: false
+  defp naming_refusal(_refusal, _fleet_id), do: @naming_failed
 
   defp post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
     if Chain.fresh?(fleet_id),

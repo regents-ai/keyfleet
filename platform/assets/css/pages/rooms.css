@@ -88,28 +88,7 @@
   list-style: none;
 }
 
-.rooms-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: baseline;
-}
-
-.rooms-tag {
-  color: var(--ash-muted);
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.rooms-list h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.rooms-composer input,
-.rooms-composer select {
+.rooms-composer input {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid var(--ash-line);
@@ -156,6 +135,12 @@
   gap: 0.35rem;
   padding: 0.75rem;
   border: 1px solid var(--ash-line);
+}
+
+/* The note that someone named the room reads as a line of its own, not a post. */
+.rooms-thread-list li.rooms-naming {
+  padding-block: 0.25rem;
+  border-color: transparent;
 }
 
 .rooms-author {

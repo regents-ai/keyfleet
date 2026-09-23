@@ -22,7 +22,7 @@ defmodule KeyFleet.MessagesTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     owner = human("a")
     epoch!(owner_wallet: wallet("a"))
     %{owner: owner}
@@ -31,14 +31,13 @@ defmodule KeyFleet.MessagesTest do
   test "each room counts its own posts from one upwards", %{owner: owner} do
     first = post!(owner, "general", "Morning")
     second = post!(owner, "general", "Anyone on the hull survey?")
-    elsewhere = post!(owner, "work", "Hull survey started")
+    elsewhere = post!(owner, "coding", "Hull survey started")
 
     assert Enum.map([first, second, elsewhere], & &1.seq) == [1, 2, 1]
 
-    assert heads() == %{
+    assert Map.reject(heads(), fn {_room, head} -> head == 0 end) == %{
              {@fleet, "general"} => 2,
-             {@fleet, "work"} => 1,
-             {@fleet, "planning"} => 0
+             {@fleet, "coding"} => 1
            }
   end
 
@@ -117,7 +116,7 @@ defmodule KeyFleet.MessagesTest do
   end
 
   test "a post can only answer a post in the same room", %{owner: owner} do
-    elsewhere = post!(owner, "work", "Hull survey started")
+    elsewhere = post!(owner, "coding", "Hull survey started")
     here = post!(owner, "general", "Morning")
 
     assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.ReplyOutsideRoomError{}]}} =
@@ -159,7 +158,7 @@ defmodule KeyFleet.MessagesTest do
 
   test "a reader behind on every room catches up on each post exactly once", %{owner: owner} do
     for n <- 1..3, do: post!(owner, "general", "General #{n}")
-    post!(owner, "work", "Work 1")
+    post!(owner, "coding", "Coding 1")
 
     {:ok, first} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, owner)
     assert [%{slug: "general", head_seq: 3, cursor: 3, messages: caught_up}] = first.rooms
@@ -171,15 +170,15 @@ defmodule KeyFleet.MessagesTest do
     {:ok, second} =
       Rooms.sync(
         @fleet,
-        [%{slug: "general", after_seq: 3}, %{slug: "work", after_seq: 1}],
+        [%{slug: "general", after_seq: 3}, %{slug: "coding", after_seq: 1}],
         0,
         owner
       )
 
-    assert [general, work] = second.rooms
+    assert [general, coding] = second.rooms
     assert Enum.map(general.messages, & &1.seq) == [4]
     assert {general.cursor, general.head_seq} == {4, 4}
-    assert {work.messages, work.cursor, work.head_seq} == {[], 1, 1}
+    assert {coding.messages, coding.cursor, coding.head_seq} == {[], 1, 1}
 
     assert {:error, %Rooms.Errors.RoomUnknownError{}} =
              Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], 0, owner)
@@ -246,6 +245,21 @@ defmodule KeyFleet.MessagesTest do
     end
 
     assert Enum.map(read("general"), &{&1.id, &1.body}) == [{posted.id, "Hull survey started"}]
+  end
+
+  test "the database holds only posts and room namings", %{owner: owner} do
+    posted = post!(owner, "general", "Hull survey started")
+
+    assert {:error,
+            %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_kind"}}} =
+             Repo.query(
+               "INSERT INTO keyfleet_app.messages " <>
+                 "(seq, kind, author_kind, author_wallet, body, body_digest, idempotency_key, fleet_id, room_id) " <>
+                 "SELECT seq + 1, 'level', author_kind, author_wallet, body, body_digest, 'k-level', fleet_id, room_id " <>
+                 "FROM keyfleet_app.messages WHERE id = $1",
+               [Ecto.UUID.dump!(posted.id)],
+               mode: :savepoint
+             )
   end
 
   defp post!(actor, slug, body, key \\ nil) do

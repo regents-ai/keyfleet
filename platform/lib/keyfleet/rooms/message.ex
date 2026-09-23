@@ -2,7 +2,8 @@ defmodule KeyFleet.Rooms.Message do
   require Ash.Query
 
   @moduledoc """
-  One post in one room, in the place that room gave it.
+  One line in one room, in the place that room gave it: a post a member wrote,
+  or the note that a member named the room.
 
   Posts are never edited and never removed, so the table is the room's whole
   history and the place a post holds is the only thing a reader has to remember
@@ -25,6 +26,9 @@ defmodule KeyFleet.Rooms.Message do
 
     check_constraints do
       check_constraint(:seq, "messages_positive_seq", check: "seq > 0")
+
+      # A post, or the line saying a member named the room.
+      check_constraint(:kind, "messages_kind", check: "kind IN ('post', 'room_named')")
 
       check_constraint(:author_wallet, "messages_author_wallet_shape",
         check: "author_wallet ~ '^0x[0-9a-f]{40}$'"
@@ -103,7 +107,30 @@ defmodule KeyFleet.Rooms.Message do
       return_skipped_upsert? true
 
       validate KeyFleet.Graph.Validations.KnownFleet
-      change KeyFleet.Rooms.Changes.PostMessage
+      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post}
+      change KeyFleet.Rooms.Changes.AnnouncePost
+    end
+
+    # The line an open room takes when a member names it, written inside the
+    # naming itself (`KeyFleet.Rooms.Changes.NameRoom`), which tells the room's
+    # watchers once it commits. Its body is the room's new topic.
+    create :note_room_named do
+      public? false
+      accept []
+      transaction? true
+
+      argument :fleet_id, :string, allow_nil?: false
+      argument :slug, :string, allow_nil?: false
+
+      argument :body, :string,
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: @max_body, trim?: false]
+
+      argument :idempotency_key, :string,
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: 128, trim?: false]
+
+      change {KeyFleet.Rooms.Changes.PostMessage, kind: :room_named}
     end
 
     read :read_messages do
@@ -172,7 +199,7 @@ defmodule KeyFleet.Rooms.Message do
       authorize_if always()
     end
 
-    policy action(:send_message) do
+    policy action([:send_message, :note_room_named]) do
       authorize_if KeyFleet.Rooms.Checks.RoomPoster
     end
   end
@@ -185,6 +212,13 @@ defmodule KeyFleet.Rooms.Message do
       public?: true,
       writable?: false,
       constraints: [min: 1, max: @bigint]
+
+    # A post a member wrote, or the note that a member named the room.
+    attribute :kind, :atom,
+      allow_nil?: false,
+      public?: true,
+      writable?: false,
+      constraints: [one_of: [:post, :room_named]]
 
     attribute :author_kind, :atom,
       allow_nil?: false,

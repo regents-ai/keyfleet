@@ -1,6 +1,7 @@
 defmodule KeyFleet.Rooms.Changes.PostMessage do
   @moduledoc """
-  Puts one post in its room, or hands back the post this sender already made.
+  Puts one line in its room, of the kind the action names (`kind: :post` or
+  `kind: :room_named`), or hands back the line this sender already made.
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -18,14 +19,13 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   alias KeyFleet.Rooms.Sequence
 
   @impl true
-  def change(changeset, _opts, %{actor: actor}) do
+  def change(changeset, opts, %{actor: actor}) do
     changeset
-    |> Ash.Changeset.before_action(&place(&1, actor))
+    |> Ash.Changeset.before_action(&place(&1, actor, Keyword.fetch!(opts, :kind)))
     |> Ash.Changeset.after_action(&confirm/2)
-    |> Ash.Changeset.after_transaction(&announce/2)
   end
 
-  defp place(changeset, actor) do
+  defp place(changeset, actor, kind) do
     fleet_id = Ash.Changeset.get_argument(changeset, :fleet_id)
     slug = Ash.Changeset.get_argument(changeset, :slug)
     reply_to_id = Ash.Changeset.get_argument(changeset, :reply_to_id)
@@ -45,7 +45,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
         )
 
       true ->
-        write(changeset, room, actor)
+        write(changeset, room, actor, kind)
     end
   end
 
@@ -54,7 +54,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   defp answers_this_room?(reply_to_id, room, actor),
     do: Rooms.get_post_in_room!(reply_to_id, room.id, actor: actor) != nil
 
-  defp write(changeset, room, actor) do
+  defp write(changeset, room, actor, kind) do
     Sequence.lock_room!(room.id)
 
     {author, profile} = author(room.fleet_id, actor)
@@ -65,6 +65,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
     |> Ash.Changeset.put_context(:author_profile, profile)
     |> Ash.Changeset.force_change_attributes(
       Map.merge(author, %{
+        kind: kind,
         fleet_id: room.fleet_id,
         room_id: room.id,
         seq: seq(room, author.author_wallet, idempotency_key, actor),
@@ -119,20 +120,4 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
        )}
     end
   end
-
-  # Best effort, and only for a post that is new. Anyone reading a room reads it
-  # from the room itself, so a notice that never arrives costs nothing.
-  defp announce(_changeset, {:ok, message} = result) do
-    unless Ash.Resource.get_metadata(message, :upsert_skipped) do
-      Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
-        Rooms.fleet_topic(message.fleet_id),
-        {:room_head, message.room_id, message.seq}
-      )
-    end
-
-    result
-  end
-
-  defp announce(_changeset, result), do: result
 end

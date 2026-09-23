@@ -66,55 +66,6 @@ defmodule KeyFleet.Fleets.PresetsTest do
     assert Enum.map([8, 9, 10, 20], &Presets.fibonacci_holding_limit/1) == [5, 8, 14, 1_771]
   end
 
-  # Someone holding keys of several levels writes what each key writes.
-  test "keys of several levels write each held level, and later levels from the lowest" do
-    assert Presets.levels_writable_by([], 46_365) == []
-    assert Presets.levels_writable_by([3, 1, 3], 10) == [1, 2, 3]
-    assert Presets.levels_writable_by([4, 2], 5) == [2, 4]
-    assert Presets.levels_writable_by([4, 2], 18) == [2, 3, 4]
-    assert Presets.levels_writable_by([20], 46_365) == [20]
-  end
-
-  # A level opens with its first key: 1, 3, 6, 11, 19, … and 28,655.
-  test "a Fibonacci level runs from its first key to its last, and is open once its first sells" do
-    assert Enum.map(
-             [0, 1, 2, 3, 5, 6, 10, 11, 230, 231, 28_654, 28_655, 46_365],
-             &Presets.active_levels/1
-           ) ==
-             [0, 1, 1, 2, 2, 3, 3, 4, 9, 10, 19, 20, 20]
-
-    assert {starts, ends} = Presets.fibonacci_level_bounds()
-    assert Enum.map(starts, &Presets.fibonacci_level_of/1) == Enum.to_list(1..20)
-    assert Enum.map(ends, &Presets.fibonacci_level_of/1) == Enum.to_list(1..20)
-
-    assert Enum.map(Enum.drop(starts, 1), &Presets.fibonacci_level_of(&1 - 1)) ==
-             Enum.to_list(1..19)
-
-    assert starts ==
-             [
-               1,
-               3,
-               6,
-               11,
-               19,
-               32,
-               53,
-               87,
-               142,
-               231,
-               375,
-               608,
-               985,
-               1_595,
-               2_582,
-               4_179,
-               6_763,
-               10_944,
-               17_709,
-               28_655
-             ]
-  end
-
   test "only the two Fibonacci fleets have levels" do
     assert Enum.filter(KeyFleet.Fleets.catalog_ids(), &Presets.levelled?/1) ==
              ["fibonacci_syndicate", "fibonacci_cascade"]

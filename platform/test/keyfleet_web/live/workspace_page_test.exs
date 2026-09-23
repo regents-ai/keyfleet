@@ -17,7 +17,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
 
   setup do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     :ok
   end
 
@@ -314,6 +314,16 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
     test "shows every field, its links both ways, its history and where it was discussed", %{
       conn: conn
     } do
+      KeyFleet.Repo.query!(
+        "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
+          "topic_set_at = now() WHERE fleet_id = $2 AND slug = 'open-2'",
+        ["0x" <> String.duplicate("a", 40), @fleet]
+      )
+
+      KeyFleet.Rooms.create_room!(%{fleet_id: @fleet, slug: "ship-ops", name: "Ship ops"},
+        authorize?: false
+      )
+
       goal =
         create(@fleet, "goal", %{
           "title" => "Revenue",
@@ -329,7 +339,9 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
           "result_ref" => "git+https://example.com/repo.git",
           "extra_notes" => "Anything else.",
           "discussion" => [
-            %{"room" => "planning", "seq" => 4},
+            %{"room" => "business", "seq" => 4},
+            %{"room" => "open-2", "seq" => 1},
+            %{"room" => "ship-ops", "seq" => 3},
             %{"room" => "elsewhere", "seq" => 2}
           ]
         })
@@ -406,8 +418,22 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/planning"]),
-               "Message 4 in Planning"
+               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/business"]),
+               "Message 4 in Business"
+             )
+
+      # An open room goes by the name its members gave it.
+      assert has_element?(
+               view,
+               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/open-2"]),
+               "Message 1 in Hull survey"
+             )
+
+      # So does a room an agent created.
+      assert has_element?(
+               view,
+               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/ship-ops"]),
+               "Message 3 in Ship ops"
              )
 
       assert has_element?(view, "#workspace-discussion span", "Message 2 in elsewhere")

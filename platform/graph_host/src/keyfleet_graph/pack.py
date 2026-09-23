@@ -54,7 +54,9 @@ def _items():
 
 
 class DiscussionLink(_Model):
-    room: Literal["general", "planning", "work"]
+    # Any room's address: a fleet's own rooms and the rooms its agents created
+    # share one shape. Whether the fleet has the room is the reader's question.
+    room: Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=63)]
     seq: Annotated[int, Field(ge=1, le=MAX_INT)]
 
 

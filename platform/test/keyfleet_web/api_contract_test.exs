@@ -21,6 +21,7 @@ defmodule KeyFleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/rooms/create",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
+             "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
              "/api/v1/agent/fleets/{fleet_id}/sync",
              "/api/v1/agent/join/status",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing",
@@ -362,7 +363,7 @@ defmodule KeyFleetWeb.ApiContractTest do
     assert Enum.sort(served) == Enum.sort(documented)
   end
 
-  test "a topic room's address is lowercase letters, digits and single dashes" do
+  test "a created room's address is lowercase letters, digits and single dashes" do
     contract = YamlElixir.read_from_file!(@contract)
 
     slug =
@@ -370,7 +371,7 @@ defmodule KeyFleetWeb.ApiContractTest do
         contract["components"]["schemas"]["RoomCreateRequest"]["properties"]["slug"]["pattern"]
       )
 
-    assert Enum.all?(~w(hull-survey a 7 level-two-plans), &Regex.match?(slug, &1))
+    assert Enum.all?(~w(hull-survey a 7 open-6 hull-survey-2), &Regex.match?(slug, &1))
     refute Enum.any?(~w(Hull hull--survey -hull hull- hull_survey), &Regex.match?(slug, &1))
   end
 

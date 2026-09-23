@@ -27,6 +27,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   @pairing "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing"
   @rooms "/api/v1/agent/fleets/{fleet_id}/rooms"
   @create "/api/v1/agent/fleets/{fleet_id}/rooms/create"
+  @topic "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic"
   @read "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read"
   @send "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send"
   @sync "/api/v1/agent/fleets/{fleet_id}/sync"
@@ -52,7 +53,8 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     {"POST", @pairing, [], %{}},
     {"DELETE", @pairing, [], %{}},
     {"GET", @rooms, [], %{}},
-    {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe", "level" => 1}},
+    {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
+    {"POST", @topic, [], %{"topic" => "Probe"}},
     {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @send, [], %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
     {"POST", @sync, [],
@@ -104,7 +106,8 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   # Where each body's fields go once admitted, less the ones its address supplies.
   @actions [
              {@update, KeyFleet.Agents.AgentProfile, :edit_my_profile},
-             {@create, KeyFleet.Rooms.Room, :create_topic},
+             {@create, KeyFleet.Rooms.Room, :create},
+             {@topic, KeyFleet.Rooms.Room, :set_topic},
              {@read, KeyFleet.Rooms.Message, :read_messages},
              {@send, KeyFleet.Rooms.Message, :send_message}
            ] ++
@@ -129,7 +132,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     {:ok, signer} = Siwa.LocalSigner.new()
     record_owner(1, @owner)
     record_owner(2, signer.address)
@@ -319,21 +322,24 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
       answer(c, c.signer, "POST", @sync, address, body, status)
     end
 
-    sync.(@address, [general, %{general | "slug" => "work"}], 200)
+    sync.(@address, [general, %{general | "slug" => "coding"}], 200)
     sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
     sync.(@address, [%{general | "after_seq" => -1}], 422)
     sync.(@address, [general, general], 422)
 
-    # Opening topic rooms: new, taken, malformed, by an outsider, and past the limit.
+    # Creating rooms: new, taken, a name taken, malformed, by an outsider, and
+    # past the limit.
     room = %{"slug" => "survey-plans", "name" => "Survey plans"}
 
-    assert answer(c, c.signer, "POST", @create, @address, Map.put(room, "level", 1), 201).body ==
+    assert answer(c, c.signer, "POST", @create, @address, room, 201).body ==
              %{
                "room" => %{
                  "slug" => "survey-plans",
                  "name" => "Survey plans",
-                 "kind" => "topic",
-                 "level" => 1,
+                 "kind" => "created",
+                 "topic" => nil,
+                 "topic_set_by" => nil,
+                 "topic_set_at" => nil,
                  "head_seq" => 0
                }
              }
@@ -341,17 +347,47 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @create, @address, room, 409).body ==
              %{"error" => "room_taken"}
 
+    assert answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "plans"}, 409).body ==
+             %{"error" => "name_taken"}
+
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "Survey"}, 422)
     answer(c, stranger, "POST", @create, @address, %{room | "slug" => "outsiders"}, 403)
 
+    # Who may create a room is shown above; these only fill the fleet.
     for n <- 2..100 do
-      Rooms.create_topic_room!(%{fleet_id: @fleet, slug: "topic-#{n}", name: "Topic #{n}"},
-        actor: human
+      Rooms.create_room!(%{fleet_id: @fleet, slug: "made-#{n}", name: "Made #{n}"},
+        authorize?: false
       )
     end
 
     assert answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "one-more"}, 409).body ==
              %{"error" => "room_limit_reached"}
+
+    # Naming an open room: named, by an outsider, somewhere else, refused, a
+    # name taken, and renamed too soon.
+    open = Map.put(@address, "slug", "open-1")
+    named = answer(c, c.signer, "POST", @topic, open, %{"topic" => "Hull survey"}, 200)
+
+    assert %{"kind" => "open", "topic" => "Hull survey", "head_seq" => 1} = named.body["room"]
+    assert named.body["room"]["topic_set_by"] == c.signer.address
+
+    answer(c, stranger, "POST", @topic, open, %{"topic" => "Mine"}, 403)
+    answer(c, c.signer, "POST", @topic, Map.put(open, "slug", "open-6"), %{"topic" => "x"}, 404)
+
+    assert answer(c, c.signer, "POST", @topic, open, %{"topic" => ""}, 422).body ==
+             %{"error" => "invalid_topic"}
+
+    assert answer(c, c.signer, "POST", @topic, @address, %{"topic" => "Mine"}, 422).body ==
+             %{"error" => "room_not_open"}
+
+    other_open = Map.put(@address, "slug", "open-2")
+
+    assert answer(c, c.signer, "POST", @topic, other_open, %{"topic" => "General"}, 409).body ==
+             %{"error" => "name_taken"}
+
+    too_soon = answer(c, c.signer, "POST", @topic, open, %{"topic" => "Dry dock"}, 429)
+    assert too_soon.body == %{"error" => "rename_too_soon"}
+    assert [_seconds] = Req.Response.get_header(too_soon, "retry-after")
 
     # A fleet outside the catalog is not found on every route that names one,
     # with the answer the workspace gives.
@@ -368,6 +404,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @send, @address, %{post | "idempotency_key" => "k-4"}, 503)
     answer(c, c.signer, "POST", @pairing, one, %{}, 503)
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
+    answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
 
     # Every route: unsigned, too large, and with the sign-in check away.
     for {method, template} <- routes() do
@@ -443,6 +480,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
       {"DELETE", @pairing},
       {"GET", @rooms},
       {"POST", @create},
+      {"POST", @topic},
       {"POST", @read},
       {"POST", @send},
       {"POST", @sync}
@@ -457,6 +495,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@join), do: %{"name" => "Probe", "declared_harness" => "local"}
   defp empty_or_minimal(@update), do: %{"current_status" => "away"}
   defp empty_or_minimal(@create), do: %{"slug" => "away", "name" => "Away"}
+  defp empty_or_minimal(@topic), do: %{"topic" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@sync), do: %{"rooms" => [], "graph" => %{"after_seq" => 0}}
   defp empty_or_minimal(_template), do: %{}

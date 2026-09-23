@@ -43,11 +43,6 @@ defmodule KeyFleet.Chain.Scanner do
   votes are known to be counted. A pass that made a new proposal record says
   so on `KeyFleet.Proposals.topic/1`, even if it then failed or stopped the
   fleet; that is only a hint to read again.
-
-  Once a pass has moved the cursor on, the room of every Fibonacci level that
-  has sold a key is opened if it is not open yet. Opening a room never holds
-  up the record: if it fails, the failure is logged and the next pass tries
-  again.
   """
 
   require Logger
@@ -58,7 +53,6 @@ defmodule KeyFleet.Chain.Scanner do
   alias KeyFleet.Fleets.Fleet
   alias KeyFleet.Keys
   alias KeyFleet.Proposals
-  alias KeyFleet.Rooms
 
   @rescan_blocks 30
   @max_range 10_000
@@ -77,10 +71,6 @@ defmodule KeyFleet.Chain.Scanner do
   written to.
   """
   def step(%Fleet{} = fleet, client) do
-    with :ok <- pass(fleet, client), do: open_level_rooms(fleet)
-  end
-
-  defp pass(fleet, client) do
     case Chain.get_cursor!(fleet.id) do
       nil ->
         %{fleet_id: fleet.id, next_block: fleet.deployed_block}
@@ -274,17 +264,6 @@ defmodule KeyFleet.Chain.Scanner do
         {:proposals_changed, fleet_id}
       )
     end
-  end
-
-  defp open_level_rooms(fleet) do
-    with {:error, reason} <- Rooms.ensure_level_rooms(fleet.id) do
-      Logger.warning(
-        "Fleet #{fleet.id}: level rooms not opened this pass, trying again next pass: " <>
-          Exception.format_banner(:error, reason)
-      )
-    end
-
-    :ok
   end
 
   # Someone else moved the cursor or stopped the fleet during the pass: an

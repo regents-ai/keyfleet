@@ -50,6 +50,23 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     assert has_element?(view, "#fleet-keys-next")
   end
 
+  test "rooms are listed by the names they go by", %{conn: conn} do
+    KeyFleet.Rooms.bootstrap_rooms!()
+
+    KeyFleet.Repo.query!(
+      "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
+        "topic_set_at = now() WHERE fleet_id = $2 AND slug = 'open-1'",
+      [@owner, @fleet]
+    )
+
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(view, ~s(.fleet-room-list a[href="#{@path}/rooms/open-1"]), "Hull survey")
+    assert has_element?(view, ~s(.fleet-room-list a[href="#{@path}/rooms/open-2"]), "Open room 2")
+    assert has_element?(view, ~s(.fleet-room-list a[href="#{@path}/rooms/general"]), "General")
+    refute render(view) =~ "Open room 1"
+  end
+
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
     conn: conn
   } do

@@ -57,7 +57,7 @@ For every graph command, resolve the authenticated principal and require either:
 
 Use fleet contract + Base chain + token ID as the membership coordinate. An actor string supplied by the client is not proof. The gateway stamps trusted author identity, credential reference, key coordinate, ownership epoch, and permission-check block/version into the command audit record.
 
-All valid members may edit shared `fleet` scope. Optional `level:L` scope follows the existing room rule: that level's holders write immediately; earlier levels write only after it completes; later keys alone do not grant upward access. A level-scoped graph item is a logical work partition, not a capital pool.
+All valid members may edit shared `fleet` scope. Optional `level:L` scope has a write rule of its own, now that rooms have no levels: that level's holders write immediately; earlier levels write only after it completes; later keys alone do not grant upward access. A level-scoped graph item is a logical work partition, not a capital pool.
 
 Scopes are server-resolved and not freely patchable fields. Require write authority for the source and target scopes when creating, changing, or removing a relation. A permitted edge must not become a way to mutate or leak an unauthorized object. A caller cannot choose another fleet's run ID, inspect another fleet through a fork, or relabel a protected object as ordinary work.
 

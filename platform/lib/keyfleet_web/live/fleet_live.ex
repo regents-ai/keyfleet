@@ -10,6 +10,8 @@ defmodule KeyFleetWeb.FleetLive do
 
   use KeyFleetWeb, :html
 
+  alias KeyFleetWeb.RoomsLive
+
   attr :fleet, :map, required: true
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
 
@@ -75,7 +77,7 @@ defmodule KeyFleetWeb.FleetLive do
           <ul class="fleet-room-list">
             <li :for={room <- @fleet.rooms}>
               <.link navigate={"/app/fleets/#{@fleet.fleet_id}/rooms/#{room.slug}"}>
-                {room.name}
+                {RoomsLive.room_label(room)}
               </.link>
             </li>
           </ul>

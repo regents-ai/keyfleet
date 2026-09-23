@@ -3,14 +3,18 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Rooms
+  alias KeyFleet.Rooms.Errors.CreatedRoomLimitError
+  alias KeyFleet.Rooms.Errors.RenameTooSoonError
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
   alias KeyFleet.Rooms.Errors.SendConflictError
-  alias KeyFleet.Rooms.Errors.TopicRoomLimitError
+
+  @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
   @message_fields [
     :id,
     :seq,
+    :kind,
     :author_kind,
     :author_wallet,
     :agent_profile_id,
@@ -33,10 +37,10 @@ defmodule KeyFleetWeb.AgentRoomController do
 
     input =
       params
-      |> Map.take(["slug", "name", "level"])
+      |> Map.take(["slug", "name"])
       |> Map.put("fleet_id", fleet_id)
 
-    case Rooms.create_topic_room(input, actor: actor) do
+    case Rooms.create_room(input, actor: actor) do
       {:ok, room} ->
         conn |> put_status(201) |> json(%{room: room_json(room)})
 
@@ -45,6 +49,21 @@ defmodule KeyFleetWeb.AgentRoomController do
 
       {:error, error} ->
         refuse_room(conn, error)
+    end
+  end
+
+  def set_topic(conn, %{"fleet_id" => fleet_id, "slug" => slug, "topic" => topic}) do
+    actor = conn.assigns.agent_actor
+
+    case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
+      {:ok, room} ->
+        json(conn, %{room: room_json(room)})
+
+      {:error, %Ash.Error.Forbidden{} = error} ->
+        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+
+      {:error, error} ->
+        refuse_topic(conn, error)
     end
   end
 
@@ -102,7 +121,7 @@ defmodule KeyFleetWeb.AgentRoomController do
     if Ash.Resource.get_metadata(message, :upsert_skipped), do: 200, else: 201
   end
 
-  defp room_json(room), do: Map.take(room, [:slug, :name, :kind, :level, :head_seq])
+  defp room_json(room), do: Map.take(room, @room_fields)
 
   defp message_json(message) do
     message
@@ -123,7 +142,6 @@ defmodule KeyFleetWeb.AgentRoomController do
           %{
             slug: room.slug,
             kind: room.kind,
-            level: room.level,
             head_seq: room.head_seq,
             cursor: room.cursor,
             messages: Enum.map(room.messages, &message_json/1)
@@ -160,16 +178,19 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   defp refuse(conn, _error), do: invalid(conn, "invalid_message")
 
-  defp refuse_room(conn, %Ash.Error.Invalid{errors: errors}) do
+  defp refuse_room(conn, %Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
         conn |> put_status(404) |> json(%{error: "fleet_unknown"})
 
-      Enum.any?(errors, &match?(%TopicRoomLimitError{}, &1)) ->
+      Enum.any?(errors, &match?(%CreatedRoomLimitError{}, &1)) ->
         conn |> put_status(409) |> json(%{error: "room_limit_reached"})
 
-      Enum.any?(errors, &taken?/1) ->
+      Rooms.taken?(error, :slug) ->
         conn |> put_status(409) |> json(%{error: "room_taken"})
+
+      Rooms.taken?(error, :name) ->
+        name_taken(conn)
 
       true ->
         invalid(conn, "invalid_room")
@@ -178,11 +199,34 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   defp refuse_room(conn, _error), do: invalid(conn, "invalid_room")
 
-  # The fleet already has a room at this address.
-  defp taken?(%Ash.Error.Changes.InvalidAttribute{private_vars: private_vars}),
-    do: Keyword.get(private_vars || [], :constraint_type) == :unique
+  defp refuse_topic(conn, %RoomUnknownError{}), do: not_found(conn)
 
-  defp taken?(_error), do: false
+  defp refuse_topic(conn, %Ash.Error.Invalid{errors: errors} = error) do
+    cond do
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
+        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+
+      Enum.any?(errors, &match?(%{field: :kind}, &1)) ->
+        invalid(conn, "room_not_open")
+
+      Rooms.taken?(error, :name) ->
+        name_taken(conn)
+
+      too_soon = Enum.find(errors, &match?(%RenameTooSoonError{}, &1)) ->
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(too_soon.retry_after))
+        |> put_status(429)
+        |> json(%{error: "rename_too_soon"})
+
+      true ->
+        invalid(conn, "invalid_topic")
+    end
+  end
+
+  defp refuse_topic(conn, _error), do: invalid(conn, "invalid_topic")
+
+  # Another room of the fleet already goes by this name.
+  defp name_taken(conn), do: conn |> put_status(409) |> json(%{error: "name_taken"})
 
   defp forbidden(conn), do: conn |> put_status(403) |> json(%{error: "not_a_member"})
 

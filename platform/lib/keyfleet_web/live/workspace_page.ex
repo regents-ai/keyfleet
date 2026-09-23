@@ -20,6 +20,7 @@ defmodule KeyFleetWeb.WorkspacePage do
   alias KeyFleet.Graph
   alias KeyFleet.Rooms
   alias KeyFleetWeb.NotFoundError
+  alias KeyFleetWeb.RoomsLive
 
   @types ~w(goal task finding evidence service launch_card note)
 
@@ -435,7 +436,7 @@ defmodule KeyFleetWeb.WorkspacePage do
   defp key_or(nil, none), do: none
 
   defp discussion(links, fleet_id, opts) when is_list(links) and links != [] do
-    rooms = fleet_id |> Rooms.list_rooms!(opts) |> Map.new(&{&1.slug, &1.name})
+    rooms = fleet_id |> Rooms.list_rooms!(opts) |> Map.new(&{&1.slug, RoomsLive.room_label(&1)})
 
     for %{"room" => room, "seq" => seq} <- links, is_binary(room) and is_integer(seq) do
       name = rooms[room]

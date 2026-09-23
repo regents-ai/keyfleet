@@ -22,9 +22,17 @@ defmodule KeyFleet.Rooms.Errors.SendConflictError do
     do: "send key #{idempotency_key} was already used for a different post"
 end
 
-defmodule KeyFleet.Rooms.Errors.TopicRoomLimitError do
-  @moduledoc "Raised when a fleet already has as many topic rooms as it may."
+defmodule KeyFleet.Rooms.Errors.CreatedRoomLimitError do
+  @moduledoc "Raised when a fleet already has as many created rooms as it may."
   use Splode.Error, fields: [:limit], class: :invalid
 
-  def message(%{limit: limit}), do: "this fleet already has #{limit} topic rooms"
+  def message(%{limit: limit}), do: "this fleet already has #{limit} created rooms"
+end
+
+defmodule KeyFleet.Rooms.Errors.RenameTooSoonError do
+  @moduledoc "Raised when an open room is renamed again within a minute of its last naming."
+  use Splode.Error, fields: [:retry_after], class: :invalid
+
+  def message(%{retry_after: retry_after}),
+    do: "this room was renamed less than a minute ago; try again in #{retry_after} seconds"
 end

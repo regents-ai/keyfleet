@@ -21,7 +21,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
   setup do
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
 
     Keys.record_epoch!(
       %{
@@ -174,296 +174,221 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     assert html =~ "This fleet doesn’t exist."
   end
 
-  describe "level and topic rooms" do
-    # Syndicate keys other suites commit outside the sandbox would count as
-    # sold, so the levels are read on the Cascade fleet.
-    @cascade "fibonacci_cascade"
-    @opener "#rooms-opener"
-    @early "0x" <> String.duplicate("b", 40)
-    @later "0x" <> String.duplicate("f", 40)
+  describe "the fleet's rooms" do
+    @open_one "/app/fleets/fibonacci_syndicate/rooms/open-1"
+    @namer "#rooms-namer"
 
-    setup do
-      ChainHelpers.seed_cursor!(@cascade)
-      # Keys 1 and 2 are level 1's, keys 3 and 4 level 2's; key 5 is not sold.
-      sell!(1, @early)
-      sell!(2, @early)
-      sell!(3, @owner)
-      sell!(4, @later)
-      :ok
-    end
-
-    test "a level's room says who posts there, and offers the box only to them", %{conn: conn} do
-      level_two = "/app/fleets/#{@cascade}/rooms/level-2"
-
-      {:ok, view, html} = conn |> signed_in_as(@owner) |> live(level_two)
-      assert has_element?(view, "#rooms-thread-title", "Level 2")
-      assert html =~ "Level 2 keys post here from the start."
-      assert html =~ "Keys from earlier levels join once every Level 2 key is sold."
-      assert html =~ "Later levels never post here."
-      assert has_element?(view, ~s(a[href="/app/fleets/#{@cascade}/rooms/level-1"]), "Level 1")
-      refute has_element?(view, ~s(a[href="/app/fleets/#{@cascade}/rooms/level-3"]))
-      # A level's room is named after its level, so it carries no tag.
-      refute has_element?(view, ".rooms-list .rooms-tag")
-      assert has_element?(view, @composer)
-
-      view |> form(@composer, post: %{body: "Level two here"}) |> render_submit()
-      assert Enum.map(Rooms.read_messages!(@cascade, "level-2"), & &1.body) == ["Level two here"]
-
-      {:ok, view, html} = conn |> signed_in_as(@early) |> live(level_two)
-      refute has_element?(view, @composer)
-      assert html =~ "Only the people who can post in Level 2"
-      assert html =~ "Level two here"
-
-      # Once key 5 is sold, level 1's keys post in level 2 as well.
-      sell!(5, @owner)
-      {:ok, view, _html} = conn |> signed_in_as(@early) |> live(level_two)
-      assert has_element?(view, @composer)
-
-      # A level that opens while the page is up joins its list of rooms.
-      sell!(6, @later)
-      assert has_element?(view, ~s(a[href="/app/fleets/#{@cascade}/rooms/level-3"]), "Level 3")
-
-      {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@cascade}/rooms/level-1")
-
-      refute has_element?(view, @composer)
-    end
-
-    test "a refused post is judged again by the room's own rule", %{conn: conn} do
-      # Key 6 is a level 3 key, which never posts in level 2.
-      sell!(6, @owner)
-
-      {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@cascade}/rooms/level-2")
-
-      assert has_element?(view, @composer)
-      transfer!(3, @stranger)
-
-      view |> form(@composer, post: %{body: "Still here?"}) |> render_submit()
-      refute has_element?(view, @composer)
-      assert Rooms.read_messages!(@cascade, "level-2") == []
-    end
-
-    test "a key holder names a topic room and its address, for the fleet or a level they post in",
+    test "a fleet lists its five fixed rooms, then its five open rooms by their own names",
          %{conn: conn} do
-      general = "/app/fleets/#{@cascade}/rooms/general"
-      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(general)
-      {:ok, watcher, _html} = conn |> signed_in_as(@early) |> live(general)
+      signed_out = conn
+      stranger = signed_in_as(conn, @stranger)
+      member = signed_in_as(conn, @owner)
 
-      assert has_element?(view, @opener)
+      for conn <- [signed_out, stranger, member] do
+        {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(
-               view,
-               ~s(#{@opener} option[value=""]),
-               "Anyone holding this fleet’s keys"
-             )
+        labels =
+          view
+          |> element(".rooms-list")
+          |> render()
+          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*<\/a>/u, &1, capture: :all_but_first))
+          |> List.flatten()
 
-      assert has_element?(view, ~s(#{@opener} option[value="2"]), "The same people as Level 2")
-      refute has_element?(view, ~s(#{@opener} option[value="1"]))
+        assert labels ==
+                 ["Welcome and intros", "General", "Business", "Voting", "Coding"] ++
+                   Enum.map(1..5, &"Open room #{&1}")
 
-      # The address is suggested from the name as it is typed.
-      view |> form(@opener, topic: %{name: "Hull Survey: phase 2!"}) |> render_change()
-      assert has_element?(view, ~s(#rooms-opener-address[value="hull-survey-phase-2"]))
+        # A fixed room takes no name.
+        refute has_element?(view, @namer)
+      end
 
-      view |> form(@opener, topic: %{level: "2"}) |> render_submit()
-      assert_patch(view, "/app/fleets/#{@cascade}/rooms/hull-survey-phase-2")
+      # Only a member is asked to name an open room.
+      for conn <- [signed_out, stranger] do
+        {:ok, view, html} = live(conn, @open_one)
+        assert has_element?(view, "#rooms-thread-title", "Open room 1")
+        refute has_element?(view, @namer)
+        refute html =~ "Name this room"
+      end
 
-      assert has_element?(view, "#rooms-thread-title", "Hull Survey: phase 2!")
-      assert render(view) =~ "Level 2 keys post here from the start."
+      {:ok, view, _html} = live(member, @open_one)
+      assert has_element?(view, "label[for=rooms-namer-topic]", "Name this room")
+    end
 
-      assert has_element?(
-               view,
-               ~s(a[href="/app/fleets/#{@cascade}/rooms/hull-survey-phase-2"] + .rooms-tag),
-               "Level 2"
-             )
+    test "a key holder names an open room, and everyone watching sees who named it",
+         %{conn: conn} do
+      {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@open_one)
+      {:ok, watcher, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
+      {:ok, elsewhere, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 
-      assert has_element?(view, @composer)
+      assert has_element?(view, "#rooms-thread-title", "Open room 1")
+      assert html =~ "Name this room"
+      refute has_element?(watcher, @namer)
 
-      # The form is empty again, and everyone watching sees the new room.
-      assert has_element?(view, ~s(#rooms-opener-name[value=""]))
-      assert has_element?(view, ~s(#rooms-opener-address[value=""]))
+      html = view |> form(@namer, room: %{topic: "Hull survey"}) |> render_submit()
 
-      assert has_element?(
-               watcher,
-               ~s(a[href="/app/fleets/#{@cascade}/rooms/hull-survey-phase-2"])
-             )
+      assert has_element?(view, "#rooms-thread-title", "Hull survey")
+      assert html =~ "Named by 0xdddd…dddd on"
+      assert has_element?(view, ".rooms-naming", "0xdddd…dddd named this room “Hull survey” on")
+      assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
+      assert has_element?(view, "#rooms-namer-topic[value='']")
+      assert has_element?(view, "label[for=rooms-namer-topic]", "Rename this room")
 
-      # An address the person writes stays theirs while they change the name.
-      view |> form(@opener, topic: %{name: "Galley"}) |> render_change()
-      view |> form(@opener, topic: %{address: "mess-deck"}) |> render_change()
-      view |> form(@opener, topic: %{name: "Galley and mess"}) |> render_change()
-      assert has_element?(view, ~s(#rooms-opener-address[value="mess-deck"]))
+      assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
+      assert has_element?(watcher, ".rooms-naming", "named this room “Hull survey”")
+      assert render(watcher) =~ "Named by 0xdddd…dddd on"
+      assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
 
-      view |> form(@opener, topic: %{level: ""}) |> render_submit()
-      assert_patch(view, "/app/fleets/#{@cascade}/rooms/mess-deck")
+      # A room is renamed at most once a minute.
+      assert view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit() =~
+               "This room was renamed a moment ago. Try again in a minute."
 
-      refute has_element?(
-               view,
-               ~s(a[href="/app/fleets/#{@cascade}/rooms/mess-deck"] + .rooms-tag)
-             )
+      assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
+      a_minute_passes("open-1")
 
-      assert Enum.map(topics(), &{&1.slug, &1.name, &1.level}) == [
-               {"mess-deck", "Galley and mess", nil},
-               {"hull-survey-phase-2", "Hull Survey: phase 2!", 2}
+      view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit()
+      assert has_element?(watcher, "#rooms-thread-title", "Dry dock")
+
+      assert Enum.map(Rooms.read_messages!(@fleet, "open-1"), &{&1.kind, &1.body}) == [
+               {:room_named, "Hull survey"},
+               {:room_named, "Dry dock"}
              ]
+    end
 
-      shape =
-        "An address uses lowercase letters, numbers and single dashes, like hull-survey, " <>
-          "and can’t be general, planning, work or a level’s address."
+    test "a name that breaks the rules is refused and stays in the box", %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
+      rule = "Choose a name of up to 80 characters, on one line, using only visible characters."
+      taken = "That name is already another room’s name in this fleet."
 
-      name =
-        "Choose another name of up to 80 characters, on one line, that isn’t General, " <>
-          "Planning, Work or a level’s name."
+      {:ok, _room} = Rooms.name_open_room(@fleet, "open-2", "Dry dock", actor: owner_actor())
 
-      for {topic, refusal} <- [
-            {{"Early", "early", "1"},
-             "Only the people who can post in that level can open a room that follows it."},
-            {{"Mess", "mess-deck", ""},
-             "That address is already in use in this fleet. Try another."},
-            {{"Mess", "Mess", ""}, shape},
-            {{"Mess", "mess deck", ""}, shape},
-            {{"Mess", "", ""}, shape},
-            {{"Mess", "general", ""}, shape},
-            {{"Mess", "level-2", ""}, shape},
-            {{"General", "general-talk", ""}, name},
-            {{"  level 2 ", "level-talk", ""}, name},
-            {{"Mess\ndeck", "mess-two", ""}, name},
-            {{"Mess \u202Edeck", "mess-two", ""}, name},
-            {{"", "mess-two", ""}, name},
-            {{"Mess", "mess-two", "21"}, "Choose who can post from the list."}
+      for topic <- [
+            "",
+            "   ",
+            String.duplicate("h", 81),
+            "Hull\nsurvey",
+            "Hull\u200Bsurvey",
+            "Hull\u2028survey",
+            "Hull \u202Esurvey"
           ] do
-        {topic_name, address, level} = topic
-
-        html =
-          render_submit(view, "open_room", %{
-            "topic" => %{"name" => topic_name, "address" => address, "level" => level}
-          })
-
-        assert html =~ refusal, inspect(topic)
+        html = render_submit(view, "name_room", %{"room" => %{"topic" => topic}})
+        assert html =~ rule, inspect(topic)
+        refute html =~ taken
       end
 
-      # What was typed stays in the form after a refusal.
-      assert has_element?(view, ~s(#rooms-opener-address[value="mess-two"]))
-
-      # A form missing a field is refused, and the page carries on.
-      for params <- [%{}, %{"topic" => %{"name" => "Mess"}}, %{"topic" => "Mess"}] do
-        assert render_submit(view, "open_room", params) =~
-                 "That room couldn’t be opened. Try again."
-
-        render_change(view, "edit_room_opener", params)
+      for topic <- [" coding ", "DRY dock", "Ｃｏｄｉｎｇ"] do
+        html = render_submit(view, "name_room", %{"room" => %{"topic" => topic}})
+        assert html =~ taken, inspect(topic)
+        refute html =~ rule
       end
 
-      assert length(topics()) == 2
+      assert has_element?(view, ~s(#rooms-namer-topic[value="Ｃｏｄｉｎｇ"]))
+
+      # A form missing its field is refused, and the page carries on.
+      for params <- [%{}, %{"room" => %{}}, %{"room" => "Hull"}] do
+        assert render_submit(view, "name_room", params) =~
+                 "That room couldn’t be named. Try again."
+      end
+
+      assert %{topic: nil, head_seq: 0} = Rooms.get_room!(@fleet, "open-1")
     end
 
-    test "someone holding keys of several levels is offered each level once", %{conn: conn} do
-      # Key 5 completes level 2, which key 1 and 2's holder then reaches as well.
-      sell!(5, @early)
+    test "only the people holding the fleet's keys name an open room", %{conn: conn} do
+      naming = %{"room" => %{"topic" => "Mine now"}}
 
-      {:ok, view, _html} =
-        conn |> signed_in_as(@early) |> live("/app/fleets/#{@cascade}/rooms/general")
+      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
+      refute has_element?(view, @namer)
 
-      options = view |> element("#rooms-opener-level") |> render()
+      assert render_submit(view, "name_room", naming) =~
+               "Only the people holding this fleet’s keys can name a room."
 
-      assert Regex.scan(~r/<option value="(\d*)"/, options, capture: :all_but_first) ==
-               [[""], ["1"], ["2"]]
-    end
-
-    test "someone holding none of the fleet's keys opens no room", %{conn: conn} do
-      galley = %{"topic" => %{"name" => "Galley", "address" => "galley", "level" => ""}}
-
-      {:ok, view, _html} =
-        conn |> signed_in_as(@stranger) |> live("/app/fleets/#{@cascade}/rooms/general")
-
-      refute has_element?(view, @opener)
-      render_submit(view, "open_room", galley)
-      assert topics() == []
+      {:ok, view, _html} = live(conn, @open_one)
+      refute has_element?(view, @namer)
 
       # A key that changes hands after the page was drawn takes the right with it.
-      {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@cascade}/rooms/general")
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
+      assert has_element?(view, @namer)
+      transfer!(1, @stranger)
 
-      transfer!(3, @stranger)
+      assert render_submit(view, "name_room", naming) =~
+               "Only the people holding this fleet’s keys can name a room."
 
-      assert render_submit(view, "open_room", galley) =~
-               "Only the people holding this fleet’s keys can open a room."
-
-      assert topics() == []
-
-      {:ok, view, _html} = live(conn, "/app/fleets/#{@cascade}/rooms/general")
-      refute has_element?(view, @opener)
+      refute has_element?(view, @namer)
+      refute has_element?(view, @composer)
+      assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
     end
 
-    test "a fleet that has all its topic rooms says so", %{conn: conn} do
-      for n <- 1..100 do
-        Rooms.create_topic_room!(%{fleet_id: @cascade, slug: "topic-#{n}", name: "Topic #{n}"},
-          actor: owner_actor()
-        )
-      end
+    test "naming waits while key ownership is refreshed", %{conn: conn} do
+      deploy!()
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
+      assert has_element?(view, @namer)
 
-      {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@cascade}/rooms/general")
+      ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
-      assert view
-             |> form(@opener, topic: %{name: "Galley", address: "galley", level: ""})
-             |> render_submit() =~
-               "This fleet already has as many topic rooms as it can hold."
+      assert render_submit(view, "name_room", %{"room" => %{"topic" => "Hull"}}) =~
+               "Key ownership is being refreshed"
+
+      assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
     end
 
-    test "a fleet without rooms offers no room to open", %{conn: conn} do
-      ChainHelpers.seed_cursor!("fleet_tech_accelerant")
-      sell!(1, @owner, "fleet_tech_accelerant")
+    test "a fixed room keeps its name", %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
 
+      assert render_submit(view, "name_room", %{"room" => %{"topic" => "Hull"}}) =~
+               "That room couldn’t be named. Try again."
+
+      assert has_element?(view, "#rooms-thread-title", "General")
+    end
+
+    test "a room an agent creates joins the list for everyone watching", %{conn: conn} do
+      agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
+      request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
+      Keys.approve_pairing!(request, %{}, actor: owner_actor())
+
+      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+      Rooms.create_room!(%{fleet_id: @fleet, slug: "hull-survey", name: "Hull survey"},
+        actor: agent
+      )
+
+      assert has_element?(
+               view,
+               ~s(a[href="/app/fleets/#{@fleet}/rooms/hull-survey"]),
+               "Hull survey"
+             )
+
+      {:ok, view, _html} =
+        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@fleet}/rooms/hull-survey")
+
+      assert has_element?(view, @composer)
+      refute has_element?(view, @namer)
+    end
+
+    test "a fleet without rooms says it does not exist", %{conn: conn} do
       KeyFleet.Repo.query!(
         "DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_accelerant'"
       )
 
-      {:ok, view, html} =
+      {:ok, _view, html} =
         conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_accelerant/rooms/general")
 
       assert html =~ "This fleet doesn’t exist."
-      refute has_element?(view, @opener)
-    end
-
-    test "a Classic fleet has no level rooms and offers no level to follow", %{conn: conn} do
-      ChainHelpers.seed_cursor!("fleet_tech_classic")
-      sell!(1, @owner, "fleet_tech_classic")
-
-      {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/general")
-
-      refute has_element?(view, ~s(a[href*="/rooms/level-"]))
-      assert has_element?(view, @opener)
-      refute has_element?(view, ~s(#{@opener} option[value="1"]))
     end
   end
 
-  defp topics,
-    do: for(%{kind: :topic} = room <- Rooms.list_rooms!("fibonacci_cascade"), do: room)
-
-  defp sell!(token_id, wallet, fleet \\ "fibonacci_cascade") do
-    Keys.record_epoch!(
-      %{
-        fleet_id: fleet,
-        token_id: token_id,
-        ownership_epoch: 0,
-        owner_wallet: wallet,
-        block_number: 10,
-        block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash:
-          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}"), case: :lower),
-        log_index: 0
-      },
-      actor: %Actors.System{}
+  # Moves the room's last naming back a minute, so it may be renamed.
+  defp a_minute_passes(slug) do
+    KeyFleet.Repo.query!(
+      "UPDATE keyfleet_app.rooms SET topic_set_at = topic_set_at - interval '61 seconds' " <>
+        "WHERE fleet_id = $1 AND slug = $2",
+      [@fleet, slug]
     )
-
-    :ok = Rooms.ensure_level_rooms(fleet)
   end
 
   defp transfer!(token_id, wallet) do
     Keys.record_epoch!(
       %{
-        fleet_id: "fibonacci_cascade",
+        fleet_id: @fleet,
         token_id: token_id,
         ownership_epoch: 1,
         owner_wallet: wallet,

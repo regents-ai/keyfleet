@@ -4,14 +4,12 @@ defmodule KeyFleet.Rooms do
 
   require Ash.Query
 
-  alias KeyFleet.Fleets.Presets
   alias KeyFleet.Rooms.Errors.RoomUnknownError
   alias KeyFleet.Rooms.Room
 
-  @core_rooms [{"general", "General"}, {"planning", "Planning"}, {"work", "Work"}]
-  # As many rooms as a fleet holds: three core rooms, twenty levels and a
-  # hundred topics.
-  @max_sync_rooms 123
+  # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
+  # hundred created ones.
+  @max_sync_rooms 110
   @sync_page 50
   @graph_sync_page 100
   # Places in a room are counted in a Postgres bigint.
@@ -21,11 +19,13 @@ defmodule KeyFleet.Rooms do
     resource KeyFleet.Rooms.Room do
       define :list_rooms, action: :for_fleet, args: [:fleet_id]
       define :get_room, action: :in_fleet, args: [:fleet_id, :slug], not_found_error?: false
-      define :create_topic_room, action: :create_topic
+      define :create_room, action: :create
+      define :set_room_topic, action: :set_topic, args: [:topic]
     end
 
     resource KeyFleet.Rooms.Message do
       define :send_message, action: :send_message
+      define :note_room_named, action: :note_room_named
       define :read_messages, action: :read_messages, args: [:fleet_id, :slug]
 
       define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
@@ -120,12 +120,11 @@ defmodule KeyFleet.Rooms do
         last -> last.seq
       end
 
-    %{kind: kind, level: level, head_seq: head_seq} = Map.fetch!(rooms, slug)
+    %{kind: kind, head_seq: head_seq} = Map.fetch!(rooms, slug)
 
     %{
       slug: slug,
       kind: kind,
-      level: level,
       head_seq: head_seq,
       cursor: cursor,
       messages: messages
@@ -150,92 +149,67 @@ defmodule KeyFleet.Rooms do
   defp in_log(after_seq) when after_seq in 0..@max_seq, do: :ok
   defp in_log(_after_seq), do: {:error, :invalid_request}
 
-  @doc "How many topic rooms members have opened in the fleet."
-  def count_topic_rooms!(fleet_id) do
+  @doc """
+  Names one of the fleet's open rooms, or names it again, as `actor`.
+
+  The room takes a line saying who named it and what, and answers with its new
+  topic, who set it and when. A room the fleet does not have is
+  `RoomUnknownError`; a room that is not open is refused as invalid.
+  """
+  def name_open_room(fleet_id, slug, topic, opts) do
+    case get_room(fleet_id, slug, opts) do
+      {:ok, nil} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+      {:ok, room} -> set_room_topic(room, topic, opts)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Whether `refusal` says another room of the fleet already has this `field`:
+  its address (`:slug`), or the name it goes by (`:name`), which is where a
+  clash is reported whether it came from naming a room or creating one.
+  """
+  def taken?(%Ash.Error.Invalid{errors: errors}, field),
+    do: Enum.any?(errors, &taken_on?(&1, field))
+
+  def taken?(_refusal, _field), do: false
+
+  defp taken_on?(%Ash.Error.Changes.InvalidAttribute{field: field, private_vars: vars}, field),
+    do: Keyword.get(vars || [], :constraint_type) == :unique
+
+  defp taken_on?(_error, _field), do: false
+
+  @doc "How many rooms agents have created in the fleet."
+  def count_created_rooms!(fleet_id) do
     Room
     |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
-    |> Ash.Query.filter(kind == :topic)
+    |> Ash.Query.filter(kind == :created)
     |> Ash.count!()
   end
 
-  # Written as one statement of its own, not through a resource action: an
-  # upsert action always rewrites and locks the rows already there, and a
-  # level's room, once open, is never written to except by its posts.
-  @open_level_rooms """
-  INSERT INTO keyfleet_app.rooms (id, fleet_id, slug, name, kind, level, head_seq)
-  SELECT gen_random_uuid(), $1, 'level-' || level, 'Level ' || level, 'level', level, 0
-  FROM generate_series(1, $2::bigint) AS level
-  ON CONFLICT (fleet_id, slug) DO NOTHING
-  """
-
-  @doc """
-  Opens the room of every level of a Fibonacci fleet that has sold a key, as
-  far as its key history has been read, and leaves the rooms already open
-  untouched. A fleet without levels has none to open.
-
-  The chain reader calls this after each pass, so a room that fails to open is
-  opened by a later pass; a failure answers `{:error, reason}` and changes
-  nothing. Opening rooms never holds up recording who owns a key.
-  """
-  def ensure_level_rooms(fleet_id) do
-    with true <- Presets.levelled?(fleet_id),
-         {:ok, minted} <- KeyFleet.Chain.minted(fleet_id),
-         {:ok, opened} <- insert_level_rooms(fleet_id, Presets.active_levels(minted)) do
-      if opened > 0, do: rooms_opened(fleet_id)
-      :ok
-    else
-      false -> :ok
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  # In a transaction of its own, so a failure undoes only this statement even
-  # when the caller has a transaction open.
-  defp insert_level_rooms(fleet_id, count) do
-    KeyFleet.Repo.transaction(fn ->
-      case KeyFleet.Repo.query(@open_level_rooms, [fleet_id, count]) do
-        {:ok, %Postgrex.Result{num_rows: opened}} -> opened
-        {:error, error} -> KeyFleet.Repo.rollback(error)
-      end
-    end)
-  end
-
-  @doc "Tells everyone watching the fleet's rooms that a room has opened."
-  def rooms_opened(fleet_id) do
-    Phoenix.PubSub.broadcast(KeyFleet.PubSub, fleet_topic(fleet_id), {:rooms_opened, fleet_id})
+  @doc "Tells everyone watching the fleet's rooms that its list of rooms has changed."
+  def rooms_changed(fleet_id) do
+    Phoenix.PubSub.broadcast(KeyFleet.PubSub, fleet_topic(fleet_id), {:rooms_changed, fleet_id})
   end
 
   @doc """
-  Opens, from trusted setup code, the room of every level that has sold a key
-  in each Fibonacci fleet, as far as each fleet's key history has been read.
+  Ensures the five fixed rooms and the five open rooms of every persisted fleet
+  from trusted setup code.
 
-  Reruns change nothing. This internal entry point must never be exposed as a
-  user action.
+  Reruns preserve room identities, restore canonical names and leave every open
+  room's topic as members named it. The whole bootstrap commits together. This
+  internal entry point must never be exposed as a user action.
   """
-  def bootstrap_level_rooms! do
-    for fleet_id <- KeyFleet.Fleets.catalog_ids() do
-      :ok = ensure_level_rooms(fleet_id)
-    end
-
-    :ok
-  end
-
-  @doc """
-  Ensures the three core rooms for every persisted fleet from trusted setup code.
-
-  Reruns preserve room identities and restore canonical names. The whole bootstrap
-  commits together. This internal entry point must never be exposed as a user action.
-  """
-  def bootstrap_core_rooms! do
+  def bootstrap_rooms! do
     fleets = KeyFleet.Fleets.list_fleets!() |> Enum.sort_by(& &1.id)
 
     if not match?([_, _, _, _], fleets) do
-      raise "Core room bootstrap requires the complete fixed fleet catalog"
+      raise "Room bootstrap requires the complete fixed fleet catalog"
     end
 
     inputs =
-      for fleet <- fleets, {slug, name} <- @core_rooms do
-        %{fleet_id: fleet.id, slug: slug, name: name}
+      for fleet <- fleets, {slug, name, kind} <- Room.own_rooms() do
+        %{fleet_id: fleet.id, slug: slug, name: name, kind: kind}
       end
 
     %Ash.BulkResult{records: rooms} =

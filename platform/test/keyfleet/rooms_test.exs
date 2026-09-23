@@ -13,24 +13,36 @@ defmodule KeyFleet.RoomsTest do
     Fleets.bootstrap_catalog!()
 
     existing =
-      Ash.create!(Room, %{fleet_id: "fibonacci_syndicate", slug: "general", name: "Stale"},
+      Ash.create!(
+        Room,
+        %{fleet_id: "fibonacci_syndicate", slug: "general", name: "Stale", kind: :fixed},
         action: :bootstrap,
         actor: %KeyFleet.Actors.System{}
       )
 
-    assert length(Rooms.bootstrap_core_rooms!()) == 12
+    assert length(Rooms.bootstrap_rooms!()) == 40
     first = persisted_rooms()
-    assert length(first) == 12
+    assert length(first) == 40
     assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "General"}))
 
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     assert persisted_rooms() == first
 
     for fleet <- Fleets.list_fleets!() do
       rooms = Rooms.list_rooms!(fleet.id)
 
-      assert Enum.map(rooms, &{&1.slug, &1.name}) ==
-               [{"general", "General"}, {"planning", "Planning"}, {"work", "Work"}]
+      assert Enum.map(rooms, &{&1.slug, &1.name, &1.kind, &1.topic}) == [
+               {"welcome", "Welcome and intros", :fixed, nil},
+               {"general", "General", :fixed, nil},
+               {"business", "Business", :fixed, nil},
+               {"voting", "Voting", :fixed, nil},
+               {"coding", "Coding", :fixed, nil},
+               {"open-1", "Open room 1", :open, nil},
+               {"open-2", "Open room 2", :open, nil},
+               {"open-3", "Open room 3", :open, nil},
+               {"open-4", "Open room 4", :open, nil},
+               {"open-5", "Open room 5", :open, nil}
+             ]
 
       assert Enum.all?(rooms, &(&1.fleet_id == fleet.id))
     end
@@ -44,16 +56,37 @@ defmodule KeyFleet.RoomsTest do
              Room |> Ash.Query.for_read(:for_fleet, %{}) |> Ash.read()
   end
 
+  test "running bootstrap again keeps what members named the open rooms" do
+    Fleets.bootstrap_catalog!()
+    Rooms.bootstrap_rooms!()
+
+    Repo.query!(
+      "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
+        "topic_set_at = now() WHERE fleet_id = 'fibonacci_syndicate' AND slug = 'open-2'",
+      ["0x" <> String.duplicate("a", 40)]
+    )
+
+    Rooms.bootstrap_rooms!()
+
+    assert %{topic: "Hull survey", topic_set_by: "0x" <> _} =
+             Rooms.get_room!("fibonacci_syndicate", "open-2")
+  end
+
   test "ordinary and forged actors cannot write rooms and leave persisted state unchanged" do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     before = persisted_rooms()
 
     for actor <- [nil, %KeyFleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
       assert {:error, %Ash.Error.Forbidden{}} =
                Ash.create(
                  Room,
-                 %{fleet_id: "fibonacci_syndicate", slug: "general", name: "Changed"},
+                 %{
+                   fleet_id: "fibonacci_syndicate",
+                   slug: "general",
+                   name: "Changed",
+                   kind: :fixed
+                 },
                  action: :bootstrap,
                  actor: actor
                )
@@ -64,7 +97,7 @@ defmodule KeyFleet.RoomsTest do
 
   test "database rejects duplicate fleet slugs and orphan rooms" do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_core_rooms!()
+    Rooms.bootstrap_rooms!()
     before = persisted_rooms()
 
     for {fleet_id, slug, code} <- [
@@ -74,7 +107,7 @@ defmodule KeyFleet.RoomsTest do
       assert {:error, %Postgrex.Error{postgres: %{code: ^code}}} =
                Repo.query(
                  "INSERT INTO keyfleet_app.rooms (id, fleet_id, slug, name, kind) " <>
-                   "VALUES ($1, $2, $3, $4, 'core')",
+                   "VALUES ($1, $2, $3, $4, 'fixed')",
                  [Ecto.UUID.dump!(Ash.UUID.generate()), fleet_id, slug, "Unwanted"],
                  mode: :savepoint
                )
@@ -88,7 +121,7 @@ defmodule KeyFleet.RoomsTest do
     Repo.query!("DELETE FROM keyfleet_app.fleets WHERE id = 'fleet_tech_classic'")
 
     assert_raise RuntimeError, ~r/complete fixed fleet catalog/, fn ->
-      Rooms.bootstrap_core_rooms!()
+      Rooms.bootstrap_rooms!()
     end
 
     assert persisted_rooms() == []
@@ -98,10 +131,10 @@ defmodule KeyFleet.RoomsTest do
     Fleets.bootstrap_catalog!()
 
     Repo.query!(
-      "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT reject_work CHECK (slug <> 'work')"
+      "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT reject_coding CHECK (slug <> 'coding')"
     )
 
-    assert_raise Ash.Error.Unknown, fn -> Rooms.bootstrap_core_rooms!() end
+    assert_raise Ash.Error.Unknown, fn -> Rooms.bootstrap_rooms!() end
 
     assert persisted_rooms() == []
   end

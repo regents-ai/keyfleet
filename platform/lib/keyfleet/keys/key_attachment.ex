@@ -38,8 +38,9 @@ defmodule KeyFleet.Keys.KeyAttachment do
     end
 
     custom_indexes do
-      # The keys a wallet has held in a fleet, in key order, so finding the
-      # levels someone holds keys in reads a few entries per level.
+      # The keys a wallet holds in a fleet, so the check whether someone may
+      # post in, name or create a room, made on every such action, reads a few
+      # entries.
       index([:fleet_id, :owner_wallet, :token_id])
     end
 
