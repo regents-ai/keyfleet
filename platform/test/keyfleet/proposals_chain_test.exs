@@ -961,6 +961,37 @@ defmodule KeyFleet.ProposalsChainTest do
       end
     end
 
+    # An answer always comes in whole 32-byte words, so the hash's own
+    # 136-byte blocks are met exactly by a launch 1088 bytes long. Its hash
+    # is pinned from `cast keccak` of the same bytes.
+    test "a launch that fills the hash's blocks exactly is kept", %{fleet: fleet} do
+      description = "A fleet's launch. " |> String.duplicate(27) |> binary_part(0, 480)
+
+      texts = [
+        "Cascade Research",
+        "CSR",
+        description,
+        "https://example.test",
+        "ipfs://" <> String.duplicate("c", 50)
+      ]
+
+      returned = encoded_envelope(texts, 250_000)
+      assert byte_size(returned) == 8 * 136
+
+      StubClient.put_chain(
+        head(@deployed + 10),
+        autolaunch(1, @deployed + 2, 0,
+          envelope_hash: "0x9667be28058aae2ff99b278e27680af58ac13121852b76c68cd835cae7d0a30d"
+        ),
+        calls: fn _to, _data, _block_hash -> {:ok, returned} end
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert %{name: "Cascade Research", description: ^description} =
+               Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
+    end
+
     # A read that fails, is refused because the block is no longer on the
     # chain, or answers with another launch keeps nothing and holds up
     # nothing; the next pass tries again.
@@ -1329,7 +1360,7 @@ defmodule KeyFleet.ProposalsChainTest do
       <<raise::256, 0::256, 18_446_744_073_709_551_615::256>> <> Enum.join(tails)
   end
 
-  defp keccak(bytes), do: hex(KeccakEx.hash_256(bytes))
+  defp keccak(bytes), do: hex(ExKeccak.hash_256(bytes))
 
   defp ownership(token_id, owner, block, log_index) do
     log(

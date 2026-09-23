@@ -75,7 +75,6 @@ defmodule KeyFleet.MixProject do
       {:ex_secp256k1, "~> 0.8.0"},
       {:ex_keccak, "~> 0.7.8"},
       {:req, "== 0.6.2"},
-      {:keccak_ex, "~> 0.4.2"},
       {:bandit, "~> 1.12.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},

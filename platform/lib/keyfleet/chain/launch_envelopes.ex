@@ -71,5 +71,5 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
 
   defp decode(_returned, _envelope_hash), do: {:error, :envelope_not_the_approved_one}
 
-  defp hash(bytes), do: "0x" <> Base.encode16(KeccakEx.hash_256(bytes), case: :lower)
+  defp hash(bytes), do: "0x" <> Base.encode16(ExKeccak.hash_256(bytes), case: :lower)
 end
