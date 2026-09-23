@@ -16,6 +16,11 @@ defmodule KeyFleet.Chain.Scanner do
   record by hand and then clears the stop, as `docs/chain-reader.md` describes.
   A recorded change missing from a block whose hash still matches is the node
   answering inconsistently, so the pass fails and is retried instead.
+
+  Once a pass has moved the cursor on, the room of every Fibonacci level that
+  has sold a key is opened if it is not open yet. Opening a room never holds
+  up the record: if it fails, the failure is logged and the next pass tries
+  again.
   """
 
   require Logger
@@ -25,6 +30,7 @@ defmodule KeyFleet.Chain.Scanner do
   alias KeyFleet.Chain.OwnershipLog
   alias KeyFleet.Fleets.Fleet
   alias KeyFleet.Keys
+  alias KeyFleet.Rooms
 
   @rescan_blocks 30
   @max_range 10_000
@@ -39,6 +45,10 @@ defmodule KeyFleet.Chain.Scanner do
   written to.
   """
   def step(%Fleet{} = fleet, client) do
+    with :ok <- pass(fleet, client), do: open_level_rooms(fleet)
+  end
+
+  defp pass(fleet, client) do
     case Chain.get_cursor!(fleet.id) do
       nil ->
         %{fleet_id: fleet.id, next_block: fleet.deployed_block}
@@ -144,6 +154,17 @@ defmodule KeyFleet.Chain.Scanner do
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
+  end
+
+  defp open_level_rooms(fleet) do
+    with {:error, reason} <- Rooms.ensure_level_rooms(fleet.id) do
+      Logger.warning(
+        "Fleet #{fleet.id}: level rooms not opened this pass, trying again next pass: " <>
+          Exception.format_banner(:error, reason)
+      )
+    end
+
+    :ok
   end
 
   defp stop(fleet, cursor, block) do

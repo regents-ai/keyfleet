@@ -2,10 +2,16 @@ defmodule KeyFleet.Rooms do
   @moduledoc "Fleet-scoped rooms for native chat."
   use Ash.Domain
 
+  require Ash.Query
+
+  alias KeyFleet.Fleets.Presets
   alias KeyFleet.Rooms.Errors.RoomUnknownError
+  alias KeyFleet.Rooms.Room
 
   @core_rooms [{"general", "General"}, {"planning", "Planning"}, {"work", "Work"}]
-  @max_sync_rooms 100
+  # As many rooms as a fleet holds: three core rooms, twenty levels and a
+  # hundred topics.
+  @max_sync_rooms 123
   @sync_page 50
   @graph_sync_page 100
   # Places in a room are counted in a Postgres bigint.
@@ -15,6 +21,7 @@ defmodule KeyFleet.Rooms do
     resource KeyFleet.Rooms.Room do
       define :list_rooms, action: :for_fleet, args: [:fleet_id]
       define :get_room, action: :in_fleet, args: [:fleet_id, :slug], not_found_error?: false
+      define :create_topic_room, action: :create_topic
     end
 
     resource KeyFleet.Rooms.Message do
@@ -95,25 +102,34 @@ defmodule KeyFleet.Rooms do
          )}
       end)
 
-    heads = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1.head_seq})
+    rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
 
-    case Enum.find(cursors, &(not Map.has_key?(heads, &1.slug))) do
+    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
       nil ->
-        {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, heads) end)}
+        {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, rooms) end)}
 
       %{slug: slug} ->
         {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
     end
   end
 
-  defp synced(%{slug: slug, after_seq: after_seq}, messages, heads) do
+  defp synced(%{slug: slug, after_seq: after_seq}, messages, rooms) do
     cursor =
       case List.last(messages) do
         nil -> after_seq
         last -> last.seq
       end
 
-    %{slug: slug, head_seq: heads[slug], cursor: cursor, messages: messages}
+    %{kind: kind, level: level, head_seq: head_seq} = Map.fetch!(rooms, slug)
+
+    %{
+      slug: slug,
+      kind: kind,
+      level: level,
+      head_seq: head_seq,
+      cursor: cursor,
+      messages: messages
+    }
   end
 
   # One entry per room, each saying how far along that room the caller has read.
@@ -134,6 +150,76 @@ defmodule KeyFleet.Rooms do
   defp in_log(after_seq) when after_seq in 0..@max_seq, do: :ok
   defp in_log(_after_seq), do: {:error, :invalid_request}
 
+  @doc "How many topic rooms members have opened in the fleet."
+  def count_topic_rooms!(fleet_id) do
+    Room
+    |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
+    |> Ash.Query.filter(kind == :topic)
+    |> Ash.count!()
+  end
+
+  # Written as one statement of its own, not through a resource action: an
+  # upsert action always rewrites and locks the rows already there, and a
+  # level's room, once open, is never written to except by its posts.
+  @open_level_rooms """
+  INSERT INTO keyfleet_app.rooms (id, fleet_id, slug, name, kind, level, head_seq)
+  SELECT gen_random_uuid(), $1, 'level-' || level, 'Level ' || level, 'level', level, 0
+  FROM generate_series(1, $2::bigint) AS level
+  ON CONFLICT (fleet_id, slug) DO NOTHING
+  """
+
+  @doc """
+  Opens the room of every level of a Fibonacci fleet that has sold a key, as
+  far as its key history has been read, and leaves the rooms already open
+  untouched. A fleet without levels has none to open.
+
+  The chain reader calls this after each pass, so a room that fails to open is
+  opened by a later pass; a failure answers `{:error, reason}` and changes
+  nothing. Opening rooms never holds up recording who owns a key.
+  """
+  def ensure_level_rooms(fleet_id) do
+    with true <- Presets.levelled?(fleet_id),
+         {:ok, minted} <- KeyFleet.Chain.minted(fleet_id),
+         {:ok, opened} <- insert_level_rooms(fleet_id, Presets.active_levels(minted)) do
+      if opened > 0, do: rooms_opened(fleet_id)
+      :ok
+    else
+      false -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # In a transaction of its own, so a failure undoes only this statement even
+  # when the caller has a transaction open.
+  defp insert_level_rooms(fleet_id, count) do
+    KeyFleet.Repo.transaction(fn ->
+      case KeyFleet.Repo.query(@open_level_rooms, [fleet_id, count]) do
+        {:ok, %Postgrex.Result{num_rows: opened}} -> opened
+        {:error, error} -> KeyFleet.Repo.rollback(error)
+      end
+    end)
+  end
+
+  @doc "Tells everyone watching the fleet's rooms that a room has opened."
+  def rooms_opened(fleet_id) do
+    Phoenix.PubSub.broadcast(KeyFleet.PubSub, fleet_topic(fleet_id), {:rooms_opened, fleet_id})
+  end
+
+  @doc """
+  Opens, from trusted setup code, the room of every level that has sold a key
+  in each Fibonacci fleet, as far as each fleet's key history has been read.
+
+  Reruns change nothing. This internal entry point must never be exposed as a
+  user action.
+  """
+  def bootstrap_level_rooms! do
+    for fleet_id <- KeyFleet.Fleets.catalog_ids() do
+      :ok = ensure_level_rooms(fleet_id)
+    end
+
+    :ok
+  end
+
   @doc """
   Ensures the three core rooms for every persisted fleet from trusted setup code.
 
@@ -153,7 +239,7 @@ defmodule KeyFleet.Rooms do
       end
 
     %Ash.BulkResult{records: rooms} =
-      Ash.bulk_create!(inputs, KeyFleet.Rooms.Room, :bootstrap,
+      Ash.bulk_create!(inputs, Room, :bootstrap,
         actor: %KeyFleet.Actors.System{},
         return_records?: true,
         return_errors?: true,

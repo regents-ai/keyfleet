@@ -6,6 +6,7 @@ defmodule KeyFleetWeb.AgentRoomController do
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
   alias KeyFleet.Rooms.Errors.SendConflictError
+  alias KeyFleet.Rooms.Errors.TopicRoomLimitError
 
   @message_fields [
     :id,
@@ -24,6 +25,26 @@ defmodule KeyFleetWeb.AgentRoomController do
     case Rooms.list_rooms(fleet_id, actor: actor) do
       {:ok, rooms} -> json(conn, %{rooms: Enum.map(rooms, &room_json/1)})
       {:error, error} -> refuse(conn, error)
+    end
+  end
+
+  def create_room(conn, %{"fleet_id" => fleet_id} = params) do
+    actor = conn.assigns.agent_actor
+
+    input =
+      params
+      |> Map.take(["slug", "name", "level"])
+      |> Map.put("fleet_id", fleet_id)
+
+    case Rooms.create_topic_room(input, actor: actor) do
+      {:ok, room} ->
+        conn |> put_status(201) |> json(%{room: room_json(room)})
+
+      {:error, %Ash.Error.Forbidden{} = error} ->
+        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+
+      {:error, error} ->
+        refuse_room(conn, error)
     end
   end
 
@@ -81,7 +102,7 @@ defmodule KeyFleetWeb.AgentRoomController do
     if Ash.Resource.get_metadata(message, :upsert_skipped), do: 200, else: 201
   end
 
-  defp room_json(room), do: Map.take(room, [:slug, :name, :head_seq])
+  defp room_json(room), do: Map.take(room, [:slug, :name, :kind, :level, :head_seq])
 
   defp message_json(message) do
     message
@@ -101,6 +122,8 @@ defmodule KeyFleetWeb.AgentRoomController do
         Enum.map(synced.rooms, fn room ->
           %{
             slug: room.slug,
+            kind: room.kind,
+            level: room.level,
             head_seq: room.head_seq,
             cursor: room.cursor,
             messages: Enum.map(room.messages, &message_json/1)
@@ -136,6 +159,30 @@ defmodule KeyFleetWeb.AgentRoomController do
   end
 
   defp refuse(conn, _error), do: invalid(conn, "invalid_message")
+
+  defp refuse_room(conn, %Ash.Error.Invalid{errors: errors}) do
+    cond do
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
+        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+
+      Enum.any?(errors, &match?(%TopicRoomLimitError{}, &1)) ->
+        conn |> put_status(409) |> json(%{error: "room_limit_reached"})
+
+      Enum.any?(errors, &taken?/1) ->
+        conn |> put_status(409) |> json(%{error: "room_taken"})
+
+      true ->
+        invalid(conn, "invalid_room")
+    end
+  end
+
+  defp refuse_room(conn, _error), do: invalid(conn, "invalid_room")
+
+  # The fleet already has a room at this address.
+  defp taken?(%Ash.Error.Changes.InvalidAttribute{private_vars: private_vars}),
+    do: Keyword.get(private_vars || [], :constraint_type) == :unique
+
+  defp taken?(_error), do: false
 
   defp forbidden(conn), do: conn |> put_status(403) |> json(%{error: "not_a_member"})
 

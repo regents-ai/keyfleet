@@ -73,7 +73,8 @@ defmodule KeyFleet.RoomsTest do
         ] do
       assert {:error, %Postgrex.Error{postgres: %{code: ^code}}} =
                Repo.query(
-                 "INSERT INTO keyfleet_app.rooms (id, fleet_id, slug, name) VALUES ($1, $2, $3, $4)",
+                 "INSERT INTO keyfleet_app.rooms (id, fleet_id, slug, name, kind) " <>
+                   "VALUES ($1, $2, $3, $4, 'core')",
                  [Ecto.UUID.dump!(Ash.UUID.generate()), fleet_id, slug, "Unwanted"],
                  mode: :savepoint
                )

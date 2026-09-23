@@ -173,7 +173,7 @@ defmodule KeyFleet.Rooms.Message do
     end
 
     policy action(:send_message) do
-      authorize_if KeyFleet.Rooms.Checks.FleetMember
+      authorize_if KeyFleet.Rooms.Checks.RoomPoster
     end
   end
 

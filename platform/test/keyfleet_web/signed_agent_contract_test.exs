@@ -26,6 +26,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   @pairings "/api/v1/agent/pairings"
   @pairing "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing"
   @rooms "/api/v1/agent/fleets/{fleet_id}/rooms"
+  @create "/api/v1/agent/fleets/{fleet_id}/rooms/create"
   @read "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read"
   @send "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send"
   @sync "/api/v1/agent/fleets/{fleet_id}/sync"
@@ -51,6 +52,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     {"POST", @pairing, [], %{}},
     {"DELETE", @pairing, [], %{}},
     {"GET", @rooms, [], %{}},
+    {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe", "level" => 1}},
     {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @send, [], %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
     {"POST", @sync, [],
@@ -102,6 +104,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   # Where each body's fields go once admitted, less the ones its address supplies.
   @actions [
              {@update, KeyFleet.Agents.AgentProfile, :edit_my_profile},
+             {@create, KeyFleet.Rooms.Room, :create_topic},
              {@read, KeyFleet.Rooms.Message, :read_messages},
              {@send, KeyFleet.Rooms.Message, :send_message}
            ] ++
@@ -321,6 +324,35 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     sync.(@address, [%{general | "after_seq" => -1}], 422)
     sync.(@address, [general, general], 422)
 
+    # Opening topic rooms: new, taken, malformed, by an outsider, and past the limit.
+    room = %{"slug" => "survey-plans", "name" => "Survey plans"}
+
+    assert answer(c, c.signer, "POST", @create, @address, Map.put(room, "level", 1), 201).body ==
+             %{
+               "room" => %{
+                 "slug" => "survey-plans",
+                 "name" => "Survey plans",
+                 "kind" => "topic",
+                 "level" => 1,
+                 "head_seq" => 0
+               }
+             }
+
+    assert answer(c, c.signer, "POST", @create, @address, room, 409).body ==
+             %{"error" => "room_taken"}
+
+    answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "Survey"}, 422)
+    answer(c, stranger, "POST", @create, @address, %{room | "slug" => "outsiders"}, 403)
+
+    for n <- 2..100 do
+      Rooms.create_topic_room!(%{fleet_id: @fleet, slug: "topic-#{n}", name: "Topic #{n}"},
+        actor: human
+      )
+    end
+
+    assert answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "one-more"}, 409).body ==
+             %{"error" => "room_limit_reached"}
+
     # A fleet outside the catalog is not found on every route that names one,
     # with the answer the workspace gives.
     nowhere = Map.put(@address, "fleet_id", "hull_survey")
@@ -335,6 +367,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     answer(c, c.signer, "POST", @send, @address, %{post | "idempotency_key" => "k-4"}, 503)
     answer(c, c.signer, "POST", @pairing, one, %{}, 503)
+    answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
 
     # Every route: unsigned, too large, and with the sign-in check away.
     for {method, template} <- routes() do
@@ -409,6 +442,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
       {"POST", @pairing},
       {"DELETE", @pairing},
       {"GET", @rooms},
+      {"POST", @create},
       {"POST", @read},
       {"POST", @send},
       {"POST", @sync}
@@ -422,6 +456,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
 
   defp empty_or_minimal(@join), do: %{"name" => "Probe", "declared_harness" => "local"}
   defp empty_or_minimal(@update), do: %{"current_status" => "away"}
+  defp empty_or_minimal(@create), do: %{"slug" => "away", "name" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@sync), do: %{"rooms" => [], "graph" => %{"after_seq" => 0}}
   defp empty_or_minimal(_template), do: %{}

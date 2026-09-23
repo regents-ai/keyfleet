@@ -18,6 +18,7 @@ defmodule KeyFleetWeb.ApiContractTest do
              @graph <> "patch",
              @graph <> "unlink",
              "/api/v1/agent/fleets/{fleet_id}/rooms",
+             "/api/v1/agent/fleets/{fleet_id}/rooms/create",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
              "/api/v1/agent/fleets/{fleet_id}/sync",
@@ -359,6 +360,18 @@ defmodule KeyFleetWeb.ApiContractTest do
       end
 
     assert Enum.sort(served) == Enum.sort(documented)
+  end
+
+  test "a topic room's address is lowercase letters, digits and single dashes" do
+    contract = YamlElixir.read_from_file!(@contract)
+
+    slug =
+      Regex.compile!(
+        contract["components"]["schemas"]["RoomCreateRequest"]["properties"]["slug"]["pattern"]
+      )
+
+    assert Enum.all?(~w(hull-survey a 7 level-two-plans), &Regex.match?(slug, &1))
+    refute Enum.any?(~w(Hull hull--survey -hull hull- hull_survey), &Regex.match?(slug, &1))
   end
 
   test "the served contract is byte-identical and available over HTTP", %{conn: conn} do

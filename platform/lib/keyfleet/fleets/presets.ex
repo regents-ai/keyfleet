@@ -28,6 +28,9 @@ defmodule KeyFleet.Fleets.Presets do
 
   @fibonacci_max_token_id List.last(@fibonacci_level_ends)
 
+  # The first token id of each level.
+  @fibonacci_level_starts [1 | Enum.map(Enum.drop(@fibonacci_level_ends, -1), &(&1 + 1))]
+
   @presets %{
     "fibonacci_syndicate" => :fibonacci,
     "fibonacci_cascade" => :fibonacci,
@@ -65,10 +68,37 @@ defmodule KeyFleet.Fleets.Presets do
   an earlier level.
   """
   def writable_levels(token_id, total_minted)
-      when is_integer(total_minted) and total_minted >= 0 do
-    own = fibonacci_level_of(token_id)
-    [own | Enum.to_list((own + 1)..completed_levels(:fibonacci, total_minted)//1)]
+      when is_integer(total_minted) and total_minted >= 0,
+      do: levels_writable_by([fibonacci_level_of(token_id)], total_minted)
+
+  @doc """
+  The levels someone holding keys of each of `levels` may write once
+  `total_minted` keys are sold, lowest first: each held level, and every level
+  above the lowest one held once every key of that level is sold
+  (`writable_levels/2` for each key, together).
+  """
+  def levels_writable_by([], total_minted) when is_integer(total_minted) and total_minted >= 0,
+    do: []
+
+  def levels_writable_by(levels, total_minted)
+      when is_list(levels) and is_integer(total_minted) and total_minted >= 0 do
+    later = (Enum.min(levels) + 1)..completed_levels(:fibonacci, total_minted)//1
+
+    (levels ++ Enum.to_list(later))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
+
+  @doc """
+  How many Fibonacci levels have at least one key sold once `total_minted`
+  keys are: every level up to the one the latest key belongs to, since keys
+  are sold in order.
+  """
+  def active_levels(total_minted) when is_integer(total_minted) and total_minted >= 0,
+    do: Enum.count(@fibonacci_level_starts, &(&1 <= total_minted))
+
+  @doc "Each Fibonacci level's first and last key numbers, as two lists in level order."
+  def fibonacci_level_bounds, do: {@fibonacci_level_starts, @fibonacci_level_ends}
 
   @doc "Whether a Fibonacci fleet ever issues `token_id`."
   def fibonacci_token?(token_id), do: token_id in 1..@fibonacci_max_token_id

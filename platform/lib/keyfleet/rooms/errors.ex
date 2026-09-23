@@ -21,3 +21,10 @@ defmodule KeyFleet.Rooms.Errors.SendConflictError do
   def message(%{idempotency_key: idempotency_key}),
     do: "send key #{idempotency_key} was already used for a different post"
 end
+
+defmodule KeyFleet.Rooms.Errors.TopicRoomLimitError do
+  @moduledoc "Raised when a fleet already has as many topic rooms as it may."
+  use Splode.Error, fields: [:limit], class: :invalid
+
+  def message(%{limit: limit}), do: "this fleet already has #{limit} topic rooms"
+end

@@ -40,4 +40,38 @@ defmodule KeyFleet.Keys do
         not_found_error?: false
     end
   end
+
+  # One probe per level: each walks the index on (fleet, owner, key) within
+  # that level and stops at the first key the wallet still holds, so holding
+  # thousands of keys costs about what holding one does. A key is held while
+  # its latest ownership record names the wallet.
+  @levels_held """
+  SELECT bounds.level::integer
+  FROM unnest($3::bigint[], $4::bigint[]) WITH ORDINALITY AS bounds(first_key, last_key, level)
+  CROSS JOIN LATERAL (
+    SELECT 1 FROM keyfleet_app.key_attachments AS held
+    WHERE held.fleet_id = $1
+      AND held.owner_wallet = ANY($2)
+      AND held.token_id BETWEEN bounds.first_key AND bounds.last_key
+      AND NOT EXISTS (
+        SELECT 1 FROM keyfleet_app.key_attachments AS later
+        WHERE later.fleet_id = held.fleet_id
+          AND later.token_id = held.token_id
+          AND later.ownership_epoch > held.ownership_epoch
+      )
+    LIMIT 1
+  ) AS holding
+  ORDER BY bounds.level
+  """
+
+  @doc """
+  The Fibonacci levels in which any of `wallets` holds a key of the fleet
+  right now, lowest first. Only the levels are read, never the keys.
+  """
+  def levels_held!(fleet_id, wallets) when is_list(wallets) do
+    {starts, ends} = KeyFleet.Fleets.Presets.fibonacci_level_bounds()
+
+    KeyFleet.Repo.query!(@levels_held, [fleet_id, wallets, starts, ends]).rows
+    |> List.flatten()
+  end
 end

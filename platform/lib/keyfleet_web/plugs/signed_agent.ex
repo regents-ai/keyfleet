@@ -18,6 +18,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # A post is named by its id as the API answers it: lowercase and hyphenated.
   @post_id ~r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"
   @rooms_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms\z"
+  @create_room_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/create\z"
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
   @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
@@ -36,9 +37,10 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
-  # One catch-up names up to a hundred rooms and how far the workspace was read.
+  # One catch-up names up to 123 rooms, as many as a fleet holds (three core
+  # rooms, twenty levels and a hundred topics), and how far the workspace was read.
   @sync_max_body 32 * 1024
-  @max_sync_rooms 100
+  @max_sync_rooms 123
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
@@ -216,7 +218,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp supported?("POST", path) do
     Enum.any?(
-      [@pairing_path, @read_path, @send_path, @sync_path, @graph_path],
+      [@pairing_path, @create_room_path, @read_path, @send_path, @sync_path, @graph_path],
       &Regex.match?(&1, path)
     )
   end
@@ -250,6 +252,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@pairing_path, path) -> admit(params == %{})
       Regex.match?(@rooms_path, path) -> admit(params == %{})
+      Regex.match?(@create_room_path, path) -> admit(valid_room_body?(params))
       Regex.match?(@read_path, path) -> check_read_body(params)
       Regex.match?(@send_path, path) -> admit(valid_send_body?(params))
       Regex.match?(@sync_path, path) -> check_sync_body(params)
@@ -322,6 +325,16 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   end
 
   defp valid_send_body?(_params), do: false
+
+  # A topic room names its address and its name, and the level it follows if
+  # it follows one.
+  defp valid_room_body?(%{"slug" => slug, "name" => name} = params) do
+    is_binary(slug) and is_binary(name) and
+      Enum.all?(Map.keys(params), &(&1 in ~w(slug name level))) and
+      (not Map.has_key?(params, "level") or is_integer(params["level"]))
+  end
+
+  defp valid_room_body?(_params), do: false
 
   defp check_sync_body(%{"rooms" => rooms, "graph" => graph} = params)
        when map_size(params) == 2 and is_list(rooms) do

@@ -88,6 +88,37 @@
   list-style: none;
 }
 
+.rooms-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.rooms-tag {
+  color: var(--ash-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rooms-list h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.rooms-composer input,
+.rooms-composer select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--ash-line);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
 .rooms-list a[aria-current="page"] {
   text-decoration: none;
   font-weight: 600;

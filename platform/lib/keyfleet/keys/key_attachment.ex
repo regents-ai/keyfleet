@@ -37,6 +37,12 @@ defmodule KeyFleet.Keys.KeyAttachment do
       )
     end
 
+    custom_indexes do
+      # The keys a wallet has held in a fleet, in key order, so finding the
+      # levels someone holds keys in reads a few entries per level.
+      index([:fleet_id, :owner_wallet, :token_id])
+    end
+
     custom_statements do
       statement :immutable_epochs_function do
         up("""

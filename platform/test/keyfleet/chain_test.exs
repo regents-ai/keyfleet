@@ -47,22 +47,7 @@ defmodule KeyFleet.ChainTest do
 
   describe "reading the chain" do
     setup do
-      fleet =
-        @fleet
-        |> Fleets.get_fleet!()
-        |> Fleets.record_deployment!(
-          %{
-            chain_id: 8_453,
-            contract_address: @contract,
-            rewards_address: "0x" <> String.duplicate("8", 40),
-            votes_address: "0x" <> String.duplicate("9", 40),
-            usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-            deployed_block: @deployed
-          },
-          actor: %System{}
-        )
-
-      %{fleet: fleet}
+      %{fleet: deploy!(@fleet, @contract)}
     end
 
     # The cursor moves on only after everything up to the head is recorded,
@@ -80,6 +65,44 @@ defmodule KeyFleet.ChainTest do
       assert length(Keys.key_history!(@fleet, 1)) == 2
       assert next_block() == @deployed + 11
       assert Chain.fresh?(@fleet)
+    end
+
+    # Opening a level's room follows a pass and never holds up the record.
+    test "a pass opens the rooms of the levels sold so far, and failing to holds nothing up" do
+      contract = "0x" <> String.duplicate("6", 40)
+      cascade = deploy!("fibonacci_cascade", contract)
+      sale = &%{log(&1, 1, "a", @deployed + &1, 0) | "address" => contract}
+
+      Repo.query!(
+        "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT refuse_level_rooms CHECK (kind <> 'level') NOT VALID"
+      )
+
+      StubClient.put_chain(head(@deployed + 10), Enum.map(1..3, sale))
+
+      assert capture_log(fn -> assert Scanner.step(cascade, StubClient) == :ok end) =~
+               "Fleet fibonacci_cascade: level rooms not opened this pass, trying again next pass"
+
+      # The fleet keeps reading while the rooms cannot open.
+      StubClient.put_chain(head(@deployed + 20), Enum.map(1..6, sale))
+      capture_log(fn -> assert Scanner.step(cascade, StubClient) == :ok end)
+
+      assert length(Keys.keys_in_fleet!("fibonacci_cascade").results) == 6
+      assert %{next_block: next_block, rescan_from: nil} = Chain.get_cursor!("fibonacci_cascade")
+      assert next_block == @deployed + 21
+      assert Chain.fresh?("fibonacci_cascade")
+      assert slugs("fibonacci_cascade") == []
+
+      Repo.query!("ALTER TABLE keyfleet_app.rooms DROP CONSTRAINT refuse_level_rooms")
+      assert Scanner.step(cascade, StubClient) == :ok
+      assert slugs("fibonacci_cascade") == ~w(level-1 level-2 level-3)
+
+      # A pass that reads only a key changing hands leaves the rooms as they were.
+      rooms = room_versions("fibonacci_cascade")
+      transfer = %{log(2, 2, "b", @deployed + 25, 0) | "address" => contract}
+      StubClient.put_chain(head(@deployed + 30), Enum.map(1..6, sale) ++ [transfer])
+      assert Scanner.step(cascade, StubClient) == :ok
+      assert Chain.get_cursor!("fibonacci_cascade").next_block == @deployed + 31
+      assert room_versions("fibonacci_cascade") == rooms
     end
 
     # One log the reader cannot make sense of holds the whole range back.
@@ -238,6 +261,8 @@ defmodule KeyFleet.ChainTest do
     } do
       path = Path.join(dir, "deployed.json")
       File.write!(path, Jason.encode!(manifest("1")))
+      record_sales!("fibonacci_cascade", 1..3)
+      record_sales!("fleet_tech_classic", 1..3)
 
       assert capture_io(fn -> Release.seed_deployment!(path) end) =~
                "fleet_tech_classic: 0x#{String.duplicate("c1", 20)} from block 42"
@@ -254,12 +279,64 @@ defmodule KeyFleet.ChainTest do
                &(&1.usdc_address == "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
              )
 
-      assert Enum.all?(Map.keys(bound), &(length(Rooms.list_rooms!(&1)) == 3))
+      # Keys sold before the seed ran open their levels' rooms in a Fibonacci
+      # fleet; Classic has no levels.
+      core = ~w(general planning work)
+      assert slugs("fibonacci_cascade") == core ++ ~w(level-1 level-2)
+      assert slugs("fleet_tech_classic") == core
+      assert slugs("fleet_tech_accelerant") == core
+      assert Enum.take(slugs("fibonacci_syndicate"), 3) == core
 
       File.write!(path, Jason.encode!(manifest("2")))
       assert_raise Ash.Error.Invalid, fn -> Release.seed_deployment!(path) end
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
     end
+  end
+
+  defp slugs(fleet), do: Enum.map(Rooms.list_rooms!(fleet), & &1.slug)
+
+  defp record_sales!(fleet, token_ids) do
+    for token_id <- token_ids do
+      Keys.record_epoch!(
+        %{
+          fleet_id: fleet,
+          token_id: token_id,
+          ownership_epoch: 0,
+          owner_wallet: wallet("a"),
+          block_number: 10,
+          block_hash: "0x" <> String.duplicate("a", 64),
+          transaction_hash:
+            "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}"), case: :lower),
+          log_index: 0
+        },
+        actor: %System{}
+      )
+    end
+  end
+
+  # Each room's row version: a rewrite moves it, and a lock marks it.
+  defp room_versions(fleet) do
+    Repo.query!(
+      "SELECT slug, ctid::text, xmin::text, xmax::text FROM keyfleet_app.rooms " <>
+        "WHERE fleet_id = $1 ORDER BY slug",
+      [fleet]
+    ).rows
+  end
+
+  defp deploy!(fleet, contract) do
+    fleet
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8_453,
+        contract_address: contract,
+        rewards_address: "0x" <> String.duplicate("8", 40),
+        votes_address: "0x" <> String.duplicate("9", 40),
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        deployed_block: @deployed
+      },
+      actor: %System{}
+    )
   end
 
   defp manifest(generation) do

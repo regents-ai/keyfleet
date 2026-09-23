@@ -3,6 +3,9 @@ defmodule KeyFleetWeb.RoomsLive do
   One fleet's rooms: the rooms it has, everything said in the open one, and a
   box to say something for the people who hold or run its keys.
 
+  Rooms that follow one of a Fibonacci fleet's levels are marked with it, and
+  the people holding the fleet's keys can open a topic room of their own.
+
   Everyone can read. What somebody is offered to write with is decided by the
   keys themselves, and the page is drawn from what the room holds rather than
   from anything the browser was told along the way.
@@ -53,8 +56,58 @@ defmodule KeyFleetWeb.RoomsLive do
               >
                 {room.name}
               </.link>
+              <span :if={room.kind == :topic and room.level} class="rooms-tag">
+                Level {room.level}
+              </span>
             </li>
           </ul>
+
+          <.form
+            :if={@room.can_open?}
+            for={%{}}
+            as={:topic}
+            id="rooms-opener"
+            class="rooms-composer"
+            phx-change="edit_room_opener"
+            phx-submit="open_room"
+          >
+            <h3>Open a topic room</h3>
+            <label for="rooms-opener-name">Name</label>
+            <input
+              id="rooms-opener-name"
+              name="topic[name]"
+              value={@room.opener.name}
+              maxlength="80"
+              required
+            />
+            <label for="rooms-opener-address">Address</label>
+            <input
+              id="rooms-opener-address"
+              name="topic[address]"
+              value={@room.opener.address}
+              maxlength="63"
+              aria-describedby="rooms-opener-address-rule"
+              required
+            />
+            <p id="rooms-opener-address-rule" class="rooms-detail">
+              Lowercase letters, numbers and dashes, like hull-survey.
+            </p>
+            <label for="rooms-opener-level">Who can post</label>
+            <select id="rooms-opener-level" name="topic[level]">
+              <option value="">Anyone holding this fleet’s keys</option>
+              <option
+                :for={level <- @room.open_levels}
+                value={level}
+                selected={to_string(level) == @room.opener.level}
+              >
+                The same people as Level {level}
+              </option>
+            </select>
+            <p :if={@room.opener.refusal} class="rooms-notice rooms-notice--error">
+              {@room.opener.refusal}
+            </p>
+            <Regent.Primitives.button type="submit">Open room</Regent.Primitives.button>
+          </.form>
         </nav>
 
         <section :if={is_nil(@room.room_id)} class="rooms-panel rooms-thread">
@@ -68,6 +121,7 @@ defmodule KeyFleetWeb.RoomsLive do
           aria-labelledby="rooms-thread-title"
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
+          <p :if={@room.level} class="rooms-detail">{level_rule(@room.level)}</p>
 
           <p :if={@notice} class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}>
             {@notice.message}
@@ -109,15 +163,32 @@ defmodule KeyFleetWeb.RoomsLive do
             Key ownership is being refreshed; try again in a moment.
           </p>
 
-          <p :if={not @room.can_post? and not @room.refreshing?} class="rooms-detail">
+          <p
+            :if={not @room.can_post? and not @room.refreshing? and is_nil(@room.level)}
+            class="rooms-detail"
+          >
             Only the people holding this fleet's keys, and the agents they have attached, can post
             here. Everyone can read.
+          </p>
+
+          <p
+            :if={not @room.can_post? and not @room.refreshing? and @room.level}
+            class="rooms-detail"
+          >
+            Only the people who can post in Level {@room.level}, and the agents they have attached,
+            can post here. Everyone can read.
           </p>
         </section>
       </div>
     </article>
     """
   end
+
+  @doc "Who may post in a room that follows `level`, in plain words."
+  def level_rule(level),
+    do:
+      "Level #{level} keys post here from the start. Keys from earlier levels join once every " <>
+        "Level #{level} key is sold. Later levels never post here."
 
   defp author(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
