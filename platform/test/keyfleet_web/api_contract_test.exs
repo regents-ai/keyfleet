@@ -17,6 +17,14 @@ defmodule KeyFleetWeb.ApiContractTest do
              @graph <> "link",
              @graph <> "patch",
              @graph <> "unlink",
+             "/api/v1/agent/fleets/{fleet_id}/rooms",
+             "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",
+             "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
+             "/api/v1/agent/fleets/{fleet_id}/sync",
+             "/api/v1/agent/join/status",
+             "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing",
+             "/api/v1/agent/pairings",
+             "/api/v1/agent/profile/update",
              "/api/v1/profile",
              "/api/v1/profile/sync",
              "/auth/csrf",
@@ -325,6 +333,32 @@ defmodule KeyFleetWeb.ApiContractTest do
              ~w(level:0 level:21 level:01 Level:1 level: fleet:1 all),
              &Regex.match?(scope, &1)
            )
+  end
+
+  # A signed agent route the router serves and the contract leaves out, or
+  # the other way round, fails here.
+  test "the contract documents exactly the signed agent routes the router serves" do
+    contract = YamlElixir.read_from_file!(@contract)
+
+    served =
+      for %{path: "/api/v1/agent/" <> _ = path, verb: verb} <-
+            Phoenix.Router.routes(KeyFleetWeb.Router),
+          do: {verb |> to_string() |> String.upcase(), Regex.replace(~r/:(\w+)/, path, "{\\1}")}
+
+    documented =
+      for {"/api/v1/agent/" <> _ = path, operations} <- contract["paths"],
+          {method, operation} <- operations do
+        assert operation["security"] == [%{"siwaReceipt" => []}], "#{method} #{path}"
+
+        assert %{
+                 "401" => %{"$ref" => "#/components/responses/AgentUnauthorized"},
+                 "413" => %{"$ref" => "#/components/responses/AgentRequestTooLarge"}
+               } = operation["responses"]
+
+        {String.upcase(method), path}
+      end
+
+    assert Enum.sort(served) == Enum.sort(documented)
   end
 
   test "the served contract is byte-identical and available over HTTP", %{conn: conn} do

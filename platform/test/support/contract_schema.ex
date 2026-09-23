@@ -11,6 +11,7 @@ defmodule KeyFleet.ContractSchema do
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   @prefix "#/components/schemas/"
   @notes ~w(description default)
+  @uuid ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
 
   @doc """
   Answers the ways `value` breaks the contract schema called `name`, as
@@ -21,6 +22,37 @@ defmodule KeyFleet.ContractSchema do
     schemas = YamlElixir.read_from_file!(@contract)["components"]["schemas"]
     json = value |> Jason.encode!() |> Jason.decode!()
     check(json, %{"$ref" => @prefix <> name}, schemas, "$")
+  end
+
+  @doc """
+  Answers the ways a response breaks what the contract documents for
+  `method` on the path template `path` with `status`: a status the operation
+  does not document, or a JSON body that does not fit its schema.
+  """
+  @spec response_errors(term(), String.t(), String.t(), pos_integer()) :: [String.t()]
+  def response_errors(value, method, path, status) do
+    contract = YamlElixir.read_from_file!(@contract)
+    operation = contract["paths"][path][String.downcase(method)]
+
+    case operation["responses"][Integer.to_string(status)] do
+      nil ->
+        ["#{method} #{path} documents no #{status} response"]
+
+      %{"$ref" => "#/components/responses/" <> name} ->
+        body_errors(value, contract["components"]["responses"][name], contract)
+
+      response ->
+        body_errors(value, response, contract)
+    end
+  end
+
+  defp body_errors(
+         value,
+         %{"content" => %{"application/json" => %{"schema" => schema}}},
+         contract
+       ) do
+    json = value |> Jason.encode!() |> Jason.decode!()
+    check(json, schema, contract["components"]["schemas"], "$")
   end
 
   defp check(value, schema, schemas, at) do
@@ -70,6 +102,17 @@ defmodule KeyFleet.ContractSchema do
         at,
         "does not match #{pattern}"
       )
+
+  defp rule("format", "date-time", value, _schema, _schemas, at),
+    do:
+      bound(
+        is_binary(value) and not match?({:ok, _, _}, DateTime.from_iso8601(value)),
+        at,
+        "is not a date-time"
+      )
+
+  defp rule("format", "uuid", value, _schema, _schemas, at),
+    do: bound(is_binary(value) and not Regex.match?(@uuid, value), at, "is not a uuid")
 
   defp rule("maxItems", max, value, _schema, _schemas, at),
     do: bound(is_list(value) and length(value) > max, at, "has more than #{max} items")
