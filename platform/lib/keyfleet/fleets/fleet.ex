@@ -1,7 +1,8 @@
 defmodule KeyFleet.Fleets.Fleet do
   @moduledoc """
   A fixed fleet with a stable machine identity and display name, and once it is
-  deployed, the chain and contracts it lives at and the USDC its keys are paid in.
+  deployed, the chain and contracts it lives at, the USDC its keys are paid in
+  and the hash of the trait table its keys' traits are drawn from.
   """
   use Ash.Resource,
     domain: KeyFleet.Fleets,
@@ -22,13 +23,17 @@ defmodule KeyFleet.Fleets.Fleet do
       # A deployment is recorded whole or not at all.
       check_constraint(:contract_address, "fleets_deployment_whole",
         check:
-          "num_nulls(chain_id, contract_address, rewards_address, votes_address, usdc_address, deployed_block) IN (0, 6)",
+          "num_nulls(chain_id, contract_address, rewards_address, votes_address, usdc_address, deployed_block, trait_table_hash) IN (0, 7)",
         message: "must record the whole deployment"
       )
 
       for field <- [:contract_address, :rewards_address, :votes_address, :usdc_address] do
         check_constraint(field, "fleets_#{field}_shape", check: "#{field} ~ '^0x[0-9a-f]{40}$'")
       end
+
+      check_constraint(:trait_table_hash, "fleets_trait_table_hash_shape",
+        check: "trait_table_hash ~ '^0x[0-9a-f]{64}$'"
+      )
     end
   end
 
@@ -66,7 +71,8 @@ defmodule KeyFleet.Fleets.Fleet do
         :rewards_address,
         :votes_address,
         :usdc_address,
-        :deployed_block
+        :deployed_block,
+        :trait_table_hash
       ]
 
       require_attributes [
@@ -75,7 +81,8 @@ defmodule KeyFleet.Fleets.Fleet do
         :rewards_address,
         :votes_address,
         :usdc_address,
-        :deployed_block
+        :deployed_block,
+        :trait_table_hash
       ]
 
       validate KeyFleet.Fleets.Validations.SameDeployment
@@ -107,5 +114,10 @@ defmodule KeyFleet.Fleets.Fleet do
 
     # The first block of the deployment, where reading its history starts.
     attribute :deployed_block, :integer, public?: true, constraints: [min: 0]
+
+    # `keccak256` of the trait table file, byte for byte, as the fleet holds it.
+    attribute :trait_table_hash, :string,
+      public?: true,
+      constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
   end
 end

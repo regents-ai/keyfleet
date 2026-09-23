@@ -125,7 +125,9 @@ defmodule KeyFleet.Keys.KeyAttachment do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
-      change KeyFleet.Keys.Changes.VerifyReplay
+
+      change {KeyFleet.Chain.Changes.RecordOnce,
+              identity: [:fleet_id, :token_id, :ownership_epoch]}
     end
 
     read :history do

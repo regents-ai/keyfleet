@@ -31,6 +31,7 @@ defmodule KeyFleetWeb.RouterGateCoverageTest do
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
              {:get, "/llms.txt"},
+             {:get, "/metadata/:slot/:token_id"},
              {:get, "/docs"},
              {:get, "/about"},
              {:get, "/contact"},

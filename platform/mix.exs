@@ -72,6 +72,7 @@ defmodule KeyFleet.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:sentry, "~> 13.0"},
       {:jason, "~> 1.2"},
+      {:ex_keccak, "~> 0.7.8"},
       {:req, "== 0.6.2"},
       {:bandit, "~> 1.12.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -119,7 +120,7 @@ defmodule KeyFleet.MixProject do
         "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
         # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
         # floor: each resource adds its domain's edge and one per policy check module.
-        "xref graph --label compile-connected --fail-above 43",
+        "xref graph --label compile-connected --fail-above 45",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

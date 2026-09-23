@@ -1,7 +1,9 @@
 # Reading the fleets from the chain
 
 The app reads each deployed fleet's `OwnershipEpoch` events from Base and
-records who holds every key. From the fleet's vote contract it records every
+records who holds every key. From the same contract it records each key's
+reveal (`KeyRevealed`: the Chainlink VRF request and the seed its traits are
+drawn from). From the fleet's vote contract it records every
 proposal, vote and execution (`ProposalCreated` with `AutolaunchProposed` or
 `PayProposed` beside it for a launch or a payment, `VoteCast` and
 `ProposalExecuted`). A payment keeps its asset, amount, recipient, expiry and
@@ -37,6 +39,14 @@ reader stops that fleet and an operator fixes the record by hand, as below.
    a bound fleet is refused and changes nothing. In development the same step
    is `mix key_fleet.seed_deployment ../contracts/deployments/<name>.deployed.json`.
 
+   Metadata for a revealed key is drawn from the fleet's trait table, which
+   ships with the release: the art agent commits it as
+   `platform/priv/trait_tables/<traitTableHash>.json`, named by the manifest's
+   `traitTableHash` in lowercase, and there is nothing to copy. A missing
+   file, or one whose `keccak256` is not its name, answers that key's metadata
+   with a server error and changes nothing recorded; the format is in
+   `docs/deployment.md`.
+
 3. Restart the app (`fly apps restart <app>`). The reader starts only for the
    fleets that were bound when the app started.
 
@@ -47,9 +57,9 @@ its sales figures are catching up.
 
 ## What a stop means
 
-A second reading of the last 30 blocks found an ownership change, proposal,
-vote or execution that reads differently from the record, or a recorded one
-gone from a block whose hash is no longer the recorded one. A proposal number
+A second reading of the last 30 blocks found an ownership change, reveal,
+proposal, vote or execution that reads differently from the record, or a
+recorded one gone from a block whose hash is no longer the recorded one. A proposal number
 recorded twice, or a proposal executed twice, stops the fleet the same way. The
 app logs, at error level:
 
@@ -60,10 +70,23 @@ Fleet <fleet id> stopped: the chain disagrees with the record at block <N>. It i
 and stops reading that fleet. Its cursor keeps `rescan_from = S`, and nothing
 recorded has been changed. `S` is `N`, or an earlier block the fleet was
 already stopped at: a stop only ever moves to an earlier block, so
-`rescan_from` is always the earliest disagreement found. The piece of blocks
+`rescan_from` is always the earliest disagreement found. A piece read again
+that disagrees with its record names the earlier of the recorded piece's block
+and the block it was read from, since the recorded one's block is what
+changed. The piece of blocks
 holding `N` recorded nothing; pieces before it, already checked, keep what they
 recorded. A recorded change missing from a block whose hash still matches is a
 node fault, not a stop: the app logs a warning and retries.
+
+A reveal is checked by its seed, not by its place on the chain. A key's
+`KeyRevealed` read again from another block, with the same request and seed,
+is the reveal already recorded, and a recorded reveal missing from its block
+is no stop. A `KeyRevealed` for a revealed key with a different seed or request
+stops the fleet at the earlier of the recorded reveal's block and the block it
+was read from, and nothing is recorded. Chainlink
+VRF draws the seed from the request's block, so a change in history deep enough
+to drop that block can bring a different seed; that is a real reorg, corrected
+as below.
 
 ## When a stretch is not read
 
@@ -104,6 +127,7 @@ the `keyfleet_app` tables:
 SELECT DISTINCT block_number, block_hash
 FROM (
   SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
@@ -131,12 +155,15 @@ the chain has not changed and the node answered wrongly: point
 ## Correcting the record
 
 Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
-proposal, vote and execution record of that fleet at or after `F` is removed,
+reveal, proposal, vote and execution record of that
+fleet at or after `F` is removed,
 every pairing made under one of those ownership records is ended, and the
 cursor goes back to `F`, so the reader records the chain's current history from
 there. Ended pairings stay as history; agents ask again and the key's owner
-approves again. The proposal records made again from `F` on get new record
-numbers, higher than any removed, so every reader of the list sees them as new.
+approves again. The proposal and reveal records made again from `F` on get
+new record numbers, higher than any removed, so every reader of the list sees
+them as new. A key whose reveal is removed shows as still being revealed until
+its reveal is read again.
 
 A pass that was already running when the fleet stopped cannot undo the
 correction. A pass records each piece, and moves the cursor, only while the
@@ -187,6 +214,14 @@ DELETE FROM keyfleet_app.key_attachments
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 
 ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs;
+
+-- The reveals from the fork on, the same way.
+ALTER TABLE keyfleet_app.key_reveals DISABLE TRIGGER immutable_key_reveals;
+
+DELETE FROM keyfleet_app.key_reveals
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
 
 -- The proposal records from the fork on are removed the same way: executions
 -- and votes first, since they point at proposals.

@@ -239,6 +239,11 @@ defmodule KeyFleet.ChainTest do
                &(&1.usdc_address == "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
              )
 
+      assert Enum.all?(
+               Map.values(bound),
+               &(&1.trait_table_hash == "0x" <> String.duplicate("a1", 32))
+             )
+
       own = ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
       assert Enum.all?(Map.keys(bound), &(Enum.take(slugs(&1), 10) == own))
 
@@ -260,7 +265,8 @@ defmodule KeyFleet.ChainTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: @deployed
+        deployed_block: @deployed,
+        trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
       actor: %System{}
     )
@@ -279,6 +285,7 @@ defmodule KeyFleet.ChainTest do
       "chainId" => 8_453,
       "deploymentBlock" => 42,
       "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "traitTableHash" => "0x" <> String.duplicate("A" <> generation, 32),
       "fleets" => %{
         "syndicate" => fleet.("a"),
         "cascade" => fleet.("b"),

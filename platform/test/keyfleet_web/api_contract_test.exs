@@ -32,7 +32,8 @@ defmodule KeyFleetWeb.ApiContractTest do
              "/auth/csrf",
              "/auth/privy/failure",
              "/auth/privy/session",
-             "/auth/session"
+             "/auth/session",
+             "/metadata/{slot}/{token_id}"
            ]
 
     assert Map.take(contract["paths"], [

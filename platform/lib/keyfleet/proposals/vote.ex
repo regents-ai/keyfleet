@@ -90,7 +90,9 @@ defmodule KeyFleet.Proposals.Vote do
       upsert_condition expr(false)
       return_skipped_upsert? true
       change KeyFleet.Proposals.Changes.FindProposal
-      change KeyFleet.Proposals.Changes.RecordOnce
+
+      change {KeyFleet.Chain.Changes.RecordOnce,
+              identity: [:transaction_hash, :log_index], number: :proposal_seq}
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second

@@ -13,6 +13,10 @@ config :keyfleet, KeyFleetWeb.Endpoint,
 
 config :keyfleet, :privy_verifier, KeyFleet.TestPrivyVerifier
 config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.StubClient
+
+config :keyfleet, KeyFleet.Traits,
+  directory: Path.expand("../test/support/fixtures/trait_tables", __DIR__)
+
 config :keyfleet, :database_startup_enabled, true
 
 # Every test case here reaches one node holding one anonymous bootstrap budget

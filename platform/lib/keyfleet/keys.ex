@@ -1,5 +1,8 @@
 defmodule KeyFleet.Keys do
-  @moduledoc "Key ownership projected from contract events, and who operates each key."
+  @moduledoc """
+  Key ownership and reveals projected from contract events, and who operates
+  each key.
+  """
   use Ash.Domain
 
   resources do
@@ -14,6 +17,12 @@ defmodule KeyFleet.Keys do
       define :recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+    end
+
+    resource KeyFleet.Keys.KeyReveal do
+      define :record_reveal, action: :record
+      define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
+      define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
     end
 
     resource KeyFleet.Keys.KeyPairing do
@@ -40,4 +49,7 @@ defmodule KeyFleet.Keys do
         not_found_error?: false
     end
   end
+
+  @doc "Where the reader says which of a fleet's keys have just been revealed."
+  def topic(fleet_id), do: "fleet:#{fleet_id}:keys"
 end

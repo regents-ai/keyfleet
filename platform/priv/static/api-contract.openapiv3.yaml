@@ -603,6 +603,34 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RoomRenameTooSoonError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+  /metadata/{slot}/{token_id}:
+    get:
+      operationId: getKeyMetadata
+      description: >-
+        A key's ERC-721 metadata, at the address its fleet's tokenURI gives: the fleet's metadata
+        base followed by the key's number. Until the key's traits are drawn it shows the fleet's
+        waiting picture and Status Revealing, and may be cached for 30 seconds. Once drawn, the
+        key shows its traits and may be cached for an hour. Needs no sign-in.
+      parameters:
+        - {$ref: "#/components/parameters/Slot"}
+        - {$ref: "#/components/parameters/TokenId"}
+      responses:
+        "200":
+          description: The key's metadata, waiting for its traits or with them
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: ["max-age=30", "public, max-age=3600"]}
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/KeyMetadataRevealing"}
+                  - {$ref: "#/components/schemas/KeyMetadataRevealed"}
+        "404":
+          description: There is no fleet by this slot, or no key by this number has been bought
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KeyNotFoundError"}
 components:
   parameters:
     ExpectedSubject:
@@ -633,6 +661,12 @@ components:
       in: path
       required: true
       schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+    Slot:
+      name: slot
+      in: path
+      required: true
+      description: The fleet's place in the deployment, as its metadata base names it
+      schema: {type: string, enum: [syndicate, cascade, classic, accelerant]}
   requestBodies:
     AgentEmpty:
       description: >-
@@ -1669,3 +1703,56 @@ components:
       required: [error]
       properties:
         error: {type: string, enum: [unauthorized]}
+    KeyMetadataRevealing:
+      type: object
+      additionalProperties: false
+      required: [name, description, image, attributes]
+      properties:
+        name: {type: string, minLength: 1}
+        description: {type: string, minLength: 1}
+        image: {type: string, pattern: '^https?://'}
+        attributes:
+          type: array
+          description: The key's Level in a Fibonacci fleet, then Status Revealing
+          items: {$ref: "#/components/schemas/KeyAttribute"}
+    KeyMetadataRevealed:
+      type: object
+      additionalProperties: false
+      required: [name, description, image, attributes, properties]
+      properties:
+        name: {type: string, minLength: 1}
+        description: {type: string, minLength: 1}
+        image:
+          type: string
+          description: The key's picture, at an address that names the trait table it was drawn from
+          pattern: '^https?://'
+        attributes:
+          type: array
+          description: The key's Level in a Fibonacci fleet, then each trait in the trait table's order
+          items: {$ref: "#/components/schemas/KeyAttribute"}
+        properties:
+          type: object
+          additionalProperties: false
+          required: [seed, trait_table_hash]
+          properties:
+            seed:
+              type: string
+              description: The key's random number, from which anyone can draw its traits again
+              pattern: '^0x[0-9a-f]{64}$'
+            trait_table_hash:
+              type: string
+              description: keccak256 of the trait table file, fixed in the fleet's contract
+              pattern: '^0x[0-9a-f]{64}$'
+    KeyAttribute:
+      type: object
+      additionalProperties: false
+      required: [trait_type, value]
+      properties:
+        trait_type: {type: string, minLength: 1}
+        value: {type: [string, integer]}
+    KeyNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: {type: string, const: key_not_found}

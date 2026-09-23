@@ -52,6 +52,9 @@ defmodule KeyFleet.Fleets do
     "accelerant" => "fleet_tech_accelerant"
   }
 
+  @doc "The fleet in a deployment's `slot`, such as `syndicate`, or `nil` for no such slot."
+  def slot_fleet_id(slot), do: Map.get(@manifest_slots, slot)
+
   @doc """
   Binds the four fleets to the deployment described by a deployed manifest,
   the JSON `contracts/script/RecordKeyfleets.s.sol` writes, from trusted
@@ -65,6 +68,7 @@ defmodule KeyFleet.Fleets do
         "chainId" => chain_id,
         "deploymentBlock" => block,
         "usdc" => usdc,
+        "traitTableHash" => trait_table_hash,
         "fleets" => fleets
       })
       when is_integer(chain_id) and is_integer(block) do
@@ -85,7 +89,8 @@ defmodule KeyFleet.Fleets do
               rewards_address: String.downcase(rewards),
               votes_address: String.downcase(votes),
               usdc_address: String.downcase(usdc),
-              deployed_block: block
+              deployed_block: block,
+              trait_table_hash: String.downcase(trait_table_hash)
             },
             actor: %KeyFleet.Actors.System{}
           )

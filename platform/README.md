@@ -110,6 +110,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/api/v1/profile`, `/api/v1/profile/sync` | GET, PATCH, POST | The signed-in person's shared profile, served by the `regent_identity` package with paired Privy proofs. |
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
+| `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. Open while the launch gate is closed. |
 | `/`, `/docs`, `/about`, `/contact`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. |
 | `/app`, `/account` | GET | The signed-in shell. |
 

@@ -1,0 +1,167 @@
+defmodule KeyFleet.Keys.KeyReveal do
+  @moduledoc """
+  One key's reveal, from its fleet's `KeyRevealed` log: the seed its traits
+  are drawn from. A key is revealed once. Only the chain reader writes it, and
+  nothing ever changes it.
+
+  A reveal is the key's seed, not its place on the chain. Read again, from the
+  same block or another, the same seed is the same reveal: it keeps the place
+  and number it was first recorded with. A different seed or request for the
+  key is refused as invalid, which the reader takes to mean the chain no longer
+  agrees with the record. `record_seq` is the fleet's count of reveals when it
+  was made.
+  """
+  use Ash.Resource,
+    domain: KeyFleet.Keys,
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
+
+  @max_bigint 9_223_372_036_854_775_807
+
+  postgres do
+    table "key_reveals"
+    repo(KeyFleet.Repo)
+    migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
+
+    check_constraints do
+      check_constraint(:token_id, "key_reveals_positive_token", check: "token_id > 0")
+
+      check_constraint(:request_id, "key_reveals_nonnegative_request_id",
+        check: "request_id >= 0"
+      )
+
+      for field <- [:seed, :block_hash, :transaction_hash] do
+        check_constraint(field, "key_reveals_#{field}_shape",
+          check: "#{field} ~ '^0x[0-9a-f]{64}$'"
+        )
+      end
+
+      for field <- [:block_number, :log_index] do
+        check_constraint(field, "key_reveals_nonnegative_#{field}", check: "#{field} >= 0")
+      end
+
+      check_constraint(:record_seq, "key_reveals_positive_record_seq", check: "record_seq > 0")
+    end
+
+    custom_statements do
+      # The same refusal every proposal record table uses; only the chain
+      # reader inserts.
+      statement :immutable_key_reveals_trigger do
+        up("""
+        CREATE TRIGGER immutable_key_reveals BEFORE UPDATE OR DELETE ON keyfleet_app.key_reveals
+        FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+        """)
+
+        down("DROP TRIGGER immutable_key_reveals ON keyfleet_app.key_reveals;")
+      end
+
+      statement :untruncatable_key_reveals_trigger do
+        up("""
+        CREATE TRIGGER untruncatable_key_reveals BEFORE TRUNCATE ON keyfleet_app.key_reveals
+        FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+        """)
+
+        down("DROP TRIGGER untruncatable_key_reveals ON keyfleet_app.key_reveals;")
+      end
+    end
+  end
+
+  actions do
+    defaults [:read]
+
+    create :record do
+      public? false
+
+      accept [
+        :fleet_id,
+        :token_id,
+        :request_id,
+        :seed,
+        :block_number,
+        :block_hash,
+        :transaction_hash,
+        :log_index
+      ]
+
+      upsert? true
+      upsert_identity :unique_key_reveal
+      upsert_fields []
+      upsert_condition expr(false)
+      return_skipped_upsert? true
+      # A reveal is its seed and request, wherever on the chain it is read.
+      change {KeyFleet.Chain.Changes.RecordOnce,
+              identity: [:fleet_id, :token_id], number: :reveal_seq, fields: [:request_id, :seed]}
+    end
+
+    # The keys revealed after the fleet's reveal number `after_seq`, oldest first.
+    read :recorded_since do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :after_seq, :integer, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
+      prepare build(sort: [record_seq: :asc])
+    end
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if always()
+    end
+
+    policy action(:record) do
+      authorize_if KeyFleet.Checks.SystemActor
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :token_id, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: @max_bigint]
+
+    # The coordinator's request the seed answered: any uint256.
+    attribute :request_id, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
+
+    for field <- [:seed, :block_hash, :transaction_hash] do
+      attribute field, :string,
+        allow_nil?: false,
+        public?: true,
+        constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
+    end
+
+    for field <- [:block_number, :log_index] do
+      attribute field, :integer,
+        allow_nil?: false,
+        public?: true,
+        constraints: [min: 0, max: @max_bigint]
+    end
+
+    attribute :record_seq, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: @max_bigint]
+
+    attribute :observed_at, :utc_datetime_usec,
+      allow_nil?: false,
+      generated?: true,
+      writable?: false,
+      public?: true
+  end
+
+  relationships do
+    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+      attribute_type :string
+      allow_nil? false
+      public? true
+    end
+  end
+
+  identities do
+    # A key is revealed once.
+    identity :unique_key_reveal, [:fleet_id, :token_id]
+    identity :unique_chain_event, [:transaction_hash, :log_index]
+    identity :unique_record_seq, [:fleet_id, :record_seq]
+  end
+end

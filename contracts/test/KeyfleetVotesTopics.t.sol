@@ -13,6 +13,10 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet.OwnershipEpoch.selector, 0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1);
     }
 
+    function test_keyRevealedTopic() public pure {
+        assertEq(Keyfleet.KeyRevealed.selector, 0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e);
+    }
+
     function test_proposalCreatedTopic() public pure {
         assertEq(
             KeyfleetVotes.ProposalCreated.selector, 0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9

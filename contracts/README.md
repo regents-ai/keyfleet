@@ -696,6 +696,11 @@ The draw rule, for a key with seed `seed`:
   that `u * total` fits in 64 bits and every value with a weight above zero can
   be drawn.
 
+The site draws every key's traits with this rule in
+`platform/lib/keyfleet/traits.ex`, and `test/KeyfleetTraitDraw.t.sol` pins the
+same golden results the site's tests pin, so the two copies cannot drift. The
+table's file format is in `docs/deployment.md`.
+
 Before a release is deployed the operator creates the subscription, funds it in
 ETH, moves its ownership to the Regents Safe, and writes its id into the
 manifest's `vrf` block and the trait table's hash into its `traitTableHash`. The

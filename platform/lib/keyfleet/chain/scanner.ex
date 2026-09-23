@@ -1,8 +1,8 @@
 defmodule KeyFleet.Chain.Scanner do
   @moduledoc """
-  One pass over a deployed fleet's history: who holds each key, from the
-  fleet contract, and its proposals, votes and executions, from its vote
-  contract.
+  One pass over a deployed fleet's history: who holds each key and each
+  key's reveal, from the fleet contract, and its proposals, votes and
+  executions, from its vote contract.
 
   Each pass reads the head, reads again the last 30 blocks it already
   recorded, then records what happened after them up to the head. Each
@@ -33,16 +33,22 @@ defmodule KeyFleet.Chain.Scanner do
   every record made from those blocks must still be there. If it finds a
   record that disagrees with one already made, or a block whose hash is no
   longer the one recorded, the fleet is stopped at that block and the error
-  is logged; pieces before it keep what they recorded. Nothing recorded is
-  rewritten; an operator corrects the record by hand and then clears the
-  stop, as `docs/chain-reader.md` describes. A recorded event missing from a
-  block whose hash still matches is the node answering inconsistently, so the
-  pass fails and is retried instead.
+  is logged; pieces before it keep what they recorded. A record read again
+  that disagrees with the one already made stops the fleet at the earlier of
+  the block it was read from and the block it was recorded from. A key's
+  reveal is its seed wherever it is read: the same seed read from another
+  block is the same reveal, and a reveal missing from its block is not a
+  disagreement, but a different seed or request for a revealed key is.
+  Nothing recorded is rewritten; an operator corrects the record by hand and
+  then clears the stop, as `docs/chain-reader.md` describes. A recorded event
+  missing from a block whose hash still matches is the node answering
+  inconsistently, so the pass fails and is retried instead.
 
   A pass that reaches the head also notes the head's time, which is how far
   votes are known to be counted. A pass that made a new proposal record says
-  so on `KeyFleet.Proposals.topic/1`, even if it then failed or stopped the
-  fleet; that is only a hint to read again.
+  so on `KeyFleet.Proposals.topic/1`, and one that revealed keys names them on
+  `KeyFleet.Keys.topic/1`, even if it then failed or stopped the fleet; both
+  are only hints to read again.
   """
 
   require Logger
@@ -97,7 +103,7 @@ defmodule KeyFleet.Chain.Scanner do
         {:error, reason} -> {:error, reason}
       end
 
-    announce_proposals(cursor)
+    announce(cursor)
     result
   end
 
@@ -219,7 +225,17 @@ defmodule KeyFleet.Chain.Scanner do
     end
   end
 
-  defp failure(%Ash.Error.Invalid{}, block), do: {:diverged, block}
+  # A record read again that disagrees with the one already made stops the
+  # fleet at the earlier of the two blocks: the recorded one's block changed.
+  defp failure(%Ash.Error.Invalid{errors: errors}, block) do
+    recorded =
+      for %{vars: vars} <- errors,
+          Keyword.has_key?(vars, :recorded_block),
+          do: vars[:recorded_block]
+
+    {:diverged, Enum.min([block | recorded])}
+  end
+
   defp failure(error, _block), do: {:error, error}
 
   # A refused record is returned rather than rolling back the piece's
@@ -227,6 +243,8 @@ defmodule KeyFleet.Chain.Scanner do
   @record_opts [actor: @system, rollback_on_error?: false]
 
   defp make_record({:ownership, epoch}), do: Keys.record_epoch(epoch, @record_opts)
+  defp make_record({:reveal, reveal}), do: Keys.record_reveal(reveal, @record_opts)
+
   defp make_record({:proposal, proposal}), do: Proposals.record_proposal(proposal, @record_opts)
   defp make_record({:vote, vote}), do: Proposals.record_vote(vote, @record_opts)
 
@@ -255,13 +273,28 @@ defmodule KeyFleet.Chain.Scanner do
     end)
   end
 
-  # The cursor as the pass found it; the records it made moved proposal_seq on.
-  defp announce_proposals(%{fleet_id: fleet_id, proposal_seq: before}) do
-    if Chain.get_cursor!(fleet_id).proposal_seq > before do
+  # The cursor as the pass found it; the records it made moved its numbers on.
+  defp announce(%{fleet_id: fleet_id} = before) do
+    now = Chain.get_cursor!(fleet_id)
+
+    if now.proposal_seq > before.proposal_seq do
       Phoenix.PubSub.broadcast(
         KeyFleet.PubSub,
         Proposals.topic(fleet_id),
         {:proposals_changed, fleet_id}
+      )
+    end
+
+    if now.reveal_seq > before.reveal_seq do
+      token_ids =
+        fleet_id
+        |> Keys.reveals_recorded_since!(before.reveal_seq, actor: @system)
+        |> Enum.map(& &1.token_id)
+
+      Phoenix.PubSub.broadcast(
+        KeyFleet.PubSub,
+        Keys.topic(fleet_id),
+        {:keys_changed, fleet_id, token_ids}
       )
     end
   end

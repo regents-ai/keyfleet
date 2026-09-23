@@ -11,7 +11,8 @@ defmodule KeyFleet.Fleets.Validations.SameDeployment do
     :rewards_address,
     :votes_address,
     :usdc_address,
-    :deployed_block
+    :deployed_block,
+    :trait_table_hash
   ]
 
   @impl true

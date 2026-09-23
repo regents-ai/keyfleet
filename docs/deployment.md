@@ -82,6 +82,24 @@ never change: a changed byte is a different hash, and every fleet holds the
 original one. The contracts README gives the rule that draws each key's traits
 from its seed and this table.
 
+The file is JSON: an object whose `traits` lists every trait in the order the
+rule draws them, each with its `name` and its `values`, and each value with its
+`name` and a whole-number `weight`. A value of weight 0 is never drawn, and each
+trait's weights must add up to at least 1 and less than 2^32.
+
+```json
+{"traits": [
+  {"name": "Hull", "values": [{"name": "Brass", "weight": 50}, {"name": "Gold", "weight": 5}]},
+  {"name": "Sky", "values": [{"name": "Dawn", "weight": 1}, {"name": "Dusk", "weight": 1}]}
+]}
+```
+
+The table ships with the site: the art agent commits it as
+`platform/priv/trait_tables/<traitTableHash>.json`, named by the hash in
+lowercase `0x` hex, and there is no copy step. The site uses it only if its
+`keccak256` is that name; a missing or changed file answers revealed keys'
+metadata with a server error.
+
 Between the deployment and the record step the Safe adds each of the four
 fleets to the subscription with `addConsumer(subId, fleet)`. A key sold before
 its fleet is added is still sold; its request is refused, and anyone can ask
@@ -356,11 +374,25 @@ Accelerant rebate are all USDC.
 
 **Names, symbols and metadata base.** Every fleet's symbol is `KEYFLEET`. The
 collections are named Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic and
-Keyfleet Accelerant. The name of each key, such as "Keyfleet Syndicate #01-01",
+Keyfleet Accelerant. The name of each key, such as "Keyfleet Syndicate #12",
 comes from the site's metadata, not from the contract. The site is keyfleet.ai:
 the Base manifest's metadata base is `https://keyfleet.ai/metadata/<slot>/`, for
 example `https://keyfleet.ai/metadata/syndicate/`, and the lab manifest uses
-`http://localhost:4000/metadata/<slot>/`.
+`http://localhost:4000/metadata/<slot>/`. The contract's `tokenURI` is that base
+followed by the key's number, and the site answers it for every key sold:
+
+- until the key's traits are drawn, its name, a description, the fleet's
+  waiting picture `/art/<slot>/revealing.png` and the attributes `Level` (for
+  Syndicate and Cascade only) and `Status: Revealing`, with
+  `Cache-Control: max-age=30`;
+- once they are drawn, the same with its traits in place of `Status`, the
+  picture `/art/<traitTableHash>/<slot>/<number>.png`, and `properties` holding
+  its `seed` and `trait_table_hash`, with
+  `Cache-Control: public, max-age=3600`, so a reveal corrected by hand after a
+  reorg and newly delivered pictures show within the hour;
+- a slot that is not one of the four, or a key not yet sold, is 404.
+
+The pictures are not served yet; the art agent delivers them at those paths.
 
 **Random key traits.** Every key's traits come from Chainlink VRF v2.5 and
 nothing else. One

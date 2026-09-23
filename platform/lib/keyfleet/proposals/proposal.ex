@@ -154,7 +154,9 @@ defmodule KeyFleet.Proposals.Proposal do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
-      change KeyFleet.Proposals.Changes.RecordOnce
+
+      change {KeyFleet.Chain.Changes.RecordOnce,
+              identity: [:transaction_hash, :log_index], number: :proposal_seq}
     end
 
     # The fleet's highest proposal number recorded so far.

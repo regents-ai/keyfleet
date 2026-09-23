@@ -398,7 +398,8 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: @usdc,
-        deployed_block: 1
+        deployed_block: 1,
+        trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
       actor: %Actors.System{}
     )

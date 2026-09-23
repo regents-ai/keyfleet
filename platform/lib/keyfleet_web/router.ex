@@ -67,6 +67,7 @@ defmodule KeyFleetWeb.Router do
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots
     get "/llms.txt", PublicPagesController, :llms
+    get "/metadata/:slot/:token_id", MetadataController, :show
   end
 
   scope "/", KeyFleetWeb do

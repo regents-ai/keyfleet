@@ -1,0 +1,29 @@
+{
+  "traits": [
+    {
+      "name": "Hull",
+      "values": [
+        {"name": "Brass", "weight": 50},
+        {"name": "Steel", "weight": 30},
+        {"name": "Glass", "weight": 15},
+        {"name": "Gold", "weight": 5}
+      ]
+    },
+    {
+      "name": "Sky",
+      "values": [
+        {"name": "Dawn", "weight": 1},
+        {"name": "Noon", "weight": 1},
+        {"name": "Dusk", "weight": 1}
+      ]
+    },
+    {
+      "name": "Mark",
+      "values": [
+        {"name": "Anchor", "weight": 0},
+        {"name": "Star", "weight": 9},
+        {"name": "Crown", "weight": 1}
+      ]
+    }
+  ]
+}

@@ -3,8 +3,9 @@ defmodule KeyFleet.Chain.Logs do
   Turns the raw logs of one stretch of a fleet's blocks into the records the
   reader makes, in the order the chain made them.
 
-  Each log is sent, by its contract and topic0, to `KeyFleet.Chain.OwnershipLog`
-  or `KeyFleet.Chain.VotesLog`, and carries its fleet and its place on the
+  Each log is sent, by its contract and topic0, to
+  `KeyFleet.Chain.OwnershipLog`, `KeyFleet.Chain.RevealLog` or
+  `KeyFleet.Chain.VotesLog`, and carries its fleet and its place on the
   chain. A launch or payment proposal is joined with the payload log that
   follows it in the same transaction. A log the node lists twice is read once.
   One log that cannot be read, two different logs in one place, or a proposal
@@ -14,10 +15,11 @@ defmodule KeyFleet.Chain.Logs do
 
   alias KeyFleet.Chain.Abi
   alias KeyFleet.Chain.OwnershipLog
+  alias KeyFleet.Chain.RevealLog
   alias KeyFleet.Chain.VotesLog
 
   @doc "The topic0 of every event the reader asks for."
-  def topics, do: [OwnershipLog.topic() | VotesLog.topics()]
+  def topics, do: [OwnershipLog.topic(), RevealLog.topic() | VotesLog.topics()]
 
   @doc """
   The records in `logs`, read from blocks `from..to` of `fleet`, in (block,
@@ -63,7 +65,7 @@ defmodule KeyFleet.Chain.Logs do
       {_type, %{proposal_number: _number} = record}, _top ->
         {:halt, {:error, {:proposal_not_recorded, record.block_number}}}
 
-      {:ownership, _epoch}, top ->
+      {_type, _key_record}, top ->
         {:cont, top}
     end)
     |> case do
@@ -126,8 +128,10 @@ defmodule KeyFleet.Chain.Logs do
 
   defp decode_one(_log, _fleet, _blocks), do: :error
 
-  defp route(%{contract_address: address}, address, topic0, words, data),
-    do: OwnershipLog.decode(topic0, words, data)
+  defp route(%{contract_address: address}, address, topic0, words, data) do
+    with :error <- OwnershipLog.decode(topic0, words, data),
+         do: RevealLog.decode(topic0, words, data)
+  end
 
   defp route(%{votes_address: address}, address, topic0, words, data),
     do: VotesLog.decode(topic0, words, data)

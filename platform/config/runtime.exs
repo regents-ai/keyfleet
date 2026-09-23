@@ -61,6 +61,13 @@ if config_env() != :test do
        end)
 end
 
+# Each fleet's trait table ships with the release, named by its hash; the
+# tests keep theirs with the other fixtures.
+if config_env() != :test do
+  config :keyfleet, KeyFleet.Traits,
+    directory: Application.app_dir(:keyfleet, "priv/trait_tables")
+end
+
 migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
 database_config =

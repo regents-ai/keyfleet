@@ -24,6 +24,7 @@ defmodule KeyFleet.ProposalsChainTest do
   # Pinned from `cast keccak` of each event signature, and against the
   # contracts in contracts/test/KeyfleetVotesTopics.t.sol.
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
+  @revealed "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
   @created "0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9"
   @autolaunch "0xa395caec5e719dd09aa72025608546598e2f07d131ae8ca46b82bbaacfbe2846"
   @pay "0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85"
@@ -65,8 +66,9 @@ defmodule KeyFleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
 
       assert StubClient.log_requests() == [
-               {[@contract, @votes], [@ownership, @created, @autolaunch, @pay, @vote, @executed],
-                @deployed, @deployed + 10}
+               {[@contract, @votes],
+                [@ownership, @revealed, @created, @autolaunch, @pay, @vote, @executed], @deployed,
+                @deployed + 10}
              ]
 
       decision = Proposals.get_proposal!(@fleet, 1)
@@ -1103,7 +1105,8 @@ defmodule KeyFleet.ProposalsChainTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: @deployed
+        deployed_block: @deployed,
+        trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
       actor: %System{}
     )
@@ -1283,7 +1286,7 @@ defmodule KeyFleet.ProposalsChainTest do
       Repo.query!(
         "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
           "rewards_address = NULL, votes_address = NULL, usdc_address = NULL, " <>
-          "deployed_block = NULL WHERE id = $1",
+          "deployed_block = NULL, trait_table_hash = NULL WHERE id = $1",
         [@fleet]
       )
     end)
