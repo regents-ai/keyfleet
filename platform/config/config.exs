@@ -31,7 +31,8 @@ config :keyfleet,
     KeyFleet.Keys,
     KeyFleet.Chain,
     KeyFleet.Proposals,
-    KeyFleet.Graph
+    KeyFleet.Graph,
+    KeyFleet.Keeper
   ],
   generators: [timestamp_type: :utc_datetime]
 

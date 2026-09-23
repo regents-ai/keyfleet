@@ -210,6 +210,8 @@ defmodule KeyFleet.ReleaseTest do
              "graph_events",
              "graph_objects",
              "graph_relations",
+             "keeper_runs",
+             "keeper_txs",
              "key_attachments",
              "key_pairings",
              "key_reveals",

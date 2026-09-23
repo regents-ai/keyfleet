@@ -5,8 +5,8 @@ defmodule KeyFleet.Chain.Abi do
   contracts emit, and anything else is `:error`.
 
   Types are `{:uint, bits}`, `:address`, `:bool`, `:bytes32`, `:bytes` (also
-  used for `string`, whose bytes are kept as they are) and `{:array, {:uint,
-  bits}}`. A `{:uint, bits}` refuses any value of `bits` bits or more, so a
+  used for `string`, whose bytes are kept as they are) and `{:array, type}` of
+  any static type, such as `{:array, :address}`. A `{:uint, bits}` refuses any value of `bits` bits or more, so a
   field can be bounded tighter than its Solidity type.
   """
 
