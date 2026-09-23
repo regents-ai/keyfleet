@@ -104,6 +104,17 @@ defmodule KeyFleet.Proposals do
   defp expired?(proposal, now),
     do: Decimal.gt?(DateTime.to_unix(now), proposal.execution_expiry)
 
+  @doc "Each asset the fleet's payment proposals name, by address."
+  def payment_assets(fleet_id) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and kind == :pay)
+    |> Ash.Query.distinct(:asset)
+    |> Ash.Query.select([:asset])
+    |> Ash.read!()
+    |> Enum.map(& &1.asset)
+    |> Enum.sort()
+  end
+
   @doc "The fleet's proposal `number`, as `status/3` needs it, or nil."
   def get_by_number(fleet_id, number),
     do: get_proposal!(fleet_id, number, load: @summary)

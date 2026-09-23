@@ -8,13 +8,13 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
   contract's `launchEnvelope` is read at the head for every launch proposal
   still without one. What comes back is kept only when its hash is the
   proposal's envelope hash, so it is the launch the proposal fixed, byte for
-  byte, whichever block it is read at. A read that fails keeps nothing and
-  is tried again the next time. A stopped fleet's record is waiting for an
+  byte, whichever block it is read at. A read that fails keeps nothing, and
+  the proposals not read are answered as `{:error, {:launches_not_read,
+  [{number, reason}]}}`, so `KeyFleet.Chain.Repeat` logs them once and waits
+  longer before trying again. A stopped fleet's record is waiting for an
   operator, so nothing is added to it. A launch kept is announced where the
   fleet's proposal pages listen.
   """
-
-  require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain
@@ -43,7 +43,12 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
 
   defp read_at_head(fleet, proposals, client) do
     with {:ok, head} <- client.head() do
-      if Enum.any?(Enum.map(proposals, &read_one(fleet, &1, head.hash, client))) do
+      {kept, not_read} =
+        proposals
+        |> Enum.map(&{&1.number, read_one(fleet, &1, head.hash, client)})
+        |> Enum.split_with(fn {_number, read} -> read == :ok end)
+
+      if kept != [] do
         Phoenix.PubSub.broadcast(
           KeyFleet.PubSub,
           Proposals.topic(fleet.id),
@@ -51,7 +56,10 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
         )
       end
 
-      :ok
+      case not_read do
+        [] -> :ok
+        not_read -> {:error, {:launches_not_read, not_read}}
+      end
     end
   end
 
@@ -67,15 +75,9 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
            envelope
            |> Map.merge(%{fleet_id: fleet.id, proposal_id: proposal.id})
            |> Proposals.record_launch_envelope(actor: @system) do
-      true
+      :ok
     else
-      failure ->
-        Logger.info(
-          "Fleet #{fleet.id}: the launch of proposal #{proposal.number} was not read " <>
-            "(#{inspect(failure)}); it is tried again shortly."
-        )
-
-        false
+      {:error, reason} -> reason
     end
   end
 

@@ -160,7 +160,7 @@ defmodule KeyFleetWeb.ProposalsLive do
           <dl :if={@page.proposal.pay} id="proposal-payment" class="proposals-fields">
             <div>
               <dt>Amount</dt>
-              <dd>{@page.proposal.pay.amount}</dd>
+              <dd><.amount value={@page.proposal.pay.amount} /></dd>
             </div>
             <div>
               <dt>Paid to</dt>
@@ -228,9 +228,12 @@ defmodule KeyFleetWeb.ProposalsLive do
       </p>
       <ol :if={@treasury.income != []} id="proposals-income" class="proposals-lines">
         <li :for={income <- @treasury.income} data-income={income.id}>
-          <span>{income.received} received</span>
+          <span><.amount value={income.received} /> received</span>
           <span class="proposals-detail">
-            {income.to_budget} to the budget, {income.to_keys} to key holders, {income.fee} fee
+            <span>
+              <.amount value={income.to_budget} /> to the budget, <.amount value={income.to_keys} />
+              to key holders, <.amount value={income.fee} /> fee
+            </span>
           </span>
         </li>
       </ol>
@@ -244,7 +247,7 @@ defmodule KeyFleetWeb.ProposalsLive do
       </p>
       <ol :if={@treasury.payments != []} id="proposals-payments" class="proposals-lines">
         <li :for={payment <- @treasury.payments} data-payment={payment.id}>
-          <span>{payment.amount}</span>
+          <span><.amount value={payment.amount} /></span>
           <span class="proposals-detail">to <code>{payment.recipient}</code></span>
         </li>
       </ol>
@@ -270,30 +273,30 @@ defmodule KeyFleetWeb.ProposalsLive do
     >
       <div>
         <dt>Budget</dt>
-        <dd>{balance.budget}</dd>
+        <dd><.amount value={balance.budget} /></dd>
       </div>
       <div :if={@treasury.payments_open?}>
         <dt>Available this month</dt>
-        <dd>{balance.available}</dd>
+        <dd><.amount value={balance.available} /></dd>
       </div>
       <div :if={balance.paid}>
         <dt>Paid this month</dt>
-        <dd>{balance.paid}, until {at(balance.month_ends)}</dd>
+        <dd><.paid paid={balance.paid} until={balance.month_ends} /></dd>
       </div>
       <div>
         <dt>Set aside for key holders</dt>
-        <dd>{balance.set_aside}</dd>
+        <dd><.amount value={balance.set_aside} /></dd>
       </div>
     </dl>
 
     <dl id="proposals-held" class="proposals-facts">
       <div :if={@treasury.reserve}>
         <dt>Held for the next level</dt>
-        <dd>{@treasury.reserve}</dd>
+        <dd><.amount value={@treasury.reserve} /></dd>
       </div>
       <div>
         <dt>Set aside for REGENT stakers</dt>
-        <dd>{@treasury.owed}</dd>
+        <dd><.amount value={@treasury.owed} /></dd>
       </div>
     </dl>
 
@@ -303,6 +306,28 @@ defmodule KeyFleetWeb.ProposalsLive do
     <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
     """
   end
+
+  attr :value, :map, required: true
+
+  # An amount, with its token's address beside it, shortened and in full on
+  # hover, unless it is the fleet's own USDC. Kept on one line, since it sits
+  # inside text.
+  defp amount(%{value: %{token: nil}} = assigns),
+    do: ~H|<span class="proposals-amount">{@value.text}</span>|
+
+  defp amount(assigns),
+    do: ~H|<span class="proposals-amount">{@value.text} <.token address={@value.token} /></span>|
+
+  attr :paid, :map, required: true
+  attr :until, DateTime, required: true
+
+  defp paid(assigns),
+    do: ~H|<.amount value={@paid.spent} /> of <.amount value={@paid.cap} />, until {at(@until)}|
+
+  attr :address, :string, required: true
+
+  defp token(assigns),
+    do: ~H|<code class="proposals-token" title={@address}>{short_wallet(@address)}</code>|
 
   attr :page, :map, required: true
 

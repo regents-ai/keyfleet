@@ -101,9 +101,8 @@ defmodule KeyFleet.Chain.RpcClient do
       {:ok, %{status: 200, body: %{"result" => result}}} ->
         {:ok, result}
 
-      # How nodes report a call the contract refused.
-      {:ok, %{status: 200, body: %{"error" => %{"message" => "execution reverted" <> _reason}}}} ->
-        {:error, :reverted}
+      {:ok, %{status: 200, body: %{"error" => %{} = error}}} ->
+        refused_or_failed(method, error)
 
       {:ok, %{status: status}} ->
         Logger.warning("chain read failed #{inspect(%{method: method, status: status})}")
@@ -114,6 +113,27 @@ defmodule KeyFleet.Chain.RpcClient do
         {:error, :chain_unavailable}
     end
   end
+
+  # Nodes report a call the contract refused with error code 3, or with a
+  # message that says so; anything else is the node failing.
+  defp refused_or_failed(method, error) do
+    if refused?(error) do
+      {:error, :reverted}
+    else
+      Logger.warning(
+        "chain read failed #{inspect(%{method: method, code: error["code"], message: error["message"]})}"
+      )
+
+      {:error, :chain_unavailable}
+    end
+  end
+
+  defp refused?(%{"code" => 3}), do: true
+
+  defp refused?(%{"message" => message}) when is_binary(message),
+    do: message |> String.downcase() |> String.contains?("execution reverted")
+
+  defp refused?(_error), do: false
 
   defp hex_quantity(value), do: "0x" <> (value |> Integer.to_string(16) |> String.downcase())
 end

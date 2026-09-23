@@ -999,8 +999,8 @@ defmodule KeyFleet.ProposalsChainTest do
     # An answer always comes in whole 32-byte words, so the hash's own
     # 136-byte blocks are met exactly by a launch 1088 bytes long. Its hash
     # is pinned from `cast keccak` of the same bytes, and in
-    # contracts/test/KeyfleetVotesTopics.t.sol from the contract's own
-    # encoding of the same launch.
+    # contracts/test/KeyfleetAutolaunch.t.sol from the same launch proposed,
+    # as its event carries it and as `launchEnvelope` returns it.
     test "a launch that fills the hash's blocks exactly is kept", %{fleet: fleet} do
       description = "A fleet's launch. " |> String.duplicate(27) |> binary_part(0, 480)
 
@@ -1040,15 +1040,19 @@ defmodule KeyFleet.ProposalsChainTest do
       StubClient.put_chain(head(@deployed + 10), logs)
       assert Scanner.step(fleet, StubClient) == :ok
 
-      for answer <- [
-            fn _to, _data, _block_hash -> {:error, :chain_unavailable} end,
-            fn _to, _data, _block_hash -> {:error, :reverted} end,
-            fn _to, _data, _block_hash -> {:ok, other} end,
-            fn _to, _data, _block_hash -> {:ok, binary_part(returned, 0, 64)} end
+      for {answer, reason} <- [
+            {{:error, :chain_unavailable}, :chain_unavailable},
+            {{:error, :reverted}, :reverted},
+            {{:ok, other}, :envelope_not_the_approved_one},
+            {{:ok, binary_part(returned, 0, 64)}, :envelope_not_the_approved_one}
           ] do
-        StubClient.put_chain(head(@deployed + 10), logs, calls: answer)
+        StubClient.put_chain(head(@deployed + 10), logs,
+          calls: fn _to, _data, _block_hash -> answer end
+        )
 
-        capture_log(fn -> assert LaunchEnvelopes.read(fleet, StubClient) == :ok end)
+        assert LaunchEnvelopes.read(fleet, StubClient) ==
+                 {:error, {:launches_not_read, [{1, reason}]}}
+
         assert length(StubClient.call_requests()) == 1
         refute Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
       end

@@ -1807,7 +1807,10 @@ components:
         and a key that did not vote counts against. failed: it did not pass. executed: carried out on
         chain. closed: a launch that passed, but another launch of the fleet was carried out, and a
         fleet launches once. expired: a payment or a launch that passed and is past the last second
-        it could be carried out.
+        it could be carried out. Neither closed nor expired arrives as a change record of its own:
+        a recorded launch execution closes every other passed launch of the fleet, and a proposal
+        that passed expires once the time is past its execution_expiry, so a client works both out
+        from what it already holds, or reads the proposal again.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'

@@ -12,7 +12,6 @@ defmodule KeyFleet.Treasury do
   require Ash.Query
 
   alias KeyFleet.Actors.System
-  alias KeyFleet.Proposals.Proposal
   alias KeyFleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
 
   @latest 20
@@ -72,12 +71,13 @@ defmodule KeyFleet.Treasury do
   @doc """
   Every asset the fleet's budget can hold, as its history shows them: USDC,
   which key sales pay in, then `reward_assets`, the reward ledger's assets in
-  its order, then, by address, each asset received into the budget, split
-  from launch income or named by a payment proposal.
+  its order, then, by address, each asset received into the budget or split
+  from launch income. The fleet contract takes in only the assets its
+  registry admits, so the list stays as short as that.
   """
   def budget_assets(fleet, reward_assets) do
     recorded =
-      [BudgetReceipt, IncomeSplit, Ash.Query.filter(Proposal, kind == :pay)]
+      [BudgetReceipt, IncomeSplit]
       |> Enum.flat_map(&assets_of(&1, fleet.id))
       |> Enum.sort()
 

@@ -1,9 +1,11 @@
 defmodule KeyFleet.Treasury.AssetDetails do
   @moduledoc """
-  The symbol and decimals an asset of a fleet's budget reports, read from the
-  token once, by `KeyFleet.Chain.TreasuryReader`, and never again. Either is
-  nil when the token does not answer it, and the asset is then shown by its
-  address or in whole atomic units.
+  The symbol and decimals a token of a fleet's budget or payment proposals
+  reports, read from the token once, by `KeyFleet.Chain.TreasuryReader`, and
+  never again. Either is nil when the token does not answer it, or answers a
+  symbol that is not short plain text, and its amounts are then shown in
+  whole atomic units. Whatever the symbol, only the fleet's own USDC is shown
+  without its address.
   """
   use Ash.Resource,
     domain: KeyFleet.Treasury,
@@ -64,7 +66,7 @@ defmodule KeyFleet.Treasury.AssetDetails do
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    attribute :symbol, :string, public?: true, constraints: [trim?: false, allow_empty?: true]
+    attribute :symbol, :string, public?: true, constraints: [trim?: false, max_length: 32]
     attribute :decimals, :integer, public?: true, constraints: [min: 0, max: 255]
   end
 

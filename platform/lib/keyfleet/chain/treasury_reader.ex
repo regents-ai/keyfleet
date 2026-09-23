@@ -7,13 +7,21 @@ defmodule KeyFleet.Chain.TreasuryReader do
   Every figure of a reading comes from that one block: for each asset
   `KeyFleet.Treasury.budget_assets/2` lists, the budget, the reward backing
   and the pay period, beside the Cascade reserve, the protocol share owed and
-  whether the launch has settled. An asset read for the first time also has
-  its symbol and decimals read and kept, once; a token that does not answer
-  one of them, by reverting or with something else, has it kept as unknown.
-  A reading that fails in any part keeps nothing and is tried again at the
-  next one. A reading of a later block than the one kept replaces it and is
-  announced as `{:balances_changed, fleet_id}` on `KeyFleet.Proposals.topic/1`.
+  whether the launch has settled. A reading that fails in any part keeps
+  nothing and is tried again at the next one. A reading of a later block than
+  the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
+  on `KeyFleet.Proposals.topic/1`.
+
+  After the balances, each asset of the budget or of a payment proposal whose
+  token has not been read has its symbol and decimals read and kept, once.
+  A token that refuses either, answers with something else, or reports a
+  symbol that is not 1 to 32 bytes of text free of control and direction
+  characters, has it kept as unknown. A token that cannot be reached is
+  logged and asked again at the next reading; it never holds up or undoes the
+  balances.
   """
+
+  require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.Abi
@@ -32,14 +40,20 @@ defmodule KeyFleet.Chain.TreasuryReader do
   @symbol <<0x95, 0xD8, 0x9B, 0x41>>
   @system %System{}
 
-  @doc "Reads the fleet's balances at the node's head and keeps them."
+  @doc "Reads the fleet's balances at the node's head and keeps them, then any unread token details."
   def read(fleet, client) do
-    with {:ok, head} <- client.head(),
-         at = &call(client, &1, &2, head.hash),
-         {:ok, [rewards]} <- at.(fleet.rewards_address, {@reward_assets, [{:array, :address}]}),
-         assets = Treasury.budget_assets(fleet, rewards),
-         :ok <- read_details(fleet, assets, client, head.hash),
-         {:ok, balances} <- balances(fleet, assets, at),
+    with {:ok, head} <- client.head() do
+      reading = read_balances(fleet, client, head)
+      read_details(fleet, client, head.hash)
+      reading
+    end
+  end
+
+  defp read_balances(fleet, client, head) do
+    at = &call(client, &1, &2, head.hash)
+
+    with {:ok, [rewards]} <- at.(fleet.rewards_address, {@reward_assets, [{:array, :address}]}),
+         {:ok, balances} <- balances(fleet, Treasury.budget_assets(fleet, rewards), at),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
          {:ok, [settled]} <- at.(fleet.contract_address, {@launch_settled, [:bool]}),
@@ -72,25 +86,42 @@ defmodule KeyFleet.Chain.TreasuryReader do
     end
   end
 
-  # The symbol and decimals of each asset read for the first time.
-  defp read_details(fleet, assets, client, block_hash) do
+  # The symbol and decimals of each asset shown anywhere that has not been
+  # read yet: the budget's, including the reward assets of the reading kept,
+  # and those payment proposals name. Each is read on its own.
+  defp read_details(fleet, client, block_hash) do
     known = MapSet.new(Treasury.asset_details!(fleet.id, actor: @system), & &1.asset)
 
-    assets
-    |> Enum.reject(&MapSet.member?(known, &1))
-    |> Enum.reduce_while(:ok, fn asset, :ok ->
-      with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
-           {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash),
-           {:ok, _details} <-
-             Treasury.record_asset_details(
-               %{fleet_id: fleet.id, asset: asset, symbol: symbol, decimals: decimals},
-               actor: @system
-             ) do
-        {:cont, :ok}
-      else
-        failure -> {:halt, failure}
+    held =
+      case Treasury.get_reading!(fleet.id) do
+        nil -> []
+        reading -> Enum.map(reading.assets, & &1.asset)
       end
-    end)
+
+    fleet
+    |> Treasury.budget_assets(held)
+    |> Enum.concat(Proposals.payment_assets(fleet.id))
+    |> Enum.uniq()
+    |> Enum.reject(&MapSet.member?(known, &1))
+    |> Enum.each(&read_detail(fleet, &1, client, block_hash))
+  end
+
+  defp read_detail(fleet, asset, client, block_hash) do
+    with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
+         {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash),
+         {:ok, _details} <-
+           Treasury.record_asset_details(
+             %{fleet_id: fleet.id, asset: asset, symbol: symbol, decimals: decimals},
+             actor: @system
+           ) do
+      :ok
+    else
+      {:error, reason} ->
+        Logger.warning(
+          "Fleet #{fleet.id}: token #{asset} was not read (#{inspect(reason)}); " <>
+            "it is asked again at the next reading."
+        )
+    end
   end
 
   # A token that reverts, or answers with something else, does not answer.
@@ -98,13 +129,26 @@ defmodule KeyFleet.Chain.TreasuryReader do
     case client.call(asset, data, block_hash) do
       {:ok, returned} -> {:ok, answer(Abi.decode(returned, [type]))}
       {:error, :reverted} -> {:ok, nil}
-      {:error, reason} -> {:error, {asset, reason}}
+      {:error, reason} -> {:error, reason}
     end
   end
 
-  defp answer({:ok, [symbol]}) when is_binary(symbol), do: String.replace_invalid(symbol)
+  defp answer({:ok, [symbol]}) when is_binary(symbol), do: if(symbol?(symbol), do: symbol)
   defp answer({:ok, [decimals]}), do: decimals
   defp answer(:error), do: nil
+
+  # A symbol is shown as written, so only short plain text is taken as one.
+  defp symbol?(symbol) do
+    byte_size(symbol) in 1..32 and String.valid?(symbol) and
+      not (symbol |> String.to_charlist() |> Enum.any?(&hidden?/1))
+  end
+
+  # Control characters, the zero byte among them, and the characters that
+  # turn text around.
+  defp hidden?(char) when char < 0x20 or char in 0x7F..0x9F, do: true
+  defp hidden?(char) when char in [0x061C, 0x200E, 0x200F], do: true
+  defp hidden?(char) when char in 0x202A..0x202E or char in 0x2066..0x2069, do: true
+  defp hidden?(_char), do: false
 
   defp balances(fleet, assets, at) do
     assets

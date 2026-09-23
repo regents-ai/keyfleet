@@ -182,7 +182,14 @@
 .proposals-facts dd,
 .proposals-fields dd {
   margin: 0;
+}
+
+.proposals-fields dd {
   white-space: pre-line;
+}
+
+.proposals-token {
+  font-size: 0.85em;
 }
 
 .proposals-lines li {

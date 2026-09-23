@@ -59,7 +59,8 @@ defmodule KeyFleet.TreasuryReaderTest do
 
   # Every figure is read at the head's block and kept together, for USDC,
   # the reward ledger's assets and every other asset the budget has held,
-  # and the proposal pages are told.
+  # and the proposal pages are told. The tokens are asked what they are
+  # after, those payment proposals name among them.
   test "a reading keeps every balance from the one block it was read at", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
     ProposalHelpers.budget_receipt!(@fleet, asset: @deposited)
@@ -73,14 +74,18 @@ defmodule KeyFleet.TreasuryReaderTest do
     refute_received {:proposals_changed, _fleet}
 
     requests = StubClient.call_requests()
-    assert length(requests) == 24
+    assert length(requests) == 21
     assert Enum.all?(requests, fn {_to, _data, block_hash} -> block_hash == @head_hash end)
+
+    {balances, details} = Enum.split(requests, 13)
+    assert List.last(balances) == {@contract, @launch_settled, @head_hash}
+    assert Enum.all?(details, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
 
     assert %{block_number: 40, block_hash: @head_hash, launch_settled: true} = reading
-    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @deposited, @named]
-    [usdc, other, deposited, named] = reading.assets
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @deposited]
+    [usdc, other, deposited] = reading.assets
 
     assert DateTime.compare(reading.block_time, head(40).timestamp) == :eq
     assert Decimal.equal?(reading.cascade_reserve, 700)
@@ -94,7 +99,6 @@ defmodule KeyFleet.TreasuryReaderTest do
 
     # Every digit of the largest amount the contract can hold is kept.
     assert deposited.free_capital == @max_uint256
-    assert named.free_capital == 0
 
     # Each token's symbol and decimals, or nothing for one it does not answer.
     assert details() == %{
@@ -121,11 +125,10 @@ defmodule KeyFleet.TreasuryReaderTest do
     assert details()[@usdc] == {"USDC", 6}
   end
 
-  # A figure that cannot be read, or reads as something else, keeps nothing,
-  # and a token that cannot be reached is asked again, not taken as silent.
+  # A figure that cannot be read, or reads as something else, keeps nothing.
+  # The tokens are still asked what they are.
   test "a reading that fails in any part keeps nothing", %{fleet: fleet} do
     for {key, answer, reason} <- [
-          {{@other, @symbol}, {:error, :chain_unavailable}, {@other, :chain_unavailable}},
           {{@rewards, @backed <> word(@other)}, {:error, :chain_unavailable},
            {@rewards, :chain_unavailable}},
           {{@contract, @launch_settled}, {:ok, <<2::256>>}, {@contract, :unreadable_answer}}
@@ -134,13 +137,91 @@ defmodule KeyFleet.TreasuryReaderTest do
 
       assert TreasuryReader.read(fleet, StubClient) == {:error, reason}
       assert Treasury.get_reading!(@fleet) == nil
-
-      # USDC's were kept, and the unreachable token's were not.
-      if reason == {@other, :chain_unavailable},
-        do: assert(Map.keys(details()) == [@usdc])
+      assert Map.keys(details()) == [@usdc]
     end
 
     refute_received {:balances_changed, _fleet}
+  end
+
+  # A token that cannot be reached holds up nothing: the balances are kept
+  # and announced, and the token is asked again at the next reading.
+  @tag capture_log: true
+  test "a token that cannot be reached is asked again, and holds up nothing", %{fleet: fleet} do
+    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
+
+    unreachable =
+      chain()
+      |> Map.put({@other, @decimals}, {:error, :chain_unavailable})
+      |> Map.put({@named, @symbol}, {:error, :chain_unavailable})
+
+    StubClient.put_chain(head(40), [], calls: answers(unreachable))
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
+      end)
+
+    assert log =~ "token #{@other} was not read"
+    assert log =~ "token #{@named} was not read"
+    assert_received {:balances_changed, @fleet}
+    assert Treasury.get_reading!(@fleet).block_number == 40
+    assert details() == %{@usdc => {"USDC", 6}}
+
+    StubClient.put_chain(head(41), [], calls: answers(chain()))
+    assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
+
+    assert details() == %{
+             @usdc => {"USDC", 6},
+             @other => {"WETH", 18},
+             @named => {nil, nil}
+           }
+  end
+
+  # A symbol is shown as written, so a token's is kept only when it is 1 to
+  # 32 bytes of text without control or direction characters.
+  test "a symbol that is not short plain text is kept as unknown", %{fleet: fleet} do
+    symbols = [
+      {"USD₮", "USD₮"},
+      {String.duplicate("S", 32), String.duplicate("S", 32)},
+      {"", nil},
+      {"US" <> <<0>> <> "DC", nil},
+      {<<0>>, nil},
+      {String.duplicate("S", 33), nil},
+      {"USD\nC", nil},
+      {<<0xC2, 0x85>> <> "USDC", nil},
+      {<<0xFF>> <> "USDC", nil},
+      {"\u202EUSDC", nil},
+      {"\u2066USDC", nil},
+      {"USDC\u200F", nil},
+      {"\u061CUSDC", nil}
+    ]
+
+    tokens =
+      symbols
+      |> Enum.with_index(1)
+      |> Map.new(fn {{symbol, _kept}, number} ->
+        token = "0x" <> String.pad_leading(Integer.to_string(number, 16), 40, "0")
+        ProposalHelpers.proposal!(@fleet, number, kind: :pay, asset: String.downcase(token))
+        {String.downcase(token), symbol}
+      end)
+
+    chain =
+      Enum.reduce(tokens, chain(), fn {token, symbol}, chain ->
+        chain
+        |> Map.put({token, @symbol}, {:ok, text(symbol)})
+        |> Map.put({token, @decimals}, {:ok, <<6::256>>})
+      end)
+
+    StubClient.put_chain(head(40), [], calls: answers(chain))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+
+    kept = details()
+
+    for {{symbol, expected}, number} <- Enum.with_index(symbols, 1) do
+      token = "0x" <> String.pad_leading(Integer.to_string(number, 16), 40, "0")
+      assert kept[String.downcase(token)] == {expected, 6}, inspect(symbol)
+    end
   end
 
   # A reading that fails leaves the one kept as it was.
@@ -242,8 +323,10 @@ defmodule KeyFleet.TreasuryReaderTest do
       timestamp: DateTime.from_unix!(1_700_000_000 + number)
     }
 
-  defp text(string),
-    do: <<32::256, byte_size(string)::256>> <> string <> <<0::size(8 * (32 - byte_size(string)))>>
+  defp text(string) do
+    padded = 32 * div(byte_size(string) + 31, 32)
+    <<32::256, byte_size(string)::256>> <> string <> <<0::size(8 * (padded - byte_size(string)))>>
+  end
 
   defp word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
 end

@@ -14,11 +14,17 @@ reason.
 
 Apart from those passes, so a slow node never holds them up, it reads every
 few seconds, at the head, the launch each launch proposal approves, and keeps
-it only if its hash is the one the proposal carries; a read that fails is tried
-again the next time. Once a minute it reads, at the head, the fleet's balances
-in every asset its budget has held, and the first time it meets an asset, that
-token's symbol and decimals, which it keeps; a token that does not answer one
-of them is shown by its address, or in whole units. Every key is one
+it only if its hash is the one the proposal carries; a read that fails is
+logged once and tried again after a wait that doubles, up to five minutes. Once
+a minute it reads, at the head, the fleet's balances in USDC, its reward assets
+and every asset received into its budget or split from launch income, all of
+them assets the fleet's registry admits. After that, the first time it meets an
+asset of the budget or of a payment proposal, it reads that token's symbol and
+decimals and keeps them; a token that refuses, or reports a symbol that is not
+1 to 32 bytes of text free of control and direction characters, has it kept as
+unknown and its amounts shown in whole units. A token that cannot be reached is
+asked again at the next reading and never holds up the balances. Every amount
+outside the fleet's own USDC is shown with its token's address. Every key is one
 vote, so a vote records the keys it cast and a proposal's tally, `yes_keys` and
 `no_keys`, counts keys. It records at the head, from the first block Base
 confirms in about two seconds, and never waits for L1 finality. A change in the

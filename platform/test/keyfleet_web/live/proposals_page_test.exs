@@ -119,15 +119,20 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
   end
 
   test "a payment names what it pays, to whom and until when", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
+    now = DateTime.utc_now()
+    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
     ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     ProposalHelpers.proposal!(@fleet, 1,
       kind: :pay,
       asset: @usdc,
       amount: Decimal.new(12_500_000),
-      execution_expiry: Decimal.new(DateTime.to_unix(~U[2026-11-01 09:30:00Z]))
+      closes_at: DateTime.add(now, -3600),
+      eligible_keys: 1,
+      execution_expiry: Decimal.new(DateTime.to_unix(~U[2126-11-01 09:30:00Z]))
     )
+
+    votes!(1, true: [1])
 
     ProposalHelpers.proposal!(@fleet, 2,
       kind: :pay,
@@ -137,29 +142,140 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
 
-    assert has_element?(view, "#proposal-payment", "12.5 USDC")
-    assert has_element?(view, "#proposal-payment", ProposalHelpers.wallet("b"))
+    assert fields(view, "#proposal-payment div") == [
+             {"Amount", "12.5 USDC"},
+             {"Paid to", ProposalHelpers.wallet("b")}
+           ]
+
+    refute has_element?(view, "#proposal-payment .proposals-token")
 
     assert has_element?(
              view,
              "#proposal-last-day",
-             "Can be paid until 1 November 2026 at 09:30 UTC"
+             "Can be paid until 1 November 2126 at 09:30 UTC"
            )
 
     # An asset whose token has not been asked yet is shown as the chain
-    # holds it.
+    # holds it, with the token's address.
+    other_token = ProposalHelpers.wallet("c")
     {:ok, other, _html} = live(conn, "#{@list}/2")
 
-    assert has_element?(
-             other,
-             "#proposal-payment",
-             "1,234 in the smallest units of token #{ProposalHelpers.wallet("c")}"
-           )
+    assert amount(other, "#proposal-payment div:first-child dd") ==
+             {"1,234 in the smallest units of token 0xcccc…cccc", other_token}
 
-    # Once the token has told its symbol and decimals, it is named.
-    ProposalHelpers.asset_details!(@fleet, ProposalHelpers.wallet("c"), "WETH", 18)
+    # Once the token has told its symbol and decimals, it is named, and its
+    # address is still beside it.
+    ProposalHelpers.asset_details!(@fleet, other_token, "WETH", 18)
     {:ok, named, _html} = live(conn, "#{@list}/2")
-    assert has_element?(named, "#proposal-payment", "0.000000000000001234 WETH")
+
+    assert amount(named, "#proposal-payment div:first-child dd") ==
+             {"0.000000000000001234 WETH 0xcccc…cccc", other_token}
+  end
+
+  # Only the fleet's own USDC, known by its address, is shown without one. A
+  # token anywhere else that calls itself USDC always has its address beside
+  # every amount of it.
+  test "a token calling itself USDC is shown with its address", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    fake = ProposalHelpers.wallet("d")
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+    ProposalHelpers.asset_details!(@fleet, fake, "USDC", 6)
+
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: fake, amount: 2_000_000)
+    ProposalHelpers.proposal!(@fleet, 2, kind: :pay, asset: @usdc, amount: 2_000_000)
+
+    ProposalHelpers.treasury_reading!(@fleet, [
+      balance(@usdc, free_capital: 1_000_000),
+      balance(fake, free_capital: 1_000_000, backed: 3_000_000)
+    ])
+
+    ProposalHelpers.income_split!(@fleet, asset: fake)
+    ProposalHelpers.budget_payment!(@fleet, asset: fake)
+
+    {:ok, view, _html} = live(conn, "#{@list}/1")
+    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC 0xdddd…dddd", fake}
+
+    {:ok, view, _html} = live(conn, "#{@list}/2")
+    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC", nil}
+
+    {:ok, view, _html} = live(conn, @list)
+
+    assert fields(view, "[data-asset='#{fake}'] div") == [
+             {"Budget", "1 USDC 0xdddd…dddd"},
+             {"Available this month", "0.2 USDC 0xdddd…dddd"},
+             {"Set aside for key holders", "3 USDC 0xdddd…dddd"}
+           ]
+
+    assert fields(view, "[data-asset='#{@usdc}'] div") == [
+             {"Budget", "1 USDC"},
+             {"Available this month", "0.2 USDC"},
+             {"Set aside for key holders", "0 USDC"}
+           ]
+
+    tokens =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(
+        "#proposals-income .proposals-token, #proposals-payments .proposals-token"
+      )
+      |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
+
+    assert tokens == List.duplicate({"0xdddd…dddd", fake}, 5)
+  end
+
+  # How long a proposal can be carried out for matters only while it has
+  # passed and waits to be.
+  test "the last day to carry a proposal out shows only while it waits to be", %{conn: conn} do
+    now = DateTime.utc_now()
+    closed = DateTime.add(now, -3600)
+    later = Decimal.new(DateTime.to_unix(now) + 86_400)
+    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, execution_expiry: later)
+
+    ProposalHelpers.proposal!(@fleet, 2,
+      kind: :pay,
+      closes_at: closed,
+      eligible_keys: 2,
+      execution_expiry: later
+    )
+
+    votes!(2, true: [1])
+
+    for number <- 3..4 do
+      ProposalHelpers.proposal!(@fleet, number,
+        kind: :pay,
+        closes_at: closed,
+        eligible_keys: 1,
+        execution_expiry: later
+      )
+
+      votes!(number, true: [1])
+    end
+
+    ProposalHelpers.execution!(@fleet, 4, @voter)
+
+    ProposalHelpers.proposal!(@fleet, 5,
+      kind: :pay,
+      closes_at: closed,
+      eligible_keys: 1,
+      execution_expiry: Decimal.new(DateTime.to_unix(now) - 1)
+    )
+
+    votes!(5, true: [1])
+
+    for {number, status, shown?} <- [
+          {1, "Voting open", false},
+          {2, "Did not pass", false},
+          {3, "Passed", true},
+          {4, "Paid", false},
+          {5, "Expired", false}
+        ] do
+      {:ok, view, _html} = live(conn, "#{@list}/#{number}")
+      assert has_element?(view, "#proposal-status", status)
+      assert has_element?(view, "#proposal-last-day") == shown?, "proposal #{number}"
+    end
   end
 
   # A token that will not tell its symbol or its decimals is never guessed at.
@@ -175,12 +291,17 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
 
-      assert has_element?(
-               view,
-               "#proposal-payment",
-               "1,234,000 in the smallest units of token #{asset}"
-             )
+      assert amount(view, "#proposal-payment div:first-child dd") ==
+               {"1,234,000 in the smallest units of token #{short(asset)}", asset}
     end
+
+    # The fleet's USDC is known by its address even before its token has
+    # said what it is.
+    ProposalHelpers.proposal!(@fleet, 3, kind: :pay, asset: @usdc, amount: 1_234_000)
+    {:ok, view, _html} = live(conn, "#{@list}/3")
+
+    assert amount(view, "#proposal-payment div:first-child dd") ==
+             {"1,234,000 in USDC’s smallest units", nil}
   end
 
   # The contract holds any uint256, which is shown to the last digit.
@@ -218,13 +339,18 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
   test "a launch shows its five fields exactly as proposed, once they have been read", %{
     conn: conn
   } do
-    ChainHelpers.seed_cursor!(@fleet)
+    now = DateTime.utc_now()
+    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
 
     proposal =
       ProposalHelpers.proposal!(@fleet, 1,
         kind: :autolaunch,
-        execution_expiry: Decimal.new(DateTime.to_unix(~U[2026-10-07 18:00:00Z]))
+        closes_at: DateTime.add(now, -3600),
+        eligible_keys: 1,
+        execution_expiry: Decimal.new(DateTime.to_unix(~U[2126-10-07 18:00:00Z]))
       )
+
+    votes!(1, true: [1])
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
     assert has_element?(view, "#proposal-launch-pending", "Launch details are still being read.")
@@ -250,7 +376,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     assert has_element?(
              view,
              "#proposal-last-day",
-             "Can be launched until 7 October 2026 at 18:00 UTC"
+             "Can be launched until 7 October 2126 at 18:00 UTC"
            )
   end
 
@@ -441,9 +567,9 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
            ]
 
     assert fields(view, "[data-asset='#{weth}'] div") == [
-             {"Budget", "2 WETH"},
-             {"Available this month", "0.4 WETH"},
-             {"Set aside for key holders", "0 WETH"}
+             {"Budget", "2 WETH 0xcccc…cccc"},
+             {"Available this month", "0.4 WETH 0xcccc…cccc"},
+             {"Set aside for key holders", "0 WETH 0xcccc…cccc"}
            ]
 
     assert fields(view, "#proposals-held div") == [{"Set aside for REGENT stakers", "2.5 USDC"}]
@@ -617,6 +743,17 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
   end
 
   defp text(node), do: node |> LazyHTML.text() |> String.trim()
+
+  # An amount's words, and the full address of its token, if it shows one.
+  defp amount(view, selector) do
+    node = view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
+    token = LazyHTML.query(node, ".proposals-token")
+
+    {text(node),
+     if(Enum.empty?(token), do: nil, else: token |> LazyHTML.attribute("title") |> hd())}
+  end
+
+  defp short(address), do: String.slice(address, 0, 6) <> "…" <> String.slice(address, -4, 4)
 
   # Polls every tenth of a second, `tries` times.
   defp shows?(check, tries \\ 30) do

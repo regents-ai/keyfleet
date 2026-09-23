@@ -516,6 +516,53 @@ contract KeyfleetAutolaunchTest is Test {
         votes.launchEnvelope(decisionId);
     }
 
+    /// @dev The fleet reader in platform/lib/keyfleet/chain/launch_envelopes.ex keeps a launch only
+    /// when the bytes `launchEnvelope` returns hash to the proposal's envelope hash. This is the
+    /// launch platform/test/keyfleet/proposals_chain_test.exs encodes by hand, 1088 bytes long, and
+    /// both sides pin the same digest: as emitted, and as the stored envelope is returned.
+    function test_readerSampleLaunchHashesAlikeWhenEmittedAndReturned() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        bytes32 pinned = 0x9667be28058aae2ff99b278e27680af58ac13121852b76c68cd835cae7d0a30d;
+
+        vm.prank(alice);
+        vm.expectEmit(true, false, false, true, address(votes));
+        emit AutolaunchProposed(1, pinned, type(uint64).max);
+        uint256 proposalId = votes.proposeAutolaunch(1, _readerSample());
+
+        (bool ok, bytes memory returned) =
+            address(votes).staticcall(abi.encodeCall(KeyfleetVotes.launchEnvelope, (proposalId)));
+        assertTrue(ok);
+        assertEq(returned.length, 8 * 136);
+        assertEq(keccak256(returned), pinned);
+    }
+
+    function _readerSample() private pure returns (Keyfleet.LaunchEnvelope memory) {
+        bytes memory repeated;
+        for (uint256 i; i < 27; ++i) {
+            repeated = bytes.concat(repeated, "A fleet's launch. ");
+        }
+        bytes memory description = new bytes(480);
+        for (uint256 i; i < 480; ++i) {
+            description[i] = repeated[i];
+        }
+        bytes memory image = "ipfs://";
+        for (uint256 i; i < 50; ++i) {
+            image = bytes.concat(image, "c");
+        }
+
+        return Keyfleet.LaunchEnvelope({
+            name: "Cascade Research",
+            symbol: "CSR",
+            description: string(description),
+            website: "https://example.test",
+            image: string(image),
+            requiredRegentRaised: 250_000,
+            narrativeDigest: bytes32(0),
+            executionExpiry: type(uint64).max
+        });
+    }
+
     // --- 3. execution ------------------------------------------------------
 
     /// @dev Invariant: a passed Autolaunch calls the factory once with the fleet as both launcher

@@ -95,23 +95,28 @@ defmodule KeyFleetWeb.ProposalsPage do
   @doc "What a kind of proposal is called."
   def kind_name(kind), do: Map.fetch!(@kinds, kind)
 
-  @doc """
-  An amount of an asset, grouped: in its own units with its symbol when the
-  token has reported both, and otherwise as the whole number the chain
-  holds, with the token's address.
-  """
-  def amount(atoms, asset, assets) do
-    case assets[asset] do
-      {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-        "#{units(atoms, decimals)} #{symbol}"
+  # An amount of an asset, grouped: in its own units with its symbol when the
+  # token has reported both, and otherwise as the whole number the chain
+  # holds. Every asset but the fleet's own USDC, known by its address, comes
+  # with its address, so a token calling itself USDC is never taken for it.
+  defp amount(atoms, asset, %{usdc: usdc, details: details}) do
+    text =
+      case {details[asset], asset == usdc} do
+        {{symbol, decimals}, _usdc?} when is_binary(symbol) and is_integer(decimals) ->
+          "#{units(atoms, decimals)} #{symbol}"
 
-      _unknown ->
-        "#{units(atoms, 0)} in the smallest units of token #{asset}"
-    end
+        {_unknown, true} ->
+          "#{units(atoms, 0)} in USDC’s smallest units"
+
+        {_unknown, false} ->
+          "#{units(atoms, 0)} in the smallest units of token"
+      end
+
+    %{text: text, token: if(asset != usdc, do: asset)}
   end
 
-  @doc "REGENT, which has eighteen decimals."
-  def regent(atoms), do: "#{units(atoms, @regent_decimals)} REGENT"
+  # REGENT, which has eighteen decimals.
+  defp regent(atoms), do: "#{units(atoms, @regent_decimals)} REGENT"
 
   defp with_fleet(fleet_id, read) do
     case Fleets.get_fleet!(fleet_id) do
@@ -132,18 +137,24 @@ defmodule KeyFleetWeb.ProposalsPage do
   end
 
   defp summary(proposal, cursor, now) do
+    status = Proposals.status(proposal, cursor, now)
+
     %{
       number: proposal.number,
       kind: proposal.kind,
-      status: Proposals.status(proposal, cursor, now),
+      status: status,
       closes_at: proposal.closes_at,
       eligible_keys: proposal.eligible_keys,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
       gist: gist(proposal),
-      last_day: proposal.execution_expiry && expiry(proposal.execution_expiry)
+      last_day: last_day(status, proposal.execution_expiry)
     }
   end
+
+  # The last second a passed proposal can still be carried out in.
+  defp last_day(:passed, %Decimal{} = expiry), do: expiry(expiry)
+  defp last_day(_status, _expiry), do: nil
 
   defp gist(%{kind: :autolaunch, launch_envelope: %{name: name}}), do: as_text(name)
   defp gist(%{kind: :autolaunch}), do: nil
@@ -162,7 +173,7 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   defp pay(%{kind: :pay} = proposal, fleet),
     do: %{
-      amount: amount(proposal.amount, proposal.asset, assets(fleet.id)),
+      amount: amount(Decimal.to_integer(proposal.amount), proposal.asset, assets(fleet)),
       recipient: proposal.recipient
     }
 
@@ -180,7 +191,7 @@ defmodule KeyFleetWeb.ProposalsPage do
         {"Website", as_text(envelope.website)},
         {"Image", as_text(envelope.image)}
       ],
-      raise: regent(envelope.required_regent_raised)
+      raise: regent(Decimal.to_integer(envelope.required_regent_raised))
     }
   end
 
@@ -195,19 +206,24 @@ defmodule KeyFleetWeb.ProposalsPage do
     }
   end
 
-  # Each asset's symbol and decimals, as its token reported them.
-  defp assets(fleet_id) do
-    fleet_id
-    |> Treasury.asset_details!()
-    |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+  # The fleet's USDC, and each asset's symbol and decimals as its token
+  # reported them.
+  defp assets(fleet) do
+    %{
+      usdc: fleet.usdc_address,
+      details:
+        fleet.id
+        |> Treasury.asset_details!()
+        |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+    }
   end
 
-  defp treasury(fleet, balances), do: treasury(fleet, balances, assets(fleet.id))
+  defp treasury(fleet, balances), do: treasury(fleet, balances, assets(fleet))
 
   defp treasury(fleet, nil, assets), do: Map.put(history(fleet.id, assets), :read?, false)
 
   defp treasury(fleet, balances, assets) do
-    usdc = &amount(&1, fleet.usdc_address, assets)
+    usdc = &amount(Decimal.to_integer(&1), fleet.usdc_address, assets)
 
     fleet.id
     |> history(assets)
@@ -241,7 +257,7 @@ defmodule KeyFleetWeb.ProposalsPage do
     if open_month?(balance, as_of) do
       %{
         available: shown.(balance.pay_cap - balance.pay_spent),
-        paid: "#{shown.(balance.pay_spent)} of #{shown.(balance.pay_cap)}",
+        paid: %{spent: shown.(balance.pay_spent), cap: shown.(balance.pay_cap)},
         month_ends: month_end(balance.pay_period_start)
       }
     else
@@ -259,7 +275,7 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   defp history(fleet_id, assets) do
     %{income: income, payments: payments} = Treasury.latest(fleet_id)
-    shown = &amount(&1, &2.asset, assets)
+    shown = &amount(Decimal.to_integer(&1), &2.asset, assets)
 
     %{
       income:
@@ -325,8 +341,6 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   # Whole numbers throughout: an amount can be any uint256, more digits than
   # decimal arithmetic keeps.
-  defp units(%Decimal{} = atoms, decimals), do: units(Decimal.to_integer(atoms), decimals)
-
   defp units(atoms, decimals) do
     scale = Integer.pow(10, decimals)
 
