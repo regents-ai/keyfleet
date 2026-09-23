@@ -155,7 +155,7 @@ graph.create     create a schema-valid object
 graph.patch      expected-version update
 graph.link       create a scoped typed relation
 graph.archive    versioned archive/tombstone
-launch.prepare   freeze selected launch-card data into an existing proposal draft
+launch.prepare   build the exact Autolaunch proposal transaction from selected launch-card data
 ```
 
 Names are new interfaces to implement, not existing commands. A local CLI wrapper might expose `regents keyfleet graph ...`; do not create a separate public ActiveGraph CLI login or database connection. Do not expose arbitrary Cypher; start with bounded queries and depth/size limits.

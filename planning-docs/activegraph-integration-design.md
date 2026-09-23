@@ -441,7 +441,7 @@ Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left
 - Delivers the LiveView Workspace tab (cards, related objects, revision history, activity).
 
 **S5: `launch.prepare` and verified receipts.**
-- Delivers `launch.prepare`, which freezes selected `launch_card` revisions (by id and version) into immutable bytes, validates the seven launch fields in bytes, forces the treasury, and hashes content plus parameters into the existing proposal draft. It also delivers `system_record` receipts from the verified chain adapter.
+- Delivers `launch.prepare`, which freezes selected `launch_card` revisions (by id and version) into immutable bytes, validates the seven launch fields in bytes, forces the treasury, and hashes content plus parameters into the exact `proposeAutolaunch` transaction it returns. Nothing is stored: there is no proposal draft, and the proposal exists only once that transaction lands on chain. It also delivers `system_record` receipts from the verified chain adapter.
 - Done when:
   - a frozen candidate is unchanged by later card edits;
   - a test payment appears as a read-only `receipt` with block and log provenance;
