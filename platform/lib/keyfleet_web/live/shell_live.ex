@@ -14,6 +14,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Chain
   alias KeyFleet.Fleets
   alias KeyFleet.Graph
+  alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.FleetMember
@@ -383,7 +384,13 @@ defmodule KeyFleetWeb.ShellLive do
   defp load_room(socket, %{route_id: :rooms}, %{"fleet_id" => fleet_id, "slug" => slug}) do
     socket = listen_to(socket, fleet_id)
     actor = human_actor(socket)
-    rooms = Rooms.list_rooms!(fleet_id, actor: actor, load: [:fleet])
+    # A fleet outside the catalog has no rooms, and the page says it doesn't exist.
+    rooms =
+      case Rooms.list_rooms(fleet_id, actor: actor, load: [:fleet]) do
+        {:ok, rooms} -> rooms
+        {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} -> []
+      end
+
     room = Enum.find(rooms, &(&1.slug == slug))
     posts = latest_posts(room, actor)
 

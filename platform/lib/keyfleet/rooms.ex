@@ -57,15 +57,16 @@ defmodule KeyFleet.Rooms do
   share this one call rather than adding a second.
   """
   def sync(fleet_id, cursors, graph_after_seq, actor) do
+    # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
          :ok <- in_log(graph_after_seq),
-         {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
          {:ok, graph} <-
            KeyFleet.Graph.list_changes(
              fleet_id,
              %{after_seq: graph_after_seq, limit: @graph_sync_page},
              actor: actor
-           ) do
+           ),
+         {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
       {:ok,
        %{
          rooms: rooms,

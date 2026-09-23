@@ -19,6 +19,7 @@ defmodule KeyFleet.Rooms.Room do
   actions do
     read :for_fleet do
       argument :fleet_id, :string, allow_nil?: false
+      validate KeyFleet.Graph.Validations.KnownFleet
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare build(sort: [slug: :asc])
     end

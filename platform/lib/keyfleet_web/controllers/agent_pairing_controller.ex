@@ -1,6 +1,7 @@
 defmodule KeyFleetWeb.AgentPairingController do
   use KeyFleetWeb, :controller
 
+  alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Keys
   alias KeyFleet.Keys.Errors.AlreadyOperatingError
   alias KeyFleet.Keys.Errors.OwnershipRefreshingError
@@ -59,6 +60,9 @@ defmodule KeyFleetWeb.AgentPairingController do
 
   defp refuse(conn, %Ash.Error.Invalid{errors: errors}) do
     cond do
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
+        not_found(conn, "fleet_unknown")
+
       Enum.any?(errors, &match?(%UnknownKeyError{}, &1)) ->
         not_found(conn, "key_not_found")
 

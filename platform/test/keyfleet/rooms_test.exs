@@ -2,6 +2,7 @@ defmodule KeyFleet.RoomsTest do
   use ExUnit.Case, async: false
 
   alias KeyFleet.{Fleets, Repo, Rooms}
+  alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Rooms.Room
 
   setup do
@@ -34,7 +35,9 @@ defmodule KeyFleet.RoomsTest do
       assert Enum.all?(rooms, &(&1.fleet_id == fleet.id))
     end
 
-    assert Rooms.list_rooms!("unknown_fleet") == []
+    assert {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} =
+             Rooms.list_rooms("unknown_fleet")
+
     assert {:error, %Ash.Error.Invalid{}} = Rooms.list_rooms(nil)
 
     assert {:error, %Ash.Error.Invalid{}} =

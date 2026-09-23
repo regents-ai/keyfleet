@@ -102,6 +102,7 @@ defmodule KeyFleet.Rooms.Message do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
+      validate KeyFleet.Graph.Validations.KnownFleet
       change KeyFleet.Rooms.Changes.PostMessage
     end
 
@@ -111,6 +112,7 @@ defmodule KeyFleet.Rooms.Message do
       argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, default: 100, constraints: [min: 1, max: @max_page]
 
+      validate KeyFleet.Graph.Validations.KnownFleet
       filter expr(seq > ^arg(:after_seq))
 
       prepare build(load: [:agent_profile])

@@ -212,6 +212,22 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     assert joining -- Enum.map(ensure.accept, &to_string/1) == []
   end
 
+  test "a reply names its post only by its id as the API gives it", c do
+    contract = YamlElixir.read_from_file!(@contract)
+    id = Ecto.UUID.generate()
+    reply = &%{"body" => "Seen", "idempotency_key" => "r-1", "reply_to_id" => &1}
+
+    assert admitted?(c, contract, "POST", @send, [], reply.(id))
+    assert ContractSchema.errors(reply.(id), "RoomSendRequest") == []
+
+    # The same post in capitals, without its hyphens, in braces, and as any
+    # sixteen bytes, which is how a post id is stored.
+    for other <- [String.upcase(id), String.replace(id, "-", ""), "{#{id}}", "abcdefghijklmnop"] do
+      refute admitted?(c, contract, "POST", @send, [], reply.(other)), inspect(other)
+      assert ContractSchema.errors(reply.(other), "RoomSendRequest") != [], inspect(other)
+    end
+  end
+
   test "every answer a signed route gives fits the contract, and every documented answer is given",
        c do
     stranger = new_signer()
@@ -302,9 +318,18 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
 
     sync.(@address, [general, %{general | "slug" => "work"}], 200)
     sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
-    sync.(Map.put(@address, "fleet_id", "hull_survey"), [], 404)
     sync.(@address, [%{general | "after_seq" => -1}], 422)
     sync.(@address, [general, general], 422)
+
+    # A fleet outside the catalog is not found on every route that names one,
+    # with the answer the workspace gives.
+    nowhere = Map.put(@address, "fleet_id", "hull_survey")
+
+    for {method, template, [], body} <- @bodies, String.contains?(template, "{fleet_id}") do
+      assert answer(c, c.signer, method, template, nowhere, body, 404).body["error"] ==
+               "fleet_unknown",
+             "#{method} #{template}"
+    end
 
     # While key ownership is being read again, nothing that needs a key is done.
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
@@ -322,7 +347,11 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     for {method, template} <- routes(),
         do: answer(c, c.signer, method, template, @address, empty_or_minimal(template), 503)
 
-    answered = answered()
+    answered =
+      Enum.filter(answered(), fn {method, template, _status} ->
+        {method, template} in routes()
+      end)
+
     documented = documented_answers()
     assert documented -- answered == @unforced
     assert answered -- documented == []

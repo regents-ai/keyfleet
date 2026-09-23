@@ -20,7 +20,11 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   def rooms(conn, %{"fleet_id" => fleet_id}) do
     actor = conn.assigns.agent_actor
-    json(conn, %{rooms: Enum.map(Rooms.list_rooms!(fleet_id, actor: actor), &room_json/1)})
+
+    case Rooms.list_rooms(fleet_id, actor: actor) do
+      {:ok, rooms} -> json(conn, %{rooms: Enum.map(rooms, &room_json/1)})
+      {:error, error} -> refuse(conn, error)
+    end
   end
 
   def read_messages(conn, %{"fleet_id" => fleet_id, "slug" => slug} = params) do
@@ -114,11 +118,11 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   defp refuse(conn, %Ash.Error.Invalid{errors: errors}) do
     cond do
-      Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
-        not_found(conn)
-
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
         conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+
+      Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
+        not_found(conn)
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
         invalid(conn, "idempotency_conflict")

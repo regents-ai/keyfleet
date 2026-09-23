@@ -15,6 +15,8 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # the same canonical spelling the product's own addresses use.
   @fleet ~S"[a-z][a-z0-9_]{0,62}"
   @slug ~S"[a-z0-9][a-z0-9-]{0,62}"
+  # A post is named by its id as the API answers it: lowercase and hyphenated.
+  @post_id ~r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"
   @rooms_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms\z"
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
@@ -352,7 +354,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   defp graph_cursor?(_graph), do: false
 
   defp answers_a_post?(nil), do: true
-  defp answers_a_post?(value), do: is_binary(value) and match?({:ok, _}, Ecto.UUID.cast(value))
+  defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)
 
   defp admit(true), do: :ok
   defp admit(false), do: :invalid

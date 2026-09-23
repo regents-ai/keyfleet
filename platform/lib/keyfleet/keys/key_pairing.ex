@@ -109,6 +109,7 @@ defmodule KeyFleet.Keys.KeyPairing do
 
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
 
+      validate KeyFleet.Graph.Validations.KnownFleet
       change KeyFleet.Keys.Changes.OpenPairing
     end
 
@@ -250,6 +251,7 @@ defmodule KeyFleet.Keys.KeyPairing do
     read :my_open_request do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      validate KeyFleet.Graph.Validations.KnownFleet
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and

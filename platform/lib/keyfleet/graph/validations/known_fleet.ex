@@ -5,11 +5,11 @@ defmodule KeyFleet.Graph.Validations.KnownFleet do
   alias KeyFleet.Graph.Errors.UnknownFleetError
 
   @impl true
-  def supports(_opts), do: [Ash.ActionInput]
+  def supports(_opts), do: [Ash.ActionInput, Ash.Changeset, Ash.Query]
 
   @impl true
-  def validate(input, _opts, _context) do
-    fleet_id = Ash.ActionInput.get_argument(input, :fleet_id)
+  def validate(%input_type{} = input, _opts, _context) do
+    fleet_id = input_type.get_argument(input, :fleet_id)
 
     if fleet_id in KeyFleet.Fleets.catalog_ids(),
       do: :ok,

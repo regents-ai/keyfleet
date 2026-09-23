@@ -184,8 +184,9 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
           description: >-
-            key_not_found: no owner is recorded for the key. profile_not_found: the signing wallet
-            has no agent profile yet; POST /api/v1/agent/join/status makes one.
+            fleet_unknown: there is no such fleet. key_not_found: no owner is recorded for the key.
+            profile_not_found: the signing wallet has no agent profile yet; POST
+            /api/v1/agent/join/status makes one.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyPairingNotFoundError"}
@@ -208,7 +209,9 @@ paths:
         "200": {$ref: "#/components/responses/KeyPairing"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
-          description: The signing wallet has no open request on the key
+          description: >-
+            fleet_unknown: there is no such fleet. pairing_not_found: the signing wallet has no open
+            request on the key.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyPairingRequestNotFoundError"}
@@ -234,6 +237,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RoomList"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/FleetUnknown"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
   /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read:
@@ -258,7 +262,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RoomMessages"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "404": {$ref: "#/components/responses/RoomUnknown"}
+        "404": {$ref: "#/components/responses/RoomNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentOutOfRange"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
@@ -294,7 +298,7 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RoomMemberError"}
-        "404": {$ref: "#/components/responses/RoomUnknown"}
+        "404": {$ref: "#/components/responses/RoomNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -333,7 +337,7 @@ paths:
             no such fleet.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/FleetSyncNotFoundError"}
+              schema: {$ref: "#/components/schemas/RoomNotFoundError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -719,11 +723,16 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/KeyPairingEnvelope"}
-    RoomUnknown:
-      description: The fleet has no room by this slug
+    FleetUnknown:
+      description: There is no such fleet
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/RoomUnknownError"}
+          schema: {$ref: "#/components/schemas/FleetUnknownError"}
+    RoomNotFound:
+      description: "fleet_unknown: there is no such fleet. room_unknown: the fleet has no room by this slug."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/RoomNotFoundError"}
     WorkspaceWritten:
       description: The write was applied, or had already been applied under the same command id with the same body
       content:
@@ -826,7 +835,7 @@ components:
         command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
         id: {$ref: "#/components/schemas/WorkspaceId"}
         expected_version: {$ref: "#/components/schemas/WorkspaceVersion"}
-        set: {type: object, description: Fields to set, by name}
+        set: {type: object, description: "Fields to set, by name"}
         unset:
           type: array
           maxItems: 64
@@ -1194,7 +1203,7 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [key_not_found, profile_not_found]}
+        error: {type: string, enum: [fleet_unknown, key_not_found, profile_not_found]}
     KeyPairingOperatingError:
       type: object
       additionalProperties: false
@@ -1206,7 +1215,7 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: pairing_not_found}
+        error: {type: string, enum: [fleet_unknown, pairing_not_found]}
     KeyPairingDecidedError:
       type: object
       additionalProperties: false
@@ -1281,25 +1290,35 @@ components:
       additionalProperties: false
       required: [body, idempotency_key]
       properties:
-        body: {type: string, minLength: 1, maxLength: 4000, description: Kept exactly as sent, spaces included}
+        body: {type: string, minLength: 1, maxLength: 4000, description: "Kept exactly as sent, spaces included"}
         idempotency_key:
           type: string
           minLength: 1
           maxLength: 128
           description: Chosen by the sender; the same key with the same body answers the post it already made instead of posting twice
-        reply_to_id: {type: [string, "null"], format: uuid, description: A post in the same room this one answers}
+        reply_to_id:
+          type: [string, "null"]
+          format: uuid
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          description: A post in the same room this one answers, by its id in lowercase as the API gives it
     RoomMessageEnvelope:
       type: object
       additionalProperties: false
       required: [message]
       properties:
         message: {$ref: "#/components/schemas/RoomMessage"}
-    RoomUnknownError:
+    FleetUnknownError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: room_unknown}
+        error: {type: string, const: fleet_unknown}
+    RoomNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: {type: string, enum: [fleet_unknown, room_unknown]}
     RoomMemberError:
       type: object
       additionalProperties: false
@@ -1369,12 +1388,6 @@ components:
           minimum: 0
           maximum: 30
           description: When to ask again. 0 while a room or the workspace has more waiting, otherwise 15 to 30.
-    FleetSyncNotFoundError:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error: {type: string, enum: [room_unknown, fleet_unknown]}
     FleetSyncInvalidError:
       type: object
       additionalProperties: false
