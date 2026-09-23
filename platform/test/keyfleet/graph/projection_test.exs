@@ -120,9 +120,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
     kept = write!("create", note("Kept"), "kept-1")
     assert Projector.await(@fleet, run_id, kept) == kept
 
-    stop_supervised!(KeyFleet.Graph.Supervisor)
-    File.cp_r!(Path.join(tmp_dir, "graph"), Path.join(tmp_dir, "backup"))
-    start_writer(Path.join(tmp_dir, "graph"))
+    back_up(Path.join(tmp_dir, "graph"), Path.join(tmp_dir, "backup"))
     lost = Enum.reduce(1..3, 0, fn n, _ -> write!("create", note("Lost #{n}"), "lost-#{n}") end)
     assert Projector.await(@fleet, run_id, lost) == lost
 
@@ -365,16 +363,11 @@ defmodule KeyFleet.Graph.ProjectionTest do
     :sys.suspend(writer)
     on_exit(fn -> if Process.alive?(writer), do: :sys.resume(writer) end)
 
+    # The case has one sandboxed connection, so polls sent at once would only
+    # queue for it; they are made one after another.
     answers =
-      1..1_000
-      |> Task.async_stream(
-        fn n ->
-          Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], rem(n, head), nil)
-        end,
-        max_concurrency: 20,
-        timeout: 30_000
-      )
-      |> Enum.map(fn {:ok, answer} -> answer end)
+      for n <- 1..1_000,
+          do: Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], rem(n, head), nil)
 
     assert Enum.all?(answers, &match?({:ok, %{graph: %{watermark: ^head}}}, &1))
     assert Enum.all?(answers, fn {:ok, synced} -> length(synced.graph.events) <= 100 end)
@@ -538,6 +531,20 @@ defmodule KeyFleet.Graph.ProjectionTest do
   defp write_notes(n, until) do
     head = write!("create", note("Fresh #{n}"), "fresh-#{n}")
     if head >= until, do: head, else: write_notes(n + 1, until)
+  end
+
+  # Copies the log's file and its write-ahead log from `from` into `to` while
+  # the writer is held, so nothing reaches the host and neither file changes.
+  # A host whose writer has stopped may still be closing them.
+  defp back_up(from, to) do
+    writer = writer()
+    :sys.suspend(writer)
+    File.mkdir_p!(to)
+
+    for file <- ["#{@fleet}.sqlite", "#{@fleet}.sqlite-wal"],
+        do: File.cp!(Path.join(from, file), Path.join(to, file))
+
+    :sys.resume(writer)
   end
 
   defp created!(type, data, id) do
