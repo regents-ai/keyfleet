@@ -331,20 +331,23 @@ defmodule KeyFleet.MessagesTest do
     assert heads()[{@fleet, "general"}] == 1
   end
 
-  test "a key that changes hands while its post is being written leaves nothing written",
-       %{owner: owner} do
+  test "a key that changes hands while its post is being written leaves nothing written" do
+    # A wallet of its own, so the key it sells is the only key it holds.
+    seller_wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+    epoch!(ownership_epoch: 1, owner_wallet: seller_wallet, log_index: 1)
+    seller = %Actors.Human{human_account_id: 1, wallet_addresses: [seller_wallet]}
     test_pid = self()
     moved = :atomics.new(1, [])
 
     # The policy has already let the post through when the room is locked for
-    # it; right then, the owner's only key is sold.
+    # it; right then, the seller's only key is sold.
     :telemetry.attach(
       "key-sold-while-posting",
       [:key_fleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and String.contains?(meta.query, "pg_advisory_xact_lock") and
              :atomics.compare_exchange(moved, 1, 0, 1) == :ok do
-          epoch!(token_id: 1, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+          epoch!(ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 2)
         end
       end,
       nil
@@ -353,7 +356,7 @@ defmodule KeyFleet.MessagesTest do
     on_exit(fn -> :telemetry.detach("key-sold-while-posting") end)
 
     assert {:error, %Ash.Error.Forbidden{errors: [%Rooms.Errors.NoKeyToWriteAsError{}]}} =
-             send_as(owner, "general", "Hull survey started", "k-1")
+             send_as(seller, "general", "Hull survey started", "k-1")
 
     assert :atomics.get(moved, 1) == 1
     assert read("general") == []
