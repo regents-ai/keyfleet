@@ -225,7 +225,8 @@ defmodule KeyFleet.ReleaseTest do
              "proposals",
              "rooms",
              "schema_migrations",
-             "session_authorities"
+             "session_authorities",
+             "treasury_readings"
            ]
   end
 

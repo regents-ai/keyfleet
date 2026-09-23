@@ -198,6 +198,17 @@
   border-bottom: 0;
 }
 
+/* Each asset's figures stand apart, since each is counted in its own units. */
+.proposals-balance {
+  padding-block-start: 1rem;
+  border-top: 1px solid var(--ash-line);
+}
+
+.proposals-panel h3 {
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
 .proposals-pages {
   display: flex;
   flex-wrap: wrap;

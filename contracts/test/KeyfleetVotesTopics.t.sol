@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
 /// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads a
@@ -57,6 +58,19 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_launchEnvelopeSelector() public pure {
         assertEq(KeyfleetVotes.launchEnvelope.selector, bytes4(0xb3bceadb));
+    }
+
+    /// @dev The treasury reader's balance reads, one call each at the same block. A public
+    /// mapping or variable's getter is only reachable through an instance, so those are named
+    /// through one at address zero, which is never called.
+    function test_treasuryViewSelectors() public view {
+        assertEq(KeyfleetRewards.rewardAssets.selector, bytes4(0x880ec04e));
+        assertEq(KeyfleetRewards(address(0)).backed.selector, bytes4(0x595b7f21));
+        assertEq(Keyfleet(address(0)).freeCapital.selector, bytes4(0x2b84308e));
+        assertEq(Keyfleet(address(0)).payPeriod.selector, bytes4(0xe6ec9e56));
+        assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
+        assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
+        assertEq(Keyfleet.launchSettled.selector, bytes4(0x06e93dae));
     }
 
     function test_proposalExecutedTopic() public pure {

@@ -152,6 +152,14 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
              "#proposal-payment",
              "1,234 units of #{ProposalHelpers.wallet("c")}"
            )
+
+    # Once the fleet's balances are read, an asset it holds is named.
+    ProposalHelpers.treasury_reading!(@fleet, [
+      balance(ProposalHelpers.wallet("c"), "WETH", 18, free_capital: 0)
+    ])
+
+    {:ok, named, _html} = live(conn, "#{@list}/2")
+    assert has_element?(named, "#proposal-payment", "0.000000000000001234 WETH")
   end
 
   test "a launch shows its five fields exactly as proposed, once they have been read", %{
@@ -177,7 +185,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
 
-    assert fields(view) == [
+    assert fields(view, "#proposal-launch div") == [
              {"Name", "Cascade  Research"},
              {"Symbol", "CSR"},
              {"Description", "Line one\nLine <two>"},
@@ -281,6 +289,148 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     assert shows?(fn -> has_element?(view, "#proposal-status", "Counting votes") end, 80)
   end
 
+  test "the budget shows what the fleet holds and what it can pay this month", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    weth = ProposalHelpers.wallet("c")
+    as_of = ~U[2026-09-20 12:00:00Z]
+
+    ProposalHelpers.treasury_reading!(
+      @fleet,
+      [
+        balance(@usdc, "USDC", 6,
+          free_capital: 100_000_000,
+          backed: 30_000_000,
+          pay_period_start: ~U[2026-09-01 08:00:00Z],
+          pay_cap: 20_000_000,
+          pay_spent: 5_000_000
+        ),
+        balance(weth, "WETH", 18, free_capital: 2_000_000_000_000_000_000)
+      ],
+      block_time: as_of,
+      protocol_share_owed: Decimal.new(2_500_000)
+    )
+
+    ProposalHelpers.income_split!(@fleet, asset: @usdc)
+    ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
+
+    {:ok, view, _html} = live(conn, @list)
+
+    assert fields(view, "[data-asset='#{@usdc}'] div") == [
+             {"Budget", "100 USDC"},
+             {"Available this month", "15 USDC"},
+             {"Paid this month", "5 USDC of 20 USDC, until 1 October 2026 at 08:00 UTC"},
+             {"Set aside for key holders", "30 USDC"}
+           ]
+
+    assert fields(view, "[data-asset='#{weth}'] div") == [
+             {"Budget", "2 WETH"},
+             {"Available this month", "0.4 WETH"},
+             {"Set aside for key holders", "0 WETH"}
+           ]
+
+    assert fields(view, "#proposals-held div") == [{"Set aside for REGENT stakers", "2.5 USDC"}]
+
+    assert has_element?(
+             view,
+             "#proposals-budget-as-of",
+             "Figures as of 20 September 2026 at 12:00 UTC."
+           )
+
+    refute has_element?(view, "#proposals-payments-closed")
+
+    assert has_element?(view, "#proposals-income li", "10 USDC received")
+
+    assert has_element?(
+             view,
+             "#proposals-income li",
+             "4 USDC to the budget, 5 USDC to key holders, 1 USDC fee"
+           )
+
+    assert has_element?(view, "#proposals-payments li", "5 USDC")
+    assert has_element?(view, "#proposals-payments li", "to #{ProposalHelpers.wallet("b")}")
+  end
+
+  test "the budget says what it doesn't know yet, and when payments can't be made", %{
+    conn: conn
+  } do
+    ChainHelpers.seed_cursor!(@fleet)
+
+    {:ok, view, _html} = live(conn, @list)
+    assert has_element?(view, "#proposals-budget-pending", "Budget figures are still being read.")
+    assert has_element?(view, "#proposals-no-income", "No launch income yet.")
+
+    assert has_element?(
+             view,
+             "#proposals-no-payments",
+             "Nothing has been paid from the budget yet."
+           )
+
+    # A month that has ended leaves a fifth of the budget as it stands.
+    ProposalHelpers.treasury_reading!(
+      @fleet,
+      [
+        balance(@usdc, "USDC", 6,
+          free_capital: 50_000_000,
+          pay_period_start: ~U[2026-08-01 08:00:00Z],
+          pay_cap: 20_000_000,
+          pay_spent: 20_000_000
+        )
+      ],
+      block_time: ~U[2026-09-20 12:00:00Z],
+      launch_settled: false,
+      cascade_reserve: Decimal.new(7_000_000)
+    )
+
+    for _payment <- 1..21, do: ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
+
+    {:ok, view, _html} = live(conn, @list)
+
+    assert has_element?(
+             view,
+             "#proposals-payments-closed",
+             "Payments from the budget open once the launch has finished."
+           )
+
+    assert fields(view, "[data-asset='#{@usdc}'] div") == [
+             {"Budget", "50 USDC"},
+             {"Set aside for key holders", "0 USDC"}
+           ]
+
+    assert fields(view, "#proposals-held div") == [
+             {"Held for the next level", "7 USDC"},
+             {"Set aside for REGENT stakers", "0 USDC"}
+           ]
+
+    assert view
+           |> render()
+           |> LazyHTML.from_fragment()
+           |> LazyHTML.query("#proposals-payments li")
+           |> Enum.count() == 20
+
+    assert render(view) =~ "Earlier payments are not shown here."
+
+    ProposalHelpers.treasury_reading!(
+      @fleet,
+      [
+        balance(@usdc, "USDC", 6,
+          free_capital: 50_000_000,
+          pay_period_start: ~U[2026-08-01 08:00:00Z],
+          pay_cap: 20_000_000,
+          pay_spent: 20_000_000
+        )
+      ],
+      block_time: ~U[2026-09-20 12:00:00Z]
+    )
+
+    {:ok, view, _html} = live(conn, @list)
+
+    assert fields(view, "[data-asset='#{@usdc}'] div") == [
+             {"Budget", "50 USDC"},
+             {"Available this month", "10 USDC"},
+             {"Set aside for key holders", "0 USDC"}
+           ]
+  end
+
   test "the fleet's page leads to its proposals", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
     assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "See the proposals")
@@ -289,6 +439,22 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
   defp votes!(number, sides) do
     for {support, token_ids} <- sides,
         do: ProposalHelpers.vote!(@fleet, number, @voter, support, token_ids)
+  end
+
+  defp balance(asset, symbol, decimals, figures) do
+    Map.merge(
+      %{
+        asset: asset,
+        symbol: symbol,
+        decimals: decimals,
+        free_capital: 0,
+        backed: 0,
+        pay_period_start: nil,
+        pay_cap: 0,
+        pay_spent: 0
+      },
+      Map.new(figures)
+    )
   end
 
   defp cards(view) do
@@ -312,11 +478,11 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     |> Enum.map(&text/1)
   end
 
-  defp fields(view) do
+  defp fields(view, selector) do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#proposal-launch div")
+    |> LazyHTML.query(selector)
     |> Enum.map(fn field ->
       {field |> LazyHTML.query("dt") |> LazyHTML.text(),
        field |> LazyHTML.query("dd") |> LazyHTML.text()}

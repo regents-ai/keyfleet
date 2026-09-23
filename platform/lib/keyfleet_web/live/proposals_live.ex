@@ -2,7 +2,7 @@ defmodule KeyFleetWeb.ProposalsLive do
   @moduledoc """
   A fleet's proposals, for anyone to read: what its key holders have put to
   a vote, how each vote stands, and each proposal's text, payment or launch
-  with every vote cast on it.
+  with every vote cast on it; and beside them the budget they vote on.
 
   Nothing here writes or asks a wallet for anything. Everything shown is what
   `KeyFleetWeb.ProposalsPage` read.
@@ -35,7 +35,9 @@ defmodule KeyFleetWeb.ProposalsLive do
           <.link navigate={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Proposals</h1>
-        <p class="proposals-lede">What this fleet’s key holders have put to a vote.</p>
+        <p class="proposals-lede">
+          What this fleet’s key holders have put to a vote, and the budget they vote on.
+        </p>
       </header>
 
       <.catching_up :if={@page.catching_up?} />
@@ -88,6 +90,8 @@ defmodule KeyFleetWeb.ProposalsLive do
           <.link :if={@page.older} id="proposals-older" patch={@page.older}>Older proposals</.link>
         </nav>
       </section>
+
+      <.budget treasury={@page.treasury} />
     </article>
     """
   end
@@ -198,6 +202,101 @@ defmodule KeyFleetWeb.ProposalsLive do
         </section>
       </div>
     </article>
+    """
+  end
+
+  attr :treasury, :map, required: true
+
+  defp budget(assigns) do
+    ~H"""
+    <section id="proposals-budget" class="proposals-panel" aria-labelledby="proposals-budget-title">
+      <h2 id="proposals-budget-title">Budget</h2>
+
+      <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
+        Budget figures are still being read.
+      </p>
+
+      <.balances :if={@treasury.read?} treasury={@treasury} />
+
+      <h3>Launch income</h3>
+      <p :if={@treasury.income == []} id="proposals-no-income" class="proposals-detail">
+        No launch income yet.
+      </p>
+      <ol :if={@treasury.income != []} id="proposals-income" class="proposals-lines">
+        <li :for={income <- @treasury.income} data-income={income.id}>
+          <span>{income.received} received</span>
+          <span class="proposals-detail">
+            {income.to_budget} to the budget, {income.to_keys} to key holders, {income.fee} fee
+          </span>
+        </li>
+      </ol>
+      <p :if={@treasury.earlier_income?} class="proposals-detail">
+        Earlier launch income is not shown here.
+      </p>
+
+      <h3>Payments</h3>
+      <p :if={@treasury.payments == []} id="proposals-no-payments" class="proposals-detail">
+        Nothing has been paid from the budget yet.
+      </p>
+      <ol :if={@treasury.payments != []} id="proposals-payments" class="proposals-lines">
+        <li :for={payment <- @treasury.payments} data-payment={payment.id}>
+          <span>{payment.amount}</span>
+          <span class="proposals-detail">to <code>{payment.recipient}</code></span>
+        </li>
+      </ol>
+      <p :if={@treasury.earlier_payments?} class="proposals-detail">
+        Earlier payments are not shown here.
+      </p>
+    </section>
+    """
+  end
+
+  attr :treasury, :map, required: true
+
+  defp balances(assigns) do
+    ~H"""
+    <p :if={not @treasury.payments_open?} id="proposals-payments-closed" class="proposals-detail">
+      Payments from the budget open once the launch has finished.
+    </p>
+
+    <dl
+      :for={balance <- @treasury.balances}
+      class="proposals-facts proposals-balance"
+      data-asset={balance.asset}
+    >
+      <div>
+        <dt>Budget</dt>
+        <dd>{balance.budget}</dd>
+      </div>
+      <div :if={@treasury.payments_open?}>
+        <dt>Available this month</dt>
+        <dd>{balance.available}</dd>
+      </div>
+      <div :if={balance.paid}>
+        <dt>Paid this month</dt>
+        <dd>{balance.paid}, until {at(balance.month_ends)}</dd>
+      </div>
+      <div>
+        <dt>Set aside for key holders</dt>
+        <dd>{balance.set_aside}</dd>
+      </div>
+    </dl>
+
+    <dl id="proposals-held" class="proposals-facts">
+      <div :if={@treasury.reserve}>
+        <dt>Held for the next level</dt>
+        <dd>{@treasury.reserve}</dd>
+      </div>
+      <div>
+        <dt>Set aside for REGENT stakers</dt>
+        <dd>{@treasury.owed}</dd>
+      </div>
+    </dl>
+
+    <p class="proposals-rule">
+      A month of payments starts with its first payment, and can pay out up to a fifth of the budget as it stood then.
+    </p>
+    <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
     """
   end
 

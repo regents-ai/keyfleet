@@ -1,12 +1,13 @@
 defmodule KeyFleet.ProposalHelpers do
   @moduledoc """
-  Records proposals, votes, executions and launches as the chain reader
-  would, without a chain. Each record gets a chain event of its own. The
+  Records proposals, votes, executions, launches, launch income, budget
+  payments and balance readings as the chain reader would, without a chain. Each record gets a chain event of its own. The
   fleet needs a cursor first, as `KeyFleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Proposals
+  alias KeyFleet.Treasury
 
   @system %System{}
   @block_hash "0x" <> String.duplicate("b", 64)
@@ -69,6 +70,53 @@ defmodule KeyFleet.ProposalHelpers do
     }
     |> Map.merge(Map.new(attrs))
     |> Proposals.record_launch_envelope!(actor: @system)
+  end
+
+  @doc "Launch income of 10 USDC-sized units, split 1 fee, 4 budget, 5 keys, unless `attrs` says otherwise."
+  def income_split!(fleet_id, attrs \\ %{}) do
+    %{
+      fleet_id: fleet_id,
+      asset: wallet("a"),
+      caller: wallet("f"),
+      gross: Decimal.new(10_000_000),
+      fee: Decimal.new(1_000_000),
+      to_budget: Decimal.new(4_000_000),
+      to_keys: Decimal.new(5_000_000)
+    }
+    |> Map.merge(event())
+    |> Map.merge(Map.new(attrs))
+    |> Treasury.record_income_split!(actor: @system)
+  end
+
+  @doc "A payment of 5 USDC-sized units from the budget, unless `attrs` says otherwise."
+  def budget_payment!(fleet_id, attrs \\ %{}) do
+    %{
+      fleet_id: fleet_id,
+      asset: wallet("a"),
+      recipient: wallet("b"),
+      amount: Decimal.new(5_000_000),
+      spent_in_period: Decimal.new(5_000_000),
+      period_start: DateTime.utc_now()
+    }
+    |> Map.merge(event())
+    |> Map.merge(Map.new(attrs))
+    |> Treasury.record_budget_payment!(actor: @system)
+  end
+
+  @doc "A reading of the fleet's balances with `assets`, taken at `block_time`."
+  def treasury_reading!(fleet_id, assets, attrs \\ %{}) do
+    %{
+      fleet_id: fleet_id,
+      block_number: :erlang.unique_integer([:positive]),
+      block_hash: @block_hash,
+      block_time: DateTime.utc_now(),
+      launch_settled: true,
+      cascade_reserve: Decimal.new(0),
+      protocol_share_owed: Decimal.new(0),
+      assets: assets
+    }
+    |> Map.merge(Map.new(attrs))
+    |> Treasury.record_reading!(actor: @system)
   end
 
   def wallet(character), do: "0x" <> String.duplicate(character, 40)

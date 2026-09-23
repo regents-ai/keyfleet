@@ -3,8 +3,10 @@ defmodule KeyFleetWeb.ProposalsPage do
   What a fleet's proposal pages show, read from the proposals, votes and
   launches the chain reader recorded.
 
-  `list/2` is the fleet's proposals, newest first, twenty to a page;
-  `detail/3` is one proposal with its votes, fifty to a page. Each answers
+  `list/2` is the fleet's proposals, newest first, twenty to a page, with
+  its budget: the latest reading of its balances, and its latest launch
+  income and payments. `detail/3` is one proposal with its votes, fifty to a
+  page. Each answers
   `check_in`, how long the page may wait before its proposals could read
   differently without anything new being recorded: a proposal closing, or a
   closed one being counted. A page name that is not a proposal number is a
@@ -14,6 +16,7 @@ defmodule KeyFleetWeb.ProposalsPage do
   alias KeyFleet.Chain
   alias KeyFleet.Fleets
   alias KeyFleet.Proposals
+  alias KeyFleet.Treasury
   alias KeyFleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
@@ -24,6 +27,10 @@ defmodule KeyFleetWeb.ProposalsPage do
   @usdc_decimals 6
   @regent_decimals 18
   @text_cap 64 * 1024
+  # A month of payments, and the part of the budget it can pay out.
+  @pay_period 30 * 24 * 60 * 60
+  @pay_cap_bps 2_000
+  @bps 10_000
 
   @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from the budget"}
 
@@ -35,13 +42,14 @@ defmodule KeyFleetWeb.ProposalsPage do
       {proposals, older?} = Proposals.list_page(fleet_id, before)
       now = DateTime.utc_now()
       shown = Enum.map(proposals, &summary(&1, reading.cursor, now))
+      balances = Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
         proposals: shown,
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         check_in: check_in(shown, now),
-        assets: assets(fleet)
+        treasury: treasury(fleet, balances, assets(fleet, balances))
       })
     end)
   end
@@ -147,7 +155,8 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   defp pay(%{kind: :pay} = proposal, fleet),
     do: %{
-      amount: amount(proposal.amount, proposal.asset, assets(fleet)),
+      amount:
+        amount(proposal.amount, proposal.asset, assets(fleet, Treasury.get_reading!(fleet.id))),
       recipient: proposal.recipient
     }
 
@@ -180,8 +189,94 @@ defmodule KeyFleetWeb.ProposalsPage do
     }
   end
 
-  # The assets whose units are known without reading anything.
-  defp assets(fleet), do: %{fleet.usdc_address => {"USDC", @usdc_decimals}}
+  # USDC's units are known without reading anything; the others' come from
+  # the latest reading of the fleet's balances.
+  defp assets(fleet, nil), do: %{fleet.usdc_address => {"USDC", @usdc_decimals}}
+
+  defp assets(fleet, balances) do
+    balances.assets
+    |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+    |> Map.merge(assets(fleet, nil))
+  end
+
+  defp treasury(fleet, nil, assets), do: Map.put(history(fleet.id, assets), :read?, false)
+
+  defp treasury(fleet, balances, assets) do
+    usdc = &amount(&1, fleet.usdc_address, assets)
+
+    fleet.id
+    |> history(assets)
+    |> Map.merge(%{
+      read?: true,
+      as_of: balances.block_time,
+      payments_open?: balances.launch_settled,
+      balances: Enum.map(balances.assets, &balance(&1, balances.block_time, assets)),
+      reserve: if(Decimal.gt?(balances.cascade_reserve, 0), do: usdc.(balances.cascade_reserve)),
+      owed: usdc.(balances.protocol_share_owed)
+    })
+  end
+
+  defp balance(balance, as_of, assets) do
+    shown = &amount(&1, balance.asset, assets)
+
+    Map.merge(
+      %{
+        asset: balance.asset,
+        budget: shown.(balance.free_capital),
+        set_aside: shown.(balance.backed)
+      },
+      month(balance, as_of, shown)
+    )
+  end
+
+  # A month of payments begins with its first payment and can pay out up to
+  # a fifth of the budget as it stood then. Until one begins, a fifth of the
+  # budget as it stands is what the next month could pay.
+  defp month(balance, as_of, shown) do
+    if open_month?(balance, as_of) do
+      %{
+        available: shown.(Decimal.sub(balance.pay_cap, balance.pay_spent)),
+        paid: "#{shown.(balance.pay_spent)} of #{shown.(balance.pay_cap)}",
+        month_ends: month_end(balance.pay_period_start)
+      }
+    else
+      fifth = balance.free_capital |> Decimal.mult(@pay_cap_bps) |> Decimal.div_int(@bps)
+      %{available: shown.(fifth), paid: nil, month_ends: nil}
+    end
+  end
+
+  defp open_month?(%{pay_period_start: nil}, _as_of), do: false
+
+  defp open_month?(%{pay_period_start: start}, as_of),
+    do: DateTime.before?(as_of, month_end(start))
+
+  defp month_end(start), do: DateTime.add(start, @pay_period)
+
+  defp history(fleet_id, assets) do
+    %{income: income, payments: payments} = Treasury.latest(fleet_id)
+    shown = &amount(&1, &2.asset, assets)
+
+    %{
+      income:
+        Enum.map(
+          income.shown,
+          &%{
+            id: &1.id,
+            received: shown.(&1.gross, &1),
+            fee: shown.(&1.fee, &1),
+            to_budget: shown.(&1.to_budget, &1),
+            to_keys: shown.(&1.to_keys, &1)
+          }
+        ),
+      earlier_income?: income.earlier?,
+      payments:
+        Enum.map(
+          payments.shown,
+          &%{id: &1.id, amount: shown.(&1.amount, &1), recipient: &1.recipient}
+        ),
+      earlier_payments?: payments.earlier?
+    }
+  end
 
   # A proposal on show reads differently once it closes, and a closed one
   # once its votes are counted.
