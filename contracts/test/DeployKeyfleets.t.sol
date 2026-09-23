@@ -8,6 +8,8 @@ import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
@@ -41,17 +43,26 @@ contract DeployKeyfleetsTest is Test {
     address private constant STAKING = address(0x57A1);
     address private constant STRATEGY = address(0x574A);
     address private constant BUYER = address(0xB0B);
+    bytes32 private constant KEY_HASH = keccak256("lab gas lane");
+    bytes32 private constant TRAIT_TABLE = keccak256("trait table");
+
+    event RevealRequestFailed(uint256 indexed tokenId);
 
     DeployKeyfleets private script;
     MockToken private regent;
     MockToken private usdc;
     StrategyPublishingFactory private factory;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private subscriptionId;
 
     function setUp() public {
         script = new DeployKeyfleets();
         regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         factory = new StrategyPublishingFactory(STRATEGY);
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrf.addProvingKey(KEY_HASH, 30 gwei);
+        subscriptionId = vrf.createSubscription();
     }
 
     function test_deployedFleetsCarryTheManifestAndTheDirectoryNamesThem() public {
@@ -82,12 +93,20 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
             assertTrue(deployment.directory.isFleet(address(fleet)), "Directory names the fleet");
+            assertEq(address(fleet.VRF_COORDINATOR()), address(vrf), "VRF coordinator");
+            assertEq(fleet.VRF_SUBSCRIPTION_ID(), subscriptionId, "VRF subscription");
+            assertEq(fleet.VRF_KEY_HASH(), KEY_HASH, "VRF gas lane");
+            assertEq(fleet.TRAIT_TABLE_HASH(), TRAIT_TABLE, "Trait table");
 
+            // The Safe has not added the fleet to the subscription yet: the key sells all the same
+            // and waits for a retry.
             uint256 price = fleet.nextPrice();
             assertEq(price, KeyfleetPresets.Q_USDC, "The first key costs 10 USDC");
             usdc.mint(BUYER, price);
             vm.startPrank(BUYER);
             usdc.approve(address(fleet), price);
+            vm.expectEmit(true, false, false, false, address(fleet));
+            emit RevealRequestFailed(1);
             fleet.purchase(BUYER, address(0), price, block.timestamp);
             vm.stopPrank();
             assertEq(
@@ -177,6 +196,52 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
+    /// @dev Invariant: on Base the only randomness a release can use is Chainlink's own Base
+    /// coordinator on its 2 gwei gas lane.
+    function test_baseManifestNamingAnyVrfCoordinatorOrGasLaneButBaseIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(vrf));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfCoordinatorNotBase.selector, address(vrf)));
+        script.deploy(manifest);
+
+        manifest = _baseManifest();
+        manifest.vrf.keyHash = KEY_HASH;
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfKeyHashNotBase.selector, KEY_HASH));
+        script.deploy(manifest);
+    }
+
+    function test_vrfCoordinatorWithoutCodeIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(0xC0DE));
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfCoordinatorMissing.selector, address(0xC0DE)));
+        script.deploy(manifest);
+    }
+
+    function test_vrfGasLaneTheCoordinatorDoesNotKnowIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.vrf.keyHash = keccak256("no such lane");
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfKeyHashUnknown.selector, keccak256("no such lane")));
+        script.deploy(manifest);
+    }
+
+    function test_vrfSubscriptionTheCoordinatorDoesNotKnowIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.vrf.subscriptionId = 0;
+
+        vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
+        script.deploy(manifest);
+    }
+
+    function test_manifestWithoutATraitTableIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.traitTableHash = bytes32(0);
+
+        vm.expectRevert(Keyfleet.TraitTableHashZero.selector);
+        script.deploy(manifest);
+    }
+
     function test_suppliedRegistryIsReused() public {
         KeyfleetAssetRegistry existing = new KeyfleetAssetRegistry(SAFE, address(usdc));
         KeyfleetManifest.Manifest memory manifest = _manifest();
@@ -207,6 +272,10 @@ contract DeployKeyfleetsTest is Test {
             ' "treasury": "0x00000000000000000000000000000000000000a3",',
             ' "autolaunchFactory": "0x00000000000000000000000000000000000000a6",',
             ' "regentSafe": "0x00000000000000000000000000000000000000a5",',
+            ' "traitTableHash": "0x00000000000000000000000000000000000000000000000000000000000000c4",',
+            ' "vrf": {"keyHash": "0x00000000000000000000000000000000000000000000000000000000000000c3",',
+            '  "subscriptionId": "115792089237316195423570985008687907853269984665640564039457584007913129639935",',
+            '  "coordinator": "0x00000000000000000000000000000000000000c1"},',
             ' "fleets": {',
             '  "accelerant": {"symbol": "D", "baseTokenURI": "u/d/", "name": "Fleet D"},',
             '  "syndicate": {"name": "Fleet A", "symbol": "A", "baseTokenURI": "u/a/"},',
@@ -227,6 +296,10 @@ contract DeployKeyfleetsTest is Test {
         assertEq(manifest.assetRegistry, address(0xA7), "assetRegistry");
         assertTrue(manifest.autolaunchFactoryMayBeEmpty, "autolaunchFactoryMayBeEmpty");
         assertEq(manifest.votingWindow, 7200, "votingWindow");
+        assertEq(address(manifest.vrf.coordinator), address(0xC1), "vrf.coordinator");
+        assertEq(manifest.vrf.subscriptionId, type(uint256).max, "vrf.subscriptionId, all 78 digits");
+        assertEq(manifest.vrf.keyHash, bytes32(uint256(0xC3)), "vrf.keyHash");
+        assertEq(manifest.traitTableHash, bytes32(uint256(0xC4)), "traitTableHash");
 
         string[4] memory letters = ["A", "B", "C", "D"];
         string[4] memory lower = ["a", "b", "c", "d"];
@@ -238,16 +311,34 @@ contract DeployKeyfleetsTest is Test {
         }
     }
 
-    function test_committedManifestsPassTheDeploymentRefusals() public {
+    /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a zero
+    /// subscription and a zero trait table until the operator writes in the subscription the Safe
+    /// owns and the final trait table's hash. Until then they cannot be deployed; with both written
+    /// in, every other refusal passes.
+    function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil");
         vm.etch(anvil.usdc, address(usdc).code);
         vm.etch(anvil.regent, address(regent).code);
+        uint256 labSubscription = _standInForBaseCoordinator();
+        assertEq(address(anvil.vrf.coordinator), script.BASE_VRF_COORDINATOR(), "The lab forks Base's coordinator");
+        assertEq(anvil.vrf.keyHash, script.BASE_VRF_KEY_HASH(), "The lab uses Base's gas lane");
+
+        vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
+        script.deploy(anvil);
+        anvil.vrf.subscriptionId = labSubscription;
+        vm.expectRevert(Keyfleet.TraitTableHashZero.selector);
+        script.deploy(anvil);
+        anvil.traitTableHash = TRAIT_TABLE;
         DeployKeyfleets.Deployment memory lab = script.deploy(anvil);
         assertGt(address(lab.directory).code.length, 0, "The anvil manifest deploys on its chain");
 
         KeyfleetManifest.Manifest memory base = script.readManifest("base");
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(base.autolaunchFactory, address(factory).code);
+        vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
+        script.deploy(base);
+        base.vrf.subscriptionId = labSubscription;
+        base.traitTableHash = TRAIT_TABLE;
         DeployKeyfleets.Deployment memory release = script.deploy(base);
         assertGt(address(release.directory).code.length, 0, "The Base manifest deploys once its factory exists");
     }
@@ -272,16 +363,31 @@ contract DeployKeyfleetsTest is Test {
         script.parseManifest(json);
     }
 
-    /// @dev A Base manifest on Base, paid in Base USDC and naming Base REGENT, both stood in for by
-    /// the local mocks' code.
+    /// @dev Puts the mock coordinator's code at Base's coordinator address, registers Base's gas
+    /// lane there and opens a subscription on it, as the operator does on a fork.
+    function _standInForBaseCoordinator() private returns (uint256 baseSubscription) {
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
+        vm.etch(address(base), address(vrf).code);
+        base.addProvingKey(script.BASE_VRF_KEY_HASH(), 2 gwei);
+        baseSubscription = base.createSubscription();
+    }
+
+    /// @dev A Base manifest on Base, paid in Base USDC, naming Base REGENT and answered by Base's
+    /// VRF coordinator on its 2 gwei lane, all stood in for by the local mocks' code.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(script.BASE_USDC(), address(usdc).code);
         vm.etch(script.BASE_REGENT(), address(regent).code);
+        uint256 baseSubscription = _standInForBaseCoordinator();
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
         manifest.usdc = script.BASE_USDC();
         manifest.regent = script.BASE_REGENT();
+        manifest.vrf = Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR()),
+            subscriptionId: baseSubscription,
+            keyHash: script.BASE_VRF_KEY_HASH()
+        });
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
@@ -295,6 +401,10 @@ contract DeployKeyfleetsTest is Test {
         manifest.assetRegistry = address(0);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
+        manifest.vrf = Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
+        });
+        manifest.traitTableHash = TRAIT_TABLE;
         manifest.fleets[0] = KeyfleetManifest.FleetSpec("Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
         manifest.fleets[1] = KeyfleetManifest.FleetSpec("Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
         manifest.fleets[2] = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");

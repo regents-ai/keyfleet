@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetDirectory} from "../src/KeyfleetDirectory.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -21,12 +23,14 @@ contract MockToken is ERC20 {
 }
 
 /// @dev The directory only reads fleets, so the staking contract and the Autolaunch factory are
-/// bare addresses here: a fleet stores both without calling either at construction.
+/// bare addresses here: a fleet stores both without calling either at construction. Nothing is
+/// bought, so no fleet is added to the VRF subscription.
 contract KeyfleetDirectoryTest is Test {
     uint64 private constant VOTING_WINDOW = 24 hours;
 
     MockToken private usdc;
     KeyfleetAssetRegistry private registry;
+    MockVRFCoordinatorV2Plus private vrf;
 
     address private constant SAFE = address(0x5AFE);
     address private constant TREASURY = address(0x7EA5);
@@ -41,6 +45,8 @@ contract KeyfleetDirectoryTest is Test {
         address staking;
         address factory;
         uint64 votingWindow;
+        Keyfleet.Randomness randomness;
+        bytes32 traitTableHash;
     }
 
     Keyfleet private syndicate;
@@ -51,6 +57,7 @@ contract KeyfleetDirectoryTest is Test {
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
         registry = new KeyfleetAssetRegistry(SAFE, address(usdc));
+        vrf = new MockVRFCoordinatorV2Plus();
 
         syndicate = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate, _wiring());
         cascade = _deploy(KeyfleetPresets.Preset.FibonacciCascade, _wiring());
@@ -147,6 +154,42 @@ contract KeyfleetDirectoryTest is Test {
         new KeyfleetDirectory(syndicate, cascade, stray, accelerant);
     }
 
+    function test_fleetAnsweredByADifferentVrfCoordinatorIsRefused() public {
+        Wiring memory wiring = _wiring();
+        wiring.randomness.coordinator = IVRFCoordinatorV2Plus(address(new MockVRFCoordinatorV2Plus()));
+        Keyfleet stray = _deploy(KeyfleetPresets.Preset.FibonacciCascade, wiring);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetDirectory.FleetMismatch.selector, uint8(1)));
+        new KeyfleetDirectory(syndicate, stray, classic, accelerant);
+    }
+
+    function test_fleetPaidFromADifferentVrfSubscriptionIsRefused() public {
+        Wiring memory wiring = _wiring();
+        wiring.randomness.subscriptionId = 2;
+        Keyfleet stray = _deploy(KeyfleetPresets.Preset.FleetTechClassic, wiring);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetDirectory.FleetMismatch.selector, uint8(2)));
+        new KeyfleetDirectory(syndicate, cascade, stray, accelerant);
+    }
+
+    function test_fleetOnADifferentVrfGasLaneIsRefused() public {
+        Wiring memory wiring = _wiring();
+        wiring.randomness.keyHash = keccak256("another lane");
+        Keyfleet stray = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant, wiring);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetDirectory.FleetMismatch.selector, uint8(3)));
+        new KeyfleetDirectory(syndicate, cascade, classic, stray);
+    }
+
+    function test_fleetDrawingFromADifferentTraitTableIsRefused() public {
+        Wiring memory wiring = _wiring();
+        wiring.traitTableHash = keccak256("another table");
+        Keyfleet stray = _deploy(KeyfleetPresets.Preset.FleetTechClassic, wiring);
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetDirectory.FleetMismatch.selector, uint8(2)));
+        new KeyfleetDirectory(syndicate, cascade, stray, accelerant);
+    }
+
     function testFuzz_strangerIsNotAFleet(address stranger) public {
         KeyfleetDirectory directory = new KeyfleetDirectory(syndicate, cascade, classic, accelerant);
         vm.assume(
@@ -164,7 +207,11 @@ contract KeyfleetDirectoryTest is Test {
             registry: registry,
             staking: STAKING,
             factory: FACTORY,
-            votingWindow: VOTING_WINDOW
+            votingWindow: VOTING_WINDOW,
+            randomness: Keyfleet.Randomness({
+                coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: 1, keyHash: keccak256("key hash")
+            }),
+            traitTableHash: keccak256("trait table")
         });
     }
 
@@ -177,7 +224,9 @@ contract KeyfleetDirectoryTest is Test {
             IRegentRevenueStaking(wiring.staking),
             IRegentsAutolaunchFactoryV1(wiring.factory),
             wiring.votingWindow,
-            Keyfleet.Metadata({name: "Fleet Keys", symbol: "KEY", baseTokenURI: "https://keys.example/"})
+            Keyfleet.Metadata({name: "Fleet Keys", symbol: "KEY", baseTokenURI: "https://keys.example/"}),
+            wiring.randomness,
+            wiring.traitTableHash
         );
     }
 }

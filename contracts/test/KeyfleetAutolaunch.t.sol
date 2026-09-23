@@ -6,6 +6,8 @@ import {console2} from "forge-std/console2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentLBPStrategy} from "../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
@@ -218,6 +220,8 @@ contract KeyfleetAutolaunchTest is Test {
     KeyfleetAssetRegistry private registry;
     MockLBPStrategy private strategy;
     MockAutolaunchFactory private factory;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
 
     address private safe = address(0x5AFE);
@@ -239,13 +243,15 @@ contract KeyfleetAutolaunchTest is Test {
         strategy = new MockLBPStrategy();
         factory = new MockAutolaunchFactory(strategy);
         factory.openLaunches();
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
         vm.warp(1_000_000);
     }
 
     // --- helpers ---------------------------------------------------------
 
-    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return new Keyfleet(
+    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
+        fleet = new Keyfleet(
             preset,
             usdc,
             treasury,
@@ -253,8 +259,20 @@ contract KeyfleetAutolaunchTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
+    }
+
+    /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
+    function _randomness() private view returns (Keyfleet.Randomness memory) {
+        return Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+            subscriptionId: vrfSubscription,
+            keyHash: keccak256("key hash")
+        });
     }
 
     /// @dev A fleet that has sold exactly the keys its preset requires before it may propose a
@@ -374,7 +392,9 @@ contract KeyfleetAutolaunchTest is Test {
             staking,
             IRegentsAutolaunchFactoryV1(address(0)),
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
     }
 

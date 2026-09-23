@@ -22,7 +22,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// file or an environment variable.
 ///
 /// The script sets no allowlist flag and moves no token. Deposit admission belongs to the Regents
-/// Safe alone, and USDC and REGENT are admitted by the Safe after this script has run.
+/// Safe alone, and USDC and REGENT are admitted by the Safe after this script has run. Nor does it
+/// touch the VRF subscription: the Safe owns it and adds the four fleets as consumers afterwards.
 contract DeployKeyfleets is KeyfleetManifest {
     /// @notice What one run of `deploy` created or reused.
     /// @param registry The shared asset registry, whether newly deployed or supplied.
@@ -81,7 +82,9 @@ contract DeployKeyfleets is KeyfleetManifest {
                     name: manifest.fleets[slot].name,
                     symbol: manifest.fleets[slot].symbol,
                     baseTokenURI: manifest.fleets[slot].baseTokenURI
-                })
+                }),
+                manifest.vrf,
+                manifest.traitTableHash
             );
         }
 

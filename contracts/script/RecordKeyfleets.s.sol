@@ -20,8 +20,10 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// and split constants are the ones this script was compiled with from `KeyfleetPresets`, and the
 /// runtime code hash of the directory and of every fleet is recorded so they can be re-verified
 /// against the deployed code. `factoryMayBeEmpty` is the manifest's waiver as it applies on this
-/// chain. A receipt that failed, a transaction with no receipt, a directory with no code, or any
-/// value that differs from the manifest stops the step before it writes.
+/// chain. A receipt that failed, a transaction with no receipt, a directory with no code, any
+/// value that differs from the manifest, or a fleet the VRF subscription does not yet list as a
+/// consumer stops the step before it writes. The Safe adds the four consumers between the two
+/// steps, so the site only ever lists fleets whose keys can be revealed.
 ///
 /// `parseBroadcast` and `record` take values and return values, so the suite runs them against
 /// fleets deployed in the test; `run` is the only part that reads or writes a file or reads the
@@ -51,6 +53,10 @@ contract RecordKeyfleets is KeyfleetManifest {
     error RecordedMismatch(string field);
     /// @notice A value of the fleet in `slot` differs from the manifest.
     error RecordedFleetMismatch(uint8 slot, string field);
+    /// @notice The VRF subscription does not list the fleet in `slot` as a consumer yet.
+    error FleetNotVrfConsumer(uint8 slot, address fleet);
+    /// @notice On Base, the VRF subscription is owned by someone other than the manifest's Safe.
+    error VrfSubscriptionNotOwnedBySafe(address owner, address regentSafe);
 
     /// @notice Reads the named manifest and its deployment's broadcast, and writes
     /// `deployments/<manifestName>.deployed.json`.
@@ -100,7 +106,9 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// constructor already refused any fleet whose preset is not its slot's or whose treasury,
     /// registry, staking contract, Autolaunch factory or voting window differs from slot 0's. A
     /// fleet's USDC is not compared on its own: a fleet refuses at construction any USDC but its
-    /// registry's `BASE_USDC`, and the registry is compared.
+    /// registry's `BASE_USDC`, and the registry is compared. The VRF values and the trait table
+    /// hash are compared on slot 0 for the same reason, and every fleet must be a consumer of the
+    /// subscription. On Base the subscription must be owned by the manifest's Safe.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         if (address(summary.directory).code.length == 0) revert DirectoryMissing(address(summary.directory));
@@ -117,9 +125,17 @@ contract RecordKeyfleets is KeyfleetManifest {
         if (address(anchor.STAKING()) != manifest.staking) revert RecordedMismatch("staking");
         if (address(anchor.FACTORY()) != manifest.autolaunchFactory) revert RecordedMismatch("autolaunchFactory");
         if (anchor.VOTES().VOTING_WINDOW() != manifest.votingWindow) revert RecordedMismatch("votingWindow");
+        _requireRandomnessMatches(manifest.vrf, anchor);
+        if (anchor.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
 
+        (,,, address subscriptionOwner, address[] memory consumers) =
+            manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
+        if (block.chainid == BASE_CHAIN_ID && subscriptionOwner != manifest.regentSafe) {
+            revert VrfSubscriptionNotOwnedBySafe(subscriptionOwner, manifest.regentSafe);
+        }
         for (uint8 slot = 0; slot < 4; ++slot) {
             _requireFleetMatches(manifest.fleets[slot], fleets[slot], slot);
+            if (!_contains(consumers, address(fleets[slot]))) revert FleetNotVrfConsumer(slot, address(fleets[slot]));
         }
 
         string memory root = "deployed";
@@ -139,6 +155,8 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(root, "bounds", _boundsJson(anchor.REWARDS()));
         vm.serializeString(root, "fees", _feesJson(anchor));
         vm.serializeString(root, "autolaunch", _autolaunchJson(manifest, address(anchor.FACTORY())));
+        vm.serializeString(root, "vrf", _vrfJson(anchor));
+        vm.serializeBytes32(root, "traitTableHash", anchor.TRAIT_TABLE_HASH());
         vm.serializeString(root, "initialAssetFlags", _initialAssetFlagsJson(registry.BASE_USDC(), manifest.regent));
         return vm.serializeString(root, "disclosures", _disclosuresJson());
     }
@@ -148,6 +166,30 @@ contract RecordKeyfleets is KeyfleetManifest {
         if (!_equal(fleet.name(), spec.name)) revert RecordedFleetMismatch(slot, "name");
         if (!_equal(fleet.symbol(), spec.symbol)) revert RecordedFleetMismatch(slot, "symbol");
         if (!_equal(fleet.baseTokenURI(), spec.baseTokenURI)) revert RecordedFleetMismatch(slot, "baseTokenURI");
+    }
+
+    /// @dev The three randomness values the manifest decides, read back off slot 0.
+    function _requireRandomnessMatches(Keyfleet.Randomness memory vrf, Keyfleet anchor) private view {
+        if (anchor.VRF_COORDINATOR() != vrf.coordinator) revert RecordedMismatch("vrf.coordinator");
+        if (anchor.VRF_SUBSCRIPTION_ID() != vrf.subscriptionId) revert RecordedMismatch("vrf.subscriptionId");
+        if (anchor.VRF_KEY_HASH() != vrf.keyHash) revert RecordedMismatch("vrf.keyHash");
+    }
+
+    /// @dev The randomness every key's traits come from, read from the chain: the coordinator and
+    /// its code hash, the subscription, the gas lane and the fixed request terms.
+    /// The subscription id is written as a decimal string, because Chainlink subscription ids are
+    /// 77-digit numbers that many JSON readers cannot hold exactly.
+    function _vrfJson(Keyfleet anchor) private returns (string memory) {
+        address coordinator = address(anchor.VRF_COORDINATOR());
+        string memory vrf = "vrf";
+        vm.serializeAddress(vrf, "coordinator", coordinator);
+        vm.serializeBytes32(vrf, "coordinatorCodeHash", coordinator.codehash);
+        vm.serializeString(vrf, "subscriptionId", vm.toString(anchor.VRF_SUBSCRIPTION_ID()));
+        vm.serializeBytes32(vrf, "keyHash", anchor.VRF_KEY_HASH());
+        vm.serializeUint(vrf, "requestConfirmations", anchor.REVEAL_CONFIRMATIONS());
+        vm.serializeUint(vrf, "callbackGasLimit", anchor.REVEAL_CALLBACK_GAS_LIMIT());
+        vm.serializeUint(vrf, "retryAfterSeconds", anchor.REVEAL_RETRY_AFTER());
+        return vm.serializeBool(vrf, "nativePayment", true);
     }
 
     /// @dev One object per fleet, under the same four keys the input manifest uses.
@@ -268,6 +310,13 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     function _element(string memory array, uint256 index) private pure returns (string memory) {
         return string.concat(array, "[", vm.toString(index), "]");
+    }
+
+    function _contains(address[] memory accounts, address account) private pure returns (bool) {
+        for (uint256 index = 0; index < accounts.length; ++index) {
+            if (accounts[index] == account) return true;
+        }
+        return false;
     }
 
     function _equal(string memory a, string memory b) private pure returns (bool) {

@@ -2,6 +2,8 @@
 pragma solidity 0.8.26;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {IERC4906} from "@openzeppelin/contracts/interfaces/IERC4906.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -13,6 +15,8 @@ import {KeyfleetAssetRegistry} from "./KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
+import {IVRFCoordinatorV2Plus} from "./vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol";
 
 /// @notice One fleet: the keys, the primary purchases, and the USDC accounting behind them.
 /// @dev The keys are an ordinary OpenZeppelin ERC721 with 1-based, contiguous token ids. Every
@@ -47,12 +51,18 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// tokens and grants no allowance. The deploying factory is a later slice, and nothing speculative
 /// is prepared for it here.
 ///
+/// Every key's traits come from one Chainlink VRF v2.5 answer. A purchase asks the pinned coordinator
+/// for one random word and never waits for it or fails because of it; the coordinator answers a few
+/// blocks later through `rawFulfillRandomWords`, and the key's seed is written once from that answer.
+/// A key whose request failed or went unanswered for an hour can be asked for again by anyone. There
+/// is no other source of randomness and no way to choose or replace a seed.
+///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
 /// this contract are the owed protocol share sent to the staking contract, the referral and
 /// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, the
 /// deposit fee and revenue backing of a USDC deposit, the keys' share of a surplus recognized after
 /// the launch settled, and a budget payment the keys voted for.
-contract Keyfleet is ERC721, ReentrancyGuard {
+contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /// @notice How far this fleet's one Autolaunch has got.
@@ -145,6 +155,17 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         string baseTokenURI;
     }
 
+    /// @notice Where a fleet's key traits come from, fixed for its lifetime.
+    /// @param coordinator The Chainlink VRF v2.5 coordinator, the only address that can answer.
+    /// @param subscriptionId The VRF subscription that pays for every request. Its owner adds the
+    /// fleet as a consumer after deployment; until then every request fails and purchases go on.
+    /// @param keyHash The VRF gas lane, which caps the gas price an answer is paid at.
+    struct Randomness {
+        IVRFCoordinatorV2Plus coordinator;
+        uint256 subscriptionId;
+        bytes32 keyHash;
+    }
+
     /// @notice A constructor address argument was zero.
     error ZeroAddress();
     /// @notice The purchase deadline had already passed.
@@ -188,6 +209,16 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error ProposalExpired(uint64 executionExpiry);
     /// @notice The factory does not record the launch it just said it created.
     error LaunchProvenanceMismatch();
+    /// @notice The VRF coordinator address holds no code.
+    error CoordinatorMissing(address coordinator);
+    /// @notice No trait table was named.
+    error TraitTableHashZero();
+    /// @notice Only the VRF coordinator may deliver random words.
+    error OnlyCoordinator(address caller);
+    /// @notice The key already has its seed.
+    error AlreadyRevealed(uint256 tokenId);
+    /// @notice The key's last request is less than `REVEAL_RETRY_AFTER` old.
+    error RevealPending(uint256 tokenId, uint256 retryAt);
 
     /// @notice A primary key was bought. The five split parts always sum to `gross`.
     /// @param tokenId The key that was minted.
@@ -278,6 +309,18 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice A sync recorded a terminal launch state. An unsettled launch emits nothing.
     event LaunchSynced(LaunchState state);
 
+    /// @notice The coordinator accepted a request for a key's random word.
+    event RevealRequested(uint256 indexed tokenId, uint256 indexed requestId);
+
+    /// @notice The coordinator refused a request for a key's random word, so the key waits for
+    /// `requestReveal`. The purchase or retry that tried still stands.
+    event RevealRequestFailed(uint256 indexed tokenId);
+
+    /// @notice A key's seed was written. It never changes afterwards.
+    /// @param requestId The request whose answer produced the seed.
+    /// @param seed `keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, word))`.
+    event KeyRevealed(uint256 indexed tokenId, uint256 indexed requestId, bytes32 seed);
+
     /// @notice External-receipt fee, in basis points of the gross receipt.
     uint256 public constant DEPOSIT_FEE_BPS = 200;
     /// @notice Revenue source label every fleet reports to the staking contract.
@@ -294,6 +337,19 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice Length of a pay period. A period begins with the first payment after the previous
     /// one ended.
     uint256 public constant PAY_PERIOD = 30 days;
+    /// @notice Domain tag of every key seed.
+    bytes32 public constant TRAIT_SEED_TAG = keccak256("keyfleet.trait-seed");
+    /// @notice Blocks the coordinator waits before answering, so a shallow reorg of the purchase
+    /// lands before any seed exists.
+    uint16 public constant REVEAL_CONFIRMATIONS = 3;
+    /// @notice Gas the coordinator gives `rawFulfillRandomWords`. Only the gas used is charged.
+    uint32 public constant REVEAL_CALLBACK_GAS_LIMIT = 100_000;
+    /// @notice Random words asked for per key.
+    uint32 public constant REVEAL_WORDS = 1;
+    /// @notice How long a request may go unanswered before anyone may ask again.
+    uint256 public constant REVEAL_RETRY_AFTER = 1 hours;
+    /// @dev ERC-4906, reported by `supportsInterface` so marketplaces refresh a key once revealed.
+    bytes4 private constant ERC4906_INTERFACE_ID = 0x49064906;
 
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
@@ -320,6 +376,17 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// from it on every call rather than stored, so a fleet can never disagree with its factory
     /// about which strategy is canonical.
     IRegentsAutolaunchFactoryV1 public immutable FACTORY;
+    /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On Base
+    /// the deployment scripts require `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`.
+    IVRFCoordinatorV2Plus public immutable VRF_COORDINATOR;
+    /// @notice The VRF subscription every request is paid from, in ETH.
+    uint256 public immutable VRF_SUBSCRIPTION_ID;
+    /// @notice The VRF gas lane every request names.
+    bytes32 public immutable VRF_KEY_HASH;
+    /// @notice `keccak256` of the published trait-table file, byte for byte, that every key's traits
+    /// are drawn from with its seed. Fixed before the first sale, so the table can never be changed
+    /// after the seeds are known.
+    bytes32 public immutable TRAIT_TABLE_HASH;
 
     /// @notice Primary keys minted so far. Token ids are `1..totalMinted`.
     uint256 public totalMinted;
@@ -348,9 +415,14 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     LaunchState public launchState;
     /// @notice The current pay period of each asset: when it began, its cap and what it has paid.
     mapping(address asset => PayPeriod period) public payPeriod;
+    /// @notice A key's trait seed, zero until the coordinator answers. Written once.
+    mapping(uint256 tokenId => bytes32 seed) public revealSeed;
+    /// @notice When the coordinator last accepted a request for a key, zero if it never has.
+    mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
 
     string private _baseTokenURI;
     LaunchRecord private _launch;
+    mapping(uint256 requestId => uint256 tokenId) private _requestToken;
 
     /// @notice Deploys a fleet and, atomically, the reward ledger and voting controller bound to it.
     /// @dev Both satellites are constructed here rather than passed in, so there is no window in
@@ -370,6 +442,8 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// thirty-day bounds. Production is 24 hours and a testnet fleet uses a shorter window the app
     /// labels from `VOTES.VOTING_WINDOW`.
     /// @param metadata The ERC721 name, symbol and metadata base.
+    /// @param randomness The VRF coordinator, subscription and gas lane.
+    /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte. Not zero.
     constructor(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
@@ -378,7 +452,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         IRegentRevenueStaking staking,
         IRegentsAutolaunchFactoryV1 factory,
         uint64 votingWindow,
-        Metadata memory metadata
+        Metadata memory metadata,
+        Randomness memory randomness,
+        bytes32 traitTableHash
     ) ERC721(metadata.name, metadata.symbol) {
         if (
             address(usdc) == address(0) || treasury == address(0) || address(assetRegistry) == address(0)
@@ -390,12 +466,21 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         if (address(usdc) != canonicalUsdc) revert UsdcNotCanonical(address(usdc), canonicalUsdc);
         uint8 decimals = IERC20Metadata(address(usdc)).decimals();
         if (decimals != KeyfleetPresets.USDC_DECIMALS) revert UsdcDecimalsWrong(decimals);
+        // A coordinator without code would make the request in `purchase` revert past its `catch`.
+        if (address(randomness.coordinator).code.length == 0) {
+            revert CoordinatorMissing(address(randomness.coordinator));
+        }
+        if (traitTableHash == bytes32(0)) revert TraitTableHashZero();
         PRESET = preset;
         USDC = usdc;
         TREASURY = treasury;
         ASSET_REGISTRY = assetRegistry;
         STAKING = staking;
         FACTORY = factory;
+        VRF_COORDINATOR = randomness.coordinator;
+        VRF_SUBSCRIPTION_ID = randomness.subscriptionId;
+        VRF_KEY_HASH = randomness.keyHash;
+        TRAIT_TABLE_HASH = traitTableHash;
         _baseTokenURI = metadata.baseTokenURI;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = KeyfleetPresets.Q_USDC;
 
@@ -482,6 +567,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         return IERC20(asset).balanceOf(address(this)) - accountedBalance(asset);
     }
 
+    /// @notice ERC-165, ERC-721 and ERC-4906.
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, IERC165) returns (bool) {
+        return interfaceId == ERC4906_INTERFACE_ID || super.supportsInterface(interfaceId);
+    }
+
     // --- purchase --------------------------------------------------------
 
     /// @notice Buys the next primary key with USDC.
@@ -504,6 +594,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// including a Cascade level completion, therefore sees the forwarded holder.
     ///
     /// Reentrancy: guarded, so a receiver contract cannot buy again from inside `onERC721Received`.
+    ///
+    /// Last of all the key's random word is requested. A refused request emits
+    /// `RevealRequestFailed` and the purchase stands; the key waits for `requestReveal`.
     /// @param receiver Address to mint to; zero mints to the caller.
     /// @param referrer Any address, including the caller; zero means no referral deduction.
     /// @param maxPrice Highest gross USDC price the caller authorizes.
@@ -574,6 +667,66 @@ contract Keyfleet is ERC721, ReentrancyGuard {
 
         if (PRESET == KeyfleetPresets.Preset.FibonacciCascade && tokenId == KeyfleetPresets.fibonacciLevelEnd(level)) {
             _completeLevel(level);
+        }
+
+        _requestReveal(tokenId);
+    }
+
+    // --- reveals ---------------------------------------------------------
+
+    /// @notice Asks the coordinator again for a key's random word.
+    /// @dev Open to anyone, for a minted key with no seed whose request failed, was never accepted,
+    /// or has gone unanswered for `REVEAL_RETRY_AFTER`. A refused request emits
+    /// `RevealRequestFailed` and does not revert. If two requests are both answered, the first
+    /// answer wins and the second is ignored. Guarded, so a receiver cannot add a second request to
+    /// the purchase that is minting to it.
+    function requestReveal(uint256 tokenId) external nonReentrant {
+        _requireOwned(tokenId);
+        if (revealSeed[tokenId] != bytes32(0)) revert AlreadyRevealed(tokenId);
+        uint256 requestedAt = revealRequestedAt[tokenId];
+        if (requestedAt != 0 && block.timestamp < requestedAt + REVEAL_RETRY_AFTER) {
+            revert RevealPending(tokenId, requestedAt + REVEAL_RETRY_AFTER);
+        }
+        _requestReveal(tokenId);
+    }
+
+    /// @notice The coordinator's answer to a request.
+    /// @dev Only the pinned coordinator may call, and for it this never reverts: a reverted
+    /// callback is final and the coordinator would charge for it and never answer again. An
+    /// unknown request, an empty answer, or an answer for a key that already has its seed is
+    /// ignored. Not guarded: a guard could only lose an answer.
+    function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
+        if (msg.sender != address(VRF_COORDINATOR)) revert OnlyCoordinator(msg.sender);
+        uint256 tokenId = _requestToken[requestId];
+        if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0)) return;
+
+        bytes32 seed = keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, randomWords[0]));
+        revealSeed[tokenId] = seed;
+        emit KeyRevealed(tokenId, requestId, seed);
+        emit MetadataUpdate(tokenId);
+    }
+
+    /// @dev Requests one random word, paid in ETH from the fleet's subscription. Never reverts: a
+    /// refusal, including one caused by a caller who sent too little gas, only leaves the key
+    /// waiting for `requestReveal`, and cannot choose its seed.
+    function _requestReveal(uint256 tokenId) private {
+        try VRF_COORDINATOR.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: VRF_KEY_HASH,
+                subId: VRF_SUBSCRIPTION_ID,
+                requestConfirmations: REVEAL_CONFIRMATIONS,
+                callbackGasLimit: REVEAL_CALLBACK_GAS_LIMIT,
+                numWords: REVEAL_WORDS,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
+            })
+        ) returns (
+            uint256 requestId
+        ) {
+            _requestToken[requestId] = tokenId;
+            revealRequestedAt[tokenId] = uint64(block.timestamp);
+            emit RevealRequested(tokenId, requestId);
+        } catch {
+            emit RevealRequestFailed(tokenId);
         }
     }
 

@@ -15,3 +15,6 @@ optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
+
+[fmt]
+ignore = ["src/vendor/**"]

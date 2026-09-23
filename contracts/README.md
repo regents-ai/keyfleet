@@ -268,12 +268,17 @@ write of a slot already holding a value costs 5,000; a referred Classic purchase
 measured 239,138. The most expensive primary purchase is the first referred
 purchase on a fresh fleet, because every accounting slot it touches is written
 from zero, and among the presets Cascade's is the dearest. The suite measures that
-purchase against a plain ERC-20 standing in for USDC, with every account starting
-cold, at 361,516 gas in execution, and asserts a ceiling of 434,000, the
+purchase against a plain ERC-20 standing in for USDC and a stand-in randomness
+coordinator whose request writes what the real one writes, with every account
+starting cold, at 445,417 gas in execution, and asserts a ceiling of 535,000, the
 measurement plus twenty percent rounded up to the nearest thousand. That ceiling
 is a regression bound on the fleet's own work, not a figure to quote: Base USDC is
 a proxy and costs more per transfer than the stand-in, so the fork figures above
-are the ones to publish.
+are the ones to publish. They were taken before every purchase began asking for
+its key's traits, which is described below. On a fork of Base, against the real
+Chainlink coordinator, asking again for a key's traits measured 96,899 gas in
+execution with everything cold, and a purchase now pays about that on top of the
+figures above; they are to be measured again before they are published.
 
 On the same fork, against the real Regents staking contract, `sendProtocolShare`
 measured 121,915 gas in total the first time any fleet sent and 108,970 for each
@@ -633,15 +638,86 @@ referral, Accelerant rebate and Cascade repayment paid into the ledger, the
 revenue backing and the keys' share of launch income moved into the ledger, and a
 budget payment the keys voted for. An Autolaunch moves nothing out at all.
 
+Every key gets its traits from a random number that nobody, the team included,
+can choose or see in advance. The number comes from Chainlink VRF v2.5, which
+proves on chain that it was drawn fairly. Each purchase, as its last step, asks
+the Chainlink coordinator for one random number: three blocks deep, with 100,000
+gas for the answer, paid in ETH from one subscription the Regent Safe owns. A
+purchase never waits for the answer and never fails because of the request: if
+the coordinator refuses it, or the buyer sent too little gas for it, the key is
+still sold and the fleet emits `RevealRequestFailed(tokenId)`. When the request
+is accepted the fleet emits `RevealRequested(tokenId, requestId)` and records
+when it asked, in `revealRequestedAt(tokenId)`.
+
+The answer arrives in a later transaction from the coordinator, through
+`rawFulfillRandomWords`, which refuses any other caller. The fleet does not
+inherit Chainlink's consumer base contract; it checks the caller against its own
+fixed `VRF_COORDINATOR`. The key's seed is
+
+```
+keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(fleet), tokenId, word))
+```
+
+with `TRAIT_SEED_TAG = keccak256("keyfleet.trait-seed")` and `word` the first
+random word. It is stored in `revealSeed(tokenId)`, and the fleet emits
+`KeyRevealed(tokenId, requestId, seed)` and ERC-4906 `MetadataUpdate(tokenId)`,
+so marketplaces refresh the key. A seed is written once: the first answer wins,
+and an answer for a key that already has a seed, for a request the fleet never
+made, or with no words at all is ignored without reverting, because a reverted
+answer is final and still charged to the subscription. The answer measured about
+29,000 gas with everything cold, well inside the 100,000 it is given.
+`supportsInterface` reports ERC-4906 (`0x49064906`).
+
+If a key has no seed, anyone may ask again with `requestReveal(tokenId)`: at once
+if no request for it was ever accepted, or once an hour has passed since the last
+accepted one. There is no other way to give a key a seed.
+
+The traits themselves are drawn off chain from the seed and a published trait
+table. The table is one file: the file the art agent delivers, committed to the
+repository at a path chosen then. `TRAIT_TABLE_HASH` is `keccak256` of that
+file's bytes, exactly as committed, with nothing normalised or re-encoded first,
+so anyone can hash the published file and compare. Every fleet takes the hash as
+its own constructor argument, `traitTableHash`, so the table is fixed before the
+first key is sold and cannot be changed after the seeds are known. A constructor
+refuses a zero hash.
+
+The draw rule, for a key with seed `seed`:
+
+- Traits are drawn in the order the table lists them. The trait listed at
+  position `i`, counting from 0, uses word `i`, which is
+  `keccak256(abi.encode(seed, i))` with `i` a `uint256`.
+- Let `u` be the top 32 bits of word `i`, as a number from 0 to 2^32 - 1, and
+  `total` the sum of that trait's weights. The draw is
+  `r = floor(u * total / 2^32)`.
+- Walk the trait's values in the order the table lists them, adding up their
+  weights. The value picked is the first one whose running total is greater than
+  `r`.
+- Each trait's weights must be whole numbers that add up to less than 2^32, so
+  that `u * total` fits in 64 bits and every value with a weight above zero can
+  be drawn.
+
+Before a release is deployed the operator creates the subscription, funds it in
+ETH, moves its ownership to the Regents Safe, and writes its id into the
+manifest's `vrf` block and the trait table's hash into its `traitTableHash`. The
+fleets are deployed with the coordinator, the subscription, the gas lane and the
+trait table fixed; the Safe then adds each fleet to the subscription as a
+consumer, and only after that does the record step accept the release. On Base
+the record step also requires the subscription to be owned by the manifest's
+Safe. Keys sold in between are sold without a request and can ask
+again as soon as their fleet is added. The three Chainlink files the fleet uses
+are copied unchanged into `src/vendor/chainlink`, with their source, commit and
+checksums in the README beside them.
+
 `KeyfleetDirectory` names the four fleets of one release and does nothing else.
-It deploys nothing: `Keyfleet` initcode is 39,078 bytes, so a contract carrying
+It deploys nothing: `Keyfleet` initcode is 41,304 bytes and its runtime 21,865, so a contract carrying
 a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
 deploying all four would exceed the 49,152-byte initcode limit. The script
 deploys the fleets and hands them to the directory, whose constructor is its
 only check: each slot must hold the preset that belongs to it — Syndicate,
 Cascade, Classic, Accelerant, in that order — and all four must share the same
-treasury, asset registry, staking contract, Autolaunch factory and voting
-window, or it reverts with the slot that did not fit. USDC needs no
+treasury, asset registry, staking contract, Autolaunch factory, voting
+window, randomness coordinator, subscription, gas lane and trait table hash, or
+it reverts with the slot that did not fit. USDC needs no
 comparison of its own: a fleet refuses any USDC but its registry's, and the
 registry is compared. `fleets()` and `isFleet(address)` are the whole of its
 surface. It has no owner, no setter and no upgrade path, holds no authority over
@@ -658,7 +734,12 @@ chain it is running on; on Base, a USDC other than Base USDC
 `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` or a REGENT other than Base REGENT
 `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`; on any chain, a REGENT address that
 holds no code; and an Autolaunch factory address that holds no code — a manifest
-may waive that for a lab, and the waiver is ignored on Base. It sets no
+may waive that for a lab, and the waiver is ignored on Base. It also refuses, on
+Base, a VRF coordinator other than `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`
+or a gas lane other than the 2 gwei lane
+`0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab`; on any
+chain, a coordinator without code, a gas lane the coordinator does not know, a
+subscription it does not know, and a zero trait table hash. It sets no
 allowlist flag and moves no token: admitting USDC and REGENT is the Safe's own
 transaction afterwards.
 
@@ -666,12 +747,16 @@ transaction afterwards.
 It reads Forge's broadcast log, refuses a transaction without a receipt or a
 receipt that failed, applies the same manifest refusals as the deployment step,
 takes the directory from the broadcast, and reads the release back from the chain
-through that directory, refusing any value that differs from the manifest. Only then does it write
+through that directory, refusing any value that differs from the manifest, any
+fleet the subscription does not yet list as a consumer and, on Base, a
+subscription the manifest's Safe does not own. Only then does it write
 `deployments/<name>.deployed.json`, the published deployment manifest the app and
 the product copy are seeded from: addresses, the deployment block, the numeric
 bounds, the ten-USDC reference price, the fee basis points, the fixed vote window, the Autolaunch binding with
-the code hashes of the factory and strategy, the asset flags awaiting the Safe,
-and the terms the release discloses. Addresses and fleet values come from the
+the code hashes of the factory and strategy, the randomness terms (coordinator and
+its code hash, subscription, gas lane, confirmations, answer gas and retry wait),
+the trait table hash, the asset flags awaiting the Safe, and the terms the release
+discloses. Addresses and fleet values come from the
 chain; the supply and split constants come from the `KeyfleetPresets` the script
 was compiled with, and the runtime code hash of the directory and of each fleet
 is recorded so they can be checked against the deployed code.
@@ -685,13 +770,16 @@ steps, what each refuses, and what the Safe does next.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, post-launch budget, fleet-directory and
+fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, post-launch budget, key-reveal, fleet-directory and
 deployment tests. Foundry must be installed; the compiler may be downloaded on
-first use. Tests require no RPC, apart from `test/fork/KeyfleetLaunchIncomeFork.t.sol`,
-which skips unless `KEYFLEET_FORK_RPC_URL` names a chain with the Autolaunch
-graph deployed and `KEYFLEET_FORK_FACTORY` names its factory. It runs the whole
-path on a local fork: the keys vote a launch, a bidder graduates it, SUBJECT
-vests out of the escrow, USDC and REGENT pass through the splitter, the fleet
-splits each, keys claim, and a Pay vote spends budget. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
+first use. Tests require no RPC, apart from the two in `test/fork`, which skip
+themselves unless their environment is set.
+`test/fork/KeyfleetLaunchIncomeFork.t.sol` needs `KEYFLEET_FORK_RPC_URL` naming a
+chain with the Autolaunch graph deployed and `KEYFLEET_FORK_FACTORY` naming its
+factory. It runs the whole path on a local fork: the keys vote a launch, a
+bidder graduates it, SUBJECT vests out of the escrow, USDC and REGENT pass
+through the splitter, the fleet splits each, keys claim, and a Pay vote spends
+budget. `test/fork/KeyfleetRevealBaseFork.t.sol` needs `BASE_RPC_URL` and runs
+a fleet against the real Chainlink coordinator on a fork of Base. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
 vendored as git submodules under `contracts/lib`, so clone with submodules or
 run `git submodule update --init`.

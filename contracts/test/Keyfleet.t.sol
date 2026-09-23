@@ -10,6 +10,8 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
@@ -124,6 +126,8 @@ contract KeyfleetTest is Test {
     MockERC20 private usdc;
     MockERC20 private other;
     KeyfleetAssetRegistry private registry;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
 
     address private buyer = address(0xB0B0B0);
     address private treasury = address(0x7EA5);
@@ -154,12 +158,14 @@ contract KeyfleetTest is Test {
         usdc = new MockERC20("USD Coin", "USDC");
         other = new MockERC20("Other", "OTH");
         registry = new KeyfleetAssetRegistry(address(0x5AFE), address(usdc));
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
     }
 
     // --- helpers ---------------------------------------------------------
 
-    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return new Keyfleet(
+    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
+        fleet = new Keyfleet(
             preset,
             usdc,
             treasury,
@@ -167,8 +173,20 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
+    }
+
+    /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
+    function _randomness() private view returns (Keyfleet.Randomness memory) {
+        return Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+            subscriptionId: vrfSubscription,
+            keyHash: keccak256("key hash")
+        });
     }
 
     /// @dev Mints the buyer exactly the next price, so the buyer's balance is zero between buys, and
@@ -246,7 +264,9 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -258,7 +278,9 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -270,7 +292,9 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -282,7 +306,9 @@ contract KeyfleetTest is Test {
             IRegentRevenueStaking(address(0)),
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
 
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
@@ -294,7 +320,9 @@ contract KeyfleetTest is Test {
             staking,
             IRegentsAutolaunchFactoryV1(address(0)),
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
     }
 
@@ -313,7 +341,9 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
     }
 
@@ -332,7 +362,9 @@ contract KeyfleetTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("n", "s", BASE_URI)
+            Keyfleet.Metadata("n", "s", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
     }
 
@@ -1073,6 +1105,7 @@ contract KeyfleetTest is Test {
         vm.cool(address(fleet));
         vm.cool(address(fleet.REWARDS()));
         vm.cool(address(usdc));
+        vm.cool(address(vrf));
         vm.cool(receiver);
     }
 
@@ -1095,8 +1128,9 @@ contract KeyfleetTest is Test {
 
     /// @dev The published execution-gas ceiling covers the worst primary purchase: the first referred
     /// one on a fresh Cascade fleet, with every account it touches starting cold. It is measured
-    /// against the plain ERC-20 mock standing in for USDC: 361,516 gas in execution, and the ceiling
-    /// is that plus twenty percent, rounded up to the nearest thousand. The first purchase after each
+    /// against the plain ERC-20 mock standing in for USDC and the mock VRF coordinator, whose request
+    /// writes what the real coordinator's writes: 445,417 gas in execution, and the ceiling is that
+    /// plus twenty percent, rounded up to the nearest thousand. The first purchase after each
     /// `sendProtocolShare` pays the write of the owed share from zero again. That makes it a
     /// regression bound on the fleet's own work, not the figure to publish: real Base USDC is a
     /// proxy and costs more per transfer, and the fork-measured totals in the contracts README are
@@ -1114,7 +1148,7 @@ contract KeyfleetTest is Test {
         console2.log("first referred purchase gas, Accelerant:", accelerant);
         console2.log("first referred purchase gas, Classic:", classic);
 
-        assertLt(cascade, 434_000, "the worst primary purchase stays under the published ceiling");
+        assertLt(cascade, 535_000, "the worst primary purchase stays under the published ceiling");
         assertGt(cascade, syndicate, "Cascade is the most expensive preset");
         assertGt(cascade, accelerant);
         assertGt(cascade, classic);

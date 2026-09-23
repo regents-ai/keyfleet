@@ -11,7 +11,9 @@ import {KeyfleetAssetRegistry} from "../../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
+import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockStaking} from "../KeyfleetDeposits.t.sol";
+import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The pinned continuous clearing auction, as far as a bidder drives it.
 interface IForkAuction {
@@ -55,7 +57,9 @@ interface IForkSplitter {
 /// deployed and `KEYFLEET_FORK_FACTORY` names its factory; without them the test skips. Everything
 /// happens on a local fork of that chain, so nothing is written to the chain itself. `deal` funds
 /// ordinary wallets with USDC and REGENT, and `prank` acts as ordinary holders, a bidder, a payer and
-/// the stand-in Safe this test deploys its own registry with; no lab role is taken over.
+/// the stand-in Safe this test deploys its own registry with; no lab role is taken over. The fleet's
+/// key reveals go to a stand-in VRF coordinator deployed on the fork, because the lab chain need not
+/// carry Chainlink's; reveals are not what this test covers.
 contract KeyfleetLaunchIncomeForkTest is Test {
     address private constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address private constant REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
@@ -91,6 +95,8 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         assertFalse(factory.launchesPaused(), "the lab's factory is not taking launches");
 
         registry = new KeyfleetAssetRegistry(safe, USDC);
+        MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
+        uint256 vrfSubscription = vrf.createSubscription();
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FibonacciSyndicate,
             IERC20(USDC),
@@ -99,8 +105,15 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             new MockStaking(IERC20(USDC)),
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Fork", "KFF", "https://keys.regents.sh/fork/")
+            Keyfleet.Metadata("Keyfleet Fork", "KFF", "https://keys.regents.sh/fork/"),
+            Keyfleet.Randomness({
+                coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+                subscriptionId: vrfSubscription,
+                keyHash: keccak256("key hash")
+            }),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
         votes = fleet.VOTES();
         rewards = fleet.REWARDS();
 

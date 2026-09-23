@@ -9,6 +9,12 @@
   "assetRegistry": "0x0000000000000000000000000000000000000000",
   "autolaunchFactoryMayBeEmpty": true,
   "votingWindow": 86400,
+  "vrf": {
+    "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
+    "subscriptionId": "0",
+    "keyHash": "0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab"
+  },
+  "traitTableHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "fleets": {
     "syndicate": {
       "name": "Keyfleet Syndicate",

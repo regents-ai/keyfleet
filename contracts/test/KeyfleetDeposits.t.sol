@@ -8,6 +8,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -143,6 +145,8 @@ contract KeyfleetDepositsTest is Test {
     MockToken private other;
     KeyfleetAssetRegistry private registry;
     MockStaking private staking;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
     IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
@@ -167,12 +171,14 @@ contract KeyfleetDepositsTest is Test {
         other = new MockToken("Other", "OTH");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
         staking = new MockStaking(usdc);
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
     }
 
     // --- helpers ---------------------------------------------------------
 
-    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return new Keyfleet(
+    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
+        fleet = new Keyfleet(
             preset,
             usdc,
             treasury,
@@ -180,8 +186,20 @@ contract KeyfleetDepositsTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
+    }
+
+    /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
+    function _randomness() private view returns (Keyfleet.Randomness memory) {
+        return Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+            subscriptionId: vrfSubscription,
+            keyHash: keccak256("key hash")
+        });
     }
 
     function _admit(Keyfleet fleet, address token) private {
@@ -1116,6 +1134,8 @@ contract KeyfleetDepositsGasTest is Test {
     MockToken private revenueAsset;
     KeyfleetAssetRegistry private registry;
     MockStaking private staking;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
     IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
     Keyfleet private fleet;
@@ -1129,6 +1149,8 @@ contract KeyfleetDepositsGasTest is Test {
         revenueAsset = new MockToken("Revenue", "REV");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
         staking = new MockStaking(usdc);
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FibonacciSyndicate,
             usdc,
@@ -1137,8 +1159,11 @@ contract KeyfleetDepositsGasTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/")
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
+            _randomness(),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
 
         vm.startPrank(safe);
         registry.setFactoryTokenAllowed(address(revenueAsset), true);
@@ -1184,6 +1209,15 @@ contract KeyfleetDepositsGasTest is Test {
         emit log_named_uint("sendProtocolShare gas", used);
         assertLt(used, SEND_CEILING, "the send stays under its ceiling");
         assertEq(staking.registered(), owed, "the whole owed share was registered");
+    }
+
+    /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
+    function _randomness() private view returns (Keyfleet.Randomness memory) {
+        return Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+            subscriptionId: vrfSubscription,
+            keyHash: keccak256("key hash")
+        });
     }
 
     function _levelStart(uint256 level) private pure returns (uint256) {

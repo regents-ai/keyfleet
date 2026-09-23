@@ -2,7 +2,15 @@
 pragma solidity 0.8.26;
 
 import {Script} from "forge-std/Script.sol";
+import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+
+/// @notice The VRF v2.5 coordinator's public proving-key table, which the vendored interface does
+/// not declare.
+interface IVRFProvingKeys {
+    function s_provingKeys(bytes32 keyHash) external view returns (bool exists, uint64 maxGas);
+}
 
 /// @notice The input manifest both deployment steps share: its shape, its reader, and the
 /// refusals that hold for the manifest before anything is deployed or recorded.
@@ -17,6 +25,10 @@ abstract contract KeyfleetManifest is Script {
     address public constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     /// @notice Base REGENT, the only REGENT a manifest may name on Base.
     address public constant BASE_REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
+    /// @notice The Chainlink VRF v2.5 coordinator on Base, the only one a manifest may name there.
+    address public constant BASE_VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
+    /// @notice The Base VRF gas lane with the 2 gwei price cap, the only one a manifest may name there.
+    bytes32 public constant BASE_VRF_KEY_HASH = 0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab;
 
     /// @notice What one fleet is deployed with, which is exactly `Keyfleet.Metadata`.
     /// @param name ERC721 collection name.
@@ -45,6 +57,10 @@ abstract contract KeyfleetManifest is Script {
     /// @param autolaunchFactoryMayBeEmpty Whether the Autolaunch factory may have no code yet. It
     /// is ignored on Base, where the factory must already exist.
     /// @param votingWindow Seconds a proposal stays open, identical on all four fleets.
+    /// @param vrf The VRF coordinator, subscription and gas lane, identical on all four fleets. On
+    /// Base the coordinator and gas lane must be `BASE_VRF_COORDINATOR` and `BASE_VRF_KEY_HASH`.
+    /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte, identical
+    /// on all four fleets. Never zero.
     /// @param fleets Syndicate, Cascade, Classic and Accelerant, in that order.
     struct Manifest {
         uint256 chainId;
@@ -57,6 +73,8 @@ abstract contract KeyfleetManifest is Script {
         address assetRegistry;
         bool autolaunchFactoryMayBeEmpty;
         uint64 votingWindow;
+        Keyfleet.Randomness vrf;
+        bytes32 traitTableHash;
         FleetSpec[4] fleets;
     }
 
@@ -73,6 +91,14 @@ abstract contract KeyfleetManifest is Script {
     /// @notice The manifest's voting window does not fit the seconds a fleet is deployed with. The
     /// controller bounds it far more tightly again, to one hour through thirty days.
     error VotingWindowTooLarge(uint256 votingWindow);
+    /// @notice A Base manifest names a VRF coordinator other than Base's.
+    error VrfCoordinatorNotBase(address coordinator);
+    /// @notice A Base manifest names a VRF gas lane other than Base's 2 gwei lane.
+    error VrfKeyHashNotBase(bytes32 keyHash);
+    /// @notice The manifest's VRF coordinator address holds no code on this chain.
+    error VrfCoordinatorMissing(address coordinator);
+    /// @notice The coordinator has no proving key for the manifest's gas lane.
+    error VrfKeyHashUnknown(bytes32 keyHash);
 
     /// @notice Reads `deployments/<manifestName>.json`.
     function readManifest(string memory manifestName) public view returns (Manifest memory) {
@@ -95,6 +121,12 @@ abstract contract KeyfleetManifest is Script {
         uint256 votingWindow = vm.parseJsonUint(json, ".votingWindow");
         if (votingWindow > type(uint64).max) revert VotingWindowTooLarge(votingWindow);
         manifest.votingWindow = uint64(votingWindow);
+        manifest.vrf = Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(vm.parseJsonAddress(json, ".vrf.coordinator")),
+            subscriptionId: vm.parseJsonUint(json, ".vrf.subscriptionId"),
+            keyHash: vm.parseJsonBytes32(json, ".vrf.keyHash")
+        });
+        manifest.traitTableHash = vm.parseJsonBytes32(json, ".traitTableHash");
 
         string[4] memory keys = _fleetKeys();
         for (uint256 slot = 0; slot < 4; ++slot) {
@@ -110,17 +142,29 @@ abstract contract KeyfleetManifest is Script {
     /// @dev The manifest's chain must be this chain. On Base its USDC and REGENT must be Base USDC
     /// and Base REGENT, and on every chain its REGENT must hold code, because the record step
     /// publishes REGENT for the Safe to admit and no fleet reads it. Its Autolaunch factory must
-    /// hold code unless the manifest waives that for a lab. The waiver is ignored on Base.
+    /// hold code unless the manifest waives that for a lab. The waiver is ignored on Base. On Base
+    /// the VRF coordinator and gas lane must be Base's own, and on every chain the coordinator must
+    /// hold code, know the gas lane and know the subscription; a subscription it does not know
+    /// reverts with the coordinator's own `InvalidSubscription`. The trait table hash must not be
+    /// zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
         if (block.chainid != manifest.chainId) revert WrongChain(manifest.chainId, block.chainid);
+        address coordinator = address(manifest.vrf.coordinator);
         if (block.chainid == BASE_CHAIN_ID) {
             if (manifest.usdc != BASE_USDC) revert UsdcNotBaseUsdc(manifest.usdc);
             if (manifest.regent != BASE_REGENT) revert RegentNotBaseRegent(manifest.regent);
+            if (coordinator != BASE_VRF_COORDINATOR) revert VrfCoordinatorNotBase(coordinator);
+            if (manifest.vrf.keyHash != BASE_VRF_KEY_HASH) revert VrfKeyHashNotBase(manifest.vrf.keyHash);
         }
         if (manifest.regent.code.length == 0) revert RegentMissing(manifest.regent);
         if (!_factoryMayBeEmpty(manifest) && manifest.autolaunchFactory.code.length == 0) {
             revert AutolaunchFactoryMissing(manifest.autolaunchFactory);
         }
+        if (coordinator.code.length == 0) revert VrfCoordinatorMissing(coordinator);
+        (bool keyExists,) = IVRFProvingKeys(coordinator).s_provingKeys(manifest.vrf.keyHash);
+        if (!keyExists) revert VrfKeyHashUnknown(manifest.vrf.keyHash);
+        manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
+        if (manifest.traitTableHash == bytes32(0)) revert Keyfleet.TraitTableHashZero();
     }
 
     /// @dev Whether the manifest's empty-factory waiver applies on this chain. It never does on Base.

@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
@@ -31,6 +33,8 @@ contract KeyfleetVotesTest is Test {
     MockToken private usdc;
     MockToken private other;
     KeyfleetAssetRegistry private registry;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
     IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
@@ -62,6 +66,8 @@ contract KeyfleetVotesTest is Test {
         usdc = new MockToken("USD Coin", "USDC");
         other = new MockToken("Other", "OTH");
         registry = new KeyfleetAssetRegistry(safe, address(usdc));
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
         vm.warp(1_000_000);
     }
 
@@ -71,8 +77,8 @@ contract KeyfleetVotesTest is Test {
         return _deploy(preset, VOTING_WINDOW);
     }
 
-    function _deploy(KeyfleetPresets.Preset preset, uint64 votingWindow) private returns (Keyfleet) {
-        return new Keyfleet(
+    function _deploy(KeyfleetPresets.Preset preset, uint64 votingWindow) private returns (Keyfleet fleet) {
+        fleet = new Keyfleet(
             preset,
             usdc,
             treasury,
@@ -80,8 +86,20 @@ contract KeyfleetVotesTest is Test {
             staking,
             factory,
             votingWindow,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            _randomness(),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
+    }
+
+    /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
+    function _randomness() private view returns (Keyfleet.Randomness memory) {
+        return Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+            subscriptionId: vrfSubscription,
+            keyHash: keccak256("key hash")
+        });
     }
 
     function _buy(Keyfleet fleet, address receiver) private returns (uint256 tokenId) {

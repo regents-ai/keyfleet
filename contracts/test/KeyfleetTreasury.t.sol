@@ -8,8 +8,10 @@ import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken, MockLBPStrategy, MockAutolaunchFactory} from "./KeyfleetAutolaunch.t.sol";
 import {MockStaking, ReenteringToken} from "./KeyfleetDeposits.t.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The fleet after its launch: income recognized once the launch has graduated or failed is
 /// split between the budget and the keys, and the budget is spent only by a passed Pay vote within
@@ -25,6 +27,8 @@ contract KeyfleetTreasuryTest is Test {
     MockLBPStrategy private strategy;
     MockAutolaunchFactory private factory;
     MockStaking private staking;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private vrfSubscription;
 
     /// @dev A Fibonacci Syndicate fleet with its eighty-six keys sold and its launch created but
     /// not settled, built once so every fuzz run starts from it.
@@ -72,6 +76,8 @@ contract KeyfleetTreasuryTest is Test {
         strategy = new MockLBPStrategy();
         factory = new MockAutolaunchFactory(strategy);
         factory.openLaunches();
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrfSubscription = vrf.createSubscription();
         vm.warp(1_000_000);
 
         fib = _launchedFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
@@ -80,8 +86,8 @@ contract KeyfleetTreasuryTest is Test {
 
     // --- helpers ---------------------------------------------------------
 
-    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet) {
-        return new Keyfleet(
+    function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
+        fleet = new Keyfleet(
             preset,
             usdc,
             treasury,
@@ -89,8 +95,15 @@ contract KeyfleetTreasuryTest is Test {
             staking,
             factory,
             VOTING_WINDOW,
-            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI)
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            Keyfleet.Randomness({
+                coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+                subscriptionId: vrfSubscription,
+                keyHash: keccak256("key hash")
+            }),
+            keccak256("trait table")
         );
+        vrf.addConsumer(vrfSubscription, address(fleet));
     }
 
     function _isFibonacci(KeyfleetPresets.Preset preset) private pure returns (bool) {

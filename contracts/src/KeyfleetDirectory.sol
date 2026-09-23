@@ -6,14 +6,15 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
 /// @notice The four fixed fleets of the release, named once and never again.
 /// @dev This is the whole of the "minimal deployment factory/registry" the release asks for. It
-/// deploys nothing: `Keyfleet` initcode is 39,078 bytes, so a contract carrying a `new Keyfleet`
+/// deploys nothing: `Keyfleet` initcode is 41,304 bytes, so a contract carrying a `new Keyfleet`
 /// would exceed the 24,576-byte runtime limit, and a constructor deploying all four would exceed
 /// the 49,152-byte initcode limit. The deployment script creates the fleets and this contract
 /// records which four they are, so the app seeds from one address instead of four pasted ones.
 ///
 /// The constructor is the only check there is: each slot must hold the preset that belongs to it,
-/// and all four must share the same treasury, asset registry, staking contract, Autolaunch factory
-/// and voting window. A directory therefore only ever names a coherent set. USDC, the money every
+/// and all four must share the same treasury, asset registry, staking contract, Autolaunch factory,
+/// voting window, VRF coordinator, VRF subscription, VRF gas lane and trait table. A directory
+/// therefore only ever names a coherent set. USDC, the money every
 /// key is paid in, needs no comparison of its own: a fleet refuses any USDC but its registry's
 /// `BASE_USDC`, and the registry is compared. The fleets themselves are unchanged by it: it holds
 /// no authority over any of them, takes no tokens, and a later factory reading a fleet's public
@@ -23,7 +24,7 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// set of fleets means a different directory.
 contract KeyfleetDirectory {
     /// @notice The fleet in `slot` does not belong in this directory: its preset is not the one the
-    /// slot is for, or one of its five shared values differs from slot 0's.
+    /// slot is for, or one of its nine shared values differs from slot 0's.
     error FleetMismatch(uint8 slot);
 
     /// @notice Fibonacci Syndicate, slot 0.
@@ -74,15 +75,20 @@ contract KeyfleetDirectory {
         if (fleet.PRESET() != expected) revert FleetMismatch(slot);
     }
 
-    /// @dev The five values every fleet of one release shares. A difference in any of them means
+    /// @dev The nine values every fleet of one release shares. A difference in any of them means
     /// the two fleets answer to a different treasury, different money through a different admission
-    /// list, a different staking contract, a different factory or a different vote clock, and are
-    /// not the same release.
+    /// list, a different staking contract, a different factory, a different vote clock, different
+    /// randomness paid from a different subscription, or a different trait table, and are not the
+    /// same release.
     function _requireSameWiring(Keyfleet anchor, Keyfleet fleet, uint8 slot) private view {
         if (
             fleet.TREASURY() != anchor.TREASURY() || fleet.ASSET_REGISTRY() != anchor.ASSET_REGISTRY()
                 || fleet.STAKING() != anchor.STAKING() || fleet.FACTORY() != anchor.FACTORY()
                 || fleet.VOTES().VOTING_WINDOW() != anchor.VOTES().VOTING_WINDOW()
+                || fleet.VRF_COORDINATOR() != anchor.VRF_COORDINATOR()
+                || fleet.VRF_SUBSCRIPTION_ID() != anchor.VRF_SUBSCRIPTION_ID()
+                || fleet.VRF_KEY_HASH() != anchor.VRF_KEY_HASH()
+                || fleet.TRAIT_TABLE_HASH() != anchor.TRAIT_TABLE_HASH()
         ) {
             revert FleetMismatch(slot);
         }

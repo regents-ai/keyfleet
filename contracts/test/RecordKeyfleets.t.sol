@@ -5,9 +5,12 @@ import {Test} from "forge-std/Test.sol";
 import {DeployKeyfleets} from "../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
+import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetDirectory} from "../src/KeyfleetDirectory.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken, StrategyPublishingFactory} from "./DeployKeyfleets.t.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Stands in for the Autolaunch strategy: the record step reads only its address and its code.
 contract StandInStrategy {}
@@ -20,6 +23,8 @@ contract RecordKeyfleetsTest is Test {
     address private constant TREASURY = address(0x7EA5);
     address private constant STAKING = address(0x57A1);
     uint256 private constant DEPLOYMENT_BLOCK = 7;
+    bytes32 private constant KEY_HASH = keccak256("lab gas lane");
+    bytes32 private constant TRAIT_TABLE = keccak256("trait table");
 
     DeployKeyfleets private deployer;
     RecordKeyfleets private recorder;
@@ -27,6 +32,8 @@ contract RecordKeyfleetsTest is Test {
     MockToken private usdc;
     StandInStrategy private strategy;
     StrategyPublishingFactory private factory;
+    MockVRFCoordinatorV2Plus private vrf;
+    uint256 private subscriptionId;
 
     function setUp() public {
         deployer = new DeployKeyfleets();
@@ -35,11 +42,14 @@ contract RecordKeyfleetsTest is Test {
         usdc = new MockToken("USD Coin", "USDC");
         strategy = new StandInStrategy();
         factory = new StrategyPublishingFactory(address(strategy));
+        vrf = new MockVRFCoordinatorV2Plus();
+        vrf.addProvingKey(KEY_HASH, 30 gwei);
+        subscriptionId = vrf.createSubscription();
     }
 
     function test_recordPublishesTheReleaseAsTheChainReportsIt() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        DeployKeyfleets.Deployment memory deployment = deployer.deploy(manifest);
+        DeployKeyfleets.Deployment memory deployment = _deployAndAddConsumers(manifest);
 
         string memory json = recorder.record(manifest, _summary(deployment.directory));
 
@@ -134,13 +144,43 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonString(json, ".disclosures.serviceRewardEligibility"), "Keys only.", "Eligibility");
         assertTrue(bytes(vm.parseJsonString(json, ".disclosures.feeComposition")).length > 0, "Fee composition");
         assertTrue(bytes(vm.parseJsonString(json, ".disclosures.safeAuthority")).length > 0, "Safe authority");
+
+        assertEq(vm.parseJsonAddress(json, ".vrf.coordinator"), address(vrf), "VRF coordinator");
+        assertEq(vm.parseJsonBytes32(json, ".vrf.coordinatorCodeHash"), address(vrf).codehash, "Coordinator code");
+        assertEq(vm.parseJsonString(json, ".vrf.subscriptionId"), vm.toString(subscriptionId), "Subscription");
+        assertEq(vm.parseJsonUint(json, ".vrf.subscriptionId"), subscriptionId, "Subscription, all its digits");
+        assertEq(vm.parseJsonBytes32(json, ".vrf.keyHash"), KEY_HASH, "Gas lane");
+        assertEq(vm.parseJsonBytes32(json, ".traitTableHash"), TRAIT_TABLE, "Trait table");
+        assertEq(vm.parseJsonUint(json, ".vrf.requestConfirmations"), 3, "Confirmations");
+        assertEq(vm.parseJsonUint(json, ".vrf.callbackGasLimit"), 100_000, "Callback gas");
+        assertEq(vm.parseJsonUint(json, ".vrf.retryAfterSeconds"), 1 hours, "Retry after");
+        assertTrue(vm.parseJsonBool(json, ".vrf.nativePayment"), "Paid in ETH");
+    }
+
+    /// @dev Invariant: a fleet is published only once the subscription pays for its reveals, so
+    /// the site never lists a fleet whose keys would stay unrevealed.
+    function test_recordRefusesAFleetTheSubscriptionDoesNotListYet() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        DeployKeyfleets.Deployment memory deployment = deployer.deploy(manifest);
+        for (uint256 slot = 0; slot < 4; ++slot) {
+            if (slot != 2) vrf.addConsumer(subscriptionId, address(deployment.fleets[slot]));
+        }
+
+        _expectRecordRefused(
+            manifest,
+            deployment.directory,
+            abi.encodeWithSelector(RecordKeyfleets.FleetNotVrfConsumer.selector, uint8(2), deployment.fleets[2])
+        );
+
+        vrf.addConsumer(subscriptionId, address(deployment.fleets[2]));
+        recorder.record(manifest, _summary(deployment.directory));
     }
 
     function test_recordOfALabWithoutTheAutolaunchFactoryRecordsNoStrategy() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         manifest.autolaunchFactory = address(0xFAC7);
         manifest.autolaunchFactoryMayBeEmpty = true;
-        DeployKeyfleets.Deployment memory deployment = deployer.deploy(manifest);
+        DeployKeyfleets.Deployment memory deployment = _deployAndAddConsumers(manifest);
 
         string memory json = recorder.record(manifest, _summary(deployment.directory));
 
@@ -150,7 +190,7 @@ contract RecordKeyfleetsTest is Test {
     }
 
     function test_recordRefusesEveryValueThatDiffersFromTheManifest() public {
-        KeyfleetDirectory directory = deployer.deploy(_manifest()).directory;
+        KeyfleetDirectory directory = _deployAndAddConsumers(_manifest()).directory;
         KeyfleetManifest.Manifest memory manifest;
 
         manifest = _manifest();
@@ -182,6 +222,23 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, directory, _released("votingWindow"));
 
         manifest = _manifest();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(_otherCoordinatorKnowing(manifest)));
+        _expectRecordRefused(manifest, directory, _released("vrf.coordinator"));
+
+        manifest = _manifest();
+        manifest.vrf.subscriptionId = vrf.createSubscription();
+        _expectRecordRefused(manifest, directory, _released("vrf.subscriptionId"));
+
+        manifest = _manifest();
+        manifest.vrf.keyHash = keccak256("another lane");
+        vrf.addProvingKey(manifest.vrf.keyHash, 30 gwei);
+        _expectRecordRefused(manifest, directory, _released("vrf.keyHash"));
+
+        manifest = _manifest();
+        manifest.traitTableHash = keccak256("another table");
+        _expectRecordRefused(manifest, directory, _released("traitTableHash"));
+
+        manifest = _manifest();
         manifest.fleets[1].name = "Another name";
         _expectRecordRefused(manifest, directory, _fleet(1, "name"));
 
@@ -194,8 +251,36 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, directory, _fleet(3, "baseTokenURI"));
     }
 
+    /// @dev A zero trait table is refused by the manifest check itself, before anything is read back
+    /// from the chain, so the refusal names the missing table rather than a mismatch.
+    function test_recordRefusesAManifestWithoutATraitTable() public {
+        KeyfleetDirectory directory = _deployAndAddConsumers(_manifest()).directory;
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        manifest.traitTableHash = bytes32(0);
+
+        _expectRecordRefused(manifest, directory, abi.encodeWithSelector(Keyfleet.TraitTableHashZero.selector));
+    }
+
+    /// @dev Invariant: on Base a release is published only while the Regents Safe owns the
+    /// subscription that pays for its reveals, so nobody else can remove the fleets or cancel it.
+    function test_recordOnBaseRefusesASubscriptionTheSafeDoesNotOwn() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        KeyfleetDirectory directory = _deployAndAddConsumers(manifest).directory;
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
+
+        base.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
+        _expectRecordRefused(
+            manifest,
+            directory,
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedBySafe.selector, address(0xBEEF), SAFE)
+        );
+
+        base.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        recorder.record(manifest, _summary(directory));
+    }
+
     function test_recordRefusesAManifestForAnotherChain() public {
-        KeyfleetDirectory directory = deployer.deploy(_manifest()).directory;
+        KeyfleetDirectory directory = _deployAndAddConsumers(_manifest()).directory;
         KeyfleetManifest.Manifest memory manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
 
@@ -209,7 +294,7 @@ contract RecordKeyfleetsTest is Test {
     function test_emptyFactoryWaiverIsNeverRecordedOnBase() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.autolaunchFactoryMayBeEmpty = true;
-        KeyfleetDirectory directory = deployer.deploy(manifest).directory;
+        KeyfleetDirectory directory = _deployAndAddConsumers(manifest).directory;
 
         string memory json = recorder.record(manifest, _summary(directory));
 
@@ -220,7 +305,7 @@ contract RecordKeyfleetsTest is Test {
     /// for a release that was deployed correctly.
     function test_recordOnBaseRefusesAnyUsdcOrRegentButBase() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
-        KeyfleetDirectory directory = deployer.deploy(manifest).directory;
+        KeyfleetDirectory directory = _deployAndAddConsumers(manifest).directory;
 
         manifest.usdc = address(usdc);
         _expectRecordRefused(
@@ -237,7 +322,7 @@ contract RecordKeyfleetsTest is Test {
     /// @dev Invariant: the REGENT the record step tells the Safe to admit always holds code, so a
     /// zero or mistyped address is never published into `regent` or `initialAssetFlags`.
     function test_recordRefusesARegentWithoutCode() public {
-        KeyfleetDirectory directory = deployer.deploy(_manifest()).directory;
+        KeyfleetDirectory directory = _deployAndAddConsumers(_manifest()).directory;
         KeyfleetManifest.Manifest memory manifest = _manifest();
 
         manifest.regent = address(0xBEEF);
@@ -314,6 +399,32 @@ contract RecordKeyfleetsTest is Test {
         );
     }
 
+    /// @dev Deploys, then adds the four fleets to the manifest's subscription as its owner does
+    /// between the two steps: the Safe on Base, the test contract on a lab chain.
+    function _deployAndAddConsumers(KeyfleetManifest.Manifest memory manifest)
+        private
+        returns (DeployKeyfleets.Deployment memory deployment)
+    {
+        deployment = deployer.deploy(manifest);
+        (,,, address owner,) = manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
+        vm.startPrank(owner);
+        for (uint256 slot = 0; slot < 4; ++slot) {
+            manifest.vrf.coordinator.addConsumer(manifest.vrf.subscriptionId, address(deployment.fleets[slot]));
+        }
+        vm.stopPrank();
+    }
+
+    /// @dev A second coordinator that knows the manifest's gas lane and subscription id, so only
+    /// the comparison with the fleets can refuse it.
+    function _otherCoordinatorKnowing(KeyfleetManifest.Manifest memory manifest)
+        private
+        returns (MockVRFCoordinatorV2Plus other)
+    {
+        other = new MockVRFCoordinatorV2Plus();
+        other.addProvingKey(manifest.vrf.keyHash, 30 gwei);
+        other.openSubscription(manifest.vrf.subscriptionId, address(this));
+    }
+
     function _expectRecordRefused(
         KeyfleetManifest.Manifest memory manifest,
         KeyfleetDirectory directory,
@@ -335,16 +446,24 @@ contract RecordKeyfleetsTest is Test {
         return RecordKeyfleets.BroadcastSummary({directory: directory, deploymentBlock: DEPLOYMENT_BLOCK});
     }
 
-    /// @dev A Base manifest on Base, paid in Base USDC and naming Base REGENT, both stood in for by
-    /// the local mocks' code.
+    /// @dev A Base manifest on Base, paid in Base USDC, naming Base REGENT and answered by Base's
+    /// VRF coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
+    /// subscription owned by the Safe.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(deployer.BASE_USDC(), address(usdc).code);
         vm.etch(deployer.BASE_REGENT(), address(regent).code);
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(deployer.BASE_VRF_COORDINATOR());
+        vm.etch(address(base), address(vrf).code);
+        base.addProvingKey(deployer.BASE_VRF_KEY_HASH(), 2 gwei);
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
         manifest.usdc = deployer.BASE_USDC();
         manifest.regent = deployer.BASE_REGENT();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(base));
+        manifest.vrf.subscriptionId = base.createSubscription();
+        base.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        manifest.vrf.keyHash = deployer.BASE_VRF_KEY_HASH();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
@@ -358,6 +477,10 @@ contract RecordKeyfleetsTest is Test {
         manifest.assetRegistry = address(0);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
+        manifest.vrf = Keyfleet.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
+        });
+        manifest.traitTableHash = TRAIT_TABLE;
         manifest.fleets[0] = KeyfleetManifest.FleetSpec("Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
         manifest.fleets[1] = KeyfleetManifest.FleetSpec("Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
         manifest.fleets[2] = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
