@@ -3,15 +3,22 @@
 The app reads each deployed fleet's `OwnershipEpoch` events from Base and
 records who holds every key. From the same contract it records each key's
 reveal (`KeyRevealed`: the Chainlink VRF request and the seed its traits are
-drawn from), and the budget's `LaunchIncomeSplit` (income after the launch,
-split between the budget and the keys) and `BudgetPaid` (a payment out of the
-budget) events. From the fleet's vote contract it records every
+drawn from), and the budget's `CapitalDeposited` and `SurplusRecognized`
+(an asset received into the budget), `LaunchIncomeSplit` (income after the
+launch, split between the budget and the keys) and `BudgetPaid` (a payment out
+of the budget) events. From the fleet's vote contract it records every
 proposal, vote and execution (`ProposalCreated` with `AutolaunchProposed` or
 `PayProposed` beside it for a launch or a payment, `VoteCast` and
 `ProposalExecuted`). A payment keeps its asset, amount, recipient, expiry and
-reason. After each pass it reads, at the proposal's own block, the launch each
-launch proposal approves, and keeps it only if its hash is the one the proposal
-carries; a read that fails is tried again after the next pass. Every key is one
+reason.
+
+Apart from those passes, so a slow node never holds them up, it reads every
+few seconds, at the head, the launch each launch proposal approves, and keeps
+it only if its hash is the one the proposal carries; a read that fails is tried
+again the next time. Once a minute it reads, at the head, the fleet's balances
+in every asset its budget has held, and the first time it meets an asset, that
+token's symbol and decimals, which it keeps; a token that does not answer one
+of them is shown by its address, or in whole units. Every key is one
 vote, so a vote records the keys it cast and a proposal's tally, `yes_keys` and
 `no_keys`, counts keys. It records at the head, from the first block Base
 confirms in about two seconds, and never waits for L1 finality. A change in the
@@ -63,7 +70,7 @@ its sales figures are catching up.
 ## What a stop means
 
 A second reading of the last 30 blocks found an ownership change, reveal,
-proposal, vote, execution, income split or budget payment that reads
+proposal, vote, execution, budget receipt, income split or budget payment that reads
 differently from the record, or a recorded one gone from a block whose hash is
 no longer the recorded one. A proposal number
 recorded twice, or a proposal executed twice, stops the fleet the same way. The
@@ -137,6 +144,7 @@ FROM (
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_receipts
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.launch_income_splits
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_payments
 ) AS recorded
@@ -163,7 +171,8 @@ the chain has not changed and the node answered wrongly: point
 ## Correcting the record
 
 Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
-reveal, proposal, vote, execution, income split and budget payment record of
+reveal, proposal, vote, execution, budget receipt, income split and budget
+payment record of
 that fleet at or after `F` is removed,
 every pairing made under one of those ownership records is ended, and the
 cursor goes back to `F`, so the reader records the chain's current history from
@@ -264,6 +273,13 @@ WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 ALTER TABLE keyfleet_app.proposals ENABLE TRIGGER immutable_proposals;
 
 -- And the budget records.
+ALTER TABLE keyfleet_app.budget_receipts DISABLE TRIGGER immutable_budget_receipts;
+
+DELETE FROM keyfleet_app.budget_receipts
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.budget_receipts ENABLE TRIGGER immutable_budget_receipts;
+
 ALTER TABLE keyfleet_app.launch_income_splits DISABLE TRIGGER immutable_launch_income_splits;
 
 DELETE FROM keyfleet_app.launch_income_splits

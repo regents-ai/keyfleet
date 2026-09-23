@@ -23,8 +23,9 @@ defmodule KeyFleet.Chain.Client do
 
   @doc """
   Calls a contract's view function with `data` at the block whose hash is
-  `block_hash`, and returns what it returned. A block that is no longer on
-  the chain is an error, never another block's answer.
+  `block_hash`, and returns what it returned. A call the contract refuses is
+  `{:error, :reverted}`. A block that is no longer on the chain is an error,
+  never another block's answer.
   """
   @callback call(to :: String.t(), data :: binary(), block_hash :: String.t()) ::
               {:ok, binary()} | {:error, term()}

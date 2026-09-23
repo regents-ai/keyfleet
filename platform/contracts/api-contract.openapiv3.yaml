@@ -1800,12 +1800,14 @@ components:
         payment from the fleet's budget, in pay.
     ProposalStatus:
       type: string
-      enum: [voting, counting, passed, failed, executed, expired]
+      enum: [voting, counting, passed, failed, executed, closed, expired]
       description: >-
         voting: open until closes_at. counting: closed, and the site has not yet read the chain past
         closes_at. passed: more than half of the keys that could vote voted yes; exactly half fails,
         and a key that did not vote counts against. failed: it did not pass. executed: carried out on
-        chain. expired: a payment that passed and can no longer be paid.
+        chain. closed: a launch that passed, but another launch of the fleet was carried out, and a
+        fleet launches once. expired: a payment or a launch that passed and is past the last second
+        it could be carried out.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'

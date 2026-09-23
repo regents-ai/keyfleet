@@ -2,6 +2,7 @@ defmodule KeyFleet.ProposalsTest do
   use ExUnit.Case, async: false
 
   alias KeyFleet.Actors
+  alias KeyFleet.Chain
   alias KeyFleet.ChainHelpers
   alias KeyFleet.ContractSchema
   alias KeyFleet.Fleets
@@ -76,6 +77,31 @@ defmodule KeyFleet.ProposalsTest do
                :executed
     end
 
+    # The fleet contract refuses a launch after its last second, and any
+    # launch once one has gone ahead, which it checks first.
+    test "a passed launch expires after its last second, and closes once another launch goes ahead" do
+      cursor = read_through(@now)
+      last_second = Decimal.new(DateTime.to_unix(@now))
+      launch = proposal(kind: :autolaunch, yes_keys: 7, execution_expiry: last_second)
+      later = DateTime.add(@now, 1)
+
+      assert Proposals.status(launch, cursor, @now) == :passed
+      assert Proposals.status(launch, cursor, later) == :expired
+
+      launched = %{launch | fleet_launched?: true}
+      assert Proposals.status(launched, cursor, @now) == :closed
+      assert Proposals.status(launched, cursor, later) == :closed
+
+      # Only a passed launch closes: one still open or failed says so, a
+      # decision or payment is unaffected, and the one that went ahead is it.
+      assert Proposals.status(%{launched | closes_at: later}, cursor, @now) == :voting
+      assert Proposals.status(%{launched | yes_keys: 1}, cursor, @now) == :failed
+
+      assert Proposals.status(%{launched | kind: :pay}, cursor, later) == :expired
+      assert Proposals.status(%{launched | kind: :decision}, cursor, later) == :passed
+      assert Proposals.status(%{launched | execution: %Execution{}}, cursor, later) == :executed
+    end
+
     test "a carried out proposal is shown as carried out, whatever the reading says" do
       executed = proposal(execution: %Execution{}, closes_at: DateTime.add(@now, 60))
       assert Proposals.status(executed, nil, @now) == :executed
@@ -89,7 +115,8 @@ defmodule KeyFleet.ProposalsTest do
           eligible_keys: 7,
           yes_keys: 0,
           no_keys: 0,
-          execution: nil
+          execution: nil,
+          fleet_launched?: false
         },
         fields
       )
@@ -123,6 +150,39 @@ defmodule KeyFleet.ProposalsTest do
                [4]
     end
 
+    test "a record saved while the changes are being read is left for the next read" do
+      ProposalHelpers.proposal!(@fleet, 1)
+      test_pid = self()
+      saved = :atomics.new(1, [])
+
+      # Right after the proposals are read, a new proposal and then launch
+      # income are saved: the income is numbered after the proposal the read
+      # has missed, and touches no proposal of its own.
+      :telemetry.attach(
+        "saved-while-reading-changes",
+        [:key_fleet, :repo, :query],
+        fn _event, _measurements, meta, _config ->
+          if self() == test_pid and meta.source == "proposals" and
+               :atomics.compare_exchange(saved, 1, 0, 1) == :ok do
+            ProposalHelpers.proposal!(@fleet, 2)
+            ProposalHelpers.income_split!(@fleet)
+          end
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach("saved-while-reading-changes") end)
+
+      first = Proposals.changes(@fleet, 0, DateTime.utc_now())
+      assert :atomics.get(saved, 1) == 1
+      assert Enum.map(first.items, &{&1.proposal.number, &1.changed_seq}) == [{1, 1}]
+      assert {first.next_cursor, first.head_seq, first.has_more} == {1, 1, false}
+
+      rest = Proposals.changes(@fleet, first.next_cursor, DateTime.utc_now())
+      assert Enum.map(rest.items, &{&1.proposal.number, &1.changed_seq}) == [{2, 2}]
+      assert {rest.next_cursor, rest.head_seq} == {3, 3}
+    end
+
     test "a catch-up from the start comes fifty records at a time and asks to come straight back" do
       for number <- 1..55, do: ProposalHelpers.proposal!(@fleet, number)
       owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
@@ -152,8 +212,32 @@ defmodule KeyFleet.ProposalsTest do
     ProposalHelpers.proposal!(@fleet, 5, closes_at: DateTime.add(DateTime.utc_now(), -60))
     ProposalHelpers.execution!(@fleet, 5, @owner)
 
+    past = DateTime.add(DateTime.utc_now(), -3600)
+
+    for number <- 6..8 do
+      ProposalHelpers.proposal!(@fleet, number,
+        kind: :autolaunch,
+        closes_at: past,
+        eligible_keys: 1,
+        execution_expiry: Decimal.new(DateTime.to_unix(past) + 60)
+      )
+
+      ProposalHelpers.vote!(@fleet, number, @owner, true, [1])
+    end
+
+    {:ok, _} =
+      Chain.advance_cursor(Chain.get_cursor!(@fleet), %{read_through_at: DateTime.utc_now()})
+
+    %{items: expired} = Proposals.changes(@fleet, 0, DateTime.utc_now())
+    assert %{status: :expired} = Enum.find(expired, &(&1.proposal.number == 6))
+
+    assert json(ProposalJSON.summary(Enum.find(expired, &(&1.proposal.number == 6))))["status"] ==
+             "expired"
+
+    ProposalHelpers.execution!(@fleet, 8, @owner)
+
     %{items: items} = Proposals.changes(@fleet, 0, DateTime.utc_now())
-    assert length(items) == 5
+    assert length(items) == 8
 
     for item <- items do
       summary = json(ProposalJSON.summary(item))
@@ -175,6 +259,13 @@ defmodule KeyFleet.ProposalsTest do
 
     assert %{"status" => "executed", "executed" => %{"executor" => @owner}} =
              json(ProposalJSON.summary(by_number[5]))
+
+    assert json(ProposalJSON.summary(by_number[6]))["status"] == "closed"
+
+    assert json(ProposalJSON.detail(by_number[7].proposal, by_number[7].status))["status"] ==
+             "closed"
+
+    assert json(ProposalJSON.summary(by_number[8]))["status"] == "executed"
   end
 
   defp json(value), do: value |> Jason.encode!() |> Jason.decode!()

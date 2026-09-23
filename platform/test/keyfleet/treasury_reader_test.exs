@@ -3,7 +3,9 @@ defmodule KeyFleet.TreasuryReaderTest do
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.{StubClient, TreasuryReader}
+  alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
+  alias KeyFleet.ProposalHelpers
   alias KeyFleet.Proposals
   alias KeyFleet.Repo
   alias KeyFleet.Treasury
@@ -13,6 +15,9 @@ defmodule KeyFleet.TreasuryReaderTest do
   @rewards "0x" <> String.duplicate("8", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   @other "0x" <> String.duplicate("5", 40)
+  @deposited "0x" <> String.duplicate("3", 40)
+  @named "0x" <> String.duplicate("4", 40)
+  @max_uint256 2 ** 256 - 1
   @head_hash "0x" <> String.duplicate("f", 64)
   @period_start 1_700_000_000
 
@@ -31,6 +36,7 @@ defmodule KeyFleet.TreasuryReaderTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.seed_cursor!(@fleet)
 
     fleet =
       @fleet
@@ -51,71 +57,129 @@ defmodule KeyFleet.TreasuryReaderTest do
     %{fleet: fleet}
   end
 
-  # Every figure is read at the head's block and kept together, and the
-  # proposal pages are told.
+  # Every figure is read at the head's block and kept together, for USDC,
+  # the reward ledger's assets and every other asset the budget has held,
+  # and the proposal pages are told.
   test "a reading keeps every balance from the one block it was read at", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    ProposalHelpers.budget_receipt!(@fleet, asset: @deposited)
+    ProposalHelpers.budget_receipt!(@fleet, asset: @deposited, kind: :surplus)
+    ProposalHelpers.income_split!(@fleet, asset: @other)
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
     StubClient.put_chain(head(40), [], calls: answers(chain()))
 
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
-    assert_received {:proposals_changed, @fleet}
+    assert_received {:balances_changed, @fleet}
+    refute_received {:proposals_changed, _fleet}
 
     requests = StubClient.call_requests()
-    assert length(requests) == 14
+    assert length(requests) == 24
     assert Enum.all?(requests, fn {_to, _data, block_hash} -> block_hash == @head_hash end)
 
     reading = Treasury.get_reading!(@fleet)
 
-    assert %{
-             block_number: 40,
-             block_hash: @head_hash,
-             launch_settled: true,
-             assets: [usdc, other]
-           } = reading
+    assert %{block_number: 40, block_hash: @head_hash, launch_settled: true} = reading
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @deposited, @named]
+    [usdc, other, deposited, named] = reading.assets
 
     assert DateTime.compare(reading.block_time, head(40).timestamp) == :eq
     assert Decimal.equal?(reading.cascade_reserve, 700)
     assert Decimal.equal?(reading.protocol_share_owed, 800)
 
-    assert %{asset: @usdc, symbol: "USDC", decimals: 6, pay_period_start: nil} = usdc
-    assert Decimal.equal?(usdc.free_capital, 100_000_000)
-    assert Decimal.equal?(usdc.backed, 30_000_000)
-    assert Decimal.equal?(usdc.pay_cap, 0)
-    assert Decimal.equal?(usdc.pay_spent, 0)
+    assert %{asset: @usdc, pay_period_start: nil} = usdc
+    assert %{free_capital: 100_000_000, backed: 30_000_000, pay_cap: 0, pay_spent: 0} = usdc
 
-    assert %{asset: @other, symbol: "WETH", decimals: 18} = other
     assert DateTime.compare(other.pay_period_start, DateTime.from_unix!(@period_start)) == :eq
-    assert Decimal.equal?(other.free_capital, 5_000)
-    assert Decimal.equal?(other.pay_cap, 1_000)
-    assert Decimal.equal?(other.pay_spent, 400)
-    assert Decimal.equal?(other.backed, 60)
+    assert %{free_capital: 5_000, pay_cap: 1_000, pay_spent: 400, backed: 60} = other
+
+    # Every digit of the largest amount the contract can hold is kept.
+    assert deposited.free_capital == @max_uint256
+    assert named.free_capital == 0
+
+    # Each token's symbol and decimals, or nothing for one it does not answer.
+    assert details() == %{
+             @usdc => {"USDC", 6},
+             @other => {"WETH", 18},
+             @deposited => {"DEP", nil},
+             @named => {nil, nil}
+           }
   end
 
-  # A figure that cannot be read, or reads as something else, keeps nothing.
+  # An asset's symbol and decimals are read once, and never again.
+  test "an asset's symbol and decimals are read once", %{fleet: fleet} do
+    StubClient.put_chain(head(40), [], calls: answers(chain()))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+
+    renamed = Map.put(chain(), {@usdc, @symbol}, {:ok, text("USDX")})
+    StubClient.put_chain(head(41), [], calls: answers(renamed))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+
+    refute Enum.any?(StubClient.call_requests(), fn {_to, data, _hash} ->
+             data in [@symbol, @decimals]
+           end)
+
+    assert details()[@usdc] == {"USDC", 6}
+  end
+
+  # A figure that cannot be read, or reads as something else, keeps nothing,
+  # and a token that cannot be reached is asked again, not taken as silent.
   test "a reading that fails in any part keeps nothing", %{fleet: fleet} do
     for {key, answer, reason} <- [
+          {{@other, @symbol}, {:error, :chain_unavailable}, {@other, :chain_unavailable}},
           {{@rewards, @backed <> word(@other)}, {:error, :chain_unavailable},
            {@rewards, :chain_unavailable}},
-          {{@contract, @launch_settled}, {:ok, <<2::256>>}, {@contract, :unreadable_answer}},
-          {{@other, @symbol}, {:ok, <<32::256>>}, {@other, :unreadable_answer}}
+          {{@contract, @launch_settled}, {:ok, <<2::256>>}, {@contract, :unreadable_answer}}
         ] do
       StubClient.put_chain(head(40), [], calls: answers(Map.put(chain(), key, answer)))
 
       assert TreasuryReader.read(fleet, StubClient) == {:error, reason}
       assert Treasury.get_reading!(@fleet) == nil
+
+      # USDC's were kept, and the unreachable token's were not.
+      if reason == {@other, :chain_unavailable},
+        do: assert(Map.keys(details()) == [@usdc])
     end
 
-    refute_received {:proposals_changed, _fleet}
+    refute_received {:balances_changed, _fleet}
   end
 
-  # A reading from an earlier block never replaces a later one.
+  # A reading that fails leaves the one kept as it was.
+  test "a failed reading leaves the previous one untouched", %{fleet: fleet} do
+    StubClient.put_chain(head(40), [], calls: answers(chain()))
+    assert {:ok, kept} = TreasuryReader.read(fleet, StubClient)
+
+    failing =
+      chain()
+      |> Map.put({@contract, @cascade_reserve}, {:ok, <<1::256>>})
+      |> Map.put({@contract, @protocol_share_owed}, {:error, :chain_unavailable})
+
+    StubClient.put_chain(head(41), [], calls: answers(failing))
+
+    assert TreasuryReader.read(fleet, StubClient) ==
+             {:error, {@contract, :chain_unavailable}}
+
+    reading = Treasury.get_reading!(@fleet)
+    assert reading.id == kept.id
+    assert {reading.block_number, reading.block_hash} == {40, @head_hash}
+    assert Decimal.equal?(reading.cascade_reserve, 700)
+    assert reading.assets == kept.assets
+  end
+
+  # A reading from an earlier block, or the same one, never replaces the one
+  # kept, and is not announced.
   test "an earlier reading does not replace a later one", %{fleet: fleet} do
+    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
     StubClient.put_chain(head(40), [], calls: answers(chain()))
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+    assert_received {:balances_changed, @fleet}
 
     earlier = Map.put(chain(), {@contract, @cascade_reserve}, {:ok, <<1::256>>})
-    StubClient.put_chain(head(39), [], calls: answers(earlier))
-    assert {:ok, _skipped} = TreasuryReader.read(fleet, StubClient)
+
+    for number <- [39, 40] do
+      StubClient.put_chain(head(number), [], calls: answers(earlier))
+      assert {:ok, _skipped} = TreasuryReader.read(fleet, StubClient)
+      refute_received {:balances_changed, _fleet}
+    end
 
     reading = Treasury.get_reading!(@fleet)
     assert reading.block_number == 40
@@ -124,15 +188,32 @@ defmodule KeyFleet.TreasuryReaderTest do
     later = Map.put(chain(), {@contract, @cascade_reserve}, {:ok, <<2::256>>})
     StubClient.put_chain(head(41), [], calls: answers(later))
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+    assert_received {:balances_changed, @fleet}
 
     reading = Treasury.get_reading!(@fleet)
     assert reading.block_number == 41
     assert Decimal.equal?(reading.cascade_reserve, 2)
   end
 
+  defp details do
+    @fleet
+    |> Treasury.asset_details!()
+    |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+  end
+
   defp chain do
     %{
       {@rewards, @reward_assets} => {:ok, <<32::256, 2::256>> <> word(@usdc) <> word(@other)},
+      {@deposited, @symbol} => {:ok, text("DEP")},
+      {@deposited, @decimals} => {:error, :reverted},
+      {@contract, @free_capital <> word(@deposited)} => {:ok, <<@max_uint256::256>>},
+      {@contract, @pay_period <> word(@deposited)} => {:ok, <<0::256, 0::256, 0::256>>},
+      {@rewards, @backed <> word(@deposited)} => {:ok, <<0::256>>},
+      {@named, @symbol} => {:error, :reverted},
+      {@named, @decimals} => {:ok, <<256::256>>},
+      {@contract, @free_capital <> word(@named)} => {:ok, <<0::256>>},
+      {@contract, @pay_period <> word(@named)} => {:ok, <<0::256, 0::256, 0::256>>},
+      {@rewards, @backed <> word(@named)} => {:ok, <<0::256>>},
       {@usdc, @symbol} => {:ok, text("USDC")},
       {@usdc, @decimals} => {:ok, <<6::256>>},
       {@contract, @free_capital <> word(@usdc)} => {:ok, <<100_000_000::256>>},

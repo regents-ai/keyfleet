@@ -1,8 +1,9 @@
 defmodule KeyFleet.Treasury do
   @moduledoc """
-  A fleet's budget as its contract reports it: launch income split between
-  the budget and the keys, payments out of the budget, and the latest
-  reading of its balances. Recorded from the fleet's contracts by the chain
+  A fleet's budget as its contract reports it: assets received into it,
+  launch income split between the budget and the keys, payments out of the
+  budget, the latest reading of its balances, and the symbol and decimals of
+  each asset they name. Recorded from the fleet's contracts by the chain
   reader and by nothing else. The chain is the authority; these records only
   mirror it.
   """
@@ -11,7 +12,8 @@ defmodule KeyFleet.Treasury do
   require Ash.Query
 
   alias KeyFleet.Actors.System
-  alias KeyFleet.Treasury.{BudgetPayment, IncomeSplit}
+  alias KeyFleet.Proposals.Proposal
+  alias KeyFleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
 
   @latest 20
 
@@ -19,6 +21,19 @@ defmodule KeyFleet.Treasury do
     resource KeyFleet.Treasury.Reading do
       define :record_reading, action: :record
       define :get_reading, action: :read, get_by: [:fleet_id], not_found_error?: false
+    end
+
+    resource KeyFleet.Treasury.AssetDetails do
+      define :record_asset_details, action: :record
+      define :asset_details, action: :of_fleet, args: [:fleet_id]
+    end
+
+    resource KeyFleet.Treasury.BudgetReceipt do
+      define :record_budget_receipt, action: :record
+
+      define :budget_receipts_recorded_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
     end
 
     resource KeyFleet.Treasury.IncomeSplit do
@@ -39,14 +54,43 @@ defmodule KeyFleet.Treasury do
   end
 
   @doc """
-  Every income split and budget payment recorded from blocks `from..to` of the
-  fleet, so a second reading of them can be checked against the record.
+  Every budget receipt, income split and budget payment recorded from blocks
+  `from..to` of the fleet, so a second reading of them can be checked against
+  the record.
   """
   def recorded_in_blocks!(fleet_id, from, to) do
     Enum.flat_map(
-      [&income_splits_recorded_in_blocks!/4, &budget_payments_recorded_in_blocks!/4],
+      [
+        &budget_receipts_recorded_in_blocks!/4,
+        &income_splits_recorded_in_blocks!/4,
+        &budget_payments_recorded_in_blocks!/4
+      ],
       & &1.(fleet_id, from, to, actor: %System{})
     )
+  end
+
+  @doc """
+  Every asset the fleet's budget can hold, as its history shows them: USDC,
+  which key sales pay in, then `reward_assets`, the reward ledger's assets in
+  its order, then, by address, each asset received into the budget, split
+  from launch income or named by a payment proposal.
+  """
+  def budget_assets(fleet, reward_assets) do
+    recorded =
+      [BudgetReceipt, IncomeSplit, Ash.Query.filter(Proposal, kind == :pay)]
+      |> Enum.flat_map(&assets_of(&1, fleet.id))
+      |> Enum.sort()
+
+    Enum.uniq([fleet.usdc_address | reward_assets] ++ recorded)
+  end
+
+  defp assets_of(query, fleet_id) do
+    query
+    |> Ash.Query.filter(fleet_id == ^fleet_id)
+    |> Ash.Query.distinct(:asset)
+    |> Ash.Query.select([:asset])
+    |> Ash.read!()
+    |> Enum.map(& &1.asset)
   end
 
   @doc """

@@ -73,6 +73,49 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet.launchSettled.selector, bytes4(0x06e93dae));
     }
 
+    function test_capitalDepositedTopic() public pure {
+        assertEq(Keyfleet.CapitalDeposited.selector, 0xf49206ff502b068fb456947e73acf6d2a86e0e30706185ec236c24a954654564);
+    }
+
+    function test_surplusRecognizedTopic() public pure {
+        assertEq(
+            Keyfleet.SurplusRecognized.selector, 0x231f7feeea7c01c57b7d3ee8b0c2c48e8bfab5565fe2a638fc209d6bcc2c94d4
+        );
+    }
+
+    /// @dev The same launch the reader's test in platform/test/keyfleet/proposals_chain_test.exs
+    /// encodes by hand, 1088 bytes long, so both sides hash it to the same digest.
+    function test_launchEnvelopeHash() public pure {
+        bytes memory repeated;
+        for (uint256 i; i < 27; ++i) {
+            repeated = bytes.concat(repeated, "A fleet's launch. ");
+        }
+        bytes memory description = new bytes(480);
+        for (uint256 i; i < 480; ++i) {
+            description[i] = repeated[i];
+        }
+        bytes memory image = "ipfs://";
+        for (uint256 i; i < 50; ++i) {
+            image = bytes.concat(image, "c");
+        }
+
+        bytes memory encoded = abi.encode(
+            Keyfleet.LaunchEnvelope({
+                name: "Cascade Research",
+                symbol: "CSR",
+                description: string(description),
+                website: "https://example.test",
+                image: string(image),
+                requiredRegentRaised: 250_000,
+                narrativeDigest: bytes32(0),
+                executionExpiry: type(uint64).max
+            })
+        );
+
+        assertEq(encoded.length, 8 * 136);
+        assertEq(keccak256(encoded), 0x9667be28058aae2ff99b278e27680af58ac13121852b76c68cd835cae7d0a30d);
+    }
+
     function test_proposalExecutedTopic() public pure {
         assertEq(
             KeyfleetVotes.ProposalExecuted.selector, 0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24

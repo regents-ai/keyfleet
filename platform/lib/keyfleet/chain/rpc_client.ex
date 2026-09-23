@@ -101,6 +101,10 @@ defmodule KeyFleet.Chain.RpcClient do
       {:ok, %{status: 200, body: %{"result" => result}}} ->
         {:ok, result}
 
+      # How nodes report a call the contract refused.
+      {:ok, %{status: 200, body: %{"error" => %{"message" => "execution reverted" <> _reason}}}} ->
+        {:error, :reverted}
+
       {:ok, %{status: status}} ->
         Logger.warning("chain read failed #{inspect(%{method: method, status: status})}")
         {:error, :chain_unavailable}

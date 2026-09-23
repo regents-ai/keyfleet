@@ -1,7 +1,8 @@
 defmodule KeyFleet.ProposalHelpers do
   @moduledoc """
-  Records proposals, votes, executions, launches, launch income, budget
-  payments and balance readings as the chain reader would, without a chain. Each record gets a chain event of its own. The
+  Records proposals, votes, executions, launches, budget receipts, launch
+  income, budget payments, balance readings and asset details as the chain
+  reader would, without a chain. Each record gets a chain event of its own. The
   fleet needs a cursor first, as `KeyFleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
@@ -70,6 +71,29 @@ defmodule KeyFleet.ProposalHelpers do
     }
     |> Map.merge(Map.new(attrs))
     |> Proposals.record_launch_envelope!(actor: @system)
+  end
+
+  @doc "A deposit of 10 USDC-sized units into the budget, 9.8 kept, unless `attrs` says otherwise."
+  def budget_receipt!(fleet_id, attrs \\ %{}) do
+    %{
+      fleet_id: fleet_id,
+      kind: :deposit,
+      asset: wallet("a"),
+      sender: wallet("f"),
+      amount: Decimal.new(10_000_000),
+      net: Decimal.new(9_800_000)
+    }
+    |> Map.merge(event())
+    |> Map.merge(Map.new(attrs))
+    |> Treasury.record_budget_receipt!(actor: @system)
+  end
+
+  @doc "The symbol and decimals of `asset`, as its token reported them."
+  def asset_details!(fleet_id, asset, symbol, decimals) do
+    Treasury.record_asset_details!(
+      %{fleet_id: fleet_id, asset: asset, symbol: symbol, decimals: decimals},
+      actor: @system
+    )
   end
 
   @doc "Launch income of 10 USDC-sized units, split 1 fee, 4 budget, 5 keys, unless `attrs` says otherwise."

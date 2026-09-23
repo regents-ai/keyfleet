@@ -205,6 +205,7 @@ defmodule KeyFleet.ReleaseTest do
     assert table_names(config, "keyfleet_app") == [
              "agent_profiles",
              "budget_payments",
+             "budget_receipts",
              "chain_cursors",
              "fleets",
              "graph_cursors",
@@ -226,6 +227,7 @@ defmodule KeyFleet.ReleaseTest do
              "rooms",
              "schema_migrations",
              "session_authorities",
+             "treasury_asset_details",
              "treasury_readings"
            ]
   end

@@ -156,7 +156,9 @@ defmodule KeyFleet.Proposals.Proposal do
       return_skipped_upsert? true
 
       change {KeyFleet.Chain.Changes.RecordOnce,
-              identity: [:transaction_hash, :log_index], number: :proposal_seq}
+              identity: [:transaction_hash, :log_index],
+              number: :proposal_seq,
+              block: :block_number}
     end
 
     # The fleet's highest proposal number recorded so far.
@@ -293,6 +295,14 @@ defmodule KeyFleet.Proposals.Proposal do
     has_many :votes, KeyFleet.Proposals.Vote, public?: true
     has_one :execution, KeyFleet.Proposals.Execution, public?: true
     has_one :launch_envelope, KeyFleet.Proposals.LaunchEnvelope, public?: true
+
+    # The launches carried out in the fleet: one at most, since the fleet
+    # contract launches once.
+    has_many :fleet_launches, KeyFleet.Proposals.Execution do
+      source_attribute :fleet_id
+      destination_attribute :fleet_id
+      filter expr(proposal.kind == :autolaunch)
+    end
   end
 
   aggregates do
@@ -309,6 +319,10 @@ defmodule KeyFleet.Proposals.Proposal do
     end
 
     exists :executed?, :execution, public?: true
+
+    # Whether one of the fleet's launch proposals has been carried out: the
+    # fleet contract then refuses every other.
+    exists :fleet_launched?, :fleet_launches, public?: true
   end
 
   identities do

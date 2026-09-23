@@ -120,6 +120,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
 
   test "a payment names what it pays, to whom and until when", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     ProposalHelpers.proposal!(@fleet, 1,
       kind: :pay,
@@ -145,21 +146,73 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
              "Can be paid until 1 November 2026 at 09:30 UTC"
            )
 
+    # An asset whose token has not been asked yet is shown as the chain
+    # holds it.
     {:ok, other, _html} = live(conn, "#{@list}/2")
 
     assert has_element?(
              other,
              "#proposal-payment",
-             "1,234 units of #{ProposalHelpers.wallet("c")}"
+             "1,234 in the smallest units of token #{ProposalHelpers.wallet("c")}"
            )
 
-    # Once the fleet's balances are read, an asset it holds is named.
-    ProposalHelpers.treasury_reading!(@fleet, [
-      balance(ProposalHelpers.wallet("c"), "WETH", 18, free_capital: 0)
-    ])
-
+    # Once the token has told its symbol and decimals, it is named.
+    ProposalHelpers.asset_details!(@fleet, ProposalHelpers.wallet("c"), "WETH", 18)
     {:ok, named, _html} = live(conn, "#{@list}/2")
     assert has_element?(named, "#proposal-payment", "0.000000000000001234 WETH")
+  end
+
+  # A token that will not tell its symbol or its decimals is never guessed at.
+  test "an amount in a token that doesn't say what it is shows as the chain holds it", %{
+    conn: conn
+  } do
+    ChainHelpers.seed_cursor!(@fleet)
+
+    for {number, character, symbol, decimals} <- [{1, "c", nil, 18}, {2, "d", "ODD", nil}] do
+      asset = ProposalHelpers.wallet(character)
+      ProposalHelpers.asset_details!(@fleet, asset, symbol, decimals)
+      ProposalHelpers.proposal!(@fleet, number, kind: :pay, asset: asset, amount: 1_234_000)
+
+      {:ok, view, _html} = live(conn, "#{@list}/#{number}")
+
+      assert has_element?(
+               view,
+               "#proposal-payment",
+               "1,234,000 in the smallest units of token #{asset}"
+             )
+    end
+  end
+
+  # The contract holds any uint256, which is shown to the last digit.
+  test "the largest amount the contract can hold is shown whole", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+    max = 2 ** 256 - 1
+
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @usdc, amount: Decimal.new(max))
+
+    ProposalHelpers.treasury_reading!(@fleet, [
+      balance(@usdc, free_capital: max, backed: max)
+    ])
+
+    whole =
+      "115,792,089,237,316,195,423,570,985,008,687,907,853,269,984,665,640,564,039,457,584," <>
+        "007,913,129.639935 USDC"
+
+    fifth =
+      "23,158,417,847,463,239,084,714,197,001,737,581,570,653,996,933,128,112,807,891,516," <>
+        "801,582,625.927987 USDC"
+
+    {:ok, view, _html} = live(conn, "#{@list}/1")
+    assert has_element?(view, "#proposal-payment", whole)
+
+    {:ok, list, _html} = live(conn, @list)
+
+    assert fields(list, "[data-asset='#{@usdc}'] div") == [
+             {"Budget", whole},
+             {"Available this month", fifth},
+             {"Set aside for key holders", whole}
+           ]
   end
 
   test "a launch shows its five fields exactly as proposed, once they have been read", %{
@@ -199,6 +252,50 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
              "#proposal-last-day",
              "Can be launched until 7 October 2026 at 18:00 UTC"
            )
+  end
+
+  # A launch that passed can be carried out until its last second, and a
+  # fleet launches once: after one launch goes ahead, the contract refuses
+  # every other.
+  test "a passed launch runs out of time, and closes once another launch goes ahead", %{
+    conn: conn
+  } do
+    now = DateTime.utc_now()
+    closed = DateTime.add(now, -3600)
+    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+
+    for {number, last_second} <- [{1, -1}, {2, 86_400}, {3, 2}, {4, 86_400}] do
+      ProposalHelpers.proposal!(@fleet, number,
+        kind: :autolaunch,
+        closes_at: closed,
+        eligible_keys: 1,
+        execution_expiry: Decimal.new(DateTime.to_unix(now) + last_second)
+      )
+
+      votes!(number, true: [1])
+    end
+
+    {:ok, view, _html} = live(conn, @list)
+
+    assert cards(view) == [
+             {"4", "Launch", "Passed"},
+             {"3", "Launch", "Passed"},
+             {"2", "Launch", "Passed"},
+             {"1", "Launch", "Expired"}
+           ]
+
+    # The page itself notices the last second passing.
+    assert shows?(fn -> has_element?(view, ~s([data-proposal="3"]), "Expired") end, 80)
+
+    ProposalHelpers.execution!(@fleet, 4, @voter)
+    {:ok, view, _html} = live(conn, @list)
+
+    assert cards(view) == [
+             {"4", "Launch", "Launched"},
+             {"3", "Launch", "Closed: another launch went ahead"},
+             {"2", "Launch", "Closed: another launch went ahead"},
+             {"1", "Launch", "Closed: another launch went ahead"}
+           ]
   end
 
   test "while votes are still being read the page says so", %{conn: conn} do
@@ -278,6 +375,25 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     assert shows?(fn -> has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no") end)
   end
 
+  test "a notice that balances were read has an open page show them", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+
+    {:ok, view, _html} = live(conn, @list)
+    assert has_element?(view, "#proposals-budget-pending")
+
+    ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, free_capital: 3_000_000)])
+    assert has_element?(view, "#proposals-budget-pending")
+
+    Phoenix.PubSub.broadcast(
+      KeyFleet.PubSub,
+      Proposals.topic(@fleet),
+      {:balances_changed, @fleet}
+    )
+
+    assert shows?(fn -> has_element?(view, "[data-asset='#{@usdc}']", "3 USDC") end)
+  end
+
   test "a proposal on show that closes is shown being counted without anything new recorded",
        %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
@@ -293,18 +409,20 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     ChainHelpers.seed_cursor!(@fleet)
     weth = ProposalHelpers.wallet("c")
     as_of = ~U[2026-09-20 12:00:00Z]
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+    ProposalHelpers.asset_details!(@fleet, weth, "WETH", 18)
 
     ProposalHelpers.treasury_reading!(
       @fleet,
       [
-        balance(@usdc, "USDC", 6,
+        balance(@usdc,
           free_capital: 100_000_000,
           backed: 30_000_000,
           pay_period_start: ~U[2026-09-01 08:00:00Z],
           pay_cap: 20_000_000,
           pay_spent: 5_000_000
         ),
-        balance(weth, "WETH", 18, free_capital: 2_000_000_000_000_000_000)
+        balance(weth, free_capital: 2_000_000_000_000_000_000)
       ],
       block_time: as_of,
       protocol_share_owed: Decimal.new(2_500_000)
@@ -354,6 +472,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     conn: conn
   } do
     ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     {:ok, view, _html} = live(conn, @list)
     assert has_element?(view, "#proposals-budget-pending", "Budget figures are still being read.")
@@ -369,7 +488,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.treasury_reading!(
       @fleet,
       [
-        balance(@usdc, "USDC", 6,
+        balance(@usdc,
           free_capital: 50_000_000,
           pay_period_start: ~U[2026-08-01 08:00:00Z],
           pay_cap: 20_000_000,
@@ -412,7 +531,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.treasury_reading!(
       @fleet,
       [
-        balance(@usdc, "USDC", 6,
+        balance(@usdc,
           free_capital: 50_000_000,
           pay_period_start: ~U[2026-08-01 08:00:00Z],
           pay_cap: 20_000_000,
@@ -431,6 +550,16 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
            ]
   end
 
+  # Until a fleet is on chain it has no budget, and its page says nothing
+  # about one.
+  test "a fleet not yet on chain shows no budget", %{conn: conn} do
+    {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_accelerant/proposals")
+    assert has_element?(view, "#proposals-page")
+    refute has_element?(view, "#proposals-budget")
+    refute html =~ "Budget"
+    refute html =~ "budget"
+  end
+
   test "the fleet's page leads to its proposals", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
     assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "See the proposals")
@@ -441,12 +570,10 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
         do: ProposalHelpers.vote!(@fleet, number, @voter, support, token_ids)
   end
 
-  defp balance(asset, symbol, decimals, figures) do
+  defp balance(asset, figures) do
     Map.merge(
       %{
         asset: asset,
-        symbol: symbol,
-        decimals: decimals,
         free_capital: 0,
         backed: 0,
         pay_period_start: nil,

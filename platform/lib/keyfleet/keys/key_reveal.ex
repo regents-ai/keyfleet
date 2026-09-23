@@ -90,7 +90,10 @@ defmodule KeyFleet.Keys.KeyReveal do
       return_skipped_upsert? true
       # A reveal is its seed and request, wherever on the chain it is read.
       change {KeyFleet.Chain.Changes.RecordOnce,
-              identity: [:fleet_id, :token_id], number: :reveal_seq, fields: [:request_id, :seed]}
+              identity: [:fleet_id, :token_id],
+              number: :reveal_seq,
+              fields: [:request_id, :seed],
+              block: :block_number}
     end
 
     # The keys revealed after the fleet's reveal number `after_seq`, oldest first.

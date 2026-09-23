@@ -1,12 +1,14 @@
 defmodule KeyFleet.Treasury.Reading do
   @moduledoc """
   A fleet's balances as its contracts held them at one block: the budget,
-  reward backing and pay period of each reward asset, the Cascade completion
-  reserve, the protocol share owed and whether the launch has settled.
+  reward backing and pay period of each asset the budget or the reward
+  ledger has held, the Cascade completion reserve, the protocol share owed
+  and whether the launch has settled.
 
   `KeyFleet.Chain.TreasuryReader` reads them about once a minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
-  an earlier block than the one kept is ignored.
+  the block kept, or of an earlier one, is ignored, and comes back marked
+  `upsert_skipped` in its metadata.
   """
   use Ash.Resource,
     domain: KeyFleet.Treasury,
@@ -64,7 +66,7 @@ defmodule KeyFleet.Treasury.Reading do
         :assets
       ]
 
-      upsert_condition expr(upsert_conflict(:block_number) >= block_number)
+      upsert_condition expr(upsert_conflict(:block_number) > block_number)
       return_skipped_upsert? true
     end
   end
@@ -103,7 +105,9 @@ defmodule KeyFleet.Treasury.Reading do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
 
-    # Every reward asset, in the order the reward ledger registered them.
+    # USDC, then each reward asset in the order the reward ledger registered
+    # them, then every other asset the budget has held, as
+    # `KeyFleet.Treasury.budget_assets/2` lists them.
     attribute :assets, {:array, KeyFleet.Treasury.AssetBalance},
       allow_nil?: false,
       public?: true

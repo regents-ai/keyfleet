@@ -7,8 +7,9 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
   Read again, it must match the record already made in every field named in
   `:fields`, or in every field the changeset sets; a match is accepted and
   changes nothing, a mismatch is refused as invalid, which the reader takes
-  to mean the chain no longer agrees with the record. The refusal carries the
-  recorded block as `recorded_block`.
+  to mean the chain no longer agrees with the record. With `:block`, the
+  attribute holding the block the record was made from, the refusal carries
+  that block as `recorded_block`.
 
   With `:number`, `:proposal_seq` or `:reveal_seq`, a record read again keeps
   the number it has and a new one takes the fleet's next number in the same
@@ -72,10 +73,13 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
        Ash.Error.Changes.InvalidChanges.exception(
          fields: fields,
          message: "conflicts with the record already made from the chain",
-         vars: [recorded_block: row.block_number]
+         vars: recorded_block(row, opts[:block])
        )}
     end
   end
+
+  defp recorded_block(_row, nil), do: []
+  defp recorded_block(row, block), do: [recorded_block: Map.fetch!(row, block)]
 
   defp same?(%Decimal{} = recorded, %Decimal{} = read), do: Decimal.equal?(recorded, read)
   defp same?(recorded, read), do: recorded == read

@@ -4,12 +4,12 @@ defmodule KeyFleetWeb.ProposalsPage do
   launches the chain reader recorded.
 
   `list/2` is the fleet's proposals, newest first, twenty to a page, with
-  its budget: the latest reading of its balances, and its latest launch
-  income and payments. `detail/3` is one proposal with its votes, fifty to a
+  its budget once it is on chain: the latest reading of its balances, and
+  its latest launch income and payments. `detail/3` is one proposal with its votes, fifty to a
   page. Each answers
   `check_in`, how long the page may wait before its proposals could read
-  differently without anything new being recorded: a proposal closing, or a
-  closed one being counted. A page name that is not a proposal number is a
+  differently without anything new being recorded: a proposal closing, a
+  closed one being counted, or a passed one running out of time. A page name that is not a proposal number is a
   page that doesn't exist.
   """
 
@@ -24,7 +24,7 @@ defmodule KeyFleetWeb.ProposalsPage do
   # A closed proposal's votes are counted by the chain reader's next pass.
   @after_closing 5_000
   @while_counting 10_000
-  @usdc_decimals 6
+  @day 24 * 60 * 60 * 1_000
   @regent_decimals 18
   @text_cap 64 * 1024
   # A month of payments, and the part of the budget it can pay out.
@@ -42,14 +42,13 @@ defmodule KeyFleetWeb.ProposalsPage do
       {proposals, older?} = Proposals.list_page(fleet_id, before)
       now = DateTime.utc_now()
       shown = Enum.map(proposals, &summary(&1, reading.cursor, now))
-      balances = Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
         proposals: shown,
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         check_in: check_in(shown, now),
-        treasury: treasury(fleet, balances, assets(fleet, balances))
+        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id))
       })
     end)
   end
@@ -96,11 +95,18 @@ defmodule KeyFleetWeb.ProposalsPage do
   @doc "What a kind of proposal is called."
   def kind_name(kind), do: Map.fetch!(@kinds, kind)
 
-  @doc "An amount of an asset in its own units, grouped, with its symbol when it is known."
+  @doc """
+  An amount of an asset, grouped: in its own units with its symbol when the
+  token has reported both, and otherwise as the whole number the chain
+  holds, with the token's address.
+  """
   def amount(atoms, asset, assets) do
     case assets[asset] do
-      {symbol, decimals} -> "#{units(atoms, decimals)} #{symbol}"
-      nil -> "#{units(atoms, 0)} units of #{asset}"
+      {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
+        "#{units(atoms, decimals)} #{symbol}"
+
+      _unknown ->
+        "#{units(atoms, 0)} in the smallest units of token #{asset}"
     end
   end
 
@@ -118,6 +124,7 @@ defmodule KeyFleetWeb.ProposalsPage do
         read.(fleet, %{
           fleet_id: fleet_id,
           fleet_name: fleet.name,
+          deployed?: deployed?,
           cursor: Chain.get_cursor!(fleet_id),
           catching_up?: deployed? and not Chain.fresh?(fleet_id)
         })
@@ -133,7 +140,8 @@ defmodule KeyFleetWeb.ProposalsPage do
       eligible_keys: proposal.eligible_keys,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
-      gist: gist(proposal)
+      gist: gist(proposal),
+      last_day: proposal.execution_expiry && expiry(proposal.execution_expiry)
     }
   end
 
@@ -148,15 +156,13 @@ defmodule KeyFleetWeb.ProposalsPage do
       text_cut?: proposal.text_bytes != nil and proposal.text_bytes > @text_cap,
       pay: pay(proposal, fleet),
       launch: launch(proposal),
-      last_day: proposal.execution_expiry && expiry(proposal.execution_expiry),
       executor: proposal.execution && proposal.execution.executor
     }
   end
 
   defp pay(%{kind: :pay} = proposal, fleet),
     do: %{
-      amount:
-        amount(proposal.amount, proposal.asset, assets(fleet, Treasury.get_reading!(fleet.id))),
+      amount: amount(proposal.amount, proposal.asset, assets(fleet.id)),
       recipient: proposal.recipient
     }
 
@@ -189,15 +195,14 @@ defmodule KeyFleetWeb.ProposalsPage do
     }
   end
 
-  # USDC's units are known without reading anything; the others' come from
-  # the latest reading of the fleet's balances.
-  defp assets(fleet, nil), do: %{fleet.usdc_address => {"USDC", @usdc_decimals}}
-
-  defp assets(fleet, balances) do
-    balances.assets
+  # Each asset's symbol and decimals, as its token reported them.
+  defp assets(fleet_id) do
+    fleet_id
+    |> Treasury.asset_details!()
     |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
-    |> Map.merge(assets(fleet, nil))
   end
+
+  defp treasury(fleet, balances), do: treasury(fleet, balances, assets(fleet.id))
 
   defp treasury(fleet, nil, assets), do: Map.put(history(fleet.id, assets), :read?, false)
 
@@ -235,12 +240,12 @@ defmodule KeyFleetWeb.ProposalsPage do
   defp month(balance, as_of, shown) do
     if open_month?(balance, as_of) do
       %{
-        available: shown.(Decimal.sub(balance.pay_cap, balance.pay_spent)),
+        available: shown.(balance.pay_cap - balance.pay_spent),
         paid: "#{shown.(balance.pay_spent)} of #{shown.(balance.pay_cap)}",
         month_ends: month_end(balance.pay_period_start)
       }
     else
-      fifth = balance.free_capital |> Decimal.mult(@pay_cap_bps) |> Decimal.div_int(@bps)
+      fifth = div(balance.free_capital * @pay_cap_bps, @bps)
       %{available: shown.(fifth), paid: nil, month_ends: nil}
     end
   end
@@ -286,7 +291,14 @@ defmodule KeyFleetWeb.ProposalsPage do
           do: DateTime.diff(closes_at, now, :millisecond) + @after_closing
 
     counting = for %{status: :counting} <- proposals, do: @while_counting
-    Enum.min(closing ++ counting, fn -> nil end)
+
+    # The second after the last one it can be carried out in, looked at
+    # again at least daily until then.
+    running_out =
+      for %{status: :passed, last_day: %DateTime{} = last_day} <- proposals,
+          do: min(DateTime.diff(last_day, now, :millisecond) + 1_000, @day)
+
+    Enum.min(closing ++ counting ++ running_out, fn -> nil end)
   end
 
   # The contract holds the last second as any uint64; one past what a date
@@ -311,27 +323,28 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   defp as_text(bytes), do: String.replace_invalid(bytes)
 
+  # Whole numbers throughout: an amount can be any uint256, more digits than
+  # decimal arithmetic keeps.
+  defp units(%Decimal{} = atoms, decimals), do: units(Decimal.to_integer(atoms), decimals)
+
   defp units(atoms, decimals) do
-    scale = Decimal.new(1, 1, decimals)
-    whole = Decimal.div_int(atoms, scale)
+    scale = Integer.pow(10, decimals)
 
     fraction =
       atoms
-      |> Decimal.rem(scale)
-      |> Decimal.to_integer()
+      |> rem(scale)
       |> Integer.to_string()
       |> String.pad_leading(decimals, "0")
       |> String.trim_trailing("0")
 
     case fraction do
-      "" -> grouped(whole)
-      fraction -> "#{grouped(whole)}.#{fraction}"
+      "" -> grouped(div(atoms, scale))
+      fraction -> "#{grouped(div(atoms, scale))}.#{fraction}"
     end
   end
 
   defp grouped(number) do
     number
-    |> Decimal.to_integer()
     |> Integer.to_string()
     |> String.reverse()
     |> String.graphemes()

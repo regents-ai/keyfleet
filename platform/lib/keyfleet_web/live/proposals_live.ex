@@ -17,6 +17,7 @@ defmodule KeyFleetWeb.ProposalsLive do
     counting: "Counting votes",
     passed: "Passed",
     failed: "Did not pass",
+    closed: "Closed: another launch went ahead",
     expired: "Expired"
   }
 
@@ -35,8 +36,11 @@ defmodule KeyFleetWeb.ProposalsLive do
           <.link navigate={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Proposals</h1>
-        <p class="proposals-lede">
+        <p :if={@page.treasury} class="proposals-lede">
           What this fleet’s key holders have put to a vote, and the budget they vote on.
+        </p>
+        <p :if={!@page.treasury} class="proposals-lede">
+          What this fleet’s key holders have put to a vote.
         </p>
       </header>
 
@@ -91,7 +95,7 @@ defmodule KeyFleetWeb.ProposalsLive do
         </nav>
       </section>
 
-      <.budget treasury={@page.treasury} />
+      <.budget :if={@page.treasury} treasury={@page.treasury} />
     </article>
     """
   end

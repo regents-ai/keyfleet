@@ -1,26 +1,24 @@
 defmodule KeyFleet.Chain.TreasuryReader do
   @moduledoc """
-  Reads one deployed fleet's balances once a minute, at the block the node
-  last called its head, and keeps them as the fleet's `KeyFleet.Treasury.Reading`.
+  Reads one deployed fleet's balances at the block the node last called its
+  head, and keeps them as the fleet's `KeyFleet.Treasury.Reading`.
+  `KeyFleet.Chain.Repeat` runs it once a minute.
 
-  Every figure of a reading comes from that one block: the reward ledger's
-  assets, and for each its symbol, decimals, budget, reward backing and pay
-  period, beside the Cascade reserve, the protocol share owed and whether the
-  launch has settled. A reading that fails in any part keeps nothing, is
-  logged, and is tried again a minute later. A kept reading is announced
-  where the fleet's proposal pages listen.
+  Every figure of a reading comes from that one block: for each asset
+  `KeyFleet.Treasury.budget_assets/2` lists, the budget, the reward backing
+  and the pay period, beside the Cascade reserve, the protocol share owed and
+  whether the launch has settled. An asset read for the first time also has
+  its symbol and decimals read and kept, once; a token that does not answer
+  one of them, by reverting or with something else, has it kept as unknown.
+  A reading that fails in any part keeps nothing and is tried again at the
+  next one. A reading of a later block than the one kept replaces it and is
+  announced as `{:balances_changed, fleet_id}` on `KeyFleet.Proposals.topic/1`.
   """
-  use GenServer
-
-  require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.Abi
-  alias KeyFleet.Chain.Client
   alias KeyFleet.Proposals
   alias KeyFleet.Treasury
-
-  @every 60_000
 
   # cast sig of each view function read.
   @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
@@ -32,39 +30,15 @@ defmodule KeyFleet.Chain.TreasuryReader do
   @launch_settled <<0x06, 0xE9, 0x3D, 0xAE>>
   @decimals <<0x31, 0x3C, 0xE5, 0x67>>
   @symbol <<0x95, 0xD8, 0x9B, 0x41>>
-
-  def child_spec(fleet),
-    do: %{id: {__MODULE__, fleet.id}, start: {__MODULE__, :start_link, [fleet]}}
-
-  def start_link(fleet), do: GenServer.start_link(__MODULE__, fleet)
-
-  @impl true
-  def init(fleet) do
-    send(self(), :read)
-    {:ok, %{fleet: fleet, client: Client.configured()}}
-  end
-
-  @impl true
-  def handle_info(:read, %{fleet: fleet, client: client} = state) do
-    case read(fleet, client) do
-      {:ok, _reading} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.warning(
-          "Fleet #{fleet.id}: balances were not read (#{inspect(reason)}); trying again in a minute."
-        )
-    end
-
-    Process.send_after(self(), :read, @every)
-    {:noreply, state}
-  end
+  @system %System{}
 
   @doc "Reads the fleet's balances at the node's head and keeps them."
   def read(fleet, client) do
     with {:ok, head} <- client.head(),
          at = &call(client, &1, &2, head.hash),
-         {:ok, [assets]} <- at.(fleet.rewards_address, {@reward_assets, [{:array, :address}]}),
+         {:ok, [rewards]} <- at.(fleet.rewards_address, {@reward_assets, [{:array, :address}]}),
+         assets = Treasury.budget_assets(fleet, rewards),
+         :ok <- read_details(fleet, assets, client, head.hash),
          {:ok, balances} <- balances(fleet, assets, at),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
@@ -81,17 +55,56 @@ defmodule KeyFleet.Chain.TreasuryReader do
                protocol_share_owed: Decimal.new(owed),
                assets: balances
              },
-             actor: %System{}
+             actor: @system
            ) do
-      Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
-        Proposals.topic(fleet.id),
-        {:proposals_changed, fleet.id}
-      )
-
+      announce(fleet, reading)
       {:ok, reading}
     end
   end
+
+  defp announce(fleet, reading) do
+    unless Ash.Resource.get_metadata(reading, :upsert_skipped) do
+      Phoenix.PubSub.broadcast(
+        KeyFleet.PubSub,
+        Proposals.topic(fleet.id),
+        {:balances_changed, fleet.id}
+      )
+    end
+  end
+
+  # The symbol and decimals of each asset read for the first time.
+  defp read_details(fleet, assets, client, block_hash) do
+    known = MapSet.new(Treasury.asset_details!(fleet.id, actor: @system), & &1.asset)
+
+    assets
+    |> Enum.reject(&MapSet.member?(known, &1))
+    |> Enum.reduce_while(:ok, fn asset, :ok ->
+      with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
+           {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash),
+           {:ok, _details} <-
+             Treasury.record_asset_details(
+               %{fleet_id: fleet.id, asset: asset, symbol: symbol, decimals: decimals},
+               actor: @system
+             ) do
+        {:cont, :ok}
+      else
+        failure -> {:halt, failure}
+      end
+    end)
+  end
+
+  # A token that reverts, or answers with something else, does not answer.
+  defp detail(client, asset, {data, type}, block_hash) do
+    case client.call(asset, data, block_hash) do
+      {:ok, returned} -> {:ok, answer(Abi.decode(returned, [type]))}
+      {:error, :reverted} -> {:ok, nil}
+      {:error, reason} -> {:error, {asset, reason}}
+    end
+  end
+
+  defp answer({:ok, [symbol]}) when is_binary(symbol), do: String.replace_invalid(symbol)
+  defp answer({:ok, [decimals]}), do: decimals
+  defp answer(:error), do: nil
 
   defp balances(fleet, assets, at) do
     assets
@@ -110,9 +123,7 @@ defmodule KeyFleet.Chain.TreasuryReader do
   defp balance(fleet, asset, at) do
     word = address_word(asset)
 
-    with {:ok, [symbol]} <- at.(asset, {@symbol, [:bytes]}),
-         {:ok, [decimals]} <- at.(asset, {@decimals, [{:uint, 8}]}),
-         {:ok, [free]} <- at.(fleet.contract_address, {@free_capital <> word, [{:uint, 256}]}),
+    with {:ok, [free]} <- at.(fleet.contract_address, {@free_capital <> word, [{:uint, 256}]}),
          {:ok, [start, cap, spent]} <-
            at.(
              fleet.contract_address,
@@ -123,13 +134,11 @@ defmodule KeyFleet.Chain.TreasuryReader do
       {:ok,
        %{
          asset: asset,
-         symbol: String.replace_invalid(symbol),
-         decimals: decimals,
-         free_capital: Decimal.new(free),
-         backed: Decimal.new(backed),
+         free_capital: free,
+         backed: backed,
          pay_period_start: start,
-         pay_cap: Decimal.new(cap),
-         pay_spent: Decimal.new(spent)
+         pay_cap: cap,
+         pay_spent: spent
        }}
     end
   end

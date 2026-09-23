@@ -47,7 +47,8 @@ defmodule KeyFleetWeb.ShellLive do
   # How long a workspace page waits after a notice of changes before it reads
   # them, so a burst of writes is read once.
   @workspace_refresh_after 1_000
-  # The same for a proposals page after a notice that votes were recorded.
+  # The same for a proposals page after a notice that the fleet's proposal
+  # records or balances changed.
   @proposals_refresh_after 1_000
   # After a purchase the page reads the fleet again every two seconds, up to
   # thirty times, until the chain reader has recorded the key that was bought.
@@ -230,12 +231,13 @@ defmodule KeyFleetWeb.ShellLive do
   def handle_info(:refresh_workspace, socket),
     do: {:noreply, assign(socket, :workspace_refresh?, false)}
 
-  # A notice that the open fleet's proposals were recorded is a nudge to read
-  # them again, once, a moment later, like the workspace's.
+  # A notice that the open fleet's proposal records or balances changed is a
+  # nudge to read its page again, once, a moment later, like the workspace's.
   def handle_info(
-        {:proposals_changed, fleet_id},
+        {notice, fleet_id},
         %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
-      ) do
+      )
+      when notice in [:proposals_changed, :balances_changed] do
     if socket.assigns.proposals_refresh? do
       {:noreply, socket}
     else
@@ -244,7 +246,9 @@ defmodule KeyFleetWeb.ShellLive do
     end
   end
 
-  def handle_info({:proposals_changed, _fleet_id}, socket), do: {:noreply, socket}
+  def handle_info({notice, _fleet_id}, socket)
+      when notice in [:proposals_changed, :balances_changed],
+      do: {:noreply, socket}
 
   def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket),
     do: {:noreply, socket |> assign(:proposals_refresh?, false) |> read_proposals()}
@@ -870,7 +874,8 @@ defmodule KeyFleetWeb.ShellLive do
   end
 
   # Each read sets the one check that comes when a proposal on show could
-  # next read differently by itself: when it closes, or while it is counted.
+  # next read differently by itself: when it closes, while it is counted, or
+  # when it runs out of time.
   defp read_proposals(socket) do
     params = socket.assigns.proposals_params
 

@@ -84,7 +84,9 @@ defmodule KeyFleet.Proposals.Execution do
       change KeyFleet.Proposals.Changes.FindProposal
 
       change {KeyFleet.Chain.Changes.RecordOnce,
-              identity: [:transaction_hash, :log_index], number: :proposal_seq}
+              identity: [:transaction_hash, :log_index],
+              number: :proposal_seq,
+              block: :block_number}
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second

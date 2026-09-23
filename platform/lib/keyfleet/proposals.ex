@@ -12,12 +12,13 @@ defmodule KeyFleet.Proposals do
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain
   alias KeyFleet.Proposals.{Execution, LaunchEnvelope, Proposal, Vote}
-  alias KeyFleet.Treasury.{BudgetPayment, IncomeSplit}
+  alias KeyFleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
 
   @page 20
   @changes_page 50
-  # What a proposal is shown with: its tally, its execution and its launch.
-  @summary [:yes_keys, :no_keys, :execution, :launch_envelope]
+  # What a proposal is shown with: its tally, its execution and its launch,
+  # and whether its fleet's launch has gone ahead.
+  @summary [:yes_keys, :no_keys, :execution, :launch_envelope, :fleet_launched?]
 
   resources do
     resource KeyFleet.Proposals.Proposal do
@@ -70,7 +71,10 @@ defmodule KeyFleet.Proposals do
       time, since a vote cast before then may not have been read yet;
     * `:failed` unless more than half of the keys that could vote on it voted
       yes: exactly half fails, and a key that did not vote counts against it;
-    * `:expired` for a payment that passed and can no longer be paid;
+    * `:closed` for a launch that passed after another launch of the fleet
+      was carried out, since the fleet contract refuses a second launch;
+    * `:expired` for a payment or a launch that passed and is past the last
+      second it could be carried out;
     * `:passed` otherwise.
   """
   def status(%Proposal{} = proposal, cursor, %DateTime{} = now) do
@@ -78,8 +82,16 @@ defmodule KeyFleet.Proposals do
       proposal.execution -> :executed
       DateTime.before?(now, proposal.closes_at) -> :voting
       not read_past?(cursor, proposal.closes_at) -> :counting
+      true -> outcome(proposal, now)
+    end
+  end
+
+  # Where a proposal stands once every vote on it has been read.
+  defp outcome(proposal, now) do
+    cond do
       proposal.yes_keys * 2 <= proposal.eligible_keys -> :failed
-      proposal.kind == :pay and expired?(proposal, now) -> :expired
+      proposal.kind == :autolaunch and proposal.fleet_launched? -> :closed
+      proposal.kind != :decision and expired?(proposal, now) -> :expired
       true -> :passed
     end
   end
@@ -142,14 +154,18 @@ defmodule KeyFleet.Proposals do
   proposal.
   """
   def changes(fleet_id, after_seq, %DateTime{} = now) do
+    # The head is read first and bounds every query: a record numbered after
+    # it may be saved between the queries below, and reading it from one kind
+    # but not from another would move the next cursor past the one missed.
+    cursor = Chain.get_cursor!(fleet_id)
+    head_seq = if(cursor, do: cursor.proposal_seq, else: 0)
+
     {read, rest} =
-      [Proposal, Vote, Execution, LaunchEnvelope, IncomeSplit, BudgetPayment]
-      |> Enum.flat_map(&records_after(&1, fleet_id, after_seq))
+      [Proposal, Vote, Execution, LaunchEnvelope, BudgetReceipt, IncomeSplit, BudgetPayment]
+      |> Enum.flat_map(&records_after(&1, fleet_id, after_seq, head_seq))
       |> Enum.sort()
       |> Enum.split(@changes_page)
 
-    # Read after the records, so the head is never behind them.
-    cursor = Chain.get_cursor!(fleet_id)
     changed = for {seq, proposal_id} <- read, proposal_id, into: %{}, do: {proposal_id, seq}
 
     items =
@@ -165,16 +181,18 @@ defmodule KeyFleet.Proposals do
     %{
       items: items,
       next_cursor: read |> List.last({after_seq, nil}) |> elem(0),
-      head_seq: if(cursor, do: cursor.proposal_seq, else: 0),
+      head_seq: head_seq,
       has_more: rest != []
     }
   end
 
-  defp records_after(resource, fleet_id, after_seq) do
+  defp records_after(resource, fleet_id, after_seq, head_seq) do
     fields = Enum.filter([:record_seq, :proposal_id], &Ash.Resource.Info.attribute(resource, &1))
 
     resource
-    |> Ash.Query.filter(fleet_id == ^fleet_id and record_seq > ^after_seq)
+    |> Ash.Query.filter(
+      fleet_id == ^fleet_id and record_seq > ^after_seq and record_seq <= ^head_seq
+    )
     |> Ash.Query.sort(record_seq: :asc)
     |> Ash.Query.limit(@changes_page + 1)
     |> Ash.Query.select(fields)

@@ -127,7 +127,7 @@ defmodule KeyFleet.Keys.KeyAttachment do
       return_skipped_upsert? true
 
       change {KeyFleet.Chain.Changes.RecordOnce,
-              identity: [:fleet_id, :token_id, :ownership_epoch]}
+              identity: [:fleet_id, :token_id, :ownership_epoch], block: :block_number}
     end
 
     read :history do
