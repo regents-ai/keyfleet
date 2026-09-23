@@ -1,0 +1,207 @@
+@layer regents-product {
+/* Proposals stand on the same Key grammar as the workspace: one ground,
+   hairline panels, the display face for headings and a mono voice for
+   kickers. Proposal text and addresses wrap, so nothing widens the page. */
+
+.proposals-page {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposals-heading,
+.proposals-panel {
+  min-width: 0;
+  border: 1px solid var(--ash-line);
+  background: var(--ash-panel);
+}
+
+.proposals-page h1,
+.proposals-page h2,
+.proposals-page h3 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-weight: 400;
+}
+
+.proposals-page p {
+  margin: 0;
+}
+
+.proposals-kicker,
+.proposals-kind {
+  color: var(--ash-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.proposals-heading {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+}
+
+.proposals-heading h1 {
+  max-width: 24ch;
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.proposals-heading h1:focus {
+  outline: none;
+}
+
+.proposals-lede {
+  max-width: 56ch;
+  color: var(--ash-muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.proposals-notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--ash-line);
+  border-inline-start: 3px solid var(--ash-accent-warm);
+  background: var(--ash-panel);
+  line-height: 1.5;
+}
+
+.proposals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.proposals-panel {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+  justify-items: start;
+}
+
+.proposals-panel > * {
+  max-width: 100%;
+}
+
+.proposals-panel h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.proposals-rule,
+.proposals-detail,
+.proposals-facts dt,
+.proposals-fields dt {
+  color: var(--ash-muted);
+}
+
+.proposals-rule {
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.proposals-list,
+.proposals-lines {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposals-card {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--ash-line);
+}
+
+.proposals-card h3 {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.proposals-kind {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.proposals-badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ash-line-strong);
+  color: var(--ash-ink);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proposals-gist,
+.proposals-text {
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.proposals-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.9rem;
+}
+
+.proposals-facts,
+.proposals-fields {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0;
+}
+
+.proposals-facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+}
+
+.proposals-facts div,
+.proposals-fields div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.proposals-facts dd,
+.proposals-fields dd {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.proposals-lines li {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding-block-end: 0.75rem;
+  border-bottom: 1px solid var(--ash-line);
+}
+
+.proposals-lines li:last-child {
+  padding-block-end: 0;
+  border-bottom: 0;
+}
+
+.proposals-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+}

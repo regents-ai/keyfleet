@@ -131,6 +131,8 @@ defmodule KeyFleetWeb.Router do
       live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
       live "/app/fleets/:fleet_id/workspace", ShellLive, :workspace
       live "/app/fleets/:fleet_id/workspace/:object_id", ShellLive, :workspace_item
+      live "/app/fleets/:fleet_id/proposals", ShellLive, :proposals
+      live "/app/fleets/:fleet_id/proposals/:number", ShellLive, :proposal
     end
   end
 end

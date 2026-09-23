@@ -12,7 +12,9 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     "/app/keys/:fleet_id/:token_id",
     "/app/fleets/:fleet_id/rooms/:slug",
     "/app/fleets/:fleet_id/workspace",
-    "/app/fleets/:fleet_id/workspace/:object_id"
+    "/app/fleets/:fleet_id/workspace/:object_id",
+    "/app/fleets/:fleet_id/proposals",
+    "/app/fleets/:fleet_id/proposals/:number"
   ]
 
   test "contains exactly the approved pages" do
@@ -133,6 +135,25 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     end
   end
 
+  test "a proposal's page names the proposal it was asked for" do
+    proposal =
+      RouteCatalog.fetch!(:proposal, %{"fleet_id" => "fibonacci_syndicate", "number" => "3"})
+
+    assert proposal.route_id == :proposal
+    assert proposal.destination == "/app/fleets/fibonacci_syndicate/proposals/3"
+    assert proposal.page_display_label == "Proposals"
+    assert proposal.canonical_root == "/app"
+
+    assert RouteCatalog.fetch!(:proposals, %{"fleet_id" => "fibonacci_syndicate"}).destination ==
+             "/app/fleets/fibonacci_syndicate/proposals"
+
+    for number <- ["0", "03", "-1", "1.5", "one", String.duplicate("9", 19)] do
+      assert_raise KeyFleetWeb.NotFoundError, fn ->
+        RouteCatalog.fetch!(:proposal, %{"fleet_id" => "fibonacci_syndicate", "number" => number})
+      end
+    end
+  end
+
   test "account is the canonical product detail route" do
     account = RouteCatalog.fetch!(:account)
 
@@ -190,7 +211,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 8
+    assert length(decoded["routes"]) == 10
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
@@ -200,7 +221,9 @@ defmodule KeyFleetWeb.RouteCatalogTest do
              "keys",
              "rooms",
              "workspace",
-             "workspace_item"
+             "workspace_item",
+             "proposals",
+             "proposal"
            ]
 
     assert decoded["schema_version"] == 1
@@ -237,6 +260,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
       {:token_id, _type} -> {"token_id", "1"}
       {:slug, _type} -> {"slug", "general"}
       {:object_id, _type} -> {"object_id", "task#12"}
+      {:number, _type} -> {"number", "3"}
     end)
   end
 end

@@ -17,6 +17,8 @@ defmodule KeyFleetWeb.RouteCatalog do
   @token_id ~r/\A[1-9][0-9]{0,17}\z/
   # A workspace item is named by its type and its number, such as `task#12`.
   @object_id ~r/\A[a-z][a-z_]{0,31}#[1-9][0-9]{0,17}\z/
+  # Eighteen digits at most, so every admitted proposal number is a database integer.
+  @number ~r/\A[1-9][0-9]{0,17}\z/
 
   @entries [
     %Entry{
@@ -74,6 +76,20 @@ defmodule KeyFleetWeb.RouteCatalog do
       parameter_schema: %{fleet_id: :fleet_id, object_id: :object_id},
       reserved_values: %{},
       route_spec_id: :workspace_item
+    },
+    %Entry{
+      path_pattern: "/app/fleets/:fleet_id/proposals",
+      live_action: :proposals,
+      parameter_schema: %{fleet_id: :fleet_id},
+      reserved_values: %{},
+      route_spec_id: :proposals
+    },
+    %Entry{
+      path_pattern: "/app/fleets/:fleet_id/proposals/:number",
+      live_action: :proposal,
+      parameter_schema: %{fleet_id: :fleet_id, number: :number},
+      reserved_values: %{},
+      route_spec_id: :proposal
     }
   ]
 
@@ -96,6 +112,12 @@ defmodule KeyFleetWeb.RouteCatalog do
        :detail, %{}},
     workspace_item:
       {:workspace_item, :product, "KeyFleet", "Workspace", "/app", [:profile_actions], :product,
+       :detail, %{}},
+    proposals:
+      {:proposals, :product, "KeyFleet", "Proposals", "/app", [:profile_actions], :product,
+       :detail, %{}},
+    proposal:
+      {:proposal, :product, "KeyFleet", "Proposals", "/app", [:profile_actions], :product,
        :detail, %{}}
   }
 
@@ -129,6 +151,8 @@ defmodule KeyFleetWeb.RouteCatalog do
   defp valid_parameter?(:slug, value), do: is_binary(value) and Regex.match?(@slug, value)
   defp valid_parameter?(:fleet_id, value), do: is_binary(value) and Regex.match?(@fleet_id, value)
   defp valid_parameter?(:token_id, value), do: is_binary(value) and Regex.match?(@token_id, value)
+
+  defp valid_parameter?(:number, value), do: is_binary(value) and Regex.match?(@number, value)
 
   defp valid_parameter?(:object_id, value),
     do: is_binary(value) and Regex.match?(@object_id, value)

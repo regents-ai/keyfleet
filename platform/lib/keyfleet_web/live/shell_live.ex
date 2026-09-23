@@ -17,6 +17,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Graph
   alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Keys
+  alias KeyFleet.Proposals
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.RoomPoster
   alias KeyFleet.Rooms.Errors.RenameTooSoonError
@@ -27,6 +28,8 @@ defmodule KeyFleetWeb.ShellLive do
     KeysLive,
     NotFoundError,
     OverviewLive,
+    ProposalsLive,
+    ProposalsPage,
     RoomsLive,
     WorkspaceLive,
     WorkspacePage
@@ -44,6 +47,8 @@ defmodule KeyFleetWeb.ShellLive do
   # How long a workspace page waits after a notice of changes before it reads
   # them, so a burst of writes is read once.
   @workspace_refresh_after 1_000
+  # The same for a proposals page after a notice that votes were recorded.
+  @proposals_refresh_after 1_000
   # After a purchase the page reads the fleet again every two seconds, up to
   # thirty times, until the chain reader has recorded the key that was bought.
   @catch_up_every 2_000
@@ -80,7 +85,12 @@ defmodule KeyFleetWeb.ShellLive do
        workspace: nil,
        workspace_params: nil,
        workspace_topic: nil,
-       workspace_refresh?: false
+       workspace_refresh?: false,
+       proposals: nil,
+       proposals_params: nil,
+       proposals_topic: nil,
+       proposals_refresh?: false,
+       proposals_check: nil
      )}
   end
 
@@ -95,7 +105,8 @@ defmodule KeyFleetWeb.ShellLive do
      |> load_fleet(route_spec, params)
      |> load_key(route_spec, params)
      |> load_room(route_spec, params)
-     |> load_workspace(route_spec, params)}
+     |> load_workspace(route_spec, params)
+     |> load_proposals(route_spec, params)}
   end
 
   @impl true
@@ -219,6 +230,34 @@ defmodule KeyFleetWeb.ShellLive do
   def handle_info(:refresh_workspace, socket),
     do: {:noreply, assign(socket, :workspace_refresh?, false)}
 
+  # A notice that the open fleet's proposals were recorded is a nudge to read
+  # them again, once, a moment later, like the workspace's.
+  def handle_info(
+        {:proposals_changed, fleet_id},
+        %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
+      ) do
+    if socket.assigns.proposals_refresh? do
+      {:noreply, socket}
+    else
+      Process.send_after(self(), :refresh_proposals, @proposals_refresh_after)
+      {:noreply, assign(socket, :proposals_refresh?, true)}
+    end
+  end
+
+  def handle_info({:proposals_changed, _fleet_id}, socket), do: {:noreply, socket}
+
+  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket),
+    do: {:noreply, socket |> assign(:proposals_refresh?, false) |> read_proposals()}
+
+  def handle_info(:refresh_proposals, socket),
+    do: {:noreply, assign(socket, :proposals_refresh?, false)}
+
+  # Only the check the page last set reads; one a later read replaced is dropped.
+  def handle_info({:check_proposals, ref}, %{assigns: %{proposals_check: ref}} = socket),
+    do: {:noreply, read_proposals(socket)}
+
+  def handle_info({:check_proposals, _ref}, socket), do: {:noreply, socket}
+
   # Only the page's one running catch-up reads; a read it has replaced is dropped.
   def handle_info(
         {:catch_up_fleet, ref},
@@ -286,6 +325,8 @@ defmodule KeyFleetWeb.ShellLive do
 
         <WorkspaceLive.board :if={@route_spec.route_id == :workspace} board={@workspace} />
         <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
+        <ProposalsLive.list :if={@route_spec.route_id == :proposals} page={@proposals} />
+        <ProposalsLive.detail :if={@route_spec.route_id == :proposal} page={@proposals} />
       </:content>
     </.shell>
     """
@@ -807,6 +848,58 @@ defmodule KeyFleetWeb.ShellLive do
       stop_listening(socket.assigns.workspace_topic)
       start_listening(topic)
       assign(socket, :workspace_topic, topic)
+    else
+      socket
+    end
+  end
+
+  # The page starts listening before it reads, so votes recorded while it
+  # loads still reach it. Each visit, reconnection included, reads afresh.
+  defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
+       when route_id in [:proposals, :proposal] do
+    socket
+    |> follow_proposals(fleet_id)
+    |> assign(:proposals_params, params)
+    |> read_proposals()
+  end
+
+  defp load_proposals(socket, _route_spec, _params) do
+    socket
+    |> follow_proposals(nil)
+    |> assign(proposals: nil, proposals_params: nil, proposals_check: nil)
+  end
+
+  # Each read sets the one check that comes when a proposal on show could
+  # next read differently by itself: when it closes, or while it is counted.
+  defp read_proposals(socket) do
+    params = socket.assigns.proposals_params
+
+    page =
+      case socket.assigns.route_spec.route_id do
+        :proposals -> ProposalsPage.list(params["fleet_id"], params)
+        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params)
+      end
+
+    assign(socket, proposals: page, proposals_check: check_proposals(socket, page.check_in))
+  end
+
+  defp check_proposals(socket, after_ms) when is_integer(after_ms) do
+    if connected?(socket) do
+      ref = make_ref()
+      Process.send_after(self(), {:check_proposals, ref}, after_ms)
+      ref
+    end
+  end
+
+  defp check_proposals(_socket, nil), do: nil
+
+  defp follow_proposals(socket, fleet_id) do
+    topic = fleet_id && Proposals.topic(fleet_id)
+
+    if connected?(socket) and topic != socket.assigns.proposals_topic do
+      stop_listening(socket.assigns.proposals_topic)
+      start_listening(topic)
+      assign(socket, :proposals_topic, topic)
     else
       socket
     end
