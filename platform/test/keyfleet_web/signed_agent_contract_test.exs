@@ -11,6 +11,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   alias KeyFleet.ContractSchema
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
+  alias KeyFleet.ProposalHelpers
   alias KeyFleet.Rooms
 
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
@@ -34,6 +35,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   @key_read "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read"
   @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
   @graph "/api/v1/agent/fleets/{fleet_id}/graph/"
+  @proposal "/api/v1/agent/fleets/{fleet_id}/proposals/read"
 
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
 
@@ -63,9 +65,15 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     {"POST", @key_send, [],
      %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
     {"POST", @sync, [],
-     %{"rooms" => [%{"slug" => "general", "after_seq" => 0}], "graph" => %{"after_seq" => 0}}},
+     %{
+       "rooms" => [%{"slug" => "general", "after_seq" => 0}],
+       "graph" => %{"after_seq" => 0},
+       "proposals" => %{"after_seq" => 0}
+     }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
+    {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
+    {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
@@ -363,7 +371,12 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     general = %{"slug" => "general", "after_seq" => 0}
 
     sync = fn address, rooms, status ->
-      body = %{"rooms" => rooms, "graph" => %{"after_seq" => 0}}
+      body = %{
+        "rooms" => rooms,
+        "graph" => %{"after_seq" => 0},
+        "proposals" => %{"after_seq" => 0}
+      }
+
       answer(c, c.signer, "POST", @sync, address, body, status)
     end
 
@@ -371,6 +384,17 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
     sync.(@address, [%{general | "after_seq" => -1}], 422)
     sync.(@address, [general, general], 422)
+
+    # Reading a proposal: recorded, not yet made, and no proposal at all.
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay)
+    ProposalHelpers.vote!(@fleet, 1, @owner, false, [1])
+    proposal = %{"number" => 1, "votes_after_seq" => 0}
+
+    assert %{"kind" => "pay", "no_votes" => 1} =
+             answer(c, c.signer, "POST", @proposal, @address, proposal, 200).body["proposal"]
+
+    answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 99}, 404)
+    answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 0}, 422)
 
     # Creating rooms: new, taken, a name taken, malformed, by an outsider, and
     # past the limit.
@@ -531,7 +555,8 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
       {"POST", @send},
       {"POST", @key_read},
       {"POST", @key_send},
-      {"POST", @sync}
+      {"POST", @sync},
+      {"POST", @proposal}
     ]
   end
 
@@ -547,7 +572,11 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@topic), do: %{"topic" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
-  defp empty_or_minimal(@sync), do: %{"rooms" => [], "graph" => %{"after_seq" => 0}}
+
+  defp empty_or_minimal(@sync),
+    do: %{"rooms" => [], "graph" => %{"after_seq" => 0}, "proposals" => %{"after_seq" => 0}}
+
+  defp empty_or_minimal(@proposal), do: %{"number" => 1, "votes_after_seq" => 0}
   defp empty_or_minimal(_template), do: %{}
 
   # The signed-request check refuses a body it does not admit before anything
@@ -590,7 +619,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   defp candidate_fields(contract) do
     resources =
       Enum.flat_map(
-        [KeyFleet.Agents, KeyFleet.Keys, KeyFleet.Rooms, KeyFleet.Graph],
+        [KeyFleet.Agents, KeyFleet.Keys, KeyFleet.Rooms, KeyFleet.Graph, KeyFleet.Proposals],
         &Ash.Domain.Info.resources/1
       )
 

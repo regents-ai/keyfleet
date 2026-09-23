@@ -6,6 +6,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
   alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
+  alias KeyFleet.ProposalHelpers
   alias KeyFleet.Rooms
 
   @join_path "/api/v1/agent/join/status"
@@ -16,6 +17,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
   @sync_path "/api/v1/agent/fleets/fibonacci_syndicate/sync"
   @key_read "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read"
   @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
+  @read_proposal "/api/v1/agent/fleets/fibonacci_syndicate/proposals/read"
   @cascade "fibonacci_cascade"
   @create_cascade "/api/v1/agent/fleets/fibonacci_cascade/rooms/create"
   @join_body ~s({ "name": "Wallet agent", "declared_harness": "local" })
@@ -204,10 +206,46 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     assert send_signed(c, "POST", room_path("coding", "send"), send_body("Coding 1", "w-1")).status ==
              201
 
+    proposal = ProposalHelpers.proposal!("fibonacci_syndicate", 1)
+    ProposalHelpers.vote!("fibonacci_syndicate", 1, @owner, true, [1])
+
     first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "coding" => 0}))
     assert first.status == 200
-    assert first.body["proposals"] == []
     assert first.body["next_poll_seconds"] in 15..30
+
+    assert %{
+             "items" => [
+               %{
+                 "number" => 1,
+                 "kind" => "decision",
+                 "status" => "voting",
+                 "yes_votes" => 1,
+                 "no_votes" => 0,
+                 "eligible_keys" => 7,
+                 "text_preview" => "Proposal 1",
+                 "changed_seq" => 2
+               }
+             ],
+             "next_cursor" => 2,
+             "head_seq" => 2,
+             "has_more" => false
+           } = first.body["proposals"]
+
+    assert KeyFleet.ContractSchema.errors(first.body, "FleetSync") == []
+
+    read = send_signed(c, "POST", @read_proposal, ~s({"number":1,"votes_after_seq":0}))
+    assert read.status == 200
+    assert read.body["proposal"]["text"] == "Proposal 1"
+    assert read.body["proposal"]["text_sha256"] == proposal.text_sha256
+
+    assert [%{"voter" => @owner, "support" => true, "votes" => 1, "keys" => [1], "seq" => 2}] =
+             read.body["votes"]
+
+    assert {read.body["votes_next_cursor"], read.body["votes_has_more"]} == {2, false}
+    assert KeyFleet.ContractSchema.errors(read.body, "ProposalRead") == []
+
+    missing = send_signed(c, "POST", @read_proposal, ~s({"number":2,"votes_after_seq":0}))
+    assert {missing.status, missing.body} == {404, %{"error" => "proposal_unknown"}}
 
     assert first.body["graph"] == %{
              "run_id" => nil,
@@ -224,8 +262,11 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     assert Enum.map(general["messages"], & &1["body"]) == ["General 1", "General 2", "General 3"]
     assert %{"slug" => "coding", "head_seq" => 1, "cursor" => 1} = coding
 
-    second = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 3, "coding" => 1}))
+    second =
+      send_signed(c, "POST", @sync_path, sync_body(%{"general" => 3, "coding" => 1}, 0, 2))
+
     assert Enum.map(second.body["rooms"], & &1["messages"]) == [[], []]
+    assert %{"items" => [], "next_cursor" => 2, "has_more" => false} = second.body["proposals"]
     assert Enum.map(second.body["rooms"], & &1["cursor"]) == [1, 3]
 
     assert Enum.map(
@@ -265,10 +306,16 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
           {"DELETE", @send_general, "{}"},
           {"POST", @sync_path, "{}"},
           {"POST", @sync_path, ~s({"rooms":[{"slug":"general"}]})},
+          {"POST", @sync_path, ~s({"rooms":[],"graph":{"after_seq":0}})},
           {"POST", @sync_path,
-           ~s({"rooms":[{"slug":"general","after_seq":0}],"graph":{"after_seq":0},"all":true})},
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0},"all":true})},
           {"POST", @sync_path,
-           ~s({"rooms":[{"slug":"general","after_seq":0}],"graph":{"after_seq":0,"all":true}})},
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0,"all":true}})},
+          {"POST", @sync_path,
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":"0"}})},
+          {"POST", @read_proposal, ~s({"number":1})},
+          {"POST", @read_proposal, ~s({"number":"1","votes_after_seq":0})},
+          {"POST", @read_proposal, ~s({"number":1,"votes_after_seq":0,"limit":5})},
           {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send", "{}"},
           {"POST", @read_general <> "/", "{}"}
         ] do
@@ -299,7 +346,12 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
           {@read_general, ~s({"after_seq":-1})},
           {@read_general, ~s({"limit":201})},
           {@sync_path, sync_body(%{"general" => 2 ** 70})},
-          {@sync_path, sync_body(%{"general" => 0}, 2 ** 70)}
+          {@sync_path, sync_body(%{"general" => 0}, 2 ** 70)},
+          {@sync_path, sync_body(%{"general" => 0}, 0, -1)},
+          {@sync_path, sync_body(%{"general" => 0}, 0, 2 ** 70)},
+          {@read_proposal, ~s({"number":0,"votes_after_seq":0})},
+          {@read_proposal, ~s({"number":#{2 ** 70},"votes_after_seq":0})},
+          {@read_proposal, ~s({"number":1,"votes_after_seq":-1})}
         ] do
       refused = send_signed(c, "POST", path, body)
       assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
@@ -308,7 +360,8 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     twice =
       Jason.encode!(%{
         rooms: [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}],
-        graph: %{after_seq: 0}
+        graph: %{after_seq: 0},
+        proposals: %{after_seq: 0}
       })
 
     refused = send_signed(c, "POST", @sync_path, twice)
@@ -702,7 +755,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
-      assert Rooms.sync(@cascade, cursors, 0, member) == {:error, :invalid_request}
+      assert Rooms.sync(@cascade, cursors, 0, 0, member) == {:error, :invalid_request}
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do
@@ -813,11 +866,12 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
   defp send_body(body, key), do: Jason.encode!(%{body: body, idempotency_key: key})
 
-  defp sync_body(cursors, graph_after_seq \\ 0),
+  defp sync_body(cursors, graph_after_seq \\ 0, proposals_after_seq \\ 0),
     do:
       Jason.encode!(%{
         rooms: Enum.map(cursors, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
-        graph: %{after_seq: graph_after_seq}
+        graph: %{after_seq: graph_after_seq},
+        proposals: %{after_seq: proposals_after_seq}
       })
 
   defp send_signed(c, method, path, body \\ "{}"),

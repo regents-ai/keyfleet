@@ -98,6 +98,7 @@ defmodule KeyFleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
+    post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
     post "/fleets/:fleet_id/graph/create", AgentGraphController, :create

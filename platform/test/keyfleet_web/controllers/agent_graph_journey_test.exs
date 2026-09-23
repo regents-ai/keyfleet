@@ -1041,7 +1041,8 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   defp sync(c, agent, rooms, graph_after_seq) do
     send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/sync", %{
       rooms: Enum.map(rooms, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
-      graph: %{after_seq: graph_after_seq}
+      graph: %{after_seq: graph_after_seq},
+      proposals: %{after_seq: 0}
     })
   end
 

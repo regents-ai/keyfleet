@@ -65,18 +65,20 @@ defmodule KeyFleet.Rooms do
   `run_id`: a different `run_id` from the one the caller last saw means the log
   started over, and the caller reads it again from 0.
 
+  `proposals_after_seq` says how far the caller has read the fleet's proposal
+  records. Proposals answer with the ones changed after that point, as
+  `KeyFleet.Proposals.changes/3` does.
+
   `next_poll_seconds` is when to ask again: at once while anything has more
   waiting, otherwise between 15 and 30 seconds, spread so callers do not all
   come back together. Nothing is marked as read, and asking again is always
   safe.
-
-  `proposals` is answered empty here; fleet decisions arrive in a later slice and
-  share this one call rather than adding a second.
   """
-  def sync(fleet_id, cursors, graph_after_seq, actor) do
+  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
          :ok <- in_log(graph_after_seq),
+         :ok <- in_log(proposals_after_seq),
          {:ok, graph} <-
            KeyFleet.Graph.list_changes(
              fleet_id,
@@ -84,18 +86,20 @@ defmodule KeyFleet.Rooms do
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
+      proposals = KeyFleet.Proposals.changes(fleet_id, proposals_after_seq, DateTime.utc_now())
+
       {:ok,
        %{
          rooms: rooms,
          graph: graph,
-         proposals: [],
-         next_poll_seconds: next_poll_seconds(rooms, graph)
+         proposals: proposals,
+         next_poll_seconds: next_poll_seconds(rooms, graph, proposals)
        }}
     end
   end
 
-  defp next_poll_seconds(rooms, graph) do
-    if graph.has_more or Enum.any?(rooms, &(&1.cursor < &1.head_seq)),
+  defp next_poll_seconds(rooms, graph, proposals) do
+    if graph.has_more or proposals.has_more or Enum.any?(rooms, &(&1.cursor < &1.head_seq)),
       do: 0,
       else: Enum.random(15..30)
   end

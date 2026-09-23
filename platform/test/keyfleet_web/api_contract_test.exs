@@ -17,6 +17,7 @@ defmodule KeyFleetWeb.ApiContractTest do
              @graph <> "link",
              @graph <> "patch",
              @graph <> "unlink",
+             "/api/v1/agent/fleets/{fleet_id}/proposals/read",
              "/api/v1/agent/fleets/{fleet_id}/rooms",
              "/api/v1/agent/fleets/{fleet_id}/rooms/create",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",

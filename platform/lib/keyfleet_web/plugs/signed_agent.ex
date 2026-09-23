@@ -28,6 +28,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   @token ~S"[1-9][0-9]{0,17}"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
+  @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
@@ -45,7 +46,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   @graph_write_max_body @send_max_body
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
-  # workspace was read.
+  # workspace and the proposals were read.
   @sync_max_body 32 * 1024
   @max_sync_rooms 110
   # Places in a room are counted in a Postgres bigint.
@@ -234,6 +235,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
         @key_read_path,
         @key_send_path,
         @sync_path,
+        @proposal_read_path,
         @graph_path
       ],
       &Regex.match?(&1, path)
@@ -269,6 +271,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@pairing_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
+      Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
       op = graph_op(path) -> check_graph_body(op, params)
       true -> check_room_body(path, params)
     end
@@ -375,14 +378,14 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp valid_topic_body?(_params), do: false
 
-  defp check_sync_body(%{"rooms" => rooms, "graph" => graph} = params)
-       when map_size(params) == 2 and is_list(rooms) do
+  defp check_sync_body(%{"rooms" => rooms, "graph" => graph, "proposals" => proposals} = params)
+       when map_size(params) == 3 and is_list(rooms) do
     cond do
-      not (Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph)) ->
+      not (Enum.all?(rooms, &cursor?/1) and log_cursor?(graph) and log_cursor?(proposals)) ->
         :invalid
 
       length(rooms) > @max_sync_rooms or
-          not Enum.all?([graph | rooms], &(&1["after_seq"] in 0..@max_seq)) ->
+          not Enum.all?([graph, proposals | rooms], &(&1["after_seq"] in 0..@max_seq)) ->
         :out_of_range
 
       length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->
@@ -395,15 +398,22 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp check_sync_body(_params), do: :invalid
 
+  # A proposal is named by its number, and its votes are read on from a place.
+  defp check_proposal_read_body(%{"number" => number, "votes_after_seq" => after_seq} = params)
+       when map_size(params) == 2 and is_integer(number) and is_integer(after_seq),
+       do: in_range(number in 1..@max_seq and after_seq in 0..@max_seq)
+
+  defp check_proposal_read_body(_params), do: :invalid
+
   defp cursor?(%{"slug" => slug, "after_seq" => after_seq} = room),
     do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)
 
   defp cursor?(_room), do: false
 
-  defp graph_cursor?(%{"after_seq" => after_seq} = graph),
-    do: map_size(graph) == 1 and is_integer(after_seq)
+  defp log_cursor?(%{"after_seq" => after_seq} = log),
+    do: map_size(log) == 1 and is_integer(after_seq)
 
-  defp graph_cursor?(_graph), do: false
+  defp log_cursor?(_log), do: false
 
   defp answers_a_post?(nil), do: true
   defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)

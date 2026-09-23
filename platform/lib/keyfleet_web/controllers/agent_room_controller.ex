@@ -9,6 +9,7 @@ defmodule KeyFleetWeb.AgentRoomController do
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
   alias KeyFleet.Rooms.Errors.SendConflictError
+  alias KeyFleetWeb.ProposalJSON
 
   @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
@@ -129,11 +130,16 @@ defmodule KeyFleetWeb.AgentRoomController do
     sent(conn, fleet_id, Rooms.send_to_key(input, actor: actor))
   end
 
-  def sync(conn, %{"fleet_id" => fleet_id, "rooms" => rooms, "graph" => graph}) do
+  def sync(conn, %{
+        "fleet_id" => fleet_id,
+        "rooms" => rooms,
+        "graph" => graph,
+        "proposals" => proposals
+      }) do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
 
-    case Rooms.sync(fleet_id, cursors, graph["after_seq"], actor) do
+    case Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor) do
       {:ok, synced} -> json(conn, sync_json(synced))
       {:error, error} -> refuse(conn, error)
     end
@@ -184,7 +190,10 @@ defmodule KeyFleetWeb.AgentRoomController do
           }
         end),
       graph: synced.graph,
-      proposals: synced.proposals,
+      proposals: %{
+        synced.proposals
+        | items: Enum.map(synced.proposals.items, &ProposalJSON.summary/1)
+      },
       next_poll_seconds: synced.next_poll_seconds
     }
   end
