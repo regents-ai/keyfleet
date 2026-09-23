@@ -6,7 +6,9 @@ defmodule KeyFleet.Graph.Workspace do
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's
   choosing; the same command id with the same body answers the original result
-  instead of writing twice. Writes reach the fleet scope only.
+  instead of writing twice. Every object sits in a scope, the whole fleet or
+  one of a Fibonacci fleet's levels, and a write may touch only objects in the
+  scopes its key may write; see `KeyFleet.Graph.Checks.KeyActor`.
 
   Anyone may read a workspace. Reads are answered from the read tables copied
   from the graph's log, never by the writer; see `KeyFleet.Graph.Workspace.Read`.
@@ -48,7 +50,7 @@ defmodule KeyFleet.Graph.Workspace do
     end
 
     action :create, :map do
-      description "Adds an object to the fleet scope."
+      description "Adds an object to the scope it names."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text

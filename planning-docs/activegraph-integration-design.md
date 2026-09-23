@@ -26,8 +26,6 @@ Upstream citations are `path:line` relative to the upstream repository root. Key
 - **Where it breaks today:**
   - There is no Python in the image and no Fly volume.
   - The agent actor carries no key coordinate or credential reference.
-  - There is no chain freshness, so "fail closed" cannot be honoured yet.
-  - There is no completed-level projection, so level scope is blocked.
   - There is no proposals projection, so `launch.prepare` is blocked.
 
 ---
@@ -128,7 +126,8 @@ So the actor string is an attribution label, not proof. The host must always pas
    - `principal`, `command_id`, `body_hash`, `op`;
    - `result` (the object or relation id, the new version, and the event ids);
    - `auth`: key coordinate, ownership epoch, operator wallet, pairing id, credential reference, check time, and the chain block and freshness once the chain projection exists.
-5. `run_quantum(...)` for the bounded reactions. Their events land in the same transaction.
+   Before it, the host emits the `keyfleet.attention` events the write's reactions ask for (§7.6), so the event ids the ledger records name them too.
+5. `run_quantum(...)` to settle the runtime's own bookkeeping. The pack carries no upstream behaviors, so this drains lifecycle events only and must finish idle.
 6. `COMMIT`. The last event is now `runtime.idle`, so a restart requeues nothing.
 
 **Why this and not a side table:**
@@ -236,14 +235,14 @@ Reads (get, changes, sync): one repeatable-read, read-only snapshot of those tab
 | # | Break | Where | Consequence / fix |
 |---|---|---|---|
 | B1 | No key coordinate or credential reference on the agent actor | `lib/keyfleet_web/plugs/signed_agent.ex:131` builds `%Agent{wallet_address, chain_id, audience}` only; receipt fields are validated then dropped | Commands must name `as_key`. The plug must keep a credential reference, such as a digest of `x-siwa-receipt` plus `x-key-id`, for the audit stamp the addendum requires (§13.3). |
-| B2 | No chain freshness | "Current" epoch is `max(ownership_epoch)` over recorded rows (`lib/keyfleet/keys/key_attachment.ex:242-250`); nothing calls `record_epoch` outside tests | "Fail closed when ownership state is unavailable" (§13.3) cannot be implemented until the P3 chain projection. Test 13.11 #6 can still be exercised with System-recorded epochs. |
-| B3 | No level data | No level scope, no `LevelCompleted` projection (handoff `docs/handoff-2026-09-22.md:135-146`) | `level:L` scope is refused until P3 (decision 5). |
+| B2 | Chain freshness | Resolved: the chain projection records each key's ownership epochs from the contract's `OwnershipEpoch` logs (`lib/keyfleet/chain/scanner.ex`), and its cursor says whether that reading is recent enough (`KeyFleet.Chain.fresh?/1`) | The key check fails closed: while the reading is not fresh, a write is refused as `ownership_refreshing` (§7.3). |
+| B3 | Level data | Resolved in S4a: completed levels come from the fleet's sold keys as the chain projection records them (`KeyFleet.Chain.minted/2`, `KeyFleet.Fleets.Presets.writable_levels/2`) | Level scopes are granted only while that reading is fresh (§7.3). |
 | B4 | No proposals projection | `Rooms.sync` hard-codes `proposals: []` (`lib/keyfleet/rooms.ex:44-50`) | `launch.prepare` and test 13.11 #5 wait for proposals. |
 | B5 | The image has no Python | `Dockerfile:81-83` is Debian slim plus coreutils | Add a uv-built venv from `uv.lock` (Python ≥3.11) in a build stage, copied into the runtime stage, run as uid 1001. |
 | B6 | No volume | `fly.toml` and `fly.staging.toml` have no `[mounts]` | Add a volume at `/data`. It pins the app to one host and one machine, which `fly.toml:21-22` already requires. A deploy is stop then start, so there is a short write outage. Fly volumes are not replicated: add scheduled `sqlite3 .backup` exports next to Fly snapshots. If someone scales to two machines, each gets its **own** volume and the graphs split silently; flock cannot see across hosts. Keep `fly scale count 1` as a written deploy rule. |
 | B7 | Process-death semantics | Upstream design | Any write exception, cross-thread use or append failure means exit (§3). The BEAM Port gets `exit_status` and the supervisor restarts. A reload replays the full log: 40k events took 0.57 s locally (probe p3), and every event stays in memory (`Graph._events`). This is fine at hackathon scale. Measure under the planned load test. |
-| B8 | Restart requeue | `runtime.py:4101-4177` | Events after the last `runtime.idle` re-run behaviors on boot. With `runtime.idle` last in every transaction (§3) the suffix is empty, but the two v1 reactions must still be idempotent. |
-| B9 | Reaction cost holds the transaction | `run_quantum` bounds are between events | Reactions must be pure and bounded: no I/O, no LLM, and a cascade cap by `max_queue_events`. If a quantum is not idle, commit and schedule a `tick` quantum in its own transaction. |
+| B8 | Restart requeue | `runtime.py:4101-4177` | Events after the last `runtime.idle` re-run behaviors on boot. Upstream behaviors would also swallow their own exceptions into `behavior.failed` events and add lifecycle events of their own, so the v1 reactions are not behaviors: they are plain host code run inside the write (§7.6), and nothing is requeued. Each cause's reactions run once, so no dedupe key is asked twice, across replay and restart (§7.6). |
+| B9 | Reaction cost holds the transaction | The write's transaction | Reactions are pure and bounded: no I/O, at most `MAX_WORK` reads of the fleet's indexed `depends_on` links and `MAX_ATTENTION` attention events per command, whatever the size of the fleet (§7.6). The settling quantum's `max_queue_events` (64) holds one command's change, its attention and its ledger event. |
 | B10 | Private upstream seams | `store._conn`, autocommit mode | A pinned-version test guards them (§3). |
 | B11 | `#` in object ids | `core/ids.py:63-65` | URL-encode ids in HTTP paths, or pass ids in JSON bodies only (the signed plug already requires JSON bodies and empty query strings, `signed_agent.ex:54-69`, `:167-170`). |
 | B12 | Log noise | A `pack.loaded` on every boot; a `runtime.idle` per command | The feed filters to domain types but still advances the scan cursor past filtered events (§13.7 "last-scanned cursor"). |
@@ -263,7 +262,7 @@ Each message is a `{:packet, 4}` frame holding one UTF-8 JSON object. The Python
 {"v": 1, "req": "r_01J…", "op": "patch",
  "command": {"id": "client-idempotency-key ≤128",
              "principal": "member:8453:0xFLEET:17@3/agent:0xWALLET",
-             "writable_scopes": ["fleet"],
+             "writable_scopes": ["fleet", "level:2", "level:3"],
              "auth": {"key": {"chain_id": 8453, "contract": "0x…", "token_id": 17},
                       "ownership_epoch": 3, "kind": "agent", "operator_wallet": "0x…",
                       "pairing_id": "uuid", "credential_ref": "sha256:…",
@@ -308,7 +307,9 @@ Everything else is refused as `bad_request`. That includes raw emit, `load_pack`
 1. Ledger. The same `(principal, command_id)` with the same hash returns the stored result with `replayed: true`. With a different hash it returns `duplicate_mismatch`.
 2. Existence and archive state of every touched id.
 3. `expected_version == current.version`.
-4. Scope: every touched object's `sys.scope` is in `writable_scopes`. For `link` this means both endpoints; for `create` it means the requested scope.
+4. Scope: every touched object's `sys.scope` is in `writable_scopes`. For `link` and `unlink` this means both endpoints; for `create` it means the requested scope. `sys.scope` is set at creation and no member write can change it.
+
+`writable_scopes` is resolved in Elixir by `KeyFleet.Graph.Checks.KeyActor`, at the write's turn and only while the fleet's key ownership is fresh (otherwise `ownership_refreshing`, 503). Every key writes `fleet`. A key of a Fibonacci fleet whose token is in level K also writes `level:K`, and `level:L` for L > K once every key of level L is sold; never L < K. Level L is complete once the fleet's sold keys reach the last token id of that level (2, 5, 10, 18, …). The number sold is the highest key number the chain projection has recorded: the contract numbers keys from 1 in the order it sells them and has no way to burn one (`contracts/src/Keyfleet.sol`, `purchase` and `_update`), and a transfer adds no key. Every read the check makes gets what is left of its time budget, and none starts once it is spent; a check that runs out answers the write as unavailable (503). Classic and Accelerant keys write `fleet` only. The host checks the scope strings against `^(fleet|level:([1-9]|1[0-9]|20))$` and refuses any other as `bad_request`.
 5. Field rules: the forbidden set, and the `assignee_key` rule.
 6. Schema on the merged data.
 7. `BEGIN IMMEDIATE` … `COMMIT` as in §3.
@@ -365,10 +366,38 @@ Every model uses `ConfigDict(extra="forbid")`. Strings are trimmed and length-bo
 - **Actors:**
   - members: `member:<chain>:<contract>:<token>@<epoch>/<human|agent>:<wallet>`;
   - `system:<adapter>` for trusted adapters;
-  - `keyfleet:gateway` for ledger events;
+  - `keyfleet:gateway` for the ledger and attention events; a command's principal must be a member, so no request can act under it;
   - `runtime` is upstream's own.
   - The host never lets the default `"system"` actor through; it always passes an explicit actor.
-- **Event types:** `keyfleet.command` (the ledger) and `keyfleet.attention` (reaction output, slice 4). Both are emitted only by the host.
+- **Event types:** `keyfleet.command` (the ledger) and `keyfleet.attention` (reaction output, §7.6). Both are emitted only by the host, with actor `keyfleet:gateway`, and both are copied to Postgres and served by `changes` and sync.
+
+### 7.6 Reactions
+
+A write can ask members to look at something. The host runs two reactions after the write's own change, inside its transaction (`keyfleet_graph/reactions.py`). They only emit `keyfleet.attention` events and never change an object or link.
+
+**Payload:** `{"kind": "task_unblocked" | "needs_review", "object_id": <id>, "cause": {"event_id": <the change's event id>}, "dedupe_key": "<run_id>:<kind>:<object_id>:<cause event id>"}`.
+
+**`task_unblocked`.** A target is *finished* when it is archived, or when it is a task marked done; goals, services and launch cards have no finished state of their own. A task *waits* while it is neither archived nor done. The host asks `task_unblocked` for each waiting task whose `depends_on` targets are now all finished, when:
+- a task's `progress` becomes `done` (its dependents are checked);
+- an unfinished object is archived (its dependents are checked);
+- a `depends_on` link to an unfinished target is removed (its source is checked).
+
+**`needs_review`.** The host asks `needs_review` of:
+- the target of a new `supports` or `contradicts` link from `evidence`;
+- the target of a new `produces` link (only tasks produce);
+- a task created with, or patched to, a `result_ref`.
+
+An existing link answered again (`existing: true`) asks nothing.
+
+**Depth.** Only a member's change sets a reaction off. Attention events never do, so the cascade depth is one by construction and needs no counter.
+
+**Dedupe.** A cause is one durable event, and its reactions run once, inside its own transaction, asking each object at most once per kind. The same command again is answered from the ledger and runs nothing. A crash between commit and reply leaves the attention durable with the command, and the retry is a replay. Opening the log runs nothing again, because reactions are not upstream behaviors. So a `dedupe_key` never appears twice, and readers can rely on it. It starts with the log's `run_id` because every log numbers its events alike: without it, the same change in two workspaces would give the same key. The host keeps no set of asked keys: no path could ask one again, so the set would guard nothing.
+
+**Bounds per command**, named in `reactions.py`:
+- `MAX_ATTENTION = 50` attention events. A notice is a hint to look, so fifty is more than a fleet acts on at once. Past it the rest are not asked, and the command still commits. One member's command can use all fifty, for example by finishing a task that many tasks wait on, and the tasks past the fiftieth are then not announced. That is a known and accepted limit: a notice is only a hint, and those tasks can be seen as unblocked in the graph. The settling quantum (64 events) must hold the change, all fifty and the ledger event; a pytest fails if `MAX_ATTENTION` grows past that.
+- `MAX_WORK = 2000` `depends_on` link reads. The host keeps the fleet's `depends_on` links indexed by source and by target: it gathers them once when it opens the fleet's log and records each link it makes or removes after that. A reaction reads the tasks that depend on the changed object, then each one's own dependencies, one read per link, and every read counts against the bound, so a write's work does not grow with the fleet. Two thousand dictionary lookups take a few milliseconds. A task whose check is cut short is not announced, since it cannot be known to be unblocked.
+
+A storm command (200 tasks waiting on one task and on 100 done tasks, 20,200 links) takes about 1 ms in the host. In a fleet with 200,000 `depends_on` links, a write that unblocks one task takes about 0.3 ms (at most 2 ms over 40 writes); reading every link on each such write took 55 ms. While one fleet runs storms back to back, another fleet's plain writes are answered in the same time as before (median about 0.27 ms before and during, measured in `KeyFleet.Graph.WriterTest`), because each fleet has its own writer and host process.
 
 ---
 
@@ -403,14 +432,13 @@ Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left
   - sync responses stay bounded in the 1,000-client polling test.
 - Covers 13.11 #4, "sink notification loss is recoverable from the durable log", and "graph queries and responses remain bounded".
 
-**S4: Level scope, reactions and the Workspace tab.**
-- Delivers `level:L` writable scopes (holders immediately; earlier levels after completion); two bounded reactions (recompute unblocked tasks, and `keyfleet.attention` for new evidence or deliverables, deduplicated, with a depth cap); and the LiveView Workspace tab (cards, related objects, revision history, activity).
-- Done when:
-  - a level-scoped write by a later-level key is refused;
-  - a cross-scope link is refused;
-  - a reaction storm in one fleet exhausts its bound while another fleet's commands keep their latency.
+**S4a: Level scope and reactions (built).**
+- Delivers `level:L` writable scopes for the two Fibonacci fleets (§7.3): a key writes the fleet, its own level, and each later level once all of that level's keys are sold, read from the chain projection's sold keys while ownership is fresh. Classic and Accelerant keys write the fleet only. It also delivers the two bounded reactions of §7.6, their `keyfleet.attention` events in Postgres, `changes` and sync, and both in the API contract.
+- Tested over the signed HTTP routes: a key writes its own level; a later-level key is refused an earlier level (403 `forbidden_scope`); an earlier-level key is refused a later level until its last key is sold, then allowed; stale ownership refuses; Classic and Accelerant refuse every level; links in either direction, patches, archives and unlinks touching an unwritable level are refused; `sys.scope` cannot be patched. pytest covers every reaction trigger and the writes that ask nothing, dedupe across replay and restart, both bounds with the command still committing, and that no member request produces attention or moves a scope. ExUnit measures another fleet's write latency during a storm.
 - Covers "cross-fleet/scope links are rejected" and "reaction loops exhaust bounded work without blocking other fleets".
-- **Depends on the chain-projection slice (P3) for completed levels and fresh ownership.**
+
+**S4b: The Workspace tab.**
+- Delivers the LiveView Workspace tab (cards, related objects, revision history, activity).
 
 **S5: `launch.prepare` and verified receipts.**
 - Delivers `launch.prepare`, which freezes selected `launch_card` revisions (by id and version) into immutable bytes, validates the seven launch fields in bytes, forces the treasury, and hashes content plus parameters into the existing proposal draft. It also delivers `system_record` receipts from the verified chain adapter.
@@ -445,11 +473,11 @@ Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left
 5. **Level scope before the chain projection.**
    - (a) Refuse `level:L` until completed-level data exists.
    - (b) Allow holders only, without the "earlier levels after completion" part.
-   - **Recommend (a).** It fails closed and avoids a temporary rule.
+   - **Recommend (a).** It fails closed and avoids a temporary rule. Settled by S4a: the chain projection now supplies sold keys, and the full rule is in §7.3.
 
 ## 10. Decisions taken (chief engineer, 2026-09-22)
 
 1a (commands name `as_key`), 2a (no Postgres command queue; the SQLite ledger is the idempotency authority), 3a (host
 compare-and-swap then `patch_object` in one transaction), 4a (`{:packet, 4}` + JSON), 5a (`level:L` scope refused until
-the chain projection supplies completed levels). The probes referenced above were run in a temporary scratchpad and are
+the chain projection supplies completed levels; S4a now grants level scopes from that projection, §7.3). The probes referenced above were run in a temporary scratchpad and are
 not kept; the S1 test suite reproduces what they proved.

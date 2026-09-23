@@ -78,10 +78,10 @@ defmodule KeyFleet.Graph.Writer do
 
   `authorize` runs inside the writer when the write's turn comes, just before
   the write reaches the host, and is given the milliseconds it may spend. It
-  answers `{:ok, command}`, the command's `:id`, `:principal` and `:auth` as
-  they stand at that moment, or `{:error, error}`, which is returned as it is
-  with nothing sent; one that exits is answered `{:error, :unavailable}`, also
-  with nothing sent. The writer limits every write to the fleet scope.
+  answers `{:ok, command}`, the command's `:id`, `:principal`, `:auth` and
+  `:writable_scopes` as they stand at that moment, or `{:error, error}`, which
+  is returned as it is with nothing sent; one that exits or raises is
+  answered `{:error, :unavailable}`, also with nothing sent.
   """
   @spec command(String.t(), String.t(), map(), authorize()) :: reply()
   def command(fleet_id, op, body, authorize) when op in @write_ops do
@@ -157,7 +157,6 @@ defmodule KeyFleet.Graph.Writer do
   def handle_call({:command, op, body, authorize}, from, %{host: %{ready?: true}} = state) do
     case check(authorize, state) do
       {:ok, command} ->
-        command = Map.put(command, :writable_scopes, ["fleet"])
         message = %{v: 1, op: op, command: command, body: Jason.Fragment.new(body)}
         handle_call({:send, Jason.encode!(message)}, from, state)
 
@@ -168,11 +167,19 @@ defmodule KeyFleet.Graph.Writer do
 
   def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
 
-  # A database pool that is down or out of time exits its caller; here that
-  # would stop the writer, so a check that exits is answered as unavailable,
-  # with nothing sent.
+  # A database pool that is down or out of time exits its caller, and a fault
+  # in the check raises; either would stop the writer, so a check that exits
+  # or raises is answered as unavailable, with nothing sent.
   defp check(authorize, state) do
     authorize.(state.check_timeout)
+  rescue
+    error ->
+      Logger.warning(
+        "graph write for #{state.fleet_id} not sent: its ownership check raised: " <>
+          Exception.message(error)
+      )
+
+      {:error, :unavailable}
   catch
     :exit, reason ->
       Logger.warning(

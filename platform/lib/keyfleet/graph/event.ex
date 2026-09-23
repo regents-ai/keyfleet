@@ -2,8 +2,9 @@ defmodule KeyFleet.Graph.Event do
   @moduledoc """
   One event of a fleet's graph log, copied at its place (`seq`) in the log.
 
-  Only the events that change the workspace, and the command record each
-  write leaves, are copied; the runtime's own bookkeeping is not. Each keeps
+  Only the events that change the workspace, the attention each write asks
+  for and the command record each write leaves are copied; the runtime's own
+  bookkeeping is not. Each keeps
   `byte_size`, the length of the event as a reader receives it, so a page of
   events is cut to size by the database. Only the projector writes here;
   anyone may read.

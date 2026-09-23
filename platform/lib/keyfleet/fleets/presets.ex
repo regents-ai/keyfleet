@@ -56,6 +56,23 @@ defmodule KeyFleet.Fleets.Presets do
     }
   end
 
+  @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
+  def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
+
+  @doc """
+  The levels a Fibonacci key may write once `total_minted` keys are sold: its
+  own level, and each later level once every key of that level is sold. Never
+  an earlier level.
+  """
+  def writable_levels(token_id, total_minted)
+      when is_integer(total_minted) and total_minted >= 0 do
+    own = fibonacci_level_of(token_id)
+    [own | Enum.to_list((own + 1)..completed_levels(:fibonacci, total_minted)//1)]
+  end
+
+  @doc "Whether a Fibonacci fleet ever issues `token_id`."
+  def fibonacci_token?(token_id), do: token_id in 1..@fibonacci_max_token_id
+
   @doc "The Fibonacci level that owns a token id."
   def fibonacci_level_of(token_id) when token_id in 1..@fibonacci_max_token_id,
     do: Enum.find_index(@fibonacci_level_ends, &(token_id <= &1)) + 1

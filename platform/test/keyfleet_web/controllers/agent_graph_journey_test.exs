@@ -3,6 +3,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   import Plug.Conn
 
   alias KeyFleet.Actors
+  alias KeyFleet.Chain
   alias KeyFleet.ChainHelpers
   alias KeyFleet.ContractSchema
   alias KeyFleet.Fleets
@@ -15,6 +16,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
   @fleet "fibonacci_syndicate"
   @contract "0x" <> String.duplicate("7", 40)
+  @levelled "fibonacci_cascade"
   @owners %{1 => "0x" <> String.duplicate("a", 40), 2 => "0x" <> String.duplicate("b", 40)}
   @goal %{
     title: "First paying customer",
@@ -40,20 +42,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_core_rooms!()
-
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        deployed_block: 1
-      },
-      actor: %Actors.System{}
-    )
-
+    deploy(@fleet, @contract)
     for {token_id, wallet} <- @owners, do: record_owner(token_id, 0, wallet)
 
     secret = :crypto.strong_rand_bytes(32)
@@ -395,11 +384,243 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
     assert {refused.status, refused.body["details"]} == {422, %{"fields" => ["sys"]}}
 
-    refused = graph(c, ann, "create", %{create | scope: "level:1"})
-    assert {refused.status, refused.body["error"]} == {400, "bad_request"}
-
     events = graph(c, ann, "changes", %{}).body["events"]
     assert Enum.count(events, &(&1["type"] == "keyfleet.command")) == 1
+  end
+
+  # Syndicate keys other suites commit outside the sandbox would count as
+  # sold, so the level tests run on the Cascade fleet.
+  test "a key writes the fleet and its own level, and a later level once all its keys are sold",
+       c do
+    sell_levelled(1..3)
+    start_graph(c, fleets: [@fleet, @levelled])
+    [ann, cal] = pair_levelled(c, [{"Ann", 1}, {"Cal", 3}])
+
+    # Key 1 is in level 1. Key 3 opens level 2, whose keys run from 3 to 5.
+    first = write!(c, ann, "create", level_goal(1, "a-1", "level:1"), @levelled)
+    second = write!(c, cal, "create", level_goal(3, "c-1", "level:2"), @levelled)
+    assert scope_of(c, ann, first) == "level:1"
+    assert scope_of(c, ann, second) == "level:2"
+
+    for {agent, key, scope} <- [{cal, 3, "level:1"}, {ann, 1, "level:2"}, {cal, 3, "level:3"}] do
+      assert_forbidden_scope(
+        graph(c, agent, "create", level_goal(key, "x-#{key}", scope), @levelled),
+        scope
+      )
+    end
+
+    # Four of level 2's five keys sold does not open it; the fifth does.
+    sell_levelled(4..4)
+
+    assert_forbidden_scope(
+      graph(c, ann, "create", level_goal(1, "a-2", "level:2"), @levelled),
+      "level:2"
+    )
+
+    sell_levelled(5..5)
+    opened = write!(c, ann, "create", level_goal(1, "a-3", "level:2"), @levelled)
+    assert scope_of(c, ann, opened) == "level:2"
+
+    # The next level waits for its own keys, and an earlier level stays closed.
+    assert_forbidden_scope(
+      graph(c, ann, "create", level_goal(1, "a-4", "level:3"), @levelled),
+      "level:3"
+    )
+
+    assert_forbidden_scope(
+      graph(c, cal, "create", level_goal(3, "c-2", "level:1"), @levelled),
+      "level:1"
+    )
+
+    assert length(commands(c, ann, @levelled)) == 3
+
+    # While the fleet's key ownership is not fresh, no level is written.
+    ChainHelpers.seed_cursor!(@levelled, observed_at: DateTime.add(DateTime.utc_now(), -3600))
+    refused = graph(c, cal, "create", level_goal(3, "c-3", "level:2"), @levelled)
+    assert {refused.status, refused.body["error"]} == {503, "ownership_refreshing"}
+    assert length(commands(c, ann, @levelled)) == 3
+  end
+
+  test "an object in a level a key may not write cannot be linked, changed, archived or unlinked by it",
+       c do
+    sell_levelled(1..3)
+    start_graph(c, fleets: [@fleet, @levelled])
+    [ann, cal] = pair_levelled(c, [{"Ann", 1}, {"Cal", 3}])
+    task = %{type: "task", data: %{title: "Draft the brief"}}
+
+    open = write!(c, ann, "create", Map.merge(task, %{as_key: 1, command_id: "t-1"}), @levelled)
+
+    closed =
+      write!(
+        c,
+        cal,
+        "create",
+        Map.merge(task, %{as_key: 3, command_id: "t-2", scope: "level:2"}),
+        @levelled
+      )
+
+    for {source, target} <- [{open, closed}, {closed, open}] do
+      link = %{
+        as_key: 1,
+        command_id: "l-#{source["id"]}",
+        source: source["id"],
+        target: target["id"],
+        type: "depends_on"
+      }
+
+      assert_forbidden_scope(graph(c, ann, "link", link, @levelled), "level:2")
+    end
+
+    link = %{
+      as_key: 3,
+      command_id: "l-1",
+      source: open["id"],
+      target: closed["id"],
+      type: "depends_on"
+    }
+
+    linked = graph(c, cal, "link", link, @levelled)
+    assert linked.status == 200
+    relation_id = linked.body["result"]["relation_id"]
+
+    for {op, body} <- [
+          {"unlink", %{relation_id: relation_id}},
+          {"patch", %{id: closed["id"], expected_version: 1, set: %{progress: "doing"}}},
+          {"archive", %{id: closed["id"], expected_version: 1}}
+        ] do
+      body = Map.merge(%{as_key: 1, command_id: "x-#{op}"}, body)
+      assert_forbidden_scope(graph(c, ann, op, body, @levelled), "level:2")
+    end
+
+    # Not even a key that writes the level can move an object out of it.
+    for {set, n} <- Enum.with_index([%{sys: %{scope: "fleet"}}, %{scope: "fleet"}]) do
+      patch = %{as_key: 3, command_id: "s-#{n}", id: closed["id"], expected_version: 1, set: set}
+      refused = graph(c, cal, "patch", patch, @levelled)
+      assert {refused.status, refused.body["error"]} == {422, "forbidden_field"}
+    end
+
+    read = graph(c, ann, "get", %{id: closed["id"]}, @levelled).body
+    assert {read["object"]["version"], read["object"]["sys"]["scope"]} == {1, "level:2"}
+    assert [%{"id" => ^relation_id}] = read["relations"]
+    assert length(commands(c, ann, @levelled)) == 3
+  end
+
+  test "a Classic or Accelerant key writes the fleet scope and no level", c do
+    unlevelled = ["fleet_tech_classic", "fleet_tech_accelerant"]
+
+    for {fleet, n} <- Enum.with_index(unlevelled, 1) do
+      ChainHelpers.seed_cursor!(fleet)
+      deploy(fleet, "0x" <> String.duplicate("#{n}", 40))
+      record_owner(1, 0, owner_wallet(1), fleet)
+    end
+
+    start_graph(c, fleets: [@fleet | unlevelled])
+    dee = join(c, "Dee")
+
+    for fleet <- unlevelled do
+      pair(c, dee, 1, owner_wallet(1), fleet)
+      assert write!(c, dee, "create", level_goal(1, "g-1", "fleet"), fleet)
+
+      for scope <- ["level:1", "level:2"] do
+        assert_forbidden_scope(
+          graph(c, dee, "create", level_goal(1, "g-#{scope}", scope), fleet),
+          scope
+        )
+      end
+
+      assert length(commands(c, dee, fleet)) == 1
+    end
+  end
+
+  test "a task marked done tells the tasks waiting on it, and new evidence asks for a review, in changes and in sync",
+       c do
+    start_graph(c)
+    [ann, bea] = pair_agents(c)
+    task = fn id, title -> %{as_key: 1, command_id: id, type: "task", data: %{title: title}} end
+    blocker = write!(c, ann, "create", task.("t-1", "Find a customer"))
+    waiting = write!(c, ann, "create", task.("t-2", "Write the brief"))
+
+    evidence =
+      write!(c, bea, "create", %{
+        as_key: 2,
+        command_id: "e-1",
+        type: "evidence",
+        data: %{title: "Call", source_uri: "https://example.com/call"}
+      })
+
+    link = %{
+      as_key: 1,
+      command_id: "l-1",
+      source: waiting["id"],
+      target: blocker["id"],
+      type: "depends_on"
+    }
+
+    assert graph(c, ann, "link", link).status == 200
+    cursor = sync(c, ann, %{"general" => 0}, 0).body["graph"]["next_cursor"]
+
+    done = %{
+      as_key: 1,
+      command_id: "p-1",
+      id: blocker["id"],
+      expected_version: 1,
+      set: %{progress: "done"}
+    }
+
+    assert graph(c, ann, "patch", done).status == 200
+
+    review = %{
+      as_key: 2,
+      command_id: "l-2",
+      source: evidence["id"],
+      target: waiting["id"],
+      type: "supports"
+    }
+
+    assert graph(c, bea, "link", review).status == 200
+
+    changes = graph(c, bea, "changes", %{after_seq: cursor}).body
+    synced = sync(c, ann, %{"general" => 0}, cursor).body["graph"]
+    assert synced["events"] == changes["events"]
+
+    for page <- [changes, synced] do
+      assert ContractSchema.errors(page, "WorkspaceChanges") == []
+    end
+
+    [patched, unblocked, first_ledger, linked, reviewed, second_ledger] = changes["events"]
+    log = changes["run_id"]
+    assert Enum.map([patched, linked], & &1["type"]) == ["patch.applied", "relation.created"]
+
+    assert [unblocked, reviewed] |> Enum.map(&Map.take(&1, ~w(type actor payload))) == [
+             %{
+               "type" => "keyfleet.attention",
+               "actor" => "keyfleet:gateway",
+               "payload" => %{
+                 "kind" => "task_unblocked",
+                 "object_id" => waiting["id"],
+                 "cause" => %{"event_id" => patched["id"]},
+                 "dedupe_key" => "#{log}:task_unblocked:#{waiting["id"]}:#{patched["id"]}"
+               }
+             },
+             %{
+               "type" => "keyfleet.attention",
+               "actor" => "keyfleet:gateway",
+               "payload" => %{
+                 "kind" => "needs_review",
+                 "object_id" => waiting["id"],
+                 "cause" => %{"event_id" => linked["id"]},
+                 "dedupe_key" => "#{log}:needs_review:#{waiting["id"]}:#{linked["id"]}"
+               }
+             }
+           ]
+
+    # Each write's command record names the notices it left alongside its change.
+    assert first_ledger["payload"]["events"] == [patched["id"], unblocked["id"]]
+    assert second_ledger["payload"]["events"] == [linked["id"], reviewed["id"]]
+
+    # The same write again is answered from the record and asks nothing more.
+    assert graph(c, ann, "patch", done).body["replayed"] == true
+    assert graph(c, bea, "changes", %{after_seq: cursor}).body["events"] == changes["events"]
   end
 
   test "a wallet that does not run the key it names is refused and nothing is written", c do
@@ -665,18 +886,68 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
       )
 
     start_supervised!({KeyFleet.Graph.Supervisor, opts})
-    await(fn -> match?({:ok, _}, Writer.request(@fleet, "hello", %{})) end)
+
+    for fleet <- opts[:fleets],
+        do: await(fn -> match?({:ok, _}, Writer.request(fleet, "hello", %{})) end)
 
     # Writes ask the projector to copy them; with no rounds of its own during
     # a test, nothing else reaches the writer. Its first round is done once
     # it answers.
     start_supervised!({KeyFleet.Graph.Projectors, [catch_up_interval: 60_000] ++ opts})
-    Projector.await(@fleet, log_id(), 0)
+    for fleet <- opts[:fleets], do: Projector.await(fleet, log_id(fleet), 0)
   end
 
-  defp log_id do
-    {:ok, %{"result" => %{"run_id" => run_id}}} = Writer.request(@fleet, "hello", %{})
+  defp log_id(fleet \\ @fleet) do
+    {:ok, %{"result" => %{"run_id" => run_id}}} = Writer.request(fleet, "hello", %{})
     run_id
+  end
+
+  defp deploy(fleet, contract) do
+    fleet
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8453,
+        contract_address: contract,
+        rewards_address: "0x" <> String.duplicate("8", 40),
+        votes_address: "0x" <> String.duplicate("9", 40),
+        deployed_block: 1
+      },
+      actor: %Actors.System{}
+    )
+  end
+
+  # The Cascade fleet deployed and fresh, with these keys sold.
+  defp sell_levelled(token_ids) do
+    if Chain.get_cursor!(@levelled) == nil do
+      ChainHelpers.seed_cursor!(@levelled)
+      deploy(@levelled, "0x" <> String.duplicate("6", 40))
+    end
+
+    for token_id <- token_ids, do: record_owner(token_id, 0, owner_wallet(token_id), @levelled)
+  end
+
+  # One agent for each named Cascade key, paired by the key's owner.
+  defp pair_levelled(c, names_and_keys) do
+    for {name, token_id} <- names_and_keys do
+      agent = join(c, name)
+      pair(c, agent, token_id, owner_wallet(token_id), @levelled)
+      agent
+    end
+  end
+
+  defp owner_wallet(token_id),
+    do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")
+
+  defp level_goal(token_id, command_id, scope),
+    do: %{as_key: token_id, command_id: command_id, type: "goal", scope: scope, data: @goal}
+
+  defp scope_of(c, agent, %{"id" => id}),
+    do: graph(c, agent, "get", %{id: id}, @levelled).body["object"]["sys"]["scope"]
+
+  defp assert_forbidden_scope(refused, scope) do
+    assert {refused.status, refused.body["error"], refused.body["details"]} ==
+             {403, "forbidden_scope", %{"scope" => scope}}
   end
 
   defp writer do
@@ -698,17 +969,17 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     end
   end
 
-  defp pair(c, agent, token_id, owner_wallet) do
-    path = "/api/v1/agent/keys/#{@fleet}/#{token_id}/pairing"
+  defp pair(c, agent, token_id, owner_wallet, fleet \\ @fleet) do
+    path = "/api/v1/agent/keys/#{fleet}/#{token_id}/pairing"
     assert send_signed(c, agent, "POST", path, %{}).status == 200
 
     owner = %Actors.Human{human_account_id: token_id, wallet_addresses: [owner_wallet]}
-    [request] = Keys.list_pairing_requests!(@fleet, token_id, actor: owner)
+    [request] = Keys.list_pairing_requests!(fleet, token_id, actor: owner)
     Keys.approve_pairing!(request, %{}, actor: owner)
   end
 
-  defp commands(c, agent) do
-    events = graph(c, agent, "changes", %{limit: 500}).body["events"]
+  defp commands(c, agent, fleet \\ @fleet) do
+    events = graph(c, agent, "changes", %{limit: 500}, fleet).body["events"]
     for %{"type" => "keyfleet.command"} = event <- events, do: event
   end
 
@@ -730,16 +1001,18 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   defp agent_actor(signer),
     do: %Actors.Agent{wallet_address: signer.address, chain_id: 8453, audience: "keyfleet"}
 
-  defp record_owner(token_id, epoch, wallet) do
+  defp record_owner(token_id, epoch, wallet, fleet \\ @fleet) do
     Keys.record_epoch!(
       %{
-        fleet_id: @fleet,
+        fleet_id: fleet,
         token_id: token_id,
         ownership_epoch: epoch,
         owner_wallet: wallet,
         block_number: 10 + epoch,
         block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash: "0x" <> Base.encode16(<<token_id, epoch, 0::240>>, case: :lower),
+        transaction_hash:
+          "0x" <>
+            Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}/#{epoch}"), case: :lower),
         log_index: 0
       },
       actor: %Actors.System{}
@@ -749,10 +1022,11 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   defp goal_command(command_id),
     do: %{as_key: 1, command_id: command_id, type: "goal", scope: "fleet", data: @goal}
 
-  # Creates in the fleet scope and answers what was created.
-  defp write!(c, agent, "create", body) do
+  # Creates, in the fleet scope unless the body names another, and answers
+  # what was created.
+  defp write!(c, agent, "create", body, fleet \\ @fleet) do
     body = Map.merge(%{type: "service", scope: "fleet"}, body)
-    written = graph(c, agent, "create", body)
+    written = graph(c, agent, "create", body, fleet)
     assert written.status == 200
     assert written.body["replayed"] == false
     assert written.body["watermark"] >= written.body["head_seq"]
@@ -767,8 +1041,8 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     })
   end
 
-  defp graph(c, agent, op, body),
-    do: send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/graph/#{op}", body)
+  defp graph(c, agent, op, body, fleet \\ @fleet),
+    do: send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet}/graph/#{op}", body)
 
   defp send_signed(c, signer, method, path, body),
     do: send_signed(c, signer, receipt(c, signer), method, path, body)

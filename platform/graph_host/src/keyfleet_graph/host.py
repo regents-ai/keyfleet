@@ -1,8 +1,9 @@
 """One fleet's graph: the run, the pack, the command ledger and the ops.
 
 Every accepted write commits as one SQLite transaction holding its domain
-events, its `keyfleet.command` ledger event and the runtime's settling
-events, so a command is either wholly durable or absent. The in-memory
+events, the `keyfleet.attention` events its reactions ask for, its
+`keyfleet.command` ledger event and the runtime's settling events, so a
+command is either wholly durable or absent. The in-memory
 projection is outside that transaction, so any exception raised once a
 transaction has begun is left to end the process: the supervisor restarts
 it and `Runtime.load` rebuilds memory from what is durable.
@@ -34,15 +35,19 @@ from keyfleet_graph.pack import (
     RelationData,
 )
 from keyfleet_graph.protocol import Command
+from keyfleet_graph.reactions import ATTENTION_EVENT, DependsOnLinks, Reactions
 
 LEDGER_EVENT = "keyfleet.command"
-LEDGER_ACTOR = "keyfleet:gateway"
+# The host's own name on the events only it writes: the ledger and attention.
+GATEWAY_ACTOR = "keyfleet:gateway"
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
 
 # The settling quantum only drains lifecycle bookkeeping: the pack carries no
-# behaviors, so any work left after it is a fault.
+# behaviors, so any work left after it is a fault. It holds the most one
+# command can write: its change, `MAX_ATTENTION` attention events and its
+# ledger event. A test fails if `MAX_ATTENTION` grows past what fits.
 _QUANTUM_EVENTS = 64
 _QUANTUM_SECONDS = 1.0
 
@@ -87,6 +92,7 @@ class Host:
             for event in self.graph.events
             if event.type == LEDGER_EVENT
         }
+        self.depends_on = DependsOnLinks(self.graph)
 
     # ---------- request handling ----------
 
@@ -141,8 +147,11 @@ class Host:
 
         apply = _PLANNERS[request.op](self, command, body)
         head = self._head_seq()
+        reactions = Reactions(self.graph, self.depends_on, self.log_id)
         with self._transaction():
-            result = apply()
+            result = apply(reactions)
+            for attention in reactions.attention:
+                self._emit(ATTENTION_EVENT, attention)
             payload = {
                 "principal": command.principal,
                 "command_id": command.id,
@@ -152,15 +161,7 @@ class Host:
                 "events": [event["id"] for event in self._events_after(head)],
                 "auth": command.auth.model_dump(mode="json"),
             }
-            self.graph.emit(
-                Event(
-                    id=self.graph.ids.event(),
-                    type=LEDGER_EVENT,
-                    payload=payload,
-                    actor=LEDGER_ACTOR,
-                    timestamp=self.graph.clock.now(),
-                )
-            )
+            self._emit(LEDGER_EVENT, payload)
             self._settle()
         self._ledger[key] = payload
         return self._accepted(request.req, result, replayed=False, events=self._events_after(head))
@@ -179,7 +180,7 @@ class Host:
 
     # ---------- planners: every check, then the closure that writes ----------
 
-    def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[], dict]:
+    def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[Reactions], dict]:
         member = MEMBER_MODELS.get(body.type)
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
@@ -188,13 +189,14 @@ class Host:
         _check_fields(member, body.data.keys(), body.data, command)
         record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.scope)})
 
-        def apply() -> dict:
+        def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
+            reactions.created(obj, self._last_event_id())
             return {"id": obj.id, "version": obj.version}
 
         return apply
 
-    def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[], dict]:
+    def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
         obj = self._live(body.id, "id")
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
@@ -207,27 +209,31 @@ class Host:
         if not updates:
             raise _invalid("set", "the patch changes nothing")
 
-        def apply() -> dict:
+        def apply(reactions: Reactions) -> dict:
             self.graph.patch_object(
                 obj.id, updates, actor=command.principal, rationale=body.reason, evidence=body.evidence
             )
-            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
+            current = self.graph.get_object(obj.id)
+            reactions.patched(current, updates, self._last_event_id())
+            return {"id": obj.id, "version": current.version}
 
         return apply
 
-    def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[], dict]:
+    def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
         obj = self._live(body.id, "id")
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
         archived = {**obj.data["sys"], "archived": True}
 
-        def apply() -> dict:
+        def apply(reactions: Reactions) -> dict:
             self.graph.patch_object(obj.id, {"sys": archived}, actor=command.principal, rationale=body.reason)
-            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
+            current = self.graph.get_object(obj.id)
+            reactions.archived(current, self._last_event_id())
+            return {"id": obj.id, "version": current.version}
 
         return apply
 
-    def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[], dict]:
+    def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[Reactions], dict]:
         source = self._live(body.source, "source")
         target = self._live(body.target, "target")
         _check_scope(command, source, target)
@@ -241,23 +247,28 @@ class Host:
             raise _invalid("target", "an object cannot depend on itself")
         data = _validate(RelationData, {"note": body.note}, exclude_none=True)
 
-        def apply() -> dict:
+        def apply(reactions: Reactions) -> dict:
             existing = self.graph.relations(source=source.id, target=target.id, type=body.type)
             if existing:
                 return {"relation_id": existing[0].id, "existing": True}
             rel = self.graph.add_relation(source.id, target.id, body.type, data, actor=command.principal)
+            self.depends_on.made(rel)
+            reactions.linked(rel, source, self._last_event_id())
             return {"relation_id": rel.id, "existing": False}
 
         return apply
 
-    def _plan_unlink(self, command: Command, body: protocol.UnlinkBody) -> Callable[[], dict]:
+    def _plan_unlink(self, command: Command, body: protocol.UnlinkBody) -> Callable[[Reactions], dict]:
         rel = self.graph.get_relation(body.relation_id)
         if rel is None:
             raise Refusal("not_found", "no such relation", {"id": body.relation_id})
-        _check_scope(command, self.graph.get_object(rel.source), self.graph.get_object(rel.target))
+        target = self.graph.get_object(rel.target)
+        _check_scope(command, self.graph.get_object(rel.source), target)
 
-        def apply() -> dict:
+        def apply(reactions: Reactions) -> dict:
             self.graph.remove_relation(rel.id, actor=command.principal)
+            self.depends_on.removed(rel)
+            reactions.unlinked(rel, target, self._last_event_id())
             return {"relation_id": rel.id}
 
         return apply
@@ -289,6 +300,24 @@ class Host:
         log_id = f"log_{secrets.token_hex(16)}"
         self._conn.execute("INSERT INTO keyfleet_log (id) VALUES (?)", (log_id,))
         return log_id
+
+    def _last_event_id(self) -> str:
+        """The id of the event just written, as this connection sees it inside its transaction."""
+        row = self._conn.execute(
+            "SELECT id FROM events WHERE run_id = ? ORDER BY seq DESC LIMIT 1", (self._run,)
+        ).fetchone()
+        return row[0]
+
+    def _emit(self, event_type: str, payload: dict[str, Any]) -> None:
+        self.graph.emit(
+            Event(
+                id=self.graph.ids.event(),
+                type=event_type,
+                payload=payload,
+                actor=GATEWAY_ACTOR,
+                timestamp=self.graph.clock.now(),
+            )
+        )
 
     def _head_seq(self) -> int:
         row = self._conn.execute(

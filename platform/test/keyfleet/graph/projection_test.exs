@@ -519,7 +519,8 @@ defmodule KeyFleet.Graph.ProjectionTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      }
+      },
+      writable_scopes: ["fleet"]
     }
   end
 

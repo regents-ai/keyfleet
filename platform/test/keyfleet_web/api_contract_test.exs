@@ -313,9 +313,18 @@ defmodule KeyFleetWeb.ApiContractTest do
     end
 
     assert schemas["WorkspaceCreateRequest"]["properties"]["scope"] == %{
-             "type" => "string",
-             "const" => "fleet"
+             "$ref" => "#/components/schemas/WorkspaceScope"
            }
+
+    # The fleet, or one of a Fibonacci fleet's twenty levels, written one way only.
+    scope = Regex.compile!(schemas["WorkspaceScope"]["pattern"])
+    scopes = ["fleet" | Enum.map(1..20, &"level:#{&1}")]
+    assert Enum.all?(scopes, &Regex.match?(scope, &1))
+
+    refute Enum.any?(
+             ~w(level:0 level:21 level:01 Level:1 level: fleet:1 all),
+             &Regex.match?(scope, &1)
+           )
   end
 
   test "the served contract is byte-identical and available over HTTP", %{conn: conn} do

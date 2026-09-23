@@ -26,8 +26,12 @@ defmodule KeyFleet.Graph.Projection do
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
 
   # What a reader of the workspace sees: every change to its objects and
-  # links, and the command record each write leaves.
-  @copied ~w(object.created patch.applied relation.created relation.removed keyfleet.command)
+  # links, what each write asks members to look at, and the command record
+  # each write leaves.
+  @copied ~w(
+    object.created patch.applied relation.created relation.removed
+    keyfleet.attention keyfleet.command
+  )
 
   # Of a command record, what a reader sees: who asked, for what, and what it
   # did. The authority stamp stays in the log.
@@ -190,6 +194,7 @@ defmodule KeyFleet.Graph.Projection do
   defp fold(%{"type" => "relation.removed", "payload" => %{"id" => id}}, state),
     do: %{state | links: Map.delete(state.links, id), unlinked: MapSet.put(state.unlinked, id)}
 
+  defp fold(%{"type" => "keyfleet.attention"}, state), do: state
   defp fold(%{"type" => "keyfleet.command"}, state), do: state
 
   defp touch(state, id, object),

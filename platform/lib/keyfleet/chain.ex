@@ -31,12 +31,24 @@ defmodule KeyFleet.Chain do
 
   @doc "The fleet's sales so far and what its next key costs, in atomic USDC."
   def progress(fleet_id) do
-    minted =
-      KeyAttachment
-      |> Ash.Query.for_read(:current_in_fleet, %{fleet_id: fleet_id})
-      |> Ash.count!()
-
+    {:ok, minted} = minted(fleet_id)
     Presets.progress(fleet_id, minted)
+  end
+
+  @doc """
+  How many keys the fleet has sold, as far as its key history has been read:
+  the highest key number read, since the contract numbers keys from 1 in the
+  order it sells them and has no way to burn one.
+  """
+  def minted(fleet_id, opts \\ []) do
+    KeyAttachment
+    |> Ash.Query.for_read(:latest_in_fleet, %{fleet_id: fleet_id})
+    |> Ash.read_one(opts)
+    |> case do
+      {:ok, nil} -> {:ok, 0}
+      {:ok, latest} -> {:ok, latest.token_id}
+      error -> error
+    end
   end
 
   @doc """

@@ -56,7 +56,10 @@ def _logged(host, event_type):
     return [event for event in page["events"] if event["type"] == event_type]
 
 
-FORBIDDEN_FIELDS = ["sys", "paid", "approved", "admin", "treasury_balance"]
+FORBIDDEN_FIELDS = ["sys", "scope", "paid", "approved", "admin", "treasury_balance"]
+
+# A scope is the fleet or one of the twenty levels, written exactly so.
+MALFORMED_SCOPES = ["level:0", "level:21", "level:01", "level:1 ", "Level:1", "level:", "level:-1", "fleet:1", "*", ""]
 
 # Embeddings, overrides and isolates, which can reorder how text displays.
 BIDI_CONTROLS = [chr(code) for code in [*range(0x202A, 0x202F), *range(0x2066, 0x206A)]]
@@ -116,8 +119,17 @@ REFUSALS = [
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, {**command("c"), "principal": "system"})),
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", wallet="0x" + WALLET[2:].upper()))),
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", contract="0x" + CONTRACT[2:].upper()))),
-    ("bad_request", request("create", {"type": "goal", "scope": "level:1", "data": GOAL}, command("c"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=("level:1",)))),
+    ("forbidden_scope", request("create", {"type": "goal", "scope": "level:1", "data": GOAL}, command("c"))),
+    ("forbidden_scope", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=("level:1",)))),
+    *[
+        ("bad_request", request("create", {"type": "goal", "scope": scope, "data": GOAL}, command("c")))
+        for scope in MALFORMED_SCOPES
+    ],
+    *[
+        ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=("fleet", scope))))
+        for scope in MALFORMED_SCOPES
+    ],
+    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=["fleet"] * 22))),
     ("bad_request", request("changes", {"after_seq": 2**63, "limit": 10})),
     ("bad_request", request("changes", {"after_seq": 2**70, "limit": 10})),
     ("bad_request", request("patch", {"id": "goal#1", "expected_version": 2**63, "set": {}}, command("c"))),

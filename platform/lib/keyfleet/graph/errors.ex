@@ -31,6 +31,17 @@ defmodule KeyFleet.Graph.Errors.UnavailableError do
     do: "the workspace of #{fleet_id} is not taking requests right now; nothing was written"
 end
 
+defmodule KeyFleet.Graph.Errors.CheckExpiredError do
+  @moduledoc """
+  Returned when a write's ownership check used up its time before it finished
+  reading. Nothing was written.
+  """
+  use Splode.Error, fields: [:fleet_id], class: :framework
+
+  def message(%{fleet_id: fleet_id}),
+    do: "the ownership check for a write to #{fleet_id} ran out of time; nothing was written"
+end
+
 defmodule KeyFleet.Graph.Errors.IndeterminateError do
   @moduledoc """
   Raised when a write reached the fleet's graph but its outcome never came

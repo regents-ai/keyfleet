@@ -447,9 +447,10 @@ components:
           schema: {$ref: "#/components/schemas/WorkspaceWrite"}
     WorkspaceRefused:
       description: >-
-        The workspace refused the request. 400 bad_request: the body does not fit the operation,
-        including a scope other than the fleet's. 403 not_a_key_holder: the signing wallet does not
-        own or run the named key today. 403 forbidden_scope: the object is outside the fleet scope.
+        The workspace refused the request. 400 bad_request: the body does not fit the operation.
+        403 not_a_key_holder: the signing wallet does not own or run the named key today. 403
+        forbidden_scope: the write names a scope, or touches an object or either end of a link in a
+        scope, that the key may not write; details name that scope.
         404 fleet_unknown: there is no such fleet. 404 not_found: there is no such object or link.
       content:
         application/json:
@@ -528,7 +529,7 @@ components:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
         type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note]}
-        scope: {type: string, const: fleet}
+        scope: {$ref: "#/components/schemas/WorkspaceScope"}
         data:
           type: object
           description: The object's fields for its type. Any object may link back to room posts with discussion, a list of {room, seq}.
@@ -591,6 +592,14 @@ components:
       maxLength: 128
       description: Chosen by the caller; the same command id with the same body answers the original result instead of writing twice
     WorkspaceId: {type: string, minLength: 1, maxLength: 128}
+    WorkspaceScope:
+      type: string
+      pattern: '^(fleet|level:([1-9]|1[0-9]|20))$'
+      description: >-
+        Where an object sits, set when it is created and never changed: fleet, the whole fleet, or
+        level:1 to level:20, one level of a Fibonacci fleet. Every key writes fleet. A Fibonacci key
+        also writes its own level, and each later level once every key of that level is sold; never
+        an earlier level.
     WorkspaceVersion: {type: integer, minimum: 1, maximum: 9223372036854775807}
     WorkspaceWrite:
       type: object
@@ -660,7 +669,7 @@ components:
           additionalProperties: false
           required: [scope, created_by, archived]
           properties:
-            scope: {type: string, const: fleet}
+            scope: {$ref: "#/components/schemas/WorkspaceScope"}
             archived: {type: boolean}
             created_by:
               type: object
@@ -701,6 +710,7 @@ components:
           items:
             oneOf:
               - {$ref: "#/components/schemas/WorkspaceChange"}
+              - {$ref: "#/components/schemas/WorkspaceAttention"}
               - {$ref: "#/components/schemas/WorkspaceCommandRecord"}
         next_cursor: {type: integer, minimum: 0, description: Pass as after_seq to read on}
         has_more: {type: boolean}
@@ -717,6 +727,39 @@ components:
         actor: {type: string}
         timestamp: {type: string}
         payload: {type: object}
+    WorkspaceAttention:
+      type: object
+      description: >-
+        A notice asking members to look at an object, left by the workspace in the same write as
+        the change that set it off. task_unblocked: the task no longer waits on any unfinished task
+        or open object. needs_review: evidence now supports or contradicts the object, a task
+        produced it, or the task has a new result reference. Each is asked once for its cause.
+      additionalProperties: false
+      required: [seq, id, type, actor, timestamp, payload]
+      properties:
+        seq: {type: integer, minimum: 1}
+        id: {type: string}
+        type: {type: string, const: keyfleet.attention}
+        actor: {type: string, const: "keyfleet:gateway"}
+        timestamp: {type: string}
+        payload:
+          type: object
+          additionalProperties: false
+          required: [kind, object_id, cause, dedupe_key]
+          properties:
+            kind: {type: string, enum: [task_unblocked, needs_review]}
+            object_id: {$ref: "#/components/schemas/WorkspaceId"}
+            cause:
+              type: object
+              additionalProperties: false
+              required: [event_id]
+              properties:
+                event_id: {type: string, description: The change that set the notice off}
+            dedupe_key:
+              type: string
+              description: >-
+                Built from the workspace log's run_id and the notice's kind, object and cause, so no
+                two notices in any workspace share one
     WorkspaceCommandRecord:
       type: object
       description: The record each applied write leaves, naming who asked for it
@@ -738,7 +781,7 @@ components:
             result: {$ref: "#/components/schemas/WorkspaceResult"}
             events:
               type: array
-              description: The ids of the changes the write made
+              description: The ids of the changes the write made and of the notices it left
               items: {type: string}
     ProfileEnvelope:
       type: object

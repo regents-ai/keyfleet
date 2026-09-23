@@ -286,6 +286,77 @@ defmodule KeyFleet.Graph.WriterTest do
     refute Enum.any?(events, &(&1["type"] in ["object.created", "keyfleet.command"]))
   end
 
+  test "a check that raises is answered unavailable, is logged, sends nothing and leaves the writer running",
+       ctx do
+    [fleet] = Enum.take(@fleets, 1)
+    start_graph(ctx, [fleet])
+    await_ready(fleet)
+    writer = writer(fleet)
+
+    faulty = fn _within -> raise ArgumentError, "no such level" end
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert Writer.command(fleet, "create", @note, faulty) == {:error, :unavailable}
+      end)
+
+    assert log =~ "graph write for #{fleet} not sent: its ownership check raised: no such level"
+    assert writer(fleet) == writer
+
+    assert {:ok, %{"result" => %{"events" => events}}} =
+             Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+
+    refute Enum.any?(events, &(&1["type"] in ["object.created", "keyfleet.command"]))
+  end
+
+  test "one fleet's writes asking the most attention they may leave another fleet's plain writes as quick",
+       ctx do
+    [stormy, calm] = Enum.take(@fleets, 2)
+    # Task 1 has 200 tasks waiting on it, each also waiting on the same 100
+    # done tasks: every time it is marked done, the reactions read until the
+    # work bound stops them.
+    seed_waiting!(ctx.data_dir, stormy, 200, 100)
+    start_graph(ctx, [stormy, calm])
+    await_ready(stormy)
+    await_ready(calm)
+
+    before = Enum.map(1..50, &timed_note(calm, "before-#{&1}"))
+    test = self()
+
+    storm =
+      Task.async(fn ->
+        Stream.iterate(1, &(&1 + 1))
+        |> Enum.reduce_while([], fn n, asked ->
+          progress = if rem(n, 2) == 1, do: "done", else: "doing"
+          patch = %{id: "task#1", expected_version: n, set: %{progress: progress}}
+          {:ok, reply} = Writer.command(stormy, "patch", patch, authorized("storm-#{n}"))
+          asked = [Enum.count(reply["events"], &(&1["type"] == "keyfleet.attention")) | asked]
+          if n == 2, do: send(test, :storming)
+
+          receive do
+            :stop -> {:halt, Enum.reverse(asked)}
+          after
+            0 -> {:cont, asked}
+          end
+        end)
+      end)
+
+    assert_receive :storming, 10_000
+    during = Enum.map(1..200, &timed_note(calm, "during-#{&1}"))
+    send(storm.pid, :stop)
+    asked = Task.await(storm, 30_000)
+
+    # The storm ran from before the first calm write until after the last, and
+    # every round that marked task 1 done asked for all its bounds allow.
+    assert length(asked) > 2
+    assert asked |> Enum.take_every(2) |> Enum.uniq() == [19]
+
+    # The calm fleet's writes answer as they did before the storm, well inside
+    # the writer's reply budget.
+    assert Enum.max(during) < 500_000
+    assert median(during) <= median(before) * 3 + 20_000
+  end
+
   test "a fleet with no running writer answers unavailable", ctx do
     assert Writer.request("fleet_without_graph", "hello", %{}) == {:error, :unavailable}
 
@@ -407,6 +478,55 @@ defmodule KeyFleet.Graph.WriterTest do
 
   defp authorized(id), do: fn _within -> {:ok, command(id)} end
 
+  # Microseconds for one plain write to be answered.
+  defp timed_note(fleet, id) do
+    {micros, {:ok, %{"replayed" => false}}} =
+      :timer.tc(fn -> Writer.command(fleet, "create", @note, authorized(id)) end)
+
+    micros
+  end
+
+  defp median(values) do
+    {_lower, [middle | _upper]} = values |> Enum.sort() |> Enum.split(div(length(values), 2))
+    middle
+  end
+
+  # Writes a fleet's graph before its host starts: task 1, then `dependents`
+  # tasks each waiting on task 1 and on the same `done` tasks already done.
+  defp seed_waiting!(data_dir, fleet, dependents, done) do
+    File.mkdir_p!(data_dir)
+
+    code = """
+    import sys
+    from keyfleet_graph.host import Host
+
+    fleet, db, dependents, done = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+    actor = "member:8453:#{@contract}:17@3/agent:#{@wallet}"
+    key = {"chain_id": 8453, "contract": "#{@contract}", "token_id": 17}
+    created_by = {"key": key, "ownership_epoch": 3, "kind": "agent", "wallet": "#{@wallet}"}
+    sys_record = {"scope": "fleet", "created_by": created_by, "archived": False}
+    host = Host(fleet, db)
+    add = host.graph.add_object
+    with host._transaction():
+        blocker = add("task", {"title": "Blocker", "sys": sys_record}, actor=actor).id
+        finished = [
+            add("task", {"title": "Done", "progress": "done", "sys": sys_record}, actor=actor).id
+            for _ in range(done)
+        ]
+        for n in range(dependents):
+            task = add("task", {"title": f"Waiting {n}", "sys": sys_record}, actor=actor).id
+            for target in (blocker, *finished):
+                host.graph.add_relation(task, target, "depends_on", {}, actor=actor)
+    while not host.runtime.run_quantum(max_queue_events=1_000, max_seconds=10.0).idle:
+        pass
+    host.graph.store.close()
+    """
+
+    db = Path.join(data_dir, "#{fleet}.sqlite")
+    args = ["-c", code, fleet, db, to_string(dependents), to_string(done)]
+    assert {_output, 0} = System.cmd(python(), args, stderr_to_stdout: true)
+  end
+
   defp command(id) do
     token_id = 17
 
@@ -422,7 +542,8 @@ defmodule KeyFleet.Graph.WriterTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      }
+      },
+      writable_scopes: ["fleet"]
     }
   end
 

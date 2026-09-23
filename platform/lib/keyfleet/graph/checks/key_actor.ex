@@ -6,17 +6,25 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   A write names the key it acts as. Standing is read from that key every
   time, and only while the fleet's key ownership is fresh, so a key changing
   hands moves the right to write with it and an unknown owner grants nothing.
+
+  Every key writes the fleet scope. A key of a Fibonacci fleet also writes its
+  own level, and a later level once every key of that level is sold, as far as
+  the fleet's key history has been read; never an earlier level. Classic and
+  Accelerant keys write the fleet scope only.
   The policy asks first; the fleet's writer asks again when the write's turn
   comes, and only that answer lets the write through.
 
   Each check has a budget in milliseconds, the graph's `:check_timeout`, and
-  every read it makes gets what is left of it. A read that fails or runs out
-  of time answers the error it got.
+  every read it makes gets what is left of it; once it is spent, the check
+  reads nothing more and answers `CheckExpiredError`. A read that fails or runs
+  out of time answers the error it got.
   """
   use Ash.Policy.SimpleCheck
 
   alias KeyFleet.Actors.Agent
   alias KeyFleet.Actors.Human
+  alias KeyFleet.Fleets.Presets
+  alias KeyFleet.Graph.Errors.CheckExpiredError
   alias KeyFleet.Graph.Errors.NotKeyHolderError
   alias KeyFleet.Keys.Errors.OwnershipRefreshingError
 
@@ -38,14 +46,15 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
 
   @doc """
   The command a write carries: its id, the member principal it is recorded
-  under, and the audit stamp of the standing that admits it, read now within
-  `within` milliseconds.
+  under, the audit stamp of the standing that admits it and the scopes it may
+  write, read now within `within` milliseconds.
   """
   def command(actor, fleet_id, token_id, command_id, within) do
-    deadline = System.monotonic_time(:millisecond) + within
+    deadline = System.monotonic_time(:microsecond) + within * 1_000
 
-    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline) do
-      {:ok, %{id: command_id, principal: principal(auth), auth: auth}}
+    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline),
+         {:ok, scopes} <- writable_scopes(fleet_id, token_id, deadline) do
+      {:ok, %{id: command_id, principal: principal(auth), auth: auth, writable_scopes: scopes}}
     end
   end
 
@@ -64,9 +73,11 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   end
 
   defp fresh_reading(fleet_id, deadline) do
-    case KeyFleet.Chain.fresh_cursor(fleet_id, within(deadline)) do
-      {:ok, nil} -> {:error, OwnershipRefreshingError.exception(fleet_id: fleet_id)}
-      other -> other
+    with {:ok, opts} <- within(deadline, fleet_id) do
+      case KeyFleet.Chain.fresh_cursor(fleet_id, opts) do
+        {:ok, nil} -> {:error, OwnershipRefreshingError.exception(fleet_id: fleet_id)}
+        other -> other
+      end
     end
   end
 
@@ -74,14 +85,20 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   # deployed fleet's chain is read, and a deployment is for good, so a fleet
   # with a fresh reading always has its contract.
   defp key_coordinate(fleet_id, token_id, deadline) do
-    with {:ok, fleet} <-
-           KeyFleet.Fleets.get_fleet(fleet_id, [not_found_error?: true] ++ within(deadline)) do
+    with {:ok, opts} <- within(deadline, fleet_id),
+         {:ok, fleet} <- KeyFleet.Fleets.get_fleet(fleet_id, [not_found_error?: true] ++ opts) do
       {:ok, %{chain_id: fleet.chain_id, contract: fleet.contract_address, token_id: token_id}}
     end
   end
 
-  defp standing(%Human{wallet_addresses: wallets} = actor, fleet_id, token_id, deadline) do
-    case KeyFleet.Keys.current_key(fleet_id, token_id, [actor: actor] ++ within(deadline)) do
+  defp standing(actor, fleet_id, token_id, deadline) do
+    with {:ok, opts} <- within(deadline, fleet_id) do
+      holding(actor, fleet_id, token_id, opts)
+    end
+  end
+
+  defp holding(%Human{wallet_addresses: wallets} = actor, fleet_id, token_id, opts) do
+    case KeyFleet.Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{owner_wallet: owner} = key} ->
         if owner in wallets,
           do:
@@ -103,8 +120,8 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
     end
   end
 
-  defp standing(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, deadline) do
-    case KeyFleet.Keys.current_operator(fleet_id, token_id, [actor: actor] ++ within(deadline)) do
+  defp holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
+    case KeyFleet.Keys.current_operator(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{operator_wallet: ^wallet} = pairing} ->
         {:ok,
          %{
@@ -123,12 +140,34 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
     end
   end
 
-  defp standing(_actor, fleet_id, token_id, _deadline), do: not_a_holder(fleet_id, token_id)
+  defp holding(_actor, fleet_id, token_id, _opts), do: not_a_holder(fleet_id, token_id)
 
-  # What is left of the check's budget, as the database's time limit for a read.
-  defp within(deadline) do
-    left = max(deadline - System.monotonic_time(:millisecond), 1)
-    [context: %{data_layer: %{timeout: left}}]
+  # Read once the standing is known, so the key has an owner on record. A
+  # number past the fleet's supply is one the contract never issued.
+  defp writable_scopes(fleet_id, token_id, deadline) do
+    cond do
+      not Presets.levelled?(fleet_id) ->
+        {:ok, ["fleet"]}
+
+      not Presets.fibonacci_token?(token_id) ->
+        not_a_holder(fleet_id, token_id)
+
+      true ->
+        with {:ok, opts} <- within(deadline, fleet_id),
+             {:ok, minted} <- KeyFleet.Chain.minted(fleet_id, opts) do
+          levels = Presets.writable_levels(token_id, minted)
+          {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
+        end
+    end
+  end
+
+  # What is left of the check's budget, as the database's time limit for the
+  # next read, in whole milliseconds rounded up. A spent budget reads nothing.
+  defp within(deadline, fleet_id) do
+    case deadline - System.monotonic_time(:microsecond) do
+      left when left > 0 -> {:ok, [context: %{data_layer: %{timeout: div(left + 999, 1_000)}}]}
+      _spent -> {:error, CheckExpiredError.exception(fleet_id: fleet_id)}
+    end
   end
 
   defp not_a_holder(fleet_id, token_id),

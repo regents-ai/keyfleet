@@ -177,6 +177,17 @@ defmodule KeyFleet.Keys.KeyAttachment do
       pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
     end
 
+    # The fleet's highest key number read so far. Keys are numbered from 1 in
+    # the order they are sold and are never burned, so it is also how many
+    # have sold.
+    read :latest_in_fleet do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare build(sort: [token_id: :desc], limit: 1, select: [:token_id])
+      get? true
+    end
+
     # What was recorded from a stretch of the fleet's blocks, so a second
     # reading of the same stretch can be checked against it.
     read :recorded_in_blocks do
