@@ -100,6 +100,8 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciMaxTokenId"), 46_365, "Highest token id");
         assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 144, "Classic seats");
         assertEq(vm.parseJsonUint(json, ".bounds.accelerantMaxKeys"), 2000, "Accelerant cap");
+        assertEq(vm.parseJsonUint(json, ".bounds.fibonacciAutolaunchMinKeys"), 86, "Launch after level 7");
+        assertEq(vm.parseJsonUint(json, ".bounds.fleetTechAutolaunchMinKeys"), 100, "Launch after 100 keys");
         assertEq(vm.parseJsonUint(json, ".bounds.maxRewardAssets"), 8, "Reward-asset bound");
         assertEq(vm.parseJsonUint(json, ".bounds.maxCohorts"), 32, "Cohort bound");
 

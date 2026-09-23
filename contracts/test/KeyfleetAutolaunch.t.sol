@@ -212,6 +212,7 @@ contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
 contract KeyfleetAutolaunchTest is Test {
     uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
+    uint256 private constant SCALE = 1e18;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private usdc;
@@ -231,6 +232,7 @@ contract KeyfleetAutolaunchTest is Test {
         uint256 indexed proposalId, uint256 indexed launchId, address indexed subject, address auction, address escrow
     );
     event LaunchSynced(Keyfleet.LaunchState state);
+    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight, uint256[] tokenIds);
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
@@ -256,16 +258,46 @@ contract KeyfleetAutolaunchTest is Test {
         );
     }
 
-    /// @dev A fleet holding exactly one key, owned by `alice`. One key is always a majority of the
-    /// weight it is the whole of, on every preset, so a single YES carries any proposal here.
-    function _fleetWithOneKey(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
+    /// @dev A fleet that has sold exactly the keys its preset requires before it may propose a
+    /// launch, with every key's vote in `alice`'s hands.
+    function _launchReadyFleet(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
         fleet = _deploy(preset);
-        uint256 price = fleet.nextPrice();
-        usdc.mint(buyer, price);
-        vm.startPrank(buyer);
-        usdc.approve(address(fleet), price);
-        fleet.purchase(alice, address(0), 2 * price, block.timestamp);
-        vm.stopPrank();
+        _buyKeys(fleet, _required(preset));
+    }
+
+    function _required(KeyfleetPresets.Preset preset) private pure returns (uint256) {
+        return preset == KeyfleetPresets.Preset.FibonacciSyndicate || preset == KeyfleetPresets.Preset.FibonacciCascade
+            ? KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS
+            : KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS;
+    }
+
+    /// @dev Buys the next `count` keys. Key 1 goes to `alice`, and every later key to a wallet of its
+    /// own that makes `alice` its voting delegate: one key per wallet is what the Fibonacci holding
+    /// limit requires below level 8, and the delegation lets `alice` vote any set of keys in one call.
+    function _buyKeys(Keyfleet fleet, uint256 count) private {
+        KeyfleetVotes votes = fleet.VOTES();
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 tokenId = fleet.totalMinted() + 1;
+            address holder = tokenId == 1 ? alice : address(uint160(0x100000 + tokenId));
+            uint256 price = fleet.nextPrice();
+            usdc.mint(buyer, price);
+            vm.startPrank(buyer);
+            usdc.approve(address(fleet), price);
+            fleet.purchase(holder, address(0), price, block.timestamp);
+            vm.stopPrank();
+            if (holder != alice) {
+                vm.prank(holder);
+                votes.setVotingDelegate(alice);
+            }
+        }
+    }
+
+    /// @dev The ids `first..first + count - 1`.
+    function _ids(uint256 first, uint256 count) private pure returns (uint256[] memory ids) {
+        ids = new uint256[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            ids[i] = first + i;
+        }
     }
 
     function _envelope() private view returns (Keyfleet.LaunchEnvelope memory) {
@@ -287,15 +319,14 @@ contract KeyfleetAutolaunchTest is Test {
         proposalId = votes.proposeAutolaunch(1, envelope);
     }
 
-    /// @dev Proposes, carries the vote and warps to the moment execution opens.
+    /// @dev Proposes, votes every key YES and warps to the moment execution opens.
     function _proposeAndPass(Keyfleet fleet, Keyfleet.LaunchEnvelope memory envelope)
         private
         returns (uint256 proposalId)
     {
         KeyfleetVotes votes = fleet.VOTES();
         proposalId = _propose(fleet, envelope);
-        uint256[] memory ids = new uint256[](1);
-        ids[0] = 1;
+        uint256[] memory ids = _ids(1, fleet.totalMinted());
         vm.prank(alice);
         votes.vote(proposalId, ids, true);
         vm.warp(votes.proposal(proposalId).closesAt);
@@ -355,7 +386,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// own published caps, read from it here exactly as the controller reads them. The caps are byte
     /// caps and the bound itself is accepted; only one byte over is not.
     function test_proposalRefusesAnyMetadataFieldThatIsEmptyOrOverItsByteCap() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint256[5] memory caps = [
             factory.MAX_NAME_BYTES(),
@@ -392,7 +423,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// refused at proposal time, against the ceiling the strategy itself publishes. The ceiling is
     /// reachable and is accepted.
     function test_proposalRefusesARaiseOfZeroOrAboveTheReachableCeiling() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint128 ceiling = strategy.MAX_REACHABLE_RAISE();
 
@@ -417,7 +448,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// voting closes could never be executed, so it is refused at proposal time rather than
     /// discovered by a fleet that voted for nothing.
     function test_proposalRefusesAnExpiryThatFallsAtOrBeforeTheVoteCloses() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint64 closesAt = uint64(block.timestamp) + VOTING_WINDOW;
 
@@ -438,7 +469,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// @dev Invariant: proposing an Autolaunch takes the same standing as every other kind, and the
     /// envelope the proposal carries is exactly the one the caller supplied.
     function test_proposalTakesStandingAndStoresTheEnvelopeItWasGiven() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         Keyfleet.LaunchEnvelope memory envelope = _envelope();
 
@@ -472,7 +503,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// and treasury, and records only what the factory says it created. Nothing is approved, no
     /// token moves and the fleet's own capital is untouched.
     function test_executionLaunchesWithTheFleetAsLauncherAndTreasuryAndRecordsTheFactorysAnswer() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         Keyfleet.LaunchEnvelope memory envelope = _envelope();
         uint256 capitalBefore = fleet.freeCapital(address(usdc));
         uint256 balanceBefore = usdc.balanceOf(address(fleet));
@@ -519,7 +550,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// @dev Invariant: only the fleet's own voting controller may launch. No holder, no proposer and
     /// no passer-by can call the typed entry point directly.
     function test_onlyTheVotingControllerMayLaunch() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
 
         vm.prank(alice);
         vm.expectRevert(Keyfleet.OnlyVotes.selector);
@@ -531,8 +562,8 @@ contract KeyfleetAutolaunchTest is Test {
     }
 
     /// @dev Invariant: every preset can launch. The spec requires the adapter to be testable across
-    /// all four, and the vote is the only gate in front of it: a fleet that has minted one key can
-    /// propose and execute one launch, whichever ladder it is on.
+    /// all four: a fleet that has sold the keys its preset requires can propose and execute one
+    /// launch, whichever ladder it is on.
     function test_everyPresetCanProposeAndExecuteOneLaunch() public {
         KeyfleetPresets.Preset[4] memory presets = [
             KeyfleetPresets.Preset.FibonacciSyndicate,
@@ -542,7 +573,7 @@ contract KeyfleetAutolaunchTest is Test {
         ];
 
         for (uint256 i = 0; i < presets.length; ++i) {
-            Keyfleet fleet = _fleetWithOneKey(presets[i]);
+            Keyfleet fleet = _launchReadyFleet(presets[i]);
             _executeFor(fleet, _envelope());
             assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated));
             assertEq(fleet.launchRecord().launchId, i + 1, "each fleet took the next launch from the shared factory");
@@ -552,7 +583,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// @dev Invariant: one created launch per fleet. A second proposal is refused outright once a
     /// launch exists, and a second proposal made before the first executed cannot execute after it.
     function test_aFleetCreatesOneLaunchAndOnlyOne() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
 
         uint256 second = _proposeAndPass(fleet, _envelope());
@@ -573,7 +604,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// @dev Invariant: an approved launch that was not executed in time cannot be executed at all.
     /// The proposal is not consumed by the attempt; it is simply out of date.
     function test_anExpiredEnvelopeCannotExecuteAndConsumesNothing() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         Keyfleet.LaunchEnvelope memory envelope = _envelope();
         uint256 proposalId = _proposeAndPass(fleet, envelope);
@@ -582,7 +613,7 @@ contract KeyfleetAutolaunchTest is Test {
         votes.execute(proposalId);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "the last moment works");
 
-        Keyfleet fresh = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fresh = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes freshVotes = fresh.VOTES();
         Keyfleet.LaunchEnvelope memory late = _envelope();
         uint256 lateId = _proposeAndPass(fresh, late);
@@ -600,7 +631,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// exists for: a fleet can wait for the Safe to open the factory and execute the same approval
     /// afterwards, as long as its envelope has not expired.
     function test_aPausedFactoryLeavesTheProposalExecutable() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
@@ -623,7 +654,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// factory's own rules is predicted at proposal time, because they are not the fleet's to
     /// predict, and a refusal costs the proposal nothing.
     function test_aTreasuryTheFactoryRefusesRevertsTheWholeExecution() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
@@ -645,7 +676,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// the launch it just created. Every one of them rejects the whole launch rather than writing it
     /// down.
     function test_aFactoryThatDoesNotRecordThisFleetHasItsLaunchRejected() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
@@ -683,7 +714,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// reentrancy guard that protects every other entry point, and the launch itself still
     /// completes on the factory's own terms.
     function test_aFactoryThatCallsBackIsRefusedByTheGuards() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
@@ -700,7 +731,7 @@ contract KeyfleetAutolaunchTest is Test {
         assertEq(fleet.launchRecord().launchId, 1, "one launch, recorded once");
         assertEq(factory.nextLaunchId(), 2);
 
-        Keyfleet second = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet second = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 secondId = _proposeAndPass(second, _envelope());
         factory.armReentry(address(second), abi.encodeCall(Keyfleet.depositCapital, (address(usdc), 1e18)));
         second.VOTES().execute(secondId);
@@ -714,6 +745,22 @@ contract KeyfleetAutolaunchTest is Test {
         );
     }
 
+    /// @dev Invariant: a proposal is marked executed before the fleet calls the factory, so anything
+    /// the factory reads back mid-launch already sees the proposal as spent.
+    function test_aProposalIsMarkedExecutedBeforeTheFactoryRuns() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 proposalId = _proposeAndPass(fleet, _envelope());
+
+        factory.armReentry(address(votes), abi.encodeCall(KeyfleetVotes.proposal, (proposalId)));
+        votes.execute(proposalId);
+
+        assertTrue(factory.reentryFired(), "the factory read the proposal mid-launch");
+        assertTrue(factory.reentryOk(), "a read is not refused by the guard");
+        KeyfleetVotes.Proposal memory seen = abi.decode(factory.reentryReturn(), (KeyfleetVotes.Proposal));
+        assertTrue(seen.executed, "and it was already marked executed");
+    }
+
     // --- 5. sync -----------------------------------------------------------
 
     /// @dev Invariant: a launch the strategy has not settled is not economically failed. An auction
@@ -721,7 +768,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// on the strategy, and a sync of either leaves the fleet exactly where it was and emits
     /// nothing at all.
     function test_syncLeavesAnUnsettledLaunchAloneAndEmitsNothing() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(fleet, _envelope());
         Keyfleet.LaunchRecord memory before = fleet.launchRecord();
 
@@ -740,7 +787,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// else. The SUBJECT, the auction, the escrow and the approved envelope are untouched by it,
     /// and the fleet's deposit admission is not turned on by it either.
     function test_syncRecordsTheGraduationArtifactsAndReplacesNothing() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(fleet, _envelope());
         Keyfleet.LaunchRecord memory before = fleet.launchRecord();
 
@@ -774,7 +821,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// @dev Invariant: an auction the strategy settled as failed makes the fleet economically
     /// failed, and a terminal state is terminal: a later sync is refused rather than left to churn.
     function test_syncRecordsFailureAndTerminalStatesNeverChangeAgain() public {
-        Keyfleet failed = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet failed = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(failed, _envelope());
         strategy.fail(failed.launchRecord().auction);
 
@@ -786,7 +833,7 @@ contract KeyfleetAutolaunchTest is Test {
         vm.expectRevert(Keyfleet.LaunchSettled.selector);
         failed.syncLaunch();
 
-        Keyfleet graduated = _fleetWithOneKey(KeyfleetPresets.Preset.FleetTechClassic);
+        Keyfleet graduated = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(graduated, _envelope());
         strategy.graduate(graduated.launchRecord().auction, address(0x1), address(0x2), keccak256("p"), 1);
         graduated.syncLaunch();
@@ -804,7 +851,7 @@ contract KeyfleetAutolaunchTest is Test {
     /// it is a regression bound on this side of the call rather than a prediction of the real cost:
     /// the real factory deploys a token, an escrow and an auction and spends far more than this.
     function test_autolaunchExecutionGas() public {
-        Keyfleet fleet = _fleetWithOneKey(KeyfleetPresets.Preset.FibonacciSyndicate);
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
@@ -819,6 +866,160 @@ contract KeyfleetAutolaunchTest is Test {
         console2.log("autolaunch execution gas through the mock factory:", used);
         assertLt(used, 889_000, "an execution stays under the published ceiling");
         assertEq(fleet.launchRecord().launchId, 1);
+    }
+
+    // --- 7. eligibility -----------------------------------------------------
+
+    /// @dev Invariant: a fleet may propose its launch only once it has sold the keys its preset
+    /// requires: a Fibonacci fleet the last key of level 7, a Classic or Accelerant fleet one
+    /// hundred keys. One key short is refused with both figures, and the key that reaches the
+    /// threshold is enough on every preset.
+    function test_aLaunchNeedsTheLastKeyOfLevelSevenOrOneHundredKeys() public {
+        KeyfleetPresets.Preset[4] memory presets = [
+            KeyfleetPresets.Preset.FibonacciSyndicate,
+            KeyfleetPresets.Preset.FibonacciCascade,
+            KeyfleetPresets.Preset.FleetTechClassic,
+            KeyfleetPresets.Preset.FleetTechAccelerant
+        ];
+        uint256[4] memory required = [uint256(86), 86, 100, 100];
+
+        for (uint256 i = 0; i < presets.length; ++i) {
+            Keyfleet fleet = _deploy(presets[i]);
+            KeyfleetVotes votes = fleet.VOTES();
+            _buyKeys(fleet, required[i] - 1);
+            if (i < 2) assertEq(fleet.completedLevels(), 6, "one key short of level 7");
+
+            vm.prank(alice);
+            vm.expectRevert(
+                abi.encodeWithSelector(KeyfleetVotes.LaunchNotYetEligible.selector, required[i] - 1, required[i])
+            );
+            votes.proposeAutolaunch(1, _envelope());
+
+            _buyKeys(fleet, 1);
+            if (i < 2) assertEq(fleet.completedLevels(), 7, "the last key of level 7 is sold");
+            assertEq(_propose(fleet, _envelope()), 1, "the threshold itself is enough");
+        }
+    }
+
+    // --- 8. launch vote weight ----------------------------------------------
+
+    /// @dev Invariant: a launch counts one vote per key on every preset. A level-1 key and a
+    /// level-7 key of a Fibonacci fleet each add one whole vote, and the launch is measured against
+    /// every eligible key at one whole vote each.
+    function test_aLaunchVoteCountsEveryFibonacciKeyAsOneWholeVote() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 proposalId = _propose(fleet, _envelope());
+        assertEq(votes.eligibleWeight(proposalId), 86 * SCALE, "eighty-six keys are eighty-six votes");
+
+        assertEq(fleet.levelOf(1), 1);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit VoteCast(proposalId, alice, true, SCALE, _ids(1, 1));
+        vm.prank(alice);
+        assertEq(votes.vote(proposalId, _ids(1, 1), true), SCALE, "a level-1 key is one whole vote");
+
+        assertEq(fleet.levelOf(86), 7);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit VoteCast(proposalId, alice, false, SCALE, _ids(86, 1));
+        vm.prank(alice);
+        assertEq(votes.vote(proposalId, _ids(86, 1), false), SCALE, "and so is a level-7 key");
+
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(stored.yesWeight, SCALE);
+        assertEq(stored.noWeight, SCALE);
+    }
+
+    /// @dev Invariant: a Decision on the same fleet still weighs keys by level, so one level is one
+    /// vote shared by its keys and the launch rule changes nothing else.
+    function test_aDecisionOnTheSameFleetStillWeighsKeysByLevel() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
+        KeyfleetVotes votes = fleet.VOTES();
+        vm.prank(alice);
+        uint256 proposalId = votes.proposeDecision(1, "record it", bytes32(0));
+
+        uint256 levels;
+        for (uint256 level = 1; level <= 7; ++level) {
+            uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
+            levels += supply * (SCALE / supply);
+        }
+        assertEq(votes.eligibleWeight(proposalId), levels, "seven levels, one vote each less the floors");
+
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit VoteCast(proposalId, alice, true, SCALE / 2, _ids(1, 1));
+        vm.prank(alice);
+        assertEq(votes.vote(proposalId, _ids(1, 1), true), SCALE / 2, "a level-1 key is half a vote");
+        vm.prank(alice);
+        assertEq(votes.vote(proposalId, _ids(86, 1), true), SCALE / 34, "a level-7 key is a thirty-fourth");
+    }
+
+    /// @dev Invariant: a launch passes only when more than half of all eligible keys vote YES.
+    /// Exactly half fails, one key more passes, and silence counts against. The same forty-three
+    /// early keys that fail a launch carry a Decision, because there they hold most of the levels.
+    function test_aLaunchFailsAtExactlyHalfOfTheKeysAndPassesWithOneMore() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 half = _propose(fleet, _envelope());
+        uint256 majority = _propose(fleet, _envelope());
+        vm.prank(alice);
+        uint256 decision = votes.proposeDecision(1, "record it", bytes32(0));
+
+        vm.startPrank(alice);
+        votes.vote(half, _ids(1, 43), true);
+        votes.vote(majority, _ids(1, 44), true);
+        votes.vote(decision, _ids(1, 43), true);
+        vm.stopPrank();
+        vm.warp(votes.proposal(half).closesAt);
+
+        assertEq(uint256(votes.state(half)), uint256(KeyfleetVotes.State.Defeated), "43 of 86 is not a majority");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 43 * SCALE, 86 * SCALE));
+        votes.execute(half);
+
+        assertEq(uint256(votes.state(decision)), uint256(KeyfleetVotes.State.Passed), "the same keys carry a Decision");
+        assertEq(uint256(votes.state(majority)), uint256(KeyfleetVotes.State.Passed), "44 of 86 is");
+        votes.execute(majority);
+        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated));
+    }
+
+    // --- 9. fuzz invariant ---------------------------------------------------
+
+    /// @dev Invariant: across random votes on either Fibonacci preset, every key adds exactly one
+    /// whole vote to a launch and exactly its level weight to a Decision, whatever its level, and a
+    /// launch passes exactly when more than half of the eligible keys voted YES.
+    function testFuzz_aLaunchCountsOneVotePerKeyAndADecisionWeighsByLevel(uint256 seed) public {
+        KeyfleetPresets.Preset preset =
+            seed % 2 == 0 ? KeyfleetPresets.Preset.FibonacciSyndicate : KeyfleetPresets.Preset.FibonacciCascade;
+        Keyfleet fleet = _launchReadyFleet(preset);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 launch = _propose(fleet, _envelope());
+        vm.prank(alice);
+        uint256 decision = votes.proposeDecision(1, "record it", bytes32(0));
+
+        // Every key abstains one time in eight, and otherwise votes YES with a random bias, so the
+        // YES count lands on both sides of half the keys across runs.
+        uint256 bias = seed % 100;
+        uint256 yesKeys;
+        uint256 cast;
+        for (uint256 tokenId = 1; tokenId <= 86; ++tokenId) {
+            uint256 roll = uint256(keccak256(abi.encode(seed, tokenId)));
+            if (roll % 8 == 0) continue;
+            bool support = (roll >> 8) % 100 < bias;
+
+            vm.startPrank(alice);
+            assertEq(votes.vote(launch, _ids(tokenId, 1), support), SCALE, "one whole vote on a launch");
+            assertEq(votes.vote(decision, _ids(tokenId, 1), support), votes.weightOf(tokenId), "level weight");
+            vm.stopPrank();
+            ++cast;
+            if (support) ++yesKeys;
+        }
+
+        KeyfleetVotes.Proposal memory stored = votes.proposal(launch);
+        assertEq(stored.totalWeight, 86 * SCALE);
+        assertEq(stored.yesWeight, yesKeys * SCALE);
+        assertEq(stored.yesWeight + stored.noWeight, cast * SCALE, "recorded weight is one vote per key cast");
+        vm.warp(stored.closesAt);
+        assertEq(
+            votes.state(launch) == KeyfleetVotes.State.Passed, yesKeys * 2 > 86, "passes exactly above half the keys"
+        );
     }
 
     // --- helpers -----------------------------------------------------------

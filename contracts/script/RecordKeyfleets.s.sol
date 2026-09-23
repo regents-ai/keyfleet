@@ -177,6 +177,8 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(bounds, "fibonacciMaxTokenId", KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
         vm.serializeUint(bounds, "classicSupply", KeyfleetPresets.CLASSIC_SUPPLY);
         vm.serializeUint(bounds, "accelerantMaxKeys", KeyfleetPresets.MAX_ACCELERANT_KEYS);
+        vm.serializeUint(bounds, "fibonacciAutolaunchMinKeys", KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS);
+        vm.serializeUint(bounds, "fleetTechAutolaunchMinKeys", KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS);
         vm.serializeUint(bounds, "maxRewardAssets", rewards.MAX_REWARD_ASSETS());
         return vm.serializeUint(bounds, "maxCohorts", rewards.MAX_COHORTS());
     }
@@ -211,9 +213,10 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeString(
             autolaunch,
             "readiness",
-            "A fleet may launch once, by vote, with itself as launcher and treasury. Creation is not"
-            " graduation: the app reads the strategy for the lifecycle, and a SUBJECT is admitted for"
-            " deposits only after the Regents Safe allows it."
+            "A fleet may launch once, by vote, with itself as launcher and treasury, after it has sold"
+            " the last key of level 7 (Syndicate, Cascade) or 100 keys (Classic, Accelerant). Creation"
+            " is not graduation: the app reads the strategy for the lifecycle, and a SUBJECT is"
+            " admitted for deposits only after the Regents Safe allows it."
         );
     }
 

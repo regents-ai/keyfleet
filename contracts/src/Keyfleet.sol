@@ -33,10 +33,9 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// and claims out of it are not receipts and are never charged again.
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
-/// itself in its constructor. It is the only caller of `transferCapital` and of `executeAutolaunch`,
-/// and free working capital is the only thing it can reach: the Cascade completion reserve, the owed
-/// protocol share and the ledger's reward backing are not free capital and there is no path from a
-/// vote to any of them.
+/// itself in its constructor. It is the only caller of `executeAutolaunch`, and no vote moves any of
+/// this fleet's tokens: free capital, the Cascade completion reserve, the owed protocol share and the
+/// ledger's reward backing are all out of its reach.
 ///
 /// A passed Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1` once, with this fleet
 /// as both launcher and treasury, and records what the factory says it created. That call moves no
@@ -45,9 +44,8 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
 /// this contract are the owed protocol share sent to the staking contract, the referral and
-/// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, the
-/// deposit fee and revenue backing of a USDC deposit, and a capital transfer the keys have voted
-/// for.
+/// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, and the
+/// deposit fee and revenue backing of a USDC deposit.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -158,10 +156,8 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error NoEligibleKeys();
     /// @notice This fleet's balance of the asset is fully accounted for, so there is nothing to recognize.
     error NoSurplus();
-    /// @notice Only this fleet's own voting controller may move free working capital out.
+    /// @notice Only this fleet's own voting controller may create its launch.
     error OnlyVotes();
-    /// @notice The vote asked for more free working capital than this fleet holds in that asset.
-    error InsufficientFreeCapital(address asset, uint256 requested, uint256 available);
     /// @notice This fleet already created its one launch.
     error LaunchAlreadyCreated();
     /// @notice This fleet has not created a launch, so there is nothing to sync or read.
@@ -219,7 +215,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @param amount The USDC the staking contract registered, which was the whole owed amount.
     event ProtocolShareSent(address indexed caller, uint256 amount);
 
-    /// @notice A non-key receipt became free working capital.
+    /// @notice A non-key receipt became free capital.
     event CapitalDeposited(address indexed asset, address indexed depositor, uint256 amount, uint256 net);
 
     /// @notice A non-key receipt became member reward backing in the ledger.
@@ -228,11 +224,8 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         address indexed asset, address indexed depositor, uint256 amount, uint256 net, bytes32 paymentRef
     );
 
-    /// @notice An unaccounted balance was reconciled into free working capital.
+    /// @notice An unaccounted balance was reconciled into free capital.
     event SurplusRecognized(address indexed asset, address indexed caller, uint256 amount, uint256 net);
-
-    /// @notice A vote moved free working capital out of this fleet.
-    event CapitalTransferred(address indexed asset, uint256 amount, address indexed recipient);
 
     /// @notice A passed Autolaunch proposal created this fleet's one launch. The four launch
     /// addresses are the factory's own, read back after the call and not the proposal's.
@@ -264,7 +257,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
     /// @notice The voting controller this fleet deployed for itself and the only caller of
-    /// `transferCapital`. Its `VOTING_WINDOW()` is the window the app should label.
+    /// `executeAutolaunch`. Its `VOTING_WINDOW()` is the window the app should label.
     KeyfleetVotes public immutable VOTES;
     /// @notice The shared deposit-admission registry, consulted on every new external receipt.
     KeyfleetAssetRegistry public immutable ASSET_REGISTRY;
@@ -282,13 +275,14 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice Accelerant only: the USDC price of the next primary mint, stepped by 105/100 after
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
-    /// @notice Free working capital held by this fleet, per asset. Purchases write the USDC entry;
+    /// @notice Free capital booked by this fleet, per asset. Purchases write the USDC entry;
     /// `depositCapital` and `recognizeSurplus` write the entry of any admitted asset, USDC included.
+    /// It has no way out yet: no call and no vote moves it out of the fleet.
     mapping(address asset => uint256 amount) public freeCapital;
-    /// @notice Cascade only: USDC held back for the next level completion. Never spendable capital.
+    /// @notice Cascade only: USDC held back for the next level completion. Never free capital.
     uint256 public cascadeReserve;
     /// @notice USDC set aside from purchases as staking revenue and not yet sent to the staking
-    /// contract. Never spendable capital and never surplus.
+    /// contract. Never free capital and never surplus.
     uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
@@ -532,7 +526,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
 
     // --- deposits --------------------------------------------------------
 
-    /// @notice Pays an admitted asset in as free working capital, after the 2% receipt fee.
+    /// @notice Pays an admitted asset in as free capital, after the 2% receipt fee.
     /// @dev The caller must have approved this contract for `amount`. Admission is checked before
     /// anything moves. No balance-delta check is taken around the pull: admission to the registry
     /// is where fee-on-transfer and rebasing behaviour is rejected, exactly as the canonical USDC
@@ -595,7 +589,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         emit RevenueDeposited(asset, msg.sender, amount, net, paymentRef);
     }
 
-    /// @notice Books an admitted asset that arrived by bare transfer as free working capital, after
+    /// @notice Books an admitted asset that arrived by bare transfer as free capital, after
     /// the 2% receipt fee.
     /// @dev Permissionless, because it can only ever recognize what nobody has a claim on: it works
     /// from `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is
@@ -604,7 +598,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// liability can be reclassified, an incomplete level's reserve can never be drawn on, and the
     /// stakers' share can never be swept into capital.
     /// @param asset The admitted asset to reconcile.
-    /// @return net Atomic units added to free working capital.
+    /// @return net Atomic units added to free capital.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 net) {
         _requireAdmitted(asset);
         uint256 amount = surplus(asset);
@@ -671,35 +665,6 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         if (received != amount || USDC.allowance(address(this), address(STAKING)) != 0) {
             revert StakingRegistrationFailed(amount, received);
         }
-    }
-
-    // --- votes -----------------------------------------------------------
-
-    /// @notice Moves free working capital out of this fleet, on the authority of a passed vote.
-    /// @dev The voting controller this fleet deployed is the only caller, which is why there is no
-    /// admission check here: the asset is one this fleet already booked capital in, and the spec is
-    /// explicit that disabling deposits in an asset does not freeze capital already booked in it.
-    ///
-    /// Free capital is the only bucket reachable from here. The Cascade completion reserve and the
-    /// owed protocol share are separate figures this function never reads, and reward backing does
-    /// not sit in this contract at all, so no vote can borrow an incomplete level's reserve, spend
-    /// the stakers' share or withdraw a member's claim.
-    /// The shortfall is checked explicitly rather than left to the subtraction, so a vote that
-    /// outran the capital reverts with the three figures rather than a bare panic; the proposal
-    /// itself survives and can execute later once the capital is there.
-    ///
-    /// Guarded like every other entry point that moves tokens, so an asset that calls back from
-    /// inside the transfer cannot book a receipt against a balance this call has already spent.
-    /// @param asset The asset to move.
-    /// @param amount Atomic units to move.
-    /// @param recipient Who receives them.
-    function transferCapital(address asset, uint256 amount, address recipient) external nonReentrant {
-        if (msg.sender != address(VOTES)) revert OnlyVotes();
-        uint256 available = freeCapital[asset];
-        if (available < amount) revert InsufficientFreeCapital(asset, amount, available);
-        freeCapital[asset] = available - amount;
-        emit CapitalTransferred(asset, amount, recipient);
-        IERC20(asset).safeTransfer(recipient, amount);
     }
 
     // --- autolaunch ------------------------------------------------------

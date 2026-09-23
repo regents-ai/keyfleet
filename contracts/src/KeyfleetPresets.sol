@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-/// @notice Supply, price, holding-limit and purchase-split arithmetic for the four fleet presets.
+/// @notice Supply, price, holding-limit, purchase-split and launch-threshold arithmetic for the four
+///         fleet presets.
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
 ///      the published product contract and is reproduced in the deployment manifest. All arithmetic is
 ///      checked; the bounds below keep every intermediate product far inside 256 bits.
@@ -66,6 +67,12 @@ library KeyfleetPresets {
     /// @notice Each Accelerant primary mint costs the previous primary mint times 105/100, rounded up.
     uint256 internal constant ACCELERANT_STEP_NUMERATOR = 105;
     uint256 internal constant ACCELERANT_STEP_DENOMINATOR = 100;
+
+    /// @notice Keys a Fibonacci fleet must have minted before it may propose its Autolaunch: every key
+    ///         through the last key of level 7, which is `fibonacciTotalSupplyThrough(7)`.
+    uint256 internal constant FIBONACCI_AUTOLAUNCH_MIN_KEYS = 86;
+    /// @notice Keys a Classic or Accelerant fleet must have minted before it may propose its Autolaunch.
+    uint256 internal constant FLEET_TECH_AUTOLAUNCH_MIN_KEYS = 100;
 
     /// @notice Protocol share of gross for the Regents staking contract, in basis points.
     uint256 internal constant PROTOCOL_BPS = 500;

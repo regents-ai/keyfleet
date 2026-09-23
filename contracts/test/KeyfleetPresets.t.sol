@@ -450,4 +450,16 @@ contract KeyfleetPresetsTest {
             require(current * 100 - previous * 120 < 100, "Never rounds up by a whole unit");
         }
     }
+
+    // --- 10. autolaunch thresholds -------------------------------------------------------------
+
+    /// @dev Invariant: a Fibonacci fleet may propose its launch once the last key of level 7 is sold,
+    ///      and a Classic or Accelerant fleet once it has sold 100 keys, which both ladders can reach.
+    function testAutolaunchThresholdsAreTheLastKeyOfLevelSevenAndOneHundredKeys() public view {
+        require(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS == presets.fibonacciTotalSupplyThrough(7), "Level 7");
+        require(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS == presets.fibonacciLevelEnd(7), "Its last key");
+        require(presets.fibonacciLevelOf(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS + 1) == 8, "Then level 8");
+        require(KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS == 100, "One hundred keys");
+        require(KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS <= KeyfleetPresets.CLASSIC_SUPPLY, "Classic reaches it");
+    }
 }

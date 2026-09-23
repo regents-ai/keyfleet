@@ -456,8 +456,9 @@ contract KeyfleetDepositsTest is Test {
 
     // --- 3. capital deposits ---------------------------------------------
 
-    /// @dev Invariant: a capital deposit becomes spendable working capital and nothing else. It
-    /// touches no cohort, registers no reward asset and creates no claim.
+    /// @dev Invariant: a capital deposit becomes free capital and nothing else: booked, and until
+    /// the post-launch payout slice with no way out. It touches no cohort, registers no reward asset
+    /// and creates no claim.
     function test_depositCapitalBooksTheNetAsWorkingCapitalOnly() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -677,7 +678,7 @@ contract KeyfleetDepositsTest is Test {
 
     /// @dev Invariant: recognition books only the part of the balance nothing else has a purpose
     /// for. The Cascade completion reserve is accounted for, so an incomplete level's reserve can
-    /// never be turned into spendable capital by anyone.
+    /// never be turned into free capital by anyone.
     function test_recognizeSurplusBooksOnlyTheUnaccountedPartAndSparesTheCascadeReserve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         _admit(fleet, address(usdc));
@@ -1094,30 +1095,6 @@ contract KeyfleetDepositsTest is Test {
         assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still surplus");
         assertEq(fleet.freeCapital(address(usdc)), capital, "and capital is unchanged");
         assertEq(usdc.balanceOf(address(fleet)), capital + 10_000);
-    }
-
-    /// @dev Invariant: a vote can only spend free capital, so the owed share is out of its reach
-    /// even though the fleet holds it. Asking for one unit more than the free capital is refused,
-    /// and the whole free capital can still leave while the owed share stays behind.
-    function test_aVoteCannotSpendTheOwedShare() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buy(fleet, alice);
-        uint256 owed = fleet.protocolShareOwed();
-        uint256 capital = fleet.freeCapital(address(usdc));
-        assertEq(usdc.balanceOf(address(fleet)), capital + owed, "the fleet holds both");
-        address votes = address(fleet.VOTES());
-
-        vm.prank(votes);
-        vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), capital + 1, capital)
-        );
-        fleet.transferCapital(address(usdc), capital + 1, bob);
-
-        vm.prank(votes);
-        fleet.transferCapital(address(usdc), capital, bob);
-        assertEq(usdc.balanceOf(address(fleet)), owed, "only the owed share is left");
-        assertEq(fleet.protocolShareOwed(), owed);
-        assertEq(fleet.sendProtocolShare(), owed, "and it still goes to the stakers");
     }
 }
 

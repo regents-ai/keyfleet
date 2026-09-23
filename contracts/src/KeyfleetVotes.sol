@@ -13,32 +13,32 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// eligible snapshot weight, so an abstention counts against it. Execution happens after the window
 /// closes and never before.
 ///
-/// Weight is fixed by the preset, not by anything anyone can set here. A Fleet.Tech key is worth
-/// `WEIGHT_SCALE`. A Fibonacci key is worth `WEIGHT_SCALE / fibonacciLevelSupply(level)`, floored,
-/// which is the fixed-precision approximation of one vote per level. A proposal's eligible set is
-/// the token ids `1..snapshotMinted` recorded when it was created, so later mints are ineligible for
-/// it and a transfer can never produce a second vote for the same key.
+/// Weight is fixed by the kind and the preset, not by anything anyone can set here. On an
+/// `Autolaunch` every key is worth `WEIGHT_SCALE`, whatever the preset. On a `Decision` a Fleet.Tech
+/// key is worth `WEIGHT_SCALE` and a Fibonacci key is worth `WEIGHT_SCALE /
+/// fibonacciLevelSupply(level)`, floored, which is the fixed-precision approximation of one vote per
+/// level. A proposal's eligible set is the token ids `1..snapshotMinted` recorded when it was
+/// created, so later mints are ineligible for it and a transfer can never produce a second vote for
+/// the same key.
 ///
-/// There are three kinds. A `Decision` records agreement and has no external side effect; its text
-/// is carried in the creation event only and an optional digest pins the exact artifact or commit. A
-/// `TransferCapital` moves an accounted asset out of the fleet's *free* capital to a named
-/// recipient, once. The fleet's Cascade completion reserve and the reward ledger's backing are not
-/// free capital and are unreachable from here by construction. An `Autolaunch` carries the exact
-/// launch envelope the keys approve and, when it passes, has the fleet call the pinned Autolaunch
-/// factory once with itself as launcher and treasury.
+/// There are two kinds. A `Decision` records agreement and has no external side effect; its text
+/// is carried in the creation event only and an optional digest pins the exact artifact or commit.
+/// An `Autolaunch` carries the exact launch envelope the keys approve and, when it passes, has the
+/// fleet call the pinned Autolaunch factory once with itself as launcher and treasury. A fleet may
+/// propose one only once it has sold the keys its preset requires.
 ///
-/// There are no arbitrary calls here. The three kinds are the whole surface, every payload is fixed
+/// There are no arbitrary calls here. The two kinds are the whole surface, every payload is fixed
 /// at creation, and any change to a payload is a new proposal rather than an edit.
 ///
 /// There is no administrator, no upgrade path, no pause, no cancellation, no quorum tuning and no
 /// delegation by signature. This deliberately does not solve a majority takeover: a majority of
-/// snapshot weight can authorize a harmful free-capital transfer, and no hidden signer is introduced
-/// to disguise that. Claim and reserve solvency hold regardless of any vote.
+/// keys can approve a launch the rest of the fleet did not want, and no hidden signer is introduced
+/// to disguise that. No vote moves any of the fleet's tokens, so claim and reserve solvency hold
+/// regardless of any vote.
 contract KeyfleetVotes is ReentrancyGuard {
     /// @notice What a proposal does when it passes.
     enum Kind {
         Decision,
-        TransferCapital,
         Autolaunch
     }
 
@@ -53,7 +53,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice One proposal. Everything a vote is counted against is fixed at creation.
     /// @dev An Autolaunch proposal's payload is not here: it is a whole envelope, kept in its own
     /// mapping so the record every proposal shares stays one fixed-size read.
-    /// @param kind Decision, TransferCapital or Autolaunch.
+    /// @param kind Decision or Autolaunch.
     /// @param proposer The address that created it.
     /// @param createdAt Block timestamp of creation.
     /// @param closesAt Last moment plus one: voting is open strictly before this, execution from it.
@@ -63,9 +63,6 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @param noWeight Weight voted against.
     /// @param executed Whether it has already executed.
     /// @param digest Optional exact artifact or commit digest; zero means none.
-    /// @param asset TransferCapital only: the asset to move.
-    /// @param amount TransferCapital only: the atomic amount to move.
-    /// @param recipient TransferCapital only: who receives it.
     struct Proposal {
         Kind kind;
         address proposer;
@@ -77,9 +74,6 @@ contract KeyfleetVotes is ReentrancyGuard {
         uint256 noWeight;
         bool executed;
         bytes32 digest;
-        address asset;
-        uint256 amount;
-        address recipient;
     }
 
     /// @notice The fleet address supplied at construction was zero.
@@ -88,10 +82,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     error VotingWindowOutOfBounds(uint64 window);
     /// @notice No proposal carries this id.
     error UnknownProposal(uint256 proposalId);
-    /// @notice A TransferCapital proposal of zero, or to nobody, is rejected.
-    error ZeroAmount();
-    /// @notice The recipient of a TransferCapital proposal was zero.
-    error ZeroRecipient();
+    /// @notice The fleet has not sold the keys its preset requires before it may propose a launch.
+    error LaunchNotYetEligible(uint256 minted, uint256 required);
     /// @notice The key is outside this proposal's eligible snapshot, or is not a key at all.
     error KeyNotEligible(uint256 tokenId);
     /// @notice The caller is neither the key's owner nor that owner's registered voting delegate.
@@ -124,7 +116,7 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     /// @notice A proposal was created. `text` is carried here and stored nowhere.
     /// @param proposalId The new proposal.
-    /// @param kind Decision, TransferCapital or Autolaunch.
+    /// @param kind Decision or Autolaunch.
     /// @param proposer The address that created it.
     /// @param closesAt When voting closes and execution becomes possible.
     /// @param snapshotMinted Keys minted at creation; the eligible ids are `1..snapshotMinted`.
@@ -142,11 +134,6 @@ contract KeyfleetVotes is ReentrancyGuard {
         string text
     );
 
-    /// @notice The payload of a TransferCapital proposal, emitted beside its `ProposalCreated`.
-    event TransferCapitalProposed(
-        uint256 indexed proposalId, address indexed asset, uint256 amount, address indexed recipient
-    );
-
     /// @notice The payload of an Autolaunch proposal, emitted beside its `ProposalCreated`.
     /// @param envelopeHash `keccak256(abi.encode(envelope))`, which fixes exactly what was approved.
     /// The envelope itself is stored and readable with `launchEnvelope`.
@@ -155,7 +142,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice An owner set or cleared the address that may vote their keys for them.
     event VotingDelegateSet(address indexed owner, address indexed delegate);
 
-    /// @notice Keys were voted. Each id is counted exactly once for the life of the proposal.
+    /// @notice Keys were voted. Each id is counted exactly once for the life of the proposal, and
+    /// `weight` is the weight this vote added.
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight, uint256[] tokenIds);
 
     /// @notice A passed Decision was recorded. Nothing else happens on chain.
@@ -164,7 +152,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice A proposal executed. It can never execute again.
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
-    /// @notice Weight of one Fleet.Tech key, and the numerator of every Fibonacci key's weight.
+    /// @notice Weight of every key on an Autolaunch and of a Fleet.Tech key on a Decision, and the
+    /// numerator of a Fibonacci key's weight on a Decision.
     uint256 public constant WEIGHT_SCALE = 1e18;
     /// @notice Shortest voting window a fleet may be deployed with. Anything briefer could close
     /// before holders in other time zones had a chance to see the proposal at all.
@@ -207,7 +196,8 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     // --- views -----------------------------------------------------------
 
-    /// @notice Voting weight of one key, from the preset alone.
+    /// @notice Weight of one key on a Decision, from the preset alone. On an Autolaunch every key
+    /// weighs `WEIGHT_SCALE` instead.
     /// @dev A Fleet.Tech key is worth `WEIGHT_SCALE`. A Fibonacci key is worth
     /// `WEIGHT_SCALE / fibonacciLevelSupply(level)`, floored, so a level carries one vote shared
     /// equally by its keys and the floor is the fixed-precision approximation the spec asks for.
@@ -268,34 +258,14 @@ contract KeyfleetVotes is ReentrancyGuard {
         return _propose(tokenId, Kind.Decision, text, digest);
     }
 
-    /// @notice Proposes moving free working capital out of the fleet to a named recipient.
-    /// @dev Nothing is checked against the fleet's balance here. The spec is explicit that a
-    /// proposal over free capital simply fails to execute while the capital is short, so the balance
-    /// is read at execution and never at creation.
-    /// @param tokenId An eligible key the caller owns or is the registered delegate of.
-    /// @param asset The accounted asset to move.
-    /// @param amount Atomic units to move, which must be nonzero.
-    /// @param recipient Who receives them, which must be nonzero.
-    /// @param digest Optional exact artifact or commit digest.
-    /// @return proposalId The new proposal.
-    function proposeTransferCapital(uint256 tokenId, address asset, uint256 amount, address recipient, bytes32 digest)
-        external
-        returns (uint256 proposalId)
-    {
-        if (asset == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
-        if (recipient == address(0)) revert ZeroRecipient();
-        proposalId = _propose(tokenId, Kind.TransferCapital, "", digest);
-        Proposal storage stored = _proposals[proposalId];
-        stored.asset = asset;
-        stored.amount = amount;
-        stored.recipient = recipient;
-        emit TransferCapitalProposed(proposalId, asset, amount, recipient);
-    }
-
     /// @notice Proposes the exact launch the fleet would create through the pinned Autolaunch
     /// factory, with itself as launcher and treasury.
-    /// @dev Everything that could make the approved call impossible on its own terms is checked
+    /// @dev A fleet may propose a launch only once it has sold the keys its preset requires: a
+    /// Fibonacci fleet the last key of level 7, `FIBONACCI_AUTOLAUNCH_MIN_KEYS`, and a Classic or
+    /// Accelerant fleet `FLEET_TECH_AUTOLAUNCH_MIN_KEYS`. Anything earlier is refused with
+    /// `LaunchNotYetEligible`, before the factory is asked anything.
+    ///
+    /// Everything that could make the approved call impossible on its own terms is checked
     /// here, so the keys are never asked to vote on a launch that could never happen: the five
     /// metadata strings against the byte caps, the raise against the largest one an auction can
     /// reach, an expiry that would fall at or before the vote closes, and a fleet that has already
@@ -321,6 +291,12 @@ contract KeyfleetVotes is ReentrancyGuard {
         external
         returns (uint256 proposalId)
     {
+        uint256 minted = FLEET.totalMinted();
+        uint256 required = _isFibonacci()
+            ? KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS
+            : KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS;
+        if (minted < required) revert LaunchNotYetEligible(minted, required);
+
         IRegentsAutolaunchFactoryV1 factory = FLEET.FACTORY();
         _requireBytes(0, bytes(envelope.name).length, factory.MAX_NAME_BYTES());
         _requireBytes(1, bytes(envelope.symbol).length, factory.MAX_SYMBOL_BYTES());
@@ -352,6 +328,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// vote, and a key that has not voted yet votes with whoever owns it at the time.
     ///
     /// The whole call reverts if any one id fails, so a caller never half-votes a set by accident.
+    /// Each key adds `WEIGHT_SCALE` on an Autolaunch and its `weightOf` on a Decision.
     /// @param proposalId The proposal being voted on.
     /// @param tokenIds The keys to vote, each at most once.
     /// @param support True for YES, false for NO.
@@ -362,14 +339,14 @@ contract KeyfleetVotes is ReentrancyGuard {
         if (tokenIds.length == 0) revert NoKeys();
 
         uint256 snapshotMinted = stored.snapshotMinted;
-        bool isFibonacci = _isFibonacci();
+        bool byLevel = _weighsByLevel(stored.kind);
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
             if (tokenId == 0 || tokenId > snapshotMinted) revert KeyNotEligible(tokenId);
             if (hasVoted[proposalId][tokenId]) revert AlreadyVoted(tokenId);
             _requireCaster(tokenId);
             hasVoted[proposalId][tokenId] = true;
-            weight += _weightOf(tokenId, isFibonacci);
+            weight += _weightOf(tokenId, byLevel);
         }
 
         if (support) stored.yesWeight += weight;
@@ -384,16 +361,11 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// `yesWeight * 2 > totalWeight`, so YES must exceed half of the *whole* eligible snapshot
     /// weight and every key that stayed silent counts against it.
     ///
-    /// The proposal is marked executed before the fleet is called, so a token that calls back can
-    /// never execute it twice. A TransferCapital that the fleet's free capital cannot cover reverts
-    /// the whole call, which rolls that mark back as well: the proposal stays executable and can be
-    /// executed later once the capital exists, which is exactly what the spec asks for.
-    ///
-    /// An Autolaunch behaves the same way, and it is the reason the rule matters most. Any revert
-    /// inside the fleet or the factory — a paused factory, a raise the strategy refuses, a launch
-    /// that already exists — undoes the mark with everything else, so the attempt consumes nothing
-    /// and the proposal stays executable until its envelope expires or the fleet's launch state
-    /// moves on.
+    /// The proposal is marked executed before the fleet is called, so a launch artifact that calls
+    /// back can never execute it twice. Any revert inside the fleet or the factory — a paused
+    /// factory, a raise the strategy refuses, a launch that already exists — undoes the mark with
+    /// everything else, so the attempt consumes nothing and the proposal stays executable until its
+    /// envelope expires or the fleet's launch state moves on.
     /// @param proposalId The proposal to execute.
     function execute(uint256 proposalId) external nonReentrant {
         Proposal storage stored = _require(proposalId);
@@ -406,8 +378,6 @@ contract KeyfleetVotes is ReentrancyGuard {
 
         if (stored.kind == Kind.Decision) {
             emit DecisionRecorded(proposalId, stored.digest);
-        } else if (stored.kind == Kind.TransferCapital) {
-            FLEET.transferCapital(stored.asset, stored.amount, stored.recipient);
         } else {
             FLEET.executeAutolaunch(proposalId, _envelopes[proposalId]);
         }
@@ -435,7 +405,7 @@ contract KeyfleetVotes is ReentrancyGuard {
         stored.createdAt = uint64(block.timestamp);
         stored.closesAt = uint64(block.timestamp) + VOTING_WINDOW;
         stored.snapshotMinted = snapshotMinted;
-        stored.totalWeight = _snapshotWeight(snapshotMinted);
+        stored.totalWeight = _snapshotWeight(snapshotMinted, _weighsByLevel(kind));
         stored.digest = digest;
 
         emit ProposalCreated(
@@ -454,11 +424,11 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     /// @dev Total weight of the token ids `1..minted`, computed by walking at most twenty levels and
     /// never a single key, so the cost is bounded by the preset rather than by the fleet: creating a
-    /// proposal on a Fibonacci fleet holding two keys in one level measured about 146,000 gas, and
+    /// Decision on a Fibonacci fleet holding two keys in one level measured about 146,000 gas, and
     /// on one at the level-20 ceiling about 186,000, with nothing in between depending on how many
-    /// keys exist. A Fleet.Tech fleet has one weight per key and needs no walk at all.
-    function _snapshotWeight(uint256 minted) private view returns (uint256 total) {
-        if (!_isFibonacci()) return minted * WEIGHT_SCALE;
+    /// keys exist. A proposal weighed one vote per key needs no walk at all.
+    function _snapshotWeight(uint256 minted, bool byLevel) private pure returns (uint256 total) {
+        if (!byLevel) return minted * WEIGHT_SCALE;
 
         uint256 previousEnd;
         for (uint256 level = 1; level <= KeyfleetPresets.MAX_FIBONACCI_LEVEL; ++level) {
@@ -471,10 +441,10 @@ contract KeyfleetVotes is ReentrancyGuard {
         }
     }
 
-    /// @dev The preset is read once per call and passed in, because it cannot change and a vote may
-    /// name many keys.
-    function _weightOf(uint256 tokenId, bool isFibonacci) private pure returns (uint256) {
-        if (!isFibonacci) return WEIGHT_SCALE;
+    /// @dev Whether keys weigh by level is read once per call and passed in, because it cannot
+    /// change and a vote may name many keys.
+    function _weightOf(uint256 tokenId, bool byLevel) private pure returns (uint256) {
+        if (!byLevel) return WEIGHT_SCALE;
         return WEIGHT_SCALE / KeyfleetPresets.fibonacciLevelSupply(KeyfleetPresets.fibonacciLevelOf(tokenId));
     }
 
@@ -492,6 +462,12 @@ contract KeyfleetVotes is ReentrancyGuard {
     function _require(uint256 proposalId) private view returns (Proposal storage stored) {
         if (proposalId == 0 || proposalId > proposalCount) revert UnknownProposal(proposalId);
         return _proposals[proposalId];
+    }
+
+    /// @dev Only a Decision on a Fibonacci fleet weighs keys by level. An Autolaunch counts one vote
+    /// per key on every preset, and the preset is not read at all.
+    function _weighsByLevel(Kind kind) private view returns (bool) {
+        return kind == Kind.Decision && _isFibonacci();
     }
 
     function _isFibonacci() private view returns (bool) {

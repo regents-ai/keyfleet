@@ -5,13 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
 /// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
@@ -24,102 +22,6 @@ contract MockToken is ERC20 {
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
-    }
-}
-
-/// @dev A capital asset that calls back into `execute` the first time it moves, from inside the
-/// transfer the fleet is in the middle of making on the vote's behalf. It is armed only after the
-/// deposit that funds the fleet, so the hook fires on the voted transfer and nowhere else.
-contract ReenteringToken is ERC20 {
-    KeyfleetVotes private _votes;
-    uint256 private _proposalId;
-    bool private _entered;
-
-    constructor() ERC20("Reenter", "RE") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-
-    function arm(KeyfleetVotes votes, uint256 proposalId) external {
-        _votes = votes;
-        _proposalId = proposalId;
-    }
-
-    function _update(address from, address to, uint256 value) internal override {
-        super._update(from, to, value);
-        if (address(_votes) == address(0) || _entered) return;
-        _entered = true;
-        _votes.execute(_proposalId);
-    }
-}
-
-/// @dev A capital asset whose hook fires before its own balances move, the ERC777 `tokensToSend`
-/// shape. Inside the hook the fleet still holds the tokens it is paying out while `freeCapital` has
-/// already been debited, which is the window a second entry point could misread.
-contract PreHookToken is ERC20 {
-    /// @notice What the hook saw of the fleet while the payout was half done.
-    uint256 public seenBalance;
-    uint256 public seenFreeCapital;
-    /// @notice Whether the hook ran, and how the call it made came back.
-    bool public fired;
-    bool public lastOk;
-    bytes public lastReturn;
-
-    Keyfleet private _fleet;
-    address private _target;
-    bytes private _payload;
-
-    constructor() ERC20("PreHook", "PRE") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-
-    function arm(Keyfleet fleet, address target, bytes calldata payload) external {
-        _fleet = fleet;
-        _target = target;
-        _payload = payload;
-        fired = false;
-    }
-
-    function _update(address from, address to, uint256 value) internal override {
-        if (_target != address(0) && !fired && from == address(_fleet)) {
-            fired = true;
-            seenBalance = balanceOf(address(_fleet));
-            seenFreeCapital = _fleet.freeCapital(address(this));
-            (lastOk, lastReturn) = _target.call(_payload);
-        }
-        super._update(from, to, value);
-    }
-}
-
-/// @dev Reads the proposal's executed flag from inside the payout, so the ordering is observed
-/// directly rather than inferred from the reentrancy guard.
-contract FlagReadingToken is ERC20 {
-    /// @notice What the hook read while the payout was running.
-    bool public sawExecuted;
-    bool public fired;
-
-    KeyfleetVotes private _votes;
-    uint256 private _proposalId;
-
-    constructor() ERC20("Flag", "FLG") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-
-    function arm(KeyfleetVotes votes, uint256 proposalId) external {
-        _votes = votes;
-        _proposalId = proposalId;
-    }
-
-    function _update(address from, address to, uint256 value) internal override {
-        super._update(from, to, value);
-        if (address(_votes) == address(0) || fired) return;
-        fired = true;
-        sawExecuted = _votes.proposal(_proposalId).executed;
     }
 }
 
@@ -143,7 +45,6 @@ contract KeyfleetVotesTest is Test {
     address private treasury = address(0x7EA5);
     address private buyer = address(0xB0B0B0);
     address private payer = address(0xDEDE);
-    address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
     address private dave = address(0xDA7E);
@@ -159,14 +60,10 @@ contract KeyfleetVotesTest is Test {
         bytes32 digest,
         string text
     );
-    event TransferCapitalProposed(
-        uint256 indexed proposalId, address indexed asset, uint256 amount, address indexed recipient
-    );
     event VotingDelegateSet(address indexed owner, address indexed delegate);
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight, uint256[] tokenIds);
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
-    event CapitalTransferred(address indexed asset, uint256 amount, address indexed recipient);
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
@@ -215,27 +112,18 @@ contract KeyfleetVotesTest is Test {
         return address(uint160(0x100000 + index));
     }
 
-    function _admit(Keyfleet fleet, address token) private {
+    /// @dev Admits `token` and pays `amount` of it in as capital.
+    function _depositCapital(Keyfleet fleet, MockToken token, uint256 amount) private {
         vm.startPrank(safe);
-        registry.setFactoryTokenAllowed(token, true);
-        registry.setFleetTokenAllowed(address(fleet), token, true);
+        registry.setFactoryTokenAllowed(address(token), true);
+        registry.setFleetTokenAllowed(address(fleet), address(token), true);
         vm.stopPrank();
-    }
 
-    /// @dev Admits an already-minted token and pays `amount` of it in as capital.
-    function _payCapitalIn(Keyfleet fleet, ERC20 token, uint256 amount) private {
-        _admit(fleet, address(token));
+        token.mint(payer, amount);
         vm.startPrank(payer);
         token.approve(address(fleet), amount);
         fleet.depositCapital(address(token), amount);
         vm.stopPrank();
-    }
-
-    /// @dev Pays `amount` in as capital and returns the net that actually reached `freeCapital`.
-    function _depositCapital(Keyfleet fleet, MockToken token, uint256 amount) private returns (uint256 net) {
-        token.mint(payer, amount);
-        _payCapitalIn(fleet, token, amount);
-        net = amount - (amount * fleet.DEPOSIT_FEE_BPS()) / 10_000;
     }
 
     function _ids(uint256 a) private pure returns (uint256[] memory ids) {
@@ -406,39 +294,8 @@ contract KeyfleetVotesTest is Test {
         assertEq(stored.snapshotMinted, 3);
         assertEq(stored.totalWeight, 3 * SCALE);
         assertEq(stored.digest, digest, "the digest is stored, the text is not");
-        assertEq(stored.asset, address(0), "a Decision carries no payload");
-        assertEq(stored.amount, 0);
-        assertEq(stored.recipient, address(0));
         assertFalse(stored.executed);
         assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Active));
-    }
-
-    /// @dev Invariant: a TransferCapital proposal names a real payment. A zero asset, a zero amount
-    /// or a zero recipient is refused at creation, because none of them could ever be executed.
-    function test_aTransferCapitalProposalNamesAnAssetAnAmountAndARecipient() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        vm.startPrank(_wallet(1));
-        vm.expectRevert(KeyfleetVotes.ZeroAddress.selector);
-        votes.proposeTransferCapital(1, address(0), 10_000, dave, bytes32(0));
-        vm.expectRevert(KeyfleetVotes.ZeroAmount.selector);
-        votes.proposeTransferCapital(1, address(other), 0, dave, bytes32(0));
-        vm.expectRevert(KeyfleetVotes.ZeroRecipient.selector);
-        votes.proposeTransferCapital(1, address(other), 10_000, address(0), bytes32(0));
-
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit TransferCapitalProposed(1, address(other), 10_000, dave);
-        uint256 proposalId = votes.proposeTransferCapital(1, address(other), 10_000, dave, bytes32(0));
-        vm.stopPrank();
-
-        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(uint256(stored.kind), uint256(KeyfleetVotes.Kind.TransferCapital));
-        assertEq(stored.asset, address(other));
-        assertEq(stored.amount, 10_000);
-        assertEq(stored.recipient, dave);
-        assertEq(fleet.freeCapital(address(other)), 0, "nothing is checked or reserved at creation");
     }
 
     /// @dev Invariant: proposing needs standing. The proposer names an eligible key and must be its
@@ -781,244 +638,7 @@ contract KeyfleetVotesTest is Test {
         votes.execute(proposalId);
     }
 
-    // --- 7. capital transfers ----------------------------------------------
-
-    /// @dev Invariant: a passed TransferCapital that free capital cannot cover reverts and stays
-    /// executable. The proposal is not consumed by the failure, and once the capital exists it pays
-    /// exactly the voted amount out of exactly that bucket.
-    function test_aTransferCapitalShortOfFreeCapitalRevertsAndStaysExecutable() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(other), 10_000, dave, bytes32(0));
-        _vote(votes, proposalId, 1, true);
-        _close(votes, proposalId);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(other), 10_000, uint256(0))
-        );
-        votes.execute(proposalId);
-        assertFalse(votes.proposal(proposalId).executed, "the failure did not consume the proposal");
-        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "it is still executable");
-
-        uint256 net = _depositCapital(fleet, other, 20_000);
-        vm.expectEmit(true, true, true, true, address(fleet));
-        emit CapitalTransferred(address(other), 10_000, dave);
-        votes.execute(proposalId);
-
-        assertEq(other.balanceOf(dave), 10_000, "the recipient was paid exactly the voted amount");
-        assertEq(fleet.freeCapital(address(other)), net - 10_000, "and free capital fell by exactly that");
-        assertEq(other.balanceOf(address(fleet)), net - 10_000, "the balance matches the bucket");
-        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Executed));
-
-        vm.expectRevert(KeyfleetVotes.AlreadyExecuted.selector);
-        votes.execute(proposalId);
-    }
-
-    /// @dev Invariant: a vote cannot borrow an incomplete level's reserve or spend the protocol share
-    /// owed to stakers. The fleet holds both, yet a passed proposal for that whole balance finds no
-    /// free capital to move and both figures are left exactly as they were.
-    function test_aVoteCannotBorrowTheCascadeReserveOrSpendTheOwedShare() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        uint256 reserve = fleet.cascadeReserve();
-        uint256 owed = fleet.protocolShareOwed();
-        assertGt(reserve, 0, "the first Cascade key funds the reserve");
-        assertGt(owed, 0, "and leaves a share owed to stakers");
-        assertEq(fleet.freeCapital(address(usdc)), 0, "and none of it is free capital");
-        assertEq(usdc.balanceOf(address(fleet)), reserve + owed, "the fleet is holding both");
-
-        vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(usdc), reserve + owed, dave, bytes32(0));
-        _vote(votes, proposalId, 1, true);
-        _close(votes, proposalId);
-        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "the vote itself passed");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(usdc), reserve + owed, uint256(0))
-        );
-        votes.execute(proposalId);
-
-        assertEq(fleet.cascadeReserve(), reserve, "the reserve is untouched");
-        assertEq(fleet.protocolShareOwed(), owed, "and so is the owed share");
-        assertEq(usdc.balanceOf(address(fleet)), reserve + owed);
-        assertEq(usdc.balanceOf(dave), 0);
-    }
-
-    /// @dev Invariant: a vote cannot withdraw a member's claim. Reward backing does not sit in the
-    /// fleet at all, so the fleet's free capital in a revenue asset is zero however much of it the
-    /// ledger is holding for holders.
-    function test_aVoteCannotWithdrawRewardBacking() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        KeyfleetRewards rewards = fleet.REWARDS();
-        _buyMany(fleet, 1);
-
-        _admit(fleet, address(other));
-        other.mint(payer, 10_000);
-        vm.startPrank(payer);
-        other.approve(address(fleet), 10_000);
-        fleet.depositRevenue(address(other), 10_000, bytes32("svc"));
-        vm.stopPrank();
-
-        assertEq(rewards.backed(address(other)), 9_800, "the ledger is holding the members' money");
-        assertEq(fleet.freeCapital(address(other)), 0, "and the fleet has no free capital in it");
-
-        vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(other), 9_800, dave, bytes32(0));
-        _vote(votes, proposalId, 1, true);
-        _close(votes, proposalId);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Keyfleet.InsufficientFreeCapital.selector, address(other), uint256(9_800), uint256(0)
-            )
-        );
-        votes.execute(proposalId);
-
-        assertEq(rewards.backed(address(other)), 9_800, "the recorded liability is unchanged");
-        assertEq(other.balanceOf(address(rewards)), 9_800, "and the tokens behind it never moved");
-    }
-
-    /// @dev Invariant: the shortfall boundary is exact and is refused by name. One atomic unit over
-    /// the free capital reverts with `InsufficientFreeCapital` carrying all three figures, not with
-    /// an arithmetic panic, and the whole of free capital to the unit goes through.
-    function test_oneAtomicUnitOverFreeCapitalIsTheNamedShortfallNotAPanic() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-        uint256 net = _depositCapital(fleet, other, 20_000);
-
-        vm.startPrank(_wallet(1));
-        uint256 over = votes.proposeTransferCapital(1, address(other), net + 1, dave, bytes32(0));
-        uint256 exact = votes.proposeTransferCapital(1, address(other), net, dave, bytes32(0));
-        votes.vote(over, _ids(1), true);
-        votes.vote(exact, _ids(1), true);
-        vm.stopPrank();
-        _close(votes, exact);
-
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.InsufficientFreeCapital.selector, address(other), net + 1, net));
-        votes.execute(over);
-
-        votes.execute(exact);
-        assertEq(other.balanceOf(dave), net, "the whole bucket to the unit goes through");
-        assertEq(fleet.freeCapital(address(other)), 0);
-    }
-
-    /// @dev Invariant: free capital is debited before the tokens move, and the fleet's own guard
-    /// closes the window that opens in between. A token whose hook fires before its balances move
-    /// sees the fleet still holding what it is paying out while the bucket has already fallen, and
-    /// a second entry point would book that gap as a fresh surplus: capital the fleet is about to
-    /// stop holding, credited twice, which a later vote could spend against the reserve's backing.
-    /// The guard refuses it, and nothing phantom is left behind.
-    function test_theFleetGuardClosesTheWindowAPreHookAssetOpensDuringAPayout() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        PreHookToken token = new PreHookToken();
-        token.mint(payer, 20_000);
-        _payCapitalIn(fleet, token, 20_000);
-        uint256 net = fleet.freeCapital(address(token));
-
-        vm.startPrank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(token), 10_000, dave, bytes32(0));
-        votes.vote(proposalId, _ids(1), true);
-        vm.stopPrank();
-        _close(votes, proposalId);
-
-        token.arm(fleet, address(fleet), abi.encodeCall(Keyfleet.recognizeSurplus, (address(token))));
-        votes.execute(proposalId);
-
-        assertTrue(token.fired(), "the hook ran inside the payout");
-        assertEq(token.seenBalance() - token.seenFreeCapital(), 10_000, "the window really is the voted amount wide");
-        assertFalse(token.lastOk(), "and the fleet's guard closed it");
-        assertEq(bytes4(token.lastReturn()), ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-
-        assertEq(fleet.freeCapital(address(token)), net - 10_000, "free capital fell by exactly the voted amount");
-        assertEq(token.balanceOf(address(fleet)), net - 10_000, "and the balance still matches the bucket");
-        assertEq(fleet.surplus(address(token)), 0, "nothing phantom was created");
-    }
-
-    /// @dev Invariant: the proposal is marked executed before the fleet is called, observed from
-    /// inside the payout itself, so the ordering does not rest on the reentrancy guard alone.
-    function test_theProposalIsMarkedExecutedBeforeTheFleetIsCalled() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        FlagReadingToken token = new FlagReadingToken();
-        token.mint(payer, 20_000);
-        _payCapitalIn(fleet, token, 20_000);
-
-        vm.startPrank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(token), 10_000, dave, bytes32(0));
-        votes.vote(proposalId, _ids(1), true);
-        vm.stopPrank();
-        _close(votes, proposalId);
-
-        token.arm(votes, proposalId);
-        votes.execute(proposalId);
-
-        assertTrue(token.fired(), "the hook ran inside the payout");
-        assertTrue(token.sawExecuted(), "the proposal was already marked executed before the tokens moved");
-    }
-
-    /// @dev Invariant: the fleet takes capital instructions from its own voting controller and from
-    /// nobody else, so no holder, treasury or stranger can move capital directly.
-    function test_onlyTheVotingControllerMayMoveFreeCapital() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buyMany(fleet, 1);
-        uint256 net = _depositCapital(fleet, other, 10_000);
-
-        address[4] memory strangers = [alice, treasury, safe, address(fleet.REWARDS())];
-        for (uint256 i = 0; i < strangers.length; ++i) {
-            vm.prank(strangers[i]);
-            vm.expectRevert(Keyfleet.OnlyVotes.selector);
-            fleet.transferCapital(address(other), 1, dave);
-        }
-
-        // Nor may another fleet's controller, which is bound to its own fleet.
-        Keyfleet stranger = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        vm.prank(address(stranger.VOTES()));
-        vm.expectRevert(Keyfleet.OnlyVotes.selector);
-        fleet.transferCapital(address(other), 1, dave);
-
-        assertEq(fleet.freeCapital(address(other)), net, "capital is exactly where it was");
-    }
-
-    /// @dev Invariant: the guard holds against the asset being paid out. A token that calls back
-    /// into `execute` from inside the transfer cannot execute the proposal a second time, and the
-    /// attempt takes the whole payout down with it rather than paying twice.
-    function test_reenteringExecuteFromTheRecipientTokenIsRejected() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-
-        ReenteringToken token = new ReenteringToken();
-        token.mint(payer, 20_000);
-        _payCapitalIn(fleet, token, 20_000);
-        uint256 net = fleet.freeCapital(address(token));
-
-        vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeTransferCapital(1, address(token), 10_000, dave, bytes32(0));
-        _vote(votes, proposalId, 1, true);
-        _close(votes, proposalId);
-
-        token.arm(votes, proposalId);
-        vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-        votes.execute(proposalId);
-
-        assertFalse(votes.proposal(proposalId).executed, "nothing executed");
-        assertEq(fleet.freeCapital(address(token)), net, "and nothing was paid out");
-        assertEq(token.balanceOf(dave), 0);
-    }
-
-    // --- 8. gas -------------------------------------------------------------
+    // --- 7. gas -------------------------------------------------------------
 
     /// @dev Invariant: creating a proposal walks levels, never keys, so its cost is bounded by the
     /// preset rather than by how large the fleet has grown. This is the worst case: a Fibonacci
@@ -1109,7 +729,7 @@ contract KeyfleetVotesTest is Test {
         used = before - gasleft();
     }
 
-    // --- 9. fuzz invariant ---------------------------------------------------
+    // --- 8. fuzz invariant ---------------------------------------------------
 
     /// @dev Invariant: across random sets of votes on a fleet with three different key weights, the
     /// weight recorded for and against is always exactly the weight of the keys that actually voted,
