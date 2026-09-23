@@ -160,10 +160,6 @@ class HelloBody(_Shape):
     pass
 
 
-class GetBody(_Shape):
-    id: Id
-
-
 class ChangesBody(_Shape):
     after_seq: Count
     limit: Annotated[int, Field(ge=1, le=500)]
@@ -204,7 +200,6 @@ class ArchiveBody(_Shape):
 
 READ_OPS: dict[str, type[_Shape]] = {
     "hello": HelloBody,
-    "get": GetBody,
     "changes": ChangesBody,
 }
 

@@ -190,12 +190,17 @@ signed HTTP / LiveView (later: CLI, MCP, WebMCP)
   -> KeyFleet.Graph (Ash domain): generic actions, key-actor policy
   -> KeyFleet.Graph.Writer (one GenServer per fleet, Registry name {fleet_id})
        handle_call: recheck key authority -> Port request -> await reply
-                    -> project returned events into Postgres (one Repo txn)
-                    -> PubSub {:graph_head, fleet_id, seq}
   -> Port (spawn_executable python -m keyfleet_graph --fleet F --db /data/graph/F.sqlite, {:packet,4}, :exit_status)
   -> Python host: flock, Runtime.load/new, load_pack(keyfleet_work@pinned), command loop
   -> /data/graph/<fleet_id>.sqlite  (Fly volume, single machine)
+
+KeyFleet.Graph.Projector (one GenServer per fleet, beside the writers)
+  on a write's await(run_id, head_seq), and every catch_up_interval:
+    hello -> changes(after_seq: cursor) page by page
+    -> one Repo txn per page: events, objects, links, cursor
+    -> PubSub {:graph_head, fleet_id, run_id, watermark}
 Postgres: graph_events, graph_objects, graph_relations, graph_cursors (disposable projection)
+Reads (get, changes, sync): one repeatable-read, read-only snapshot of those tables
 ```
 
 ### 6.2 What to keep from the chief engineer's leaning
@@ -219,10 +224,11 @@ Postgres: graph_events, graph_objects, graph_relations, graph_cursors (disposabl
    - let the supervisor restart it.
    The flock stops a stuck old process from being joined by a new one. A retry with the same id resolves through the ledger.
 5. **Membership freshness stamp.** `handle_call` records `{epoch, pairing_id, checked_at}` in the command's `auth` block. Once the chain projection lands, it also records the projection's block and freshness, and refuses when freshness is unknown.
-6. **Projection write path.**
-   - Fast path: each successful reply carries its appended events with `seq`. The Writer inserts them `ON CONFLICT (fleet_id, seq) DO NOTHING` and advances `graph_cursors.applied_seq` in the same Repo transaction.
-   - Slow path: on writer start and after any projection error, loop `changes(after_seq: cursor)` until `has_more=false`.
-   - A Postgres failure never turns an applied command into an error: the graph is authoritative and the projection catches up.
+6. **Projection write path.** There is one path, the fleet's projector; the Writer never writes Postgres.
+   - The projector asks the host for `hello`, then loops `changes(after_seq: cursor)` until `has_more=false`. Each page is one Repo transaction: its events, the objects and links they change, and the cursor moved past the page. The cursor moves only from the value the page started at, so of two copies running at once the one that is behind rolls its page back.
+   - It runs when a write asks it to reach that write's `head_seq` (`Projector.await/3`, bounded by `projection_wait`) and every `catch_up_interval` regardless, so a lost request or a failed page is made good on the next round.
+   - The log names itself with `run_id`, a random id minted when its SQLite file is created and kept in that file. A cursor from another `run_id`, or past the log's head, means the file was replaced: the fleet's read tables are removed and copied again from 0, and the projector forgets the place it had reached.
+   - A write answers `watermark`, how far the projection had reached when it answered, 0 when unknown. A Postgres failure never turns an applied command into an error: the graph is authoritative and the projection catches up.
 7. **Reads.** `graph.read`, `graph.query` and `graph.changes` read the Postgres projection. They do not read the Writer, so reads survive a writer restart. They return `watermark` (the projected seq).
 
 ### 6.4 Where it breaks
@@ -265,14 +271,14 @@ Each message is a `{:packet, 4}` frame holding one UTF-8 JSON object. The Python
  "body": {…op-specific…}}
 ```
 
-- Read ops (`hello`, `get`, `changes`) omit `command`.
+- Read ops (`hello`, `changes`) omit `command`.
 - The run and file are fixed per process by its start arguments, so a request cannot name another fleet's run.
 - The host recomputes `body_hash = sha256(json.dumps(body, sort_keys=True, separators=(",",":"), ensure_ascii=False))`. There is a single canonicaliser, and Elixir never hashes.
 
 **Response:**
 
 ```json
-{"v": 1, "req": "r_01J…", "ok": true, "replayed": false,
+{"v": 1, "req": "r_01J…", "ok": true, "run_id": "log_…", "replayed": false,
  "result": {…}, "events": [{"seq": 41, "id": "evt_041", "type": "patch.applied", "actor": "…", "timestamp": "…", "payload": {…}}],
  "head_seq": 43}
 ```
@@ -286,9 +292,8 @@ Each message is a `{:packet, 4}` frame holding one UTF-8 JSON object. The Python
 
 | op | body | result |
 |---|---|---|
-| `hello` | `{}` | `{run_id, pack: "keyfleet_work@0.1.0", activegraph: "1.10.0+8aedb18", head_seq}` |
-| `get` | `{id}` | `{object: {id, type, data, sys, version}, relations: [...] (≤200)}` |
-| `changes` | `{after_seq, limit ≤500}` | `{events: [...], next_seq, has_more, head_seq}`. All events, including lifecycle events; the projector filters. |
+| `hello` | `{}` | `{run_id, pack: "keyfleet_work@0.1.0", activegraph: "1.10.0+8aedb18", head_seq}`. `run_id` is the log's own id, minted with its file; a replaced file answers a new one. |
+| `changes` | `{after_seq, limit ≤500}` | `{run_id, events: [...], next_seq, has_more, head_seq}`. All events, including lifecycle events; the projector filters. |
 | `create` | `{type, scope, data}` | `{id, version: 1}` |
 | `patch` | `{id, expected_version, set: {...}, unset: [..] , reason?, evidence?: [ids]}` | `{id, version}` |
 | `link` | `{source, target, type, note?}` | `{relation_id, existing: bool}`. An identical live `(source, type, target)` returns the existing relation. |
@@ -390,7 +395,7 @@ Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left
 - #6 depends on the chain projection for *fresh* ownership: the logic is testable now, and fail-closed freshness arrives with P3.
 
 **S3: Postgres projection and `graph` in fleet sync.**
-- Delivers `graph_events/objects/relations/cursors` (AshPostgres, public read); the fast and slow projection paths; `Rooms.sync` extended with `graph: {run_id, events, next_cursor, has_more}` plus `watermark` and `next_poll_seconds`; and PubSub heads for LiveView.
+- Delivers `graph_events/objects/relations/cursors` (AshPostgres, public read); the projector, the single path that copies the log into them; `Rooms.sync` extended with `graph: {run_id, events, next_cursor, has_more}` plus `watermark` and `next_poll_seconds`; and PubSub heads for LiveView.
 - Done when:
   - an agent disconnects, others edit, and one sync call returns both the graph and the chat backlog;
   - deleting projection rows and restarting rebuilds them identically;

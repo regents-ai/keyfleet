@@ -16,7 +16,14 @@ defmodule KeyFleet.GraphTest do
   @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
 
   setup %{tmp_dir: tmp_dir} do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
+    # Workspace reads take a repeatable-read snapshot, which Postgres allows
+    # inside the sandbox only when its transaction is at that level already.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+        shared: true,
+        isolation: "REPEATABLE READ"
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
@@ -59,6 +66,7 @@ defmodule KeyFleet.GraphTest do
     )
 
     await_ready()
+    start_supervised!({KeyFleet.Graph.Projectors, fleets: [@fleet]})
     :ok
   end
 
@@ -70,13 +78,17 @@ defmodule KeyFleet.GraphTest do
                actor: owner
              )
 
-    assert {:ok, %{"events" => events}} = Graph.list_changes(@fleet, %{}, actor: nil)
-    [command] = for %{"type" => "keyfleet.command"} = event <- events, do: event
+    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
+    [command] = for %{type: "keyfleet.command"} = event <- events, do: event
+    assert command.payload["principal"] == "member:8453:#{@contract}:1@0/human:#{@owner}"
 
-    assert command["payload"]["principal"] == "member:8453:#{@contract}:1@0/human:#{@owner}"
+    {:ok, %{"result" => %{"events" => logged}}} =
+      Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+
+    [stamped] = for %{"type" => "keyfleet.command"} = event <- logged, do: event
 
     assert %{"kind" => "human", "pairing_id" => nil, "credential_ref" => nil} =
-             command["payload"]["auth"]
+             stamped["payload"]["auth"]
   end
 
   test "a person who holds none of the fleet's keys is refused before anything is written" do
@@ -90,8 +102,8 @@ defmodule KeyFleet.GraphTest do
                actor: stranger
              )
 
-    assert {:ok, %{"events" => events}} = Graph.list_changes(@fleet, %{}, actor: nil)
-    refute Enum.any?(events, &(&1["type"] == "keyfleet.command"))
+    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
+    refute Enum.any?(events, &(&1.type == "keyfleet.command"))
   end
 
   defp await_ready(attempts \\ 750) do

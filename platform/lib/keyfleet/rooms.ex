@@ -7,6 +7,7 @@ defmodule KeyFleet.Rooms do
   @core_rooms [{"general", "General"}, {"planning", "Planning"}, {"work", "Work"}]
   @max_sync_rooms 100
   @sync_page 50
+  @graph_sync_page 100
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
 
@@ -33,22 +34,52 @@ defmodule KeyFleet.Rooms do
   def fleet_topic(fleet_id), do: "fleet:#{fleet_id}:rooms"
 
   @doc """
-  Everything one caller has not read yet across the rooms it names.
+  Everything one caller has not read yet across the rooms it names and the
+  fleet's workspace.
 
   Each entry of `cursors` is a `%{slug: slug, after_seq: seq}` saying how far the
   caller has read that room. Every room answers with the posts after that point,
   the cursor those posts reach, and the room's own head, so a caller that is
-  behind knows to come back for the rest. Nothing is marked as read, and asking
-  again is always safe.
+  behind knows to come back for the rest.
+
+  `graph_after_seq` says how far the caller has read the workspace's log. The
+  workspace answers with at most 100 of its changes after that point, as
+  `KeyFleet.Graph.list_changes/3` does, with `next_cursor` to send next time and
+  `run_id`: a different `run_id` from the one the caller last saw means the log
+  started over, and the caller reads it again from 0.
+
+  `next_poll_seconds` is when to ask again: at once while anything has more
+  waiting, otherwise between 15 and 30 seconds, spread so callers do not all
+  come back together. Nothing is marked as read, and asking again is always
+  safe.
 
   `proposals` is answered empty here; fleet decisions arrive in a later slice and
   share this one call rather than adding a second.
   """
-  def sync(fleet_id, cursors, actor) do
+  def sync(fleet_id, cursors, graph_after_seq, actor) do
     with :ok <- validate_cursors(cursors),
-         {:ok, synced} <- sync_rooms(fleet_id, cursors, actor) do
-      {:ok, %{rooms: synced, proposals: []}}
+         :ok <- in_log(graph_after_seq),
+         {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
+         {:ok, graph} <-
+           KeyFleet.Graph.list_changes(
+             fleet_id,
+             %{after_seq: graph_after_seq, limit: @graph_sync_page},
+             actor: actor
+           ) do
+      {:ok,
+       %{
+         rooms: rooms,
+         graph: graph,
+         proposals: [],
+         next_poll_seconds: next_poll_seconds(rooms, graph)
+       }}
     end
+  end
+
+  defp next_poll_seconds(rooms, graph) do
+    if graph.has_more or Enum.any?(rooms, &(&1.cursor < &1.head_seq)),
+      do: 0,
+      else: Enum.random(15..30)
   end
 
   # The posts are read before the heads. A post is only ever seen once its room
@@ -98,6 +129,9 @@ defmodule KeyFleet.Rooms do
   end
 
   defp validate_cursors(_cursors), do: {:error, :invalid_request}
+
+  defp in_log(after_seq) when after_seq in 0..@max_seq, do: :ok
+  defp in_log(_after_seq), do: {:error, :invalid_request}
 
   @doc """
   Ensures the three core rooms for every persisted fleet from trusted setup code.

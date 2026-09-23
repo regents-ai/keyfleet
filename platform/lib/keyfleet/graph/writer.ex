@@ -25,7 +25,7 @@ defmodule KeyFleet.Graph.Writer do
 
   alias KeyFleet.Graph.Registry, as: GraphRegistry
 
-  @read_ops ~w(hello get changes)
+  @read_ops ~w(hello changes)
   @write_ops ~w(create patch link unlink archive)
 
   # How long a killed host gets to be reaped before the writer moves on.
@@ -60,7 +60,12 @@ defmodule KeyFleet.Graph.Writer do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
-  @doc "Sends a read (`hello`, `get` or `changes`) to the fleet's graph."
+  @doc """
+  Sends a read of the log itself (`hello` or `changes`) to the fleet's graph.
+
+  Only the projector reads the log this way, to copy it into the read tables
+  every workspace read is answered from; see `KeyFleet.Graph.Projection`.
+  """
   @spec request(String.t(), String.t(), map()) :: reply()
   def request(fleet_id, op, body) when op in @read_ops do
     with {:ok, json} <- encode(%{v: 1, op: op, body: body}) do

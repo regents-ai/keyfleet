@@ -11,7 +11,7 @@ from conftest import CONTRACT, WALLET, HostProcess, command, request
 
 from keyfleet_graph import protocol
 from keyfleet_graph.__main__ import EXIT_FAILED, EXIT_LOCKED
-from keyfleet_graph.host import CHANGES_PAGE_BYTES, RELATION_PAGE, Host
+from keyfleet_graph.host import CHANGES_PAGE_BYTES, Host
 
 PINNED_VERSION = "1.10.0"
 PINNED_COMMIT = "8aedb1866cf5dce056af97529152ffd6f468a1ed"
@@ -47,7 +47,13 @@ def _with_auth(cmd, **auth):
 
 
 def _deep(depth):
-    return b'{"v":1,"req":"deep","op":"get","body":{"id":' + b"[" * depth + b"]" * depth + b"}}"
+    return b'{"v":1,"req":"deep","op":"changes","body":{"after_seq":' + b"[" * depth + b"]" * depth + b',"limit":1}}'
+
+
+def _logged(host, event_type):
+    """Every event of one type in a host process's log, oldest first."""
+    page = host.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]
+    return [event for event in page["events"] if event["type"] == event_type]
 
 
 FORBIDDEN_FIELDS = ["sys", "paid", "approved", "admin", "treasury_balance"]
@@ -97,7 +103,6 @@ REFUSALS = [
     ("forbidden_scope", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=()))),
     ("forbidden_scope", request("patch", {"id": "goal#1", "expected_version": 2, "set": {"title": "x"}}, command("c", scopes=()))),
     ("forbidden_scope", request("link", {"source": "finding#3", "target": "goal#1", "type": "supports"}, command("c", scopes=()))),
-    ("not_found", request("get", {"id": "goal#404"})),
     ("not_found", request("patch", {"id": "goal#404", "expected_version": 1, "set": {}}, command("c"))),
     ("not_found", request("link", {"source": "finding#3", "target": "goal#404", "type": "supports"}, command("c"))),
     ("not_found", request("unlink", {"relation_id": "rel_404"}, command("c"))),
@@ -170,7 +175,7 @@ HOSTILE_FRAMES = [
     _deep(10_000),
     json.dumps(request("changes", {"after_seq": 2**70, "limit": 10}, req="huge")).encode(),
     b'{"v":1,"req":"nan","op":"changes","body":{"after_seq":NaN,"limit":1}}',
-    b'{"v":1,"req":"surrogate","op":"get","body":{"id":"\\ud800"}}',
+    b'{"v":1,"req":"surrogate","op":"changes","body":{"after_seq":"\\ud800","limit":1}}',
 ]
 
 
@@ -233,37 +238,16 @@ def test_a_link_is_idempotent_on_its_triple_and_an_unlink_removes_it(seeded):
 
     assert created["existing"] is False
     assert again == {"relation_id": created["relation_id"], "existing": True}
-    got = _call(seeded, request("get", {"id": "goal#1"}))["result"]
-    assert got["relations"] == [
-        {
-            "id": created["relation_id"],
-            "type": "supports",
-            "source": "finding#3",
-            "target": "goal#1",
-            "data": {"note": "the first customer said yes"},
-        }
+    assert [(rel.id, rel.type, rel.source, rel.target, rel.data) for rel in seeded.graph.relations()] == [
+        (created["relation_id"], "supports", "finding#3", "goal#1", {"note": "the first customer said yes"})
     ]
-    assert got["relations_has_more"] is False
-    assert _call(seeded, request("get", {"id": "finding#3"}))["result"]["relations"] == got["relations"]
 
     unscoped = _call(seeded, request("unlink", {"relation_id": created["relation_id"]}, command("u0", scopes=())))
     assert unscoped["error"]["code"] == "forbidden_scope"
     assert _ok(seeded, "unlink", {"relation_id": created["relation_id"]}, "u1") == {"relation_id": created["relation_id"]}
-    assert _call(seeded, request("get", {"id": "goal#1"}))["result"]["relations"] == []
+    assert seeded.graph.relations() == []
     relinked = _ok(seeded, "link", link, "l3")
     assert (relinked["existing"], relinked["relation_id"] != created["relation_id"]) == (False, True)
-
-
-def test_get_returns_the_first_page_of_relations_and_says_more_exist(db):
-    host = Host("fleet_a", str(db))
-    _ok(host, "create", {"type": "goal", "scope": "fleet", "data": GOAL}, "g")
-    for n in range(RELATION_PAGE + 1):
-        found = _ok(host, "create", {"type": "finding", "scope": "fleet", "data": {"title": f"F{n}", "statement": "S"}}, f"f{n}")
-        _ok(host, "link", {"source": found["id"], "target": "goal#1", "type": "supports"}, f"l{n}")
-
-    got = _call(host, request("get", {"id": "goal#1"}))["result"]
-
-    assert (len(got["relations"]), got["relations_has_more"]) == (RELATION_PAGE, True)
 
 
 def _all_changes(host, limit):
@@ -303,7 +287,7 @@ def test_multi_line_text_keeps_its_newlines_and_tabs(seeded):
     body = "first line\n\tindented"
     note = _ok(seeded, "create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": body}}, "m1")
 
-    assert _call(seeded, request("get", {"id": note["id"]}))["result"]["object"]["data"]["body"] == body
+    assert seeded.graph.get_object(note["id"]).data["body"] == body
 
 
 def test_a_reopened_host_serves_the_same_graph_and_ledger(db):
@@ -315,16 +299,43 @@ def test_a_reopened_host_serves_the_same_graph_and_ledger(db):
     patch = request("patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "doing"}}, command("c4"))
     assert first.send(patch)["ok"]
     assert first.send(request("archive", {"id": "goal#1", "expected_version": 1}, command("c5")))["ok"]
-    before = [first.send(request("get", {"id": object_id}))["result"] for object_id in ("goal#1", "task#2")]
+    before = first.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]["events"]
     assert first.close() == 0
 
     reopened = HostProcess(db)
 
-    assert [reopened.send(request("get", {"id": object_id}))["result"] for object_id in ("goal#1", "task#2")] == before
+    # Reopening only appends the runtime's own bookkeeping.
+    after = reopened.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]["events"]
+    assert after[: len(before)] == before
+    assert {event["type"] for event in after[len(before) :]} <= {"runtime.loaded", "runtime.idle", "pack.loaded"}
+    archived = request("patch", {"id": "goal#1", "expected_version": 2, "set": {"title": "x"}}, command("c6"))
+    assert reopened.send(archived)["error"]["details"] == {"errors": [{"path": "id", "message": "the object is archived"}]}
+    renamed = request("patch", {"id": "task#2", "expected_version": 2, "set": {"title": "T2"}}, command("c7"))
+    assert reopened.send(renamed)["result"] == {"id": "task#2", "version": 3}
     replay = reopened.send(patch)
     assert (replay["replayed"], replay["result"]) == (True, {"id": "task#2", "version": 2})
     assert reopened.send(link)["replayed"] is True
     assert reopened.close() == 0
+
+
+def test_the_log_id_is_minted_with_the_file_and_kept_across_restarts(db, tmp_path):
+    first = HostProcess(db)
+    log_id = first.send(request("hello", {}))["result"]["run_id"]
+    created = first.send(request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1")))
+    changes = first.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]
+    assert first.close() == 0
+
+    assert log_id.startswith("log_") and len(log_id) == len("log_") + 32
+    assert created["run_id"] == changes["run_id"] == log_id
+
+    reopened = HostProcess(db)
+    assert reopened.send(request("hello", {}))["result"]["run_id"] == log_id
+    assert reopened.close() == 0
+
+    # The same fleet on a new file is a new log, whatever it holds.
+    fresh = HostProcess(tmp_path / "fresh.sqlite")
+    assert fresh.send(request("hello", {}))["result"]["run_id"] not in (log_id, None)
+    assert fresh.close() == 0
 
 
 CRASH_AFTER_COMMIT = """
@@ -361,8 +372,8 @@ def test_a_retry_after_a_crash_between_commit_and_reply_returns_the_original_res
         "message": "this command id was already used with a different body",
         "details": {"command_id": "c2"},
     }
-    got = host.send(request("get", {"id": "goal#1"}))["result"]["object"]
-    assert (got["version"], got["data"]["status"]) == (2, "dropped")
+    patches = [event["payload"]["patch"] for event in _logged(host, "patch.applied")]
+    assert [(patch["target"], patch["value"]) for patch in patches] == [("goal#1", {"status": "dropped"})]
     assert host.close() == 0
 
 
@@ -400,7 +411,7 @@ def test_a_kill_inside_the_commit_leaves_nothing_and_the_retry_applies_once(db):
     assert dying.wait() == 9
 
     host = HostProcess(db)
-    assert host.send(request("get", {"id": "goal#1"}))["error"]["code"] == "not_found"
+    assert _logged(host, "object.created") == []
     retried = host.send(create)
     assert (retried["replayed"], retried["result"]) == (False, {"id": "goal#1", "version": 1})
     assert host.send(create)["replayed"] is True
@@ -417,8 +428,7 @@ def test_an_append_failure_ends_the_host_and_a_reload_holds_only_durable_state(d
     assert failing.wait() == EXIT_FAILED
 
     host = HostProcess(db)
-    assert host.send(request("get", {"id": "goal#1"}))["ok"] is True
-    assert host.send(request("get", {"id": "task#2"}))["error"]["code"] == "not_found"
+    assert [event["payload"]["object"]["id"] for event in _logged(host, "object.created")] == ["goal#1"]
     retried = host.send(doomed)
     assert (retried["replayed"], retried["result"]) == (False, {"id": "task#2", "version": 1})
     assert host.close() == 0
@@ -466,4 +476,4 @@ def test_right_to_left_text_is_kept_as_written(db):
 
     created = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": title}}, "rtl")
 
-    assert _call(host, request("get", {"id": created["id"]}))["result"]["object"]["data"]["title"] == title
+    assert host.graph.get_object(created["id"]).data["title"] == title

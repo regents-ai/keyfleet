@@ -34,7 +34,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
-  # One catch-up names up to a hundred rooms.
+  # One catch-up names up to a hundred rooms and how far the workspace was read.
   @sync_max_body 32 * 1024
   @max_sync_rooms 100
   # Places in a room are counted in a Postgres bigint.
@@ -321,14 +321,14 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp valid_send_body?(_params), do: false
 
-  defp check_sync_body(%{"rooms" => rooms} = params)
-       when map_size(params) == 1 and is_list(rooms) do
+  defp check_sync_body(%{"rooms" => rooms, "graph" => graph} = params)
+       when map_size(params) == 2 and is_list(rooms) do
     cond do
-      not Enum.all?(rooms, &cursor?/1) ->
+      not (Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph)) ->
         :invalid
 
       length(rooms) > @max_sync_rooms or
-          not Enum.all?(rooms, &(&1["after_seq"] in 0..@max_seq)) ->
+          not Enum.all?([graph | rooms], &(&1["after_seq"] in 0..@max_seq)) ->
         :out_of_range
 
       length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->
@@ -345,6 +345,11 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
     do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)
 
   defp cursor?(_room), do: false
+
+  defp graph_cursor?(%{"after_seq" => after_seq} = graph),
+    do: map_size(graph) == 1 and is_integer(after_seq)
+
+  defp graph_cursor?(_graph), do: false
 
   defp answers_a_post?(nil), do: true
   defp answers_a_post?(value), do: is_binary(value) and match?({:ok, _}, Ecto.UUID.cast(value))

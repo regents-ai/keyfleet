@@ -13,6 +13,7 @@ not remembered; each is a pure function of the request and the current state.
 
 import hashlib
 import json
+import secrets
 from contextlib import contextmanager
 from importlib import metadata
 from typing import Any, Callable, Iterator, Optional
@@ -36,7 +37,6 @@ from keyfleet_graph.protocol import Command
 
 LEDGER_EVENT = "keyfleet.command"
 LEDGER_ACTOR = "keyfleet:gateway"
-RELATION_PAGE = 200
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
@@ -68,8 +68,10 @@ def body_hash(body: dict[str, Any]) -> str:
 
 class Host:
     def __init__(self, fleet: str, db_path: str):
-        self.run_id = f"kf_{fleet}"
-        self.runtime = _open_runtime(db_path, self.run_id)
+        # The upstream store's run, fixed per fleet. What names this log to
+        # readers is `log_id`, minted with the file.
+        self._run = f"kf_{fleet}"
+        self.runtime = _open_runtime(db_path, self._run)
         self.graph = self.runtime.graph
         self._conn = self.graph.store._conn
         # WAL with NORMAL may lose the last commits on power loss; a confirmed
@@ -77,6 +79,7 @@ class Host:
         self._conn.execute("PRAGMA synchronous=FULL")
         self._upstream = upstream_version()
         with self._transaction():
+            self.log_id = self._log_id()
             self.runtime.load_pack(PACK)
             self._settle()
         self._ledger = {
@@ -104,24 +107,15 @@ class Host:
     def _read(self, op: str, body: BaseModel) -> dict[str, Any]:
         if op == "hello":
             return {
-                "run_id": self.run_id,
+                "run_id": self.log_id,
                 "pack": f"{PACK_NAME}@{PACK_VERSION}",
                 "activegraph": self._upstream,
                 "head_seq": self._head_seq(),
             }
-        if op == "get":
-            obj = self._object(body.id, "id")
-            relations = self.graph.relations(source=obj.id) + [
-                rel for rel in self.graph.relations(target=obj.id) if rel.source != obj.id
-            ]
-            return {
-                "object": _object_view(obj),
-                "relations": [_relation_view(rel) for rel in relations[:RELATION_PAGE]],
-                "relations_has_more": len(relations) > RELATION_PAGE,
-            }
         events = self._events_after(body.after_seq, body.limit + 1)
         page = _byte_page(events[: body.limit])
         return {
+            "run_id": self.log_id,
             "events": page,
             "next_seq": page[-1]["seq"] if page else body.after_seq,
             "has_more": len(events) > len(page),
@@ -176,6 +170,7 @@ class Host:
             "v": 1,
             "req": req,
             "ok": True,
+            "run_id": self.log_id,
             "replayed": replayed,
             "result": result,
             "events": events,
@@ -281,9 +276,23 @@ class Host:
             raise _invalid(path, "the object is archived")
         return obj
 
+    def _log_id(self) -> str:
+        """The id minted when this file first held the log; a new file is a new log.
+
+        Readers compare it with the one they last saw: places in two different
+        logs are not comparable, so a changed id means reading again from 0.
+        """
+        self._conn.execute("CREATE TABLE IF NOT EXISTS keyfleet_log (id TEXT NOT NULL)")
+        row = self._conn.execute("SELECT id FROM keyfleet_log").fetchone()
+        if row is not None:
+            return row[0]
+        log_id = f"log_{secrets.token_hex(16)}"
+        self._conn.execute("INSERT INTO keyfleet_log (id) VALUES (?)", (log_id,))
+        return log_id
+
     def _head_seq(self) -> int:
         row = self._conn.execute(
-            "SELECT COALESCE(MAX(seq), 0) FROM events WHERE run_id = ?", (self.run_id,)
+            "SELECT COALESCE(MAX(seq), 0) FROM events WHERE run_id = ?", (self._run,)
         ).fetchone()
         return int(row[0])
 
@@ -291,7 +300,7 @@ class Host:
         rows = self._conn.execute(
             "SELECT seq, id, type, actor, timestamp, payload FROM events"
             " WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?",
-            (self.run_id, seq, limit),
+            (self._run, seq, limit),
         )
         return [
             {
@@ -453,7 +462,3 @@ def _byte_page(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _object_view(obj) -> dict[str, Any]:
     data = {field: value for field, value in obj.data.items() if field != "sys"}
     return {"id": obj.id, "type": obj.type, "data": data, "sys": obj.data["sys"], "version": obj.version}
-
-
-def _relation_view(rel) -> dict[str, Any]:
-    return {"id": rel.id, "type": rel.type, "source": rel.source, "target": rel.target, "data": rel.data}

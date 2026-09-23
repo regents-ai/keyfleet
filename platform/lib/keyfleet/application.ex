@@ -14,12 +14,13 @@ defmodule KeyFleet.Application do
         database_child(),
         {Phoenix.PubSub, name: KeyFleet.PubSub},
         chain_child(),
-        graph_child(),
+        graph_children(),
         # Start a worker by calling: KeyFleet.Worker.start_link(arg)
         # {KeyFleet.Worker, arg},
         # Start to serve requests, typically the last entry
         KeyFleetWeb.Endpoint
       ]
+      |> List.flatten()
       |> Enum.reject(&is_nil/1)
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -40,9 +41,11 @@ defmodule KeyFleet.Application do
       do: KeyFleet.Chain.Supervisor
   end
 
-  defp graph_child do
+  # The projectors read each fleet's log through its writer, so they start
+  # after the writers.
+  defp graph_children do
     if Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :enabled),
-      do: KeyFleet.Graph.Supervisor
+      do: [KeyFleet.Graph.Supervisor, KeyFleet.Graph.Projectors]
   end
 
   # Tell Phoenix to update the endpoint configuration

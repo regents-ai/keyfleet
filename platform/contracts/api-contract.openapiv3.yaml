@@ -120,7 +120,7 @@ paths:
   /api/v1/agent/fleets/{fleet_id}/graph/get:
     post:
       operationId: getWorkspaceObject
-      description: One object in a fleet's workspace, with its links. Any signed agent may read.
+      description: One object in a fleet's workspace, with its first 200 links, as of watermark. Any signed agent may read.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -135,7 +135,6 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/WorkspaceObjectView"}
-        "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/WorkspaceRefused"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
@@ -143,7 +142,7 @@ paths:
   /api/v1/agent/fleets/{fleet_id}/graph/changes:
     post:
       operationId: listWorkspaceChanges
-      description: The workspace's log after a place in it, oldest first. Any signed agent may read.
+      description: The workspace's changes after a place in its log, oldest first, up to watermark and at most 512 KiB unless one change alone is larger. Any signed agent may read.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -158,7 +157,6 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/WorkspaceChanges"}
-        "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/WorkspaceRefused"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
@@ -474,13 +472,10 @@ components:
               - {$ref: "#/components/schemas/WorkspaceError"}
               - {$ref: "#/components/schemas/AgentError"}
     WorkspaceUnavailable:
-      description: The fleet's workspace or the sign-in check is not answering right now; nothing was changed
+      description: The sign-in check is not answering right now
       content:
         application/json:
-          schema:
-            oneOf:
-              - {$ref: "#/components/schemas/WorkspaceError"}
-              - {$ref: "#/components/schemas/AgentError"}
+          schema: {$ref: "#/components/schemas/AgentError"}
     WorkspaceWriteUnavailable:
       description: >-
         ownership_refreshing: key ownership is being brought up to date and writes wait until it is;
@@ -600,42 +595,57 @@ components:
     WorkspaceWrite:
       type: object
       additionalProperties: false
-      required: [result, replayed, head_seq]
+      required: [result, replayed, head_seq, watermark]
       properties:
-        result:
-          oneOf:
-            - type: object
-              description: create, patch and archive
-              additionalProperties: false
-              required: [id, version]
-              properties:
-                id: {$ref: "#/components/schemas/WorkspaceId"}
-                version: {$ref: "#/components/schemas/WorkspaceVersion"}
-            - type: object
-              description: link
-              additionalProperties: false
-              required: [relation_id, existing]
-              properties:
-                relation_id: {$ref: "#/components/schemas/WorkspaceId"}
-                existing: {type: boolean}
-            - type: object
-              description: unlink
-              additionalProperties: false
-              required: [relation_id]
-              properties:
-                relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+        result: {$ref: "#/components/schemas/WorkspaceResult"}
         replayed: {type: boolean, description: True when this command id had already been applied}
-        head_seq: {type: integer, minimum: 0}
+        head_seq:
+          type: integer
+          minimum: 0
+          description: The write's place in the log; any read whose watermark is at or past it includes the write
+        watermark:
+          type: integer
+          minimum: 0
+          description: >-
+            How far the workspace's reads had reached in the log when the write was answered; at or
+            past head_seq, a read made now includes the write. 0 when that is not known.
+    WorkspaceResult:
+      oneOf:
+        - type: object
+          description: create, patch and archive
+          additionalProperties: false
+          required: [id, version]
+          properties:
+            id: {$ref: "#/components/schemas/WorkspaceId"}
+            version: {$ref: "#/components/schemas/WorkspaceVersion"}
+        - type: object
+          description: link
+          additionalProperties: false
+          required: [relation_id, existing]
+          properties:
+            relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+            existing: {type: boolean}
+        - type: object
+          description: unlink
+          additionalProperties: false
+          required: [relation_id]
+          properties:
+            relation_id: {$ref: "#/components/schemas/WorkspaceId"}
+    WorkspaceWatermark:
+      type: integer
+      minimum: 0
+      description: The place in the log the read tables had reached when the read began
     WorkspaceObjectView:
       type: object
       additionalProperties: false
-      required: [object, relations, relations_has_more]
+      required: [object, relations, relations_has_more, watermark]
       properties:
         object: {$ref: "#/components/schemas/WorkspaceObject"}
         relations:
           type: array
           items: {$ref: "#/components/schemas/WorkspaceRelation"}
         relations_has_more: {type: boolean}
+        watermark: {$ref: "#/components/schemas/WorkspaceWatermark"}
     WorkspaceObject:
       type: object
       additionalProperties: false
@@ -681,20 +691,55 @@ components:
     WorkspaceChanges:
       type: object
       additionalProperties: false
-      required: [events, next_seq, has_more, head_seq]
+      required: [run_id, events, next_cursor, has_more, watermark]
       properties:
+        run_id:
+          type: [string, "null"]
+          description: The log these changes come from; when it differs from the one last seen, read again from 0. Null while nothing has been copied yet.
         events:
           type: array
           items:
-            type: object
-            required: [seq, type, payload]
-            properties:
-              seq: {type: integer, minimum: 1}
-              type: {type: string}
-              payload: {type: object}
-        next_seq: {type: integer, minimum: 0, description: Pass as after_seq to read on}
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceChange"}
+              - {$ref: "#/components/schemas/WorkspaceCommandRecord"}
+        next_cursor: {type: integer, minimum: 0, description: Pass as after_seq to read on}
         has_more: {type: boolean}
-        head_seq: {type: integer, minimum: 0}
+        watermark: {$ref: "#/components/schemas/WorkspaceWatermark"}
+    WorkspaceChange:
+      type: object
+      description: One change to the workspace's objects or links
+      additionalProperties: false
+      required: [seq, id, type, actor, timestamp, payload]
+      properties:
+        seq: {type: integer, minimum: 1}
+        id: {type: string}
+        type: {type: string, enum: [object.created, patch.applied, relation.created, relation.removed]}
+        actor: {type: string}
+        timestamp: {type: string}
+        payload: {type: object}
+    WorkspaceCommandRecord:
+      type: object
+      description: The record each applied write leaves, naming who asked for it
+      additionalProperties: false
+      required: [seq, id, type, actor, timestamp, payload]
+      properties:
+        seq: {type: integer, minimum: 1}
+        id: {type: string}
+        type: {type: string, const: keyfleet.command}
+        actor: {type: string}
+        timestamp: {type: string}
+        payload:
+          type: object
+          additionalProperties: false
+          required: [principal, op, result, events]
+          properties:
+            principal: {type: string, description: The key and the person or agent acting for it}
+            op: {type: string, enum: [create, patch, link, unlink, archive]}
+            result: {$ref: "#/components/schemas/WorkspaceResult"}
+            events:
+              type: array
+              description: The ids of the changes the write made
+              items: {type: string}
     ProfileEnvelope:
       type: object
       additionalProperties: false

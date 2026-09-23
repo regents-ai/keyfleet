@@ -1,6 +1,6 @@
 defmodule KeyFleet.Graph.Workspace.Relay do
   @moduledoc """
-  Hands a workspace action to its fleet's writer as one graph operation.
+  Hands a workspace write to its fleet's writer as one graph operation.
 
   `op` names the operation and `body` the arguments that make up its body; an
   argument left out is left out of the body. A write carries the command the
@@ -8,6 +8,12 @@ defmodule KeyFleet.Graph.Workspace.Relay do
   When that standing cannot be read at the write's turn, because the database
   failed or ran out of time, the write is answered as unavailable: nothing was
   sent to the graph.
+
+  An applied write is answered once the fleet's read tables have reached its
+  place in the log, `head_seq`, or once the projector's wait has run out;
+  see `KeyFleet.Graph.Projector.await/3`. The answer's `watermark` says how
+  far along the write's log the tables were known to be: at or past
+  `head_seq`, a read made now includes the write.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -18,10 +24,9 @@ defmodule KeyFleet.Graph.Workspace.Relay do
   alias KeyFleet.Graph.Errors.NotKeyHolderError
   alias KeyFleet.Graph.Errors.RefusedError
   alias KeyFleet.Graph.Errors.UnavailableError
+  alias KeyFleet.Graph.Projector
   alias KeyFleet.Graph.Writer
   alias KeyFleet.Keys.Errors.OwnershipRefreshingError
-
-  @reads ~w(get changes)
 
   @impl true
   def run(input, opts, context) do
@@ -31,24 +36,23 @@ defmodule KeyFleet.Graph.Workspace.Relay do
 
     body = Map.take(arguments, Keyword.fetch!(opts, :body))
 
-    if op in @reads do
-      fleet_id |> Writer.request(op, body) |> read_reply(fleet_id)
-    else
-      authorize = fn within ->
-        KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
-      end
-
-      fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id)
+    authorize = fn within ->
+      KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
     end
+
+    fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id)
   end
 
-  defp read_reply({:ok, %{"result" => result}}, _fleet_id), do: {:ok, result}
-  # A read that never came back changed nothing.
-  defp read_reply({:error, :indeterminate}, fleet_id), do: unavailable(fleet_id)
-  defp read_reply(error, fleet_id), do: refused(error, fleet_id)
+  defp write_reply({:ok, %{"run_id" => run_id, "head_seq" => head_seq} = reply}, fleet_id) do
+    watermark = Projector.await(fleet_id, run_id, head_seq)
 
-  defp write_reply({:ok, reply}, _fleet_id) do
-    {:ok, %{result: reply["result"], replayed: reply["replayed"], head_seq: reply["head_seq"]}}
+    {:ok,
+     %{
+       result: reply["result"],
+       replayed: reply["replayed"],
+       head_seq: head_seq,
+       watermark: watermark
+     }}
   end
 
   defp write_reply({:error, :indeterminate}, fleet_id),

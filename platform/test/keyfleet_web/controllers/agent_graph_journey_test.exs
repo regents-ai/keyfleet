@@ -4,7 +4,9 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
   alias KeyFleet.Actors
   alias KeyFleet.ChainHelpers
+  alias KeyFleet.ContractSchema
   alias KeyFleet.Fleets
+  alias KeyFleet.Graph.Projector
   alias KeyFleet.Graph.Writer
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
@@ -26,7 +28,14 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   }
 
   setup %{tmp_dir: tmp_dir} do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
+    # Workspace reads take a repeatable-read snapshot, which Postgres allows
+    # inside the sandbox only when its transaction is at that level already.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+        shared: true,
+        isolation: "REPEATABLE READ"
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
@@ -117,6 +126,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
       assert linked.status == 200
       assert %{"existing" => false, "relation_id" => "rel_" <> _} = linked.body["result"]
+      assert ContractSchema.errors(linked.body, "WorkspaceWrite") == []
     end
 
     claimed =
@@ -130,9 +140,12 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
     assert claimed.status == 200
     assert claimed.body["result"] == %{"id" => task["id"], "version" => 2}
+    assert claimed.body["watermark"] >= claimed.body["head_seq"]
+    assert ContractSchema.errors(claimed.body, "WorkspaceWrite") == []
 
     read = graph(c, bea, "get", %{id: goal["id"]})
     assert read.status == 200
+    assert ContractSchema.errors(read.body, "WorkspaceObjectView") == []
     assert read.body["object"]["data"]["title"] == "First paying customer"
     assert read.body["object"]["sys"]["created_by"]["key"]["token_id"] == 1
     assert read.body["object"]["sys"]["created_by"]["wallet"] == ann.address
@@ -157,18 +170,26 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     assert again.body["replayed"] == true
     assert again.body["result"] == %{"id" => goal["id"], "version" => 1}
 
-    # Anyone signed in may read the workspace; its log names who did what.
+    # Anyone signed in may read the workspace; its changes name who did what.
     reader = join(c, "Reader")
     changes = graph(c, reader, "changes", %{after_seq: 0, limit: 500})
     assert changes.status == 200
+    assert ContractSchema.errors(changes.body, "WorkspaceChanges") == []
     commands = for %{"type" => "keyfleet.command"} = event <- changes.body["events"], do: event
 
     assert length(commands) == 9
     [first | _] = commands
-    [pairing] = Keys.my_pairings!(actor: agent_actor(ann))
 
-    assert first["payload"]["principal"] ==
-             "member:8453:#{@contract}:1@0/agent:#{ann.address}"
+    assert first["payload"] == %{
+             "principal" => "member:8453:#{@contract}:1@0/agent:#{ann.address}",
+             "op" => "create",
+             "result" => %{"id" => goal["id"], "version" => 1},
+             "events" => first["payload"]["events"]
+           }
+
+    # The standing each write was made under stays in the log itself.
+    [stamp | _] = logged_commands()
+    [pairing] = Keys.my_pairings!(actor: agent_actor(ann))
 
     assert %{
              "key" => %{"chain_id" => 8453, "contract" => @contract, "token_id" => 1},
@@ -178,10 +199,93 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
              "pairing_id" => pairing_id,
              "credential_ref" => "sha256:" <> digest,
              "chain_block" => 1_000
-           } = first["payload"]["auth"]
+           } = stamp["payload"]["auth"]
 
     assert {operator, pairing_id} == {ann.address, pairing.id}
     assert digest =~ ~r/\A[0-9a-f]{64}\z/
+  end
+
+  test "an agent that was away gets the workspace's edits and the chat it missed in one sync",
+       c do
+    start_graph(c)
+    [ann, bea] = pair_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    left = sync(c, ann, %{"general" => 0, "work" => 0}, 0)
+    assert left.status == 200
+    [general, work] = left.body["rooms"]
+    graph_cursor = left.body["graph"]["next_cursor"]
+    assert graph_cursor == left.body["graph"]["watermark"]
+
+    # Ann is away while Bea writes in the workspace and in the chat.
+    posted =
+      send_signed(c, bea, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/work/messages/send", %{
+        body: "The goal is done.",
+        idempotency_key: "m-1"
+      })
+
+    assert posted.status == 201
+    service = write!(c, bea, "create", %{as_key: 2, command_id: "s-1", data: @service})
+
+    achieved =
+      graph(c, bea, "patch", %{
+        as_key: 2,
+        command_id: "p-1",
+        id: goal["id"],
+        expected_version: 1,
+        set: %{status: "achieved"}
+      })
+
+    assert achieved.status == 200
+
+    back = sync(c, ann, %{"general" => general["cursor"], "work" => work["cursor"]}, graph_cursor)
+    assert back.status == 200
+    assert back.body["next_poll_seconds"] in 15..30
+    assert [%{"messages" => []}, %{"messages" => [missed]}] = back.body["rooms"]
+    assert missed["body"] == "The goal is done."
+
+    missed_graph = back.body["graph"]
+    assert ContractSchema.errors(missed_graph, "WorkspaceChanges") == []
+    assert missed_graph["run_id"] == log_id()
+    assert missed_graph["has_more"] == false
+    assert missed_graph["watermark"] >= achieved.body["head_seq"]
+    assert missed_graph["next_cursor"] == missed_graph["watermark"]
+
+    changed =
+      for %{"type" => type, "payload" => payload} <- missed_graph["events"],
+          type != "keyfleet.command",
+          do: {type, payload["object"]["id"] || payload["patch"]["target"]}
+
+    assert changed == [{"object.created", service["id"]}, {"patch.applied", goal["id"]}]
+  end
+
+  test "while the workspace's writer is held, reads and syncs still answer", c do
+    start_graph(c)
+    [ann, _bea] = pair_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+    writer = writer()
+    :sys.suspend(writer)
+    on_exit(fn -> if Process.alive?(writer), do: :sys.resume(writer) end)
+
+    read = graph(c, ann, "get", %{id: goal["id"]})
+    assert {read.status, read.body["object"]["version"]} == {200, 1}
+    assert graph(c, ann, "changes", %{}).status == 200
+    assert sync(c, ann, %{"general" => 0}, 0).status == 200
+
+    assert Process.info(writer, :message_queue_len) == {:message_queue_len, 0}
+    :sys.resume(writer)
+  end
+
+  test "a write made while the projectors are down is answered, and says its place is not known to be copied",
+       c do
+    start_graph(c)
+    [ann, _bea] = pair_agents(c)
+    stop_supervised!(KeyFleet.Graph.Projectors)
+
+    written = graph(c, ann, "create", goal_command("g-1"))
+    assert written.status == 200
+    assert {written.body["replayed"], written.body["watermark"]} == {false, 0}
+    assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
   end
 
   test "two agents patching one version at once get one success and one conflict", c do
@@ -342,24 +446,26 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     assert read.body["object"]["sys"]["archived"] == false
   end
 
-  test "an unknown fleet is not found, and a fleet whose workspace is down says so", c do
+  test "an unknown fleet is not found, and a fleet whose workspace is down refuses writes but still reads",
+       c do
     start_graph(c)
     [ann, _bea] = pair_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+    create = %{as_key: 1, command_id: "g-2", type: "goal", scope: "fleet", data: @goal}
 
-    for {op, body} <- [
-          {"get", %{id: "goal#1"}},
-          {"create", %{as_key: 1, command_id: "u-1", type: "goal", scope: "fleet", data: @goal}}
-        ] do
+    for {op, body} <- [{"get", %{id: goal["id"]}}, {"create", create}] do
       missing = send_signed(c, ann, "POST", "/api/v1/agent/fleets/hull_survey/graph/#{op}", body)
       assert {missing.status, missing.body["error"]} == {404, "fleet_unknown"}
     end
 
-    down =
-      send_signed(c, ann, "POST", "/api/v1/agent/fleets/fibonacci_cascade/graph/get", %{
-        id: "goal#1"
-      })
+    stop_supervised!(KeyFleet.Graph.Supervisor)
 
-    assert {down.status, down.body["error"]} == {503, "graph_unavailable"}
+    refused = graph(c, ann, "create", create)
+    assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
+
+    read = graph(c, ann, "get", %{id: goal["id"]})
+    assert {read.status, read.body["object"]["data"]["title"]} == {200, @goal.title}
+    assert [_command] = commands(c, ann)
 
     absent = graph(c, ann, "get", %{id: "goal#9"})
     assert {absent.status, absent.body["error"]} == {404, "not_found"}
@@ -406,7 +512,13 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
     assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
     assert refused.body["message"] =~ "nothing was written"
-    assert commands(c, ann) == []
+
+    # Leaving manual mode rolled the sandbox back, so the log itself shows
+    # that nothing was written.
+    assert {:ok, %{"result" => %{"events" => events}}} =
+             Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+
+    refute Enum.any?(events, &(&1["type"] == "keyfleet.command"))
     assert Process.alive?(writer)
   end
 
@@ -458,7 +570,8 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     assert wallet == cal.address
     assert [command] = commands(c, cal)
     assert command["payload"]["principal"] == "member:8453:#{@contract}:1@1/agent:#{cal.address}"
-    assert command["payload"]["auth"]["ownership_epoch"] == 1
+    assert [stamp] = logged_commands()
+    assert stamp["payload"]["auth"]["ownership_epoch"] == 1
   end
 
   test "a long note fits in one write, and a body past the write limit is refused as too large",
@@ -498,7 +611,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     assert send_signed(c, ann, receipt, "POST", path, goal_command("g-1")).status == 200
 
     digest = :crypto.hash(:sha256, receipt <> "\n" <> ann.address)
-    assert [command] = commands(c, ann)
+    assert [command] = logged_commands()
 
     assert command["payload"]["auth"]["credential_ref"] ==
              "sha256:" <> Base.encode16(digest, case: :lower)
@@ -538,22 +651,32 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   end
 
   defp start_graph(c, opts \\ []) do
-    start_supervised!(
-      {KeyFleet.Graph.Supervisor,
-       Keyword.merge(
-         [
-           fleets: [@fleet],
-           data_dir: c.data_dir,
-           reply_timeout: 5_000,
-           hello_timeout: 30_000,
-           restart_min: 20,
-           restart_max: 200
-         ],
-         opts
-       )}
-    )
+    opts =
+      Keyword.merge(
+        [
+          fleets: [@fleet],
+          data_dir: c.data_dir,
+          reply_timeout: 5_000,
+          hello_timeout: 30_000,
+          restart_min: 20,
+          restart_max: 200
+        ],
+        opts
+      )
 
+    start_supervised!({KeyFleet.Graph.Supervisor, opts})
     await(fn -> match?({:ok, _}, Writer.request(@fleet, "hello", %{})) end)
+
+    # Writes ask the projector to copy them; with no rounds of its own during
+    # a test, nothing else reaches the writer. Its first round is done once
+    # it answers.
+    start_supervised!({KeyFleet.Graph.Projectors, [catch_up_interval: 60_000] ++ opts})
+    Projector.await(@fleet, log_id(), 0)
+  end
+
+  defp log_id do
+    {:ok, %{"result" => %{"run_id" => run_id}}} = Writer.request(@fleet, "hello", %{})
+    run_id
   end
 
   defp writer do
@@ -586,6 +709,14 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
   defp commands(c, agent) do
     events = graph(c, agent, "changes", %{limit: 500}).body["events"]
+    for %{"type" => "keyfleet.command"} = event <- events, do: event
+  end
+
+  # The command records as the log itself keeps them, authority stamp and all.
+  defp logged_commands do
+    {:ok, %{"result" => %{"events" => events}}} =
+      Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+
     for %{"type" => "keyfleet.command"} = event <- events, do: event
   end
 
@@ -624,7 +755,16 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     written = graph(c, agent, "create", body)
     assert written.status == 200
     assert written.body["replayed"] == false
+    assert written.body["watermark"] >= written.body["head_seq"]
+    assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
     written.body["result"]
+  end
+
+  defp sync(c, agent, rooms, graph_after_seq) do
+    send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/sync", %{
+      rooms: Enum.map(rooms, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
+      graph: %{after_seq: graph_after_seq}
+    })
   end
 
   defp graph(c, agent, op, body),

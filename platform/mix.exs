@@ -117,8 +117,9 @@ defmodule KeyFleet.MixProject do
         "format --check-formatted",
         "credo --strict",
         "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
-        # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the floor.
-        "xref graph --label compile-connected --fail-above 28",
+        # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
+        # floor: each resource adds its domain's edge and one per policy check module.
+        "xref graph --label compile-connected --fail-above 36",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

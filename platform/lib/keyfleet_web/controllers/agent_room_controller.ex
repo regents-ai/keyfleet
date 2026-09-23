@@ -1,6 +1,7 @@
 defmodule KeyFleetWeb.AgentRoomController do
   use KeyFleetWeb, :controller
 
+  alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
@@ -60,11 +61,11 @@ defmodule KeyFleetWeb.AgentRoomController do
     end
   end
 
-  def sync(conn, %{"fleet_id" => fleet_id, "rooms" => rooms}) do
+  def sync(conn, %{"fleet_id" => fleet_id, "rooms" => rooms, "graph" => graph}) do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
 
-    case Rooms.sync(fleet_id, cursors, actor) do
+    case Rooms.sync(fleet_id, cursors, graph["after_seq"], actor) do
       {:ok, synced} -> json(conn, sync_json(synced))
       {:error, error} -> refuse(conn, error)
     end
@@ -101,7 +102,9 @@ defmodule KeyFleetWeb.AgentRoomController do
             messages: Enum.map(room.messages, &message_json/1)
           }
         end),
-      proposals: synced.proposals
+      graph: synced.graph,
+      proposals: synced.proposals,
+      next_poll_seconds: synced.next_poll_seconds
     }
   end
 
@@ -113,6 +116,9 @@ defmodule KeyFleetWeb.AgentRoomController do
     cond do
       Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
         not_found(conn)
+
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
+        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
         invalid(conn, "idempotency_conflict")

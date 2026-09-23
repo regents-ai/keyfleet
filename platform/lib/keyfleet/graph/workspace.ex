@@ -3,11 +3,13 @@ defmodule KeyFleet.Graph.Workspace do
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
   launch cards and notes its members keep, and the links between them.
 
-  Each action is one operation on the fleet's graph, answered by its writer.
-  Anyone may read a workspace. A write names the key it acts as (`as_key`) and
-  a command id of the caller's choosing; the same command id with the same
-  body answers the original result instead of writing twice. Writes reach the
-  fleet scope only.
+  Each write is one operation on the fleet's graph, answered by its writer. A
+  write names the key it acts as (`as_key`) and a command id of the caller's
+  choosing; the same command id with the same body answers the original result
+  instead of writing twice. Writes reach the fleet scope only.
+
+  Anyone may read a workspace. Reads are answered from the read tables copied
+  from the graph's log, never by the writer; see `KeyFleet.Graph.Workspace.Read`.
   """
   use Ash.Resource,
     domain: KeyFleet.Graph,
@@ -15,6 +17,7 @@ defmodule KeyFleet.Graph.Workspace do
 
   alias KeyFleet.Graph.Validations.FreshOwnership
   alias KeyFleet.Graph.Validations.KnownFleet
+  alias KeyFleet.Graph.Workspace.Read
   alias KeyFleet.Graph.Workspace.Relay
 
   @bigint 9_223_372_036_854_775_807
@@ -27,11 +30,11 @@ defmodule KeyFleet.Graph.Workspace do
       argument :fleet_id, :string, allow_nil?: false
       argument :id, :string, allow_nil?: false, constraints: @text
       validate KnownFleet
-      run {Relay, op: "get", body: [:id]}
+      run {Read, read: :get}
     end
 
     action :changes, :map do
-      description "The graph's events after a place in its log, oldest first."
+      description "The workspace's changes after a place in its log, oldest first."
       argument :fleet_id, :string, allow_nil?: false
 
       argument :after_seq, :integer,
@@ -41,7 +44,7 @@ defmodule KeyFleet.Graph.Workspace do
 
       argument :limit, :integer, allow_nil?: false, default: 100, constraints: [min: 1, max: 500]
       validate KnownFleet
-      run {Relay, op: "changes", body: [:after_seq, :limit]}
+      run {Read, read: :changes}
     end
 
     action :create, :map do

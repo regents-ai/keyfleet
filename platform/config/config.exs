@@ -51,7 +51,9 @@ config :keyfleet, :app_surfaces, true
 # environment (`uv sync` there), one SQLite file per fleet under :data_dir.
 # A new host replays its fleet's whole log before it answers, so it gets far
 # longer than a command does. A write's ownership check reads a few indexed
-# rows at its turn, which takes milliseconds.
+# rows at its turn, which takes milliseconds. Each fleet's read tables are
+# copied from its log after every write, and every :catch_up_interval anyway;
+# a write waits up to :projection_wait for its change to be readable.
 config :keyfleet, :graph,
   enabled: false,
   data_dir: Path.expand("../tmp/graph", __DIR__),
@@ -60,7 +62,9 @@ config :keyfleet, :graph,
   reply_timeout: 5_000,
   check_timeout: 1_000,
   restart_min: 1_000,
-  restart_max: 30_000
+  restart_max: 30_000,
+  catch_up_interval: 5_000,
+  projection_wait: 2_000
 
 config :keyfleet, :session_options,
   store: :cookie,

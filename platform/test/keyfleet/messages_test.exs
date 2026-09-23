@@ -14,7 +14,11 @@ defmodule KeyFleet.MessagesTest do
   @system %Actors.System{}
 
   setup do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
+    # Workspace reads take a repeatable-read snapshot, which Postgres allows
+    # inside the sandbox only when its transaction is at that level already.
+    pid =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
@@ -157,7 +161,7 @@ defmodule KeyFleet.MessagesTest do
     for n <- 1..3, do: post!(owner, "general", "General #{n}")
     post!(owner, "work", "Work 1")
 
-    {:ok, first} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], owner)
+    {:ok, first} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, owner)
     assert [%{slug: "general", head_seq: 3, cursor: 3, messages: caught_up}] = first.rooms
     assert first.proposals == []
     assert Enum.map(caught_up, & &1.seq) == [1, 2, 3]
@@ -168,6 +172,7 @@ defmodule KeyFleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 3}, %{slug: "work", after_seq: 1}],
+        0,
         owner
       )
 
@@ -177,16 +182,31 @@ defmodule KeyFleet.MessagesTest do
     assert {work.messages, work.cursor, work.head_seq} == {[], 1, 1}
 
     assert {:error, %Rooms.Errors.RoomUnknownError{}} =
-             Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], owner)
+             Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], 0, owner)
 
     too_many = for n <- 1..101, do: %{slug: "general", after_seq: n}
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, too_many, owner)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, too_many, 0, owner)
 
     beyond = [%{slug: "general", after_seq: 2 ** 70}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, beyond, owner)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, beyond, 0, owner)
 
     twice = [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, twice, owner)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, twice, 0, owner)
+
+    for graph_after_seq <- [-1, 2 ** 70] do
+      assert {:error, :invalid_request} =
+               Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], graph_after_seq, owner)
+    end
+  end
+
+  test "a reader behind in a room is asked back at once, even when the workspace is read up",
+       %{owner: owner} do
+    for n <- 1..51, do: post!(owner, "general", "Post #{n}")
+
+    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, owner)
+    assert [%{cursor: 50, head_seq: 51}] = synced.rooms
+    assert synced.graph.has_more == false
+    assert synced.next_poll_seconds == 0
   end
 
   test "a room's notice of a new post carries its place, and a repeat sends none", %{owner: owner} do

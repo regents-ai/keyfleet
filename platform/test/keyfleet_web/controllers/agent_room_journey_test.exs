@@ -18,7 +18,14 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
   @owner "0x" <> String.duplicate("a", 40)
 
   setup do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
+    # Workspace reads take a repeatable-read snapshot, which Postgres allows
+    # inside the sandbox only when its transaction is at that level already.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+        shared: true,
+        isolation: "REPEATABLE READ"
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
@@ -177,6 +184,17 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "work" => 0}))
     assert first.status == 200
     assert first.body["proposals"] == []
+    assert first.body["next_poll_seconds"] in 15..30
+
+    assert first.body["graph"] == %{
+             "run_id" => nil,
+             "events" => [],
+             "next_cursor" => 0,
+             "has_more" => false,
+             "watermark" => 0
+           }
+
+    assert KeyFleet.ContractSchema.errors(first.body["graph"], "WorkspaceChanges") == []
 
     assert [general, work] = first.body["rooms"]
     assert %{"slug" => "general", "head_seq" => 3, "cursor" => 3} = general
@@ -202,6 +220,9 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     unknown = send_signed(c, "POST", @sync_path, sync_body(%{"hull-survey" => 0}))
     assert unknown.status == 404
     assert unknown.body == %{"error" => "room_unknown"}
+
+    elsewhere = send_signed(c, "POST", "/api/v1/agent/fleets/hull_survey/sync", sync_body(%{}))
+    assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
   end
 
   test "only the canonical signed room path and body reach the room actions", c do
@@ -221,7 +242,10 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
           {"DELETE", @send_general, "{}"},
           {"POST", @sync_path, "{}"},
           {"POST", @sync_path, ~s({"rooms":[{"slug":"general"}]})},
-          {"POST", @sync_path, ~s({"rooms":[{"slug":"general","after_seq":0}],"all":true})},
+          {"POST", @sync_path,
+           ~s({"rooms":[{"slug":"general","after_seq":0}],"graph":{"after_seq":0},"all":true})},
+          {"POST", @sync_path,
+           ~s({"rooms":[{"slug":"general","after_seq":0}],"graph":{"after_seq":0,"all":true}})},
           {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send", "{}"},
           {"POST", @read_general <> "/", "{}"}
         ] do
@@ -251,7 +275,8 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
           {@read_general, ~s({"after_seq":#{2 ** 70}})},
           {@read_general, ~s({"after_seq":-1})},
           {@read_general, ~s({"limit":201})},
-          {@sync_path, sync_body(%{"general" => 2 ** 70})}
+          {@sync_path, sync_body(%{"general" => 2 ** 70})},
+          {@sync_path, sync_body(%{"general" => 0}, 2 ** 70)}
         ] do
       refused = send_signed(c, "POST", path, body)
       assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
@@ -259,7 +284,8 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
     twice =
       Jason.encode!(%{
-        rooms: [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}]
+        rooms: [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}],
+        graph: %{after_seq: 0}
       })
 
     refused = send_signed(c, "POST", @sync_path, twice)
@@ -280,10 +306,11 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
   defp send_body(body, key), do: Jason.encode!(%{body: body, idempotency_key: key})
 
-  defp sync_body(cursors),
+  defp sync_body(cursors, graph_after_seq \\ 0),
     do:
       Jason.encode!(%{
-        rooms: Enum.map(cursors, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
+        rooms: Enum.map(cursors, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
+        graph: %{after_seq: graph_after_seq}
       })
 
   defp send_signed(c, method, path, body \\ "{}"),

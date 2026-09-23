@@ -35,8 +35,7 @@ defmodule KeyFleet.Graph.WriterTest do
              Writer.command(fleet, "create", @note, authorized("hang-after-1"))
 
     for other <- others do
-      assert {:ok, %{"result" => %{"run_id" => "kf_" <> ^other}}} =
-               Writer.request(other, "hello", %{})
+      assert {:ok, _hello} = Writer.request(other, "hello", %{})
     end
   end
 
@@ -59,7 +58,10 @@ defmodule KeyFleet.Graph.WriterTest do
     assert {:ok, %{"replayed" => true}} =
              Writer.command(fleet, "create", @note, authorized("hang-in-1"))
 
-    assert {:error, %{"code" => "not_found"}} = Writer.request(fleet, "get", %{id: "note#2"})
+    assert {:ok, %{"result" => %{"events" => events}}} =
+             Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+
+    assert Enum.count(events, &(&1["type"] == "object.created")) == 1
   end
 
   test "a host starts isolated, from a fixed directory, with none of the application's environment",
@@ -84,13 +86,17 @@ defmodule KeyFleet.Graph.WriterTest do
     await_ready(fleet)
     deep = Enum.reduce(1..10_000, [], fn _, inner -> [inner] end)
 
-    assert {:error, %{"code" => "bad_request"}} = Writer.request(fleet, "get", %{id: deep})
+    assert {:error, %{"code" => "bad_request"}} =
+             Writer.request(fleet, "changes", %{after_seq: deep, limit: 1})
 
     assert {:error, %{"code" => "bad_request"}} =
              Writer.request(fleet, "changes", %{after_seq: 2 ** 70, limit: 1})
 
     assert {:error, %{"code" => "bad_request", "message" => "the request is larger than 1 MiB"}} =
-             Writer.request(fleet, "get", %{id: String.duplicate("a", 2_000_000)})
+             Writer.request(fleet, "changes", %{
+               after_seq: String.duplicate("a", 2_000_000),
+               limit: 1
+             })
 
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
     assert length(launches(ctx.tmp_dir)) == 1
@@ -106,7 +112,7 @@ defmodule KeyFleet.Graph.WriterTest do
 
     for _ <- 1..10 do
       assert {:error, %{"code" => "bad_request"}} =
-               Writer.request(fleet, "get", %{id: <<0xFF, 0xFE>>})
+               Writer.request(fleet, "changes", %{after_seq: <<0xFF, 0xFE>>, limit: 1})
 
       assert {:error, %{"code" => "bad_request"}} =
                Writer.command(fleet, "create", %{type: <<0xFF>>}, authorized("c1"))
@@ -115,8 +121,7 @@ defmodule KeyFleet.Graph.WriterTest do
     assert {writer(fleet), writer(other), Process.whereis(KeyFleet.Graph.Registry)} == before
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
 
-    assert {:ok, %{"result" => %{"run_id" => "kf_" <> ^other}}} =
-             Writer.request(other, "hello", %{})
+    assert {:ok, _hello} = Writer.request(other, "hello", %{})
 
     assert length(launches(ctx.tmp_dir)) == 2
   end
@@ -135,8 +140,7 @@ defmodule KeyFleet.Graph.WriterTest do
     assert {writer(crashing), writer(healthy), Process.whereis(KeyFleet.Graph.Registry)} == before
     assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
 
-    assert {:ok, %{"result" => %{"run_id" => "kf_" <> ^healthy}}} =
-             Writer.request(healthy, "hello", %{})
+    assert {:ok, _hello} = Writer.request(healthy, "hello", %{})
   end
 
   test "a host that exits while idle turns the next request into an error result and is replaced",
