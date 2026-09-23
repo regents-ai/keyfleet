@@ -13,6 +13,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Actors.Human
   alias KeyFleet.Chain
   alias KeyFleet.Fleets
+  alias KeyFleet.Fleets.Presets
   alias KeyFleet.Graph
   alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Keys
@@ -41,6 +42,15 @@ defmodule KeyFleetWeb.ShellLive do
   # How long a workspace page waits after a notice of changes before it reads
   # them, so a burst of writes is read once.
   @workspace_refresh_after 1_000
+  # After a purchase the page reads the fleet again every two seconds, up to
+  # thirty times, until the chain reader has recorded the key that was bought.
+  @catch_up_every 2_000
+  @catch_up_reads 30
+  @zero_address "0x" <> String.duplicate("0", 40)
+  # How long a purchase has to reach Base, counted from Base's latest block
+  # when the buyer confirms it. The wallet and the words it shows read it
+  # from the page.
+  @purchase_deadline_seconds 600
 
   @impl true
   def mount(params, session, socket) do
@@ -57,6 +67,8 @@ defmodule KeyFleetWeb.ShellLive do
        verified_connections: [],
        verified_connections_notice: nil,
        fleet: nil,
+       fleet_params: nil,
+       catch_up: nil,
        key: nil,
        key_notice: nil,
        room: nil,
@@ -124,6 +136,18 @@ defmodule KeyFleetWeb.ShellLive do
     {:noreply, post(socket, body)}
   end
 
+  # The browser only says which key its receipt named; the page then reads the
+  # fleet again until the chain reader has recorded that key.
+  def handle_event("key_bought", params, socket) do
+    with %{"token_id" => token_id} when is_binary(token_id) <- params,
+         %{fleet_id: fleet_id, buy: %{}} <- socket.assigns.fleet,
+         {token_id, ""} when token_id > 0 <- Integer.parse(token_id) do
+      {:noreply, follow_purchase(socket, fleet_id, token_id)}
+    else
+      _not_a_key -> {:noreply, socket}
+    end
+  end
+
   def handle_event("refresh_verified_connections", params, socket) do
     socket = reload_verified_connections(socket)
 
@@ -172,6 +196,32 @@ defmodule KeyFleetWeb.ShellLive do
 
   def handle_info(:refresh_workspace, socket),
     do: {:noreply, assign(socket, :workspace_refresh?, false)}
+
+  # Only the page's one running catch-up reads; a read it has replaced is dropped.
+  def handle_info(
+        {:catch_up_fleet, ref},
+        %{
+          assigns: %{
+            catch_up: %{ref: ref, fleet_id: fleet_id} = catch_up,
+            fleet: %{fleet_id: fleet_id}
+          }
+        } =
+          socket
+      ) do
+    socket = load_fleet(socket, socket.assigns.route_spec, socket.assigns.fleet_params)
+
+    if catch_up.reads > 1 and not recorded?(socket.assigns.fleet, catch_up.token_id) do
+      {:noreply, next_catch_up_read(socket, %{catch_up | reads: catch_up.reads - 1})}
+    else
+      {:noreply, assign(socket, :catch_up, nil)}
+    end
+  end
+
+  # The page has moved on to another fleet since the purchase.
+  def handle_info({:catch_up_fleet, ref}, %{assigns: %{catch_up: %{ref: ref}}} = socket),
+    do: {:noreply, assign(socket, :catch_up, nil)}
+
+  def handle_info({:catch_up_fleet, _ref}, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -228,13 +278,14 @@ defmodule KeyFleetWeb.ShellLive do
     case Fleets.get_fleet!(fleet_id, actor: actor) do
       nil ->
         socket
-        |> assign(:fleet, %{fleet_id: fleet_id, name: nil})
+        |> assign(fleet: %{fleet_id: fleet_id, name: nil}, fleet_params: params)
         |> stream(:fleet_keys, [], reset: true)
 
       fleet ->
         page = key_page!(fleet_id, params, actor)
         deployed? = fleet.contract_address != nil
         current? = deployed? and Chain.fresh?(fleet_id)
+        progress = if deployed?, do: Chain.progress(fleet_id)
 
         socket
         |> assign(:fleet, %{
@@ -243,17 +294,96 @@ defmodule KeyFleetWeb.ShellLive do
           contract_address: fleet.contract_address,
           deployed?: deployed?,
           current?: current?,
-          progress: if(current?, do: Chain.progress(fleet_id)),
+          progress: progress,
+          buy: if(deployed?, do: buy_offer(fleet, progress, params["ref"])),
           rooms: Rooms.list_rooms!(fleet_id, actor: actor),
           no_keys?: page.results == [] and not paged?(params),
           pages: page_links(fleet_id, page, params)
         })
+        |> assign(:fleet_params, params)
         |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor), reset: true)
     end
   end
 
   defp load_fleet(socket, _route_spec, _params),
-    do: socket |> assign(:fleet, nil) |> stream(:fleet_keys, [], reset: true)
+    do:
+      socket
+      |> assign(fleet: nil, fleet_params: nil)
+      |> stream(:fleet_keys, [], reset: true)
+
+  # What the wallet is asked to pay for the next key, read from the fleet's
+  # deployment and the latest reading of its sales. A reading that has fallen
+  # behind still offers the key: the purchase names this price as its most, so
+  # a key that has since cost more is refused by the contract and no USDC is taken.
+  defp buy_offer(fleet, progress, ref) do
+    level =
+      if progress.next_token_id && Presets.levelled?(fleet.id),
+        do: Presets.fibonacci_level_of(progress.next_token_id)
+
+    Map.merge(
+      %{
+        chain_id: fleet.chain_id,
+        contract_address: fleet.contract_address,
+        usdc_address: fleet.usdc_address,
+        token_id: progress.next_token_id,
+        price: progress.next_price,
+        max_supply: progress.max_supply,
+        level: level,
+        holding_limit: level && Presets.fibonacci_holding_limit(level),
+        deadline_seconds: @purchase_deadline_seconds
+      },
+      referral(ref)
+    )
+  end
+
+  # A referral link names the wallet credited for the purchase. The contract
+  # takes any address, the buyer's own included, and treats the zero address as
+  # no referral, so the shape of the address is all that is checked here.
+  defp referral(nil), do: %{referrer: nil, referral_refused?: false}
+
+  defp referral(ref) when is_binary(ref) do
+    cond do
+      not Regex.match?(~r/\A0x[0-9a-fA-F]{40}\z/, ref) ->
+        %{referrer: nil, referral_refused?: true}
+
+      String.downcase(ref) == @zero_address ->
+        %{referrer: nil, referral_refused?: false}
+
+      true ->
+        %{referrer: String.downcase(ref), referral_refused?: false}
+    end
+  end
+
+  defp referral(_ref), do: %{referrer: nil, referral_refused?: true}
+
+  # A page follows one purchase at a time. A notice while it is following one
+  # only moves it on to the higher key and starts its count again; it never
+  # starts a second run of reads, however many notices arrive.
+  defp follow_purchase(socket, fleet_id, token_id) do
+    case socket.assigns.catch_up do
+      %{fleet_id: ^fleet_id} = running ->
+        assign(socket, :catch_up, %{
+          running
+          | token_id: max(running.token_id, token_id),
+            reads: @catch_up_reads
+        })
+
+      _none_for_this_fleet ->
+        next_catch_up_read(socket, %{
+          fleet_id: fleet_id,
+          token_id: token_id,
+          reads: @catch_up_reads
+        })
+    end
+  end
+
+  defp next_catch_up_read(socket, catch_up) do
+    ref = make_ref()
+    Process.send_after(self(), {:catch_up_fleet, ref}, @catch_up_every)
+    assign(socket, :catch_up, Map.put(catch_up, :ref, ref))
+  end
+
+  defp recorded?(%{progress: %{total_minted: minted}}, token_id), do: minted >= token_id
 
   # A page is named by the key it follows or precedes; a name that isn't one
   # is a page that doesn't exist.
@@ -283,15 +413,23 @@ defmodule KeyFleetWeb.ShellLive do
         _first_page -> {false, more?}
       end
 
+    # A referral link keeps its referral while the visitor pages through keys.
+    ref = if is_binary(params["ref"]), do: [ref: params["ref"]], else: []
+
     %{
       previous:
-        if(previous?, do: fleet_page_path(fleet_id, before: hd(keys).__metadata__.keyset)),
-      next: if(next?, do: fleet_page_path(fleet_id, after: List.last(keys).__metadata__.keyset))
+        if(previous?,
+          do: fleet_page_path(fleet_id, [before: hd(keys).__metadata__.keyset], ref)
+        ),
+      next:
+        if(next?,
+          do: fleet_page_path(fleet_id, [after: List.last(keys).__metadata__.keyset], ref)
+        )
     }
   end
 
-  defp fleet_page_path(fleet_id, position),
-    do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position)}"
+  defp fleet_page_path(fleet_id, position, ref),
+    do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position ++ ref)}"
 
   defp fleet_keys(fleet_id, keys, actor) do
     operators =

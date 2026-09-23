@@ -1,7 +1,8 @@
 defmodule KeyFleetWeb.FleetLive do
   @moduledoc """
   One fleet's page: where it lives, how far it has sold, what the next key
-  costs, its rooms and workspace, and every key it has issued with who holds and runs it.
+  costs and a way to buy it, its rooms and workspace, and every key it has
+  issued with who holds and runs it.
 
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
@@ -67,6 +68,8 @@ defmodule KeyFleetWeb.FleetLive do
           </p>
         </section>
 
+        <.buy_key :if={@fleet.buy} buy={@fleet.buy} current?={@fleet.current?} />
+
         <nav class="fleet-panel" aria-labelledby="fleet-rooms-title">
           <h2 id="fleet-rooms-title">Rooms</h2>
           <ul class="fleet-room-list">
@@ -117,6 +120,78 @@ defmodule KeyFleetWeb.FleetLive do
     </article>
     """
   end
+
+  attr :buy, :map, required: true
+  attr :current?, :boolean, required: true
+
+  # Every press of Buy goes to the wallet: the button is never disabled, and
+  # nothing here decides on the buyer's behalf whether a purchase would succeed.
+  defp buy_key(assigns) do
+    ~H"""
+    <section id="buy-key" class="fleet-panel" aria-labelledby="buy-key-title">
+      <h2 id="buy-key-title">Buy a key</h2>
+
+      <p :if={is_nil(@buy.price)} id="buy-key-sold-out">
+        All {grouped(@buy.max_supply)} keys in this fleet have been sold.
+      </p>
+
+      <div
+        :if={@buy.price}
+        id="buy-key-order"
+        phx-hook="BuyKey"
+        data-chain-id={@buy.chain_id}
+        data-fleet={@buy.contract_address}
+        data-usdc={@buy.usdc_address}
+        data-price={@buy.price}
+        data-price-label={usdc(@buy.price)}
+        data-referrer={@buy.referrer}
+        data-deadline-seconds={@buy.deadline_seconds}
+      >
+        <dl class="fleet-facts">
+          <div>
+            <dt>Key</dt>
+            <dd id="buy-key-number">{grouped(@buy.token_id)}</dd>
+          </div>
+          <div>
+            <dt>Price</dt>
+            <dd id="buy-key-price">{usdc(@buy.price)}</dd>
+          </div>
+          <div :if={@buy.level}>
+            <dt>Level</dt>
+            <dd id="buy-key-level">{@buy.level}</dd>
+          </div>
+        </dl>
+
+        <p :if={@buy.level} class="fleet-detail">
+          One wallet may hold {keys(@buy.holding_limit)} of level {@buy.level}.
+        </p>
+        <p :if={not @current?} id="buy-key-price-may-move" class="fleet-detail">
+          Sales are still being counted, so this price may already have gone up. If it has,
+          the purchase is refused and no USDC is taken, though your wallet still pays the
+          Base network fee for trying.
+        </p>
+        <p :if={@buy.referrer} id="buy-key-referrer" class="fleet-detail">
+          Referred by {short_wallet(@buy.referrer)}
+        </p>
+        <p :if={@buy.referral_refused?} id="buy-key-referral-refused" class="fleet-detail">
+          The referral in this link isn’t a wallet address, so this purchase has no referrer.
+        </p>
+
+        <Regent.Primitives.button id="buy-key-button" type="button" data-buy-key>
+          Buy key {grouped(@buy.token_id)}
+        </Regent.Primitives.button>
+        <p class="fleet-detail">
+          Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
+          this much USDC, it first asks you to approve exactly {usdc(@buy.price)}.
+        </p>
+        <ol id="buy-key-status" class="fleet-buy-status" phx-update="ignore" aria-live="polite"></ol>
+      </div>
+    </section>
+    """
+  end
+
+  defp keys(1), do: "1 key"
+  defp keys(count), do: "#{grouped(count)} keys"
 
   defp short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)

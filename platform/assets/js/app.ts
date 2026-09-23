@@ -19,6 +19,7 @@ import {
   shellDestinationChanged,
   type ShellState,
 } from "./shell_state"
+import {BuyKey} from "./hooks/buy_key"
 import {CopyText} from "./hooks/copy_text"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomeField} from "./hooks/home_field"
@@ -321,6 +322,7 @@ const showcaseHooks = window.location.pathname.startsWith("/showcase")
 const hooks = {
   ...showcaseHooks,
   ...colocatedHooks,
+  BuyKey,
   CopyText,
   HolographicCard,
   HomeField,

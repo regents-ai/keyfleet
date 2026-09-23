@@ -1,7 +1,7 @@
 defmodule KeyFleet.Fleets.Fleet do
   @moduledoc """
   A fixed fleet with a stable machine identity and display name, and once it is
-  deployed, the chain and contracts it lives at.
+  deployed, the chain and contracts it lives at and the USDC its keys are paid in.
   """
   use Ash.Resource,
     domain: KeyFleet.Fleets,
@@ -22,11 +22,11 @@ defmodule KeyFleet.Fleets.Fleet do
       # A deployment is recorded whole or not at all.
       check_constraint(:contract_address, "fleets_deployment_whole",
         check:
-          "num_nulls(chain_id, contract_address, rewards_address, votes_address, deployed_block) IN (0, 5)",
+          "num_nulls(chain_id, contract_address, rewards_address, votes_address, usdc_address, deployed_block) IN (0, 6)",
         message: "must record the whole deployment"
       )
 
-      for field <- [:contract_address, :rewards_address, :votes_address] do
+      for field <- [:contract_address, :rewards_address, :votes_address, :usdc_address] do
         check_constraint(field, "fleets_#{field}_shape", check: "#{field} ~ '^0x[0-9a-f]{40}$'")
       end
     end
@@ -59,13 +59,22 @@ defmodule KeyFleet.Fleets.Fleet do
     update :record_deployment do
       public? false
       require_atomic? false
-      accept [:chain_id, :contract_address, :rewards_address, :votes_address, :deployed_block]
+
+      accept [
+        :chain_id,
+        :contract_address,
+        :rewards_address,
+        :votes_address,
+        :usdc_address,
+        :deployed_block
+      ]
 
       require_attributes [
         :chain_id,
         :contract_address,
         :rewards_address,
         :votes_address,
+        :usdc_address,
         :deployed_block
       ]
 
@@ -90,7 +99,7 @@ defmodule KeyFleet.Fleets.Fleet do
 
     attribute :chain_id, :integer, public?: true, constraints: [min: 1]
 
-    for field <- [:contract_address, :rewards_address, :votes_address] do
+    for field <- [:contract_address, :rewards_address, :votes_address, :usdc_address] do
       attribute field, :string,
         public?: true,
         constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]

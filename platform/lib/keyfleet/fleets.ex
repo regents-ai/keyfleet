@@ -64,6 +64,7 @@ defmodule KeyFleet.Fleets do
   def record_deployments!(%{
         "chainId" => chain_id,
         "deploymentBlock" => block,
+        "usdc" => usdc,
         "fleets" => fleets
       })
       when is_integer(chain_id) and is_integer(block) do
@@ -83,6 +84,7 @@ defmodule KeyFleet.Fleets do
               contract_address: String.downcase(address),
               rewards_address: String.downcase(rewards),
               votes_address: String.downcase(votes),
+              usdc_address: String.downcase(usdc),
               deployed_block: block
             },
             actor: %KeyFleet.Actors.System{}

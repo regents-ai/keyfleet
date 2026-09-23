@@ -139,4 +139,33 @@
   gap: 1rem;
 }
 
+#buy-key-order {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+  min-width: 0;
+}
+
+.fleet-buy-status {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fleet-buy-status:empty {
+  display: none;
+}
+
+.fleet-buy-status li {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent);
+  overflow-wrap: anywhere;
+}
+
+.fleet-buy-status li[data-tone="error"] {
+  border-inline-start-color: var(--ash-accent-warm);
+}
+
 }

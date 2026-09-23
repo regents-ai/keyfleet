@@ -56,6 +56,7 @@ defmodule KeyFleet.ChainTest do
             contract_address: @contract,
             rewards_address: "0x" <> String.duplicate("8", 40),
             votes_address: "0x" <> String.duplicate("9", 40),
+            usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
             deployed_block: @deployed
           },
           actor: %System{}
@@ -248,6 +249,11 @@ defmodule KeyFleet.ChainTest do
       assert bound["fibonacci_cascade"].votes_address == "0x" <> String.duplicate("e1", 20)
       assert Enum.all?(Map.values(bound), &(&1.deployed_block == 42 and &1.chain_id == 8_453))
 
+      assert Enum.all?(
+               Map.values(bound),
+               &(&1.usdc_address == "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
+             )
+
       assert Enum.all?(Map.keys(bound), &(length(Rooms.list_rooms!(&1)) == 3))
 
       File.write!(path, Jason.encode!(manifest("2")))
@@ -268,6 +274,7 @@ defmodule KeyFleet.ChainTest do
     %{
       "chainId" => 8_453,
       "deploymentBlock" => 42,
+      "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       "fleets" => %{
         "syndicate" => fleet.("a"),
         "cascade" => fleet.("b"),
