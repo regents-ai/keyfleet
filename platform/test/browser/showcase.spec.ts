@@ -91,9 +91,6 @@ test("every wallet press reaches its isolated provider, including pending and fa
   await expect(page.locator("[data-demo-results] li").first()).toContainText(
     "Connect the fixture first",
   )
-  expect(
-    await page.evaluate(() => window.__ashTemplateTestWallet),
-  ).toBeUndefined()
 })
 
 test("Ash validation, utility outcomes, local database and disclosure fixtures work", async ({

@@ -60,12 +60,6 @@ export function forgetEthereumWalletSelection(): void {
 let connectedWallets = new Map<string, ConnectedEthereumWallet>()
 let activeWallet: SelectedWallet | null = null
 
-declare global {
-  interface Window {
-    __ashTemplateTestWallet?: {address: string; provider: EthereumProvider}
-  }
-}
-
 export function replaceConnectedEthereumWallets(
   wallets: ReadonlyArray<readonly [string, ConnectedEthereumWallet]>,
 ): void {
@@ -74,14 +68,6 @@ export function replaceConnectedEthereumWallets(
 
 export function connectedEthereumWallet(expectedSigner?: string): SelectedWallet | null {
   if (walletDisconnected()) return null
-  const testWallet = testEthereumWallet()
-  if (testWallet) {
-    if (!expectedSigner || testWallet.address.toLowerCase() === expectedSigner.toLowerCase()) {
-      return testWallet
-    }
-    return null
-  }
-
   if (expectedSigner) {
     return selectConnectedEthereumWallet([...connectedWallets.entries()], expectedSigner)
   }
@@ -112,7 +98,7 @@ export function replaceActiveEthereumWallet(wallet: SelectedWallet | null): void
 
 export function activeEthereumWallet(): SelectedWallet | null {
   if (walletDisconnected()) return null
-  return testEthereumWallet() ?? activeWallet
+  return activeWallet
 }
 
 /**
@@ -191,15 +177,4 @@ function disconnectedStorage(): Pick<Storage, "getItem" | "setItem" | "removeIte
   } catch {
     return null
   }
-}
-
-// The browser test seam stands in for Privy's selection as well as for the
-// connected set, so the same wallet drives wallet actions there as in a real browser —
-// including staying gone after the visitor disconnects it.
-function testEthereumWallet(): SelectedWallet | null {
-  return window.location.origin === "http://127.0.0.1:4002" &&
-    window.__ashTemplateTestWallet &&
-    !walletDisconnected()
-    ? window.__ashTemplateTestWallet
-    : null
 }

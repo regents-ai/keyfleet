@@ -33,10 +33,9 @@ function memoryStorage() {
   }
 }
 
-function stubWindow(origin = "https://regents.sh") {
+function stubWindow() {
   const dispatched: string[] = []
   vi.stubGlobal("window", {
-    location: {origin},
     localStorage: memoryStorage(),
     dispatchEvent: (event: Event) => void dispatched.push(event.type),
   })
@@ -163,24 +162,8 @@ describe("DISCONNECT_RELEASES_EVERY_WALLET: Disconnect ends the wallet connectio
     expect(releasing).toBeInstanceOf(Promise)
   })
 
-  it("keeps the browser test wallet gone until the visitor connects again", async () => {
-    stubWindow("http://127.0.0.1:4002")
-    const testWallet = {address: first, provider: provider()}
-    window.__ashTemplateTestWallet = testWallet
-
-    expect(activeEthereumWallet()).toEqual(testWallet)
-
-    await disconnectEveryEthereumWallet(new EventTarget())
-    expect(activeEthereumWallet()).toBeNull()
-    expect(connectedEthereumWallet(first)).toBeNull()
-
-    forgetWalletDisconnected()
-    expect(activeEthereumWallet()).toEqual(testWallet)
-  })
-
   it("stays disconnected in memory when storage is unavailable, even if the SDK republishes", async () => {
     vi.stubGlobal("window", {
-      location: {origin: "https://regents.sh"},
       get localStorage(): Storage {
         throw new Error("storage is unavailable")
       },
