@@ -134,7 +134,8 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
                "data-usdc" => fleet.usdc_address,
                "data-price" => Integer.to_string(Presets.progress(@fleet, @issued).next_price),
                "data-price-label" => "42.99817 USDC",
-               "data-deadline-seconds" => "600"
+               "data-deadline-seconds" => "600",
+               "data-signed-in" => Jason.encode!([@owner])
              }
 
       assert order(view)["data-price"] == "42998170"
@@ -486,6 +487,32 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
         refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
       end
     end
+  end
+
+  # The page names the signed-in wallets so the button can say when the
+  # connected wallet is another; the press still goes to the connected one.
+  test "Buy carries the signed-in wallets for its wallet note, and none when signed out", %{
+    conn: conn
+  } do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet)
+
+    {:ok, view, _html} = live(conn, @path)
+    assert order(view)["data-signed-in"] == Jason.encode!([@owner])
+    assert has_element?(view, "#buy-key-order #buy-key-wallet-note[data-wallet-note]")
+
+    # Nothing inside, not even a space, so the page's rule hides it until
+    # there is something to say.
+    assert view
+           |> render()
+           |> LazyHTML.from_fragment()
+           |> LazyHTML.query("#buy-key-wallet-note")
+           |> LazyHTML.child_nodes()
+           |> Enum.empty?()
+
+    {:ok, view, _html} = live(init_test_session(build_conn(), %{}), @path)
+    assert order(view)["data-signed-in"] == "[]"
+    assert has_element?(view, "#buy-key-order #buy-key-wallet-note[data-wallet-note]")
   end
 
   # The button's only job is to reach the wallet, whatever the page shows.

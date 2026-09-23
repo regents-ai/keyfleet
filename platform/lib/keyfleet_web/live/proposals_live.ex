@@ -4,8 +4,14 @@ defmodule KeyFleetWeb.ProposalsLive do
   a vote, how each vote stands, and each proposal's text, payment or launch
   with every vote cast on it; and beside them the budget they vote on.
 
-  Nothing here writes or asks a wallet for anything. Everything shown is what
-  `KeyFleetWeb.ProposalsPage` read.
+  Once the fleet is on chain, its wallet buttons sit beside what they act on:
+  voting and carrying a proposal out on its own page, and proposing a
+  decision, a payment or a launch, letting another wallet vote, and sending the REGENT stakers
+  their share on the list. Every press goes to the wallet. What the page knows
+  about a proposal or the budget is said beside a button and never stops a
+  press: the contract decides, and its answer is shown under the button.
+
+  Everything shown is what `KeyFleetWeb.ProposalsPage` read.
   """
 
   use KeyFleetWeb, :html
@@ -22,6 +28,24 @@ defmodule KeyFleetWeb.ProposalsLive do
   }
 
   @executed_words %{decision: "Passed and recorded", autolaunch: "Launched", pay: "Paid"}
+
+  @carry_out_words %{
+    decision: "Record the decision",
+    autolaunch: "Start the launch",
+    pay: "Make the payment"
+  }
+
+  # What the page knows that the contract will likely refuse, said beside the
+  # button that carries a proposal out.
+  @carry_out_notes %{
+    voting: "Voting is still open, so carrying it out now will be refused.",
+    counting: "Votes are still being counted. It can be carried out if it passed.",
+    passed: nil,
+    failed: "It didn’t pass, so carrying it out will be refused.",
+    closed: "Another launch already went ahead, so this one will be refused.",
+    expired: "Its time to be carried out has passed, so it will be refused.",
+    executed: "It has already been carried out, so doing it again will be refused."
+  }
 
   attr :page, :map, required: true
 
@@ -95,7 +119,14 @@ defmodule KeyFleetWeb.ProposalsLive do
         </nav>
       </section>
 
-      <.budget :if={@page.treasury} treasury={@page.treasury} />
+      <div :if={@page.wallet} class="proposals-grid">
+        <.propose_decision wallet={@page.wallet} propose={@page.propose} />
+        <.propose_payment wallet={@page.wallet} propose={@page.propose} />
+        <.propose_launch wallet={@page.wallet} propose={@page.propose} />
+        <.voting_delegate wallet={@page.wallet} />
+      </div>
+
+      <.budget :if={@page.treasury} treasury={@page.treasury} wallet={@page.wallet} />
     </article>
     """
   end
@@ -150,6 +181,13 @@ defmodule KeyFleetWeb.ProposalsLive do
             Carried out by <code>{@page.proposal.executor}</code>
           </p>
         </section>
+
+        <.vote
+          :if={@page.wallet}
+          wallet={@page.wallet}
+          proposal={@page.proposal}
+        />
+        <.carry_out :if={@page.wallet} wallet={@page.wallet} proposal={@page.proposal} />
 
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
           <h2 id="proposal-content-title">{ProposalsPage.kind_name(@page.proposal.kind)}</h2>
@@ -209,7 +247,399 @@ defmodule KeyFleetWeb.ProposalsLive do
     """
   end
 
+  attr :wallet, :map, required: true
+  attr :proposal, :map, required: true
+
+  # Each key is one vote, so a vote names its keys: the voter's own, or those
+  # of someone who let their wallet vote for them. The contract decides which
+  # can vote.
+  defp vote(assigns) do
+    ~H"""
+    <section id="proposal-vote" class="proposals-panel" aria-labelledby="proposal-vote-title">
+      <h2 id="proposal-vote-title">Vote</h2>
+      <.action id="proposal-vote-action" to={@wallet.votes} wallet={@wallet}>
+        <:fields>
+          <div
+            id={"proposal-vote-fields-#{@proposal.number}"}
+            class="proposals-form"
+            phx-update="ignore"
+          >
+            <.text_field
+              id="proposal-vote-keys"
+              name="keys"
+              label="Keys to vote with"
+              inputmode="numeric"
+            >
+              Each key is one vote. Separate key numbers with commas.
+            </.text_field>
+          </div>
+        </:fields>
+        <:notes>
+          <p :if={@proposal.status != :voting} id="proposal-vote-closed" class="proposals-detail">
+            Voting has closed, so a vote now will be refused.
+          </p>
+          <p class="proposals-detail">
+            Type the numbers of the keys you’re voting with: your own, or those of someone who has let your wallet vote for them.
+          </p>
+        </:notes>
+        <:buttons>
+          <Regent.Primitives.button
+            id="proposal-vote-yes"
+            data-fleet-action="vote"
+            data-support="yes"
+            data-proposal={@proposal.number}
+          >
+            Vote yes
+          </Regent.Primitives.button>
+          <Regent.Primitives.button
+            id="proposal-vote-no"
+            variant="secondary"
+            data-fleet-action="vote"
+            data-support="no"
+            data-proposal={@proposal.number}
+          >
+            Vote no
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
+  attr :proposal, :map, required: true
+
+  # Anyone may carry out a proposal that passed, once its vote has closed.
+  defp carry_out(assigns) do
+    assigns = assign(assigns, :note, carry_out_note(assigns.proposal))
+
+    ~H"""
+    <section
+      id="proposal-carry-out"
+      class="proposals-panel"
+      aria-labelledby="proposal-carry-out-title"
+    >
+      <h2 id="proposal-carry-out-title">Carry it out</h2>
+      <.action id="proposal-carry-out-action" to={@wallet.votes} wallet={@wallet}>
+        <:notes>
+          <p class="proposals-detail">
+            Anyone can carry out a proposal that passed, once voting has closed.
+          </p>
+          <p :if={@note} id="proposal-carry-out-note" class="proposals-detail">{@note}</p>
+        </:notes>
+        <:buttons>
+          <Regent.Primitives.button
+            id="proposal-carry-out-button"
+            data-fleet-action="execute"
+            data-proposal={@proposal.number}
+          >
+            {carry_out_word(@proposal.kind)}
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
+  attr :propose, :map, required: true
+
+  # A decision records what the key holders agreed to, and does nothing else.
+  defp propose_decision(assigns) do
+    ~H"""
+    <section id="propose-decision" class="proposals-panel" aria-labelledby="propose-decision-title">
+      <h2 id="propose-decision-title">Propose a decision</h2>
+      <p class="proposals-detail">
+        Records what the key holders agree to if more than half of the keys vote yes. Nothing is paid or launched by it.
+      </p>
+      <.action id="propose-decision-action" to={@wallet.votes} wallet={@wallet}>
+        <:fields>
+          <div id="propose-decision-fields" class="proposals-form" phx-update="ignore">
+            <.key_field id="propose-decision-key" />
+            <Regent.Primitives.field :let={field} id="propose-decision-text" label="What to decide">
+              <textarea id={field.id} name="text" rows="4" aria-describedby={field.described_by}></textarea>
+            </Regent.Primitives.field>
+            <.fingerprint_field id="propose-decision-digest">
+              Fingerprint of the document or work the decision is about, if there is one.
+            </.fingerprint_field>
+          </div>
+        </:fields>
+        <:buttons>
+          <Regent.Primitives.button id="propose-decision-button" data-fleet-action="propose_decision">
+            Propose this decision
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
+  attr :propose, :map, required: true
+
+  defp propose_payment(assigns) do
+    ~H"""
+    <section id="propose-payment" class="proposals-panel" aria-labelledby="propose-payment-title">
+      <h2 id="propose-payment-title">Propose a payment</h2>
+      <p class="proposals-detail">
+        Pays from the budget if more than half of the keys vote yes. Payments open once the launch has finished.
+      </p>
+      <.action
+        id="propose-payment-action"
+        to={@wallet.votes}
+        wallet={@wallet}
+        data-assets={assets(@propose.assets)}
+      >
+        <:fields>
+          <div id="propose-payment-fields" class="proposals-form" phx-update="ignore">
+            <.key_field id="propose-payment-key" />
+            <Regent.Primitives.field :let={field} id="propose-payment-asset" label="Token">
+              <select id={field.id} name="asset" aria-describedby={field.described_by}>
+                <option :for={asset <- @propose.assets} value={asset.address}>{asset.name}</option>
+              </select>
+            </Regent.Primitives.field>
+            <.text_field
+              id="propose-payment-amount"
+              name="amount"
+              label="Amount"
+              inputmode="decimal"
+            >
+              In whole tokens, like 12.5, with a point for decimals. A token listed in its smallest units takes a whole number.
+            </.text_field>
+            <.text_field id="propose-payment-recipient" name="recipient" label="Pay to">
+              The wallet that receives the payment.
+            </.text_field>
+            <Regent.Primitives.field :let={field} id="propose-payment-text" label="Why">
+              <textarea id={field.id} name="text" rows="3" aria-describedby={field.described_by}></textarea>
+            </Regent.Primitives.field>
+            <.fingerprint_field id="propose-payment-digest">
+              Fingerprint of the invoice or the work paid for, if there is one.
+            </.fingerprint_field>
+          </div>
+        </:fields>
+        <:buttons>
+          <Regent.Primitives.button id="propose-payment-button" data-fleet-action="propose_pay">
+            Propose this payment
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
+  attr :propose, :map, required: true
+
+  # The five fields a launch shows, exactly as its holders will read them.
+  defp propose_launch(assigns) do
+    ~H"""
+    <section id="propose-launch" class="proposals-panel" aria-labelledby="propose-launch-title">
+      <h2 id="propose-launch-title">Propose a launch</h2>
+      <p class="proposals-detail">
+        Launches this fleet’s token if more than half of the keys vote yes. A fleet launches once.
+      </p>
+      <.action id="propose-launch-action" to={@wallet.votes} wallet={@wallet}>
+        <:fields>
+          <div id="propose-launch-fields" class="proposals-form" phx-update="ignore">
+            <.key_field id="propose-launch-key" />
+            <.text_field id="propose-launch-name" name="name" label="Name" />
+            <.text_field id="propose-launch-symbol" name="symbol" label="Symbol" />
+            <Regent.Primitives.field :let={field} id="propose-launch-description" label="Description">
+              <textarea
+                id={field.id}
+                name="description"
+                rows="3"
+                aria-describedby={field.described_by}
+              ></textarea>
+            </Regent.Primitives.field>
+            <.text_field id="propose-launch-website" name="website" label="Website" />
+            <.text_field id="propose-launch-image" name="image" label="Image">
+              A link to the token’s image.
+            </.text_field>
+            <.text_field
+              id="propose-launch-raise"
+              name="raise"
+              label="REGENT to raise"
+              inputmode="decimal"
+            >
+              In whole REGENT, like 250000.
+            </.text_field>
+            <Regent.Primitives.field
+              :let={field}
+              id="propose-launch-until"
+              label="Can be launched until (UTC)"
+            >
+              <input
+                id={field.id}
+                name="until"
+                type="datetime-local"
+                value={@propose.launch_until}
+                aria-describedby={field.described_by}
+              />
+              <:hint>It has to come after voting on it closes.</:hint>
+            </Regent.Primitives.field>
+            <.fingerprint_field id="propose-launch-digest">
+              Fingerprint of the write-up key holders read before they vote, if there is one.
+            </.fingerprint_field>
+          </div>
+        </:fields>
+        <:buttons>
+          <Regent.Primitives.button id="propose-launch-button" data-fleet-action="propose_launch">
+            Propose this launch
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
+
+  defp voting_delegate(assigns) do
+    ~H"""
+    <section id="voting-delegate" class="proposals-panel" aria-labelledby="voting-delegate-title">
+      <h2 id="voting-delegate-title">Let another wallet vote for you</h2>
+      <p class="proposals-detail">
+        It can vote and propose with every key you hold, until you stop it. It never holds your keys or their rewards, and you can still vote yourself.
+      </p>
+      <.action id="voting-delegate-action" to={@wallet.votes} wallet={@wallet}>
+        <:fields>
+          <div id="voting-delegate-fields" class="proposals-form" phx-update="ignore">
+            <.text_field id="voting-delegate-wallet" name="delegate" label="Wallet to vote for you" />
+          </div>
+        </:fields>
+        <:buttons>
+          <Regent.Primitives.button id="voting-delegate-button" data-fleet-action="delegate">
+            Let this wallet vote for me
+          </Regent.Primitives.button>
+          <Regent.Primitives.button
+            id="voting-delegate-clear"
+            variant="secondary"
+            data-fleet-action="clear_delegate"
+          >
+            Stop any wallet voting for me
+          </Regent.Primitives.button>
+        </:buttons>
+      </.action>
+    </section>
+    """
+  end
+
+  attr :wallet, :map, required: true
   attr :treasury, :map, required: true
+
+  # The stakers' share is sent once a day for them, and anyone may send it
+  # sooner.
+  defp stakers_share(assigns) do
+    ~H"""
+    <.action id="proposals-stakers-share" to={@wallet.fleet} wallet={@wallet}>
+      <:notes>
+        <p class="proposals-detail">
+          Part of every key sale is set aside for REGENT stakers. It is sent to them once a day, and anyone can send it sooner.
+        </p>
+        <p :if={@treasury.nothing_owed?} id="proposals-nothing-owed" class="proposals-detail">
+          Nothing is set aside right now, so sending will be refused.
+        </p>
+      </:notes>
+      <:buttons>
+        <Regent.Primitives.button id="proposals-send-share" data-fleet-action="send_share">
+          Send stakers their share
+        </Regent.Primitives.button>
+      </:buttons>
+    </.action>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :to, :string, required: true, doc: "the contract every press here calls"
+  attr :wallet, :map, required: true
+  attr :rest, :global
+  slot :fields
+  slot :notes
+  slot :buttons, required: true
+
+  # One group of wallet buttons, the form they read and the answer to each
+  # press, newest first. Nothing here ever disables a button. When the
+  # connected wallet isn't the signed-in person's, a note beside the buttons
+  # says so, and every press still goes to the connected wallet.
+  defp action(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="proposals-action"
+      phx-hook="FleetAction"
+      data-chain-id={@wallet.chain_id}
+      data-to={@to}
+      data-signed-in={Jason.encode!(@wallet.signed_in)}
+      {@rest}
+    >
+      {render_slot(@fields)}
+      {render_slot(@notes)}
+      <div class="proposals-buttons">{render_slot(@buttons)}</div>
+      <%!-- Nothing between the tags, so both stay hidden until there is something to say. --%>
+      <p
+        id={"#{@id}-wallet-note"}
+        class="proposals-detail proposals-wallet-note"
+        phx-update="ignore"
+        data-wallet-note
+        phx-no-format
+      ></p>
+      <ol
+        id={"#{@id}-status"}
+        class="proposals-status"
+        phx-update="ignore"
+        aria-live="polite"
+        data-fleet-action-status
+        phx-no-format
+      ></ol>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :label, :string, required: true
+  attr :inputmode, :string, default: nil
+  slot :inner_block
+
+  defp text_field(assigns) do
+    ~H"""
+    <Regent.Primitives.field :let={field} id={@id} label={@label}>
+      <input
+        id={field.id}
+        name={@name}
+        inputmode={@inputmode}
+        autocomplete="off"
+        aria-describedby={field.described_by}
+      />
+      <:hint :if={@inner_block != []}>{render_slot(@inner_block)}</:hint>
+    </Regent.Primitives.field>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  defp key_field(assigns) do
+    ~H"""
+    <.text_field id={@id} name="key" label="Propose with key" inputmode="numeric">
+      A key you hold, or one whose holder has let your wallet vote for them. Proposing doesn’t use its vote.
+    </.text_field>
+    """
+  end
+
+  attr :id, :string, required: true
+  slot :inner_block, required: true
+
+  defp fingerprint_field(assigns) do
+    ~H"""
+    <.text_field id={@id} name="digest" label="Fingerprint (optional)">
+      {render_slot(@inner_block)}
+    </.text_field>
+    """
+  end
+
+  attr :treasury, :map, required: true
+  attr :wallet, :map, required: true
 
   defp budget(assigns) do
     ~H"""
@@ -221,6 +651,7 @@ defmodule KeyFleetWeb.ProposalsLive do
       </p>
 
       <.balances :if={@treasury.read?} treasury={@treasury} />
+      <.stakers_share wallet={@wallet} treasury={@treasury} />
 
       <h3>Launch income</h3>
       <p :if={@treasury.income == []} id="proposals-no-income" class="proposals-detail">
@@ -289,6 +720,11 @@ defmodule KeyFleetWeb.ProposalsLive do
       </div>
     </dl>
 
+    <p class="proposals-rule">
+      A month of payments starts with its first payment, and can pay out up to a fifth of the budget as it stood then.
+    </p>
+    <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
+
     <dl id="proposals-held" class="proposals-facts">
       <div :if={@treasury.reserve}>
         <dt>Held for the next level</dt>
@@ -299,11 +735,6 @@ defmodule KeyFleetWeb.ProposalsLive do
         <dd><.amount value={@treasury.owed} /></dd>
       </div>
     </dl>
-
-    <p class="proposals-rule">
-      A month of payments starts with its first payment, and can pay out up to a fifth of the budget as it stood then.
-    </p>
-    <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
     """
   end
 
@@ -409,6 +840,15 @@ defmodule KeyFleetWeb.ProposalsLive do
     </article>
     """
   end
+
+  defp carry_out_word(kind), do: Map.fetch!(@carry_out_words, kind)
+
+  defp carry_out_note(%{status: status}), do: Map.fetch!(@carry_out_notes, status)
+
+  # Each asset by address: the decimals amounts typed in whole tokens are
+  # converted with, and the words that name an amount of it.
+  defp assets(assets),
+    do: Jason.encode!(Map.new(assets, &{&1.address, %{decimals: &1.decimals, unit: &1.unit}}))
 
   defp status_word(%{status: :executed, kind: kind}), do: Map.fetch!(@executed_words, kind)
   defp status_word(%{status: status}), do: Map.fetch!(@status_words, status)

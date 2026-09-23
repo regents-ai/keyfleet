@@ -28,6 +28,7 @@ import {
 import type {EthereumProvider, SelectedWallet} from "../js/wallet_actions/connected_wallet"
 
 const buyer = "0x1111111111111111111111111111111111111111" as Address
+const signedIn = `0x${"9".repeat(40)}`
 const fleet = "0x7777777777777777777777777777777777777777" as Address
 const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address
 const referrer = "0x2222222222222222222222222222222222222222" as Address
@@ -528,9 +529,31 @@ group("the page's order", () => {
 })
 
 // Vitest here runs without a document, so the hook gets the small surface it
-// touches: the order's data, a click listener and the status list.
-function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string> = page()) {
+// touches: the order's data, a click listener, the status list, the wallet
+// note and the window's wallet events.
+function mountHook(
+  wallet: SelectedWallet | null,
+  dataset: Record<string, string> = page(),
+  signedIn: string[] = [buyer.toLowerCase()],
+) {
   let listener: ((event: Event) => void) | undefined
+  let connected = wallet
+  const walletListeners = new Set<() => void>()
+  const dispatchEvent = vi.fn()
+  vi.stubGlobal("window", {
+    addEventListener: (_name: string, handler: () => void) => walletListeners.add(handler),
+    removeEventListener: (_name: string, handler: () => void) => walletListeners.delete(handler),
+    dispatchEvent,
+  })
+  let noteText = ""
+  const note = {
+    get textContent() {
+      return noteText
+    },
+    set textContent(text: string | null) {
+      noteText = text ?? ""
+    },
+  }
   const entries: {textContent: string; dataset: Record<string, string>; remove(): void}[] = []
   const list = {
     prepend: (entry: (typeof entries)[number]) => entries.unshift(entry),
@@ -548,12 +571,12 @@ function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string
     toggleAttribute: vi.fn(),
   }
   const el = {
-    dataset,
+    dataset: {signedIn: JSON.stringify(signedIn), ...dataset},
     addEventListener: (_name: string, handler: (event: Event) => void) => {
       listener = handler
     },
     removeEventListener: vi.fn(),
-    querySelector: () => list,
+    querySelector: (selector: string) => ({"[data-wallet-note]": note, "#buy-key-status": list})[selector] ?? null,
     ownerDocument: {
       createElement: () => {
         const entry = {
@@ -566,11 +589,13 @@ function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string
     },
   }
   const purchases: KeyOrder[] = []
+  const wallets: SelectedWallet[] = []
   const reports: ((update: BuyUpdate) => void)[] = []
   const hook = buyKeyHook(
-    () => wallet,
-    async (bought, _wallet, report) => {
+    () => connected,
+    async (bought, buyingWallet, report) => {
       purchases.push(bought)
+      wallets.push(buyingWallet)
       reports.push(report)
       await new Promise(() => undefined)
     },
@@ -580,8 +605,17 @@ function mountHook(wallet: SelectedWallet | null, dataset: Record<string, string
   return {
     press: () => listener!({target: button} as unknown as Event),
     purchases,
+    wallets,
     reports,
     entries,
+    note,
+    dispatchEvent,
+    connect: (next: SelectedWallet | null) => {
+      connected = next
+      for (const changed of walletListeners) changed()
+    },
+    watching: () => walletListeners.size,
+    destroy: () => hook.destroyed!.call(context),
     button,
   }
 }
@@ -604,14 +638,12 @@ group("the Buy button", () => {
   })
 
   it("asks for a wallet when none is connected", () => {
-    const dispatchEvent = vi.fn()
-    vi.stubGlobal("window", {dispatchEvent})
     const hook = mountHook(null)
 
     hook.press()
 
     expect(hook.purchases).toHaveLength(0)
-    expect(dispatchEvent.mock.calls[0][0].type).toBe("ash:wallet-connect")
+    expect(hook.dispatchEvent.mock.calls[0][0].type).toBe("ash:wallet-connect")
     expect(hook.entries[0].textContent).toBe("Connect a wallet, then press Buy again.")
   })
 
@@ -646,5 +678,43 @@ group("the Buy button", () => {
 
     expect(hook.purchases).toHaveLength(7)
     expect(hook.entries).toHaveLength(5)
+  })
+
+  it("stops watching the connected wallet once it has left", () => {
+    const hook = mountHook(fakeWallet())
+    expect(hook.watching()).toBe(1)
+    hook.destroy()
+    expect(hook.watching()).toBe(0)
+  })
+
+  it("names both wallets when the connected one isn't the signed-in one, and still buys with the connected one", () => {
+    const connected = fakeWallet()
+    const hook = mountHook(connected, page(), [signedIn])
+
+    expect(hook.note.textContent).toBe(
+      "You’re signed in as 0x9999…9999 but your wallet is on 0x1111…1111. Presses here go to 0x1111…1111.",
+    )
+
+    hook.press()
+    hook.press()
+    expect(hook.wallets).toEqual([connected, connected])
+    expect(hook.button.disabled).toBe(false)
+    expect(hook.button.setAttribute).not.toHaveBeenCalled()
+  })
+
+  it("updates the note as the connected wallet changes", () => {
+    const hook = mountHook(null, page(), [signedIn])
+    expect(hook.note.textContent).toBe("")
+
+    hook.connect(fakeWallet())
+    expect(hook.note.textContent).toMatch(/^You’re signed in as 0x9999…9999/)
+
+    hook.connect({...fakeWallet(), address: signedIn})
+    expect(hook.note.textContent).toBe("")
+  })
+
+  it("says nothing about wallets to someone signed out", () => {
+    const hook = mountHook(fakeWallet(), page(), [])
+    expect(hook.note.textContent).toBe("")
   })
 })

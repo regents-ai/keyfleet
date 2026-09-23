@@ -191,4 +191,8 @@
   border-inline-start-color: var(--ash-accent-warm);
 }
 
+.fleet-wallet-note:empty {
+  display: none;
+}
+
 }

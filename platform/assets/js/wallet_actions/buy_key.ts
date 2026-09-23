@@ -4,13 +4,23 @@ import {
   encodeFunctionData,
   getAddress,
   parseAbi,
-  toHex,
   zeroAddress,
   type Address,
   type Hex,
 } from "viem"
-import {base} from "viem/chains"
 
+import {
+  confirmed,
+  defaultTiming,
+  hasCode,
+  onChain,
+  replayError,
+  revertData,
+  send,
+  WalletStop,
+  type CallTiming,
+  type Receipt,
+} from "./chain_call"
 import type {EthereumProvider, SelectedWallet} from "./connected_wallet"
 
 /** The parts of `contracts/src/Keyfleet.sol` a purchase touches. */
@@ -55,15 +65,6 @@ export type BuyUpdate =
   | {kind: "sent"; step: BuyStep; hash: Hex}
   | {kind: "bought"; tokenId: bigint; hash: Hex}
   | ({kind: "failed"} & BuyFailure)
-
-export type BuyTiming = {
-  now?: () => number
-  wait?: (milliseconds: number) => Promise<void>
-  pollMs?: number
-  receiptTimeoutMs?: number
-}
-
-type Receipt = {status: string; blockNumber: Hex; logs: {address: string; topics: Hex[]; data: Hex}[]}
 
 class Failure extends Error {
   constructor(readonly failure: BuyFailure) {
@@ -112,23 +113,18 @@ export async function buyKey(
   order: KeyOrder,
   wallet: SelectedWallet,
   report: (update: BuyUpdate) => void,
-  {
-    now = Date.now,
-    wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
-    pollMs = 1_000,
-    receiptTimeoutMs = 180_000,
-  }: BuyTiming = {},
+  timing: CallTiming = {},
 ): Promise<void> {
   const buyer = getAddress(wallet.address)
   const {provider} = wallet
-  const confirmation = {now, wait, pollMs, receiptTimeoutMs}
+  const confirmation = {...defaultTiming, ...timing}
 
   try {
     await onChain(provider, order.chainId)
 
     if ((await allowance(provider, order, buyer)) < order.price) {
       report({kind: "wallet", step: "approve"})
-      const approval = await send(provider, order, buyer, order.usdc, encodeFunctionData({
+      const approval = await send(provider, order.chainId, buyer, order.usdc, encodeFunctionData({
         abi: usdcAbi,
         functionName: "approve",
         args: [order.fleet, order.price],
@@ -147,14 +143,14 @@ export async function buyKey(
       args: [buyer, order.referrer, order.price, deadline],
     })
     report({kind: "wallet", step: "purchase"})
-    const purchase = await send(provider, order, buyer, order.fleet, data)
+    const purchase = await send(provider, order.chainId, buyer, order.fleet, data)
     report({kind: "sent", step: "purchase", hash: purchase})
     const receipt = await confirmed(provider, purchase, confirmation)
 
     if (receipt.status === "0x1") {
       report({kind: "bought", tokenId: purchasedKey(receipt, order.fleet), hash: purchase})
     } else {
-      report({kind: "failed", ...(await whyReverted(provider, buyer, order.fleet, data, receipt.blockNumber))})
+      report({kind: "failed", ...failureOf(await replayError(provider, buyer, order.fleet, data, receipt.blockNumber))})
     }
   } catch (error) {
     report({kind: "failed", ...failureOf(error)})
@@ -182,6 +178,7 @@ export function purchasedKey(receipt: Pick<Receipt, "logs">, fleet: Address): bi
  */
 export function failureOf(error: unknown): BuyFailure {
   if (error instanceof Failure) return error.failure
+  if (error instanceof WalletStop) return {reason: error.reason}
   if (hasCode(error, 4001)) return {reason: "rejected"}
 
   for (const data of revertData(error)) {
@@ -219,85 +216,6 @@ function revertFailure(data: Hex): BuyFailure | null {
   }
 }
 
-// A revert reaches the page wrapped however the wallet wraps it, so every
-// hex `data` value in the error is a candidate; only one that decodes as one
-// of the errors above is taken to be the revert.
-function revertData(error: unknown): Hex[] {
-  const found: Hex[] = []
-  const seen = new Set<unknown>()
-  const visit = (value: unknown, depth: number): void => {
-    if (depth > 6 || !value || typeof value !== "object" || seen.has(value)) return
-    seen.add(value)
-    for (const key of new Set([...Object.keys(value), "cause", "data", "error"])) {
-      let child: unknown
-      try {
-        child = Reflect.get(value, key)
-      } catch {
-        continue
-      }
-      if (key === "data" && typeof child === "string" && /^0x[0-9a-fA-F]{8,}$/.test(child)) {
-        found.push(child as Hex)
-      } else {
-        visit(child, depth + 1)
-      }
-    }
-  }
-  visit(error, 0)
-  return found
-}
-
-// A wallet's error code, however many times a library has wrapped it: 4001
-// when its user declines, 4902 when it doesn't know the network asked for.
-function hasCode(error: unknown, code: number): boolean {
-  const seen = new Set<unknown>()
-  let current: unknown = error
-  while (current && typeof current === "object" && !seen.has(current)) {
-    seen.add(current)
-    if (Reflect.get(current, "code") === code) return true
-    current = Reflect.get(current, "cause") ?? Reflect.get(current, "error")
-  }
-  return false
-}
-
-async function onChain(provider: EthereumProvider, chainId: number): Promise<void> {
-  if ((await chainOf(provider)) === chainId) return
-  try {
-    await switchTo(provider, chainId)
-  } catch {
-    throw new Failure({reason: "wrong_network"})
-  }
-  if ((await chainOf(provider)) !== chainId) throw new Failure({reason: "wrong_network"})
-}
-
-// A wallet that has never been on Base is asked to add it, then to move to it.
-async function switchTo(provider: EthereumProvider, chainId: number): Promise<void> {
-  const change = {method: "wallet_switchEthereumChain", params: [{chainId: toHex(chainId)}]}
-  try {
-    await provider.request(change)
-  } catch (error) {
-    if (chainId !== base.id || !hasCode(error, 4902)) throw error
-    await provider.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: toHex(base.id),
-          chainName: base.name,
-          nativeCurrency: base.nativeCurrency,
-          rpcUrls: base.rpcUrls.default.http,
-          blockExplorerUrls: [base.blockExplorers.default.url],
-        },
-      ],
-    })
-    await provider.request(change)
-  }
-}
-
-async function chainOf(provider: EthereumProvider): Promise<number> {
-  const chainId = await provider.request({method: "eth_chainId"})
-  if (typeof chainId !== "string" || !/^0x[0-9a-fA-F]+$/.test(chainId)) throw new Failure({reason: "unknown"})
-  return Number(BigInt(chainId))
-}
-
 async function latestBlockTime(provider: EthereumProvider): Promise<bigint> {
   const block = await provider.request({method: "eth_getBlockByNumber", params: ["latest", false]})
   const timestamp = block && typeof block === "object" ? Reflect.get(block, "timestamp") : undefined
@@ -318,60 +236,6 @@ async function allowance(provider: EthereumProvider, order: KeyOrder, buyer: Add
   })
   if (typeof result !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(result)) throw new Failure({reason: "unknown"})
   return BigInt(result)
-}
-
-// The chain id travels with the transaction, so a wallet that has moved to
-// another network since the check above refuses it rather than sending it there.
-async function send(provider: EthereumProvider, order: KeyOrder, from: Address, to: Address, data: Hex): Promise<Hex> {
-  const hash = await provider.request({
-    method: "eth_sendTransaction",
-    params: [{from, to, data, value: "0x0", chainId: toHex(order.chainId)}],
-  })
-  if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Failure({reason: "unconfirmed"})
-  return hash as Hex
-}
-
-// Base's first block with the transaction in it is the confirmation; nothing
-// waits for finality. A failed read is asked again until the time runs out,
-// and a transaction still unseen then is reported as unconfirmed, never as
-// failed, since it may still land.
-async function confirmed(
-  provider: EthereumProvider,
-  hash: Hex,
-  {now, wait, pollMs, receiptTimeoutMs}: Required<BuyTiming>,
-): Promise<Receipt> {
-  const until = now() + receiptTimeoutMs
-  for (;;) {
-    const receipt = await provider
-      .request({method: "eth_getTransactionReceipt", params: [hash]})
-      .catch(() => null)
-    if (isReceipt(receipt)) return receipt
-    if (now() >= until) throw new Failure({reason: "unconfirmed"})
-    await wait(pollMs)
-  }
-}
-
-function isReceipt(value: unknown): value is Receipt {
-  if (!value || typeof value !== "object") return false
-  const receipt = value as Partial<Receipt>
-  return typeof receipt.status === "string" && typeof receipt.blockNumber === "string" && Array.isArray(receipt.logs)
-}
-
-// A receipt says only that the purchase reverted, so the same call is asked of
-// the block it landed in to learn why.
-async function whyReverted(
-  provider: EthereumProvider,
-  from: Address,
-  to: Address,
-  data: Hex,
-  block: Hex,
-): Promise<BuyFailure> {
-  try {
-    await provider.request({method: "eth_call", params: [{from, to, data}, block]})
-  } catch (error) {
-    return failureOf(error)
-  }
-  return {reason: "unknown"}
 }
 
 /** The plain words the page shows for an update. */

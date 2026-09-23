@@ -3,10 +3,13 @@ defmodule KeyFleetWeb.ProposalsPage do
   What a fleet's proposal pages show, read from the proposals, votes and
   launches the chain reader recorded.
 
-  `list/2` is the fleet's proposals, newest first, twenty to a page, with
+  `list/3` is the fleet's proposals, newest first, twenty to a page, with
   its budget once it is on chain: the latest reading of its balances, and
-  its latest launch income and payments. `detail/3` is one proposal with its votes, fifty to a
-  page. Each answers
+  its latest launch income and payments. `detail/4` is one proposal with its votes, fifty to a
+  page. Once the fleet is on chain, each carries what its wallet buttons
+  need: the fleet's network, its two contracts, and the wallets of the
+  person signed in, which the buttons name when the connected wallet is
+  another. Each answers
   `check_in`, how long the page may wait before its proposals could read
   differently without anything new being recorded: a proposal closing, a
   closed one being counted, or a passed one running out of time. A page name that is not a proposal number is a
@@ -31,33 +34,48 @@ defmodule KeyFleetWeb.ProposalsPage do
   @pay_period 30 * 24 * 60 * 60
   @pay_cap_bps 2_000
   @bps 10_000
+  # The fleet's USDC, which its contract refuses to be deployed with unless
+  # it has six decimals.
+  @usdc_decimals 6
+  # How long a proposed launch can be carried out for, unless its proposer
+  # changes it.
+  @launch_window_days 30
 
   @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from the budget"}
 
-  @doc "The page of proposals below the one `params` names, if it names one."
-  def list(fleet_id, params) do
+  @doc """
+  The page of proposals below the one `params` names, if it names one, with
+  what the forms for new proposals start from. `signed_in` is the wallets of
+  the person signed in, primary first.
+  """
+  def list(fleet_id, params, signed_in) do
     before = number!(params["before"])
 
-    with_fleet(fleet_id, fn fleet, reading ->
+    with_fleet(fleet_id, signed_in, fn fleet, reading ->
       {proposals, older?} = Proposals.list_page(fleet_id, before)
       now = DateTime.utc_now()
       shown = Enum.map(proposals, &summary(&1, reading.cursor, now))
+      balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
         proposals: shown,
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         check_in: check_in(shown, now),
-        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id))
+        treasury: reading.deployed? && treasury(fleet, balances),
+        propose: reading.deployed? && propose(fleet, balances, now)
       })
     end)
   end
 
-  @doc "Proposal `number` and a page of its votes, from the one `params` names."
-  def detail(fleet_id, number, params) do
+  @doc """
+  Proposal `number` and a page of its votes, from the one `params` names.
+  `signed_in` is the wallets of the person signed in, primary first.
+  """
+  def detail(fleet_id, number, params, signed_in) do
     votes_after = seq!(params["votes_after"])
 
-    with_fleet(fleet_id, fn fleet, reading ->
+    with_fleet(fleet_id, signed_in, fn fleet, reading ->
       now = DateTime.utc_now()
 
       case Proposals.get_by_number(fleet_id, String.to_integer(number)) do
@@ -118,7 +136,7 @@ defmodule KeyFleetWeb.ProposalsPage do
   # REGENT, which has eighteen decimals.
   defp regent(atoms), do: "#{units(atoms, @regent_decimals)} REGENT"
 
-  defp with_fleet(fleet_id, read) do
+  defp with_fleet(fleet_id, signed_in, read) do
     case Fleets.get_fleet!(fleet_id) do
       nil ->
         %{fleet_id: fleet_id, fleet_name: nil, check_in: nil}
@@ -130,11 +148,63 @@ defmodule KeyFleetWeb.ProposalsPage do
           fleet_id: fleet_id,
           fleet_name: fleet.name,
           deployed?: deployed?,
+          wallet: deployed? && wallet(fleet, signed_in),
           cursor: Chain.get_cursor!(fleet_id),
           catching_up?: deployed? and not Chain.fresh?(fleet_id)
         })
     end
   end
+
+  # What the wallet buttons need: the fleet's network, its vote contract,
+  # the fleet contract itself, and the signed-in person's wallets.
+  defp wallet(fleet, signed_in),
+    do: %{
+      chain_id: fleet.chain_id,
+      votes: fleet.votes_address,
+      fleet: fleet.contract_address,
+      signed_in: signed_in
+    }
+
+  # What the forms for new proposals start from: each asset the budget
+  # holds, and a launch that can be carried out for 30 days.
+  defp propose(fleet, balances, now) do
+    known = assets(fleet)
+
+    %{
+      assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known)),
+      launch_until:
+        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M")
+    }
+  end
+
+  defp budget_assets(fleet, nil), do: [fleet.usdc_address]
+
+  defp budget_assets(fleet, balances),
+    do: Enum.uniq([fleet.usdc_address | Enum.map(balances.assets, & &1.asset)])
+
+  # An asset to pay in, with the decimals amounts typed in whole tokens are
+  # converted with and the words that name an amount of it. A token that
+  # hasn't said its decimals is paid in its smallest units.
+  defp pay_asset(usdc, %{usdc_address: usdc}, _assets),
+    do: %{address: usdc, decimals: @usdc_decimals, name: "USDC", unit: "USDC"}
+
+  defp pay_asset(asset, _fleet, %{details: details}) do
+    case details[asset] do
+      {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
+        name = "#{symbol} #{short(asset)}"
+        %{address: asset, decimals: decimals, name: name, unit: name}
+
+      _unknown ->
+        %{
+          address: asset,
+          decimals: 0,
+          name: "Token #{short(asset)}, in its smallest units",
+          unit: "smallest units of token #{short(asset)}"
+        }
+    end
+  end
+
+  defp short(address), do: String.slice(address, 0, 6) <> "…" <> String.slice(address, -4, 4)
 
   defp summary(proposal, cursor, now) do
     status = Proposals.status(proposal, cursor, now)
@@ -220,7 +290,8 @@ defmodule KeyFleetWeb.ProposalsPage do
 
   defp treasury(fleet, balances), do: treasury(fleet, balances, assets(fleet))
 
-  defp treasury(fleet, nil, assets), do: Map.put(history(fleet.id, assets), :read?, false)
+  defp treasury(fleet, nil, assets),
+    do: Map.merge(history(fleet.id, assets), %{read?: false, nothing_owed?: false})
 
   defp treasury(fleet, balances, assets) do
     usdc = &amount(Decimal.to_integer(&1), fleet.usdc_address, assets)
@@ -233,7 +304,8 @@ defmodule KeyFleetWeb.ProposalsPage do
       payments_open?: balances.launch_settled,
       balances: Enum.map(balances.assets, &balance(&1, balances.block_time, assets)),
       reserve: if(Decimal.gt?(balances.cascade_reserve, 0), do: usdc.(balances.cascade_reserve)),
-      owed: usdc.(balances.protocol_share_owed)
+      owed: usdc.(balances.protocol_share_owed),
+      nothing_owed?: Decimal.eq?(balances.protocol_share_owed, 0)
     })
   end
 

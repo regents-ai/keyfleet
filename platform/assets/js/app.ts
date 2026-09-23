@@ -21,6 +21,7 @@ import {
 } from "./shell_state"
 import {BuyKey} from "./hooks/buy_key"
 import {CopyText} from "./hooks/copy_text"
+import {FleetAction} from "./hooks/fleet_action"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomeField} from "./hooks/home_field"
 import {HomeHero} from "./hooks/home_hero"
@@ -325,6 +326,7 @@ const hooks = {
   ...colocatedHooks,
   BuyKey,
   CopyText,
+  FleetAction,
   HolographicCard,
   HomeField,
   HomeHero,

@@ -386,6 +386,7 @@ defmodule KeyFleetWeb.ShellLive do
           current?: current?,
           progress: progress,
           buy: if(deployed?, do: buy_offer(fleet, progress, params["ref"])),
+          signed_in: signed_in_wallets(actor),
           rooms: Rooms.list_rooms!(fleet_id, actor: actor),
           no_keys?: page.results == [] and not paged?(params),
           pages: pages,
@@ -960,11 +961,12 @@ defmodule KeyFleetWeb.ShellLive do
   # when it runs out of time.
   defp read_proposals(socket) do
     params = socket.assigns.proposals_params
+    signed_in = signed_in_wallets(human_actor(socket))
 
     page =
       case socket.assigns.route_spec.route_id do
-        :proposals -> ProposalsPage.list(params["fleet_id"], params)
-        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params)
+        :proposals -> ProposalsPage.list(params["fleet_id"], params, signed_in)
+        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params, signed_in)
       end
 
     assign(socket, proposals: page, proposals_check: check_proposals(socket, page.check_in))
@@ -1082,6 +1084,10 @@ defmodule KeyFleetWeb.ShellLive do
     do: %Human{human_account_id: account.id, wallet_addresses: account_wallets(account)}
 
   defp human_actor(_socket), do: nil
+
+  # The wallets the wallet buttons name when the connected wallet is another.
+  defp signed_in_wallets(%Human{wallet_addresses: wallets}), do: wallets
+  defp signed_in_wallets(nil), do: []
 
   defp account_wallets(account) do
     [account.wallet_address | List.wrap(account.wallet_addresses)]

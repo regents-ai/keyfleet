@@ -70,7 +70,12 @@ defmodule KeyFleetWeb.FleetLive do
           </p>
         </section>
 
-        <.buy_key :if={@fleet.buy} buy={@fleet.buy} current?={@fleet.current?} />
+        <.buy_key
+          :if={@fleet.buy}
+          buy={@fleet.buy}
+          current?={@fleet.current?}
+          signed_in={@fleet.signed_in}
+        />
 
         <nav class="fleet-panel" aria-labelledby="fleet-rooms-title">
           <h2 id="fleet-rooms-title">Rooms</h2>
@@ -209,11 +214,14 @@ defmodule KeyFleetWeb.FleetLive do
 
   attr :buy, :map, required: true
   attr :current?, :boolean, required: true
+  attr :signed_in, :list, required: true, doc: "the signed-in person's wallets, primary first"
 
   # Every press of Buy goes to the wallet: the button is never disabled, and
   # nothing here decides on the buyer's behalf whether a purchase would succeed.
   # A fleet that sells out while the page is open keeps the buyer's messages
-  # about the purchases they made.
+  # about the purchases they made. When the connected wallet isn't the
+  # signed-in person's, a note says so, and the press still goes to the
+  # connected wallet.
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" class="fleet-panel" aria-labelledby="buy-key-title">
@@ -229,6 +237,7 @@ defmodule KeyFleetWeb.FleetLive do
         data-price-label={@buy.price && usdc(@buy.price)}
         data-referrer={@buy.referrer}
         data-deadline-seconds={@buy.deadline_seconds}
+        data-signed-in={Jason.encode!(@signed_in)}
       >
         <p :if={is_nil(@buy.price)} id="buy-key-sold-out">
           All {grouped(@buy.max_supply)} keys in this fleet have been sold.
@@ -274,6 +283,14 @@ defmodule KeyFleetWeb.FleetLive do
           </p>
         </div>
 
+        <%!-- Nothing between the tags, so the note stays hidden until it has something to say. --%>
+        <p
+          id="buy-key-wallet-note"
+          class="fleet-detail fleet-wallet-note"
+          phx-update="ignore"
+          data-wallet-note
+          phx-no-format
+        ></p>
         <ol id="buy-key-status" class="fleet-buy-status" phx-update="ignore" aria-live="polite"></ol>
       </div>
     </section>
