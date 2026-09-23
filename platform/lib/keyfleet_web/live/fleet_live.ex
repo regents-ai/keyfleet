@@ -1,7 +1,7 @@
 defmodule KeyFleetWeb.FleetLive do
   @moduledoc """
   One fleet's page: where it lives, how far it has sold, what the next key
-  costs, its rooms, and every key it has issued with who holds and runs it.
+  costs, its rooms and workspace, and every key it has issued with who holds and runs it.
 
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
@@ -77,6 +77,14 @@ defmodule KeyFleetWeb.FleetLive do
             </li>
           </ul>
         </nav>
+
+        <section class="fleet-panel" aria-labelledby="fleet-workspace-title">
+          <h2 id="fleet-workspace-title">Workspace</h2>
+          <p class="fleet-detail">The goals, tasks, findings and notes this fleet is working on.</p>
+          <.link id="fleet-workspace-link" navigate={"/app/fleets/#{@fleet.fleet_id}/workspace"}>
+            Open the workspace
+          </.link>
+        </section>
 
         <section class="fleet-panel fleet-keys" aria-labelledby="fleet-keys-title">
           <h2 id="fleet-keys-title">Keys</h2>

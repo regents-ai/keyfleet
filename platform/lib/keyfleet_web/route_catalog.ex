@@ -15,6 +15,8 @@ defmodule KeyFleetWeb.RouteCatalog do
   @fleet_id ~r/\A[a-z][a-z0-9_]{0,62}\z/
   # Eighteen digits at most, so every admitted key number is a database integer.
   @token_id ~r/\A[1-9][0-9]{0,17}\z/
+  # A workspace item is named by its type and its number, such as `task#12`.
+  @object_id ~r/\A[a-z][a-z_]{0,31}#[1-9][0-9]{0,17}\z/
 
   @entries [
     %Entry{
@@ -58,6 +60,20 @@ defmodule KeyFleetWeb.RouteCatalog do
       parameter_schema: %{fleet_id: :fleet_id, slug: :slug},
       reserved_values: %{},
       route_spec_id: :rooms
+    },
+    %Entry{
+      path_pattern: "/app/fleets/:fleet_id/workspace",
+      live_action: :workspace,
+      parameter_schema: %{fleet_id: :fleet_id},
+      reserved_values: %{},
+      route_spec_id: :workspace
+    },
+    %Entry{
+      path_pattern: "/app/fleets/:fleet_id/workspace/:object_id",
+      live_action: :workspace_item,
+      parameter_schema: %{fleet_id: :fleet_id, object_id: :object_id},
+      reserved_values: %{},
+      route_spec_id: :workspace_item
     }
   ]
 
@@ -74,7 +90,13 @@ defmodule KeyFleetWeb.RouteCatalog do
     keys:
       {:keys, :product, "KeyFleet", "Key", "/app", [:profile_actions], :product, :detail, %{}},
     rooms:
-      {:rooms, :product, "KeyFleet", "Rooms", "/app", [:profile_actions], :product, :detail, %{}}
+      {:rooms, :product, "KeyFleet", "Rooms", "/app", [:profile_actions], :product, :detail, %{}},
+    workspace:
+      {:workspace, :product, "KeyFleet", "Workspace", "/app", [:profile_actions], :product,
+       :detail, %{}},
+    workspace_item:
+      {:workspace_item, :product, "KeyFleet", "Workspace", "/app", [:profile_actions], :product,
+       :detail, %{}}
   }
 
   def entries, do: @entries
@@ -107,6 +129,9 @@ defmodule KeyFleetWeb.RouteCatalog do
   defp valid_parameter?(:slug, value), do: is_binary(value) and Regex.match?(@slug, value)
   defp valid_parameter?(:fleet_id, value), do: is_binary(value) and Regex.match?(@fleet_id, value)
   defp valid_parameter?(:token_id, value), do: is_binary(value) and Regex.match?(@token_id, value)
+
+  defp valid_parameter?(:object_id, value),
+    do: is_binary(value) and Regex.match?(@object_id, value)
 
   defp build_spec(route_spec_id, destination) do
     {route_id, app_id, app_label, page_label, root, controls, background, transition, local_state} =
@@ -182,11 +207,13 @@ defmodule KeyFleetWeb.RouteCatalog do
     %{"type" => "heading", "label" => heading.label}
   end
 
+  # A value is written into the path the way a browser sends it, so an item
+  # such as `task#12` is `task%2312`.
   defp destination(path_pattern, params) do
     path_pattern
     |> String.split("/")
     |> Enum.map_join("/", fn
-      ":" <> key -> Map.fetch!(params, key)
+      ":" <> key -> params |> Map.fetch!(key) |> URI.encode(&URI.char_unreserved?/1)
       segment -> segment
     end)
   end

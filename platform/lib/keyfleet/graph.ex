@@ -31,17 +31,22 @@ defmodule KeyFleet.Graph do
 
     resource KeyFleet.Graph.Event do
       define :read_events, action: :page, args: [:fleet_id, :after_seq, :limit]
+      define :latest_activity, action: :activity, args: [:fleet_id]
+      define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
     end
 
     resource KeyFleet.Graph.Object do
       define :read_object, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :read_objects, action: :with_ids, args: [:fleet_id, :ids]
+      define :workspace_cards, action: :cards, args: [:fleet_id]
+      define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :project_objects, action: :project
     end
 
     resource KeyFleet.Graph.Relation do
       define :read_relations_touching, action: :touching, args: [:fleet_id, :object_id, :limit]
+      define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
     end

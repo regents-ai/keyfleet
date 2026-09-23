@@ -19,6 +19,11 @@ defmodule KeyFleet.Graph.Event do
   # A page stops at this many bytes of events, or after its first event when
   # that one alone is larger.
   @page_bytes 512 * 1024
+  # How many of the latest changes the workspace page lists.
+  @activity 30
+  # How many of one object's changes its page lists at a time.
+  @history 50
+  @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
 
   postgres do
     table "graph_events"
@@ -26,6 +31,21 @@ defmodule KeyFleet.Graph.Event do
 
     references do
       reference(:cursor, on_delete: :delete)
+    end
+
+    # The workspace pages find an object's events by the ids their payloads
+    # name: an object's creation and links by `id`, its changes and links to
+    # it by `target`, and links from it by `source`.
+    custom_indexes do
+      index(["fleet_id", "(payload ->> 'id')", "seq"], name: "graph_events_payload_id_index")
+
+      index(["fleet_id", "(payload ->> 'target')", "seq"],
+        name: "graph_events_payload_target_index"
+      )
+
+      index(["fleet_id", "(payload ->> 'source')", "seq"],
+        name: "graph_events_payload_source_index"
+      )
     end
   end
 
@@ -57,6 +77,95 @@ defmodule KeyFleet.Graph.Event do
         |> Ash.Query.sort(seq: :asc)
         |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
       end
+    end
+
+    # The fleet's latest changes, newest first, for its workspace page. The
+    # record each write leaves of itself is left out: the changes it made are
+    # listed on their own.
+    read :activity do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and type != "keyfleet.command")
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.unset([:sort, :limit, :offset])
+        |> Ash.Query.sort(seq: :desc)
+        |> Ash.Query.limit(@activity)
+        |> Ash.Query.select(@brief_fields)
+        |> Ash.Query.load(:brief)
+      end
+    end
+
+    # Every change to one object up to `through_seq`, newest first, one more
+    # than a page so the reader knows whether more come before: its creation,
+    # its edits and archiving, and the links made to or from it and removed
+    # again. Each kind of change is looked up on its own index and cut to that
+    # many before they are merged, so a page reads only the object's own rows:
+    # a removed link is found from each link the object ever had, one lookup
+    # apiece, since a link is removed at most once.
+    read :history do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :object_id, :string, allow_nil?: false, constraints: @text
+
+      argument :through_seq, :integer,
+        allow_nil?: false,
+        default: @bigint,
+        constraints: [min: 0, max: @bigint]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   """
+                   ? = ANY(ARRAY(
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'id') = ? AND e.type = 'object.created' AND e.seq <= ?
+                      ORDER BY e.seq DESC LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'target') = ? AND e.type IN ('patch.applied', 'relation.created') AND e.seq <= ?
+                      ORDER BY e.seq DESC LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'source') = ? AND e.type = 'relation.created' AND e.seq <= ?
+                      ORDER BY e.seq DESC LIMIT ?)
+                     UNION ALL
+                     (SELECT d.seq
+                      FROM keyfleet_app.graph_events AS r
+                      CROSS JOIN LATERAL (
+                        SELECT d.seq FROM keyfleet_app.graph_events AS d
+                        WHERE d.fleet_id = r.fleet_id AND (d.payload ->> 'id') = (r.payload ->> 'id') AND d.type = 'relation.removed' AND d.seq > r.seq AND d.seq <= ?
+                        LIMIT 1
+                      ) AS d
+                      WHERE r.fleet_id = ? AND r.type = 'relation.created' AND ((r.payload ->> 'source') = ? OR (r.payload ->> 'target') = ?)
+                      ORDER BY d.seq DESC LIMIT ?)))
+                   """,
+                   seq,
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:through_seq),
+                   ^(@history + 1),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:through_seq),
+                   ^(@history + 1),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:through_seq),
+                   ^(@history + 1),
+                   ^arg(:through_seq),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:object_id),
+                   ^(@history + 1)
+                 )
+             )
+
+      prepare build(
+                sort: [seq: :desc],
+                limit: @history + 1,
+                select: @brief_fields,
+                load: [:brief]
+              )
     end
 
     create :record do
@@ -97,6 +206,67 @@ defmodule KeyFleet.Graph.Event do
     attribute :timestamp, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :payload, :map, allow_nil?: false, public?: true
     attribute :byte_size, :integer, allow_nil?: false, constraints: [min: 1]
+  end
+
+  calculations do
+    # What a line about the event needs from it, read in the database so a
+    # page of lines never loads the text the event carries:
+    #   object.created   object, object_type
+    #   patch.applied    object, fields (the names changed), archived, and
+    #                    values: {old, new} of the few short fields shown
+    #   relation.created relation_type, source, target
+    #   relation.removed the same, from the event that made the link
+    #   keyfleet.attention kind, object
+    # Any other event answers an empty map.
+    calculate :brief,
+              :map,
+              expr(
+                fragment(
+                  """
+                  CASE ?
+                  WHEN 'object.created' THEN jsonb_build_object('object', ? #>> '{object,id}', 'object_type', ? #>> '{object,type}')
+                  WHEN 'patch.applied' THEN jsonb_build_object(
+                    'object', (? ->> 'target'),
+                    'fields', CASE WHEN jsonb_typeof(? -> 'diff') = 'object'
+                      THEN (SELECT COALESCE(jsonb_agg(k.key ORDER BY k.key), '[]'::jsonb) FROM jsonb_object_keys(? -> 'diff') AS k(key))
+                      ELSE '[]'::jsonb END,
+                    'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb, false),
+                    'values', jsonb_strip_nulls(jsonb_build_object(
+                      'status', ? #> '{diff,status}',
+                      'progress', ? #> '{diff,progress}',
+                      'confidence', ? #> '{diff,confidence}',
+                      'assignee_key', ? #> '{diff,assignee_key}')))
+                  WHEN 'relation.created' THEN jsonb_build_object('relation_type', ? #>> '{relation,type}', 'source', (? ->> 'source'), 'target', (? ->> 'target'))
+                  WHEN 'relation.removed' THEN
+                    (SELECT jsonb_build_object('relation_type', r.payload #>> '{relation,type}', 'source', (r.payload ->> 'source'), 'target', (r.payload ->> 'target'))
+                     FROM keyfleet_app.graph_events AS r
+                     WHERE r.fleet_id = ? AND r.type = 'relation.created' AND (r.payload ->> 'id') = (? ->> 'id')
+                     ORDER BY r.seq DESC LIMIT 1)
+                  WHEN 'keyfleet.attention' THEN jsonb_build_object('kind', ? ->> 'kind', 'object', ? ->> 'object_id')
+                  ELSE '{}'::jsonb
+                  END
+                  """,
+                  type,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  fleet_id,
+                  payload,
+                  payload,
+                  payload
+                )
+              ),
+              public?: true
   end
 
   relationships do

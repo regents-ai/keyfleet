@@ -52,6 +52,21 @@ defmodule KeyFleet.Graph.ProjectionTest do
     assert length(copied[Graph.Relation]) == 2
     assert [%{run_id: ^run_id, applied_seq: ^head}] = copied[Graph.Cursor]
 
+    # Each object last changed at its creation or its latest patch.
+    last_changes =
+      for %{type: type} = event <- Enum.sort_by(copied[Graph.Event], & &1.seq),
+          type in ~w(object.created patch.applied),
+          into: %{},
+          do: {event.payload["id"] || event.payload["target"], event}
+
+    assert map_size(last_changes) == 4
+
+    for {id, event} <- last_changes do
+      assert {objects[id].changed_seq, objects[id].changed_at} == {event.seq, event.timestamp}
+    end
+
+    assert goal.changed_seq > task.changed_seq
+
     # A reader sees who asked for each write and what it did; the authority
     # stamp stays in the log.
     for %{type: "keyfleet.command", payload: payload} <- copied[Graph.Event] do
@@ -410,6 +425,43 @@ defmodule KeyFleet.Graph.ProjectionTest do
 
     assert {read.watermark, Enum.map(read.events, & &1.seq), read.next_cursor, read.has_more} ==
              {1, [1], 1, false}
+  end
+
+  test "an object last changed at its creation or its latest patch; linking and unlinking it leave that be" do
+    start_projector(catch_up_interval: 60_000)
+    run_id = log_id()
+    goal = created!("goal", %{title: "Revenue", outcome: "One paying customer."}, "g-1")
+
+    {:ok, %{"head_seq" => head, "result" => %{"id" => task}}} =
+      command("create", %{type: "task", scope: "fleet", data: %{title: "Draft"}}, "t-1")
+
+    assert Projector.await(@fleet, run_id, head) == head
+    created = Graph.read_object!(@fleet, task, actor: nil)
+    assert {created.changed_seq, created.changed_at} == last_change(task)
+
+    {:ok, %{"result" => %{"relation_id" => link}}} =
+      command("link", %{source: task, target: goal, type: "implements"}, "l-1")
+
+    unlinked = write!("unlink", %{relation_id: link}, "u-1")
+    assert Projector.await(@fleet, run_id, unlinked) == unlinked
+    assert Graph.read_object!(@fleet, task, actor: nil) == created
+
+    patched = write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "p-1")
+    assert Projector.await(@fleet, run_id, patched) == patched
+    read = Graph.read_object!(@fleet, task, actor: nil)
+    assert {read.changed_seq, read.changed_at} == last_change(task)
+    assert read.changed_seq > unlinked
+  end
+
+  # The place and time of the latest creation or patch of the object.
+  defp last_change(id) do
+    tables()[Graph.Event]
+    |> Enum.filter(
+      &(&1.type in ~w(object.created patch.applied) and
+          (&1.payload["id"] || &1.payload["target"]) == id)
+    )
+    |> Enum.max_by(& &1.seq)
+    |> then(&{&1.seq, &1.timestamp})
   end
 
   # Four objects, three links (one removed again), a patch and an archive.

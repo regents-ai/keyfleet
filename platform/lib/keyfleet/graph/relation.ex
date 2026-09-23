@@ -46,6 +46,20 @@ defmodule KeyFleet.Graph.Relation do
       end
     end
 
+    # The links from or to one object a page at a time, oldest first.
+    read :linked do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :object_id, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 (source == ^arg(:object_id) or target == ^arg(:object_id))
+             )
+
+      prepare build(sort: [created_seq: :asc])
+      pagination keyset?: true, required?: true, default_limit: 50, max_page_size: 50
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -90,7 +104,7 @@ defmodule KeyFleet.Graph.Relation do
     attribute :data, :map, allow_nil?: false, public?: true
 
     # The place in the log where the link was made.
-    attribute :created_seq, :integer, allow_nil?: false, public?: true, constraints: [min: 1]
+    attribute :created_seq, KeyFleet.Graph.Seq, allow_nil?: false, public?: true
   end
 
   relationships do

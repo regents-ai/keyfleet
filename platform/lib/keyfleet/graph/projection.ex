@@ -152,20 +152,21 @@ defmodule KeyFleet.Graph.Projection do
     write_links(fleet_id, folded)
   end
 
-  defp fold(%{"type" => "object.created", "payload" => %{"object" => object}}, state) do
+  defp fold(%{"type" => "object.created", "payload" => %{"object" => object}} = event, state) do
     projected = %{type: object["type"], data: object["data"], version: object["version"]}
-    touch(state, object["id"], projected)
+    touch(state, event, object["id"], projected)
   end
 
   # The graph's own rule: a patch of an object it does not hold changes
   # nothing. The version a patch reaches is the one it was checked against,
   # plus one.
-  defp fold(%{"type" => "patch.applied", "payload" => %{"patch" => patch}}, state) do
+  defp fold(%{"type" => "patch.applied", "payload" => %{"patch" => patch}} = event, state) do
     %{"target" => id, "op" => "update", "value" => value, "expected_version" => expected} = patch
 
     case state.objects do
       %{^id => object} ->
-        touch(state, id, %{object | data: Map.merge(object.data, value), version: expected + 1})
+        patched = %{object | data: Map.merge(object.data, value), version: expected + 1}
+        touch(state, event, id, patched)
 
       _missing ->
         state
@@ -197,19 +198,36 @@ defmodule KeyFleet.Graph.Projection do
   defp fold(%{"type" => "keyfleet.attention"}, state), do: state
   defp fold(%{"type" => "keyfleet.command"}, state), do: state
 
-  defp touch(state, id, object),
-    do: %{
+  # Only a creation or a patch changes an object: it last changed at that
+  # event's place and time.
+  defp touch(state, %{"seq" => seq, "timestamp" => at}, id, object) do
+    changed = Map.merge(object, %{changed_seq: seq, changed_at: at})
+
+    %{
       state
-      | objects: Map.put(state.objects, id, object),
+      | objects: Map.put(state.objects, id, changed),
         touched: MapSet.put(state.touched, id)
     }
+  end
 
   defp write_objects(fleet_id, %{objects: objects, touched: touched}) do
     rows =
       for id <- touched do
-        %{type: type, data: data, version: version} = Map.fetch!(objects, id)
+        %{type: type, data: data, version: version, changed_seq: seq, changed_at: at} =
+          Map.fetch!(objects, id)
+
         {sys, data} = Map.pop!(data, "sys")
-        %{fleet_id: fleet_id, id: id, type: type, data: data, sys: sys, version: version}
+
+        %{
+          fleet_id: fleet_id,
+          id: id,
+          type: type,
+          data: data,
+          sys: sys,
+          version: version,
+          changed_seq: seq,
+          changed_at: at
+        }
       end
 
     if rows != [], do: Graph.project_objects!(rows, actor: @system)

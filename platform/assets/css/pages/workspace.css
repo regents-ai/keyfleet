@@ -1,0 +1,232 @@
+@layer regents-product {
+/* The workspace stands on the Key grammar: one ground, hairline panels, the
+   display face for headings and a mono voice for kickers. Everyone's text
+   wraps wherever it must, so no item widens the page. */
+
+.workspace-page {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspace-heading,
+.workspace-panel {
+  min-width: 0;
+  border: 1px solid var(--ash-line);
+  background: var(--ash-panel);
+}
+
+.workspace-page h1,
+.workspace-page h2,
+.workspace-page h3 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-weight: 400;
+}
+
+.workspace-page p {
+  margin: 0;
+}
+
+.workspace-kicker,
+.workspace-kind {
+  color: var(--ash-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workspace-heading {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+}
+
+.workspace-heading h1 {
+  max-width: 24ch;
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.workspace-heading h1:focus {
+  outline: none;
+}
+
+.workspace-lede {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 56ch;
+  color: var(--ash-muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.workspace-notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--ash-line);
+  border-inline-start: 3px solid var(--ash-accent-warm);
+  background: var(--ash-panel);
+  line-height: 1.5;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.workspace-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.workspace-panel {
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+  justify-items: start;
+}
+
+.workspace-panel > * {
+  max-width: 100%;
+}
+
+.workspace-panel h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.workspace-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.workspace-filters a[aria-current="page"] {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.workspace-cards,
+.workspace-lines,
+.workspace-list {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-list {
+  gap: 0.25rem;
+}
+
+.workspace-card {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--ash-line);
+}
+
+.workspace-card h3 {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.workspace-kind {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.workspace-badge {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ash-line-strong);
+  color: var(--ash-ink);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-gist {
+  line-height: 1.5;
+}
+
+.workspace-facts,
+.workspace-fields {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0;
+}
+
+.workspace-facts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+}
+
+.workspace-facts div,
+.workspace-fields div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.workspace-facts dt,
+.workspace-fields dt,
+.workspace-detail {
+  color: var(--ash-muted);
+}
+
+.workspace-facts dd,
+.workspace-fields dd {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.workspace-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.9rem;
+}
+
+.workspace-lines li {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding-block-end: 0.75rem;
+  border-bottom: 1px solid var(--ash-line);
+}
+
+.workspace-lines li:last-child {
+  padding-block-end: 0;
+  border-bottom: 0;
+}
+
+.workspace-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+@media (max-width: 60rem) {
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+}

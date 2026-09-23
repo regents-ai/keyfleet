@@ -13,10 +13,22 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Actors.Human
   alias KeyFleet.Chain
   alias KeyFleet.Fleets
+  alias KeyFleet.Graph
   alias KeyFleet.Keys
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.FleetMember
-  alias KeyFleetWeb.{AccountLive, FleetLive, KeysLive, NotFoundError, OverviewLive, RoomsLive}
+
+  alias KeyFleetWeb.{
+    AccountLive,
+    FleetLive,
+    KeysLive,
+    NotFoundError,
+    OverviewLive,
+    RoomsLive,
+    WorkspaceLive,
+    WorkspacePage
+  }
+
   alias KeyFleetWeb.RouteCatalog
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
@@ -25,6 +37,9 @@ defmodule KeyFleetWeb.ShellLive do
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
   @thread_kept 200
+  # How long a workspace page waits after a notice of changes before it reads
+  # them, so a burst of writes is read once.
+  @workspace_refresh_after 1_000
 
   @impl true
   def mount(params, session, socket) do
@@ -46,7 +61,11 @@ defmodule KeyFleetWeb.ShellLive do
        room: nil,
        room_notice: nil,
        room_topic: nil,
-       send_key: nil
+       send_key: nil,
+       workspace: nil,
+       workspace_params: nil,
+       workspace_topic: nil,
+       workspace_refresh?: false
      )}
   end
 
@@ -60,7 +79,8 @@ defmodule KeyFleetWeb.ShellLive do
      |> load_verified_connections(route_spec)
      |> load_fleet(route_spec, params)
      |> load_key(route_spec, params)
-     |> load_room(route_spec, params)}
+     |> load_room(route_spec, params)
+     |> load_workspace(route_spec, params)}
   end
 
   @impl true
@@ -129,6 +149,29 @@ defmodule KeyFleetWeb.ShellLive do
 
   def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
 
+  # A notice that the open fleet's workspace has moved past what the page last
+  # read is only a nudge to read it again, once, a moment later: the notices
+  # that come in the meantime are answered by that one read.
+  def handle_info(
+        {:graph_head, fleet_id, run_id, watermark},
+        %{assigns: %{workspace: %{fleet_id: fleet_id, seen: seen}}} = socket
+      ) do
+    if moved?(seen, run_id, watermark) and not socket.assigns.workspace_refresh? do
+      Process.send_after(self(), :refresh_workspace, @workspace_refresh_after)
+      {:noreply, assign(socket, :workspace_refresh?, true)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:graph_head, _fleet_id, _run_id, _watermark}, socket), do: {:noreply, socket}
+
+  def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket),
+    do: {:noreply, socket |> assign(:workspace_refresh?, false) |> read_workspace()}
+
+  def handle_info(:refresh_workspace, socket),
+    do: {:noreply, assign(socket, :workspace_refresh?, false)}
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -167,6 +210,9 @@ defmodule KeyFleetWeb.ShellLive do
           posts={@streams.posts}
           notice={@room_notice}
         />
+
+        <WorkspaceLive.board :if={@route_spec.route_id == :workspace} board={@workspace} />
+        <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
       </:content>
     </.shell>
     """
@@ -469,6 +515,58 @@ defmodule KeyFleetWeb.ShellLive do
   end
 
   defp post_refusal(_refusal, _fleet_id), do: "That post didn’t go through. Try again."
+
+  # The page starts listening before it reads, so a change that lands while it
+  # loads still reaches it. Each visit, reconnection included, reads afresh.
+  defp load_workspace(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
+       when route_id in [:workspace, :workspace_item] do
+    socket
+    |> follow_workspace(fleet_id)
+    |> assign(:workspace_params, params)
+    |> read_workspace()
+  end
+
+  defp load_workspace(socket, _route_spec, _params) do
+    socket
+    |> follow_workspace(nil)
+    |> assign(workspace: nil, workspace_params: nil)
+  end
+
+  defp read_workspace(%{assigns: %{route_spec: %{route_id: :workspace}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    assign(
+      socket,
+      :workspace,
+      WorkspacePage.board(params["fleet_id"], params, human_actor(socket))
+    )
+  end
+
+  defp read_workspace(%{assigns: %{route_spec: %{route_id: :workspace_item}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    assign(
+      socket,
+      :workspace,
+      WorkspacePage.item(params["fleet_id"], params["object_id"], params, human_actor(socket))
+    )
+  end
+
+  # A copy of another log, or a place further on in the same one.
+  defp moved?({run_id, seen_seq}, run_id, watermark), do: watermark > seen_seq
+  defp moved?(_seen, _run_id, _watermark), do: true
+
+  defp follow_workspace(socket, fleet_id) do
+    topic = fleet_id && Graph.head_topic(fleet_id)
+
+    if connected?(socket) and topic != socket.assigns.workspace_topic do
+      stop_listening(socket.assigns.workspace_topic)
+      start_listening(topic)
+      assign(socket, :workspace_topic, topic)
+    else
+      socket
+    end
+  end
 
   defp load_verified_connections(socket, %{route_id: :account}),
     do: reload_verified_connections(socket)
