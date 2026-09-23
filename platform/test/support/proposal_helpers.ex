@@ -131,7 +131,8 @@ defmodule KeyFleet.ProposalHelpers do
   def treasury_reading!(fleet_id, assets, attrs \\ %{}) do
     %{
       fleet_id: fleet_id,
-      block_number: :erlang.unique_integer([:positive]),
+      # Later than every reading before it, so it replaces the one kept.
+      block_number: :erlang.unique_integer([:positive, :monotonic]),
       block_hash: @block_hash,
       block_time: DateTime.utc_now(),
       launch_settled: true,
