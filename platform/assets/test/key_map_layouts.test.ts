@@ -46,14 +46,12 @@ const keysOf = (grid: KeyMapGrid, level: number) =>
   Array.from({length: maxSupply.fibonacci}, (_, index) => index + 1).filter(key => grid.levelOf(key) === level)
 
 describe("key map layouts", () => {
-  it("builds the full Fibonacci map in at most 15 ms", async () => {
+  // Its build time is checked in the browser, in key_map_performance.spec.ts.
+  it("builds the full Fibonacci map", async () => {
     vi.resetModules()
     const cold = await import("../js/hooks/key_map/layouts")
-    const started = performance.now()
     const grid = cold.buildMap("fibonacci", 46_365)
-    const elapsed = performance.now() - started
     expect(grid.valueAt(...grid.home(46_365))).toBe(46_365)
-    expect(elapsed).toBeLessThanOrEqual(15)
   })
 
   it("matches the four fleets' supplies", () => {
