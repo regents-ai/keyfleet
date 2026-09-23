@@ -7,7 +7,7 @@ defmodule KeyFleet.Rooms.Errors.RoomUnknownError do
 end
 
 defmodule KeyFleet.Rooms.Errors.ReplyOutsideRoomError do
-  @moduledoc "Raised when a post answers a post that is not in the same room."
+  @moduledoc "Raised when a post answers a post that is not in the same room or key thread."
   use Splode.Error, fields: [:reply_to_id], class: :invalid
 
   def message(%{reply_to_id: reply_to_id}),
@@ -35,4 +35,25 @@ defmodule KeyFleet.Rooms.Errors.RenameTooSoonError do
 
   def message(%{retry_after: retry_after}),
     do: "this room was renamed less than a minute ago; try again in #{retry_after} seconds"
+end
+
+defmodule KeyFleet.Rooms.Errors.NoKeyToWriteAsError do
+  @moduledoc """
+  Raised when a writer no longer holds or runs any key of the fleet by the time
+  its line is written, because the key changed hands while it was being sent.
+  """
+  use Splode.Error, fields: [:fleet_id], class: :forbidden
+
+  def message(%{fleet_id: fleet_id}), do: "no key of #{fleet_id} to write as"
+end
+
+defmodule KeyFleet.Rooms.Errors.KeyUnknownError do
+  @moduledoc """
+  Raised when a fleet has not issued the key a caller named, as far as its sales
+  have been read: a key sold moments ago is unknown until the sale is seen.
+  """
+  use Splode.Error, fields: [:fleet_id, :token_id], class: :invalid
+
+  def message(%{fleet_id: fleet_id, token_id: token_id}),
+    do: "#{fleet_id} has not issued key #{token_id}"
 end

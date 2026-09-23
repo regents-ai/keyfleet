@@ -9,6 +9,12 @@ defmodule KeyFleet.Rooms.Room do
   Every member posts in every room. Nobody renames a fixed or created room, and
   no room is removed.
 
+  Every key the fleet has issued also has a thread of its own: a room of kind
+  `:key` at the address `key-N`, opened by the first post written to it
+  (`:open_key_thread`). A key's thread is found by its key (`:key_thread`) and
+  never listed or found among the fleet's rooms, so no room address, name or
+  count ever depends on it.
+
   A room goes by its topic once it has one, and by its name otherwise. No two
   rooms of a fleet go by the same name, whatever its case. Names and topics are
   kept in Unicode NFKC form, so text that only looks different in its encoding
@@ -19,6 +25,8 @@ defmodule KeyFleet.Rooms.Room do
     domain: KeyFleet.Rooms,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
+
+  require Ash.Query
 
   @fixed_rooms [
     {"welcome", "Welcome and intros"},
@@ -33,6 +41,9 @@ defmodule KeyFleet.Rooms.Room do
   @own_slugs @fixed_slugs ++ @open_slugs
 
   @slug ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/
+  # The address a key's thread sits at, which no created room may take.
+  @not_key_slug ~r/\A(?!key-[0-9]+\z)/
+  @bigint 9_223_372_036_854_775_807
   # Addresses a created room may not take: the fleet's own rooms' addresses.
   @not_own_slug Regex.compile!("\\A(?!(?:#{Enum.join(@own_slugs, "|")})\\z)")
   # No control characters (Cc), invisible or format characters such as a
@@ -40,6 +51,9 @@ defmodule KeyFleet.Rooms.Room do
   # separators (Zl, Zp), so no two names differ only by what cannot be seen.
   @plain_text ~r/\A[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*\z/u
   @plain_text_message "must not hold control characters, invisible characters or line breaks"
+
+  @doc "The address of a key's thread."
+  def key_slug(token_id), do: "key-#{token_id}"
 
   @doc "The fleet's own rooms as `{slug, name, kind}`, in the order a fleet lists them."
   def own_rooms,
@@ -57,12 +71,17 @@ defmodule KeyFleet.Rooms.Room do
       # topics are stored in NFKC form and trimmed, so the comparison is made on
       # that form. Whichever action is refused, the refusal is reported on the
       # name.
+      # A key's thread is named for its key and never goes by a room's name.
       index(["fleet_id", "lower(coalesce(topic, name))"],
         name: "rooms_unique_name_per_fleet",
         unique: true,
+        where: "kind <> 'key'",
         error_fields: [:name],
         message: "is already another room's name in this fleet"
       )
+
+      # The fleet's rooms, found or listed without its keys' threads.
+      index(["fleet_id", "slug"], name: "rooms_fleet_rooms_index", where: "kind <> 'key'")
     end
 
     check_constraints do
@@ -70,14 +89,21 @@ defmodule KeyFleet.Rooms.Room do
       # so the floor is kept where that statement cannot step over it.
       check_constraint(:head_seq, "rooms_nonnegative_head", check: "head_seq >= 0")
 
-      # The fleet's own rooms sit at their own addresses, and a created room
-      # never takes one of them.
+      # The fleet's own rooms sit at their own addresses and a key's thread at
+      # its key's, and a created room never takes one of them.
       check_constraint(:kind, "rooms_kind_address",
         check: """
         (kind = 'fixed' AND slug IN (#{Enum.map_join(@fixed_slugs, ", ", &"'#{&1}'")}))
         OR (kind = 'open' AND slug IN (#{Enum.map_join(@open_slugs, ", ", &"'#{&1}'")}))
-        OR (kind = 'created' AND slug NOT IN (#{Enum.map_join(@own_slugs, ", ", &"'#{&1}'")}))
+        OR (kind = 'created' AND slug NOT IN (#{Enum.map_join(@own_slugs, ", ", &"'#{&1}'")})
+            AND slug !~ '^key-[0-9]+$')
+        OR (kind = 'key' AND token_id IS NOT NULL AND slug = 'key-' || token_id)
         """
+      )
+
+      # Only a key's thread names a key.
+      check_constraint(:token_id, "rooms_key_thread_token",
+        check: "(kind = 'key') = (token_id IS NOT NULL)"
       )
 
       # Only an open room has a topic, and a topic is always recorded with who
@@ -93,10 +119,16 @@ defmodule KeyFleet.Rooms.Room do
   end
 
   actions do
+    # The room a post was written in, when posts are read with their rooms.
+    read :read do
+      primary? true
+      public? false
+    end
+
     read :for_fleet do
       argument :fleet_id, :string, allow_nil?: false
       validate KeyFleet.Graph.Validations.KnownFleet
-      filter expr(fleet_id == ^arg(:fleet_id))
+      filter expr(fleet_id == ^arg(:fleet_id) and kind != :key)
       prepare build(sort: [position: :asc, slug: :asc])
     end
 
@@ -104,7 +136,22 @@ defmodule KeyFleet.Rooms.Room do
       argument :fleet_id, :string, allow_nil?: false
       argument :slug, :string, allow_nil?: false
       validate KeyFleet.Graph.Validations.KnownFleet
-      filter expr(fleet_id == ^arg(:fleet_id) and slug == ^arg(:slug))
+      filter expr(fleet_id == ^arg(:fleet_id) and slug == ^arg(:slug) and kind != :key)
+      get? true
+    end
+
+    # One key's thread, once its first post has opened it, found at its
+    # address.
+    read :key_thread do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      prepare fn query, _context ->
+        fleet_id = Ash.Query.get_argument(query, :fleet_id)
+        slug = key_slug(Ash.Query.get_argument(query, :token_id))
+        Ash.Query.filter(query, kind == :key and fleet_id == ^fleet_id and slug == ^slug)
+      end
+
       get? true
     end
 
@@ -126,6 +173,7 @@ defmodule KeyFleet.Rooms.Room do
 
       validate match(:slug, @slug), message: "must be lowercase letters, digits and single dashes"
       validate match(:slug, @not_own_slug), message: "is one of the fleet's own rooms"
+      validate match(:slug, @not_key_slug), message: "is kept for a key's messages"
       validate match(:name, @plain_text), message: @plain_text_message
       validate KeyFleet.Graph.Validations.KnownFleet
 
@@ -141,6 +189,36 @@ defmodule KeyFleet.Rooms.Room do
                _changeset, result, _context ->
                  result
              end)
+    end
+
+    # Opens a key's thread for the post about to be written to it, or finds the
+    # one already open, so posts arriving together all land in one thread.
+    # Posting writes it, from trusted code only; a thread is never announced as
+    # a new room.
+    create :open_key_thread do
+      public? false
+      accept [:fleet_id]
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      change set_attribute(:kind, :key)
+      change set_attribute(:token_id, arg(:token_id))
+
+      change fn changeset, _context ->
+        token_id = Ash.Changeset.get_argument(changeset, :token_id)
+
+        Ash.Changeset.force_change_attributes(changeset,
+          slug: key_slug(token_id),
+          name: "Key #{token_id}"
+        )
+      end
+
+      # A thread's address is its key's (`rooms_kind_address`), so the one
+      # address index is also what keeps a key to one thread. A second unique
+      # index on the key would let two first posts collide on it rather than
+      # meet at the address.
+      upsert? true
+      upsert_identity :unique_slug_per_fleet
+      upsert_fields [:name]
     end
 
     update :set_topic do
@@ -159,11 +237,11 @@ defmodule KeyFleet.Rooms.Room do
   end
 
   policies do
-    policy action([:for_fleet, :in_fleet]) do
+    policy action([:read, :for_fleet, :in_fleet, :key_thread]) do
       authorize_if always()
     end
 
-    policy action(:bootstrap) do
+    policy action([:bootstrap, :open_key_thread]) do
       authorize_if KeyFleet.Checks.SystemActor
     end
 
@@ -191,13 +269,19 @@ defmodule KeyFleet.Rooms.Room do
       public?: true,
       constraints: [min_length: 1, max_length: 80]
 
-    # One of the fleet's five fixed rooms, one of its five open rooms, or a
-    # room an agent created.
+    # One of the fleet's five fixed rooms, one of its five open rooms, a room
+    # an agent created, or one key's thread.
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
       writable?: false,
-      constraints: [one_of: [:fixed, :open, :created]]
+      constraints: [one_of: [:fixed, :open, :created, :key]]
+
+    # The key whose thread this is; only a key's thread has one.
+    attribute :token_id, :integer,
+      public?: true,
+      writable?: false,
+      constraints: [min: 1, max: @bigint]
 
     # What a member named an open room, held to the same length as a room's
     # name.

@@ -89,6 +89,8 @@ defmodule KeyFleetWeb.Router do
     get "/pairings", AgentPairingController, :index
     post "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :create
     delete "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :delete
+    post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
+    post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
     post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
     post "/fleets/:fleet_id/rooms/:slug/topic", AgentRoomController, :set_topic

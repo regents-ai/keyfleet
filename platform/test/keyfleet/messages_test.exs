@@ -254,12 +254,117 @@ defmodule KeyFleet.MessagesTest do
             %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_kind"}}} =
              Repo.query(
                "INSERT INTO keyfleet_app.messages " <>
-                 "(seq, kind, author_kind, author_wallet, body, body_digest, idempotency_key, fleet_id, room_id) " <>
-                 "SELECT seq + 1, 'level', author_kind, author_wallet, body, body_digest, 'k-level', fleet_id, room_id " <>
+                 "(seq, kind, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
+                 "SELECT seq + 1, 'level', author_kind, author_wallet, as_key, body, body_digest, 'k-level', fleet_id, room_id " <>
                  "FROM keyfleet_app.messages WHERE id = $1",
                [Ecto.UUID.dump!(posted.id)],
                mode: :savepoint
              )
+  end
+
+  test "a person always writes as the highest-ranked key their wallets hold, from its wallet" do
+    epoch!(token_id: 7, owner_wallet: wallet("b"))
+    epoch!(token_id: 30, owner_wallet: wallet("c"))
+    person = %Actors.Human{human_account_id: 2, wallet_addresses: [wallet("c"), wallet("b")]}
+
+    first = post!(person, "general", "Morning")
+    assert {first.as_key, first.author_wallet} == {7, wallet("b")}
+
+    # Selling key 7 makes key 30 their highest-ranked key.
+    epoch!(token_id: 7, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+
+    second = post!(person, "general", "Still here")
+    assert {second.as_key, second.author_wallet} == {30, wallet("c")}
+
+    assert Enum.map(read("general"), &{&1.seq, &1.as_key}) == [{1, 7}, {2, 30}]
+  end
+
+  test "an agent writes as the highest-ranked key it runs today", %{owner: owner} do
+    agent = agent("f")
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+
+    for token_id <- [40, 12] do
+      epoch!(token_id: token_id)
+      request = Keys.request_pairing!(@fleet, token_id, %{}, actor: agent)
+      Keys.approve_pairing!(request, %{}, actor: owner)
+    end
+
+    first = post!(agent, "general", "Hull survey started")
+    assert {first.as_key, first.author_wallet, first.author_kind} == {12, wallet("f"), :agent}
+
+    # Key 12 changes hands, which ends the agent running it.
+    epoch!(token_id: 12, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+
+    assert post!(agent, "general", "Still surveying").as_key == 40
+  end
+
+  test "a repeated send key answers with the key the post was first written as", %{owner: owner} do
+    {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
+    epoch!(token_id: 1, ownership_epoch: 1, owner_wallet: wallet("b"), log_index: 1)
+    epoch!(token_id: 2, owner_wallet: wallet("a"))
+
+    {:ok, again} = send_as(owner, "general", "Hull survey started", "k-1")
+    assert {again.id, again.as_key} == {sent.id, 1}
+  end
+
+  test "a person's retry is known whichever of their wallets now holds the key they write as" do
+    epoch!(token_id: 7, owner_wallet: wallet("b"))
+    epoch!(token_id: 30, owner_wallet: wallet("c"))
+    person = %Actors.Human{human_account_id: 2, wallet_addresses: [wallet("b"), wallet("c")]}
+
+    {:ok, sent} = send_as(person, "general", "Hull survey started", "k-1")
+    assert {sent.as_key, sent.author_wallet} == {7, wallet("b")}
+
+    # Key 7 moves to the person's other wallet, then leaves them altogether.
+    epoch!(token_id: 7, ownership_epoch: 1, owner_wallet: wallet("c"), log_index: 1)
+    {:ok, again} = send_as(person, "general", "Hull survey started", "k-1")
+    assert {again.id, again.seq} == {sent.id, 1}
+
+    epoch!(token_id: 7, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 2)
+    {:ok, still} = send_as(person, "general", "Hull survey started", "k-1")
+    assert still.id == sent.id
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.SendConflictError{}]}} =
+             send_as(person, "general", "Hull survey finished", "k-1")
+
+    assert Enum.map(read("general"), & &1.id) == [sent.id]
+    assert heads()[{@fleet, "general"}] == 1
+  end
+
+  test "a key that changes hands while its post is being written leaves nothing written",
+       %{owner: owner} do
+    test_pid = self()
+    moved = :atomics.new(1, [])
+
+    # The policy has already let the post through when the room is locked for
+    # it; right then, the owner's only key is sold.
+    :telemetry.attach(
+      "key-sold-while-posting",
+      [:key_fleet, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if self() == test_pid and String.contains?(meta.query, "pg_advisory_xact_lock") and
+             :atomics.compare_exchange(moved, 1, 0, 1) == :ok do
+          epoch!(token_id: 1, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+        end
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach("key-sold-while-posting") end)
+
+    assert {:error, %Ash.Error.Forbidden{errors: [%Rooms.Errors.NoKeyToWriteAsError{}]}} =
+             send_as(owner, "general", "Hull survey started", "k-1")
+
+    assert :atomics.get(moved, 1) == 1
+    assert read("general") == []
+    assert heads()[{@fleet, "general"}] == 0
+  end
+
+  test "naming an open room is written as the namer's key", %{owner: owner} do
+    {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner)
+
+    assert [%{kind: :room_named, as_key: 1, author_wallet: author}] = read("open-1")
+    assert author == wallet("a")
   end
 
   defp post!(actor, slug, body, key \\ nil) do
@@ -306,8 +411,9 @@ defmodule KeyFleet.MessagesTest do
       |> Map.put(
         :transaction_hash,
         "0x" <>
-          String.duplicate(to_string(event.token_id), 32) <>
-          String.duplicate(to_string(event.ownership_epoch), 32)
+          Base.encode16(:crypto.hash(:sha256, "#{event.token_id}/#{event.ownership_epoch}"),
+            case: :lower
+          )
       )
       |> Keys.record_epoch!(actor: @system)
     end)

@@ -1,7 +1,12 @@
 defmodule KeyFleet.Rooms.Changes.PostMessage do
   @moduledoc """
   Puts one line in its room, of the kind the action names (`kind: :post` or
-  `kind: :room_named`), or hands back the line this sender already made.
+  `kind: :room_named`), or hands back the line this sender already made. With
+  `in: :room` the room is the fleet's room named by `slug`; with `in: :key` it
+  is the thread of the key `token_id`, opened by its first post.
+
+  Every line is written as the author's key in the fleet
+  (`KeyFleet.Keys.identity/2`), which is kept on the line as `as_key`.
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -12,7 +17,9 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
 
   alias KeyFleet.Actors.Agent
   alias KeyFleet.Actors.Human
+  alias KeyFleet.Actors.System
   alias KeyFleet.Rooms
+  alias KeyFleet.Rooms.Errors.NoKeyToWriteAsError
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
   alias KeyFleet.Rooms.Errors.SendConflictError
@@ -21,32 +28,47 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   @impl true
   def change(changeset, opts, %{actor: actor}) do
     changeset
-    |> Ash.Changeset.before_action(&place(&1, actor, Keyword.fetch!(opts, :kind)))
+    |> Ash.Changeset.before_action(
+      &place(&1, actor, Keyword.fetch!(opts, :kind), Keyword.fetch!(opts, :in))
+    )
     |> Ash.Changeset.after_action(&confirm/2)
   end
 
-  defp place(changeset, actor, kind) do
+  defp place(changeset, actor, kind, into) do
+    reply_to_id = Ash.Changeset.get_argument(changeset, :reply_to_id)
+
+    case room(changeset, into, actor) do
+      {:error, error} ->
+        Ash.Changeset.add_error(changeset, error)
+
+      {:ok, room} ->
+        if answers_this_room?(reply_to_id, room, actor),
+          do: write(changeset, room, actor, kind),
+          else:
+            Ash.Changeset.add_error(
+              changeset,
+              ReplyOutsideRoomError.exception(reply_to_id: reply_to_id)
+            )
+    end
+  end
+
+  defp room(changeset, :room, actor) do
     fleet_id = Ash.Changeset.get_argument(changeset, :fleet_id)
     slug = Ash.Changeset.get_argument(changeset, :slug)
-    reply_to_id = Ash.Changeset.get_argument(changeset, :reply_to_id)
-    room = Rooms.get_room!(fleet_id, slug, actor: actor)
 
-    cond do
-      is_nil(room) ->
-        Ash.Changeset.add_error(
-          changeset,
-          RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)
-        )
-
-      not answers_this_room?(reply_to_id, room, actor) ->
-        Ash.Changeset.add_error(
-          changeset,
-          ReplyOutsideRoomError.exception(reply_to_id: reply_to_id)
-        )
-
-      true ->
-        write(changeset, room, actor, kind)
+    case Rooms.get_room!(fleet_id, slug, actor: actor) do
+      nil -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+      room -> {:ok, room}
     end
+  end
+
+  # The action has already checked that the fleet issued the key.
+  defp room(changeset, :key, _actor) do
+    Rooms.open_key_thread(
+      Ash.Changeset.get_argument(changeset, :fleet_id),
+      Ash.Changeset.get_argument(changeset, :token_id),
+      actor: %System{}
+    )
   end
 
   defp answers_this_room?(nil, _room, _actor), do: true
@@ -54,12 +76,25 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   defp answers_this_room?(reply_to_id, room, actor),
     do: Rooms.get_post_in_room!(reply_to_id, room.id, actor: actor) != nil
 
+  # Who the line is written as is read once more under the room's lock: a key
+  # that changed hands since the policy looked leaves nothing to write as.
   defp write(changeset, room, actor, kind) do
     Sequence.lock_room!(room.id)
 
-    {author, profile} = author(room.fleet_id, actor)
+    case KeyFleet.Keys.identity(actor, room.fleet_id) do
+      nil ->
+        Ash.Changeset.add_error(changeset, NoKeyToWriteAsError.exception(fleet_id: room.fleet_id))
+
+      identity ->
+        write_as(changeset, room, actor, kind, identity)
+    end
+  end
+
+  defp write_as(changeset, room, actor, kind, %{token_id: as_key, wallet: wallet}) do
     body = Ash.Changeset.get_argument(changeset, :body)
     idempotency_key = Ash.Changeset.get_argument(changeset, :idempotency_key)
+    earlier = earlier_post(room.fleet_id, actor, idempotency_key)
+    {author, profile} = author(actor, as_key, author_wallet(earlier, wallet))
 
     changeset
     |> Ash.Changeset.put_context(:author_profile, profile)
@@ -68,7 +103,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
         kind: kind,
         fleet_id: room.fleet_id,
         room_id: room.id,
-        seq: seq(room, author.author_wallet, idempotency_key, actor),
+        seq: seq(room, earlier),
         body: body,
         body_digest: digest(body),
         idempotency_key: idempotency_key,
@@ -77,29 +112,36 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
     )
   end
 
+  # A send key belongs to the sender, not to one of its wallets: a person's
+  # retry finds their first post whichever of their wallets holds the key they
+  # write as now.
+  defp earlier_post(fleet_id, actor, idempotency_key),
+    do: Rooms.get_post_under_send_key!(fleet_id, wallets(actor), idempotency_key, actor: actor)
+
+  defp wallets(%Human{wallet_addresses: wallets}), do: wallets
+  defp wallets(%Agent{wallet_address: wallet}), do: [wallet]
+
+  # A retry is written under the wallet of the first post, so the database
+  # hands that post back instead of taking a second one.
+  defp author_wallet(nil, wallet), do: wallet
+  defp author_wallet(earlier, _wallet), do: earlier.author_wallet
+
   # A repeat keeps the place its post already holds, so the room's order stays
   # unbroken whether or not the first attempt ever reached the sender.
-  defp seq(room, author_wallet, idempotency_key, actor) do
-    case Rooms.get_post_under_send_key!(room.fleet_id, author_wallet, idempotency_key,
-           actor: actor
-         ) do
-      nil -> Sequence.next!(room.id)
-      message -> message.seq
-    end
-  end
+  defp seq(room, nil), do: Sequence.next!(room.id)
+  defp seq(_room, earlier), do: earlier.seq
 
-  # The policy has already established that the actor holds or runs one of the
-  # fleet's keys, so the holding wallet and the agent's own profile are there.
-  defp author(fleet_id, %Human{wallet_addresses: wallets} = actor) do
-    [key] =
-      KeyFleet.Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor, query: [limit: 1])
+  # An agent writes from its own wallet with its profile; a person from the
+  # wallet holding the key they write as.
+  defp author(%Human{}, as_key, wallet),
+    do:
+      {%{author_kind: :human, author_wallet: wallet, as_key: as_key, agent_profile_id: nil}, nil}
 
-    {%{author_kind: :human, author_wallet: key.owner_wallet, agent_profile_id: nil}, nil}
-  end
-
-  defp author(_fleet_id, %Agent{wallet_address: wallet} = actor) do
+  defp author(%Agent{} = actor, as_key, wallet) do
     profile = KeyFleet.Agents.get_my_profile!(actor: actor)
-    {%{author_kind: :agent, author_wallet: wallet, agent_profile_id: profile.id}, profile}
+
+    {%{author_kind: :agent, author_wallet: wallet, as_key: as_key, agent_profile_id: profile.id},
+     profile}
   end
 
   defp digest(body), do: :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)

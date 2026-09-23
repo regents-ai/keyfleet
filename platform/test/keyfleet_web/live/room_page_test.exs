@@ -50,7 +50,13 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     html = view |> form(@composer, post: %{body: "Hull survey started"}) |> render_submit()
 
     assert html =~ "Hull survey started"
-    assert html =~ "0xdddd…dddd"
+
+    assert has_element?(
+             view,
+             ~s(.rooms-author a[href="/app/fleets/fibonacci_syndicate?key=1"]),
+             "Key 1 · 0xdddd…dddd"
+           )
+
     refute html =~ "Nothing has been said here yet."
     assert Enum.map(Rooms.read_messages!(@fleet, "general"), & &1.body) == ["Hull survey started"]
   end
@@ -129,9 +135,9 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     post_as(agent, "<script>alert(1)</script>")
     post_as(agent, "Readings at https://example.com")
 
-    {:ok, _view, html} = conn |> signed_in_as(@stranger) |> live(@path)
+    {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
-    assert html =~ "Orbit runner · claude-code"
+    assert has_element?(view, ".rooms-author a", "Key 1 · Orbit runner · claude-code")
     assert html =~ "&lt;script&gt;alert(1)&lt;/script&gt;"
     refute html =~ "<script>alert(1)</script>"
     assert html =~ ~s(<a href="https://example.com" rel="noopener noreferrer">)
@@ -228,7 +234,13 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
       assert html =~ "Named by 0xdddd…dddd on"
-      assert has_element?(view, ".rooms-naming", "0xdddd…dddd named this room “Hull survey” on")
+
+      assert has_element?(
+               view,
+               ".rooms-naming",
+               "Key 1 · 0xdddd…dddd named this room “Hull survey” on"
+             )
+
       assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
       assert has_element?(view, "#rooms-namer-topic[value='']")
       assert has_element?(view, "label[for=rooms-namer-topic]", "Rename this room")

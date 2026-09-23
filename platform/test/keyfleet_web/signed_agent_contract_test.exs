@@ -31,6 +31,8 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   @read "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read"
   @send "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send"
   @sync "/api/v1/agent/fleets/{fleet_id}/sync"
+  @key_read "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read"
+  @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
   @graph "/api/v1/agent/fleets/{fleet_id}/graph/"
 
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
@@ -57,6 +59,9 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     {"POST", @topic, [], %{"topic" => "Probe"}},
     {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @send, [], %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
+    {"POST", @key_read, [], %{"after_seq" => 0, "limit" => 1}},
+    {"POST", @key_send, [],
+     %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
     {"POST", @sync, [],
      %{"rooms" => [%{"slug" => "general", "after_seq" => 0}], "graph" => %{"after_seq" => 0}}},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
@@ -109,7 +114,9 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
              {@create, KeyFleet.Rooms.Room, :create},
              {@topic, KeyFleet.Rooms.Room, :set_topic},
              {@read, KeyFleet.Rooms.Message, :read_messages},
-             {@send, KeyFleet.Rooms.Message, :send_message}
+             {@send, KeyFleet.Rooms.Message, :send_message},
+             {@key_read, KeyFleet.Rooms.Message, :read_key_thread},
+             {@key_send, KeyFleet.Rooms.Message, :send_to_key}
            ] ++
              for(
                op <- ~w(get changes create patch link unlink archive),
@@ -314,6 +321,44 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @read, Map.put(@address, "slug", "hull-survey"), %{}, 404)
     answer(c, c.signer, "POST", @read, @address, %{"limit" => 201}, 422)
 
+    # A key's thread: read before its first post, written to, repeated,
+    # conflicting, misplaced, for a key not sold, and by an outsider.
+    {:ok, minted} = KeyFleet.Chain.minted(@fleet)
+    unsold = Map.put(@address, "token_id", Integer.to_string(minted + 1))
+    # A send key is the agent's across the fleet, so the thread's posts take new ones.
+    thread_post = %{post | "idempotency_key" => "t-1"}
+
+    assert answer(c, c.signer, "POST", @key_read, own, %{}, 200).body ==
+             %{"thread" => %{"token_id" => 2, "head_seq" => 0}, "messages" => []}
+
+    opening = answer(c, c.signer, "POST", @key_send, own, thread_post, 201).body["message"]
+    assert opening["as_key"] == 2
+
+    assert answer(c, c.signer, "POST", @key_send, own, thread_post, 200).body["message"]["id"] ==
+             opening["id"]
+
+    answer(c, c.signer, "POST", @key_send, own, %{thread_post | "body" => "Changed"}, 422)
+    answer(c, c.signer, "POST", @key_send, own, %{reply | "idempotency_key" => "k-5"}, 422)
+
+    answer(
+      c,
+      c.signer,
+      "POST",
+      @key_send,
+      unsold,
+      %{thread_post | "idempotency_key" => "t-2"},
+      404
+    )
+
+    answer(c, stranger, "POST", @key_send, own, %{thread_post | "idempotency_key" => "s-2"}, 403)
+    answer(c, c.signer, "POST", @key_read, unsold, %{}, 404)
+    answer(c, c.signer, "POST", @key_read, own, %{"after_seq" => -1}, 422)
+
+    assert [%{"id" => opening_id}] =
+             answer(c, c.signer, "POST", @key_read, own, %{}, 200).body["messages"]
+
+    assert opening_id == opening["id"]
+
     # Catching up.
     general = %{"slug" => "general", "after_seq" => 0}
 
@@ -402,6 +447,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     # While key ownership is being read again, nothing that needs a key is done.
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     answer(c, c.signer, "POST", @send, @address, %{post | "idempotency_key" => "k-4"}, 503)
+    answer(c, c.signer, "POST", @key_send, own, %{post | "idempotency_key" => "k-7"}, 503)
     answer(c, c.signer, "POST", @pairing, one, %{}, 503)
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
@@ -483,12 +529,15 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
       {"POST", @topic},
       {"POST", @read},
       {"POST", @send},
+      {"POST", @key_read},
+      {"POST", @key_send},
       {"POST", @sync}
     ]
   end
 
   defp body_cap(@update), do: 24 * 1024
   defp body_cap(@send), do: 4_000 * 12 + 2 * 1024
+  defp body_cap(@key_send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@sync), do: 32 * 1024
   defp body_cap(_template), do: 4096
 
@@ -497,6 +546,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@create), do: %{"slug" => "away", "name" => "Away"}
   defp empty_or_minimal(@topic), do: %{"topic" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
+  defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@sync), do: %{"rooms" => [], "graph" => %{"after_seq" => 0}}
   defp empty_or_minimal(_template), do: %{}
 

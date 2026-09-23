@@ -5,13 +5,20 @@ defmodule KeyFleet.Keys do
   """
   use Ash.Domain
 
+  alias KeyFleet.Actors.Agent
+  alias KeyFleet.Actors.Human
+
   resources do
     resource KeyFleet.Keys.KeyAttachment do
       define :record_epoch, action: :record_epoch
       define :key_history, action: :history, args: [:fleet_id, :token_id]
       define :current_key, action: :current, args: [:fleet_id, :token_id], not_found_error?: false
 
-      define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
+      define :held_identity_key,
+        action: :identity_in_fleet,
+        args: [:fleet_id, :owner_wallets],
+        not_found_error?: false
+
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
 
       define :recorded_in_blocks,
@@ -40,7 +47,12 @@ defmodule KeyFleet.Keys do
       define :list_pairing_requests, action: :pairing_requests, args: [:fleet_id, :token_id]
       define :pairing_history, action: :pairing_history, args: [:fleet_id, :token_id]
       define :my_pairings, action: :my_pairings
-      define :my_effective_pairings, action: :my_effective_pairings, args: [:fleet_id]
+
+      define :my_identity_key,
+        action: :my_identity_in_fleet,
+        args: [:fleet_id],
+        not_found_error?: false
+
       define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
 
       define :my_open_request,
@@ -52,4 +64,31 @@ defmodule KeyFleet.Keys do
 
   @doc "Where the reader says which of a fleet's keys have just been revealed."
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"
+
+  @doc """
+  The key `actor` is in a fleet today, as `%{token_id: token_id, wallet: wallet}`,
+  or `nil` when it holds and runs none of the fleet's keys.
+
+  Keys rank by the order they were sold, the first key sold ranking highest. A
+  person is the highest-ranked key their wallets hold, and `wallet` is the one
+  holding it. An agent is the highest-ranked key it runs today, and `wallet` is
+  its own. Everything either writes in the fleet is written as that key.
+  """
+  def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
+    case held_identity_key!(fleet_id, wallets, actor: actor) do
+      nil -> nil
+      key -> %{token_id: key.token_id, wallet: key.owner_wallet}
+    end
+  end
+
+  def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
+    with true <- Agent.valid?(actor),
+         %{token_id: token_id} <- my_identity_key!(fleet_id, actor: actor) do
+      %{token_id: token_id, wallet: wallet}
+    else
+      _none -> nil
+    end
+  end
+
+  def identity(_actor, _fleet_id), do: nil
 end

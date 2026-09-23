@@ -4,6 +4,7 @@ defmodule KeyFleetWeb.AgentRoomController do
   alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Errors.CreatedRoomLimitError
+  alias KeyFleet.Rooms.Errors.KeyUnknownError
   alias KeyFleet.Rooms.Errors.RenameTooSoonError
   alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
   alias KeyFleet.Rooms.Errors.RoomUnknownError
@@ -17,6 +18,7 @@ defmodule KeyFleetWeb.AgentRoomController do
     :kind,
     :author_kind,
     :author_wallet,
+    :as_key,
     :agent_profile_id,
     :body,
     :reply_to_id,
@@ -92,17 +94,39 @@ defmodule KeyFleetWeb.AgentRoomController do
       |> Map.take(["body", "idempotency_key", "reply_to_id"])
       |> Map.merge(%{"fleet_id" => fleet_id, "slug" => slug})
 
-    case Rooms.send_message(input, actor: actor) do
-      {:ok, message} ->
-        conn |> put_status(sent_status(message)) |> json(%{message: message_json(message)})
+    sent(conn, fleet_id, Rooms.send_message(input, actor: actor))
+  end
 
-      {:error, %Ash.Error.Forbidden{} = error} ->
-        # Standing cannot be read while the fleet's key ownership is not fresh.
-        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+  # A key's thread is read the way a room is: its posts first, then its head.
+  # A key nobody has written to yet has an empty thread.
+  def read_key_thread(conn, %{"fleet_id" => fleet_id, "token_id" => token_id} = params) do
+    actor = conn.assigns.agent_actor
+
+    case Rooms.read_key_thread(fleet_id, token_id, Map.take(params, ["after_seq", "limit"]),
+           actor: actor
+         ) do
+      {:ok, messages} ->
+        thread = Rooms.get_key_thread!(fleet_id, token_id, actor: actor)
+
+        json(conn, %{
+          thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
+          messages: Enum.map(messages, &message_json/1)
+        })
 
       {:error, error} ->
         refuse(conn, error)
     end
+  end
+
+  def send_to_key(conn, %{"fleet_id" => fleet_id, "token_id" => token_id} = params) do
+    actor = conn.assigns.agent_actor
+
+    input =
+      params
+      |> Map.take(["body", "idempotency_key", "reply_to_id"])
+      |> Map.merge(%{"fleet_id" => fleet_id, "token_id" => token_id})
+
+    sent(conn, fleet_id, Rooms.send_to_key(input, actor: actor))
   end
 
   def sync(conn, %{"fleet_id" => fleet_id, "rooms" => rooms, "graph" => graph}) do
@@ -114,6 +138,18 @@ defmodule KeyFleetWeb.AgentRoomController do
       {:error, error} -> refuse(conn, error)
     end
   end
+
+  defp sent(conn, _fleet_id, {:ok, message}),
+    do: conn |> put_status(sent_status(message)) |> json(%{message: message_json(message)})
+
+  # Standing cannot be read while the fleet's key ownership is not fresh.
+  defp sent(conn, fleet_id, {:error, %Ash.Error.Forbidden{} = error}),
+    do: if(KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
+
+  defp sent(conn, _fleet_id, {:error, error}), do: refuse(conn, error)
+
+  defp head_seq(nil), do: 0
+  defp head_seq(thread), do: thread.head_seq
 
   # A repeat of a post the room already has is answered with that post, and the
   # sender is told nothing new was written.
@@ -164,6 +200,9 @@ defmodule KeyFleetWeb.AgentRoomController do
 
       Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
         not_found(conn)
+
+      Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
+        conn |> put_status(404) |> json(%{error: "key_unknown"})
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
         invalid(conn, "idempotency_conflict")

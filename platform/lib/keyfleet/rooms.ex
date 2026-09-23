@@ -1,5 +1,5 @@
 defmodule KeyFleet.Rooms do
-  @moduledoc "Fleet-scoped rooms for native chat."
+  @moduledoc "Fleet-scoped rooms for native chat, and a public thread for every key."
   use Ash.Domain
 
   require Ash.Query
@@ -21,18 +21,28 @@ defmodule KeyFleet.Rooms do
       define :get_room, action: :in_fleet, args: [:fleet_id, :slug], not_found_error?: false
       define :create_room, action: :create
       define :set_room_topic, action: :set_topic, args: [:topic]
+
+      define :get_key_thread,
+        action: :key_thread,
+        args: [:fleet_id, :token_id],
+        not_found_error?: false
+
+      define :open_key_thread, action: :open_key_thread, args: [:fleet_id, :token_id]
     end
 
     resource KeyFleet.Rooms.Message do
       define :send_message, action: :send_message
       define :note_room_named, action: :note_room_named
       define :read_messages, action: :read_messages, args: [:fleet_id, :slug]
+      define :send_to_key, action: :send_to_key
+      define :read_key_thread, action: :read_key_thread, args: [:fleet_id, :token_id]
+      define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
 
       define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
 
       define :get_post_under_send_key,
         action: :under_send_key,
-        args: [:fleet_id, :author_wallet, :idempotency_key],
+        args: [:fleet_id, :author_wallets, :idempotency_key],
         not_found_error?: false
     end
   end

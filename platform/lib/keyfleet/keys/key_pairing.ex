@@ -236,9 +236,9 @@ defmodule KeyFleet.Keys.KeyPairing do
       prepare build(load: [:effective?], sort: [requested_at: :desc])
     end
 
-    # Whether this operator is running any key in the fleet right now, which is
-    # what lets it work alongside that fleet's key holders.
-    read :my_effective_pairings do
+    # The lowest-numbered key this operator runs in the fleet right now: the
+    # key it is in that fleet, and writes everything there as.
+    read :my_identity_in_fleet do
       public? false
       argument :fleet_id, :string, allow_nil?: false
 
@@ -246,6 +246,9 @@ defmodule KeyFleet.Keys.KeyPairing do
                fleet_id == ^arg(:fleet_id) and operator_wallet == ^actor(:wallet_address) and
                  status == :active and ownership_epoch == current_ownership_epoch
              )
+
+      prepare build(sort: [token_id: :asc], limit: 1)
+      get? true
     end
 
     read :my_open_request do
@@ -267,7 +270,7 @@ defmodule KeyFleet.Keys.KeyPairing do
       authorize_if always()
     end
 
-    policy action([:my_pairings, :my_open_request, :my_effective_pairings]) do
+    policy action([:my_pairings, :my_open_request, :my_identity_in_fleet]) do
       authorize_if KeyFleet.Checks.AgentActor
     end
 

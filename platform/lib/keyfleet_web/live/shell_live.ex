@@ -184,6 +184,9 @@ defmodule KeyFleetWeb.ShellLive do
 
   def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
 
+  # Keys' own threads are not shown on any page yet.
+  def handle_info({:key_activity, _fleet_id, _token_id}, socket), do: {:noreply, socket}
+
   # A room created or named in the fleet on show changes its list of rooms, and
   # the room on show when it is the one named.
   def handle_info({:rooms_changed, fleet_id}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do

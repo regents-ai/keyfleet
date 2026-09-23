@@ -111,9 +111,12 @@ defmodule KeyFleetWeb.RoomsLive do
               class={message.kind == :room_named && "rooms-naming"}
             >
               <p :if={message.kind == :room_named} class="rooms-detail">
-                {author(message)} named this room “{message.body}” on {stamp(message.inserted_at)}
+                <.author fleet_id={@room.fleet_id} message={message} />
+                named this room “{message.body}” on {stamp(message.inserted_at)}
               </p>
-              <p :if={message.kind == :post} class="rooms-author">{author(message)}</p>
+              <p :if={message.kind == :post} class="rooms-author">
+                <.author fleet_id={@room.fleet_id} message={message} />
+              </p>
               <p :if={message.kind == :post and message.reply_to_id} class="rooms-detail">
                 Replying to post {message.reply_to_seq}
               </p>
@@ -159,10 +162,23 @@ defmodule KeyFleetWeb.RoomsLive do
   def room_label(%{topic: nil, name: name}), do: name
   def room_label(%{topic: topic}), do: topic
 
-  defp author(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
+  attr :fleet_id, :string, required: true
+  attr :message, :map, required: true
+
+  # Who wrote a line: the key it was written as, which opens that key, and the
+  # person's wallet or the agent's name.
+  defp author(assigns) do
+    ~H"""
+    <.link navigate={"/app/fleets/#{@fleet_id}?key=#{@message.as_key}"}>
+      Key {@message.as_key} · {writer(@message)}
+    </.link>
+    """
+  end
+
+  defp writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
 
-  defp author(%{author_wallet: wallet}), do: short_wallet(wallet)
+  defp writer(%{author_wallet: wallet}), do: short_wallet(wallet)
 
   defp short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)

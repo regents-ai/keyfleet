@@ -14,6 +14,8 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
   @read_general "/api/v1/agent/fleets/fibonacci_syndicate/rooms/general/messages/read"
   @send_general "/api/v1/agent/fleets/fibonacci_syndicate/rooms/general/messages/send"
   @sync_path "/api/v1/agent/fleets/fibonacci_syndicate/sync"
+  @key_read "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read"
+  @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
   @cascade "fibonacci_cascade"
   @create_cascade "/api/v1/agent/fleets/fibonacci_cascade/rooms/create"
   @join_body ~s({ "name": "Wallet agent", "declared_harness": "local" })
@@ -151,6 +153,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
              sent.body["message"]
 
     assert sent.body["message"]["author_wallet"] == c.signer.address
+    assert sent.body["message"]["as_key"] == 1
     assert sent.body["message"]["agent_profile"]["name"] == "Wallet agent"
 
     again = send_signed(c, "POST", @send_general, send_body("Hull survey started", "k-1"))
@@ -310,6 +313,160 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
     refused = send_signed(c, "POST", @sync_path, twice)
     assert {refused.status, refused.body} == {422, %{"error" => "invalid_request"}}
+  end
+
+  test "an agent reads and writes a key's thread by the key's number", c do
+    pair(c)
+    sell!("fibonacci_syndicate", 2..5)
+
+    empty = key_thread(c, 5, "read")
+
+    assert {empty.status, empty.body} ==
+             {200, %{"thread" => %{"token_id" => 5, "head_seq" => 0}, "messages" => []}}
+
+    assert documented(empty, @key_read) == []
+
+    {:ok, minted} = KeyFleet.Chain.minted("fibonacci_syndicate")
+    unsold = minted + 1
+
+    for {fleet, token_id, action, body, error} <- [
+          {"fibonacci_syndicate", unsold, "read", "{}", "key_unknown"},
+          {"fibonacci_syndicate", unsold, "send", send_body("Anyone there?", "k-0"),
+           "key_unknown"},
+          {"hull_survey", 1, "read", "{}", "fleet_unknown"},
+          {"hull_survey", 1, "send", send_body("Anyone there?", "k-0"), "fleet_unknown"}
+        ] do
+      refused = key_thread(c, token_id, action, body, fleet)
+      assert {refused.status, refused.body} == {404, %{"error" => error}}, "#{fleet} #{token_id}"
+      assert documented(refused, if(action == "read", do: @key_read, else: @key_send)) == []
+    end
+
+    sent = key_thread(c, 5, "send", send_body("Welcome aboard", "k-1"))
+    assert sent.status == 201
+    assert documented(sent, @key_send) == []
+
+    assert %{"seq" => 1, "as_key" => 1, "author_kind" => "agent", "body" => "Welcome aboard"} =
+             sent.body["message"]
+
+    assert sent.body["message"]["author_wallet"] == c.signer.address
+
+    again = key_thread(c, 5, "send", send_body("Welcome aboard", "k-1"))
+    assert {again.status, again.body} == {200, sent.body}
+    assert documented(again, @key_send) == []
+
+    conflict = key_thread(c, 5, "send", send_body("Welcome back", "k-1"))
+    assert {conflict.status, conflict.body} == {422, %{"error" => "idempotency_conflict"}}
+    assert documented(conflict, @key_send) == []
+
+    in_room = send_signed(c, "POST", @send_general, send_body("Morning", "k-2"))
+
+    answer =
+      key_thread(
+        c,
+        5,
+        "send",
+        Jason.encode!(%{
+          body: "On it",
+          idempotency_key: "k-3",
+          reply_to_id: in_room.body["message"]["id"]
+        })
+      )
+
+    assert {answer.status, answer.body} == {422, %{"error" => "reply_not_here"}}
+
+    read = key_thread(c, 5, "read")
+    assert documented(read, @key_read) == []
+    assert read.body["thread"] == %{"token_id" => 5, "head_seq" => 1}
+    assert [%{"seq" => 1, "as_key" => 1, "body" => "Welcome aboard"}] = read.body["messages"]
+
+    # A key's thread is never one of the fleet's rooms.
+    listed = send_signed(c, "GET", @rooms_path)
+    refute Enum.any?(listed.body["rooms"], &(&1["slug"] == "key-5" or &1["kind"] == "key"))
+
+    for {path, body} <- [
+          {room_path("key-5", "read"), "{}"},
+          {room_path("key-5", "send"), send_body("Hello", "k-4")},
+          {@sync_path, sync_body(%{"key-5" => 0})}
+        ] do
+      missing = send_signed(c, "POST", path, body)
+      assert {missing.status, missing.body} == {404, %{"error" => "room_unknown"}}, path
+    end
+
+    created =
+      send_signed(
+        c,
+        "POST",
+        "/api/v1/agent/fleets/fibonacci_syndicate/rooms/create",
+        ~s({"slug":"key-5","name":"Key 5"})
+      )
+
+    assert {created.status, created.body} == {422, %{"error" => "invalid_room"}}
+  end
+
+  test "only members write to a key's thread, and only while ownership is fresh", c do
+    assert send_signed(c, "POST", @join_path, @join_body).status == 200
+
+    refused = key_thread(c, 1, "send", send_body("Standing by", "k-1"))
+    assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
+    assert documented(refused, @key_send) == []
+
+    # Reading stays open to everyone.
+    assert key_thread(c, 1, "read").status == 200
+
+    pair(c)
+
+    ChainHelpers.seed_cursor!("fibonacci_syndicate",
+      observed_at: DateTime.add(DateTime.utc_now(), -3600)
+    )
+
+    refused = key_thread(c, 1, "send", send_body("Standing by", "k-1"))
+    assert {refused.status, refused.body} == {503, %{"error" => "ownership_refreshing"}}
+    assert documented(refused, @key_send) == []
+  end
+
+  test "only a key's path and a post's body reach a key's thread", c do
+    pair(c)
+    send_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/send"
+    read_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/read"
+
+    for {method, path, body} <- [
+          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","as_key":1})},
+          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","token_id":2})},
+          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","slug":"general"})},
+          {"POST", send_path, ~s({"body":"Hello"})},
+          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","reply_to_id":"seven"})},
+          {"POST", read_path, ~s({"page":1})},
+          {"POST", read_path, ~s({"after_seq":"1"})},
+          {"POST", read_path <> "?after_seq=1", "{}"},
+          {"POST", read_path <> "/", "{}"},
+          {"GET", read_path, "{}"},
+          {"POST", "/api/v1/agent/keys/fibonacci_syndicate/0/messages/read", "{}"},
+          {"POST", "/api/v1/agent/keys/fibonacci_syndicate/01/messages/read", "{}"},
+          {"POST", "/api/v1/agent/keys/fibonacci_syndicate/key-1/messages/read", "{}"},
+          {"POST", "/api/v1/agent/keys/fibonacci_syndicate/1234567890123456789/messages/read",
+           "{}"},
+          {"POST", "/api/v1/agent/keys/Fibonacci_syndicate/1/messages/send",
+           send_body("Hello", "k-9")}
+        ] do
+      assert send_signed(c, method, path, body).status == 401, "#{method} #{path} #{body}"
+    end
+
+    for body <- [~s({"after_seq":#{2 ** 70}}), ~s({"after_seq":-1}), ~s({"limit":201})] do
+      refused = send_signed(c, "POST", read_path, body)
+      assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
+      assert documented(refused, @key_read) == []
+    end
+
+    longest =
+      ~s({"idempotency_key":"k-10","body":") <>
+        String.duplicate("\\ud83d\\ude00", 4_000) <> ~s("})
+
+    assert send_signed(c, "POST", send_path, longest).status == 201
+
+    padded = longest <> String.duplicate(" ", 4_000 * 12 + 2 * 1024 - byte_size(longest) + 1)
+    too_big = send_signed(c, "POST", send_path, padded)
+    assert too_big.status == 413
+    assert documented(too_big, @key_send) == []
   end
 
   describe "created and open rooms" do
@@ -644,6 +801,12 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1, actor: owner)
     Keys.approve_pairing!(request, %{}, actor: owner)
   end
+
+  defp key_thread(c, token_id, action, body \\ "{}", fleet \\ "fibonacci_syndicate"),
+    do: send_signed(c, "POST", "/api/v1/agent/keys/#{fleet}/#{token_id}/messages/#{action}", body)
+
+  defp documented(response, template),
+    do: KeyFleet.ContractSchema.response_errors(response.body, "POST", template, response.status)
 
   defp room_path(slug, action),
     do: "/api/v1/agent/fleets/fibonacci_syndicate/rooms/#{slug}/messages/#{action}"

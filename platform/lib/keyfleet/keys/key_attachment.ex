@@ -211,9 +211,11 @@ defmodule KeyFleet.Keys.KeyAttachment do
              )
     end
 
-    # Which of a person's wallets holds a key in this fleet right now, which is
-    # what makes them one of the fleet's key holders.
-    read :held_in_fleet do
+    # The lowest-numbered key a person's wallets hold in this fleet right now.
+    # Keys rank by the order they were sold, so it is their highest-ranked key,
+    # and it is who they are in the fleet: everything they write there is
+    # written as it.
+    read :identity_in_fleet do
       public? false
       argument :fleet_id, :string, allow_nil?: false
       argument :owner_wallets, {:array, :string}, allow_nil?: false
@@ -223,7 +225,8 @@ defmodule KeyFleet.Keys.KeyAttachment do
                  ownership_epoch == current_ownership_epoch
              )
 
-      prepare build(sort: [token_id: :asc])
+      prepare build(sort: [token_id: :asc], limit: 1)
+      get? true
     end
   end
 

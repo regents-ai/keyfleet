@@ -23,6 +23,11 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
   @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
+  # A key's thread is addressed by its fleet and its number, spelled as the
+  # pairing path spells them.
+  @token ~S"[1-9][0-9]{0,17}"
+  @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
+  @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
@@ -226,6 +231,8 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
         @topic_path,
         @read_path,
         @send_path,
+        @key_read_path,
+        @key_send_path,
         @sync_path,
         @graph_path
       ],
@@ -240,7 +247,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp body_limit(path) do
     cond do
-      Regex.match?(@send_path, path) -> @send_max_body
+      Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
@@ -269,12 +276,23 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   defp check_room_body(path, params) do
     cond do
-      Regex.match?(@rooms_path, path) -> admit(params == %{})
-      Regex.match?(@create_room_path, path) -> admit(valid_room_body?(params))
-      Regex.match?(@topic_path, path) -> admit(valid_topic_body?(params))
-      Regex.match?(@read_path, path) -> check_read_body(params)
-      Regex.match?(@send_path, path) -> admit(valid_send_body?(params))
-      true -> :invalid
+      Regex.match?(@rooms_path, path) ->
+        admit(params == %{})
+
+      Regex.match?(@create_room_path, path) ->
+        admit(valid_room_body?(params))
+
+      Regex.match?(@topic_path, path) ->
+        admit(valid_topic_body?(params))
+
+      Regex.match?(@read_path, path) or Regex.match?(@key_read_path, path) ->
+        check_read_body(params)
+
+      Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) ->
+        admit(valid_send_body?(params))
+
+      true ->
+        :invalid
     end
   end
 
@@ -321,7 +339,9 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
   defp in_bounds?(_kind, _value), do: true
 
   # A read names how far it has already read and how much it wants; a post names
-  # the words, the key the sender filed them under and what it answers.
+  # the words, the key the sender filed them under and what it answers, in a
+  # room and in a key's thread alike. Who a post is written as is never named:
+  # it is always the sender's own key.
   defp check_read_body(params) when is_map(params) do
     if Enum.all?(params, fn {key, value} -> key in ~w(after_seq limit) and is_integer(value) end) do
       in_range(

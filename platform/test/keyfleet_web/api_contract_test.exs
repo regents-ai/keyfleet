@@ -24,6 +24,8 @@ defmodule KeyFleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
              "/api/v1/agent/fleets/{fleet_id}/sync",
              "/api/v1/agent/join/status",
+             "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read",
+             "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing",
              "/api/v1/agent/pairings",
              "/api/v1/agent/profile/update",

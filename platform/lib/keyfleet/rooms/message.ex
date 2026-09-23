@@ -3,7 +3,11 @@ defmodule KeyFleet.Rooms.Message do
 
   @moduledoc """
   One line in one room, in the place that room gave it: a post a member wrote,
-  or the note that a member named the room.
+  or the note that a member named the room. A key's thread is a room too, so a
+  post written to a key is a line in its thread.
+
+  Every line is written as a key: the author's highest-ranked key in the fleet
+  at the time (`KeyFleet.Keys.identity/2`), kept as `as_key`.
 
   Posts are never edited and never removed, so the table is the room's whole
   history and the place a post holds is the only thing a reader has to remember
@@ -18,6 +22,7 @@ defmodule KeyFleet.Rooms.Message do
   @bigint 9_223_372_036_854_775_807
   @max_body 4_000
   @max_page 200
+  @max_posts_as_key 20
 
   postgres do
     table "messages"
@@ -36,6 +41,18 @@ defmodule KeyFleet.Rooms.Message do
 
       check_constraint(:body, "messages_body_length",
         check: "length(body) BETWEEN 1 AND #{@max_body}"
+      )
+
+      # Every line names the key it was written as. Added without checking the
+      # lines already written, which can never be changed.
+      check_constraint(:as_key, "messages_as_key", check: "as_key IS NOT NULL AND as_key > 0")
+    end
+
+    custom_indexes do
+      # A key's newest posts in the fleet's rooms.
+      index(["fleet_id", "as_key", "inserted_at DESC"],
+        name: "messages_posts_as_key_index",
+        where: "kind = 'post'"
       )
     end
 
@@ -107,7 +124,38 @@ defmodule KeyFleet.Rooms.Message do
       return_skipped_upsert? true
 
       validate KeyFleet.Graph.Validations.KnownFleet
-      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post}
+      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
+      change KeyFleet.Rooms.Changes.AnnouncePost
+    end
+
+    # A post written to one of the fleet's keys, in that key's thread, which
+    # the first post opens. Otherwise the same as posting in a room.
+    create :send_to_key do
+      accept []
+      transaction? true
+
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      argument :body, :string,
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: @max_body, trim?: false]
+
+      argument :idempotency_key, :string,
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: 128, trim?: false]
+
+      argument :reply_to_id, :uuid
+
+      upsert? true
+      upsert_identity :unique_send_key
+      upsert_fields []
+      upsert_condition expr(false)
+      return_skipped_upsert? true
+
+      validate KeyFleet.Graph.Validations.KnownFleet
+      validate KeyFleet.Rooms.Validations.IssuedKey
+      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
       change KeyFleet.Rooms.Changes.AnnouncePost
     end
 
@@ -130,7 +178,7 @@ defmodule KeyFleet.Rooms.Message do
         allow_nil?: false,
         constraints: [min_length: 1, max_length: 128, trim?: false]
 
-      change {KeyFleet.Rooms.Changes.PostMessage, kind: :room_named}
+      change {KeyFleet.Rooms.Changes.PostMessage, kind: :room_named, in: :room}
     end
 
     read :read_messages do
@@ -143,28 +191,46 @@ defmodule KeyFleet.Rooms.Message do
       filter expr(seq > ^arg(:after_seq))
 
       prepare build(load: [:agent_profile])
+      prepare {KeyFleet.Rooms.Preparations.OneRoom, in: :room}
+    end
 
-      # One named room's posts, oldest first and never more than the reader asked
-      # for, whatever a caller tried to add to the query. A name the fleet does
-      # not have reads as a room with nothing in it.
-      prepare fn query, context ->
+    # The posts written to one of the fleet's keys, read the way a room is.
+    read :read_key_thread do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
+      argument :limit, :integer, default: 100, constraints: [min: 1, max: @max_page]
+
+      validate KeyFleet.Graph.Validations.KnownFleet
+      validate KeyFleet.Rooms.Validations.IssuedKey
+      filter expr(seq > ^arg(:after_seq))
+
+      prepare build(load: [:agent_profile])
+      prepare {KeyFleet.Rooms.Preparations.OneRoom, in: :key}
+    end
+
+    # What one key has said in the fleet's rooms, newest first. Posts written
+    # to keys' threads are left out.
+    read :posts_as_key do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      argument :limit, :integer,
+        default: @max_posts_as_key,
+        constraints: [min: 1, max: @max_posts_as_key]
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
+                 room.kind != :key
+             )
+
+      prepare build(load: [:room, :agent_profile])
+
+      prepare fn query, _context ->
         Ash.Query.before_action(query, fn query ->
-          room =
-            KeyFleet.Rooms.get_room!(
-              Ash.Query.get_argument(query, :fleet_id),
-              Ash.Query.get_argument(query, :slug),
-              actor: context.actor
-            )
-
-          query =
-            case room do
-              nil -> Ash.Query.do_filter(query, false)
-              %{id: room_id} -> Ash.Query.filter(query, room_id == ^room_id)
-            end
-
           query
           |> Ash.Query.unset([:sort, :limit, :offset])
-          |> Ash.Query.sort(seq: :asc)
+          |> Ash.Query.sort(inserted_at: :desc, seq: :desc, id: :desc)
           |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
         end)
       end
@@ -178,17 +244,21 @@ defmodule KeyFleet.Rooms.Message do
       get? true
     end
 
+    # The first post a sender made under a send key from any of its wallets, so
+    # a person's retry is known whichever of their wallets now holds the key
+    # they write as.
     read :under_send_key do
       public? false
       argument :fleet_id, :string, allow_nil?: false
-      argument :author_wallet, :string, allow_nil?: false
+      argument :author_wallets, {:array, :string}, allow_nil?: false
       argument :idempotency_key, :string, allow_nil?: false
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and author_wallet == ^arg(:author_wallet) and
+               fleet_id == ^arg(:fleet_id) and author_wallet in ^arg(:author_wallets) and
                  idempotency_key == ^arg(:idempotency_key)
              )
 
+      prepare build(sort: [inserted_at: :asc, id: :asc], limit: 1)
       get? true
     end
   end
@@ -199,7 +269,7 @@ defmodule KeyFleet.Rooms.Message do
       authorize_if always()
     end
 
-    policy action([:send_message, :note_room_named]) do
+    policy action([:send_message, :send_to_key, :note_room_named]) do
       authorize_if KeyFleet.Rooms.Checks.RoomPoster
     end
   end
@@ -231,6 +301,14 @@ defmodule KeyFleet.Rooms.Message do
       public?: true,
       writable?: false,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+
+    # The key the line was written as: the author's highest-ranked key in the
+    # fleet when it was written. Lines written before keys were recorded have
+    # none.
+    attribute :as_key, :integer,
+      public?: true,
+      writable?: false,
+      constraints: [min: 1, max: @bigint]
 
     attribute :body, :string,
       allow_nil?: false,

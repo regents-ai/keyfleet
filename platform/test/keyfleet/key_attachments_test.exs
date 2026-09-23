@@ -236,6 +236,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
         transaction_hash: "0x" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
       )
 
+    on_exit(fn -> forget(input.token_id) end)
+
     assert [{:ok, first}, {:ok, second}] = race_inputs([input, input])
     assert first.id == second.id
     assert first.observed_at == second.observed_at
@@ -254,6 +256,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
         transaction_hash: "0x" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
       )
 
+    on_exit(fn -> forget(input.token_id) end)
+
     results = race_inputs([input, Map.put(input, :owner_wallet, wallet("b"))])
     assert [winner] = for({:ok, row} <- results, do: row)
     assert [{:error, %Ash.Error.Invalid{}}] = Enum.filter(results, &match?({:error, _}, &1))
@@ -261,6 +265,28 @@ defmodule KeyFleet.KeyAttachmentsTest do
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       assert [row] = Keys.key_history!(@fleet, input.token_id)
       assert persisted_fields(row) == persisted_fields(winner)
+    end)
+  end
+
+  # A key these races commit is removed when the test ends, so no other test
+  # reads it as sold. Key records refuse deletion; their guard is set aside
+  # inside this one transaction, which no other connection sees.
+  defp forget(token_id) do
+    Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+      Repo.transaction(fn ->
+        Repo.query!(
+          "ALTER TABLE keyfleet_app.key_attachments DISABLE TRIGGER immutable_key_epochs"
+        )
+
+        Repo.query!(
+          "DELETE FROM keyfleet_app.key_attachments WHERE fleet_id = $1 AND token_id = $2",
+          [@fleet, token_id]
+        )
+
+        Repo.query!(
+          "ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs"
+        )
+      end)
     end)
   end
 
