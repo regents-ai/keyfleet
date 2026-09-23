@@ -5,8 +5,8 @@ defmodule KeyFleet.Chain.Logs do
 
   Each log is sent, by its contract and topic0, to `KeyFleet.Chain.OwnershipLog`
   or `KeyFleet.Chain.VotesLog`, and carries its fleet and its place on the
-  chain. A launch proposal is joined with the payload log that follows it in
-  the same transaction. A log the node lists twice is read once.
+  chain. A launch or payment proposal is joined with the payload log that
+  follows it in the same transaction. A log the node lists twice is read once.
   One log that cannot be read, two different logs in one place, or a proposal
   and payload that do not pair up refuses the whole stretch, and the reason
   names the log.
@@ -29,7 +29,7 @@ defmodule KeyFleet.Chain.Logs do
       they emit it.
     * `{:conflicting_logs, transaction_hash, log_index}`: two different logs
       claim the same place.
-    * `{:payload_missing, transaction_hash, log_index}`: a launch
+    * `{:payload_missing, transaction_hash, log_index}`: a launch or payment
       proposal is not followed by its payload.
     * `{:payload_without_proposal, transaction_hash, log_index}`: a payload
       does not follow its proposal.
@@ -168,8 +168,8 @@ defmodule KeyFleet.Chain.Logs do
     end)
   end
 
-  # A launch proposal takes its payload from the next log, which
-  # must be that payload, for the same proposal, in the same transaction.
+  # A launch or payment proposal takes its payload from the next log, which
+  # must be that kind's payload, for the same proposal, in the same transaction.
   defp join([], records), do: {:ok, Enum.reverse(records)}
 
   defp join([{:proposal, %{kind: :decision}} = proposal | rest], records),
@@ -187,7 +187,7 @@ defmodule KeyFleet.Chain.Logs do
   defp join([{:proposal, proposal} | _rest], _records),
     do: {:error, {:payload_missing, proposal.transaction_hash, proposal.log_index}}
 
-  defp join([{:autolaunch, payload} | _rest], _records),
+  defp join([{kind, payload} | _rest], _records) when kind in [:autolaunch, :pay],
     do: {:error, {:payload_without_proposal, payload.transaction_hash, payload.log_index}}
 
   defp join([record | rest], records), do: join(rest, [record | records])

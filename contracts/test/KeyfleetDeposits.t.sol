@@ -456,8 +456,8 @@ contract KeyfleetDepositsTest is Test {
 
     // --- 3. capital deposits ---------------------------------------------
 
-    /// @dev Invariant: a capital deposit becomes free capital and nothing else: booked, and until
-    /// the post-launch payout slice with no way out. It touches no cohort, registers no reward asset
+    /// @dev Invariant: a capital deposit becomes free capital and nothing else: booked, and spent
+    /// only by a passed Pay once the launch settles. It touches no cohort, registers no reward asset
     /// and creates no claim.
     function test_depositCapitalBooksTheNetAsWorkingCapitalOnly() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);

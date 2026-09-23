@@ -1,8 +1,10 @@
 defmodule KeyFleet.Proposals.Proposal do
   @moduledoc """
   One proposal of a fleet's vote, from its `ProposalCreated` log and, for a
-  launch, the payload log beside it. Only the chain reader
+  launch or a payment, the payload log beside it. Only the chain reader
   writes it, and nothing ever changes it.
+
+  Every key is one vote, so `yes_keys` and `no_keys` are the tally.
 
   Its place on the chain is the `ProposalCreated` log's. `record_seq` is the
   fleet's count of proposal records when it was made.
@@ -23,16 +25,25 @@ defmodule KeyFleet.Proposals.Proposal do
     check_constraints do
       check_constraint(:number, "proposals_positive_number", check: "number > 0")
 
-      check_constraint(:kind, "proposals_kind", check: "kind IN ('decision', 'autolaunch')")
+      check_constraint(:kind, "proposals_kind",
+        check: "kind IN ('decision', 'autolaunch', 'pay')"
+      )
 
-      check_constraint(:text, "proposals_decision_fields",
+      check_constraint(:text, "proposals_text_fields",
         check:
-          "num_nonnulls(text, text_bytes, text_sha256) = CASE kind WHEN 'decision' THEN 3 ELSE 0 END"
+          "num_nonnulls(text, text_bytes, text_sha256) = CASE kind WHEN 'autolaunch' THEN 0 ELSE 3 END"
       )
 
       check_constraint(:envelope_hash, "proposals_autolaunch_fields",
-        check:
-          "num_nonnulls(envelope_hash, execution_expiry) = CASE kind WHEN 'autolaunch' THEN 2 ELSE 0 END"
+        check: "num_nonnulls(envelope_hash) = CASE kind WHEN 'autolaunch' THEN 1 ELSE 0 END"
+      )
+
+      check_constraint(:asset, "proposals_pay_fields",
+        check: "num_nonnulls(asset, amount, recipient) = CASE kind WHEN 'pay' THEN 3 ELSE 0 END"
+      )
+
+      check_constraint(:execution_expiry, "proposals_execution_expiry_fields",
+        check: "num_nonnulls(execution_expiry) = CASE kind WHEN 'decision' THEN 0 ELSE 1 END"
       )
 
       check_constraint(:text, "proposals_text_cap",
@@ -43,17 +54,17 @@ defmodule KeyFleet.Proposals.Proposal do
         check: "eligible_keys >= 0"
       )
 
-      check_constraint(:total_weight, "proposals_nonnegative_total_weight",
-        check: "total_weight >= 0"
-      )
+      check_constraint(:amount, "proposals_nonnegative_amount", check: "amount >= 0")
 
       check_constraint(:execution_expiry, "proposals_nonnegative_execution_expiry",
         check: "execution_expiry >= 0"
       )
 
-      check_constraint(:proposer, "proposals_proposer_shape",
-        check: "proposer ~ '^0x[0-9a-f]{40}$'"
-      )
+      for field <- [:proposer, :asset, :recipient] do
+        check_constraint(field, "proposals_#{field}_shape",
+          check: "#{field} ~ '^0x[0-9a-f]{40}$'"
+        )
+      end
 
       for field <- [:digest, :text_sha256, :envelope_hash, :block_hash, :transaction_hash] do
         check_constraint(field, "proposals_#{field}_shape",
@@ -123,12 +134,14 @@ defmodule KeyFleet.Proposals.Proposal do
         :proposer,
         :closes_at,
         :eligible_keys,
-        :total_weight,
         :digest,
         :text,
         :text_bytes,
         :text_sha256,
         :envelope_hash,
+        :asset,
+        :amount,
+        :recipient,
         :execution_expiry,
         :block_number,
         :block_hash,
@@ -189,7 +202,7 @@ defmodule KeyFleet.Proposals.Proposal do
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:decision, :autolaunch]]
+      constraints: [one_of: [:decision, :autolaunch, :pay]]
 
     attribute :proposer, :string,
       allow_nil?: false,
@@ -204,20 +217,29 @@ defmodule KeyFleet.Proposals.Proposal do
       public?: true,
       constraints: [min: 0, max: @max_bigint]
 
-    attribute :total_weight, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
-
     for field <- [:digest, :text_sha256, :envelope_hash] do
       attribute field, :string,
         public?: true,
         constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
     end
 
-    # A Decision's text: its first 64 KiB as raw bytes, which need not be valid
-    # text, beside the full length and the SHA-256 of all of it.
+    # A Decision's or payment's text: its first 64 KiB as raw bytes, which need
+    # not be valid text, beside the full length and the SHA-256 of all of it.
     attribute :text, :binary, public?: true
     attribute :text_bytes, :integer, public?: true, constraints: [min: 0, max: @max_bigint]
 
-    # Seconds since 1970, as the contract holds it: any uint64 is valid.
+    # A payment's asset, amount in the asset's atomic units (any uint256) and
+    # recipient.
+    for field <- [:asset, :recipient] do
+      attribute field, :string,
+        public?: true,
+        constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+    end
+
+    attribute :amount, :decimal, public?: true, constraints: [min: 0]
+
+    # The last second a passed launch or payment may execute, in seconds since
+    # 1970, as the contract holds it: any uint64 is valid.
     attribute :execution_expiry, :decimal, public?: true, constraints: [min: 0]
 
     for field <- [:block_number, :log_index] do
@@ -258,13 +280,13 @@ defmodule KeyFleet.Proposals.Proposal do
   end
 
   aggregates do
-    sum :yes_weight, :votes, :weight do
+    sum :yes_keys, :votes, :key_count do
       filter expr(support)
       default 0
       public? true
     end
 
-    sum :no_weight, :votes, :weight do
+    sum :no_keys, :votes, :key_count do
       filter expr(not support)
       default 0
       public? true

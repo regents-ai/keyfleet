@@ -1,7 +1,8 @@
 defmodule KeyFleet.Proposals.Vote do
   @moduledoc """
-  One `VoteCast` log: a set of keys voted for or against a recorded proposal.
-  Only the chain reader writes it, and nothing ever changes it.
+  One `VoteCast` log: a set of keys voted for or against a recorded proposal,
+  one vote per key. Only the chain reader writes it, and nothing ever changes
+  it.
   """
   use Ash.Resource,
     domain: KeyFleet.Proposals,
@@ -17,7 +18,6 @@ defmodule KeyFleet.Proposals.Vote do
 
     check_constraints do
       check_constraint(:voter, "proposal_votes_voter_shape", check: "voter ~ '^0x[0-9a-f]{40}$'")
-      check_constraint(:weight, "proposal_votes_nonnegative_weight", check: "weight >= 0")
 
       check_constraint(:token_ids, "proposal_votes_some_keys",
         check: "cardinality(token_ids) > 0 AND 0 < ALL (token_ids)"
@@ -73,7 +73,6 @@ defmodule KeyFleet.Proposals.Vote do
         :fleet_id,
         :voter,
         :support,
-        :weight,
         :token_ids,
         :block_number,
         :block_hash,
@@ -128,7 +127,6 @@ defmodule KeyFleet.Proposals.Vote do
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
     attribute :support, :boolean, allow_nil?: false, public?: true
-    attribute :weight, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
 
     attribute :token_ids, {:array, :integer},
       allow_nil?: false,
@@ -159,6 +157,11 @@ defmodule KeyFleet.Proposals.Vote do
       generated?: true,
       writable?: false,
       public?: true
+  end
+
+  calculations do
+    # Every key is one vote.
+    calculate :key_count, :integer, expr(length(token_ids)), public?: true
   end
 
   relationships do

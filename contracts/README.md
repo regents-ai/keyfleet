@@ -223,8 +223,10 @@ surplus, and no vote can reach it.
 
 Free capital is `freeCapital`, keyed by asset: purchases write the USDC
 entry and deposits write the entry of any admitted asset, USDC included, so
-purchase capital and deposited USDC capital are one figure. It is booked and
-has no way out yet: no call and no vote moves it out of the fleet. The Cascade
+purchase capital and deposited USDC capital are one figure. It is the fleet's
+budget, and its one way out is a passed Pay vote once the launch has graduated or
+failed, capped per asset for each thirty-day pay period as described under "After
+the launch" below. Before the launch settles no call and no vote moves it. The Cascade
 completion reserve and the owed protocol share are separate USDC-only figures and
 are never free capital. Reward backing is not counted here at all, because
 it lives in the ledger. The invariant is that the fleet's balance of an asset is
@@ -345,13 +347,19 @@ The first revenue deposit of an asset registers it in the ledger. Counting from
 USDC, which the constructor registers, a fleet can therefore take revenue in
 seven further assets, and the ninth is refused outright by the ledger's lifetime
 bound: that fleet can never take revenue in it, though it can still take it as
-capital, which registers nothing.
+capital, which registers nothing. Anyone can use up a slot with a tiny revenue
+deposit in any admitted asset, so the Regents Safe must never admit more than
+seven assets besides USDC to one fleet. Once the launch has settled, income in a
+ninth asset cannot be recognized at all, because the keys' part of it has nowhere
+to go.
 
 Tokens that simply arrive, with no deposit call behind them, create nothing.
 `recognizeSurplus(asset)` is the permissionless way to reconcile them: it is
 admission-checked like any other receipt, works from the fleet's balance minus
-what it has already recorded a purpose for, charges the same 2%, and books the
-net as free capital. What it treats as accounted is `freeCapital[asset]`
+what it has already recorded a purpose for, and charges the same 2%. Until the
+launch has graduated or failed it books the whole net as free capital and emits
+`SurplusRecognized`; after that it splits the net between the budget and the
+keys, as described under "After the launch" below. What it treats as accounted is `freeCapital[asset]`
 plus, for USDC, the Cascade completion reserve and the owed protocol share, so
 an incomplete level's reserve can never be turned into free capital by
 anyone and the stakers' share can never be swept into it. Reward backing sits
@@ -360,16 +368,18 @@ can be reclassified. `accountedBalance(asset)` and `surplus(asset)` report the
 two figures, and a fully accounted balance reverts with `NoSurplus`. Unknown
 assets remain unsupported: nothing here can turn one into capital.
 
-All three entry points are guarded by OpenZeppelin `ReentrancyGuard`, so a token
-that calls back into the fleet from inside a transfer cannot book a receipt twice
-or read a half-updated balance. The suite proves that with a token that re-enters
-each of them in turn, and holds the general invariant by fuzzing receipts,
-revenue and bare transfers against `balanceOf(fleet) >= accountedBalance(asset)`.
+All three entry points, and the budget payment described below, are guarded by
+OpenZeppelin `ReentrancyGuard`, so a token that calls back into the fleet from
+inside a transfer cannot book a receipt twice or read a half-updated balance. The
+suite proves that with a token that re-enters each of them in turn, and a paid
+asset that calls back from inside a budget payment, and holds the general
+invariant by fuzzing receipts, revenue and bare transfers against
+`balanceOf(fleet) >= accountedBalance(asset)`.
 
 The worst case of a revenue deposit is a Fibonacci fleet with all twenty levels
 complete taking an asset it has never seen before, with every slot it touches
 cold: twenty cohort indexes move and the asset is registered in the ledger. That
-measured 788,126 gas in execution. The suite asserts a ceiling of 946,000, which
+measured 788,080 gas in execution. The suite asserts a ceiling of 946,000, which
 is the measurement plus twenty percent, and that is the execution figure the
 deployment manifest should quote, with the 21,000 base transaction cost on top of
 it. The cost is bounded by the preset, not by how many keys or holders the fleet
@@ -390,25 +400,17 @@ one, which the app should label from `VOTES.VOTING_WINDOW()`.
 There is no setter, no councils or moderators, no rule amendment, no quorum
 tuning, no pause and no cancellation.
 
-Weight comes from the kind of proposal and the preset, and nothing else. On an
-`Autolaunch` every key is one whole vote, `WEIGHT_SCALE = 1e18`, on every preset,
-so a launch is measured against the number of keys sold. On a `Decision` a
-Fleet.Tech key is one whole vote and a Fibonacci key is `WEIGHT_SCALE` divided by
-its level supply, rounded down, so a level carries one vote shared equally by its
-keys: half a vote for each of level 1's two keys, a seventeen-thousandth for each
-of level 20's. The floor is the fixed-precision approximation the product asks
-for; it loses less than one atomic unit per key in a level, so all twenty levels
-together are worth a shade under twenty votes rather than exactly twenty.
-`weightOf(tokenId)` reports a key's Decision weight, and `VoteCast` reports the
-weight a vote actually added.
+Every key is one vote, on every kind of proposal and every preset. A Fibonacci
+level-1 key and a level-20 key count the same; the early keys' advantage is in
+what they are paid, not in how they vote. `VoteCast` lists the keys a vote
+counted, and `yesVotes` and `noVotes` on the proposal are key counts.
 
 A proposal freezes everything it will be judged by in the transaction that
 creates it. Its eligible set is the token ids `1..snapshotMinted`, where
-`snapshotMinted` is the fleet's minted count at that moment, and its total weight
-is computed there and then: one whole vote per key for a launch, and for a
-Decision by walking at most twenty levels and never a single key. A key minted
-afterwards is outside that snapshot: it cannot vote on that proposal and was
-never counted in the weight it has to clear. Proposing needs
+`snapshotMinted` is the fleet's minted count at that moment, and that count is
+also the number of votes it is measured against. A key minted afterwards is
+outside that snapshot: it cannot vote on that proposal and was never counted in
+what it has to clear. Proposing needs
 standing, so the proposer names an eligible key and must be its owner or that
 owner's registered delegate; naming a key is not a vote and leaves it free to
 vote.
@@ -421,46 +423,47 @@ current owner or by the one address that owner registered with
 gets nothing from this, because financial authority is registered on chain and
 only there. A batch of keys is voted whole or not at all.
 
-There are two kinds. A `Decision` records agreement and has no
-automatic external effect; its text is carried in the creation event and stored
-nowhere, and an optional digest pins the exact artifact or commit. An
-`Autolaunch` carries the exact launch the fleet would create, and is described
-below. There are no arbitrary calls, no arbitrary approvals and no way to add a
-third kind, and no vote moves any of the fleet's tokens.
+There are three kinds, numbered in this order. A `Decision` (0) records
+agreement and has no automatic external effect; its text is carried in the
+creation event and stored nowhere, and an optional digest pins the exact
+artifact or commit. An `Autolaunch` (1) carries the exact launch the fleet would
+create, and is described below. A `Pay` (2) carries an asset, an amount and a
+recipient, and pays that amount from the fleet's budget; it is described under
+"After the launch" below. There are no arbitrary calls, no arbitrary approvals
+and no way to add a fourth kind, and the only tokens a vote can move are the
+budget's, within its cap.
 
 Voting is open strictly before `closesAt` and execution strictly from it, so the
-two never overlap. A proposal passes only if `yesWeight * 2 > totalWeight`: YES
-must exceed half of the whole eligible snapshot weight, so a key that stayed
-silent counts against it exactly as a NO would, and exactly half fails.
+two never overlap. A proposal passes only if `yesVotes * 2 > snapshotMinted`: YES
+must exceed half of all the keys in the snapshot, so a key that stayed silent
+counts against it exactly as a NO would, and exactly half fails.
 `state(proposalId)` reports Active, Defeated, Passed or Executed. Execution is
 permissionless, because the result is the vote's and not the caller's, and the
 proposal is marked executed before the fleet is called so a token that calls back
 cannot execute it twice. `execute` is guarded by OpenZeppelin `ReentrancyGuard`.
 
 This deliberately does not solve a majority takeover. A majority of keys can
-approve a launch the rest of the fleet did not want, and no hidden creator
-signer is introduced to disguise that. What is protected regardless of any vote
-is claim and reserve solvency and the stakers' owed share, because no vote can
-reach any of them.
+approve a launch or a payment the rest of the fleet did not want, and no hidden
+creator signer is introduced to disguise that. Anyone can buy a majority with
+new keys; on a Fibonacci fleet at eighty-six keys that is roughly eighty-seven
+keys from levels 8 and 9. What limits the damage is the pay cap and the pay
+expiry: a majority can take at most a fifth of an asset's budget in each pay
+period, which is up to about 36% within moments across a period boundary, and a
+passed payment it leaves behind expires thirty days after its vote closes, so it
+cannot be taken after those keys have been sold. What is protected
+regardless of any vote is claim and reserve solvency and the stakers' owed
+share, because no vote can reach any of them.
 
-Two calls cost more than a flat amount, and neither of them grows with how many
-keys the fleet has sold. Only a Decision on a Fibonacci fleet walks the preset's
-twenty levels; a launch proposal counts one vote per key and walks none, and
-neither does any proposal on a Fleet.Tech fleet. The worst case is a Decision on
-a Fibonacci fleet at the level-20 ceiling with every slot it touches cold, which
-measured 186,114 gas in execution, while the same call on a fleet holding two
-keys in a single level measured 146,706, so the other nineteen levels cost about
-two thousand gas each. The suite asserts a ceiling of
-223,000, which is the measurement plus twenty percent, and that is the execution
-figure the deployment manifest should quote, with the 21,000 base transaction
-cost on top of it. Voting grows with how many keys the caller names in the one
-call, at about 25,000 gas a key, almost all of it the one-vote-per-key record and
-the ownership read behind it; a Fibonacci fleet, which also looks each key's
-level up, came out at 25,859. Ten keys in one vote measured 272,276 gas, so a
-holder with more keys than one block can comfortably carry simply splits the vote
-across several calls, which the one-vote-per-key rule makes safe to do in any
-order. Nothing else in the controller depends on the size of the fleet: executing
-a proposal costs the same on a fleet of two keys and one at the ceiling.
+Only voting costs more than a flat amount, and it grows with how many keys the
+caller names in the one call, never with how many the fleet has sold. Creating a
+proposal records the minted count and nothing else, so it costs the same on a
+fleet of two keys and one at the ceiling, and so does executing one. A vote costs
+about 24,000 gas a key, almost all of it the one-vote-per-key record and the
+ownership read behind it, and the preset makes no difference: a Classic key
+measured 24,210 and a Fibonacci key 24,415. Ten keys in one vote measured 268,630
+gas, and the suite asserts a ceiling of 290,000, so a holder with more keys than
+one block can comfortably carry simply splits the vote across several calls,
+which the one-vote-per-key rule makes safe to do in any order.
 
 The second kind of proposal is `Autolaunch`: the one launch a fleet may create
 through the pinned `RegentsAutolaunchFactoryV1`, with the fleet itself as both
@@ -547,15 +550,15 @@ Deposit admission is untouched by all of this and defaults off. A launched
 SUBJECT is an ordinary token to the fleet until the Regents Safe admits it in the
 shared registry, exactly like any other asset.
 
-**Two separate 2% deductions, and the app must say so.** Autolaunch's own
-splitter skims 2% of the revenue it recognizes before it pays the fleet, and
-Keyfleet charges its own 2% on the new external receipt when that payout is
-deposited into the fleet. They are two different charges, taken by two different
-contracts, for two different things, and they compose: money arriving through
-both systems is reduced twice. The app must present them as two deductions and
-must never describe the pair as a single 2% charge. Nor does a gross REGENT raise
-mean spendable USDC; the actual liquidity, vesting and treasury outcomes are read
-from the strategy rather than inferred from the raise.
+**Two separate 2% deductions, and the app must say so.** Autolaunch keeps 2%
+and pays SUBJECT stakers their part (and a payment link may pay its creator up to
+2.5%). Keyfleet then keeps 2% of whatever reaches the fleet. Only after both is
+the rest split 20% to the budget and 80% to the keys. SUBJECT released from the
+vesting escrow and REGENT returned by the launch reach the fleet directly and
+pay only the fleet's 2%. The app must present the two charges as two deductions
+and must never describe the pair as a single 2% charge. Nor does a gross REGENT
+raise mean spendable USDC; the actual liquidity, vesting and treasury outcomes
+are read from the strategy rather than inferred from the raise.
 
 Executing an Autolaunch measured 740,016 gas against a mock factory, and the
 suite asserts a ceiling of 889,000, which is the measurement plus twenty percent
@@ -564,15 +567,74 @@ figure is a regression bound on this side of the call and not a prediction: most
 of it is the mock's own writing, and the real factory deploys a token, an escrow
 and an auction and spends far more.
 
-No token a fleet holds is ever swapped or
-converted. The fleet has no administrator, no upgrade path, no pause and no
-burn: the only ways tokens leave it are the owed protocol share sent to the
-staking contract, the deposit fee, the referral, Accelerant rebate and Cascade repayment paid into the
-ledger, and the revenue backing moved into the ledger. An Autolaunch moves
-nothing out at all.
+**After the launch.** Once `syncLaunch` has recorded the launch as `Graduated`
+or `EconomicallyFailed` (`launchSettled()` reports it), income the fleet
+recognizes is split by a fixed rule no vote can change. `recognizeSurplus(asset)`
+takes the 2% fee from the gross, then `BUDGET_BPS` (2,000, a fifth) of the rest,
+rounded down, becomes free capital, the budget, and the remainder goes to the
+keys: it is moved into the ledger and allocated in the same transaction by the
+exact rule a revenue deposit uses, equally across completed Fibonacci levels
+and then equally per key within a level, or equally per key on Classic and
+Accelerant. At eighty-six Fibonacci keys a level-1 key, one of two, receives
+seventeen times what a level-7 key, one of thirty-four, receives; a Classic key
+and an Accelerant key receive the same. `LaunchIncomeSplit(asset, caller, gross,
+fee, toBudget, toKeys)` records it, and `gross == fee + toBudget + toKeys`
+exactly. The keys' part follows the ledger's rules: an amount smaller than the
+number of completed levels cannot be split equally and reverts with `ZeroAmount`,
+leaving the surplus where it is until more arrives, and a ninth distinct reward
+asset is refused, which is why the Safe admits at most seven besides USDC.
+
+Only fully sold Fibonacci levels share income, and a level shares in everything
+recognized after its last key sells, including income that had been waiting
+before then. Whoever recognizes income therefore picks the moment the split is
+taken: someone who buys the last key of a level and recognizes at once brings
+that level into income that built up earlier. Regent runs a regular job that
+releases vested SUBJECT and recognizes income promptly, so little waits between
+one recognition and the next. Recognition first syncs a launch the strategy has settled but nobody has
+synced yet, so income can never be booked the old way after the launch is over.
+Anyone may call it, and nobody chooses where the money goes. The fleet never
+swaps, sells or stakes what it receives; holders decide that for themselves.
+
+The budget is spent only by a passed `Pay` proposal, made with
+`proposePay(tokenId, asset, amount, recipient, text, digest)`, which is refused
+with `LaunchNotSettled` before the launch has graduated or failed and with
+`RecipientNotAllowed` when the recipient is zero, the fleet, its voting controller
+or its ledger, where the money would be stuck for good or charged the fee again.
+The text is the reason for the payment; like a Decision's, it is carried in
+`ProposalCreated` and stored nowhere. `PayProposed(proposalId, asset, amount,
+recipient, executionExpiry)` is emitted beside it, and `executionExpiry` is
+`closesAt + PAY_EXECUTION_WINDOW`, thirty days after the vote closes. Execution calls
+`Keyfleet.payFromBudget(asset, amount, recipient)`, whose only permitted caller
+is the fleet's own controller, and which again requires a settled launch. Each
+asset has its own pay period of `PAY_PERIOD`, thirty days. A period begins with
+the first payment after the previous one ended, and its cap is `PAY_CAP_BPS`
+(2,000, a fifth) of that asset's free capital measured at that first payment;
+income recognized later in the period does not raise it. Payments accumulate
+against the cap, and one that would take the period past it reverts at execution
+with `PayCapExceeded(asset, amount, remaining)`, so several proposals passed side
+by side can never together take more than the cap. The limit is per period, not a
+rolling thirty days: a new period can open the second the last one ends, with a
+fifth of what is left, so payments either side of that boundary can take up to
+about 36% of an asset's budget within moments. A reverted payment consumes
+nothing and the proposal stays executable until its expiry, so one over what is
+left of the cap can still be paid once the next period opens. From the second
+after `executionExpiry` it is refused with `ProposalExpired` and can never
+execute. `payPeriod(asset)` reports the period's start, cap and amount spent,
+and `BudgetPaid(asset, recipient, amount, periodStart, spentInPeriod)` records
+each payment. Only free capital is reachable: the Cascade completion reserve, the
+owed protocol share and the keys' reward backing are separate figures a payment
+never touches. A failed launch unlocks the same rule, so a fleet whose launch
+failed never has its own capital stranded.
+
+No token a fleet holds is ever swapped or converted. The fleet has no
+administrator, no upgrade path, no pause and no burn: the only ways tokens leave
+it are the owed protocol share sent to the staking contract, the deposit fee, the
+referral, Accelerant rebate and Cascade repayment paid into the ledger, the
+revenue backing and the keys' share of launch income moved into the ledger, and a
+budget payment the keys voted for. An Autolaunch moves nothing out at all.
 
 `KeyfleetDirectory` names the four fleets of one release and does nothing else.
-It deploys nothing: `Keyfleet` initcode is 37,283 bytes, so a contract carrying
+It deploys nothing: `Keyfleet` initcode is 39,078 bytes, so a contract carrying
 a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
 deploying all four would exceed the 49,152-byte initcode limit. The script
 deploys the fleets and hands them to the directory, whose constructor is its
@@ -623,8 +685,13 @@ steps, what each refuses, and what the Safe does next.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, fleet-directory and
+fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, post-launch budget, fleet-directory and
 deployment tests. Foundry must be installed; the compiler may be downloaded on
-first use. Tests require no RPC. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
+first use. Tests require no RPC, apart from `test/fork/KeyfleetLaunchIncomeFork.t.sol`,
+which skips unless `KEYFLEET_FORK_RPC_URL` names a chain with the Autolaunch
+graph deployed and `KEYFLEET_FORK_FACTORY` names its factory. It runs the whole
+path on a local fork: the keys vote a launch, a bidder graduates it, SUBJECT
+vests out of the escrow, USDC and REGENT pass through the splitter, the fleet
+splits each, keys claim, and a Pay vote spends budget. OpenZeppelin 5.7.0 and forge-std 1.9.7 are
 vendored as git submodules under `contracts/lib`, so clone with submodules or
 run `git submodule update --init`.

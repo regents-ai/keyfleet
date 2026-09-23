@@ -212,7 +212,6 @@ contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
 contract KeyfleetAutolaunchTest is Test {
     uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
-    uint256 private constant SCALE = 1e18;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private usdc;
@@ -232,7 +231,7 @@ contract KeyfleetAutolaunchTest is Test {
         uint256 indexed proposalId, uint256 indexed launchId, address indexed subject, address auction, address escrow
     );
     event LaunchSynced(Keyfleet.LaunchState state);
-    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight, uint256[] tokenIds);
+    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
@@ -901,60 +900,43 @@ contract KeyfleetAutolaunchTest is Test {
         }
     }
 
-    // --- 8. launch vote weight ----------------------------------------------
+    // --- 8. one vote per key -----------------------------------------------
 
-    /// @dev Invariant: a launch counts one vote per key on every preset. A level-1 key and a
-    /// level-7 key of a Fibonacci fleet each add one whole vote, and the launch is measured against
-    /// every eligible key at one whole vote each.
-    function test_aLaunchVoteCountsEveryFibonacciKeyAsOneWholeVote() public {
+    /// @dev Invariant: a launch and a Decision both count one vote per key on a Fibonacci fleet. A
+    /// level-1 key and a level-7 key each add exactly one, and both proposals are measured against
+    /// all eighty-six keys.
+    function test_aLaunchAndADecisionBothCountEveryFibonacciKeyAsOneVote() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
-        uint256 proposalId = _propose(fleet, _envelope());
-        assertEq(votes.eligibleWeight(proposalId), 86 * SCALE, "eighty-six keys are eighty-six votes");
-
+        uint256 launch = _propose(fleet, _envelope());
+        vm.prank(alice);
+        uint256 decision = votes.proposeDecision(1, "record it", bytes32(0));
         assertEq(fleet.levelOf(1), 1);
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit VoteCast(proposalId, alice, true, SCALE, _ids(1, 1));
-        vm.prank(alice);
-        assertEq(votes.vote(proposalId, _ids(1, 1), true), SCALE, "a level-1 key is one whole vote");
-
         assertEq(fleet.levelOf(86), 7);
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit VoteCast(proposalId, alice, false, SCALE, _ids(86, 1));
-        vm.prank(alice);
-        assertEq(votes.vote(proposalId, _ids(86, 1), false), SCALE, "and so is a level-7 key");
 
-        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(stored.yesWeight, SCALE);
-        assertEq(stored.noWeight, SCALE);
-    }
+        uint256[2] memory proposals = [launch, decision];
+        for (uint256 i = 0; i < proposals.length; ++i) {
+            uint256 proposalId = proposals[i];
+            vm.expectEmit(true, true, true, true, address(votes));
+            emit VoteCast(proposalId, alice, true, _ids(1, 1));
+            vm.prank(alice);
+            votes.vote(proposalId, _ids(1, 1), true);
 
-    /// @dev Invariant: a Decision on the same fleet still weighs keys by level, so one level is one
-    /// vote shared by its keys and the launch rule changes nothing else.
-    function test_aDecisionOnTheSameFleetStillWeighsKeysByLevel() public {
-        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
-        KeyfleetVotes votes = fleet.VOTES();
-        vm.prank(alice);
-        uint256 proposalId = votes.proposeDecision(1, "record it", bytes32(0));
+            vm.expectEmit(true, true, true, true, address(votes));
+            emit VoteCast(proposalId, alice, false, _ids(86, 1));
+            vm.prank(alice);
+            votes.vote(proposalId, _ids(86, 1), false);
 
-        uint256 levels;
-        for (uint256 level = 1; level <= 7; ++level) {
-            uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
-            levels += supply * (SCALE / supply);
+            KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+            assertEq(stored.yesVotes, 1, "a level-1 key is one vote");
+            assertEq(stored.noVotes, 1, "and so is a level-7 key");
+            assertEq(stored.snapshotMinted, 86, "eighty-six keys are eighty-six votes");
         }
-        assertEq(votes.eligibleWeight(proposalId), levels, "seven levels, one vote each less the floors");
-
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit VoteCast(proposalId, alice, true, SCALE / 2, _ids(1, 1));
-        vm.prank(alice);
-        assertEq(votes.vote(proposalId, _ids(1, 1), true), SCALE / 2, "a level-1 key is half a vote");
-        vm.prank(alice);
-        assertEq(votes.vote(proposalId, _ids(86, 1), true), SCALE / 34, "a level-7 key is a thirty-fourth");
     }
 
     /// @dev Invariant: a launch passes only when more than half of all eligible keys vote YES.
-    /// Exactly half fails, one key more passes, and silence counts against. The same forty-three
-    /// early keys that fail a launch carry a Decision, because there they hold most of the levels.
+    /// Exactly half fails, one key more passes, and silence counts against. A Decision follows the
+    /// same rule, so the forty-three earliest keys carry neither.
     function test_aLaunchFailsAtExactlyHalfOfTheKeysAndPassesWithOneMore() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
@@ -971,10 +953,10 @@ contract KeyfleetAutolaunchTest is Test {
         vm.warp(votes.proposal(half).closesAt);
 
         assertEq(uint256(votes.state(half)), uint256(KeyfleetVotes.State.Defeated), "43 of 86 is not a majority");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 43 * SCALE, 86 * SCALE));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 43, 86));
         votes.execute(half);
 
-        assertEq(uint256(votes.state(decision)), uint256(KeyfleetVotes.State.Passed), "the same keys carry a Decision");
+        assertEq(uint256(votes.state(decision)), uint256(KeyfleetVotes.State.Defeated), "nor on a Decision");
         assertEq(uint256(votes.state(majority)), uint256(KeyfleetVotes.State.Passed), "44 of 86 is");
         votes.execute(majority);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated));
@@ -983,9 +965,9 @@ contract KeyfleetAutolaunchTest is Test {
     // --- 9. fuzz invariant ---------------------------------------------------
 
     /// @dev Invariant: across random votes on either Fibonacci preset, every key adds exactly one
-    /// whole vote to a launch and exactly its level weight to a Decision, whatever its level, and a
-    /// launch passes exactly when more than half of the eligible keys voted YES.
-    function testFuzz_aLaunchCountsOneVotePerKeyAndADecisionWeighsByLevel(uint256 seed) public {
+    /// vote to a launch and to a Decision, whatever its level, and each passes exactly when more
+    /// than half of the eligible keys voted YES.
+    function testFuzz_aLaunchAndADecisionCountOneVotePerKey(uint256 seed) public {
         KeyfleetPresets.Preset preset =
             seed % 2 == 0 ? KeyfleetPresets.Preset.FibonacciSyndicate : KeyfleetPresets.Preset.FibonacciCascade;
         Keyfleet fleet = _launchReadyFleet(preset);
@@ -1005,21 +987,26 @@ contract KeyfleetAutolaunchTest is Test {
             bool support = (roll >> 8) % 100 < bias;
 
             vm.startPrank(alice);
-            assertEq(votes.vote(launch, _ids(tokenId, 1), support), SCALE, "one whole vote on a launch");
-            assertEq(votes.vote(decision, _ids(tokenId, 1), support), votes.weightOf(tokenId), "level weight");
+            votes.vote(launch, _ids(tokenId, 1), support);
+            votes.vote(decision, _ids(tokenId, 1), support);
             vm.stopPrank();
             ++cast;
             if (support) ++yesKeys;
         }
 
-        KeyfleetVotes.Proposal memory stored = votes.proposal(launch);
-        assertEq(stored.totalWeight, 86 * SCALE);
-        assertEq(stored.yesWeight, yesKeys * SCALE);
-        assertEq(stored.yesWeight + stored.noWeight, cast * SCALE, "recorded weight is one vote per key cast");
-        vm.warp(stored.closesAt);
-        assertEq(
-            votes.state(launch) == KeyfleetVotes.State.Passed, yesKeys * 2 > 86, "passes exactly above half the keys"
-        );
+        uint256[2] memory proposals = [launch, decision];
+        vm.warp(votes.proposal(launch).closesAt);
+        for (uint256 i = 0; i < proposals.length; ++i) {
+            KeyfleetVotes.Proposal memory stored = votes.proposal(proposals[i]);
+            assertEq(stored.snapshotMinted, 86);
+            assertEq(stored.yesVotes, yesKeys, "one vote per YES key");
+            assertEq(stored.yesVotes + stored.noVotes, cast, "one vote per key cast");
+            assertEq(
+                votes.state(proposals[i]) == KeyfleetVotes.State.Passed,
+                yesKeys * 2 > 86,
+                "passes exactly above half the keys"
+            );
+        }
     }
 
     // --- helpers -----------------------------------------------------------

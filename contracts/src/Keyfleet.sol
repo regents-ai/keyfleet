@@ -33,9 +33,14 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 /// and claims out of it are not receipts and are never charged again.
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
-/// itself in its constructor. It is the only caller of `executeAutolaunch`, and no vote moves any of
-/// this fleet's tokens: free capital, the Cascade completion reserve, the owed protocol share and the
-/// ledger's reward backing are all out of its reach.
+/// itself in its constructor. It is the only caller of `executeAutolaunch` and `payFromBudget`. The
+/// only tokens a vote can move are free capital, the budget, and only once the launch has settled
+/// and within `PAY_CAP_BPS` of each asset's budget per `PAY_PERIOD`: the Cascade completion reserve,
+/// the owed protocol share and the ledger's reward backing are all out of its reach.
+///
+/// Once the launch has settled, every recognized surplus is split by a fixed rule no vote can
+/// change: `BUDGET_BPS` of the post-fee amount becomes free capital and the rest is paid to the keys
+/// through the ledger, by the same cohort formula a revenue deposit uses.
 ///
 /// A passed Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1` once, with this fleet
 /// as both launcher and treasury, and records what the factory says it created. That call moves no
@@ -44,8 +49,9 @@ import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
 /// this contract are the owed protocol share sent to the staking contract, the referral and
-/// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, and the
-/// deposit fee and revenue backing of a USDC deposit.
+/// Accelerant rebate paid into the ledger, the Cascade reimbursement paid into the ledger, the
+/// deposit fee and revenue backing of a USDC deposit, the keys' share of a surplus recognized after
+/// the launch settled, and a budget payment the keys voted for.
 contract Keyfleet is ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -119,6 +125,16 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         uint256 lpTokenId;
     }
 
+    /// @notice One asset's current pay period.
+    /// @param start Time of the period's first payment; zero before any payment in the asset.
+    /// @param cap `PAY_CAP_BPS` of the asset's free capital as it stood at that first payment.
+    /// @param spent Everything paid in the asset since `start`.
+    struct PayPeriod {
+        uint64 start;
+        uint256 cap;
+        uint256 spent;
+    }
+
     /// @notice The ERC721 identity a fleet is deployed with, fixed for its lifetime.
     /// @param name ERC721 collection name.
     /// @param symbol ERC721 collection symbol.
@@ -156,7 +172,7 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error NoEligibleKeys();
     /// @notice This fleet's balance of the asset is fully accounted for, so there is nothing to recognize.
     error NoSurplus();
-    /// @notice Only this fleet's own voting controller may create its launch.
+    /// @notice Only this fleet's own voting controller may create its launch or spend its budget.
     error OnlyVotes();
     /// @notice This fleet already created its one launch.
     error LaunchAlreadyCreated();
@@ -164,7 +180,11 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     error LaunchNotCreated();
     /// @notice The launch has already graduated or failed, and a terminal state never changes.
     error LaunchSettled();
-    /// @notice The approved launch's execution expiry has passed.
+    /// @notice The budget can be spent only once the launch has graduated or failed.
+    error LaunchNotSettled();
+    /// @notice The payment is more than is left of this asset's cap for the current period.
+    error PayCapExceeded(address asset, uint256 amount, uint256 remaining);
+    /// @notice The approved launch's or payment's execution expiry has passed.
     error ProposalExpired(uint64 executionExpiry);
     /// @notice The factory does not record the launch it just said it created.
     error LaunchProvenanceMismatch();
@@ -224,8 +244,30 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         address indexed asset, address indexed depositor, uint256 amount, uint256 net, bytes32 paymentRef
     );
 
-    /// @notice An unaccounted balance was reconciled into free capital.
+    /// @notice An unaccounted balance was reconciled into free capital, before the launch settled.
     event SurplusRecognized(address indexed asset, address indexed caller, uint256 amount, uint256 net);
+
+    /// @notice An unaccounted balance was recognized after the launch settled and split by the fixed
+    /// rule. `gross == fee + toBudget + toKeys` exactly.
+    /// @param asset The asset recognized.
+    /// @param caller Whoever called `recognizeSurplus`.
+    /// @param gross The whole unaccounted balance.
+    /// @param fee The 2% external-receipt fee, floored.
+    /// @param toBudget `BUDGET_BPS` of the post-fee amount, floored, added to free capital.
+    /// @param toKeys The rest of the post-fee amount, moved into the ledger and allocated to the keys.
+    event LaunchIncomeSplit(
+        address indexed asset, address indexed caller, uint256 gross, uint256 fee, uint256 toBudget, uint256 toKeys
+    );
+
+    /// @notice A passed Pay proposal moved budget out of this fleet.
+    /// @param asset The asset paid.
+    /// @param recipient Who received it.
+    /// @param amount Atomic units paid.
+    /// @param periodStart When the current pay period began, which is the time of its first payment.
+    /// @param spentInPeriod Everything paid in this asset in the current period, this payment included.
+    event BudgetPaid(
+        address indexed asset, address indexed recipient, uint256 amount, uint256 periodStart, uint256 spentInPeriod
+    );
 
     /// @notice A passed Autolaunch proposal created this fleet's one launch. The four launch
     /// addresses are the factory's own, read back after the call and not the proposal's.
@@ -243,6 +285,15 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice Source reference every protocol-share send reports to the staking contract. A USDC
     /// deposit fee reports the payer's own reference instead, or zero.
     bytes32 public constant PROTOCOL_SHARE_REF = keccak256("keyfleet.protocol-share");
+    /// @notice Share of a surplus recognized after the launch settled that becomes budget, in basis
+    /// points of the post-fee amount. The rest is paid to the keys.
+    uint256 public constant BUDGET_BPS = 2000;
+    /// @notice Most of one asset's budget the keys may pay out in one period, in basis points of that
+    /// budget as it stood at the period's first payment.
+    uint256 public constant PAY_CAP_BPS = 2000;
+    /// @notice Length of a pay period. A period begins with the first payment after the previous
+    /// one ended.
+    uint256 public constant PAY_PERIOD = 30 days;
 
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
@@ -275,9 +326,9 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// @notice Accelerant only: the USDC price of the next primary mint, stepped by 105/100 after
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
-    /// @notice Free capital booked by this fleet, per asset. Purchases write the USDC entry;
-    /// `depositCapital` and `recognizeSurplus` write the entry of any admitted asset, USDC included.
-    /// It has no way out yet: no call and no vote moves it out of the fleet.
+    /// @notice Free capital booked by this fleet, per asset: the budget. Purchases write the USDC
+    /// entry; `depositCapital` and `recognizeSurplus` write the entry of any admitted asset, USDC
+    /// included. The only way out is `payFromBudget`, on a passed Pay vote after the launch settled.
     mapping(address asset => uint256 amount) public freeCapital;
     /// @notice Cascade only: USDC held back for the next level completion. Never free capital.
     uint256 public cascadeReserve;
@@ -295,6 +346,8 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     mapping(uint256 level => bool completed) public levelCompleted;
     /// @notice How far this fleet's one Autolaunch has got.
     LaunchState public launchState;
+    /// @notice The current pay period of each asset: when it began, its cap and what it has paid.
+    mapping(address asset => PayPeriod period) public payPeriod;
 
     string private _baseTokenURI;
     LaunchRecord private _launch;
@@ -542,70 +595,100 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     }
 
     /// @notice Pays an admitted asset in as member reward backing, after the 2% receipt fee.
-    /// @dev The whole net amount is moved into the ledger and allocated in the same transaction, so
-    /// an obligation is never recorded without the tokens behind it. Allocation writes one index per
-    /// eligible cohort and never iterates over keys or holders.
-    ///
-    /// Classic and Accelerant have one cohort, so the net amount is shared equally by every key
-    /// minted at this moment. The two Fibonacci presets share it equally across the fully minted
-    /// levels and then equally per key within each level; an unfinished level receives nothing, and
-    /// keys minted later start at the index this deposit left behind. The remainder of the equal
-    /// split is added to the last completed level, so the whole net amount is backed and nothing is
-    /// stranded in the fleet. At most twenty levels can be eligible.
-    ///
-    /// The first deposit of an asset registers it in the ledger. The ledger's lifetime bound of
-    /// eight reward assets is counted from USDC, so the ninth distinct asset reverts with the
-    /// ledger's `AssetBoundReached` and this fleet can never take revenue in it.
-    ///
-    /// A net amount smaller than the number of eligible Fibonacci levels cannot be split equally and
-    /// reverts with the ledger's `ZeroAmount`; that bites below twenty atomic units of the asset.
+    /// @dev The whole net amount goes to the keys through `_allocateToKeys`, which refuses it with
+    /// `NoEligibleKeys` while no key, or no Fibonacci level, can receive it; the revert undoes the
+    /// pull and the fee with it.
     /// @param asset The admitted asset being paid in.
     /// @param amount Atomic units to pull from the caller.
     /// @param paymentRef The payer's payment reference, recorded in the event and, for USDC, passed
     /// to the staking contract as the fee's source reference.
     function depositRevenue(address asset, uint256 amount, bytes32 paymentRef) external nonReentrant {
         _requireAdmitted(asset);
-        uint256 levels;
-        if (_isFibonacci()) {
-            levels = completedLevels();
-            if (levels == 0) revert NoEligibleKeys();
-        } else if (totalMinted == 0) {
-            revert NoEligibleKeys();
-        }
-
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         uint256 net = _chargeFee(asset, amount, paymentRef);
-        if (!REWARDS.isRewardAsset(asset)) REWARDS.registerAsset(asset);
-        IERC20(asset).safeTransfer(address(REWARDS), net);
-
-        if (_isFibonacci()) {
-            uint256 share = net / levels;
-            for (uint256 level = 1; level <= levels; ++level) {
-                REWARDS.allocateToCohort(asset, level, level == levels ? net - share * (levels - 1) : share);
-            }
-        } else {
-            REWARDS.allocateToCohort(asset, 0, net);
-        }
+        _allocateToKeys(asset, net);
         emit RevenueDeposited(asset, msg.sender, amount, net, paymentRef);
     }
 
-    /// @notice Books an admitted asset that arrived by bare transfer as free capital, after
-    /// the 2% receipt fee.
+    /// @notice Recognizes an admitted asset that arrived by bare transfer, after the 2% receipt fee.
     /// @dev Permissionless, because it can only ever recognize what nobody has a claim on: it works
     /// from `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is
     /// free capital plus, for USDC, the Cascade completion reserve and the owed protocol share.
     /// Reward backing sits in the ledger and is not part of this balance at all, so no recorded
     /// liability can be reclassified, an incomplete level's reserve can never be drawn on, and the
     /// stakers' share can never be swept into capital.
+    ///
+    /// Before the launch settles the whole post-fee amount becomes free capital. Once it has
+    /// graduated or failed, the post-fee amount is split by a fixed rule: `BUDGET_BPS` of it, floored,
+    /// becomes free capital and the rest goes to the keys through `_allocateToKeys`, so the gross is
+    /// exactly the fee plus the two parts. A launch the strategy has settled but nobody has synced
+    /// is synced here first, so the split can never be skipped by recognizing income before the
+    /// sync. The keys' part follows the ledger's rules: below one atomic unit per eligible
+    /// Fibonacci level it cannot be divided and the call reverts with the ledger's `ZeroAmount`,
+    /// leaving the surplus for a later call, and a ninth distinct reward asset is refused with
+    /// `AssetBoundReached`.
     /// @param asset The admitted asset to reconcile.
-    /// @return net Atomic units added to free capital.
+    /// @return net The post-fee amount: all of it free capital before the launch settles, split
+    /// between free capital and the keys after.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 net) {
         _requireAdmitted(asset);
         uint256 amount = surplus(asset);
         if (amount == 0) revert NoSurplus();
+        if (launchState == LaunchState.AuctionCreated) _syncLaunch();
+
         net = _chargeFee(asset, amount, bytes32(0));
-        freeCapital[asset] += net;
-        emit SurplusRecognized(asset, msg.sender, amount, net);
+        if (!launchSettled()) {
+            freeCapital[asset] += net;
+            emit SurplusRecognized(asset, msg.sender, amount, net);
+            return net;
+        }
+
+        uint256 toBudget = (net * BUDGET_BPS) / KeyfleetPresets.BPS_DENOMINATOR;
+        uint256 toKeys = net - toBudget;
+        freeCapital[asset] += toBudget;
+        _allocateToKeys(asset, toKeys);
+        emit LaunchIncomeSplit(asset, msg.sender, amount, amount - net, toBudget, toKeys);
+    }
+
+    /// @notice Pays budget out of this fleet, on the authority of a passed Pay vote.
+    /// @dev The voting controller this fleet deployed is the only caller, and only once the launch
+    /// has graduated or failed. There is no admission check: the asset is one this fleet already
+    /// booked budget in, and disabling deposits in an asset does not freeze budget already booked.
+    ///
+    /// Each asset has its own pay period of `PAY_PERIOD`. A period begins with the first payment
+    /// after the previous one ended, and its cap is `PAY_CAP_BPS` of the asset's free capital at
+    /// that first payment. Payments accumulate against the cap, and one that would take the period
+    /// past it reverts with what is left, rolling back everything including a period it would have
+    /// opened; the proposal stays executable for a later period. Because the cap is a fraction of
+    /// free capital at the period's start and only this call spends it, a payment can never
+    /// exceed the free capital left.
+    ///
+    /// Free capital is the only bucket reachable from here. The Cascade completion reserve and the
+    /// owed protocol share are separate figures this function never reads, and reward backing does
+    /// not sit in this contract at all.
+    ///
+    /// Guarded like every other entry point that moves tokens, so an asset that calls back from
+    /// inside the transfer cannot book a receipt against a balance this call has already spent.
+    /// @param asset The asset to pay.
+    /// @param amount Atomic units to pay.
+    /// @param recipient Who receives them.
+    function payFromBudget(address asset, uint256 amount, address recipient) external nonReentrant {
+        if (msg.sender != address(VOTES)) revert OnlyVotes();
+        if (!launchSettled()) revert LaunchNotSettled();
+
+        PayPeriod storage period = payPeriod[asset];
+        if (period.start == 0 || block.timestamp >= period.start + PAY_PERIOD) {
+            period.start = uint64(block.timestamp);
+            period.cap = (freeCapital[asset] * PAY_CAP_BPS) / KeyfleetPresets.BPS_DENOMINATOR;
+            period.spent = 0;
+        }
+        uint256 spent = period.spent + amount;
+        if (spent > period.cap) revert PayCapExceeded(asset, amount, period.cap - period.spent);
+        period.spent = spent;
+        freeCapital[asset] -= amount;
+
+        emit BudgetPaid(asset, recipient, amount, period.start, spent);
+        IERC20(asset).safeTransfer(recipient, amount);
     }
 
     /// @notice Sends the whole owed protocol share to the Regents staking contract as registered
@@ -682,6 +765,13 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     function launchDistribution() external view returns (IRegentLBPStrategy.Distribution memory) {
         if (launchState == LaunchState.NotCreated) revert LaunchNotCreated();
         return FACTORY.strategy().distribution(_launch.auction);
+    }
+
+    /// @notice Whether this fleet's launch has graduated or failed, as last synced. From then on a
+    /// recognized surplus is split between the budget and the keys, and the budget can be paid out.
+    function launchSettled() public view returns (bool) {
+        LaunchState state = launchState;
+        return state == LaunchState.Graduated || state == LaunchState.EconomicallyFailed;
     }
 
     /// @notice Creates this fleet's one launch, on the authority of a passed vote.
@@ -766,13 +856,21 @@ contract Keyfleet is ERC721, ReentrancyGuard {
     /// instead of paying gas for a no-op forever.
     ///
     /// Unguarded, and safe to be: the only two calls it makes are reads of the strategy, so there is
-    /// nothing here for a launch artifact to reenter into.
+    /// nothing here for a launch artifact to reenter into. `recognizeSurplus` makes the same sync
+    /// first whenever the launch is still `AuctionCreated`.
     /// @return state The state after this call.
     function syncLaunch() external returns (LaunchState state) {
         state = launchState;
         if (state == LaunchState.NotCreated) revert LaunchNotCreated();
         if (state != LaunchState.AuctionCreated) revert LaunchSettled();
+        return _syncLaunch();
+    }
 
+    // --- internals -------------------------------------------------------
+
+    /// @dev Moves an `AuctionCreated` launch to the strategy's terminal verdict, when there is one,
+    /// and returns the state after it.
+    function _syncLaunch() private returns (LaunchState state) {
         IRegentLBPStrategy.Distribution memory distribution = FACTORY.strategy().distribution(_launch.auction);
         if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Graduated) {
             _launch.splitter = distribution.splitter;
@@ -783,14 +881,54 @@ contract Keyfleet is ERC721, ReentrancyGuard {
         } else if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Failed) {
             state = LaunchState.EconomicallyFailed;
         } else {
-            return state;
+            return LaunchState.AuctionCreated;
         }
 
         launchState = state;
         emit LaunchSynced(state);
     }
 
-    // --- internals -------------------------------------------------------
+    /// @dev Moves `amount` of an asset this fleet holds into the ledger and allocates all of it to
+    /// the keys in the same transaction, so an obligation is never recorded without the tokens
+    /// behind it. Allocation writes one index per eligible cohort and never iterates over keys or
+    /// holders.
+    ///
+    /// Classic and Accelerant have one cohort, so the amount is shared equally by every key minted
+    /// at this moment. The two Fibonacci presets share it equally across the fully minted levels
+    /// and then equally per key within each level; an unfinished level receives nothing, and keys
+    /// minted later start at the index this allocation left behind. The remainder of the equal
+    /// split is added to the last completed level, and the ledger keeps its own division dust as
+    /// backing, so the whole amount is backed and nothing is stranded in the fleet. At most twenty
+    /// levels can be eligible. Refused with `NoEligibleKeys` while no key is minted or no Fibonacci
+    /// level is complete.
+    ///
+    /// The first allocation of an asset registers it in the ledger. The ledger's lifetime bound of
+    /// eight reward assets is counted from USDC, so the ninth distinct asset reverts with the
+    /// ledger's `AssetBoundReached`. An amount smaller than the number of eligible Fibonacci levels
+    /// cannot be split equally and reverts with the ledger's `ZeroAmount`; that bites below twenty
+    /// atomic units of the asset.
+    function _allocateToKeys(address asset, uint256 amount) private {
+        bool fibonacci = _isFibonacci();
+        uint256 levels;
+        if (fibonacci) {
+            levels = completedLevels();
+            if (levels == 0) revert NoEligibleKeys();
+        } else if (totalMinted == 0) {
+            revert NoEligibleKeys();
+        }
+
+        if (!REWARDS.isRewardAsset(asset)) REWARDS.registerAsset(asset);
+        IERC20(asset).safeTransfer(address(REWARDS), amount);
+
+        if (fibonacci) {
+            uint256 share = amount / levels;
+            for (uint256 level = 1; level <= levels; ++level) {
+                REWARDS.allocateToCohort(asset, level, level == levels ? amount - share * (levels - 1) : share);
+            }
+        } else {
+            REWARDS.allocateToCohort(asset, 0, amount);
+        }
+    }
 
     /// @dev Releases a completed Cascade level's reserve. Level 1 has no predecessor, so its whole
     /// reserve becomes capital. Above that, the reserve first repays the preceding level's original

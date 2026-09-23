@@ -15,7 +15,7 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalCreatedTopic() public pure {
         assertEq(
-            KeyfleetVotes.ProposalCreated.selector, 0xf8482fe2c54826b69ae2eac425c7ee38d217afb99600f7a8732276535a2f300b
+            KeyfleetVotes.ProposalCreated.selector, 0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9
         );
     }
 
@@ -26,14 +26,19 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
+    function test_payProposedTopic() public pure {
+        assertEq(KeyfleetVotes.PayProposed.selector, 0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85);
+    }
+
     function test_voteCastTopic() public pure {
-        assertEq(KeyfleetVotes.VoteCast.selector, 0x75a715a3d9aeed50070699874aee33f077ea55144e4a72c43ed49f31cfcab424);
+        assertEq(KeyfleetVotes.VoteCast.selector, 0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53);
     }
 
     function test_proposalKindNumbers() public pure {
         assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
         assertEq(uint8(KeyfleetVotes.Kind.Autolaunch), 1);
-        assertEq(uint8(type(KeyfleetVotes.Kind).max), 1);
+        assertEq(uint8(KeyfleetVotes.Kind.Pay), 2);
+        assertEq(uint8(type(KeyfleetVotes.Kind).max), 2);
     }
 
     function test_proposalExecutedTopic() public pure {

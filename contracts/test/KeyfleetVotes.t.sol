@@ -3,7 +3,6 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
@@ -26,13 +25,8 @@ contract MockToken is ERC20 {
 }
 
 contract KeyfleetVotesTest is Test {
-    using stdStorage for StdStorage;
-
     uint64 private constant VOTING_WINDOW = 24 hours;
-    uint256 private constant SCALE = 1e18;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
-
-    StdStorage private fleetStore;
 
     MockToken private usdc;
     MockToken private other;
@@ -56,12 +50,11 @@ contract KeyfleetVotesTest is Test {
         address indexed proposer,
         uint64 closesAt,
         uint256 snapshotMinted,
-        uint256 totalWeight,
         bytes32 digest,
         string text
     );
     event VotingDelegateSet(address indexed owner, address indexed delegate);
-    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight, uint256[] tokenIds);
+    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
@@ -157,7 +150,6 @@ contract KeyfleetVotesTest is Test {
 
         assertEq(address(votes.FLEET()), address(fleet), "the controller is bound to this fleet");
         assertEq(votes.VOTING_WINDOW(), VOTING_WINDOW, "the window is exposed for the app to label");
-        assertEq(votes.WEIGHT_SCALE(), SCALE);
         assertEq(votes.proposalCount(), 0, "no proposal exists yet");
     }
 
@@ -182,89 +174,38 @@ contract KeyfleetVotesTest is Test {
         new KeyfleetVotes(Keyfleet(address(0)), VOTING_WINDOW);
     }
 
-    // --- 2. weight --------------------------------------------------------
+    // --- 2. one vote per key ---------------------------------------------
 
-    /// @dev Invariant: weight comes from the preset alone. A Fleet.Tech key is one vote; a Fibonacci
-    /// level is one vote shared equally by its keys, floored, so a small early level's key weighs
-    /// far more than a level-20 key.
-    function test_keyWeightIsOnePerFleetTechKeyAndOnePerFibonacciLevel() public {
-        KeyfleetVotes classic = _deploy(KeyfleetPresets.Preset.FleetTechClassic).VOTES();
-        assertEq(classic.weightOf(1), SCALE, "a Classic key is one whole vote");
-        assertEq(classic.weightOf(KeyfleetPresets.CLASSIC_SUPPLY), SCALE, "and so is the last one");
+    /// @dev Invariant: every key is one vote on every preset, whatever its level. A Fibonacci
+    /// level-1 key and a level-3 key each add exactly one, and a proposal is measured against
+    /// every key in its snapshot at one vote each.
+    function test_everyKeyIsOneVoteOnEveryPreset() public {
+        KeyfleetPresets.Preset[4] memory presets = [
+            KeyfleetPresets.Preset.FibonacciSyndicate,
+            KeyfleetPresets.Preset.FibonacciCascade,
+            KeyfleetPresets.Preset.FleetTechClassic,
+            KeyfleetPresets.Preset.FleetTechAccelerant
+        ];
+        for (uint256 i = 0; i < presets.length; ++i) {
+            Keyfleet fleet = _deploy(presets[i]);
+            KeyfleetVotes votes = fleet.VOTES();
+            _buyMany(fleet, 10);
+            uint256 proposalId = _propose(votes);
 
-        KeyfleetVotes accelerant = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant).VOTES();
-        assertEq(accelerant.weightOf(1), SCALE, "an Accelerant key is one whole vote");
-
-        KeyfleetVotes syndicate = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate).VOTES();
-        assertEq(KeyfleetPresets.fibonacciLevelSupply(1), 2);
-        assertEq(syndicate.weightOf(1), 5e17, "level 1 has two keys, so each is half a vote");
-        assertEq(syndicate.weightOf(2), 5e17);
-        assertEq(syndicate.weightOf(3), SCALE / 3, "level 2 has three keys");
-        assertEq(KeyfleetPresets.fibonacciLevelSupply(20), 17_711);
-        assertEq(syndicate.weightOf(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID), SCALE / 17_711, "level 20 is floored");
-
-        KeyfleetVotes cascade = _deploy(KeyfleetPresets.Preset.FibonacciCascade).VOTES();
-        assertEq(cascade.weightOf(3), SCALE / 3, "Cascade weighs its levels the same way");
-
-        vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
-        syndicate.weightOf(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID + 1);
-    }
-
-    /// @dev Invariant: the total eligible weight a proposal is measured against is exactly the sum
-    /// of its eligible keys' weights, although it is computed by walking at most twenty levels and
-    /// never a single key. The snapshot is checked full, part-way through a level, and at the
-    /// preset's ceiling, where summing key by key would be impossible on chain.
-    function test_snapshotWeightMatchesTheSumOverEveryEligibleKey() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 10); // levels 1, 2 and 3 exactly filled.
-
-        uint256 proposalId = _propose(votes);
-        assertEq(votes.proposal(proposalId).snapshotMinted, 10);
-        assertEq(votes.eligibleWeight(proposalId), _bruteForceWeight(votes, 10), "ten keys, three whole levels");
-
-        // Part-way through level 8, which runs from id 87 to id 141.
-        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(uint256(100));
-        uint256 midLevel = _propose(votes);
-        assertEq(votes.eligibleWeight(midLevel), _bruteForceWeight(votes, 100), "a half-filled level counts its keys");
-        assertLt(votes.eligibleWeight(midLevel), 8 * SCALE, "eight levels are worth less than eight whole votes");
-
-        // Every level filled: twenty votes less the floor of each level's division.
-        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-        uint256 full = _propose(votes);
-        assertEq(votes.eligibleWeight(full), _levelWeight(20), "the walk over levels agrees level by level");
-        assertLe(votes.eligibleWeight(full), 20 * SCALE, "twenty levels are worth at most twenty votes");
-        assertGt(
-            votes.eligibleWeight(full),
-            20 * SCALE - KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID,
-            "and a level's floor loses less than one atomic unit per key in it"
-        );
-
-        // A Fleet.Tech fleet is one whole vote per key, with no levels to walk at all.
-        Keyfleet classic = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buyMany(classic, 5);
-        uint256 flat = _propose(classic.VOTES());
-        assertEq(classic.VOTES().eligibleWeight(flat), 5 * SCALE, "five Classic keys are five whole votes");
-    }
-
-    function _bruteForceWeight(KeyfleetVotes votes, uint256 minted) private view returns (uint256 total) {
-        for (uint256 tokenId = 1; tokenId <= minted; ++tokenId) {
-            total += votes.weightOf(tokenId);
-        }
-    }
-
-    function _levelWeight(uint256 levels) private pure returns (uint256 total) {
-        for (uint256 level = 1; level <= levels; ++level) {
-            uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
-            total += supply * (SCALE / supply);
+            _vote(votes, proposalId, 1, true);
+            _vote(votes, proposalId, 10, false);
+            KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+            assertEq(stored.yesVotes, 1, "the first key is one vote");
+            assertEq(stored.noVotes, 1, "and so is the tenth, whatever its level");
+            assertEq(stored.snapshotMinted, 10, "ten keys are ten votes");
         }
     }
 
     // --- 3. proposals -----------------------------------------------------
 
     /// @dev Invariant: a proposal freezes everything it will be judged by in the transaction that
-    /// creates it: the eligible set, the total weight and the closing time.
-    function test_aProposalFreezesItsSnapshotWindowAndTotalWeight() public {
+    /// creates it: the eligible set and the closing time.
+    function test_aProposalFreezesItsSnapshotAndWindow() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
@@ -277,7 +218,6 @@ contract KeyfleetVotesTest is Test {
             _wallet(1),
             uint64(block.timestamp) + VOTING_WINDOW,
             3,
-            3 * SCALE,
             digest,
             "merge the branch"
         );
@@ -292,7 +232,6 @@ contract KeyfleetVotesTest is Test {
         assertEq(stored.createdAt, uint64(block.timestamp));
         assertEq(stored.closesAt, uint64(block.timestamp) + VOTING_WINDOW);
         assertEq(stored.snapshotMinted, 3);
-        assertEq(stored.totalWeight, 3 * SCALE);
         assertEq(stored.digest, digest, "the digest is stored, the text is not");
         assertFalse(stored.executed);
         assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Active));
@@ -336,8 +275,6 @@ contract KeyfleetVotesTest is Test {
             votes.state(unknown[i]);
             vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.UnknownProposal.selector, unknown[i]));
             votes.proposal(unknown[i]);
-            vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.UnknownProposal.selector, unknown[i]));
-            votes.eligibleWeight(unknown[i]);
             vm.prank(_wallet(1));
             vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.UnknownProposal.selector, unknown[i]));
             votes.vote(unknown[i], _ids(1), true);
@@ -349,20 +286,19 @@ contract KeyfleetVotesTest is Test {
     // --- 4. eligibility ----------------------------------------------------
 
     /// @dev Invariant: the eligible set is the snapshot and nothing else. A key minted after a
-    /// proposal was created cannot vote on it and was never counted in its total weight, so a fresh
-    /// purchase can neither add weight to a running vote nor dilute one.
+    /// proposal was created cannot vote on it and was never counted in its snapshot, so a fresh
+    /// purchase can neither add a vote to a running proposal nor dilute one.
     function test_keysMintedAfterCreationCannotVoteAndWereNeverCounted() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 2);
 
         uint256 proposalId = _propose(votes);
-        assertEq(votes.eligibleWeight(proposalId), 2 * SCALE);
+        assertEq(votes.proposal(proposalId).snapshotMinted, 2);
 
         _buyMany(fleet, 3);
         assertEq(fleet.totalMinted(), 5);
-        assertEq(votes.eligibleWeight(proposalId), 2 * SCALE, "the snapshot did not move");
-        assertEq(votes.proposal(proposalId).snapshotMinted, 2);
+        assertEq(votes.proposal(proposalId).snapshotMinted, 2, "the snapshot did not move");
 
         vm.prank(_wallet(3));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 3));
@@ -370,7 +306,7 @@ contract KeyfleetVotesTest is Test {
 
         // The later keys are eligible for the next proposal, which takes its own snapshot.
         uint256 later = _propose(votes);
-        assertEq(votes.eligibleWeight(later), 5 * SCALE);
+        assertEq(votes.proposal(later).snapshotMinted, 5);
         _vote(votes, later, 3, true);
     }
 
@@ -391,8 +327,8 @@ contract KeyfleetVotesTest is Test {
         vm.prank(dave);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, 1));
         votes.vote(first, _ids(1), false);
-        assertEq(votes.proposal(first).yesWeight, SCALE, "the one vote it cast still stands");
-        assertEq(votes.proposal(first).noWeight, 0);
+        assertEq(votes.proposal(first).yesVotes, 1, "the one vote it cast still stands");
+        assertEq(votes.proposal(first).noVotes, 0);
 
         // A key that has not voted yet moves its right with it.
         vm.prank(_wallet(2));
@@ -402,7 +338,7 @@ contract KeyfleetVotesTest is Test {
         votes.vote(first, _ids(2), true);
         vm.prank(dave);
         votes.vote(first, _ids(2), false);
-        assertEq(votes.proposal(first).noWeight, SCALE, "the new owner voted it");
+        assertEq(votes.proposal(first).noVotes, 1, "the new owner voted it");
 
         // A spent key is spent for that proposal only.
         uint256 second = _propose(votes);
@@ -432,7 +368,7 @@ contract KeyfleetVotesTest is Test {
 
         vm.prank(bob);
         votes.vote(first, _ids(1), true);
-        assertEq(votes.proposal(first).yesWeight, SCALE, "the delegate voted the owner's key");
+        assertEq(votes.proposal(first).yesVotes, 1, "the delegate voted the owner's key");
         assertEq(fleet.ownerOf(1), _wallet(1), "and the key never moved");
 
         // The owner keeps their own vote on their other keys.
@@ -473,7 +409,7 @@ contract KeyfleetVotesTest is Test {
 
         vm.prank(_wallet(1));
         votes.vote(proposalId, _ids(2), true);
-        assertEq(votes.proposal(proposalId).yesWeight, SCALE, "exactly one key of weight moved");
+        assertEq(votes.proposal(proposalId).yesVotes, 1, "exactly one key's vote moved");
         assertFalse(votes.hasVoted(proposalId, 1), "and the holder's own key is untouched");
     }
 
@@ -491,7 +427,7 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Invariant: a vote names at least one key. An empty set would otherwise record a voter
-    /// who moved no weight at all.
+    /// who moved no vote at all.
     function test_aVoteMustNameAtLeastOneKey() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -519,14 +455,15 @@ contract KeyfleetVotesTest is Test {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 3, _wallet(3)));
         votes.vote(proposalId, batch, true);
         assertFalse(votes.hasVoted(proposalId, 1), "the ids before the failure were not spent");
-        assertEq(votes.proposal(proposalId).yesWeight, 0);
+        assertEq(votes.proposal(proposalId).yesVotes, 0);
 
         uint256[] memory pair = new uint256[](2);
         (pair[0], pair[1]) = (1, 2);
         vm.expectEmit(true, true, true, true, address(votes));
-        emit VoteCast(proposalId, _wallet(1), true, 2 * SCALE, pair);
+        emit VoteCast(proposalId, _wallet(1), true, pair);
         vm.prank(_wallet(1));
-        assertEq(votes.vote(proposalId, pair, true), 2 * SCALE, "both keys counted once");
+        votes.vote(proposalId, pair, true);
+        assertEq(votes.proposal(proposalId).yesVotes, 2, "both keys counted once");
     }
 
     // --- 5. the window ----------------------------------------------------
@@ -560,10 +497,11 @@ contract KeyfleetVotesTest is Test {
 
     // --- 6. the pass rule --------------------------------------------------
 
-    /// @dev Invariant: YES must exceed half of the total eligible weight, not half of the weight
-    /// that bothered to vote. Exactly half fails, half plus one atomic unit passes, and a key that
-    /// stayed silent counts against the proposal just as a NO would.
-    function test_yesMustExceedHalfOfAllEligibleWeight() public {
+    /// @dev Invariant: YES must exceed half of all the keys in the snapshot, not half of the keys
+    /// that bothered to vote. Exactly half fails, one key more passes, and a key that stayed silent
+    /// counts against the proposal just as a NO would. On a Fibonacci fleet the early levels get no
+    /// extra say: level 1's two keys are two votes out of five.
+    function test_yesMustExceedHalfOfAllTheKeys() public {
         // Exactly half: one of two Classic keys.
         Keyfleet even = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes evenVotes = even.VOTES();
@@ -571,9 +509,9 @@ contract KeyfleetVotesTest is Test {
         uint256 tied = _propose(evenVotes);
         _vote(evenVotes, tied, 1, true);
         _close(evenVotes, tied);
-        assertEq(evenVotes.proposal(tied).yesWeight * 2, evenVotes.eligibleWeight(tied), "exactly half of the weight");
+        assertEq(evenVotes.proposal(tied).yesVotes * 2, evenVotes.proposal(tied).snapshotMinted, "exactly half");
         assertEq(uint256(evenVotes.state(tied)), uint256(KeyfleetVotes.State.Defeated));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, SCALE, 2 * SCALE));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 1, 2));
         evenVotes.execute(tied);
 
         // Silence is not neutral: one YES out of three keys, with nobody voting NO, still fails.
@@ -583,28 +521,29 @@ contract KeyfleetVotesTest is Test {
         uint256 abstained = _propose(quietVotes);
         _vote(quietVotes, abstained, 1, true);
         _close(quietVotes, abstained);
-        assertEq(quietVotes.proposal(abstained).noWeight, 0, "nobody voted against it");
+        assertEq(quietVotes.proposal(abstained).noVotes, 0, "nobody voted against it");
         assertEq(uint256(quietVotes.state(abstained)), uint256(KeyfleetVotes.State.Defeated), "and it still fails");
 
-        // Half plus one atomic unit: level 1's two keys against level 2's three floored thirds.
+        // Fibonacci: all of level 1 is two keys of five, which is not a majority; one level-2 key
+        // more is.
         Keyfleet fib = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes fibVotes = fib.VOTES();
         _buyMany(fib, 5);
         uint256 narrow = _propose(fibVotes);
-        assertEq(fibVotes.eligibleWeight(narrow), SCALE + 3 * (SCALE / 3), "the level-2 floor loses one unit");
         _vote(fibVotes, narrow, 1, true);
+        _vote(fibVotes, narrow, 2, true);
         _close(fibVotes, narrow);
-        assertEq(uint256(fibVotes.state(narrow)), uint256(KeyfleetVotes.State.Defeated), "one level is not enough");
+        assertEq(uint256(fibVotes.state(narrow)), uint256(KeyfleetVotes.State.Defeated), "a whole level is two votes");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 2, 5));
+        fibVotes.execute(narrow);
 
-        uint256 both = _propose(fibVotes);
-        _vote(fibVotes, both, 1, true);
-        _vote(fibVotes, both, 2, true);
-        _close(fibVotes, both);
-        assertEq(
-            fibVotes.proposal(both).yesWeight * 2 - fibVotes.eligibleWeight(both), 1, "it passes by one atomic unit"
-        );
-        assertEq(uint256(fibVotes.state(both)), uint256(KeyfleetVotes.State.Passed));
-        fibVotes.execute(both);
+        uint256 three = _propose(fibVotes);
+        _vote(fibVotes, three, 1, true);
+        _vote(fibVotes, three, 2, true);
+        _vote(fibVotes, three, 5, true);
+        _close(fibVotes, three);
+        assertEq(uint256(fibVotes.state(three)), uint256(KeyfleetVotes.State.Passed), "three keys of five pass");
+        fibVotes.execute(three);
     }
 
     /// @dev Invariant: a passed Decision records agreement and does nothing else. It executes once,
@@ -640,49 +579,11 @@ contract KeyfleetVotesTest is Test {
 
     // --- 7. gas -------------------------------------------------------------
 
-    /// @dev Invariant: creating a proposal walks levels, never keys, so its cost is bounded by the
-    /// preset rather than by how large the fleet has grown. This is the worst case: a Fibonacci
-    /// fleet at the level-20 ceiling, with every slot the call touches cold.
-    function test_worstCaseProposalCreationGasAtTwentyLevels() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buy(fleet, _wallet(1));
-        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-
-        vm.cool(address(fleet));
-        vm.cool(address(votes));
-
-        vm.prank(_wallet(1));
-        uint256 before = gasleft();
-        uint256 proposalId = votes.proposeDecision(1, "merge the branch", keccak256("base..head"));
-        uint256 used = before - gasleft();
-
-        console2.log("worst-case proposal creation gas at twenty levels:", used);
-        assertLt(used, 223_000, "worst-case creation stays under the published ceiling");
-        assertEq(votes.proposal(proposalId).snapshotMinted, KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-        assertEq(votes.eligibleWeight(proposalId), _levelWeight(20), "and it counted all twenty levels");
-
-        // A fleet with two keys in one level is barely cheaper than one with every level filled,
-        // which is what walking levels instead of keys buys.
-        Keyfleet small = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        _buyMany(small, 2);
-        KeyfleetVotes smallVotes = small.VOTES();
-        vm.cool(address(small));
-        vm.cool(address(smallVotes));
-        vm.prank(_wallet(1));
-        before = gasleft();
-        smallVotes.proposeDecision(1, "merge the branch", keccak256("base..head"));
-        uint256 smallUsed = before - gasleft();
-        console2.log("proposal creation gas at one level:", smallUsed);
-        assertLt(used - smallUsed, 48_000, "the other nineteen levels together cost about two thousand gas each");
-    }
-
     /// @dev Invariant: voting is the one call whose cost grows with what the caller asks of it, and
-    /// it grows only with the number of keys named, never with the fleet. The per-key cost is almost
-    /// entirely the one-vote-per-key record and the ownership read behind it, so a Fibonacci fleet,
-    /// which also looks each key's level up, is barely dearer than a flat one. A holder with more
-    /// keys than one block can carry splits the vote across calls, which the one-vote-per-key rule
-    /// makes safe to do.
+    /// it grows only with the number of keys named, never with the fleet. The per-key cost is the
+    /// one-vote-per-key record and the ownership read behind it, and the preset makes no difference
+    /// to it. A holder with more keys than one block can carry splits the vote across calls, which
+    /// the one-vote-per-key rule makes safe to do.
     function test_votingCostsAFixedAmountPerKeyNamed() public {
         Keyfleet flat = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         for (uint256 i = 0; i < 40; ++i) {
@@ -710,7 +611,7 @@ contract KeyfleetVotesTest is Test {
         assertLt(flatTen, 290_000, "a ten-key vote stays under the published ceiling");
         assertLt(flatPerKey, 26_000, "each extra key costs about twenty-three thousand gas");
         assertGt(flatPerKey, 20_000, "which is the one-vote record and the ownership read behind it");
-        assertLt(levelledPerKey - flatPerKey, 2_000, "looking a level up adds almost nothing per key");
+        assertApproxEqAbs(levelledPerKey, flatPerKey, 500, "a Fibonacci key costs what a Classic key costs");
     }
 
     /// @dev Votes `count` consecutive ids from `firstTokenId` in one call and returns the gas used.
@@ -731,14 +632,14 @@ contract KeyfleetVotesTest is Test {
 
     // --- 8. fuzz invariant ---------------------------------------------------
 
-    /// @dev Invariant: across random sets of votes on a fleet with three different key weights, the
-    /// weight recorded for and against is always exactly the weight of the keys that actually voted,
+    /// @dev Invariant: across random sets of votes on a Fibonacci fleet spanning three levels, the
+    /// votes recorded for and against are always exactly the number of keys that actually voted,
     /// each key counts at most once for the life of the proposal, and the two sides together can
-    /// never exceed the eligible weight the proposal was created with.
-    function testFuzz_everyKeyVotesAtMostOnceAndNeverBeyondTheEligibleWeight(uint256 seed) public {
+    /// never exceed the keys in the snapshot.
+    function testFuzz_everyKeyVotesAtMostOnceAndNeverBeyondTheSnapshot(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 10); // levels 1, 2 and 3: weights of a half, a third and a fifth of a vote.
+        _buyMany(fleet, 10); // levels 1, 2 and 3.
         uint256 proposalId = _propose(votes);
 
         bool[11] memory spent;
@@ -749,23 +650,22 @@ contract KeyfleetVotesTest is Test {
             bool support = (seed >> 8) % 2 == 0;
             address owner = fleet.ownerOf(tokenId);
 
+            vm.prank(owner);
             if (spent[tokenId]) {
-                vm.prank(owner);
                 vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, tokenId));
                 votes.vote(proposalId, _ids(tokenId), support);
             } else {
-                vm.prank(owner);
-                assertEq(votes.vote(proposalId, _ids(tokenId), support), votes.weightOf(tokenId));
+                votes.vote(proposalId, _ids(tokenId), support);
                 spent[tokenId] = true;
-                cast += votes.weightOf(tokenId);
+                ++cast;
             }
 
             KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
             assertTrue(votes.hasVoted(proposalId, tokenId), "the key is spent for this proposal");
-            assertEq(stored.yesWeight + stored.noWeight, cast, "recorded weight is exactly the keys that voted");
-            assertLe(stored.yesWeight + stored.noWeight, stored.totalWeight, "and never exceeds the eligible weight");
+            assertEq(stored.yesVotes + stored.noVotes, cast, "recorded votes are exactly the keys that voted");
+            assertLe(stored.yesVotes + stored.noVotes, stored.snapshotMinted, "and never exceed the snapshot");
         }
 
-        assertEq(votes.eligibleWeight(proposalId), _bruteForceWeight(votes, 10), "the snapshot never moved");
+        assertEq(votes.proposal(proposalId).snapshotMinted, 10, "the snapshot never moved");
     }
 }

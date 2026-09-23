@@ -250,6 +250,11 @@ Both flags are required for admission, and a local approval can never override a
 global disablement. A launched Autolaunch token is admitted the same way and only
 after the launch is proven; nothing about a launch admits a token by itself.
 
+Never admit more than seven assets besides USDC to one fleet. A fleet's ledger
+holds at most eight reward assets for its whole life, USDC included, and anyone
+can use up a slot with a tiny revenue deposit in any admitted asset. Once the
+launch has settled, income in a ninth asset can never be recognized.
+
 ## Decided
 
 **The 5% protocol share goes to the Regents staking contract.** Every purchase

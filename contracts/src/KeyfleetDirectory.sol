@@ -6,7 +6,7 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
 /// @notice The four fixed fleets of the release, named once and never again.
 /// @dev This is the whole of the "minimal deployment factory/registry" the release asks for. It
-/// deploys nothing: `Keyfleet` initcode is 37,283 bytes, so a contract carrying a `new Keyfleet`
+/// deploys nothing: `Keyfleet` initcode is 39,078 bytes, so a contract carrying a `new Keyfleet`
 /// would exceed the 24,576-byte runtime limit, and a constructor deploying all four would exceed
 /// the 49,152-byte initcode limit. The deployment script creates the fleets and this contract
 /// records which four they are, so the app seeds from one address instead of four pasted ones.

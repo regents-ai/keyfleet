@@ -2,8 +2,11 @@
 
 The app reads each deployed fleet's `OwnershipEpoch` events from Base and
 records who holds every key. From the fleet's vote contract it records every
-proposal, vote and execution (`ProposalCreated` with the launch details
-beside it, `VoteCast` and `ProposalExecuted`). It records at the head,
+proposal, vote and execution (`ProposalCreated` with `AutolaunchProposed` or
+`PayProposed` beside it for a launch or a payment, `VoteCast` and
+`ProposalExecuted`). A payment keeps its asset, amount, recipient, expiry and
+reason. Every key is one vote, so a vote records the keys it cast and a
+proposal's tally, `yes_keys` and `no_keys`, counts keys. It records at the head,
 from the first block Base confirms in about two seconds, and never waits for L1
 finality. A change in the chain's history is not repaired automatically: the
 reader stops that fleet and an operator fixes the record by hand, as below.
@@ -90,8 +93,8 @@ Reading fleet <fleet id> failed, retrying in <ms> ms: <reason>
 A reason about one log names it by transaction hash and log index:
 `:unreadable_log` (not exactly as the contracts emit it), `:conflicting_logs`
 (two different logs in one place), `:payload_missing` or
-`:payload_without_proposal` (a launch proposal and the log that carries its
-details, one without the other). Numbering reasons name the block:
+`:payload_without_proposal` (a launch or payment proposal and the log that
+carries its details, one without the other). Numbering reasons name the block:
 `:proposal_number_skipped` and `:proposal_not_recorded`. All of these mean the
 node answered wrongly; point `KEYFLEET_RPC_URL` at another provider.
 
