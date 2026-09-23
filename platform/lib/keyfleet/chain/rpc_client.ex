@@ -58,6 +58,24 @@ defmodule KeyFleet.Chain.RpcClient do
     end
   end
 
+  # EIP-1898: the node answers at exactly that block, and refuses once it is
+  # no longer on the chain.
+  @impl true
+  def call(to, data, block_hash) do
+    call = %{to: to, data: "0x" <> Base.encode16(data, case: :lower)}
+
+    case request("eth_call", [call, %{blockHash: block_hash, requireCanonical: true}]) do
+      {:ok, result} ->
+        case Abi.bytes(result) do
+          {:ok, bytes} -> {:ok, bytes}
+          :error -> {:error, :invalid_call_result}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp block(tag) do
     case request("eth_getBlockByNumber", [tag, false]) do
       {:ok, %{"hash" => "0x" <> digits = hash} = header} when byte_size(digits) == 64 ->

@@ -220,6 +220,7 @@ defmodule KeyFleet.ReleaseTest do
              "linked_identities",
              "messages",
              "proposal_executions",
+             "proposal_launch_envelopes",
              "proposal_votes",
              "proposals",
              "rooms",

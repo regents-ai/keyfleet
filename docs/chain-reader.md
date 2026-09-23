@@ -9,11 +9,14 @@ budget) events. From the fleet's vote contract it records every
 proposal, vote and execution (`ProposalCreated` with `AutolaunchProposed` or
 `PayProposed` beside it for a launch or a payment, `VoteCast` and
 `ProposalExecuted`). A payment keeps its asset, amount, recipient, expiry and
-reason. Every key is one vote, so a vote records the keys it cast and a
-proposal's tally, `yes_keys` and `no_keys`, counts keys. It records at the head,
-from the first block Base confirms in about two seconds, and never waits for L1
-finality. A change in the chain's history is not repaired automatically: the
-reader stops that fleet and an operator fixes the record by hand, as below.
+reason. After each pass it reads, at the proposal's own block, the launch each
+launch proposal approves, and keeps it only if its hash is the one the proposal
+carries; a read that fails is tried again after the next pass. Every key is one
+vote, so a vote records the keys it cast and a proposal's tally, `yes_keys` and
+`no_keys`, counts keys. It records at the head, from the first block Base
+confirms in about two seconds, and never waits for L1 finality. A change in the
+chain's history is not repaired automatically: the reader stops that fleet and
+an operator fixes the record by hand, as below.
 
 ## Turning it on
 
@@ -228,8 +231,17 @@ WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 
 ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
 
--- The proposal records from the fork on are removed the same way: executions
--- and votes first, since they point at proposals.
+-- The proposal records from the fork on are removed the same way: launches,
+-- executions and votes first, since they point at proposals.
+ALTER TABLE keyfleet_app.proposal_launch_envelopes DISABLE TRIGGER immutable_proposal_launch_envelopes;
+
+DELETE FROM keyfleet_app.proposal_launch_envelopes AS envelope
+USING keyfleet_app.proposals AS proposal
+WHERE envelope.proposal_id = proposal.id
+  AND proposal.fleet_id = :'fleet' AND proposal.block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.proposal_launch_envelopes ENABLE TRIGGER immutable_proposal_launch_envelopes;
+
 ALTER TABLE keyfleet_app.proposal_executions DISABLE TRIGGER immutable_proposal_executions;
 
 DELETE FROM keyfleet_app.proposal_executions

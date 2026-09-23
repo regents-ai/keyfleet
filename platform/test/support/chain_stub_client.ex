@@ -21,7 +21,8 @@ defmodule KeyFleet.Chain.StubClient do
   that block has now, `:max_logs`, the most logs one answer may hold, as a
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
-  `observations/0` returns.
+  `observations/0` returns, and `:calls`, a function answering each contract
+  read `call(to, data, block_hash)`, which by default answers none.
   """
   def put_chain(head, logs, opts \\ []) do
     Process.put(__MODULE__, %{
@@ -31,13 +32,18 @@ defmodule KeyFleet.Chain.StubClient do
       block_hashes: Keyword.get(opts, :block_hashes, %{}),
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),
+      calls: Keyword.get(opts, :calls, fn _to, _data, _block_hash -> {:error, :no_answer} end),
       log_requests: [],
+      call_requests: [],
       observations: []
     })
   end
 
   @doc "Every `get_logs/4` request since `put_chain/3`, oldest first."
   def log_requests, do: Enum.reverse(chain().log_requests)
+
+  @doc "Every `call/3` request since `put_chain/3`, oldest first."
+  def call_requests, do: Enum.reverse(chain().call_requests)
 
   @doc "What `:observe` returned as each log request arrived, oldest first."
   def observations, do: Enum.reverse(chain().observations)
@@ -78,6 +84,18 @@ defmodule KeyFleet.Chain.StubClient do
     if block <= head.number,
       do: {:ok, Map.get(hashes, block, @block_hash)},
       else: {:error, :block_unavailable}
+  end
+
+  @impl true
+  def call(to, data, block_hash) do
+    chain = chain()
+
+    Process.put(__MODULE__, %{
+      chain
+      | call_requests: [{to, data, block_hash} | chain.call_requests]
+    })
+
+    chain.calls.(to, data, block_hash)
   end
 
   defp chain, do: Process.get(__MODULE__) || raise("call put_chain/2 before reading the chain")

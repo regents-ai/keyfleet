@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
-/// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics and reads a
-/// proposal's kind by these numbers, both written out there by hand. If an event's signature or the
+/// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads a
+/// proposal's kind by these numbers and calls these functions, all written out there by hand. If an event's signature or the
 /// kinds change, this fails until both sides agree again.
 contract KeyfleetVotesTopicsTest is Test {
     function test_ownershipEpochTopic() public pure {
@@ -53,6 +53,10 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_budgetPaidTopic() public pure {
         assertEq(Keyfleet.BudgetPaid.selector, 0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e);
+    }
+
+    function test_launchEnvelopeSelector() public pure {
+        assertEq(KeyfleetVotes.launchEnvelope.selector, bytes4(0xb3bceadb));
     }
 
     function test_proposalExecutedTopic() public pure {

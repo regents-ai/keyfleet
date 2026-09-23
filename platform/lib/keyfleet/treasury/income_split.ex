@@ -108,6 +108,7 @@ defmodule KeyFleet.Treasury.IncomeSplit do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
+
       change {KeyFleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index], number: :proposal_seq}
     end

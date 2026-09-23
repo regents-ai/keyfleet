@@ -168,6 +168,19 @@ defmodule KeyFleet.Proposals.Proposal do
       get? true
     end
 
+    # The fleet's launch proposals whose launch has not been read yet.
+    read :launches_without_envelope do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and kind == :autolaunch and
+                 not exists(launch_envelope, true)
+             )
+
+      prepare build(sort: [number: :asc])
+    end
+
     # What was recorded from a stretch of the fleet's blocks, so a second
     # reading of the same stretch can be checked against it.
     read :recorded_in_blocks do
@@ -279,6 +292,7 @@ defmodule KeyFleet.Proposals.Proposal do
 
     has_many :votes, KeyFleet.Proposals.Vote, public?: true
     has_one :execution, KeyFleet.Proposals.Execution, public?: true
+    has_one :launch_envelope, KeyFleet.Proposals.LaunchEnvelope, public?: true
   end
 
   aggregates do

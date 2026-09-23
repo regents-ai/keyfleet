@@ -44,17 +44,21 @@ defmodule KeyFleet.Chain.Scanner do
   missing from a block whose hash still matches is the node answering
   inconsistently, so the pass fails and is retried instead.
 
+  After the pass, the launch each new launch proposal approves is read, as
+  `KeyFleet.Chain.LaunchEnvelopes` describes.
+
   A pass that reaches the head also notes the head's time, which is how far
-  votes are known to be counted. A pass that made a new proposal record says
-  so on `KeyFleet.Proposals.topic/1`, and one that revealed keys names them on
-  `KeyFleet.Keys.topic/1`, even if it then failed or stopped the fleet; both
-  are only hints to read again.
+  votes are known to be counted. A pass that made a new proposal, budget or
+  launch record says so on `KeyFleet.Proposals.topic/1`, and one that revealed
+  keys names them on `KeyFleet.Keys.topic/1`, even if it then failed or
+  stopped the fleet; both are only hints to read again.
   """
 
   require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain
+  alias KeyFleet.Chain.LaunchEnvelopes
   alias KeyFleet.Chain.Logs
   alias KeyFleet.Fleets.Fleet
   alias KeyFleet.Keys
@@ -104,9 +108,16 @@ defmodule KeyFleet.Chain.Scanner do
         {:error, reason} -> {:error, reason}
       end
 
+    read_launches(fleet, result, client)
     announce(cursor)
     result
   end
+
+  # The launches of recorded launch proposals are read after the pass, at
+  # their own blocks, so a slow or failed read never holds up the cursor. A
+  # stopped fleet's record is waiting for an operator, so nothing is added.
+  defp read_launches(_fleet, {:stopped, _block}, _client), do: :ok
+  defp read_launches(fleet, _result, client), do: LaunchEnvelopes.read_missing(fleet, client)
 
   # Only a pass that reached the head knows the votes are counted up to its time.
   defp advance(next_block, head) do

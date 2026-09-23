@@ -1,7 +1,8 @@
 defmodule KeyFleet.Proposals do
   @moduledoc """
-  A fleet's proposals, the votes cast on them and their executions, recorded
-  from its vote contract by the chain reader and by nothing else. The chain is
+  A fleet's proposals, the votes cast on them, their executions and the
+  launches they approve, recorded from its vote contract by the chain reader
+  and by nothing else. The chain is
   the authority; these records only mirror it.
   """
   use Ash.Domain
@@ -21,6 +22,12 @@ defmodule KeyFleet.Proposals do
       define :proposals_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :launches_without_envelope, action: :launches_without_envelope, args: [:fleet_id]
+    end
+
+    resource KeyFleet.Proposals.LaunchEnvelope do
+      define :record_launch_envelope, action: :record
     end
 
     resource KeyFleet.Proposals.Vote do

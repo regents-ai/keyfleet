@@ -905,6 +905,112 @@ defmodule KeyFleet.ProposalsChainTest do
     end
   end
 
+  describe "reading launches" do
+    # The launch is read at the proposal's own block and kept byte for byte,
+    # text that is not valid text included, and only once.
+    test "a launch proposal's launch is read at its block and kept exactly", %{fleet: fleet} do
+      texts = ["Cascade", "CSC", "A fleet's launch", "https://example.test", <<0xFF, 0xFE>>]
+      returned = encoded_envelope(texts, 250_000)
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+
+      StubClient.put_chain(
+        head(@deployed + 10),
+        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned)),
+        calls: fn _to, _data, _block_hash -> {:ok, returned} end
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:proposals_changed, @fleet}
+
+      launch = Proposals.get_proposal!(@fleet, 1, load: :launch_envelope)
+
+      assert StubClient.call_requests() == [
+               {@votes, <<0xB3, 0xBC, 0xEA, 0xDB, 1::256>>, launch.block_hash}
+             ]
+
+      assert %{
+               name: "Cascade",
+               symbol: "CSC",
+               description: "A fleet's launch",
+               website: "https://example.test",
+               image: <<0xFF, 0xFE>>,
+               record_seq: 2
+             } = launch.launch_envelope
+
+      assert Decimal.equal?(launch.launch_envelope.required_regent_raised, 250_000)
+      assert Chain.get_cursor!(@fleet).proposal_seq == 2
+
+      # Kept, it is not asked for again.
+      StubClient.put_chain(
+        head(@deployed + 12),
+        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert StubClient.call_requests() == []
+      refute_received {:proposals_changed, _fleet}
+
+      for {sql, params} <- [
+            {"UPDATE keyfleet_app.proposal_launch_envelopes SET name = $1", ["Other"]},
+            {"DELETE FROM keyfleet_app.proposal_launch_envelopes", []},
+            {"TRUNCATE keyfleet_app.proposal_launch_envelopes", []}
+          ] do
+        assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+                 Repo.query(sql, params, mode: :savepoint),
+               sql
+      end
+    end
+
+    # A read that fails, is refused because the block is no longer on the
+    # chain, or answers with another launch keeps nothing and holds up
+    # nothing; the next pass tries again.
+    test "a launch that cannot be read keeps nothing and is tried again", %{fleet: fleet} do
+      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
+      logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
+      other = encoded_envelope(["N", "S", "D", "W", "J"], 1)
+
+      for {answer, head_offset} <- [
+            {fn _to, _data, _block_hash -> {:error, :chain_unavailable} end, 10},
+            {fn _to, _data, _block_hash -> {:error, :block_not_on_chain} end, 12},
+            {fn _to, _data, _block_hash -> {:ok, other} end, 14},
+            {fn _to, _data, _block_hash -> {:ok, binary_part(returned, 0, 64)} end, 16}
+          ] do
+        StubClient.put_chain(head(@deployed + head_offset), logs, calls: answer)
+        assert Scanner.step(fleet, StubClient) == :ok
+        assert Chain.get_cursor!(@fleet).next_block == @deployed + head_offset + 1
+        assert length(StubClient.call_requests()) == 1
+        refute Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
+      end
+
+      StubClient.put_chain(head(@deployed + 18), logs,
+        calls: fn _to, _data, _block_hash -> {:ok, returned} end
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert %{name: "N", image: "I"} =
+               Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
+    end
+
+    test "a stopped fleet's launches are not read", %{fleet: fleet} do
+      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
+      logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
+      StubClient.put_chain(head(@deployed + 10), logs)
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      # The chain's history changed under the proposal: it is gone from a
+      # block whose hash is new.
+      StubClient.put_chain(head(@deployed + 12), [],
+        block_hashes: %{(@deployed + 2) => @new_hash},
+        calls: fn _to, _data, _block_hash -> {:ok, returned} end
+      )
+
+      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 2} end)
+      assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 2}
+      assert StubClient.call_requests() == []
+    end
+  end
+
   describe "the record tables" do
     test "refuse every change, delete and emptying", %{fleet: fleet} do
       budget = [
@@ -1207,6 +1313,24 @@ defmodule KeyFleet.ProposalsChainTest do
     )
   end
 
+  # What `launchEnvelope` returns for a launch of these five texts and raise:
+  # the struct's offset, then the struct.
+  defp encoded_envelope(texts, raise) do
+    tails =
+      Enum.map(texts, fn text ->
+        padded = 32 * div(byte_size(text) + 31, 32)
+        <<byte_size(text)::256>> <> text <> <<0::size(8 * (padded - byte_size(text)))>>
+      end)
+
+    {offsets, _end} = Enum.map_reduce(tails, 256, &{<<&2::256>>, &2 + byte_size(&1)})
+
+    <<32::256>> <>
+      Enum.join(offsets) <>
+      <<raise::256, 0::256, 18_446_744_073_709_551_615::256>> <> Enum.join(tails)
+  end
+
+  defp keccak(bytes), do: hex(KeccakEx.hash_256(bytes))
+
   defp ownership(token_id, owner, block, log_index) do
     log(
       @contract,
@@ -1400,6 +1524,22 @@ defmodule KeyFleet.ProposalsChainTest do
   # The records from block `offset` on removed as docs/chain-reader.md does.
   defp remove_from(offset) do
     Repo.transaction(fn ->
+      Repo.query!(
+        "ALTER TABLE keyfleet_app.proposal_launch_envelopes DISABLE TRIGGER immutable_proposal_launch_envelopes"
+      )
+
+      Repo.query!(
+        "DELETE FROM keyfleet_app.proposal_launch_envelopes AS envelope " <>
+          "USING keyfleet_app.proposals AS proposal " <>
+          "WHERE envelope.proposal_id = proposal.id AND proposal.fleet_id = $1 " <>
+          "AND proposal.block_number >= $2",
+        [@fleet, @deployed + offset]
+      )
+
+      Repo.query!(
+        "ALTER TABLE keyfleet_app.proposal_launch_envelopes ENABLE TRIGGER immutable_proposal_launch_envelopes"
+      )
+
       for table <-
             ~w(budget_payments launch_income_splits proposal_executions proposal_votes proposals) do
         Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER immutable_#{table}")
@@ -1433,6 +1573,7 @@ defmodule KeyFleet.ProposalsChainTest do
       for {table, trigger} <- [
             {"budget_payments", "immutable_budget_payments"},
             {"launch_income_splits", "immutable_launch_income_splits"},
+            {"proposal_launch_envelopes", "immutable_proposal_launch_envelopes"},
             {"proposal_executions", "immutable_proposal_executions"},
             {"proposal_votes", "immutable_proposal_votes"},
             {"proposals", "immutable_proposals"}
