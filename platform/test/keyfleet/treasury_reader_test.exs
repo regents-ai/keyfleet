@@ -125,8 +125,8 @@ defmodule KeyFleet.TreasuryReaderTest do
     assert details()[@usdc] == {"USDC", 6}
   end
 
-  # A figure that cannot be read, or reads as something else, keeps nothing.
-  # The tokens are still asked what they are.
+  # A figure that cannot be read, or reads as something else, keeps nothing,
+  # and no token is asked what it is until a reading is kept.
   test "a reading that fails in any part keeps nothing", %{fleet: fleet} do
     for {key, answer, reason} <- [
           {{@rewards, @backed <> word(@other)}, {:error, :chain_unavailable},
@@ -137,45 +137,50 @@ defmodule KeyFleet.TreasuryReaderTest do
 
       assert TreasuryReader.read(fleet, StubClient) == {:error, reason}
       assert Treasury.get_reading!(@fleet) == nil
-      assert Map.keys(details()) == [@usdc]
+      assert details() == %{}
+
+      refute Enum.any?(StubClient.call_requests(), fn {_to, data, _hash} ->
+               data in [@symbol, @decimals]
+             end)
     end
 
     refute_received {:balances_changed, _fleet}
   end
 
-  # A token that cannot be reached holds up nothing: the balances are kept
-  # and announced, and the token is asked again at the next reading.
-  @tag capture_log: true
-  test "a token that cannot be reached is asked again, and holds up nothing", %{fleet: fleet} do
+  # The node has just answered every balance at the block, so a token call
+  # that fails there, as a broken token's `invalid opcode` or `out of gas`
+  # does, is the token not answering: it is kept as unknown and never asked
+  # again, and the balances are kept and announced all the same.
+  test "a token whose calls fail while the balances are read is kept as unknown", %{
+    fleet: fleet
+  } do
     Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
     ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
 
-    unreachable =
+    broken =
       chain()
       |> Map.put({@other, @decimals}, {:error, :chain_unavailable})
       |> Map.put({@named, @symbol}, {:error, :chain_unavailable})
+      |> Map.put({@named, @decimals}, {:error, :chain_unavailable})
 
-    StubClient.put_chain(head(40), [], calls: answers(unreachable))
-
-    log =
-      ExUnit.CaptureLog.capture_log(fn ->
-        assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
-      end)
-
-    assert log =~ "token #{@other} was not read"
-    assert log =~ "token #{@named} was not read"
+    StubClient.put_chain(head(40), [], calls: answers(broken))
+    assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
     assert_received {:balances_changed, @fleet}
-    assert Treasury.get_reading!(@fleet).block_number == 40
-    assert details() == %{@usdc => {"USDC", 6}}
+
+    assert details() == %{
+             @usdc => {"USDC", 6},
+             @other => {"WETH", nil},
+             @named => {nil, nil}
+           }
 
     StubClient.put_chain(head(41), [], calls: answers(chain()))
     assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
 
-    assert details() == %{
-             @usdc => {"USDC", 6},
-             @other => {"WETH", 18},
-             @named => {nil, nil}
-           }
+    refute Enum.any?(StubClient.call_requests(), fn {_to, data, _hash} ->
+             data in [@symbol, @decimals]
+           end)
+
+    assert details()[@other] == {"WETH", nil}
   end
 
   # A symbol is shown as written, so a token's is kept only when it is 1 to

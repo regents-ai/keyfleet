@@ -12,16 +12,14 @@ defmodule KeyFleet.Chain.TreasuryReader do
   the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
   on `KeyFleet.Proposals.topic/1`.
 
-  After the balances, each asset of the budget or of a payment proposal whose
-  token has not been read has its symbol and decimals read and kept, once.
-  A token that refuses either, answers with something else, or reports a
-  symbol that is not 1 to 32 bytes of text free of control and direction
-  characters, has it kept as unknown. A token that cannot be reached is
-  logged and asked again at the next reading; it never holds up or undoes the
-  balances.
+  Once a reading's balances are kept, each asset of the budget or of a
+  payment proposal whose token has not been read has its symbol and decimals
+  read at the same block and kept, once, and never asked again. The node has
+  just answered every balance there, so a token whose call fails in any way,
+  answers with something else, or reports a symbol that is not 1 to 32 bytes
+  of text free of control and direction characters, has it kept as unknown.
+  A reading that fails asks no token anything, and the next one tries again.
   """
-
-  require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.Abi
@@ -42,10 +40,10 @@ defmodule KeyFleet.Chain.TreasuryReader do
 
   @doc "Reads the fleet's balances at the node's head and keeps them, then any unread token details."
   def read(fleet, client) do
-    with {:ok, head} <- client.head() do
-      reading = read_balances(fleet, client, head)
-      read_details(fleet, client, head.hash)
-      reading
+    with {:ok, head} <- client.head(),
+         {:ok, reading} <- read_balances(fleet, client, head) do
+      read_details(fleet, reading, client, head.hash)
+      {:ok, reading}
     end
   end
 
@@ -87,19 +85,12 @@ defmodule KeyFleet.Chain.TreasuryReader do
   end
 
   # The symbol and decimals of each asset shown anywhere that has not been
-  # read yet: the budget's, including the reward assets of the reading kept,
-  # and those payment proposals name. Each is read on its own.
-  defp read_details(fleet, client, block_hash) do
+  # read yet: those of the reading kept, and those payment proposals name.
+  defp read_details(fleet, reading, client, block_hash) do
     known = MapSet.new(Treasury.asset_details!(fleet.id, actor: @system), & &1.asset)
 
-    held =
-      case Treasury.get_reading!(fleet.id) do
-        nil -> []
-        reading -> Enum.map(reading.assets, & &1.asset)
-      end
-
-    fleet
-    |> Treasury.budget_assets(held)
+    reading.assets
+    |> Enum.map(& &1.asset)
     |> Enum.concat(Proposals.payment_assets(fleet.id))
     |> Enum.uniq()
     |> Enum.reject(&MapSet.member?(known, &1))
@@ -107,29 +98,24 @@ defmodule KeyFleet.Chain.TreasuryReader do
   end
 
   defp read_detail(fleet, asset, client, block_hash) do
-    with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
-         {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash),
-         {:ok, _details} <-
-           Treasury.record_asset_details(
-             %{fleet_id: fleet.id, asset: asset, symbol: symbol, decimals: decimals},
-             actor: @system
-           ) do
-      :ok
-    else
-      {:error, reason} ->
-        Logger.warning(
-          "Fleet #{fleet.id}: token #{asset} was not read (#{inspect(reason)}); " <>
-            "it is asked again at the next reading."
-        )
-    end
+    Treasury.record_asset_details!(
+      %{
+        fleet_id: fleet.id,
+        asset: asset,
+        symbol: detail(client, asset, {@symbol, :bytes}, block_hash),
+        decimals: detail(client, asset, {@decimals, {:uint, 8}}, block_hash)
+      },
+      actor: @system
+    )
   end
 
-  # A token that reverts, or answers with something else, does not answer.
+  # The node has just answered every balance at this block, so a call to the
+  # token that fails in any way, or answers with something else, is the
+  # token not answering.
   defp detail(client, asset, {data, type}, block_hash) do
     case client.call(asset, data, block_hash) do
-      {:ok, returned} -> {:ok, answer(Abi.decode(returned, [type]))}
-      {:error, :reverted} -> {:ok, nil}
-      {:error, reason} -> {:error, reason}
+      {:ok, returned} -> answer(Abi.decode(returned, [type]))
+      {:error, _reason} -> nil
     end
   end
 

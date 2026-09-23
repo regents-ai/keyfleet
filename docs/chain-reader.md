@@ -18,12 +18,13 @@ it only if its hash is the one the proposal carries; a read that fails is
 logged once and tried again after a wait that doubles, up to five minutes. Once
 a minute it reads, at the head, the fleet's balances in USDC, its reward assets
 and every asset received into its budget or split from launch income, all of
-them assets the fleet's registry admits. After that, the first time it meets an
-asset of the budget or of a payment proposal, it reads that token's symbol and
-decimals and keeps them; a token that refuses, or reports a symbol that is not
-1 to 32 bytes of text free of control and direction characters, has it kept as
-unknown and its amounts shown in whole units. A token that cannot be reached is
-asked again at the next reading and never holds up the balances. Every amount
+them assets the fleet's registry admits. Once those balances are kept, the
+first time it meets an asset of the budget or of a payment proposal, it reads
+that token's symbol and decimals at the same block and keeps them for good.
+The node has just answered every balance there, so a token whose call fails in
+any way, or that reports a symbol that is not 1 to 32 bytes of text free of
+control and direction characters, has it kept as unknown and its amounts shown
+in whole units. A reading that fails asks no token anything. Every amount
 outside the fleet's own USDC is shown with its token's address. Every key is one
 vote, so a vote records the keys it cast and a proposal's tally, `yes_keys` and
 `no_keys`, counts keys. It records at the head, from the first block Base
