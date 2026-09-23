@@ -4,28 +4,38 @@ defmodule KeyFleet.Chain.RpcClient do
 
   require Logger
 
+  alias KeyFleet.Chain.Abi
+
   @timeout 20_000
 
   @impl true
   def chain_id do
-    with {:ok, result} <- request("eth_chainId", []), do: quantity(result)
+    with {:ok, result} <- request("eth_chainId", []) do
+      case Abi.quantity(result) do
+        {:ok, chain_id} -> {:ok, chain_id}
+        :error -> {:error, :invalid_chain_id}
+      end
+    end
   end
 
   # Base's sequencer confirms `latest` in about two seconds; nothing here waits
   # for L1 finality.
   @impl true
   def head do
-    case block("latest") do
-      {:ok, %{"number" => number, "hash" => hash}} ->
-        with {:ok, number} <- quantity(number), do: {:ok, %{number: number, hash: hash}}
+    with {:ok, header} <- block("latest"), do: head_of(header)
+  end
 
-      {:ok, _header} ->
-        {:error, :invalid_block_header}
-
-      {:error, reason} ->
-        {:error, reason}
+  defp head_of(%{"number" => number, "hash" => hash, "timestamp" => timestamp}) do
+    with {:ok, number} <- Abi.quantity(number),
+         {:ok, seconds} <- Abi.quantity(timestamp),
+         {:ok, timestamp} <- DateTime.from_unix(seconds) do
+      {:ok, %{number: number, hash: hash, timestamp: timestamp}}
+    else
+      _malformed -> {:error, :invalid_block_header}
     end
   end
+
+  defp head_of(_header), do: {:error, :invalid_block_header}
 
   @impl true
   def get_block_hash(block_number) do
@@ -33,10 +43,10 @@ defmodule KeyFleet.Chain.RpcClient do
   end
 
   @impl true
-  def get_logs(address, topic0, from_block, to_block) do
+  def get_logs(addresses, topic0s, from_block, to_block) do
     filter = %{
-      address: address,
-      topics: [topic0],
+      address: addresses,
+      topics: [topic0s],
       fromBlock: hex_quantity(from_block),
       toBlock: hex_quantity(to_block)
     }
@@ -82,15 +92,6 @@ defmodule KeyFleet.Chain.RpcClient do
         {:error, :chain_unavailable}
     end
   end
-
-  defp quantity("0x" <> hex) when hex != "" do
-    case Integer.parse(hex, 16) do
-      {value, ""} -> {:ok, value}
-      _malformed -> {:error, :invalid_quantity}
-    end
-  end
-
-  defp quantity(_value), do: {:error, :invalid_quantity}
 
   defp hex_quantity(value), do: "0x" <> (value |> Integer.to_string(16) |> String.downcase())
 end

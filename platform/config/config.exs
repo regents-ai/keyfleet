@@ -30,6 +30,7 @@ config :keyfleet,
     KeyFleet.Agents,
     KeyFleet.Keys,
     KeyFleet.Chain,
+    KeyFleet.Proposals,
     KeyFleet.Graph
   ],
   generators: [timestamp_type: :utc_datetime]

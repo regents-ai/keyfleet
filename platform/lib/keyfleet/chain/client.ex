@@ -4,16 +4,17 @@ defmodule KeyFleet.Chain.Client do
   production and by a stand-in in tests.
 
   Logs come back exactly as `eth_getLogs` returns them; decoding them is
-  `KeyFleet.Chain.OwnershipLog`'s job.
+  `KeyFleet.Chain.Logs`'s job. One call asks for every contract and event the
+  reader follows, so a stretch of blocks is always read whole.
   """
 
-  @type head :: %{number: non_neg_integer(), hash: String.t()}
+  @type head :: %{number: non_neg_integer(), hash: String.t(), timestamp: DateTime.t()}
 
   @callback chain_id() :: {:ok, pos_integer()} | {:error, term()}
   @callback head() :: {:ok, head()} | {:error, term()}
   @callback get_logs(
-              address :: String.t(),
-              topic0 :: String.t(),
+              addresses :: [String.t()],
+              topic0s :: [String.t()],
               from_block :: non_neg_integer(),
               to_block :: non_neg_integer()
             ) :: {:ok, [map()]} | {:error, term()}

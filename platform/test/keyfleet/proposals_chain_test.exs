@@ -1,0 +1,1241 @@
+defmodule KeyFleet.ProposalsChainTest do
+  use ExUnit.Case, async: false
+
+  import ExUnit.CaptureLog
+
+  alias KeyFleet.Actors.System
+  alias KeyFleet.Chain
+  alias KeyFleet.Chain.{Logs, Scanner, StubClient}
+  alias KeyFleet.Fleets
+  alias KeyFleet.Keys
+  alias KeyFleet.Proposals
+  alias KeyFleet.Repo
+
+  # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
+  # high block keeps these readings to what each test puts on the chain.
+  @fleet "fleet_tech_accelerant"
+  @contract "0x" <> String.duplicate("7", 40)
+  @votes "0x" <> String.duplicate("9", 40)
+  @deployed 5_000_000
+  @new_hash "0x" <> String.duplicate("e", 64)
+  @e18 1_000_000_000_000_000_000
+  @max_bigint 9_223_372_036_854_775_807
+
+  # Pinned from `cast keccak` of each event signature, and against the
+  # contracts in contracts/test/KeyfleetVotesTopics.t.sol.
+  @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
+  @created "0xf8482fe2c54826b69ae2eac425c7ee38d217afb99600f7a8732276535a2f300b"
+  @autolaunch "0xa395caec5e719dd09aa72025608546598e2f07d131ae8ca46b82bbaacfbe2846"
+  @vote "0x75a715a3d9aeed50070699874aee33f077ea55144e4a72c43ed49f31cfcab424"
+  @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
+
+  setup context do
+    if context[:independent_connections] do
+      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &remove_committed_records/0) end)
+
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        Fleets.bootstrap_catalog!()
+        %{fleet: deploy!()}
+      end)
+    else
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+      Fleets.bootstrap_catalog!()
+      %{fleet: deploy!()}
+    end
+  end
+
+  describe "recording proposals" do
+    # One request per stretch of blocks covers both contracts and every
+    # event, and each kind lands with exactly the fields its logs carry.
+    test "each kind, its votes and its execution are recorded in chain order", %{fleet: fleet} do
+      envelope = "0x" <> String.duplicate("a1", 32)
+
+      StubClient.put_chain(
+        head(@deployed + 10),
+        List.flatten([
+          decision(1, @deployed + 1, text: "Ship the docs"),
+          autolaunch(2, @deployed + 3, 3, envelope_hash: envelope),
+          vote(1, "a", true, 3 * @e18, [1, 2, 3], @deployed + 4, 0),
+          vote(1, "b", false, @e18, [4], @deployed + 4, 1),
+          executed(1, "c", @deployed + 5, 0)
+        ])
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert StubClient.log_requests() == [
+               {[@contract, @votes], [@ownership, @created, @autolaunch, @vote, @executed],
+                @deployed, @deployed + 10}
+             ]
+
+      decision = Proposals.get_proposal!(@fleet, 1)
+
+      assert %{
+               kind: :decision,
+               proposer: proposer,
+               eligible_keys: 7,
+               digest: nil,
+               text: "Ship the docs",
+               text_bytes: 13,
+               envelope_hash: nil,
+               execution_expiry: nil,
+               block_number: block,
+               log_index: 0,
+               record_seq: 1
+             } = decision
+
+      assert proposer == wallet("f")
+      assert block == @deployed + 1
+      assert DateTime.compare(decision.closes_at, DateTime.from_unix!(1_800_000_001)) == :eq
+      assert Decimal.equal?(decision.total_weight, 7 * @e18)
+      assert decision.text_sha256 == sha256("Ship the docs")
+      assert decision.transaction_hash == String.downcase(transaction(@deployed + 1))
+
+      launch = Proposals.get_proposal!(@fleet, 2)
+
+      assert %{kind: :autolaunch, envelope_hash: ^envelope, digest: ^envelope} = launch
+      assert %{text: nil, text_bytes: nil, text_sha256: nil} = launch
+      assert %{log_index: 3, record_seq: 2} = launch
+      assert Decimal.equal?(launch.execution_expiry, 18_446_744_073_709_551_615)
+
+      assert [yes, no] =
+               @fleet
+               |> Proposals.votes_recorded_in_blocks!(@deployed, @deployed + 10, actor: %System{})
+               |> Enum.sort_by(& &1.record_seq)
+
+      assert %{support: true, token_ids: [1, 2, 3], record_seq: 3} = yes
+      assert %{support: false, token_ids: [4], record_seq: 4, log_index: 1} = no
+      assert yes.voter == wallet("a")
+      assert yes.proposal_id == decision.id
+
+      assert [execution] =
+               Proposals.executions_recorded_in_blocks!(@fleet, @deployed, @deployed + 10,
+                 actor: %System{}
+               )
+
+      assert %{proposal_id: proposal_id, record_seq: 5} = execution
+      assert proposal_id == decision.id
+      assert execution.executor == wallet("c")
+
+      tallied = Ash.load!(decision, [:yes_weight, :no_weight, :executed?])
+      assert Decimal.equal?(tallied.yes_weight, 3 * @e18)
+      assert Decimal.equal?(tallied.no_weight, @e18)
+      assert tallied.executed?
+      refute Ash.load!(launch, :executed?).executed?
+
+      assert Chain.get_cursor!(@fleet).proposal_seq == 5
+    end
+
+    # One stretch that cannot be read whole moves nothing, not even the
+    # ownership read beside it.
+    test "a stretch that cannot be read whole records nothing and holds the cursor", %{
+      fleet: fleet
+    } do
+      mint = ownership(1, "a", @deployed + 1, 0)
+      [created, payload] = autolaunch(1, @deployed + 2, 0)
+
+      created_at = {String.downcase(transaction(@deployed + 2)), 0}
+      payload_at = {String.downcase(transaction(@deployed + 2)), 1}
+
+      for {logs, reason} <- [
+            {[created], Tuple.insert_at(created_at, 0, :payload_missing)},
+            {[payload], Tuple.insert_at(payload_at, 0, :payload_without_proposal)},
+            {[created, %{payload | "transactionHash" => transaction(1)}],
+             Tuple.insert_at(created_at, 0, :payload_missing)},
+            {[created, payload_for(payload, 2)],
+             Tuple.insert_at(created_at, 0, :payload_missing)},
+            {[decision(1, @deployed + 2), payload],
+             Tuple.insert_at(payload_at, 0, :payload_without_proposal)},
+            {[decision(1, @deployed + 2), %{decision(1, @deployed + 2) | "data" => "0x"}],
+             {:unreadable_log, transaction(@deployed + 2), "0x0"}},
+            {[decision(1, @deployed + 2), text_of(decision(1, @deployed + 2), "Other")],
+             Tuple.insert_at(created_at, 0, :conflicting_logs)},
+            {[
+               decision(1, @deployed + 2),
+               %{decision(1, @deployed + 2) | "transactionHash" => transaction(1)}
+             ], Tuple.insert_at(created_at, 0, :conflicting_logs)},
+            {[
+               decision(1, @deployed + 2),
+               %{decision(1, @deployed + 2) | "blockNumber" => quantity(@deployed + 3)}
+             ], Tuple.insert_at(created_at, 0, :conflicting_logs)},
+            {[decision(2, @deployed + 2)], {:proposal_number_skipped, @deployed + 2}},
+            {[decision(1, @deployed + 2), decision(3, @deployed + 3)],
+             {:proposal_number_skipped, @deployed + 3}},
+            {[vote(1, "a", true, @e18, [1], @deployed + 2, 0), decision(1, @deployed + 3)],
+             {:proposal_not_recorded, @deployed + 2}},
+            {[decision(1, @deployed + 2), executed(2, "c", @deployed + 3, 0)],
+             {:proposal_not_recorded, @deployed + 3}}
+          ] do
+        StubClient.put_chain(head(@deployed + 10), [mint | List.flatten(logs)])
+
+        assert Scanner.step(fleet, StubClient) == {:error, reason}, inspect(logs)
+        assert Keys.keys_in_fleet!(@fleet).results == []
+        assert Proposals.highest_number!(@fleet) == 0
+        assert %{next_block: @deployed, proposal_seq: 0} = Chain.get_cursor!(@fleet)
+      end
+
+      StubClient.put_chain(head(@deployed + 10), [mint, decision(1, @deployed + 2)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert Proposals.highest_number!(@fleet) == 1
+    end
+
+    # Reading the same blocks again, even from the deployment on, finds every
+    # record already made and gives none a new number.
+    test "reading again, even from the deployment, gives no record a new number", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+      recorded = recorded()
+      assert Chain.get_cursor!(@fleet).proposal_seq == 4
+
+      StubClient.put_chain(head(@deployed + 12), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      {:ok, _cursor} =
+        @fleet
+        |> Chain.get_cursor!()
+        |> Chain.advance_cursor(%{
+          next_block: @deployed,
+          head_block: @deployed,
+          head_block_hash: @new_hash,
+          observed_at: DateTime.utc_now()
+        })
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert recorded() == recorded
+      assert %{proposal_seq: 4, next_block: next_block} = Chain.get_cursor!(@fleet)
+      assert next_block == @deployed + 13
+    end
+
+    test "text over 64 KiB is cut there, keeping its full length and hash, bytes as they are", %{
+      fleet: fleet
+    } do
+      text = <<0xFF, 0xFE, 0x00>> <> :binary.copy("é", 40_000)
+      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 1, text: text)])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      proposal = Proposals.get_proposal!(@fleet, 1)
+      assert proposal.text == binary_part(text, 0, 65_536)
+      assert proposal.text_bytes == 80_003
+      assert proposal.text_sha256 == sha256(text)
+    end
+
+    # The order the chain made them, not the order the node lists them.
+    test "ownership and proposal logs in one block are recorded in log order", %{fleet: fleet} do
+      logs = [
+        decision(1, @deployed + 3),
+        ownership(1, "a", @deployed + 3, 1),
+        vote(1, "a", true, @e18, [1], @deployed + 3, 2),
+        executed(1, "a", @deployed + 3, 3)
+      ]
+
+      StubClient.put_chain(head(@deployed + 10), Enum.reverse(logs))
+
+      inserted = inserts_during(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
+
+      assert inserted -- ["chain_cursors"] ==
+               ~w(proposals key_attachments proposal_votes proposal_executions)
+    end
+
+    # A single pass never asks for more than 10,000 blocks, the next starts
+    # exactly where the last ended, and the time of the head is noted only
+    # by the pass that reaches it.
+    test "passes of 10,000 blocks skip nothing and only the one at the head notes its time", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 25_000), [
+        decision(1, @deployed + 9_999),
+        decision(2, @deployed + 10_000),
+        vote(2, "a", true, @e18, [1], @deployed + 19_999, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert %{next_block: first_end, read_through_at: nil} = Chain.get_cursor!(@fleet)
+      assert first_end == @deployed + 10_000
+      assert Proposals.highest_number!(@fleet) == 1
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert %{next_block: second_end, read_through_at: nil} = Chain.get_cursor!(@fleet)
+      assert second_end == @deployed + 20_000
+      assert Proposals.highest_number!(@fleet) == 2
+      assert Chain.get_cursor!(@fleet).proposal_seq == 3
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 25_000).timestamp
+             ) == :eq
+
+      assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
+               [
+                 {@deployed, @deployed + 9_999},
+                 {@deployed + 9_970, @deployed + 9_999},
+                 {@deployed + 10_000, @deployed + 19_999},
+                 {@deployed + 19_970, @deployed + 19_999},
+                 {@deployed + 20_000, @deployed + 25_000}
+               ]
+    end
+
+    test "the head's time is kept while the node is behind and cleared with a stop", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 10).timestamp
+             ) == :eq
+
+      StubClient.put_chain(head(@deployed + 5), [decision(1, @deployed + 3)])
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 10).timestamp
+             ) == :eq
+
+      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 10).timestamp
+             ) == :eq
+
+      StubClient.put_chain(head(@deployed + 11), [],
+        block_hashes: %{(@deployed + 3) => @new_hash}
+      )
+
+      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 3} end)
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 10).timestamp
+             ) == :eq
+
+      Chain.clear_divergence!(@fleet)
+      assert Chain.get_cursor!(@fleet).read_through_at == nil
+      refute Chain.fresh?(@fleet)
+
+      # A pass with no new block to read still notes the head it read.
+      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert Chain.fresh?(@fleet)
+
+      assert DateTime.compare(
+               Chain.get_cursor!(@fleet).read_through_at,
+               head(@deployed + 10).timestamp
+             ) == :eq
+    end
+
+    test "a pass that makes a new record says so, and one that makes none does not", %{
+      fleet: fleet
+    } do
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+
+      mint = ownership(1, "a", @deployed + 1, 0)
+      StubClient.put_chain(head(@deployed + 10), [mint])
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:proposals_changed, _fleet}
+
+      StubClient.put_chain(head(@deployed + 12), [mint, decision(1, @deployed + 11)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:proposals_changed, @fleet}
+
+      StubClient.put_chain(head(@deployed + 14), [mint, decision(1, @deployed + 11)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:proposals_changed, _fleet}
+    end
+
+    # A piece recorded before the pass stopped the fleet stays recorded, so the
+    # hint still goes out for it.
+    test "a pass that records something and then stops the fleet still says so", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+
+      # Three new logs where the node sends two at most: the first piece holds
+      # proposal 3 and its vote, the second a second execution of proposal 1.
+      StubClient.put_chain(
+        head(@deployed + 14),
+        history() ++
+          [
+            decision(3, @deployed + 11),
+            vote(3, "a", true, @e18, [1], @deployed + 11, 1),
+            executed(1, "b", @deployed + 13, 0)
+          ],
+        max_logs: 2
+      )
+
+      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 13} end)
+      assert Proposals.highest_number!(@fleet) == 3
+      assert %{next_block: next_block, rescan_from: stopped_at} = Chain.get_cursor!(@fleet)
+      assert {next_block, stopped_at} == {@deployed + 13, @deployed + 13}
+      assert_received {:proposals_changed, @fleet}
+    end
+
+    # A provider refuses an answer larger than it sends at once. The stretch is
+    # asked for in halves until each half is answered, and is recorded in
+    # order, on the second reading too. Each answered piece is recorded, with
+    # the cursor moved past it, before the next is asked for, so a pass never
+    # holds more than one answer.
+    test "a stretch the node will not answer whole is read in halves", %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), history(),
+        max_logs: 2,
+        observe: fn -> {Chain.get_cursor!(@fleet).next_block, length(recorded())} end
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      halves = [
+        {@deployed, @deployed + 10},
+        {@deployed, @deployed + 5},
+        {@deployed, @deployed + 2},
+        {@deployed, @deployed + 1},
+        {@deployed + 2, @deployed + 2},
+        {@deployed + 3, @deployed + 5},
+        {@deployed + 6, @deployed + 10}
+      ]
+
+      assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
+               halves
+
+      assert StubClient.observations() == [
+               {@deployed, 0},
+               {@deployed, 0},
+               {@deployed, 0},
+               {@deployed, 0},
+               {@deployed + 2, 1},
+               {@deployed + 3, 2},
+               {@deployed + 6, 4}
+             ]
+
+      assert Enum.map(recorded_in_chain_order(), & &1.record_seq) == [1, 2, 3, 4]
+      assert Chain.get_cursor!(@fleet).next_block == @deployed + 11
+
+      StubClient.put_chain(head(@deployed + 11), history(), max_logs: 2)
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
+               halves ++ [{@deployed + 11, @deployed + 11}]
+
+      assert Chain.get_cursor!(@fleet).proposal_seq == 4
+    end
+
+    # The block holding the launch has two logs where the node sends one at
+    # most. The pieces before it stay recorded with the cursor just after them,
+    # and the next pass carries on from there with the same numbers.
+    test "a single block the node will not answer ends the pass after the last piece recorded",
+         %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), history(), max_logs: 1)
+
+      assert Scanner.step(fleet, StubClient) ==
+               {:error, {:block_unanswered, @deployed + 2, :chain_unavailable}}
+
+      assert [%{number: 1, record_seq: 1} = decision] = recorded()
+      assert %{next_block: next_block, proposal_seq: 1} = Chain.get_cursor!(@fleet)
+      assert next_block == @deployed + 2
+
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      assert [%{id: decision_id, record_seq: 1} | rest] = recorded_in_chain_order()
+      assert decision_id == decision.id
+      assert Enum.map(rest, & &1.record_seq) == [2, 3, 4]
+      assert %{next_block: next_block, proposal_seq: 4} = Chain.get_cursor!(@fleet)
+      assert next_block == @deployed + 11
+    end
+
+    # The cursor moves in the transaction that records the piece: when the
+    # move is refused, the piece's records go with it.
+    test "a piece's records and the cursor move past it are made together", %{fleet: fleet} do
+      StubClient.put_chain(%{head(@deployed + 10) | hash: "0xnot-a-block-hash"}, history())
+
+      assert {:error, %Ash.Error.Invalid{}} = Scanner.step(fleet, StubClient)
+      assert recorded() == []
+      assert %{next_block: @deployed, proposal_seq: 0} = Chain.get_cursor!(@fleet)
+    end
+
+    # A node may list a log twice; it is still one event.
+    test "a log listed twice is recorded once", %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), Enum.flat_map(history(), &[&1, &1]))
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert Enum.map(recorded_in_chain_order(), & &1.record_seq) == [1, 2, 3, 4]
+    end
+  end
+
+  describe "when the chain disagrees" do
+    # A second reading that disagrees with a record stops the fleet at that
+    # block instead of rewriting it, and a stopped fleet is left alone.
+    test "a conflicting proposal or vote stops the fleet at its block and writes nothing", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+      recorded = recorded()
+
+      for {logs, block} <- [
+            {conflicting(history(), 0, &text_of(&1, "Changed")), @deployed + 1},
+            {conflicting(
+               history(),
+               3,
+               &%{&1 | "topics" => List.replace_at(&1["topics"], 2, address_word("e"))}
+             ), @deployed + 4},
+            {conflicting(
+               history(),
+               3,
+               &%{&1 | "topics" => List.replace_at(&1["topics"], 1, hex(<<2::256>>))}
+             ), @deployed + 4},
+            {conflicting(history(), 3, &%{&1 | "blockHash" => @new_hash}), @deployed + 4},
+            {history() ++ [decision(2, @deployed + 6)], @deployed + 6},
+            {history() ++ [executed(1, "b", @deployed + 7, 0)], @deployed + 7}
+          ] do
+        StubClient.put_chain(head(@deployed + 12), logs)
+
+        assert capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end) =~
+                 "Fleet #{@fleet} stopped: the chain disagrees with the record at block #{block}"
+
+        assert recorded() == recorded
+        assert %{rescan_from: ^block, proposal_seq: 4} = Chain.get_cursor!(@fleet)
+
+        assert writes_during(fn ->
+                 assert Scanner.step(fleet, StubClient) == {:stopped, block}
+               end) == []
+
+        Chain.clear_divergence!(@fleet)
+      end
+    end
+
+    # A recorded event gone from a block whose hash changed is the chain's
+    # history changing; gone from a block whose hash matches, it is the node
+    # answering inconsistently, and the pass is retried.
+    test "a recorded event missing from its block stops the fleet only if the hash changed", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      for {index, block} <- [{0, @deployed + 1}, {3, @deployed + 4}, {4, @deployed + 5}] do
+        logs = List.delete_at(history(), index)
+        StubClient.put_chain(head(@deployed + 12), logs)
+
+        assert Scanner.step(fleet, StubClient) == {:error, {:log_missing_from_block, block}}
+        assert %{rescan_from: nil, next_block: next_block} = Chain.get_cursor!(@fleet)
+        assert next_block == @deployed + 11
+
+        StubClient.put_chain(head(@deployed + 12), logs, block_hashes: %{block => @new_hash})
+        capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end)
+        Chain.clear_divergence!(@fleet)
+      end
+    end
+  end
+
+  describe "when the chain's history changes" do
+    # A vote moved to another place in a block whose hash changed is found
+    # missing from its old place before anything is written, so it is never
+    # counted twice.
+    test "a vote moved within a changed block stops the fleet before it is recorded again", %{
+      fleet: fleet
+    } do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+      recorded = recorded()
+
+      moved =
+        conflicting(history(), 3, &%{&1 | "blockHash" => @new_hash, "logIndex" => quantity(1)})
+
+      StubClient.put_chain(head(@deployed + 12), moved,
+        block_hashes: %{(@deployed + 4) => @new_hash}
+      )
+
+      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 4} end)
+      assert recorded() == recorded
+    end
+
+    # Read in pieces, the second reading checks each piece before recording
+    # anything new in it. A vote first seen in an early piece is recorded; the
+    # vote moved in a later piece stops the fleet there and is not recorded.
+    test "each piece of the second reading is checked before it is recorded", %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+      recorded = recorded()
+
+      late_vote = vote(1, "b", false, @e18, [2], @deployed + 1, 1)
+
+      moved =
+        conflicting(history(), 3, &%{&1 | "blockHash" => @new_hash, "logIndex" => quantity(1)})
+
+      StubClient.put_chain(head(@deployed + 10), List.insert_at(moved, 1, late_vote),
+        max_logs: 2,
+        block_hashes: %{(@deployed + 4) => @new_hash}
+      )
+
+      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 4} end)
+
+      assert [%{block_number: block, log_index: 1, record_seq: 5, support: false}] =
+               recorded() -- recorded
+
+      assert block == @deployed + 1
+    end
+  end
+
+  describe "passes at the same time" do
+    # Each pass runs on a connection of its own and commits; the records are
+    # removed when the test ends, as docs/chain-reader.md corrects a record. A
+    # pass that finds the cursor moved on by another ends there, quietly.
+    @tag :independent_connections
+    test "record each event once, numbered in chain order without gaps", %{fleet: fleet} do
+      logs =
+        List.flatten([
+          decision(1, @deployed + 1),
+          autolaunch(2, @deployed + 2, 0),
+          decision(3, @deployed + 3),
+          vote(1, "a", true, @e18, [1], @deployed + 4, 0),
+          vote(3, "b", false, @e18, [2], @deployed + 4, 1),
+          executed(1, "a", @deployed + 5, 0)
+        ])
+
+      results = race(fleet, logs, 4)
+      assert :ok in results
+      assert Enum.all?(results, &(&1 in [:ok, :moved]))
+
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        assert Enum.map(recorded_in_chain_order(), & &1.record_seq) == Enum.to_list(1..6)
+        assert %{proposal_seq: 6, next_block: next_block} = Chain.get_cursor!(@fleet)
+        assert next_block == @deployed + 11
+      end)
+    end
+  end
+
+  describe "when the cursor moves during a pass" do
+    # The runbook's correction, made while a pass waits between two pieces of
+    # its forward reading: the pass writes nothing more and leaves the
+    # operator's cursor, and the next pass reads again from the fork.
+    @tag :independent_connections
+    test "a pass leaves a correction made during it", %{fleet: fleet} do
+      read_history(fleet)
+
+      log =
+        with_info_log(fn ->
+          assert interrupted_pass(fleet, &past_first_piece?/0, fn -> correct_from(4) end) ==
+                   :moved
+        end)
+
+      assert log =~ "cursor moved underneath a pass"
+      assert %{next_block: next_block, rescan_from: nil} = Chain.get_cursor!(@fleet)
+      assert next_block == @deployed + 4
+      assert recorded_blocks() == [1, 2]
+
+      StubClient.put_chain(head(@deployed + 140), history() ++ later())
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert recorded_blocks() == [1, 2, 4, 5, 100, 120, 140]
+    end
+
+    # The same correction made while the pass waits in its second reading:
+    # the pass does not record again what the operator removed.
+    @tag :independent_connections
+    test "a pass's second reading leaves a correction made during it", %{fleet: fleet} do
+      read_history(fleet)
+
+      assert interrupted_pass(fleet, &first_request?/0, fn -> correct_from(4) end) == :moved
+      assert %{next_block: next_block, rescan_from: nil} = Chain.get_cursor!(@fleet)
+      assert next_block == @deployed + 4
+      assert recorded_blocks() == [1, 2]
+    end
+
+    # A fleet stopped while a pass runs is not written to by that pass, even
+    # before the operator moves the cursor.
+    @tag :independent_connections
+    test "a pass writes nothing once the fleet is stopped during it", %{fleet: fleet} do
+      read_history(fleet)
+
+      assert interrupted_pass(fleet, &past_first_piece?/0, fn -> stop_at(4) end) == :moved
+      assert %{next_block: next_block, rescan_from: rescan_from} = Chain.get_cursor!(@fleet)
+      assert {next_block, rescan_from} == {@deployed + 76, @deployed + 4}
+      assert recorded_blocks() == [1, 2, 4, 5]
+    end
+
+    # The same in the second reading, which would otherwise record again what
+    # the operator removed.
+    @tag :independent_connections
+    test "a pass's second reading writes nothing once the fleet is stopped", %{fleet: fleet} do
+      read_history(fleet)
+
+      assert interrupted_pass(fleet, &first_request?/0, fn ->
+               stop_at(4)
+               remove_from(4)
+             end) == :moved
+
+      assert %{next_block: next_block, rescan_from: rescan_from} = Chain.get_cursor!(@fleet)
+      assert {next_block, rescan_from} == {@deployed + 11, @deployed + 4}
+      assert recorded_blocks() == [1, 2]
+    end
+
+    # The second reading holds the cursor from its check until its piece
+    # commits, so a stop waits for that piece rather than landing between.
+    @tag :independent_connections
+    test "a stop waits for the piece the second reading holds", %{fleet: fleet} do
+      read_history(fleet)
+      parent = self()
+
+      pass =
+        Task.async(fn ->
+          :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+          StubClient.put_chain(head(@deployed + 10), history())
+          pause_after_first_hold(parent, fn -> Scanner.step(fleet, StubClient) end)
+        end)
+
+      assert_receive :held, 10_000
+
+      stop =
+        Task.async(fn ->
+          :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+          stop_at(4)
+        end)
+
+      assert Task.yield(stop, 300) == nil
+      send(pass.pid, :go)
+      assert %{rescan_from: rescan_from} = Task.await(stop, 10_000)
+      assert rescan_from == @deployed + 4
+      assert Task.await(pass, 10_000) == :moved
+    end
+
+    # A pass that began before the fleet was stopped and then finds a
+    # disagreement of its own keeps whichever stop is earlier.
+    @tag :independent_connections
+    test "a fleet stopped twice stays stopped at the earlier block", %{fleet: fleet} do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+      third = decision(3, @deployed + 14)
+      StubClient.put_chain(head(@deployed + 20), history() ++ [third])
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      disagreeing_at = fn offset, logs ->
+        with_log(fn ->
+          interrupted_pass(fleet, &first_request?/0, fn -> stop_at(4) end,
+            head: @deployed + 20,
+            logs: logs,
+            max_logs: nil,
+            block_hashes: %{(@deployed + offset) => @new_hash}
+          )
+        end)
+      end
+
+      assert {{:stopped, stopped_at}, log} = disagreeing_at.(14, history())
+      assert stopped_at == @deployed + 4
+      assert log =~ "at block #{@deployed + 14}. It is stopped at block #{@deployed + 4}."
+      assert Chain.get_cursor!(@fleet).rescan_from == @deployed + 4
+
+      Chain.clear_divergence!(@fleet)
+      without_first = List.delete(history(), decision(1, @deployed + 1))
+      assert {{:stopped, stopped_at}, _log} = disagreeing_at.(1, without_first ++ [third])
+      assert stopped_at == @deployed + 1
+      assert Chain.get_cursor!(@fleet).rescan_from == @deployed + 1
+    end
+
+    # A slow pass whose cursor another pass has since moved on does not move
+    # it back.
+    @tag :independent_connections
+    test "a slow pass does not move back a cursor another pass moved on", %{fleet: fleet} do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+
+      faster = fn ->
+        StubClient.put_chain(head(@deployed + 140), history() ++ later())
+        assert Scanner.step(fleet, StubClient) == :ok
+      end
+
+      assert interrupted_pass(fleet, &first_request?/0, faster, head: @deployed + 10) == :moved
+      assert Chain.get_cursor!(@fleet).next_block == @deployed + 141
+      assert recorded_blocks() == [1, 2, 4, 5, 100, 120, 140]
+    end
+  end
+
+  describe "the record tables" do
+    test "refuse every change, delete and emptying", %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), history())
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      for {table, column, value} <- [
+            {"proposals", "text_bytes", 1},
+            {"proposal_votes", "support", false},
+            {"proposal_executions", "executor", wallet("0")}
+          ],
+          {sql, params} <- [
+            {"UPDATE keyfleet_app.#{table} SET #{column} = $1", [value]},
+            {"DELETE FROM keyfleet_app.#{table}", []},
+            {"TRUNCATE keyfleet_app.#{table} CASCADE", []}
+          ] do
+        assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+                 Repo.query(sql, params, mode: :savepoint),
+               sql
+      end
+
+      assert length(recorded()) == 4
+    end
+  end
+
+  describe "reading logs" do
+    # Anything not exactly as the contracts emit it refuses the stretch.
+    test "only logs in the contracts' exact encoding are read", %{fleet: fleet} do
+      decision = decision(1, @deployed + 1, text: "abc")
+      vote = vote(1, "a", true, @e18, [1, 2], @deployed + 2, 0)
+      [created, payload] = autolaunch(2, @deployed + 3, 0)
+      mint = ownership(1, "a", @deployed + 4, 0)
+      valid = [decision, vote, created, payload]
+      assert {:ok, [_, _, _]} = Logs.decode(valid, fleet, @deployed, @deployed + 10)
+
+      data = &(&1["data"] |> String.trim_leading("0x") |> Base.decode16!(case: :lower))
+      topic = &List.replace_at(&1["topics"], &2, &3)
+
+      for {index, broken} <- [
+            {0, %{decision | "address" => wallet("8")}},
+            {0, %{decision | "address" => @contract}},
+            {0, %{decision | "topics" => topic.(decision, 0, @ownership)}},
+            {0, %{decision | "topics" => topic.(decision, 0, "0x" <> String.duplicate("0", 64))}},
+            {0, %{decision | "topics" => topic.(decision, 1, hex(<<0::256>>))}},
+            {0, %{decision | "topics" => topic.(decision, 1, hex(<<1::1, 0::255>>))}},
+            {0, %{decision | "topics" => topic.(decision, 1, hex(<<@max_bigint + 1::256>>))}},
+            {0, %{decision | "topics" => topic.(decision, 2, hex(<<2::256>>))}},
+            {0, %{decision | "topics" => topic.(decision, 3, hex(<<1::96, 0::160>>))}},
+            {0, %{decision | "topics" => Enum.drop(decision["topics"], -1)}},
+            {0, %{decision | "topics" => topic.(decision, 3, "0x00")}},
+            {0, %{decision | "data" => hex(data.(decision) <> <<0::256>>)}},
+            {0, %{decision | "data" => hex(binary_part(data.(decision), 0, 159))}},
+            {0, %{decision | "data" => "0x0"}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 128, <<192::256>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 160, <<33::256>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 195, <<1>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 0, <<1::192, 0::64>>))}},
+            {0,
+             %{decision | "data" => hex(patch(data.(decision), 32, <<@max_bigint + 1::256>>))}},
+            {0, %{decision | "blockNumber" => quantity(@deployed + 11)}},
+            {0, %{decision | "blockNumber" => "0x-1"}},
+            {0, %{decision | "logIndex" => "0x"}},
+            {0, %{decision | "logIndex" => "0x-1"}},
+            {0, %{decision | "logIndex" => "0x+0"}},
+            {0, %{decision | "blockHash" => "0x" <> String.duplicate("g", 64)}},
+            {0, %{decision | "transactionHash" => "0x01"}},
+            {0, %{mint | "topics" => topic.(mint, 2, hex(<<1::96, 0::160>>))}},
+            {0, %{mint | "topics" => topic.(mint, 3, hex(<<1::96, 0::160>>))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 0, <<2::256>>))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 0, <<3::256>>))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 0, <<1::1, 0::254, 1::1>>))}},
+            {1,
+             %{vote | "data" => hex(patch(data.(vote), 96, <<0::256>>) |> binary_part(0, 128))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 128, <<0::256>>))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 128, <<1::1, 0::255>>))}},
+            {1, %{vote | "data" => hex(patch(data.(vote), 96, <<3::256>>))}},
+            {3, %{payload | "data" => hex(patch(data.(payload), 32, <<1::1, 0::255>>))}}
+          ] do
+        assert Logs.decode(
+                 List.replace_at(valid, index, broken),
+                 fleet,
+                 @deployed,
+                 @deployed + 10
+               ) ==
+                 {:error, {:unreadable_log, broken["transactionHash"], broken["logIndex"]}},
+               inspect(broken)
+      end
+
+      # A launch proposal read as a decision leaves its payload without a
+      # proposal; a payload for another proposal leaves it without its payload.
+      launch_tx = String.downcase(transaction(@deployed + 3))
+
+      for {index, broken, reason} <- [
+            {2, %{created | "topics" => topic.(created, 2, hex(<<0::256>>))},
+             {:payload_without_proposal, launch_tx, 1}},
+            {3, %{payload | "topics" => topic.(payload, 1, hex(<<1::256>>))},
+             {:payload_missing, launch_tx, 0}}
+          ] do
+        assert Logs.decode(
+                 List.replace_at(valid, index, broken),
+                 fleet,
+                 @deployed,
+                 @deployed + 10
+               ) == {:error, reason},
+               inspect(broken)
+      end
+
+      executed_with_data = %{executed(1, "a", @deployed + 1, 0) | "data" => hex(<<0::256>>)}
+
+      assert Logs.decode([executed_with_data], fleet, @deployed, @deployed + 10) ==
+               {:error,
+                {:unreadable_log, executed_with_data["transactionHash"],
+                 executed_with_data["logIndex"]}}
+    end
+  end
+
+  # A decision, a launch, a vote and an execution, numbered 1 to 4.
+  defp history do
+    List.flatten([
+      decision(1, @deployed + 1),
+      autolaunch(2, @deployed + 2, 0),
+      vote(1, "a", true, @e18, [1], @deployed + 4, 0),
+      executed(1, "a", @deployed + 5, 0)
+    ])
+  end
+
+  defp conflicting(logs, index, change), do: List.update_at(logs, index, change)
+
+  defp text_of(log, text) do
+    %{"topics" => [_topic0, id, _kind, _proposer]} = log
+    number = id |> String.trim_leading("0x") |> String.to_integer(16)
+    block = log["blockNumber"] |> String.trim_leading("0x") |> String.to_integer(16)
+    decision(number, block, text: text)
+  end
+
+  defp recorded_in_chain_order,
+    do: Enum.sort_by(recorded(), &{&1.block_number, &1.log_index})
+
+  defp recorded do
+    Enum.sort_by(
+      Proposals.recorded_in_blocks!(@fleet, 0, @deployed + 100_000),
+      &{&1.__struct__, &1.record_seq}
+    )
+  end
+
+  defp decision(number, block, opts \\ []) do
+    created(number, 0, block, 0, Keyword.get(opts, :text, "Proposal #{number}"), <<0::256>>)
+  end
+
+  defp payload_for(payload, number),
+    do: %{payload | "topics" => List.replace_at(payload["topics"], 1, hex(<<number::256>>))}
+
+  defp autolaunch(number, block, log_index, opts \\ []) do
+    envelope = opts |> Keyword.get(:envelope_hash, "0x" <> String.duplicate("a1", 32)) |> bytes()
+
+    [
+      created(number, 1, block, log_index, "", envelope),
+      log(
+        @votes,
+        [@autolaunch, <<number::256>>],
+        envelope <> <<18_446_744_073_709_551_615::256>>,
+        block,
+        log_index + 1
+      )
+    ]
+  end
+
+  defp created(number, kind, block, log_index, text, digest) do
+    padded = 32 * div(byte_size(text) + 31, 32)
+
+    data =
+      <<1_800_000_000 + number::256, 7::256, 7 * @e18::256>> <>
+        digest <>
+        <<160::256, byte_size(text)::256>> <>
+        text <> <<0::size(8 * (padded - byte_size(text)))>>
+
+    log(
+      @votes,
+      [@created, <<number::256>>, <<kind::256>>, address_word_bytes("f")],
+      data,
+      block,
+      log_index
+    )
+  end
+
+  defp vote(number, voter, support, weight, token_ids, block, log_index) do
+    data =
+      <<if(support, do: 1, else: 0)::256, weight::256, 96::256, length(token_ids)::256>> <>
+        for(id <- token_ids, into: <<>>, do: <<id::256>>)
+
+    log(@votes, [@vote, <<number::256>>, address_word_bytes(voter)], data, block, log_index)
+  end
+
+  defp executed(number, executor, block, log_index) do
+    log(
+      @votes,
+      [@executed, <<number::256>>, address_word_bytes(executor)],
+      <<>>,
+      block,
+      log_index
+    )
+  end
+
+  defp ownership(token_id, owner, block, log_index) do
+    log(
+      @contract,
+      [@ownership, <<token_id::256>>, <<0::256>>, address_word_bytes(owner)],
+      <<1::256>>,
+      block,
+      log_index
+    )
+  end
+
+  defp log(address, [topic0 | words], data, block, log_index) do
+    %{
+      "address" => address,
+      "topics" => [topic0 | Enum.map(words, &hex/1)],
+      "data" => hex(data),
+      "blockNumber" => quantity(block),
+      "blockHash" => "0x" <> String.duplicate("b", 64),
+      "transactionHash" => transaction(block),
+      "logIndex" => quantity(log_index)
+    }
+  end
+
+  defp patch(data, at, bytes),
+    do:
+      binary_part(data, 0, at) <>
+        bytes <> binary_part(data, at + byte_size(bytes), byte_size(data) - at - byte_size(bytes))
+
+  defp address_word(character), do: hex(address_word_bytes(character))
+
+  defp address_word_bytes(character),
+    do: <<0::96>> <> Base.decode16!(String.duplicate(character, 40), case: :mixed)
+
+  defp bytes("0x" <> hex), do: Base.decode16!(hex, case: :lower)
+  defp hex(bytes), do: "0x" <> Base.encode16(bytes, case: :lower)
+  defp sha256(text), do: hex(:crypto.hash(:sha256, text))
+  defp quantity(value), do: "0x" <> Integer.to_string(value, 16)
+  defp transaction(block), do: "0x" <> String.pad_leading(Integer.to_string(block, 16), 64, "0")
+  defp wallet(character), do: "0x" <> String.duplicate(character, 40)
+
+  defp head(number),
+    do: %{
+      number: number,
+      hash: "0x" <> String.duplicate("f", 64),
+      timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number)
+    }
+
+  defp deploy! do
+    @fleet
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8_453,
+        contract_address: @contract,
+        rewards_address: "0x" <> String.duplicate("8", 40),
+        votes_address: @votes,
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        deployed_block: @deployed
+      },
+      actor: %System{}
+    )
+  end
+
+  # Runs `passes` passes over `logs` at once, each on a connection of its own.
+  defp race(fleet, logs, passes) do
+    parent = self()
+
+    callers =
+      for _pass <- 1..passes do
+        Task.async(fn ->
+          :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+          StubClient.put_chain(head(@deployed + 10), logs)
+          send(parent, {:ready, self()})
+
+          receive do
+            :go -> Scanner.step(fleet, StubClient)
+          after
+            10_000 -> raise "pass barrier timed out"
+          end
+        end)
+      end
+
+    for _caller <- callers, do: assert_receive({:ready, _pid}, 10_000)
+    Enum.each(callers, &send(&1.pid, :go))
+    Task.await_many(callers, 30_000)
+  end
+
+  # A first pass over `history/0`, committed on this test's own connection.
+  defp read_history(fleet) do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+    StubClient.put_chain(head(@deployed + 10), history())
+    assert Scanner.step(fleet, StubClient) == :ok
+  end
+
+  # A vote, a decision and a vote on it, well after `history/0`.
+  defp later do
+    List.flatten([
+      vote(1, "b", false, @e18, [2], @deployed + 100, 0),
+      decision(3, @deployed + 120),
+      vote(3, "b", true, @e18, [2], @deployed + 140, 0)
+    ])
+  end
+
+  # Runs a pass on a connection of its own and holds it at the first log
+  # request for which `pause?` is true until `during` has run here. The chain
+  # is `history/0` and `later/0` up to block 140, two logs to an answer,
+  # unless `opts` name the `:head`, the `:logs`, `:max_logs` or `:block_hashes`.
+  defp interrupted_pass(fleet, pause?, during, opts \\ []) do
+    parent = self()
+    head = Keyword.get(opts, :head, @deployed + 140)
+    logs = Keyword.get(opts, :logs, history() ++ later())
+
+    pass =
+      Task.async(fn ->
+        :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
+
+        StubClient.put_chain(head(head), logs,
+          max_logs: Keyword.get(opts, :max_logs, 2),
+          block_hashes: Keyword.get(opts, :block_hashes, %{}),
+          observe: fn ->
+            if pause?.() and not Process.get(:paused, false) do
+              Process.put(:paused, true)
+              send(parent, :paused)
+              receive do: (:go -> :ok)
+            end
+          end
+        )
+
+        Scanner.step(fleet, StubClient)
+      end)
+
+    assert_receive :paused, 10_000
+    during.()
+    send(pass.pid, :go)
+    Task.await(pass, 30_000)
+  end
+
+  # Runs `fun`, halting it just after it first locks the cursor, inside that
+  # transaction, until the test says go.
+  defp pause_after_first_hold(parent, fun) do
+    pass = self()
+    handler = "proposals-chain-test-hold"
+
+    :telemetry.attach(
+      handler,
+      [:key_fleet, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if self() == pass and meta.query =~ "FOR UPDATE" and not Process.get(:held, false) do
+          Process.put(:held, true)
+          send(parent, :held)
+          receive do: (:go -> :ok)
+        end
+      end,
+      nil
+    )
+
+    try do
+      fun.()
+    after
+      :telemetry.detach(handler)
+    end
+  end
+
+  defp first_request?, do: StubClient.log_requests() == []
+
+  defp past_first_piece?, do: Chain.get_cursor!(@fleet).next_block > @deployed + 11
+
+  defp recorded_blocks, do: Enum.map(recorded_in_chain_order(), &(&1.block_number - @deployed))
+
+  defp stop_at(offset),
+    do:
+      Chain.flag_divergence!(Chain.get_cursor!(@fleet), %{block: @deployed + offset},
+        actor: %System{}
+      )
+
+  # The fleet stopped at block `offset` and corrected from there as
+  # docs/chain-reader.md describes, then the stop cleared.
+  defp correct_from(offset) do
+    stop_at(offset)
+    remove_from(offset)
+
+    Repo.query!(
+      "UPDATE keyfleet_app.chain_cursors SET next_block = $2 " <>
+        "WHERE fleet_id = $1 AND rescan_from IS NOT NULL",
+      [@fleet, @deployed + offset]
+    )
+
+    Chain.clear_divergence!(@fleet)
+  end
+
+  # The records from block `offset` on removed as docs/chain-reader.md does.
+  defp remove_from(offset) do
+    Repo.transaction(fn ->
+      for table <- ~w(proposal_executions proposal_votes proposals) do
+        Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER immutable_#{table}")
+
+        Repo.query!(
+          "DELETE FROM keyfleet_app.#{table} WHERE fleet_id = $1 AND block_number >= $2",
+          [@fleet, @deployed + offset]
+        )
+
+        Repo.query!("ALTER TABLE keyfleet_app.#{table} ENABLE TRIGGER immutable_#{table}")
+      end
+    end)
+  end
+
+  # Info is below the suite's log level; the pass logs its end there.
+  defp with_info_log(fun) do
+    level = Logger.level()
+    Logger.configure(level: :info)
+
+    try do
+      capture_log([level: :info], fun)
+    after
+      Logger.configure(level: level)
+    end
+  end
+
+  # Removes what the passes committed, the way docs/chain-reader.md corrects a
+  # record: the refusing triggers are off only inside this transaction.
+  defp remove_committed_records do
+    Repo.transaction(fn ->
+      for {table, trigger} <- [
+            {"proposal_executions", "immutable_proposal_executions"},
+            {"proposal_votes", "immutable_proposal_votes"},
+            {"proposals", "immutable_proposals"}
+          ] do
+        Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER #{trigger}")
+        Repo.query!("DELETE FROM keyfleet_app.#{table} WHERE fleet_id = $1", [@fleet])
+        Repo.query!("ALTER TABLE keyfleet_app.#{table} ENABLE TRIGGER #{trigger}")
+      end
+
+      Repo.query!("DELETE FROM keyfleet_app.chain_cursors WHERE fleet_id = $1", [@fleet])
+
+      Repo.query!(
+        "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
+          "rewards_address = NULL, votes_address = NULL, usdc_address = NULL, " <>
+          "deployed_block = NULL WHERE id = $1",
+        [@fleet]
+      )
+    end)
+  end
+
+  # The tables written by INSERT while `fun` ran in this process, in order.
+  defp inserts_during(fun) do
+    for "INSERT INTO " <> rest <- writes_during(fun),
+        do: rest |> String.split(~s("), trim: true) |> Enum.at(2)
+  end
+
+  # The statements that changed the database while `fun` ran in this process.
+  defp writes_during(fun) do
+    test_pid = self()
+    handler = "proposals-chain-test-writes"
+
+    :telemetry.attach(
+      handler,
+      [:key_fleet, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if self() == test_pid and
+             not String.starts_with?(meta.query, ["SELECT", "begin", "commit"]),
+           do: send(test_pid, {:write, meta.query})
+      end,
+      nil
+    )
+
+    try do
+      fun.()
+    after
+      :telemetry.detach(handler)
+    end
+
+    receive_writes([])
+  end
+
+  defp receive_writes(writes) do
+    receive do
+      {:write, query} -> receive_writes([query | writes])
+    after
+      0 -> Enum.reverse(writes)
+    end
+  end
+end

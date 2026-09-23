@@ -7,6 +7,10 @@ defmodule KeyFleet.Chain.Cursor do
   ownership is recorded at the head. A later reading that disagrees with what
   was recorded sets `rescan_from` and stops the fleet there until an operator
   has corrected the record by hand.
+
+  It also numbers the fleet's proposal records (`proposal_seq`) and keeps the
+  time of the last block read while the reading was at the head
+  (`read_through_at`), which is how far votes are known to be counted.
   """
   use Ash.Resource,
     domain: KeyFleet.Chain,
@@ -23,7 +27,7 @@ defmodule KeyFleet.Chain.Cursor do
     repo(KeyFleet.Repo)
 
     check_constraints do
-      for field <- [:next_block, :head_block, :rescan_from] do
+      for field <- [:next_block, :head_block, :rescan_from, :proposal_seq] do
         check_constraint(field, "chain_cursors_nonnegative_#{field}", check: "#{field} >= 0")
       end
 
@@ -53,16 +57,43 @@ defmodule KeyFleet.Chain.Cursor do
       return_skipped_upsert? true
     end
 
+    # The fleet's cursor while it still stands at `next_block` and the fleet
+    # is not stopped. A pass writes the cursor only through this, so it never
+    # undoes an operator's correction or another pass's progress.
+    read :standing do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :next_block, :integer, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and next_block == ^arg(:next_block) and
+                 is_nil(rescan_from)
+             )
+    end
+
+    # `read_through_at` is given only by a pass that read up to the head.
     update :advance do
       public? false
-      accept [:next_block, :head_block, :head_block_hash, :observed_at]
+      accept [:next_block, :head_block, :head_block_hash, :observed_at, :read_through_at]
       require_attributes [:next_block, :head_block, :head_block_hash, :observed_at]
     end
 
+    # Stops the fleet at `block`, or keeps an earlier stop, in one update, so
+    # an operator always sees the earliest block where the chain disagreed.
     update :flag_divergence do
       public? false
-      accept [:rescan_from]
-      require_attributes [:rescan_from]
+      accept []
+      argument :block, :integer, allow_nil?: false, constraints: [min: 0]
+
+      change atomic_update(
+               :rescan_from,
+               expr(
+                 if is_nil(rescan_from) or rescan_from > ^arg(:block) do
+                   ^arg(:block)
+                 else
+                   rescan_from
+                 end
+               )
+             )
     end
 
     update :clear_divergence do
@@ -71,6 +102,7 @@ defmodule KeyFleet.Chain.Cursor do
       change set_attribute(:rescan_from, nil)
       # Fresh again only once a new pass has read the chain.
       change set_attribute(:observed_at, nil)
+      change set_attribute(:read_through_at, nil)
     end
   end
 
@@ -99,6 +131,17 @@ defmodule KeyFleet.Chain.Cursor do
 
     # The block where the chain was found to disagree with the record.
     attribute :rescan_from, :integer, public?: true, constraints: [min: 0]
+
+    # The last number given to one of the fleet's proposal, vote or execution
+    # records. It is moved only by `KeyFleet.Chain.take_proposal_seq!/1`.
+    attribute :proposal_seq, :integer,
+      allow_nil?: false,
+      default: 0,
+      public?: true,
+      constraints: [min: 0]
+
+    # The time of the last block read by a pass that reached the head.
+    attribute :read_through_at, :utc_datetime_usec, public?: true
   end
 
   relationships do

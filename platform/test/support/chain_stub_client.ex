@@ -2,7 +2,8 @@ defmodule KeyFleet.Chain.StubClient do
   @moduledoc """
   The chain as a test describes it: a chain id, a head, a list of raw logs and
   the hash of each block, held in the calling process so tests running side by
-  side never share one.
+  side never share one. It also keeps every log request it was asked, so a test
+  can see how the chain was asked.
 
   Like a real node, it knows nothing above its head: a head behind the logs
   stands for a node that has not caught up.
@@ -16,17 +17,30 @@ defmodule KeyFleet.Chain.StubClient do
 
   @doc """
   Sets the head and the logs the chain answers with. `opts` may name the
-  `:chain_id` (8453) and `:block_hashes`, a map from block number to the hash
-  that block has now.
+  `:chain_id` (8453), `:block_hashes`, a map from block number to the hash
+  that block has now, `:max_logs`, the most logs one answer may hold, as a
+  provider limits the size of an answer; a request for more fails, and
+  `:observe`, a function called as each log request arrives, whose results
+  `observations/0` returns.
   """
   def put_chain(head, logs, opts \\ []) do
     Process.put(__MODULE__, %{
       head: head,
       logs: logs,
       chain_id: Keyword.get(opts, :chain_id, 8_453),
-      block_hashes: Keyword.get(opts, :block_hashes, %{})
+      block_hashes: Keyword.get(opts, :block_hashes, %{}),
+      max_logs: Keyword.get(opts, :max_logs),
+      observe: Keyword.get(opts, :observe, fn -> nil end),
+      log_requests: [],
+      observations: []
     })
   end
+
+  @doc "Every `get_logs/4` request since `put_chain/3`, oldest first."
+  def log_requests, do: Enum.reverse(chain().log_requests)
+
+  @doc "What `:observe` returned as each log request arrived, oldest first."
+  def observations, do: Enum.reverse(chain().observations)
 
   @impl true
   def chain_id, do: {:ok, chain().chain_id}
@@ -35,16 +49,26 @@ defmodule KeyFleet.Chain.StubClient do
   def head, do: {:ok, chain().head}
 
   @impl true
-  def get_logs(address, topic0, from, to) do
-    %{head: head, logs: logs} = chain()
+  def get_logs(addresses, topic0s, from, to) do
+    %{head: head, logs: logs, max_logs: max_logs, observe: observe} = chain = chain()
 
-    {:ok,
-     Enum.filter(logs, fn log ->
-       block = log |> Map.fetch!("blockNumber") |> quantity()
+    Process.put(__MODULE__, %{
+      chain
+      | log_requests: [{addresses, topic0s, from, to} | chain.log_requests],
+        observations: [observe.() | chain.observations]
+    })
 
-       log["address"] |> String.downcase() == address and hd(log["topics"]) == topic0 and
-         block in from..min(to, head.number)//1
-     end)}
+    found =
+      Enum.filter(logs, fn log ->
+        block = log |> Map.fetch!("blockNumber") |> quantity()
+
+        String.downcase(log["address"]) in addresses and hd(log["topics"]) in topic0s and
+          block in from..min(to, head.number)//1
+      end)
+
+    if max_logs && length(found) > max_logs,
+      do: {:error, :chain_unavailable},
+      else: {:ok, found}
   end
 
   @impl true

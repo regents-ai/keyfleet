@@ -107,12 +107,12 @@ defmodule KeyFleet.ChainTest do
 
     # One log the reader cannot make sense of holds the whole range back.
     test "a malformed log records nothing and leaves the cursor where it was", %{fleet: fleet} do
-      StubClient.put_chain(head(@deployed + 10), [
-        log(1, 1, "a", @deployed + 3, 0),
-        %{log(2, 1, "b", @deployed + 4, 0) | "data" => "0x01"}
-      ])
+      malformed = %{log(2, 1, "b", @deployed + 4, 0) | "data" => "0x01"}
+      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0), malformed])
 
-      assert Scanner.step(fleet, StubClient) == {:error, :invalid_log}
+      assert Scanner.step(fleet, StubClient) ==
+               {:error, {:unreadable_log, malformed["transactionHash"], malformed["logIndex"]}}
+
       assert current_keys() == []
       assert next_block() == @deployed
       refute Chain.fresh?(@fleet)
@@ -400,7 +400,12 @@ defmodule KeyFleet.ChainTest do
     end
   end
 
-  defp head(number), do: %{number: number, hash: "0x" <> String.duplicate("f", 64)}
+  defp head(number),
+    do: %{
+      number: number,
+      hash: "0x" <> String.duplicate("f", 64),
+      timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number)
+    }
 
   defp log(token_id, epoch, owner, block, log_index) do
     %{

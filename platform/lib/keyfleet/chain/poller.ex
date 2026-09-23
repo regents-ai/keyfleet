@@ -1,6 +1,6 @@
 defmodule KeyFleet.Chain.Poller do
   @moduledoc """
-  Keeps one deployed fleet's key ownership current by running
+  Keeps one deployed fleet's key ownership and proposals current by running
   `KeyFleet.Chain.Scanner` every few seconds.
 
   It first proves the node serves the fleet's chain and refuses to read at all
@@ -79,6 +79,7 @@ defmodule KeyFleet.Chain.Poller do
     case Scanner.step(fleet, client) do
       :ok -> {:ok, state}
       {:stopped, _block} -> {:ok, state}
+      :moved -> {:ok, state}
       {:error, reason} -> {:error, reason, state}
     end
   rescue

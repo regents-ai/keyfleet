@@ -1,12 +1,13 @@
 defmodule KeyFleet.Chain do
   @moduledoc """
   What the site knows about each fleet from its contracts: how far its key
-  history has been read, whether that reading is fresh enough to act on, and
-  how far the fleet has sold.
+  and proposal history has been read, whether that reading is fresh enough to
+  act on, and how far the fleet has sold.
   """
   use Ash.Domain
 
   alias KeyFleet.Actors.System
+  alias KeyFleet.Chain.Cursor
   alias KeyFleet.Fleets.Presets
   alias KeyFleet.Keys.KeyAttachment
 
@@ -15,7 +16,6 @@ defmodule KeyFleet.Chain do
       define :open_cursor, action: :open
       define :fresh_cursor, action: :fresh, args: [:fleet_id], not_found_error?: false
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
-      define :advance_cursor, action: :advance
       define :flag_divergence, action: :flag_divergence
       define :clear_cursor_divergence, action: :clear_divergence
     end
@@ -49,6 +49,69 @@ defmodule KeyFleet.Chain do
       {:ok, latest} -> {:ok, latest.token_id}
       error -> error
     end
+  end
+
+  @doc """
+  Takes the next number for one of the fleet's proposal records. Called inside
+  the transaction that makes the record, it holds the fleet's count until
+  commit, so numbers are given in the order records are made and a record
+  that rolls back gives its number back.
+  """
+  def take_proposal_seq!(fleet_id) do
+    %Postgrex.Result{rows: [[seq]]} =
+      KeyFleet.Repo.query!(
+        "UPDATE keyfleet_app.chain_cursors SET proposal_seq = proposal_seq + 1 " <>
+          "WHERE fleet_id = $1 RETURNING proposal_seq",
+        [fleet_id]
+      )
+
+    seq
+  end
+
+  @doc """
+  Moves the fleet's cursor as `changes` say, in one update that requires the
+  stored cursor still to stand where `cursor` does and the fleet not to be
+  stopped. Returns `{:ok, cursor}`, `{:error, :moved}` when someone else has
+  moved the cursor or stopped the fleet since, or `{:error, error}`.
+  """
+  def advance_cursor(%Cursor{} = cursor, changes) do
+    cursor
+    |> standing()
+    |> Ash.bulk_update(:advance, changes,
+      strategy: :atomic,
+      return_records?: true,
+      return_errors?: true,
+      rollback_on_error?: false,
+      actor: %System{}
+    )
+    |> case do
+      %Ash.BulkResult{status: :success, records: [cursor]} -> {:ok, cursor}
+      %Ash.BulkResult{status: :success, records: []} -> {:error, :moved}
+      %Ash.BulkResult{errors: errors} -> {:error, Ash.Error.to_error_class(errors)}
+    end
+  end
+
+  @doc """
+  Locks the fleet's cursor until the current transaction ends, if it still
+  stands where `cursor` does and the fleet is not stopped. Returns
+  `{:ok, cursor}` or `{:error, :moved}`.
+  """
+  def hold_cursor(%Cursor{} = cursor) do
+    cursor
+    |> standing()
+    |> Ash.Query.lock(:for_update)
+    |> Ash.read_one!()
+    |> case do
+      nil -> {:error, :moved}
+      cursor -> {:ok, cursor}
+    end
+  end
+
+  defp standing(cursor) do
+    Ash.Query.for_read(Cursor, :standing, %{
+      fleet_id: cursor.fleet_id,
+      next_block: cursor.next_block
+    })
   end
 
   @doc """

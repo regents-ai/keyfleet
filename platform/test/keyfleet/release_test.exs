@@ -214,6 +214,9 @@ defmodule KeyFleet.ReleaseTest do
              "key_pairings",
              "linked_identities",
              "messages",
+             "proposal_executions",
+             "proposal_votes",
+             "proposals",
              "rooms",
              "schema_migrations",
              "session_authorities"

@@ -20,10 +20,10 @@ defmodule KeyFleet.ChainHelpers do
     attrs = Map.new(attrs)
     {rescan_from, advance} = Map.pop(attrs, :rescan_from)
 
-    cursor =
+    {:ok, cursor} =
       %{fleet_id: fleet_id, next_block: 0}
       |> Chain.open_cursor!(actor: %System{})
-      |> Chain.advance_cursor!(
+      |> Chain.advance_cursor(
         Map.merge(
           %{
             next_block: 1_001,
@@ -32,13 +32,12 @@ defmodule KeyFleet.ChainHelpers do
             observed_at: DateTime.utc_now()
           },
           advance
-        ),
-        actor: %System{}
+        )
       )
 
     case rescan_from do
       nil -> cursor
-      block -> Chain.flag_divergence!(cursor, %{rescan_from: block}, actor: %System{})
+      block -> Chain.flag_divergence!(cursor, %{block: block}, actor: %System{})
     end
   end
 end

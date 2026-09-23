@@ -1,10 +1,12 @@
 # Reading the fleets from the chain
 
 The app reads each deployed fleet's `OwnershipEpoch` events from Base and
-records who holds every key. It records at the head, from the first block Base
-confirms in about two seconds, and never waits for L1 finality. A change in the
-chain's history is not repaired automatically: the reader stops that fleet and
-an operator fixes the record by hand, as below.
+records who holds every key. From the fleet's vote contract it records every
+proposal, vote and execution (`ProposalCreated` with the launch details
+beside it, `VoteCast` and `ProposalExecuted`). It records at the head,
+from the first block Base confirms in about two seconds, and never waits for L1
+finality. A change in the chain's history is not repaired automatically: the
+reader stops that fleet and an operator fixes the record by hand, as below.
 
 ## Turning it on
 
@@ -52,17 +54,51 @@ Fleet <fleet id>: level rooms not opened this pass, trying again next pass: ...
 
 ## What a stop means
 
-A second reading of the last 30 blocks found an ownership change that reads
-differently from the record, or a recorded change gone from a block whose hash
-is no longer the recorded one. The app logs, at error level:
+A second reading of the last 30 blocks found an ownership change, proposal,
+vote or execution that reads differently from the record, or a recorded one
+gone from a block whose hash is no longer the recorded one. A proposal number
+recorded twice, or a proposal executed twice, stops the fleet the same way. The
+app logs, at error level:
 
 ```
-Fleet <fleet id> stopped: the chain disagrees with the recorded key ownership at block <N>. ...
+Fleet <fleet id> stopped: the chain disagrees with the record at block <N>. It is stopped at block <S>. ...
 ```
 
-and stops reading that fleet. Its cursor keeps `rescan_from = N`, and nothing
-recorded has been changed. A recorded change missing from a block whose hash
-still matches is a node fault, not a stop: the app logs a warning and retries.
+and stops reading that fleet. Its cursor keeps `rescan_from = S`, and nothing
+recorded has been changed. `S` is `N`, or an earlier block the fleet was
+already stopped at: a stop only ever moves to an earlier block, so
+`rescan_from` is always the earliest disagreement found. The piece of blocks
+holding `N` recorded nothing; pieces before it, already checked, keep what they
+recorded. A recorded change missing from a block whose hash still matches is a
+node fault, not a stop: the app logs a warning and retries.
+
+## When a stretch is not read
+
+The reader asks for a stretch of blocks in one request. A node that will not
+answer it whole is asked for it again in halves, down to single blocks, and
+each answered piece is recorded before the next is asked for. A piece is
+recorded whole or not at all, in one transaction with the fleet's cursor
+moved past it, so the cursor always stands just after the last piece
+recorded. When the reader cannot record a piece, that piece and everything
+after it are left for the next pass, which carries on from the cursor. The
+app logs at warning level and tries again:
+
+```
+Reading fleet <fleet id> failed, retrying in <ms> ms: <reason>
+```
+
+A reason about one log names it by transaction hash and log index:
+`:unreadable_log` (not exactly as the contracts emit it), `:conflicting_logs`
+(two different logs in one place), `:payload_missing` or
+`:payload_without_proposal` (a launch proposal and the log that carries its
+details, one without the other). Numbering reasons name the block:
+`:proposal_number_skipped` and `:proposal_not_recorded`. All of these mean the
+node answered wrongly; point `KEYFLEET_RPC_URL` at another provider.
+
+If the node will not answer even one block, the reason is
+`{:block_unanswered, block, reason}`, naming that block and what the node
+said, and the fleet waits at it; a provider that answers with more logs at
+once is the fix.
 
 ## Confirming a real reorg
 
@@ -73,7 +109,12 @@ the `keyfleet_app` tables:
 \set fleet 'fibonacci_syndicate'
 
 SELECT DISTINCT block_number, block_hash
-FROM keyfleet_app.key_attachments
+FROM (
+  SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
+) AS recorded
 WHERE fleet_id = :'fleet'
   AND block_number >= (SELECT rescan_from - 30 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
 ORDER BY block_number;
@@ -96,18 +137,34 @@ the chain has not changed and the node answered wrongly: point
 
 ## Correcting the record
 
-Run in one transaction, with `fleet` and `from_block = F` set. Every ownership
-record of that fleet at or after `F` is removed, every pairing made under one of
-those records is ended, and the cursor goes back to `F`, so the reader records
-the chain's current history from there. Ended pairings stay as history; agents
-ask again and the key's owner approves again.
+Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
+proposal, vote and execution record of that fleet at or after `F` is removed,
+every pairing made under one of those ownership records is ended, and the
+cursor goes back to `F`, so the reader records the chain's current history from
+there. Ended pairings stay as history; agents ask again and the key's owner
+approves again. The proposal records made again from `F` on get new record
+numbers, higher than any removed, so every reader of the list sees them as new.
+
+A pass that was already running when the fleet stopped cannot undo the
+correction. A pass records each piece, and moves the cursor, only while the
+cursor still stands where that pass left it and the fleet is not stopped;
+otherwise that piece is rolled back and the pass ends quietly, logging at
+info level:
+
+```
+Fleet <fleet id>: the cursor moved underneath a pass that left it at block <N>, or the fleet was stopped; the pass ended and wrote nothing more.
+```
+
+The first pass after the stop is cleared starts from `F`. The same line is
+normal when two passes run at once: the slower one ends instead of moving the
+cursor back.
 
 The tables refuse deletes with a row trigger and emptying with a statement
-trigger. Nothing here uses `TRUNCATE`; only the delete trigger is switched off,
+trigger. Nothing here uses `TRUNCATE`; only the delete triggers are switched off,
 by name, and on again before the commit, so a failure anywhere rolls all of it
 back with the trigger still on. `ALTER TABLE` needs a superuser or the table's
-owner, and it locks new ownership records out of the table for every fleet
-until the commit, so run the block below in one go and keep it short.
+owner, and it locks new records out of those tables for every fleet until the
+commit, so run the block below in one go and keep it short.
 
 ```sql
 \set fleet 'fibonacci_syndicate'
@@ -137,6 +194,29 @@ DELETE FROM keyfleet_app.key_attachments
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 
 ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs;
+
+-- The proposal records from the fork on are removed the same way: executions
+-- and votes first, since they point at proposals.
+ALTER TABLE keyfleet_app.proposal_executions DISABLE TRIGGER immutable_proposal_executions;
+
+DELETE FROM keyfleet_app.proposal_executions
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.proposal_executions ENABLE TRIGGER immutable_proposal_executions;
+
+ALTER TABLE keyfleet_app.proposal_votes DISABLE TRIGGER immutable_proposal_votes;
+
+DELETE FROM keyfleet_app.proposal_votes
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.proposal_votes ENABLE TRIGGER immutable_proposal_votes;
+
+ALTER TABLE keyfleet_app.proposals DISABLE TRIGGER immutable_proposals;
+
+DELETE FROM keyfleet_app.proposals
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.proposals ENABLE TRIGGER immutable_proposals;
 
 -- The reader starts again at the fork.
 UPDATE keyfleet_app.chain_cursors
@@ -169,4 +249,7 @@ fly ssh console -C "/app/bin/clear-fleet-stop fibonacci_syndicate"
 ```
 
 The running app reads the fleet again on its next pass, from `F`; no restart is
-needed. Owners and members can act again once that pass has read the chain. In development the same step is `mix key_fleet.clear_fleet_stop <fleet id>`.
+needed. Clearing the stop also clears the time up to which votes are known to
+be counted, until a pass reaches the head again. Owners and members can act
+again once that pass has read the chain. In development the same step is
+`mix key_fleet.clear_fleet_stop <fleet id>`.
