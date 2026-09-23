@@ -52,7 +52,7 @@ defmodule KeyFleet.Chain do
   end
 
   @doc """
-  Takes the next number for one of the fleet's proposal records. Called inside
+  Takes the next number for one of the fleet's proposal or budget records. Called inside
   the transaction that makes the record, it holds the fleet's count until
   commit, so numbers are given in the order records are made and a record
   that rolls back gives its number back.

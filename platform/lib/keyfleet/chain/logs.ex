@@ -5,6 +5,7 @@ defmodule KeyFleet.Chain.Logs do
 
   Each log is sent, by its contract and topic0, to
   `KeyFleet.Chain.OwnershipLog`, `KeyFleet.Chain.RevealLog` or
+  `KeyFleet.Chain.BudgetLog`, for the fleet contract, or
   `KeyFleet.Chain.VotesLog`, and carries its fleet and its place on the
   chain. A launch or payment proposal is joined with the payload log that
   follows it in the same transaction. A log the node lists twice is read once.
@@ -14,12 +15,14 @@ defmodule KeyFleet.Chain.Logs do
   """
 
   alias KeyFleet.Chain.Abi
+  alias KeyFleet.Chain.BudgetLog
   alias KeyFleet.Chain.OwnershipLog
   alias KeyFleet.Chain.RevealLog
   alias KeyFleet.Chain.VotesLog
 
   @doc "The topic0 of every event the reader asks for."
-  def topics, do: [OwnershipLog.topic(), RevealLog.topic() | VotesLog.topics()]
+  def topics,
+    do: [OwnershipLog.topic(), RevealLog.topic() | VotesLog.topics() ++ BudgetLog.topics()]
 
   @doc """
   The records in `logs`, read from blocks `from..to` of `fleet`, in (block,
@@ -47,6 +50,7 @@ defmodule KeyFleet.Chain.Logs do
   number, `highest`: each new proposal must be the next number, and each vote
   and execution must name a proposal recorded by then. A proposal at or below
   the highest is one read again, which recording compares with the record.
+  Key ownership, key reveal and budget records name no proposal.
   """
   def in_sequence(records, highest) do
     Enum.reduce_while(records, highest, fn
@@ -65,7 +69,7 @@ defmodule KeyFleet.Chain.Logs do
       {_type, %{proposal_number: _number} = record}, _top ->
         {:halt, {:error, {:proposal_not_recorded, record.block_number}}}
 
-      {_type, _key_record}, top ->
+      {_type, _record}, top ->
         {:cont, top}
     end)
     |> case do
@@ -130,7 +134,8 @@ defmodule KeyFleet.Chain.Logs do
 
   defp route(%{contract_address: address}, address, topic0, words, data) do
     with :error <- OwnershipLog.decode(topic0, words, data),
-         do: RevealLog.decode(topic0, words, data)
+         :error <- RevealLog.decode(topic0, words, data),
+         do: BudgetLog.decode(topic0, words, data)
   end
 
   defp route(%{votes_address: address}, address, topic0, words, data),

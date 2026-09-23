@@ -45,6 +45,16 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(uint8(type(KeyfleetVotes.Kind).max), 2);
     }
 
+    function test_launchIncomeSplitTopic() public pure {
+        assertEq(
+            Keyfleet.LaunchIncomeSplit.selector, 0xd1de1f4a371f15e76fb100d279a26e729da58dcb604fa97058f7e3857fca911e
+        );
+    }
+
+    function test_budgetPaidTopic() public pure {
+        assertEq(Keyfleet.BudgetPaid.selector, 0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e);
+    }
+
     function test_proposalExecutedTopic() public pure {
         assertEq(
             KeyfleetVotes.ProposalExecuted.selector, 0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24

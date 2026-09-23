@@ -10,6 +10,7 @@ defmodule KeyFleet.ProposalsChainTest do
   alias KeyFleet.Keys
   alias KeyFleet.Proposals
   alias KeyFleet.Repo
+  alias KeyFleet.Treasury
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -30,6 +31,8 @@ defmodule KeyFleet.ProposalsChainTest do
   @pay "0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
+  @income_split "0xd1de1f4a371f15e76fb100d279a26e729da58dcb604fa97058f7e3857fca911e"
+  @budget_paid "0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e"
 
   setup context do
     if context[:independent_connections] do
@@ -67,8 +70,17 @@ defmodule KeyFleet.ProposalsChainTest do
 
       assert StubClient.log_requests() == [
                {[@contract, @votes],
-                [@ownership, @revealed, @created, @autolaunch, @pay, @vote, @executed], @deployed,
-                @deployed + 10}
+                [
+                  @ownership,
+                  @revealed,
+                  @created,
+                  @autolaunch,
+                  @pay,
+                  @vote,
+                  @executed,
+                  @income_split,
+                  @budget_paid
+                ], @deployed, @deployed + 10}
              ]
 
       decision = Proposals.get_proposal!(@fleet, 1)
@@ -169,6 +181,93 @@ defmodule KeyFleet.ProposalsChainTest do
       assert Decimal.equal?(paid.execution_expiry, 1_800_000_001 + 2_592_000)
 
       assert %{yes_keys: 3, no_keys: 4} = Ash.load!(paid, [:yes_keys, :no_keys])
+    end
+
+    # Launch income and budget payments come from the fleet contract, keep
+    # every amount as the contract gave it and are numbered with the proposal
+    # records, so the proposals hint goes out for them too.
+    test "launch income and budget payments are recorded with the proposal records", %{
+      fleet: fleet
+    } do
+      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+
+      StubClient.put_chain(
+        head(@deployed + 10),
+        List.flatten([
+          decision(1, @deployed + 1),
+          income_split("a", @deployed + 2, 0, [@max_uint256, @max_uint256 - 10, 3, 7]),
+          budget_paid("a", "c", @deployed + 3, 1, [700, 1_800_000_000, 1_000]),
+          ownership(1, "d", @deployed + 3, 0)
+        ])
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:proposals_changed, @fleet}
+
+      assert [split, payment] =
+               @fleet
+               |> Treasury.recorded_in_blocks!(@deployed, @deployed + 10)
+               |> Enum.sort_by(& &1.record_seq)
+
+      assert %{record_seq: 2, block_number: split_block, log_index: 0} = split
+      assert split_block == @deployed + 2
+      assert split.asset == wallet("a") and split.caller == wallet("f")
+
+      for {field, value} <- [
+            gross: @max_uint256,
+            fee: @max_uint256 - 10,
+            to_budget: 3,
+            to_keys: 7
+          ] do
+        assert Decimal.equal?(Map.fetch!(split, field), value), inspect(field)
+      end
+
+      assert %{record_seq: 3, log_index: 1} = payment
+      assert payment.asset == wallet("a") and payment.recipient == wallet("c")
+      assert Decimal.equal?(payment.amount, 700)
+      assert Decimal.equal?(payment.spent_in_period, 1_000)
+      assert DateTime.compare(payment.period_start, DateTime.from_unix!(1_800_000_000)) == :eq
+
+      assert Chain.get_cursor!(@fleet).proposal_seq == 3
+
+      # Read again, nothing is made twice or numbered again.
+      StubClient.put_chain(
+        head(@deployed + 12),
+        List.flatten([
+          decision(1, @deployed + 1),
+          income_split("a", @deployed + 2, 0, [@max_uint256, @max_uint256 - 10, 3, 7]),
+          budget_paid("a", "c", @deployed + 3, 1, [700, 1_800_000_000, 1_000]),
+          ownership(1, "d", @deployed + 3, 0)
+        ])
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 12)) == 2
+      assert Chain.get_cursor!(@fleet).proposal_seq == 3
+    end
+
+    # A budget log read again with other amounts is the chain disagreeing with
+    # the record; gone from a block whose hash changed, it is the same.
+    test "a budget record the chain no longer agrees with stops the fleet at its block", %{
+      fleet: fleet
+    } do
+      split = income_split("a", @deployed + 2, 0, [10, 0, 2, 8])
+      paid = budget_paid("a", "c", @deployed + 4, 0, [1, 1_800_000_000, 1])
+      StubClient.put_chain(head(@deployed + 10), [split, paid])
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      for {logs, opts, block} <- [
+            {[income_split("a", @deployed + 2, 0, [10, 0, 3, 7]), paid], [], @deployed + 2},
+            {[split, budget_paid("a", "d", @deployed + 4, 0, [1, 1_800_000_000, 1])], [],
+             @deployed + 4},
+            {[split], [block_hashes: %{(@deployed + 4) => @new_hash}], @deployed + 4}
+          ] do
+        StubClient.put_chain(head(@deployed + 12), logs, opts)
+        capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end)
+        Chain.clear_divergence!(@fleet)
+      end
+
+      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 12)) == 2
     end
 
     # One stretch that cannot be read whole moves nothing, not even the
@@ -808,13 +907,20 @@ defmodule KeyFleet.ProposalsChainTest do
 
   describe "the record tables" do
     test "refuse every change, delete and emptying", %{fleet: fleet} do
-      StubClient.put_chain(head(@deployed + 10), history())
+      budget = [
+        income_split("a", @deployed + 6, 0, [10, 0, 2, 8]),
+        budget_paid("a", "c", @deployed + 7, 0, [1, 1_800_000_000, 1])
+      ]
+
+      StubClient.put_chain(head(@deployed + 10), history() ++ budget)
       assert Scanner.step(fleet, StubClient) == :ok
 
       for {table, column, value} <- [
             {"proposals", "text_bytes", 1},
             {"proposal_votes", "support", false},
-            {"proposal_executions", "executor", wallet("0")}
+            {"proposal_executions", "executor", wallet("0")},
+            {"launch_income_splits", "caller", wallet("0")},
+            {"budget_payments", "recipient", wallet("0")}
           ],
           {sql, params} <- [
             {"UPDATE keyfleet_app.#{table} SET #{column} = $1", [value]},
@@ -827,6 +933,7 @@ defmodule KeyFleet.ProposalsChainTest do
       end
 
       assert length(recorded()) == 4
+      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 10)) == 2
     end
   end
 
@@ -932,6 +1039,33 @@ defmodule KeyFleet.ProposalsChainTest do
                  @deployed,
                  @deployed + 10
                ) == {:error, reason},
+               inspect(broken)
+      end
+
+      split = income_split("a", @deployed + 5, 0, [10, 1, 2, 7])
+      paid = budget_paid("a", "c", @deployed + 5, 1, [1, 1_800_000_000, 1])
+
+      assert {:ok, [{:income_split, _split}, {:budget_paid, _paid}]} =
+               Logs.decode([split, paid], fleet, @deployed, @deployed + 10)
+
+      for {index, broken} <- [
+            {0, %{split | "address" => @votes}},
+            {0, %{split | "data" => hex(<<10::256, 1::256, 2::256, 8::256>>)}},
+            {0, %{split | "data" => hex(<<10::256, 1::256, 2::256>>)}},
+            {0, %{split | "topics" => topic.(split, 1, hex(<<1::96, 0::160>>))}},
+            {0, %{split | "topics" => Enum.drop(split["topics"], -1)}},
+            {1, %{paid | "address" => @votes}},
+            {1, %{paid | "data" => hex(<<1::256, 1::1, 0::255, 1::256>>)}},
+            {1, %{paid | "data" => hex(<<1::256, 1_800_000_000::256, 1::256, 0::256>>)}},
+            {1, %{paid | "topics" => topic.(paid, 2, hex(<<1::96, 0::160>>))}}
+          ] do
+        assert Logs.decode(
+                 List.replace_at([split, paid], index, broken),
+                 fleet,
+                 @deployed,
+                 @deployed + 10
+               ) ==
+                 {:error, {:unreadable_log, broken["transactionHash"], broken["logIndex"]}},
                inspect(broken)
       end
 
@@ -1044,6 +1178,30 @@ defmodule KeyFleet.ProposalsChainTest do
       @votes,
       [@executed, <<number::256>>, address_word_bytes(executor)],
       <<>>,
+      block,
+      log_index
+    )
+  end
+
+  # Income in asset 0x`asset`… recognized by 0xff…, as [gross, fee,
+  # to_budget, to_keys].
+  defp income_split(asset, block, log_index, amounts) do
+    log(
+      @contract,
+      [@income_split, address_word_bytes(asset), address_word_bytes("f")],
+      for(amount <- amounts, into: <<>>, do: <<amount::256>>),
+      block,
+      log_index
+    )
+  end
+
+  # A payment of asset 0x`asset`… to 0x`recipient`…, as [amount,
+  # period_start, spent_in_period].
+  defp budget_paid(asset, recipient, block, log_index, fields) do
+    log(
+      @contract,
+      [@budget_paid, address_word_bytes(asset), address_word_bytes(recipient)],
+      for(field <- fields, into: <<>>, do: <<field::256>>),
       block,
       log_index
     )
@@ -1242,7 +1400,8 @@ defmodule KeyFleet.ProposalsChainTest do
   # The records from block `offset` on removed as docs/chain-reader.md does.
   defp remove_from(offset) do
     Repo.transaction(fn ->
-      for table <- ~w(proposal_executions proposal_votes proposals) do
+      for table <-
+            ~w(budget_payments launch_income_splits proposal_executions proposal_votes proposals) do
         Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER immutable_#{table}")
 
         Repo.query!(
@@ -1272,6 +1431,8 @@ defmodule KeyFleet.ProposalsChainTest do
   defp remove_committed_records do
     Repo.transaction(fn ->
       for {table, trigger} <- [
+            {"budget_payments", "immutable_budget_payments"},
+            {"launch_income_splits", "immutable_launch_income_splits"},
             {"proposal_executions", "immutable_proposal_executions"},
             {"proposal_votes", "immutable_proposal_votes"},
             {"proposals", "immutable_proposals"}

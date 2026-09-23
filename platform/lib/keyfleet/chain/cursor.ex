@@ -8,10 +8,10 @@ defmodule KeyFleet.Chain.Cursor do
   was recorded sets `rescan_from` and stops the fleet there until an operator
   has corrected the record by hand.
 
-  It also numbers the fleet's proposal records (`proposal_seq`) and its key
-  reveals (`reveal_seq`), and keeps the time of the last block read while the
-  reading was at the head (`read_through_at`), which is how far votes are known
-  to be counted.
+  It also numbers the fleet's proposal and budget records (`proposal_seq`)
+  and its key reveals (`reveal_seq`), and keeps the time of the last block
+  read while the reading was at the head (`read_through_at`), which is how far
+  votes are known to be counted.
   """
   use Ash.Resource,
     domain: KeyFleet.Chain,
@@ -133,8 +133,8 @@ defmodule KeyFleet.Chain.Cursor do
     # The block where the chain was found to disagree with the record.
     attribute :rescan_from, :integer, public?: true, constraints: [min: 0]
 
-    # The last number given to one of the fleet's proposal, vote or execution
-    # records. It is moved only by `KeyFleet.Chain.take_proposal_seq!/1`.
+    # The last number given to one of the fleet's proposal, vote, execution,
+    # income split or budget payment records. It is moved only by `KeyFleet.Chain.take_proposal_seq!/1`.
     attribute :proposal_seq, :integer,
       allow_nil?: false,
       default: 0,

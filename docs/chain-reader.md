@@ -3,7 +3,9 @@
 The app reads each deployed fleet's `OwnershipEpoch` events from Base and
 records who holds every key. From the same contract it records each key's
 reveal (`KeyRevealed`: the Chainlink VRF request and the seed its traits are
-drawn from). From the fleet's vote contract it records every
+drawn from), and the budget's `LaunchIncomeSplit` (income after the launch,
+split between the budget and the keys) and `BudgetPaid` (a payment out of the
+budget) events. From the fleet's vote contract it records every
 proposal, vote and execution (`ProposalCreated` with `AutolaunchProposed` or
 `PayProposed` beside it for a launch or a payment, `VoteCast` and
 `ProposalExecuted`). A payment keeps its asset, amount, recipient, expiry and
@@ -58,8 +60,9 @@ its sales figures are catching up.
 ## What a stop means
 
 A second reading of the last 30 blocks found an ownership change, reveal,
-proposal, vote or execution that reads differently from the record, or a
-recorded one gone from a block whose hash is no longer the recorded one. A proposal number
+proposal, vote, execution, income split or budget payment that reads
+differently from the record, or a recorded one gone from a block whose hash is
+no longer the recorded one. A proposal number
 recorded twice, or a proposal executed twice, stops the fleet the same way. The
 app logs, at error level:
 
@@ -131,6 +134,8 @@ FROM (
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.launch_income_splits
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_payments
 ) AS recorded
 WHERE fleet_id = :'fleet'
   AND block_number >= (SELECT rescan_from - 30 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
@@ -155,15 +160,15 @@ the chain has not changed and the node answered wrongly: point
 ## Correcting the record
 
 Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
-reveal, proposal, vote and execution record of that
-fleet at or after `F` is removed,
+reveal, proposal, vote, execution, income split and budget payment record of
+that fleet at or after `F` is removed,
 every pairing made under one of those ownership records is ended, and the
 cursor goes back to `F`, so the reader records the chain's current history from
 there. Ended pairings stay as history; agents ask again and the key's owner
-approves again. The proposal and reveal records made again from `F` on get
-new record numbers, higher than any removed, so every reader of the list sees
-them as new. A key whose reveal is removed shows as still being revealed until
-its reveal is read again.
+approves again. The proposal, budget and reveal records made again from `F` on
+get new record numbers, higher than any removed, so every reader of the list
+sees them as new. A key whose reveal is removed shows as still being revealed
+until its reveal is read again.
 
 A pass that was already running when the fleet stopped cannot undo the
 correction. A pass records each piece, and moves the cursor, only while the
@@ -245,6 +250,21 @@ DELETE FROM keyfleet_app.proposals
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 
 ALTER TABLE keyfleet_app.proposals ENABLE TRIGGER immutable_proposals;
+
+-- And the budget records.
+ALTER TABLE keyfleet_app.launch_income_splits DISABLE TRIGGER immutable_launch_income_splits;
+
+DELETE FROM keyfleet_app.launch_income_splits
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.launch_income_splits ENABLE TRIGGER immutable_launch_income_splits;
+
+ALTER TABLE keyfleet_app.budget_payments DISABLE TRIGGER immutable_budget_payments;
+
+DELETE FROM keyfleet_app.budget_payments
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.budget_payments ENABLE TRIGGER immutable_budget_payments;
 
 -- The reader starts again at the fork.
 UPDATE keyfleet_app.chain_cursors

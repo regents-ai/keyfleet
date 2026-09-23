@@ -204,6 +204,7 @@ defmodule KeyFleet.ReleaseTest do
 
     assert table_names(config, "keyfleet_app") == [
              "agent_profiles",
+             "budget_payments",
              "chain_cursors",
              "fleets",
              "graph_cursors",
@@ -215,6 +216,7 @@ defmodule KeyFleet.ReleaseTest do
              "key_attachments",
              "key_pairings",
              "key_reveals",
+             "launch_income_splits",
              "linked_identities",
              "messages",
              "proposal_executions",

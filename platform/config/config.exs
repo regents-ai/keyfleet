@@ -31,6 +31,7 @@ config :keyfleet,
     KeyFleet.Keys,
     KeyFleet.Chain,
     KeyFleet.Proposals,
+    KeyFleet.Treasury,
     KeyFleet.Graph,
     KeyFleet.Keeper
   ],

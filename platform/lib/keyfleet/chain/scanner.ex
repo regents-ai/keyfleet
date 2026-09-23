@@ -1,8 +1,8 @@
 defmodule KeyFleet.Chain.Scanner do
   @moduledoc """
-  One pass over a deployed fleet's history: who holds each key and each
-  key's reveal, from the fleet contract, and its proposals, votes and
-  executions, from its vote contract.
+  One pass over a deployed fleet's history: who holds each key, each key's
+  reveal, and what its budget took in and paid out, from the fleet contract,
+  and its proposals, votes and executions, from its vote contract.
 
   Each pass reads the head, reads again the last 30 blocks it already
   recorded, then records what happened after them up to the head. Each
@@ -59,6 +59,7 @@ defmodule KeyFleet.Chain.Scanner do
   alias KeyFleet.Fleets.Fleet
   alias KeyFleet.Keys
   alias KeyFleet.Proposals
+  alias KeyFleet.Treasury
 
   @rescan_blocks 30
   @max_range 10_000
@@ -251,6 +252,12 @@ defmodule KeyFleet.Chain.Scanner do
   defp make_record({:execution, execution}),
     do: Proposals.record_execution(execution, @record_opts)
 
+  defp make_record({:income_split, split}),
+    do: Treasury.record_income_split(split, @record_opts)
+
+  defp make_record({:budget_paid, payment}),
+    do: Treasury.record_budget_payment(payment, @record_opts)
+
   # A recorded event the second reading no longer finds means the same only
   # when its block is no longer the block that was recorded.
   defp still_on_chain(fleet, records, from, to, client) do
@@ -260,6 +267,7 @@ defmodule KeyFleet.Chain.Scanner do
     fleet.id
     |> Keys.recorded_in_blocks!(from, to, actor: @system)
     |> Enum.concat(Proposals.recorded_in_blocks!(fleet.id, from, to))
+    |> Enum.concat(Treasury.recorded_in_blocks!(fleet.id, from, to))
     |> Enum.reject(&MapSet.member?(seen, {&1.transaction_hash, &1.log_index}))
     |> Enum.map(&{&1.block_number, &1.block_hash})
     |> Enum.uniq()
