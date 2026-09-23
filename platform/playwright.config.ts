@@ -4,8 +4,9 @@ const baseURL = `http://127.0.0.1:${process.env.PORT || "4002"}`
 
 export default defineConfig({
   testDir: "./test/browser",
-  // The component workshop needs its own isolated database; playwright.showcase.config.ts runs it.
-  testIgnore: "showcase.spec.ts",
+  // The component workshop and key map exist only when the local showcase is compiled in;
+  // playwright.showcase.config.ts runs them against a server built that way.
+  testIgnore: ["showcase.spec.ts", "key_map.spec.ts", "key_map_performance.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

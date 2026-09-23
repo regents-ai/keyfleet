@@ -66,6 +66,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
         <span class="sc-local">Local only</span>
         <a href="/showcase/catalog" class="sc-api">Agent catalog ↗</a>
         <a href="/showcase/privy" class="sc-api">Privy reference ↗</a>
+        <a href="/showcase/key-map" class="sc-api">Key map ↗</a>
       </header>
       <div class="sc-layout">
         <aside class="sc-sidebar">

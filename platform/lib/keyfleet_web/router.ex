@@ -55,6 +55,7 @@ defmodule KeyFleetWeb.Router do
         live "/", ShowcaseLive, :index
         live "/preview", ShowcaseLive, :preview
         live "/privy", PrivyShowcaseLive, :index
+        live "/key-map", KeyMapShowcaseLive, :index
       end
     end
   end

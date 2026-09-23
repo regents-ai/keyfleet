@@ -17,6 +17,17 @@
   .privy-reference-content { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; }
   .privy-reference-content > section { padding: 16px; }
 }
+.key-map-reference__content { display: grid; gap: 24px; padding: 24px; }
+.key-map-reference__intro { display: grid; gap: 12px; max-width: 48rem; }
+.key-map-reference__intro p { margin: 0; }
+.key-map-reference__fleets { display: flex; flex-wrap: wrap; gap: 8px; }
+.key-map-reference__fleets [aria-pressed="true"] { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.key-map-reference__notes { max-width: 48rem; padding: 24px; border: 1px solid var(--color-border); }
+#key-map-selected { margin: 0; font-family: var(--font-family-mono); }
+@media (max-width: 48rem) {
+  .key-map-reference__content { padding: 16px; gap: 16px; }
+  .key-map-reference__notes { padding: 16px; }
+}
 html:has(.sc) { scroll-behavior: auto; }
 body:has(.sc) { margin: 0; background: var(--color-bg); color: var(--color-fg); overflow: auto; }
 .sc { min-height: 100vh; font-family: var(--font-family-ui); font-size: 14px; background: var(--color-bg); }

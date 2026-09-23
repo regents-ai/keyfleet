@@ -17,7 +17,7 @@ defmodule KeyFleetWeb.ShowcaseTest do
 
   test "HTTP pages and machine inventory are loopback-only, without trusting forwarding headers" do
     for path <-
-          ~w(/showcase /showcase/catalog /showcase/style.css /showcase/preview /showcase/privy) do
+          ~w(/showcase /showcase/catalog /showcase/style.css /showcase/preview /showcase/privy /showcase/key-map) do
       for {host, peer} <- [{"example.com", {127, 0, 0, 1}}, {"localhost", {192, 0, 2, 1}}] do
         conn =
           build_conn()
@@ -124,6 +124,35 @@ defmodule KeyFleetWeb.ShowcaseTest do
     assert {:error, _} = create_sample(%{title: "Valid", quantity: 101})
     assert {:error, _} = create_sample(%{quantity: 1})
   end
+
+  test "key map page sends every fleet's keys and shows the chosen key" do
+    {:ok, view, html} = live(local_conn(), "/showcase/key-map")
+    assert html =~ ~s(id="key-map-fibonacci")
+    assert html =~ "No key chosen yet."
+
+    render_hook(view, "keymap_ready", %{})
+    assert_reply(view, %{minted: 46_364, max_supply: 46_365, mine: mine, agent: agent})
+    mine = Base.decode64!(mine)
+    agent = Base.decode64!(agent)
+    assert byte_size(mine) == 5_796 and byte_size(agent) == 5_796
+    assert held?(mine, 13) and not held?(mine, 14) and held?(agent, 3)
+
+    assert render_hook(view, "select_key", %{"token_id" => 46_365}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => 46_366}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => 0}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "select_key", %{"token_id" => "7"}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "select_key", %{}) =~ "Key 46,365 chosen."
+    assert render_hook(view, "show_fleet", %{"value" => "hexagon"}) =~ ~s(id="key-map-fibonacci")
+
+    html = view |> element("button", "Classic") |> render_click()
+    assert html =~ ~s(id="key-map-classic") and html =~ "No key chosen yet."
+    render_hook(view, "keymap_ready", %{})
+    assert_reply(view, %{minted: 143, max_supply: 144, mine: mine})
+    assert byte_size(Base.decode64!(mine)) == 18
+  end
+
+  defp held?(bits, id),
+    do: Bitwise.band(:binary.at(bits, div(id - 1, 8)), Bitwise.bsl(1, rem(id - 1, 8))) != 0
 
   defp create_sample(params),
     do: Sample |> Ash.Changeset.for_create(:create, params) |> Ash.create()

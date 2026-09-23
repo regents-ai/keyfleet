@@ -1,0 +1,361 @@
+import {test, expect, type CDPSession, type Page} from "@playwright/test"
+import {openMap, settle} from "./support/key_map"
+
+type Point = {x: number; y: number}
+
+const selected = (page: Page) => page.locator("#key-map-selected")
+
+const nextFrame = (page: Page) =>
+  page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))))
+
+type Mark = Point & {key: string}
+
+// Where the map sits: the key drawn nearest the middle and its place on screen.
+// The map quietly swaps to another copy of itself as it travels, so a key on
+// screen is the steady measure, not the layer's own offset.
+async function mapAt(page: Page): Promise<Mark> {
+  await nextFrame(page)
+  return page.evaluate(() => {
+    const stage = document.querySelector(".key-map")!.getBoundingClientRect()
+    const middle = {x: stage.left + stage.width / 2, y: stage.top + stage.height / 2}
+    let nearest = {key: "", x: 0, y: 0, distance: Infinity}
+    for (const tile of document.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")) {
+      const rect = tile.getBoundingClientRect()
+      const [x, y] = [rect.left + rect.width / 2, rect.top + rect.height / 2]
+      const distance = Math.hypot(x - middle.x, y - middle.y)
+      if (distance < nearest.distance) nearest = {key: tile.dataset.key!, x, y, distance}
+    }
+    return {key: nearest.key, x: nearest.x, y: nearest.y}
+  })
+}
+
+// How far the map has moved since `mark`, in whole pixels.
+async function movedSince(page: Page, mark: Mark): Promise<Point> {
+  await nextFrame(page)
+  return page.evaluate(mark => {
+    let moved = {x: 0, y: 0, distance: Infinity}
+    for (const tile of document.querySelectorAll<HTMLElement>(`.km-tile[data-key="${mark.key}"]:not([hidden])`)) {
+      const rect = tile.getBoundingClientRect()
+      const [x, y] = [rect.left + rect.width / 2 - mark.x, rect.top + rect.height / 2 - mark.y]
+      if (Math.hypot(x, y) < moved.distance) moved = {x, y, distance: Math.hypot(x, y)}
+    }
+    return {x: Math.round(moved.x), y: Math.round(moved.y)}
+  }, mark)
+}
+
+const stageCentre = (page: Page) =>
+  page.locator(".key-map").evaluate(stage => {
+    const rect = stage.getBoundingClientRect()
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2}
+  })
+
+// Every copy of a key drawn well inside the stage, nearest the middle first.
+const copiesOf = (page: Page, key: number) =>
+  page.evaluate(key => {
+    const stage = document.querySelector(".key-map")!.getBoundingClientRect()
+    const middle = {x: stage.left + stage.width / 2, y: stage.top + stage.height / 2}
+    return [...document.querySelectorAll<HTMLElement>(`.km-tile[data-key="${key}"]:not([hidden])`)]
+      .map(tile => {
+        const rect = tile.getBoundingClientRect()
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, state: tile.dataset.state ?? ""}
+      })
+      .filter(({x, y}) => x > stage.left + 50 && x < stage.right - 50 && y > stage.top + 50 && y < stage.bottom - 50)
+      .sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y))
+  }, key)
+
+async function tile(page: Page, key: number): Promise<Point> {
+  const [copy] = await copiesOf(page, key)
+  expect(copy, `key ${key} is on screen`).toBeDefined()
+  return copy
+}
+
+// A throw at about a hand's speed: six moves a frame apart and a release with no rest.
+async function fling(page: Page, from: Point, dx: number) {
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  for (let step = 1; step <= 6; step++) {
+    await page.waitForTimeout(16)
+    await page.mouse.move(from.x + (dx * step) / 6, from.y)
+  }
+  await page.mouse.up()
+}
+
+
+test.describe("key map", () => {
+  test("a click chooses the key under it", async ({page}) => {
+    const {errors} = await openMap(page, "Accelerant")
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+    const target = await tile(page, 1_999)
+    await page.mouse.click(target.x, target.y)
+    await expect(selected(page)).toHaveText("Key 1,999 chosen.")
+    expect(errors).toEqual([])
+  })
+
+  test("a 200 px drag that starts on a key moves the map and chooses nothing", async ({page}) => {
+    await openMap(page, "Accelerant")
+    const start = await tile(page, 1_999)
+    const before = await mapAt(page)
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x - 200, start.y, {steps: 20})
+    // A rest before letting go, so the map stays where the drag left it.
+    await page.waitForTimeout(150)
+    await page.mouse.up()
+    expect(await movedSince(page, before)).toEqual({x: -200, y: 0})
+    await settle(page)
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+  })
+
+  test("a press while the map coasts stops it and chooses nothing", async ({page}) => {
+    await openMap(page, "Accelerant")
+    const centre = await stageCentre(page)
+    await fling(page, centre, -120)
+    const released = await mapAt(page)
+    await page.waitForTimeout(60)
+    expect((await movedSince(page, released)).x, "the map coasts after a throw").toBeLessThan(0)
+
+    await page.mouse.click(centre.x, centre.y)
+    const stopped = await mapAt(page)
+    await page.waitForTimeout(250)
+    expect(await movedSince(page, stopped)).toEqual({x: 0, y: 0})
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+  })
+
+  test("the wheel pans the map and leaves the page where it is", async ({page}) => {
+    await openMap(page, "Fibonacci")
+    const centre = await stageCentre(page)
+    const scrolled = await page.evaluate(() => scrollY)
+    const before = await mapAt(page)
+    await page.mouse.move(centre.x, centre.y)
+    await page.mouse.wheel(120, 300)
+    await expect.poll(() => movedSince(page, before)).toEqual({x: -120, y: -300})
+    expect(await page.evaluate(() => scrollY)).toBe(scrolled)
+  })
+
+  test("keys fill the stage to its edges wherever the map is moved", async ({page}) => {
+    const {stage} = await openMap(page, "Fibonacci")
+    const centre = await stageCentre(page)
+    await page.mouse.move(centre.x, centre.y)
+    // Up into level 20, where every cell holds a key.
+    await page.mouse.wheel(0, -3_000)
+    for (let step = 0; step < 16; step++) {
+      await page.mouse.wheel(37, 23)
+      await nextFrame(page)
+      const uncovered = await stage.evaluate(stage => {
+        const box = stage.getBoundingClientRect()
+        const tiles = [...stage.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")].map(tile =>
+          tile.getBoundingClientRect(),
+        )
+        // Tiles sit 6 px apart, so a point within 4 px of a tile's box is covered.
+        const covered = (x: number, y: number) =>
+          tiles.some(rect => x >= rect.left - 4 && x <= rect.right + 4 && y >= rect.top - 4 && y <= rect.bottom + 4)
+        const points: [number, number][] = []
+        for (let x = box.left + 2; x < box.right; x += 20) points.push([x, box.top + 2], [x, box.bottom - 2])
+        for (let y = box.top + 2; y < box.bottom; y += 20) points.push([box.left + 2, y], [box.right - 2, y])
+        return points.filter(([x, y]) => !covered(x, y))
+      })
+      expect(uncovered, `step ${step}`).toEqual([])
+    }
+  })
+
+  test("every copy of a key on screen carries the same marks", async ({page}) => {
+    await openMap(page, "Accelerant")
+    // Keys drawn more than once on screen, with the marks on each copy.
+    const repeated = () =>
+      page.evaluate(() => {
+        const stage = document.querySelector(".key-map")!.getBoundingClientRect()
+        const marks = new Map<string, {states: string[]; at: {x: number; y: number}}>()
+        for (const tile of document.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")) {
+          const rect = tile.getBoundingClientRect()
+          const [x, y] = [rect.left + rect.width / 2, rect.top + rect.height / 2]
+          if (x < stage.left || x > stage.right || y < stage.top || y > stage.bottom) continue
+          const key = tile.dataset.key!
+          const seen = marks.get(key) ?? {states: [], at: {x, y}}
+          marks.set(key, {...seen, states: [...seen.states, tile.dataset.state ?? ""]})
+        }
+        return [...marks].filter(([, {states}]) => states.length > 1).map(([key, {states, at}]) => ({key, states, at}))
+      })
+
+    const [{key, at}] = await repeated()
+    await page.mouse.click(at.x, at.y)
+    await expect(selected(page)).toHaveText(`Key ${Number(key).toLocaleString("en-US")} chosen.`)
+
+    // Every copy agrees, and matches the page's made-up owners and agents.
+    const marks = new Set<string>()
+    const check = async () => {
+      const copies = await repeated()
+      expect(copies.length).toBeGreaterThan(10)
+      for (const {key: shown, states} of copies) {
+        const id = Number(shown)
+        const expected = [id === 2_000 && "next", id % 97 === 13 && "mine", id % 7 === 3 && "agent", shown === key && "selected"]
+        expect(states, `key ${shown}`).toEqual(states.map(() => expected.filter(Boolean).join(" ")))
+        states[0].split(" ").forEach(mark => marks.add(mark))
+      }
+    }
+    await check()
+    // Nine rows up sits 1,953, one of the keys marked as yours.
+    await page.mouse.wheel(0, -700)
+    await nextFrame(page)
+    await check()
+    expect([...marks]).toEqual(expect.arrayContaining(["mine", "agent", "selected"]))
+  })
+
+  test("arrow keys, Enter and Home move and choose", async ({page}) => {
+    const {stage} = await openMap(page, "Accelerant")
+    const status = stage.locator("[aria-live=polite]")
+    await stage.focus()
+    await page.keyboard.press("Home")
+    await expect(status).toHaveText("Next key, 2,000.")
+    await page.keyboard.press("ArrowRight")
+    await expect(status).toHaveText("Key 1,999.")
+    await page.keyboard.press("ArrowUp")
+    await expect(status).toHaveText("Key 1,992.")
+    const cursorCopies = await copiesOf(page, 1_992)
+    expect(cursorCopies.length).toBeGreaterThan(0)
+    for (const copy of cursorCopies) expect(copy.state.split(" ")).toContain("cursor")
+    // Shortcuts with a modifier are left to the browser.
+    await page.keyboard.press("Control+ArrowRight")
+    await expect(status).toHaveText("Key 1,992.")
+    await page.keyboard.press("Enter")
+    await expect(selected(page)).toHaveText("Key 1,992 chosen.")
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press(" ")
+    await expect(selected(page)).toHaveText("Key 1,993 chosen.")
+
+    // Without a cursor, Space neither chooses a key nor scrolls the page.
+    await page.keyboard.press("Escape")
+    const scrolled = await page.evaluate(() => scrollY)
+    await page.keyboard.press(" ")
+    await nextFrame(page)
+    expect(await page.evaluate(() => scrollY)).toBe(scrolled)
+    await expect(selected(page)).toHaveText("Key 1,993 chosen.")
+
+    // Home brings the next key back to the middle from anywhere.
+    const centre = await stageCentre(page)
+    await page.mouse.move(centre.x, centre.y)
+    await page.mouse.wheel(900, 0)
+    await page.keyboard.press("Home")
+    await expect.poll(async () => {
+      const next = await tile(page, 2_000)
+      return Math.round(Math.hypot(next.x - centre.x, next.y - centre.y))
+    }).toBeLessThanOrEqual(1)
+  })
+
+  test("the page scrolls normally outside the map", async ({page}) => {
+    await openMap(page, "Fibonacci")
+    await page.evaluate(() => scrollTo(0, 0))
+    const notes = page.locator(".key-map-reference__notes")
+    const header = page.locator(".sc-header")
+    const box = (await header.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.wheel(0, 400)
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0)
+    await expect(notes).toBeInViewport()
+  })
+
+  test.describe("with reduced motion", () => {
+    test.use({contextOptions: {reducedMotion: "reduce"}})
+
+    test("a throw stops on release and Home jumps straight to the next key", async ({page}) => {
+      const {stage} = await openMap(page, "Accelerant")
+      expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true)
+      const centre = await stageCentre(page)
+      await fling(page, centre, -120)
+      const released = await mapAt(page)
+      await page.waitForTimeout(200)
+      expect(await movedSince(page, released)).toEqual({x: 0, y: 0})
+
+      await stage.focus()
+      await page.keyboard.press("Home")
+      // One frame later the next key is already in the middle, and stays there.
+      await page.evaluate(() => new Promise(requestAnimationFrame))
+      const next = await tile(page, 2_000)
+      expect(Math.hypot(next.x - centre.x, next.y - centre.y)).toBeLessThanOrEqual(1)
+      const landed = await mapAt(page)
+      await page.waitForTimeout(200)
+      expect(await movedSince(page, landed)).toEqual({x: 0, y: 0})
+    })
+  })
+})
+
+// Touch, sent through the Chromium DevTools protocol as real touch input.
+test.describe("key map by touch", () => {
+  test.skip(({browserName}) => browserName !== "chromium", "touch input is sent through the Chromium DevTools protocol")
+  test.use({hasTouch: true})
+
+  type Finger = Point & {id: number}
+  const touch = (cdp: CDPSession, type: "touchStart" | "touchMove" | "touchEnd", fingers: Finger[]) =>
+    cdp.send("Input.dispatchTouchEvent", {type, touchPoints: fingers.map(({x, y, id}) => ({x, y, id}))})
+
+  async function open(page: Page) {
+    await openMap(page, "Accelerant")
+    return page.context().newCDPSession(page)
+  }
+
+  async function tap(cdp: CDPSession, at: Point) {
+    await touch(cdp, "touchStart", [{...at, id: 0}])
+    await touch(cdp, "touchEnd", [])
+  }
+
+  test("a tap chooses a key, even with a 10 px wobble", async ({page}) => {
+    const cdp = await open(page)
+    const first = await tile(page, 1_999)
+    await tap(cdp, first)
+    await expect(selected(page)).toHaveText("Key 1,999 chosen.")
+
+    const second = await tile(page, 1_998)
+    await touch(cdp, "touchStart", [{...second, id: 0}])
+    await touch(cdp, "touchMove", [{x: second.x + 6, y: second.y + 8, id: 0}])
+    await touch(cdp, "touchMove", [{...second, id: 0}])
+    await touch(cdp, "touchEnd", [])
+    await expect(selected(page)).toHaveText("Key 1,998 chosen.")
+  })
+
+  test("a drag moves the map and chooses nothing", async ({page}) => {
+    const cdp = await open(page)
+    const start = await tile(page, 1_999)
+    const before = await mapAt(page)
+    await touch(cdp, "touchStart", [{...start, id: 0}])
+    for (let step = 1; step <= 10; step++) await touch(cdp, "touchMove", [{x: start.x - step * 10, y: start.y, id: 0}])
+    await page.waitForTimeout(150)
+    await touch(cdp, "touchEnd", [])
+    expect(await movedSince(page, before)).toEqual({x: -100, y: 0})
+    await settle(page)
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+  })
+
+  test("a second finger is ignored", async ({page}) => {
+    const cdp = await open(page)
+    const held = await tile(page, 1_999)
+    const other = await tile(page, 1_996)
+    const before = await mapAt(page)
+    await touch(cdp, "touchStart", [{...held, id: 0}])
+    await touch(cdp, "touchStart", [{...held, id: 0}, {...other, id: 1}])
+    for (let step = 1; step <= 10; step++)
+      await touch(cdp, "touchMove", [{...held, id: 0}, {x: other.x - step * 15, y: other.y, id: 1}])
+    await touch(cdp, "touchEnd", [{...held, id: 0}])
+    await touch(cdp, "touchEnd", [])
+    expect(await movedSince(page, before)).toEqual({x: 0, y: 0})
+    await expect(selected(page)).toHaveText("Key 1,999 chosen.")
+  })
+
+  test("a tap while the map coasts stops it and chooses nothing", async ({page}) => {
+    const cdp = await open(page)
+    const centre = await stageCentre(page)
+    await touch(cdp, "touchStart", [{...centre, id: 0}])
+    for (let step = 1; step <= 6; step++) {
+      await page.waitForTimeout(16)
+      await touch(cdp, "touchMove", [{x: centre.x - step * 20, y: centre.y, id: 0}])
+    }
+    await touch(cdp, "touchEnd", [])
+    const released = await mapAt(page)
+    await page.waitForTimeout(60)
+    expect((await movedSince(page, released)).x, "the map coasts after a throw").toBeLessThan(0)
+
+    await tap(cdp, centre)
+    const stopped = await mapAt(page)
+    await page.waitForTimeout(250)
+    expect(await movedSince(page, stopped)).toEqual({x: 0, y: 0})
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+  })
+})

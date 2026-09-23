@@ -39,6 +39,17 @@ the local database (`keyfleet_dev`), run `mix key_fleet.setup_local_auth`,
 then `mix assets.build` and `mix phx.server`. Do not use browser-test
 configuration as proof of real Privy sign-in.
 
+## Key map working reference
+
+`/showcase/key-map` runs the fleet key map on made-up data, with no chain or
+database behind it. Buttons switch between the three fleet shapes at full size:
+Fibonacci (46,365 keys), Classic (144) and Accelerant (2,000), each sold out but
+for its last key. Every 97th key is marked as yours and every 7th as having an
+agent. Choosing a key, by click or by Enter, only updates the line under the map.
+
+The map loads as its own script chunk the first time a page shows one. Its drag
+and coast are adapted from `thiings-grid`; see `THIRD_PARTY_NOTICES.md`.
+
 ## Utility effects
 
 - Wallet fixture: a separate local provider demonstrates connect/disconnect,
@@ -75,8 +86,15 @@ append `/showcase`.
 mix test test/keyfleet_web/showcase
 npm run typecheck
 npm test
-PORT=<port> npx playwright test --config playwright.showcase.config.ts
+PORT=<port> npx playwright test --config playwright.showcase.config.ts --project=chromium
 ```
+
+The Chromium run is the one that gates a change. It checks the key map by mouse,
+wheel, keyboard and touch, and measures its frame times, scripting time, build
+time and tile count on a laptop with the largest and the middle fleet, and on a
+phone with the processor slowed four times. The `firefox` and `webkit` projects
+run the same key map checks, but need browser builds that match this Playwright
+release (`npx playwright install firefox webkit`), which are not installed here.
 
 The dedicated browser configuration avoids the product suite's seeding and
 global teardown. Failures retain screenshots and traces in `test-results/`.
