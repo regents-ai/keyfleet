@@ -1,6 +1,8 @@
 defmodule KeyFleet.TreasuryReaderTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.{StubClient, TreasuryReader}
   alias KeyFleet.ChainHelpers
@@ -147,40 +149,78 @@ defmodule KeyFleet.TreasuryReaderTest do
     refute_received {:balances_changed, _fleet}
   end
 
-  # The node has just answered every balance at the block, so a token call
-  # that fails there, as a broken token's `invalid opcode` or `out of gas`
-  # does, is the token not answering: it is kept as unknown and never asked
-  # again, and the balances are kept and announced all the same.
-  test "a token whose calls fail while the balances are read is kept as unknown", %{
-    fleet: fleet
-  } do
+  # The budget's own tokens are admitted by the fleet's registry, so a call
+  # to one that fails may be the node's: nothing is kept, the balances are
+  # kept and announced all the same, and the token is asked again.
+  test "a budget token whose call fails is asked again at the next reading", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    unavailable = Map.put(chain(), {@usdc, @decimals}, {:error, :chain_unavailable})
+    StubClient.put_chain(head(40), [], calls: answers(unavailable))
+
+    log =
+      capture_log(fn ->
+        assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
+      end)
+
+    assert log =~ "token #{@usdc} of the budget was not read"
+    assert_received {:balances_changed, @fleet}
+    assert details() == %{@other => {"WETH", 18}}
+
+    StubClient.put_chain(head(41), [], calls: answers(chain()))
+    assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
+    assert details() == %{@usdc => {"USDC", 6}, @other => {"WETH", 18}}
+  end
+
+  # A token only a payment proposal names cannot be held or paid by the
+  # budget, so it is asked once: a call that fails, as a broken token's
+  # `invalid opcode` or `out of gas` does, keeps it as unknown for good.
+  test "a token only a payment names is asked once", %{fleet: fleet} do
     ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
 
     broken =
       chain()
-      |> Map.put({@other, @decimals}, {:error, :chain_unavailable})
       |> Map.put({@named, @symbol}, {:error, :chain_unavailable})
-      |> Map.put({@named, @decimals}, {:error, :chain_unavailable})
+      |> Map.put({@named, @decimals}, {:ok, <<18::256>>})
 
     StubClient.put_chain(head(40), [], calls: answers(broken))
-    assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
-    assert_received {:balances_changed, @fleet}
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+    assert details()[@named] == {nil, 18}
 
-    assert details() == %{
-             @usdc => {"USDC", 6},
-             @other => {"WETH", nil},
-             @named => {nil, nil}
-           }
+    StubClient.put_chain(head(41), [], calls: answers(Map.merge(broken, named_answers())))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+    refute Enum.any?(StubClient.call_requests(), fn {to, _data, _hash} -> to == @named end)
+    assert details()[@named] == {nil, 18}
+  end
 
-    StubClient.put_chain(head(41), [], calls: answers(chain()))
-    assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
+  # Once the budget holds such a token, it is asked as the budget's own are,
+  # and what was unknown is read again.
+  test "a payment's token the budget comes to hold is read again", %{fleet: fleet} do
+    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
+    broken = Map.put(chain(), {@named, @symbol}, {:error, :chain_unavailable})
+    StubClient.put_chain(head(40), [], calls: answers(broken))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+    assert details()[@named] == {nil, nil}
 
-    refute Enum.any?(StubClient.call_requests(), fn {_to, data, _hash} ->
-             data in [@symbol, @decimals]
+    ProposalHelpers.budget_receipt!(@fleet, asset: @named)
+    StubClient.put_chain(head(41), [], calls: answers(Map.merge(chain(), named_answers())))
+    assert {:ok, reading} = TreasuryReader.read(fleet, StubClient)
+    assert @named in Enum.map(reading.assets, & &1.asset)
+    assert details()[@named] == {"NMD", 18}
+
+    # Read in full, it is never asked again.
+    StubClient.put_chain(head(42), [], calls: answers(Map.merge(chain(), named_answers())))
+    assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
+
+    refute Enum.any?(StubClient.call_requests(), fn {to, data, _hash} ->
+             to == @named and data in [@symbol, @decimals]
            end)
+  end
 
-    assert details()[@other] == {"WETH", nil}
+  defp named_answers do
+    %{
+      {@named, @symbol} => {:ok, text("NMD")},
+      {@named, @decimals} => {:ok, <<18::256>>}
+    }
   end
 
   # A symbol is shown as written, so a token's is kept only when it is 1 to

@@ -1,11 +1,12 @@
 defmodule KeyFleet.Treasury.AssetDetails do
   @moduledoc """
   The symbol and decimals a token of a fleet's budget or payment proposals
-  reports, read from the token once, by `KeyFleet.Chain.TreasuryReader`, and
-  never again. Either is nil when the token does not answer it, or answers a
-  symbol that is not short plain text, and its amounts are then shown in
-  whole atomic units. Whatever the symbol, only the fleet's own USDC is shown
-  without its address.
+  reports, read by `KeyFleet.Chain.TreasuryReader`. Either is nil when the
+  token does not answer it, or answers a symbol that is not short plain text,
+  and its amounts are then shown in whole atomic units. Once both are known
+  they never change; a budget token with either unknown is read again, and
+  the new reading replaces it. Whatever the symbol, only the fleet's own USDC
+  is shown without its address.
   """
   use Ash.Resource,
     domain: KeyFleet.Treasury,
@@ -34,11 +35,12 @@ defmodule KeyFleet.Treasury.AssetDetails do
       public? false
       accept [:fleet_id, :asset, :symbol, :decimals]
 
-      # The first reading is the one kept.
+      # A token read in full is never read again; one read with its symbol
+      # or decimals unknown may be read again, and the new reading is kept.
       upsert? true
       upsert_identity :unique_fleet_asset
-      upsert_fields []
-      upsert_condition expr(false)
+      upsert_fields [:symbol, :decimals]
+      upsert_condition expr(is_nil(symbol) or is_nil(decimals))
       return_skipped_upsert? true
     end
 

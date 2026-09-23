@@ -12,14 +12,24 @@ defmodule KeyFleet.Chain.TreasuryReader do
   the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
   on `KeyFleet.Proposals.topic/1`.
 
-  Once a reading's balances are kept, each asset of the budget or of a
-  payment proposal whose token has not been read has its symbol and decimals
-  read at the same block and kept, once, and never asked again. The node has
-  just answered every balance there, so a token whose call fails in any way,
-  answers with something else, or reports a symbol that is not 1 to 32 bytes
-  of text free of control and direction characters, has it kept as unknown.
-  A reading that fails asks no token anything, and the next one tries again.
+  Once a reading's balances are kept, token symbols and decimals are read at
+  the same block; a reading that fails asks no token anything. A token that
+  refuses a call, answers with something else, or reports a symbol that is
+  not 1 to 32 bytes of text free of control and direction characters, has it
+  kept as unknown. What a call that fails otherwise means depends on whose
+  token it is:
+
+    * an asset of the reading kept, one the fleet's registry admits, is asked
+      again at the next reading, with a warning, since the node may have
+      failed; and one whose symbol or decimals are kept as unknown is asked
+      again at every reading, so an earlier failure heals;
+    * an asset only a payment proposal names, which the budget cannot hold
+      or pay, is asked once: a call that fails keeps it as unknown for good.
+      If it later turns up in a reading, it is asked as the reading's assets
+      are.
   """
+
+  require Logger
 
   alias KeyFleet.Actors.System
   alias KeyFleet.Chain.Abi
@@ -84,38 +94,66 @@ defmodule KeyFleet.Chain.TreasuryReader do
     end
   end
 
-  # The symbol and decimals of each asset shown anywhere that has not been
-  # read yet: those of the reading kept, and those payment proposals name.
+  # The symbol and decimals of the reading's assets not yet read in full, and
+  # of the assets only payment proposals name not yet read at all.
   defp read_details(fleet, reading, client, block_hash) do
-    known = MapSet.new(Treasury.asset_details!(fleet.id, actor: @system), & &1.asset)
+    known = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
+    held = Enum.map(reading.assets, & &1.asset)
 
-    reading.assets
-    |> Enum.map(& &1.asset)
-    |> Enum.concat(Proposals.payment_assets(fleet.id))
-    |> Enum.uniq()
-    |> Enum.reject(&MapSet.member?(known, &1))
-    |> Enum.each(&read_detail(fleet, &1, client, block_hash))
+    held
+    |> Enum.reject(&complete?(known[&1]))
+    |> Enum.each(&read_held(fleet, &1, client, block_hash))
+
+    fleet.id
+    |> Proposals.payment_assets()
+    |> Enum.reject(&(&1 in held or Map.has_key?(known, &1)))
+    |> Enum.each(&read_named(fleet, &1, client, block_hash))
   end
 
-  defp read_detail(fleet, asset, client, block_hash) do
+  defp complete?(%{symbol: symbol, decimals: decimals}), do: symbol != nil and decimals != nil
+  defp complete?(nil), do: false
+
+  # A call that fails may be the node's, so nothing is kept, and the asset is
+  # asked again at the next reading.
+  defp read_held(fleet, asset, client, block_hash) do
+    with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
+         {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash) do
+      record_details(fleet, asset, symbol, decimals)
+    else
+      {:error, reason} ->
+        Logger.warning(
+          "Fleet #{fleet.id}: token #{asset} of the budget was not read " <>
+            "(#{inspect(reason)}); it is asked again at the next reading."
+        )
+    end
+  end
+
+  # Asked once: a call that fails is kept as the token not answering.
+  defp read_named(fleet, asset, client, block_hash) do
+    record_details(
+      fleet,
+      asset,
+      answered(detail(client, asset, {@symbol, :bytes}, block_hash)),
+      answered(detail(client, asset, {@decimals, {:uint, 8}}, block_hash))
+    )
+  end
+
+  defp answered({:ok, value}), do: value
+  defp answered({:error, _reason}), do: nil
+
+  defp record_details(fleet, asset, symbol, decimals) do
     Treasury.record_asset_details!(
-      %{
-        fleet_id: fleet.id,
-        asset: asset,
-        symbol: detail(client, asset, {@symbol, :bytes}, block_hash),
-        decimals: detail(client, asset, {@decimals, {:uint, 8}}, block_hash)
-      },
+      %{fleet_id: fleet.id, asset: asset, symbol: symbol, decimals: decimals},
       actor: @system
     )
   end
 
-  # The node has just answered every balance at this block, so a call to the
-  # token that fails in any way, or answers with something else, is the
-  # token not answering.
+  # A token that refuses, or answers with something else, does not answer.
   defp detail(client, asset, {data, type}, block_hash) do
     case client.call(asset, data, block_hash) do
-      {:ok, returned} -> answer(Abi.decode(returned, [type]))
-      {:error, _reason} -> nil
+      {:ok, returned} -> {:ok, answer(Abi.decode(returned, [type]))}
+      {:error, :reverted} -> {:ok, nil}
+      {:error, reason} -> {:error, reason}
     end
   end
 
