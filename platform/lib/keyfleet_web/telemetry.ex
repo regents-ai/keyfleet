@@ -25,11 +25,15 @@ defmodule KeyFleetWeb.Telemetry do
     [
       counter("keyfleet.privy.browser_failure.total", tags: [:reason]),
       # Each keeper transaction's outcome, each time the keeper stopped or
-      # paused sending, and its wallet's balance and last 24 hours' spending.
+      # paused sending, its wallet's balance and last 24 hours' spending, and
+      # for each fleet its VRF subscription's balance and how many of the
+      # keys the reveal job last looked at have waited long for a seed.
       counter("keyfleet.keeper.tx.total", tags: [:function, :outcome]),
       counter("keyfleet.keeper.paused.total", tags: [:job, :reason]),
       last_value("keyfleet.keeper.wallet_balance_wei"),
-      last_value("keyfleet.keeper.spent_24h_wei")
+      last_value("keyfleet.keeper.spent_24h_wei"),
+      last_value("keyfleet.keeper.vrf.native_balance_wei", tags: [:fleet]),
+      last_value("keyfleet.keeper.reveals.waiting", tags: [:fleet])
     ]
   end
 

@@ -26,7 +26,8 @@ defmodule KeyFleet.Keeper.CallsTest do
              "0xeac37a82000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"},
             {:recognize_surplus, @usdc,
              "0xaef04030000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"},
-            {:send_protocol_share, nil, "0xcb097587"}
+            {:send_protocol_share, nil, "0xcb097587"},
+            {:sync_launch, nil, "0x8e9e57df"}
           ] do
         assert {:ok, %Call{fn: ^fun, target: @fleet, arg: ^arg} = call} =
                  Calls.new(fun, @fleet, arg)
@@ -68,6 +69,7 @@ defmodule KeyFleet.Keeper.CallsTest do
             release: 0,
             release: @usdc,
             send_protocol_share: 1,
+            sync_launch: @fleet,
             request_reveal: nil,
             request_reveal: -1,
             request_reveal: @max_uint256 + 1,
@@ -92,7 +94,7 @@ defmodule KeyFleet.Keeper.CallsTest do
     # Nothing outside the module can hand it bytes to send, or ETH.
     test "no public function takes calldata or a value" do
       assert Calls.__info__(:functions) |> Enum.sort() ==
-               [calldata: 1, decode: 2, functions: 0, new: 3, view: 2]
+               [calldata: 1, decode: 2, functions: 0, new: 3, result: 4, view: 2]
 
       assert %Call{fn: :release, target: @fleet, arg: nil}
              |> Map.from_struct()
@@ -144,7 +146,7 @@ defmodule KeyFleet.Keeper.CallsTest do
       end
     end
 
-    test "the functions are the seven the keeper may call" do
+    test "the functions are the eight the keeper may call" do
       assert Calls.functions() == [
                :collect,
                :recognize_surplus,
@@ -152,11 +154,12 @@ defmodule KeyFleet.Keeper.CallsTest do
                :release,
                :request_reveal,
                :send_protocol_share,
-               :sweep
+               :sweep,
+               :sync_launch
              ]
     end
 
-    test "only a view, or collect, can be decoded" do
+    test "only a view, collect or syncLaunch can be decoded" do
       for name <- [:owner, :request_reveal, :sweep, :send_protocol_share] do
         assert Calls.decode(name, <<1::256>>) == :error, inspect(name)
       end
@@ -190,7 +193,10 @@ defmodule KeyFleet.Keeper.CallsTest do
             {:lifecycle, word(0), :pending},
             {:lifecycle, word(1), :graduated},
             {:lifecycle, word(2), :failed},
-            {:collect, word(12) <> String.duplicate("0", 64), {12, 0}}
+            {:collect, word(12) <> String.duplicate("0", 64), {12, 0}},
+            {:sync_launch, word(1), :auction_created},
+            {:sync_launch, word(2), :graduated},
+            {:sync_launch, word(3), :economically_failed}
           ] do
         assert Calls.decode(name, bytes(encoded)) == {:ok, expected}, inspect({name, encoded})
       end
@@ -286,13 +292,49 @@ defmodule KeyFleet.Keeper.CallsTest do
             {:total_minted, <<1::248>>},
             {:total_minted, <<>>},
             {:treasury, <<1 <<< 160::256>>},
-            {:collect, <<1::256>>}
+            {:collect, <<1::256>>},
+            {:sync_launch, <<4::256>>},
+            {:sync_launch, <<1::256, 2::256>>}
           ] do
         assert Calls.decode(name, data) == :error, inspect({name, data})
       end
     end
   end
 
+  describe "a reveal's result" do
+    # Each topic is `cast keccak <event signature>` of Keyfleet.sol's events.
+    @requested "0x636f7c8c708e048e354abf12cce3c8388becccbc306c3aca98b59406c7e0a9d3"
+    @refused "0x28313d2e4de81be16551ff59132121eb412ff359b73b349ff448835751346789"
+
+    test "is what the fleet logged for that key" do
+      assert Calls.result(:request_reveal, @fleet, 7, [
+               log(@usdc, [@requested, word(7)]),
+               log(@fleet, [@requested, word(7), word(99)])
+             ]) == "reveal_requested"
+
+      # A node may give addresses and topics in upper case.
+      assert Calls.result(:request_reveal, @fleet, 7, [
+               log(String.upcase(@fleet), [String.upcase(@refused), word(7)])
+             ]) == "reveal_refused"
+    end
+
+    test "is nothing when the fleet logged neither for that key" do
+      for logs <- [
+            [],
+            [log(@fleet, [@refused, word(8)])],
+            [log(@usdc, [@refused, word(7)])],
+            [log(@fleet, [word(1), word(7)])],
+            [log(@fleet, [@refused])],
+            [%{"address" => @fleet}]
+          ] do
+        assert Calls.result(:request_reveal, @fleet, 7, logs) == nil, inspect(logs)
+      end
+
+      assert Calls.result(:release, @fleet, nil, [log(@fleet, [@refused, word(7)])]) == nil
+    end
+  end
+
+  defp log(address, topics), do: %{"address" => address, "topics" => topics, "data" => "0x"}
   defp hex(bytes), do: "0x" <> Base.encode16(bytes, case: :lower)
   defp bytes("0x" <> hex), do: Base.decode16!(hex, case: :lower)
   defp word(value), do: hex(<<value::256>>)

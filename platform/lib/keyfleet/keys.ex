@@ -99,4 +99,29 @@ defmodule KeyFleet.Keys do
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  @doc """
+  Up to `limit` of the fleet's keys numbered 1 to `minted` that have no
+  recorded reveal, lowest first, leaving out the numbers in `except`:
+  `{:ok, token_ids}` or `{:error, error}`.
+  """
+  def unrevealed(fleet_id, minted, except, limit) do
+    # Raw SQL, not an Ash read: the keys it lists have no row (key_reveals has only revealed ones).
+    case KeyFleet.Repo.query(
+           """
+           SELECT key.token_id FROM generate_series(1, $2::bigint) AS key(token_id)
+           WHERE key.token_id <> ALL($3::bigint[])
+             AND NOT EXISTS (
+               SELECT 1 FROM keyfleet_app.key_reveals AS reveal
+               WHERE reveal.fleet_id = $1 AND reveal.token_id = key.token_id
+             )
+           ORDER BY key.token_id
+           LIMIT $4
+           """,
+           [fleet_id, minted, except, limit]
+         ) do
+      {:ok, %Postgrex.Result{rows: rows}} -> {:ok, List.flatten(rows)}
+      {:error, error} -> {:error, error}
+    end
+  end
 end

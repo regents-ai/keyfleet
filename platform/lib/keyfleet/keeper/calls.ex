@@ -2,7 +2,7 @@ defmodule KeyFleet.Keeper.Calls do
   @moduledoc """
   Everything the keeper may say to a contract.
 
-  It sends only the seven permissionless functions below, each with at most one
+  It sends only the eight permissionless functions below, each with at most one
   argument of a fixed type and never with ETH. A `%Call{}` names one of them,
   the contract and the argument; its calldata is built here and nowhere else,
   so nothing outside this module can put other bytes on the chain.
@@ -31,7 +31,8 @@ defmodule KeyFleet.Keeper.Calls do
     sweep: {"sweep(address)", :address},
     recognize_surplus_revenue: {"recognizeSurplusRevenue(address)", :address},
     recognize_surplus: {"recognizeSurplus(address)", :address},
-    send_protocol_share: {"sendProtocolShare()", nil}
+    send_protocol_share: {"sendProtocolShare()", nil},
+    sync_launch: {"syncLaunch()", nil}
   }
 
   # Each view's signature, argument types and return types. Enums come back
@@ -109,8 +110,10 @@ defmodule KeyFleet.Keeper.Calls do
     balance_of: {"balanceOf(address)", [:address], [{:uint, 256}]}
   }
 
-  # What `RevstakeLPLocker.collect(uint256)` returns: the fees collected.
+  # What `RevstakeLPLocker.collect(uint256)` returns, the fees collected, and
+  # what a fleet's `syncLaunch()` returns, its launch state after the call.
   @collect_returns [{:uint, 256}, {:uint, 256}]
+  @sync_launch_returns [{:uint, 8}]
 
   @launch_states [:not_created, :auction_created, :graduated, :economically_failed]
   @strategy_lifecycles [:none, :active, :graduated, :failed]
@@ -158,12 +161,21 @@ defmodule KeyFleet.Keeper.Calls do
                &{elem(&1, 0), binary_part(ExKeccak.hash_256(elem(&1, 0)), 0, 4)}
              )
 
+  # What a fleet's `requestReveal` logs: the coordinator took the request, or
+  # refused it.
+  @reveal_results %{
+    ("0x" <> Base.encode16(ExKeccak.hash_256("RevealRequested(uint256,uint256)"), case: :lower)) =>
+      "reveal_requested",
+    ("0x" <> Base.encode16(ExKeccak.hash_256("RevealRequestFailed(uint256)"), case: :lower)) =>
+      "reveal_refused"
+  }
+
   @doc "The functions the keeper may call."
   def functions, do: @functions |> Map.keys() |> Enum.sort()
 
   @doc """
   A call to send, or `{:error, reason}`: `:unknown_function` for anything
-  but the seven functions, `:malformed_target` unless the contract is a
+  but the eight functions, `:malformed_target` unless the contract is a
   nonzero address, `:malformed_argument` unless the argument has the
   function's type.
   """
@@ -194,13 +206,19 @@ defmodule KeyFleet.Keeper.Calls do
   end
 
   @doc """
-  What a view, or `collect`, returned: a single value as itself, a record as
-  a map, `collect` as `{amount0, amount1}` and enums as atoms. `:error` for
-  any other name, and for anything but the exact encoding.
+  What a view, `collect` or `syncLaunch` returned: a single value as
+  itself, a record as a map, `collect` as `{amount0, amount1}` and enums,
+  `syncLaunch`'s launch state among them, as atoms. `:error` for any other
+  name, and for anything but the exact encoding.
   """
   def decode(:collect, data) do
     with {:ok, [amount0, amount1]} <- Abi.decode(data, @collect_returns),
          do: {:ok, {amount0, amount1}}
+  end
+
+  def decode(:sync_launch, data) do
+    with {:ok, [state]} <- Abi.decode(data, @sync_launch_returns),
+         do: enum(@launch_states, state)
   end
 
   def decode(name, data) do
@@ -208,6 +226,27 @@ defmodule KeyFleet.Keeper.Calls do
          {:ok, values} <- Abi.decode(data, returns),
          do: shape(name, values)
   end
+
+  @doc """
+  What an included call's logs say beyond its status: for a reveal, whether
+  the fleet's coordinator took the request, `"reveal_requested"`, or refused
+  it, `"reveal_refused"`, as the fleet logged it for that key. `nil` for
+  anything else.
+  """
+  def result(:request_reveal, fleet, token_id, logs) do
+    token = "0x" <> Base.encode16(<<token_id::256>>, case: :lower)
+    Enum.find_value(logs, &reveal_result(&1, fleet, token))
+  end
+
+  def result(_fun, _target, _arg, _logs), do: nil
+
+  defp reveal_result(%{"address" => address, "topics" => [topic0, topic1 | _rest]}, fleet, token)
+       when is_binary(address) and is_binary(topic0) and is_binary(topic1) do
+    if String.downcase(address) == fleet and String.downcase(topic1) == token,
+      do: Map.get(@reveal_results, String.downcase(topic0))
+  end
+
+  defp reveal_result(_log, _fleet, _token), do: nil
 
   defp shape(:launch_state, [state]), do: enum(@launch_states, state)
   defp shape(:lifecycle, [lifecycle]), do: enum(@escrow_lifecycles, lifecycle)

@@ -5,6 +5,8 @@ defmodule KeyFleet.Keeper do
   """
   use Ash.Domain
 
+  require Logger
+
   alias KeyFleet.Actors.System
   alias KeyFleet.Keeper.Transaction
 
@@ -13,6 +15,10 @@ defmodule KeyFleet.Keeper do
       define :record_sent_tx, action: :record_sent
       define :list_outstanding_txs, action: :outstanding, args: [:chain_id, :from_address]
       define :list_latest_txs, action: :latest, args: [:chain_id, :from_address]
+
+      define :list_recent_txs,
+        action: :recent,
+        args: [:chain_id, :from_address, :fleet_id, :function, :since]
 
       define :last_settled_tx,
         action: :last_settled,
@@ -24,10 +30,22 @@ defmodule KeyFleet.Keeper do
       define :record_run, action: :record
       define :last_run, action: :last, args: [:job], not_found_error?: false
       define :stop_state, action: :stop_state, not_found_error?: false
+
+      define :pause_state,
+        action: :pause_state,
+        args: [:outcomes, :fleet_id],
+        not_found_error?: false
     end
   end
 
   @day_seconds 86_400
+
+  # Each kind of pause, with the outcomes that begin and end it.
+  @pauses %{
+    gas: [:paused_gas, :unpaused_gas],
+    vrf_balance: [:paused_vrf_balance, :unpaused_vrf_balance],
+    spend_ceiling: [:paused_spend_ceiling, :unpaused_spend_ceiling]
+  }
 
   @doc """
   The wallet's spending on the chain over the last 24 hours, in wei:
@@ -68,6 +86,69 @@ defmodule KeyFleet.Keeper do
 
   # The most a transaction can cost: its gas limit at its maximum fee.
   defp worst_case(%Transaction{gas_limit: gas_limit, max_fee: max_fee}), do: gas_limit * max_fee
+
+  @doc """
+  Records that a pause of `job` began or ended, with `outcome` naming which
+  of the two and its kind, `notes` saying what happened, and the fleet a
+  VRF balance pause is for. A record that cannot be written is logged and
+  left: the pause itself goes on regardless.
+  """
+  def record_pause(job, outcome, notes, fleet_id \\ nil) do
+    now = DateTime.utc_now()
+
+    case record_run(
+           %{
+             job: job,
+             started_at: now,
+             finished_at: now,
+             outcome: outcome,
+             fleet_id: fleet_id,
+             sent: 0,
+             skipped: 0,
+             notes: String.slice(notes, 0, 2_000)
+           },
+           actor: %System{}
+         ) do
+      {:ok, _run} -> :ok
+      {:error, error} -> Logger.warning("Keeper could not record a pause: #{inspect(error)}")
+    end
+  end
+
+  @doc """
+  Whether the latest record of a `pause` (`:gas`, `:vrf_balance` for
+  `fleet_id`, or `:spend_ceiling`) says it began and has not ended:
+  `{:ok, in_force?}` or `{:error, error}`.
+  """
+  def pause_in_force(pause, fleet_id \\ nil) do
+    [began, _ended] = outcomes = Map.fetch!(@pauses, pause)
+
+    case pause_state(outcomes, fleet_id, actor: %System{}) do
+      {:ok, run} -> {:ok, match?(%{outcome: ^began}, run)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Records a round of `job` that sent something, begun at `started_at`, with
+  how many it sent and passed over. A record that cannot be written is
+  logged and left.
+  """
+  def record_round(job, started_at, %{sent: sent, skipped: skipped}) do
+    case record_run(
+           %{
+             job: job,
+             started_at: started_at,
+             finished_at: DateTime.utc_now(),
+             outcome: :sent,
+             sent: sent,
+             skipped: skipped
+           },
+           actor: %System{}
+         ) do
+      {:ok, _run} -> :ok
+      {:error, error} -> Logger.warning("Keeper could not record its round: #{inspect(error)}")
+    end
+  end
 
   @doc """
   Records that the keeper stopped during `job` for `reason`, with the

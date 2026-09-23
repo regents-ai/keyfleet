@@ -158,21 +158,20 @@ defmodule KeyFleet.Release do
 
     for tx <-
           KeyFleet.Keeper.list_latest_txs!(chain_id, address, actor: %KeyFleet.Actors.System{}) do
-      IO.puts(
-        Enum.join(
-          [
-            tx.sent_at,
-            tx.job,
-            tx.fleet_id,
-            tx.function,
-            tx.target,
-            "nonce #{tx.nonce}",
-            tx.status || "waiting",
-            tx.tx_hash
-          ],
-          " "
-        )
-      )
+      [
+        tx.sent_at,
+        tx.job,
+        tx.fleet_id,
+        tx.function,
+        tx.target,
+        "nonce #{tx.nonce}",
+        tx.status || "waiting",
+        tx.result,
+        tx.tx_hash
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(" ")
+      |> IO.puts()
     end
 
     :ok

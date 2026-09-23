@@ -22,7 +22,8 @@ defmodule KeyFleet.Keeper.StubNode do
   send, from 1, and its raw bytes that returns `:ok` to accept it, `{:ok,
   hash}` to accept it under that hash, or `{:error, reason}` to refuse it;
   `:mine`, a function given the number of the accepted send, from 1, and its
-  raw bytes that returns `{:mined, status}` or `:pending`; and `:receipt`,
+  raw bytes that returns `{:mined, status}`, `{:mined, status, logs}` for a
+  receipt with those logs, or `:pending`; and `:receipt`,
   the gas used, gas price and L1 fee each mined receipt shows.
   """
   def put_chain(opts \\ []) do
@@ -69,7 +70,7 @@ defmodule KeyFleet.Keeper.StubNode do
   def update(opts), do: Agent.update(agent(), &Map.merge(&1, Map.new(opts)))
 
   @doc "Mines a transaction already sent, with `status`."
-  def mine(tx_hash, status), do: Agent.update(agent(), &mined(&1, tx_hash, status))
+  def mine(tx_hash, status), do: Agent.update(agent(), &mined(&1, tx_hash, status, []))
 
   @doc """
   Gives a transaction already sent a receipt with `status` in the next block
@@ -77,7 +78,7 @@ defmodule KeyFleet.Keeper.StubNode do
   as they are.
   """
   def mine_later(tx_hash, status),
-    do: Agent.update(agent(), &%{&1 | later: [{tx_hash, status} | &1.later]})
+    do: Agent.update(agent(), &%{&1 | later: [{tx_hash, status, []} | &1.later]})
 
   @impl true
   def chain_id, do: {:ok, get(& &1.chain_id)}
@@ -126,7 +127,8 @@ defmodule KeyFleet.Keeper.StubNode do
     chain = %{chain | sent: [raw | chain.sent]}
 
     case chain.mine.(length(chain.sent), raw) do
-      {:mined, status} -> mined(chain, tx_hash, status)
+      {:mined, status} -> mined(chain, tx_hash, status, [])
+      {:mined, status, logs} -> mined(chain, tx_hash, status, logs)
       :pending -> chain
     end
   end
@@ -134,15 +136,15 @@ defmodule KeyFleet.Keeper.StubNode do
   @impl true
   def receipt(tx_hash), do: {:ok, get(&Map.get(&1.receipts, tx_hash))}
 
-  defp mined(chain, tx_hash, status) do
-    chain = receipted(chain, {tx_hash, status})
+  defp mined(chain, tx_hash, status, logs) do
+    chain = receipted(chain, {tx_hash, status, logs})
     latest = chain.latest + 1
     %{chain | latest: latest, pending: max(chain.pending, latest)}
   end
 
-  defp receipted(chain, {tx_hash, status}) do
+  defp receipted(chain, {tx_hash, status, logs}) do
     receipt =
-      Map.merge(chain.receipt, %{status: status, block_number: chain.block.number, logs: []})
+      Map.merge(chain.receipt, %{status: status, block_number: chain.block.number, logs: logs})
 
     %{chain | receipts: Map.put(chain.receipts, tx_hash, receipt)}
   end

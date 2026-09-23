@@ -6,8 +6,8 @@ defmodule KeyFleet.Keeper.Sender do
   `KeyFleet.Keeper.Calls`, each to the one contract its function belongs
   to, with only the argument that contract is there for:
 
-    * `requestReveal`, `sendProtocolShare` and `recognizeSurplus` go to a
-      deployed fleet, on the chain the node serves;
+    * `requestReveal`, `sendProtocolShare`, `recognizeSurplus` and
+      `syncLaunch` go to a deployed fleet, on the chain the node serves;
     * `release`, `collect`, `sweep` and `recognizeSurplusRevenue` go to that
       fleet's vesting escrow, LP locker, payment receiver and splitter, as
       read inside `income_round/3`, and only once the fleet's launch record
@@ -53,7 +53,7 @@ defmodule KeyFleet.Keeper.Sender do
   @replacements 3
   @bigint 9_223_372_036_854_775_807
 
-  @fleet_functions [:request_reveal, :send_protocol_share, :recognize_surplus]
+  @fleet_functions [:request_reveal, :send_protocol_share, :recognize_surplus, :sync_launch]
 
   # Each income function and the contract of the fleet's launch it goes to.
   @income_contracts %{
@@ -99,20 +99,23 @@ defmodule KeyFleet.Keeper.Sender do
 
   @doc """
   Learns the node's chain, the deployed fleets, whether the keeper is
-  stopped and the highest nonce it has seen taken, then, unless it is
-  stopped, settles every transaction it left waiting. Returns
+  stopped, whether a spending pause is still in force and the highest nonce
+  it has seen taken, then, unless it is stopped, settles every transaction
+  it left waiting. Returns
   `{:ok, sender}`, or `{:error, reason}` when any of those cannot be read.
   """
   def start(%__MODULE__{node: node, wallet: wallet} = sender) do
     with {:ok, chain_id} <- node.chain_id(),
          {:ok, fleets} <- Fleets.list_deployed_fleets(),
          {:ok, stop} <- Keeper.stopped(),
+         {:ok, ceiling_reached?} <- Keeper.pause_in_force(:spend_ceiling),
          {:ok, last} <- Keeper.last_settled_tx(chain_id, wallet.address, actor: %System{}) do
       sender = %{
         sender
         | chain_id: chain_id,
           fleets: Map.new(fleets, &{&1.id, &1}),
           stopped: stop && stop.stop_reason,
+          ceiling_reached?: ceiling_reached?,
           included_nonce: last && last.nonce
       }
 
@@ -360,13 +363,36 @@ defmodule KeyFleet.Keeper.Sender do
     end)
   end
 
-  defp read(%{node: node, wallet: wallet}, to, view) do
-    with {:ok, data} <- Calls.view(view, []),
+  @doc """
+  Reads a view of `KeyFleet.Keeper.Calls` from the contract at `to`, as the
+  keeper, at the latest block: `{:ok, value}`, or `{:error, reason}`, which
+  is `{:revert, selector, args}` when the contract refuses.
+  """
+  def read(%__MODULE__{node: node, wallet: wallet}, to, view, args \\ []) do
+    with {:ok, data} <- Calls.view(view, args),
          {:ok, bytes} <- node.call(wallet.address, to, data) do
-      case Calls.decode(view, bytes) do
-        {:ok, value} -> {:ok, value}
-        :error -> {:error, {:undecodable, view}}
-      end
+      decoded(view, bytes)
+    end
+  end
+
+  @doc """
+  What `call` would return if the keeper sent it now, without sending it:
+  `collect`'s fees as `{amount0, amount1}`, or `syncLaunch`'s launch state,
+  or `{:error, reason}`, which is `{:revert, selector, args}` when the
+  contract refuses.
+  """
+  def dry_run(%__MODULE__{node: node, wallet: wallet}, %Call{fn: fun} = call)
+      when fun in [:collect, :sync_launch] do
+    with {:ok, data} <- Calls.calldata(call),
+         {:ok, bytes} <- node.call(wallet.address, call.target, data) do
+      decoded(fun, bytes)
+    end
+  end
+
+  defp decoded(name, bytes) do
+    case Calls.decode(name, bytes) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, {:undecodable, name}}
     end
   end
 
@@ -511,16 +537,29 @@ defmodule KeyFleet.Keeper.Sender do
       total = settled + (waiting |> Map.put(nonce, worst_case) |> Map.values() |> Enum.sum())
 
       cond do
-        total <= @spend_ceiling ->
+        total <= @spend_ceiling and sender.ceiling_reached? ->
+          Logger.info("Keeper sends again: its spending over 24 hours is back under 0.01 ETH.")
+
+          Keeper.record_pause(
+            job,
+            :unpaused_spend_ceiling,
+            "spending over 24 hours back under 0.01 ETH"
+          )
+
           {:ok, %{sender | ceiling_reached?: false}}
+
+        total <= @spend_ceiling ->
+          {:ok, sender}
 
         sender.ceiling_reached? ->
           {:error, :spend_ceiling, sender}
 
         true ->
-          Logger.error(
-            "Keeper alert: sending would take the keeper's spending over 24 hours to #{Keeper.eth(total)} ETH, past its 0.01 ETH limit; it sends nothing until that falls."
-          )
+          message =
+            "sending would take the keeper's spending over 24 hours to #{Keeper.eth(total)} ETH, past its 0.01 ETH limit; it sends nothing until that falls."
+
+          Logger.error("Keeper alert: " <> message)
+          Keeper.record_pause(job, :paused_spend_ceiling, message)
 
           :telemetry.execute([:keyfleet, :keeper, :paused], %{count: 1}, %{
             job: job,
@@ -736,13 +775,8 @@ defmodule KeyFleet.Keeper.Sender do
   # replaced.
   defp settled(sender, txs, %Transaction{} = included, receipt) do
     with :ok <- settle_all(Enum.reject(txs, &(&1.id == included.id)), %{status: :replaced}),
-         {:ok, tx} <- settle(included, outcome(receipt)) do
-      if tx.status == :reverted do
-        Logger.error(
-          "Keeper alert: #{tx.function} to #{tx.target} for #{tx.fleet_id} reverted in #{tx.tx_hash}."
-        )
-      end
-
+         {:ok, tx} <- settle(included, outcome(included, receipt)) do
+      alert_outcome(tx)
       sender = %{sender | included_nonce: highest(sender.included_nonce, tx.nonce)}
       {:ok, tx, receipt, report(sender)}
     else
@@ -753,14 +787,33 @@ defmodule KeyFleet.Keeper.Sender do
   defp highest(nil, nonce), do: nonce
   defp highest(included, nonce), do: max(included, nonce)
 
-  defp outcome(receipt) do
+  defp alert_outcome(%{status: :reverted} = tx) do
+    Logger.error(
+      "Keeper alert: #{tx.function} to #{tx.target} for #{tx.fleet_id} reverted in #{tx.tx_hash}."
+    )
+  end
+
+  defp alert_outcome(%{result: "reveal_refused"} = tx) do
+    Logger.error(
+      "Keeper alert: the VRF coordinator refused #{tx.fleet_id}'s reveal of key #{tx.args["arg"]} in #{tx.tx_hash}; #{tx.fleet_id}'s reveals wait an hour."
+    )
+  end
+
+  defp alert_outcome(_tx), do: :ok
+
+  # A mined transaction's result is what its logs say beyond its status.
+  defp outcome(tx, receipt) do
     %{
       status: if(receipt.status == 1, do: :mined, else: :reverted),
       block_number: receipt.block_number,
       gas_used: receipt.gas_used,
       effective_gas_price: receipt.effective_gas_price,
       l1_fee_wei: receipt.l1_fee,
-      cost_wei: cost(receipt)
+      cost_wei: cost(receipt),
+      result:
+        if(receipt.status == 1,
+          do: Calls.result(tx.function, tx.target, tx.args["arg"], receipt.logs)
+        )
     }
   end
 

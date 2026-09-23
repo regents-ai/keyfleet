@@ -209,6 +209,24 @@ defmodule KeyFleet.Keeper.Transaction do
       prepare build(sort: [sent_at: :desc, nonce: :desc, max_fee: :desc], limit: 20)
     end
 
+    # The wallet's transactions calling `function` for the fleet that are
+    # still waiting, or that the chain included since `since`, whether they
+    # succeeded or reverted.
+    read :recent do
+      argument :chain_id, :integer, allow_nil?: false
+      argument :from_address, :string, allow_nil?: false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :function, :atom, allow_nil?: false, constraints: [one_of: @functions]
+      argument :since, :utc_datetime_usec, allow_nil?: false
+
+      filter expr(
+               chain_id == ^arg(:chain_id) and from_address == ^arg(:from_address) and
+                 fleet_id == ^arg(:fleet_id) and function == ^arg(:function) and
+                 (is_nil(status) or
+                    (status in [:mined, :reverted] and settled_at >= ^arg(:since)))
+             )
+    end
+
     # The wallet's settled transaction at the highest nonce on the chain.
     # Every settled nonce was taken on the chain, by this transaction or
     # another, so a node whose latest nonce is not past it is behind.

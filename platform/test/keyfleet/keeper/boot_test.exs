@@ -5,9 +5,10 @@ defmodule KeyFleet.Keeper.BootTest do
 
   import ExUnit.CaptureIO
   import ExUnit.CaptureLog
+  import KeyFleet.KeeperHelpers, only: [answering: 1, deploy!: 3, sent: 0, view!: 1, view!: 2]
 
   alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper, Release, Repo}
+  alias KeyFleet.{ChainHelpers, Fleets, Keeper, Release, Repo}
   alias KeyFleet.Keeper.{Runner, StubNode}
   alias KeyFleet.Keeper.Supervisor, as: KeeperSupervisor
 
@@ -167,6 +168,50 @@ defmodule KeyFleet.Keeper.BootTest do
       assert :binary.match(:erlang.term_to_binary(status), key) == :nomatch
     end
 
+    test "the keeper's reveal round asks for a sold key, and its next rounds do not ask again" do
+      deploy!("fibonacci_syndicate", @fleet, 8_453)
+      ChainHelpers.seed_cursor!("fibonacci_syndicate")
+      coordinator = "0x" <> String.duplicate("c0", 20)
+
+      StubNode.put_chain(
+        calls:
+          answering(%{
+            {@fleet, view!(:vrf_coordinator)} => [coordinator],
+            {@fleet, view!(:vrf_subscription_id)} => [5],
+            {coordinator, view!(:get_subscription, [5])} => [
+              0,
+              20_000_000_000_000_000,
+              0,
+              @other_keeper,
+              160,
+              1,
+              @fleet
+            ],
+            {@fleet, view!(:total_minted)} => [1],
+            {@fleet, view!(:reveal_seed, [1])} => [0],
+            {@fleet, view!(:reveal_requested_at, [1])} => [0],
+            {@fleet, view!(:launch_state)} => [0],
+            {@fleet, view!(:protocol_share_owed)} => [0]
+          })
+      )
+
+      capture_log(fn ->
+        runner = start_supervised!(Runner)
+
+        send(runner, :reveal)
+        :sys.get_state(runner)
+        assert [%{to: @fleet}] = sent()
+
+        # The key was just asked for, so neither round sends anything more.
+        send(runner, :reveal)
+        send(runner, :income)
+        :sys.get_state(runner)
+        assert [_request] = sent()
+      end)
+
+      assert [%{job: :reveal, outcome: :sent, sent: 1}] = Ash.read!(Keeper.Run, actor: %System{})
+    end
+
     test "the status command shows the wallet, its spending, its rounds and transactions" do
       Keeper.record_run!(
         %{
@@ -180,7 +225,7 @@ defmodule KeyFleet.Keeper.BootTest do
         actor: %System{}
       )
 
-      deploy!()
+      deploy!("fibonacci_syndicate", @fleet, 8_453)
       tx = sent!()
 
       other_wallet =
@@ -198,7 +243,8 @@ defmodule KeyFleet.Keeper.BootTest do
           gas_used: 100_000,
           effective_gas_price: 10_000_000,
           l1_fee_wei: 1_000,
-          cost_wei: 1_000_000_001_000
+          cost_wei: 1_000_000_001_000,
+          result: "reveal_refused"
         })
 
       output = capture_io(fn -> Release.keeper_status!() end)
@@ -213,7 +259,7 @@ defmodule KeyFleet.Keeper.BootTest do
       assert output =~ ~r/income: stopped at \S+ \S+, 0 sent, 0 skipped\n/
 
       assert output =~
-               ~r/Last 20 transactions:\n\S+ \S+ reveal fibonacci_syndicate request_reveal #{@fleet} nonce 0 mined #{tx.tx_hash}\n/
+               ~r/Last 20 transactions:\n\S+ \S+ reveal fibonacci_syndicate request_reveal #{@fleet} nonce 0 mined reveal_refused #{tx.tx_hash}\n/
 
       refute output =~ other_wallet.tx_hash
       refute output =~ other_chain.tx_hash
@@ -270,23 +316,6 @@ defmodule KeyFleet.Keeper.BootTest do
         Process.sleep(5)
         next_runner(old)
     end
-  end
-
-  defp deploy! do
-    "fibonacci_syndicate"
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8_453,
-        contract_address: @fleet,
-        rewards_address: "0x" <> String.duplicate("7", 40),
-        votes_address: "0x" <> String.duplicate("8", 40),
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %System{}
-    )
   end
 
   defp sent!(attrs \\ %{}) do

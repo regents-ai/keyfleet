@@ -1,9 +1,10 @@
 defmodule KeyFleet.Keeper.Run do
   @moduledoc """
   One round of a keeper job that sent something, or where a pause began or
-  ended. Rounds that change nothing leave no record. A run is written once,
-  when it ends, and never changed or deleted. Only the keeper reads or writes
-  here.
+  ended: each `:paused_*` outcome has its `:unpaused_*`, and a VRF balance
+  pause names its fleet. Rounds that change nothing leave no record. A run
+  is written once, when it ends, and never changed or deleted. Only the
+  keeper reads or writes here.
 
   A run `:stopped` with a `stop_reason` stops the keeper, across restarts,
   until a later run `:resumed` clears it; `bin/keeper-resume` writes that.
@@ -15,15 +16,15 @@ defmodule KeyFleet.Keeper.Run do
 
   @bigint 9_223_372_036_854_775_807
   @jobs [:reveal, :income]
-  @outcomes [
-    :sent,
+  @pause_outcomes [
     :paused_gas,
+    :unpaused_gas,
     :paused_vrf_balance,
+    :unpaused_vrf_balance,
     :paused_spend_ceiling,
-    :stopped,
-    :resumed,
-    :error
+    :unpaused_spend_ceiling
   ]
+  @outcomes [:sent | @pause_outcomes] ++ [:stopped, :resumed, :error]
   @stop_reasons [:foreign_nonce, :replaced_externally, :tx_hash_mismatch]
 
   postgres do
@@ -46,6 +47,12 @@ defmodule KeyFleet.Keeper.Run do
       # A stop, and only a stop, says why.
       check_constraint(:stop_reason, "keeper_runs_stop_has_reason",
         check: "(outcome = 'stopped') = (stop_reason IS NOT NULL)"
+      )
+
+      # A VRF balance pause, and only one, names its fleet.
+      check_constraint(:fleet_id, "keeper_runs_vrf_balance_has_fleet",
+        check:
+          "(outcome IN ('paused_vrf_balance', 'unpaused_vrf_balance')) = (fleet_id IS NOT NULL)"
       )
 
       check_constraint(:finished_at, "keeper_runs_finished_after_start",
@@ -109,8 +116,36 @@ defmodule KeyFleet.Keeper.Run do
       prepare build(sort: [finished_at: :desc], limit: 1)
     end
 
+    # The latest start or end of one kind of pause, given as its two
+    # outcomes, for `fleet_id` when that kind names a fleet.
+    read :pause_state do
+      argument :outcomes, {:array, :atom},
+        allow_nil?: false,
+        constraints: [items: [one_of: @pause_outcomes]]
+
+      argument :fleet_id, :string
+      get? true
+
+      filter expr(
+               outcome in ^arg(:outcomes) and
+                 (is_nil(^arg(:fleet_id)) or fleet_id == ^arg(:fleet_id))
+             )
+
+      prepare build(sort: [finished_at: :desc], limit: 1)
+    end
+
     create :record do
-      accept [:job, :started_at, :finished_at, :outcome, :stop_reason, :sent, :skipped, :notes]
+      accept [
+        :job,
+        :started_at,
+        :finished_at,
+        :outcome,
+        :stop_reason,
+        :fleet_id,
+        :sent,
+        :skipped,
+        :notes
+      ]
     end
   end
 
@@ -135,5 +170,9 @@ defmodule KeyFleet.Keeper.Run do
     end
 
     attribute :notes, :string, constraints: [max_length: 2000, trim?: false]
+  end
+
+  relationships do
+    belongs_to :fleet, KeyFleet.Fleets.Fleet, attribute_type: :string
   end
 end

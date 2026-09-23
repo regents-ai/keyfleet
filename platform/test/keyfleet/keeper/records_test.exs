@@ -153,6 +153,43 @@ defmodule KeyFleet.Keeper.RecordsTest do
       assert %{status: nil, result: nil} = Ash.get!(Transaction, tx.id, actor: @system)
     end
 
+    test "those for a fleet's function are found while waiting, or by when they were included" do
+      mined = settled!(tx_attrs(tx_hash: hash("mined")), mined())
+
+      reverted =
+        settled!(
+          tx_attrs(tx_hash: hash("reverted"), nonce: 1),
+          mined(status: :reverted, result: nil)
+        )
+
+      settled!(tx_attrs(tx_hash: hash("replaced"), nonce: 2), %{status: :replaced})
+
+      waiting =
+        Keeper.record_sent_tx!(tx_attrs(tx_hash: hash("waiting"), nonce: 3), actor: @system)
+
+      for {overrides, n} <-
+            Enum.with_index([
+              [from_address: "0x" <> String.duplicate("1", 40)],
+              [chain_id: 1],
+              [function: :send_protocol_share, job: :income, args: %{"arg" => nil}],
+              [fleet_id: "fibonacci_cascade"]
+            ]) do
+        settled!(tx_attrs([tx_hash: hash("other #{n}"), nonce: 10 + n] ++ overrides), mined())
+      end
+
+      recent = fn since ->
+        {:ok, txs} =
+          Keeper.list_recent_txs(8453, @keeper, @fleet, :request_reveal, since, actor: @system)
+
+        txs |> Enum.map(& &1.id) |> Enum.sort()
+      end
+
+      assert recent.(DateTime.add(DateTime.utc_now(), -60)) ==
+               Enum.sort([mined.id, reverted.id, waiting.id])
+
+      assert recent.(DateTime.add(DateTime.utc_now(), 60)) == [waiting.id]
+    end
+
     test "settling one that was never recorded finds nothing" do
       assert Keeper.settle(%Transaction{id: Ash.UUID.generate()}, mined()) ==
                {:error, :not_found}
@@ -239,6 +276,11 @@ defmodule KeyFleet.Keeper.RecordsTest do
 
   defp sent! do
     Keeper.record_sent_tx!(tx_attrs(tx_hash: hash(Ash.UUID.generate())), actor: @system)
+  end
+
+  defp settled!(attrs, outcome) do
+    {:ok, tx} = Keeper.settle(Keeper.record_sent_tx!(attrs, actor: @system), outcome)
+    tx
   end
 
   defp tx_attrs(overrides \\ []) do

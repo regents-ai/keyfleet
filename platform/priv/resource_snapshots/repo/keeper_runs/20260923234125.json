@@ -1,0 +1,251 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "job",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "started_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "finished_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "outcome",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "stop_reason",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "sent",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "skipped",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "notes",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "keeper_runs_fleet_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "fleets"
+      },
+      "scale": null,
+      "size": null,
+      "source": "fleet_id",
+      "type": "text"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "job"
+      ],
+      "base_filter": null,
+      "check": "job IN ('reveal', 'income')",
+      "name": "keeper_runs_job"
+    },
+    {
+      "attribute": [
+        "outcome"
+      ],
+      "base_filter": null,
+      "check": "outcome IN ('sent', 'paused_gas', 'unpaused_gas', 'paused_vrf_balance', 'unpaused_vrf_balance', 'paused_spend_ceiling', 'unpaused_spend_ceiling', 'stopped', 'resumed', 'error')",
+      "name": "keeper_runs_outcome"
+    },
+    {
+      "attribute": [
+        "stop_reason"
+      ],
+      "base_filter": null,
+      "check": "stop_reason IN ('foreign_nonce', 'replaced_externally', 'tx_hash_mismatch')",
+      "name": "keeper_runs_stop_reason"
+    },
+    {
+      "attribute": [
+        "stop_reason"
+      ],
+      "base_filter": null,
+      "check": "(outcome = 'stopped') = (stop_reason IS NOT NULL)",
+      "name": "keeper_runs_stop_has_reason"
+    },
+    {
+      "attribute": [
+        "fleet_id"
+      ],
+      "base_filter": null,
+      "check": "(outcome IN ('paused_vrf_balance', 'unpaused_vrf_balance')) = (fleet_id IS NOT NULL)",
+      "name": "keeper_runs_vrf_balance_has_fleet"
+    },
+    {
+      "attribute": [
+        "finished_at"
+      ],
+      "base_filter": null,
+      "check": "finished_at >= started_at",
+      "name": "keeper_runs_finished_after_start"
+    },
+    {
+      "attribute": [
+        "sent"
+      ],
+      "base_filter": null,
+      "check": "sent >= 0",
+      "name": "keeper_runs_nonnegative_sent"
+    },
+    {
+      "attribute": [
+        "skipped"
+      ],
+      "base_filter": null,
+      "check": "skipped >= 0",
+      "name": "keeper_runs_nonnegative_skipped"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP FUNCTION keyfleet_app.refuse_keeper_run_change();",
+      "global?": false,
+      "name": "keeper_runs_function",
+      "up": "CREATE FUNCTION keyfleet_app.refuse_keeper_run_change() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  RAISE EXCEPTION 'keeper runs cannot be changed or deleted' USING ERRCODE = '23514';\nEND;\n$$;\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER immutable_keeper_runs ON keyfleet_app.keeper_runs;",
+      "global?": false,
+      "name": "keeper_runs_trigger",
+      "up": "CREATE TRIGGER immutable_keeper_runs BEFORE UPDATE OR DELETE ON keyfleet_app.keeper_runs\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_keeper_run_change();\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER untruncatable_keeper_runs ON keyfleet_app.keeper_runs;",
+      "global?": false,
+      "name": "untruncatable_keeper_runs_trigger",
+      "up": "CREATE TRIGGER untruncatable_keeper_runs BEFORE TRUNCATE ON keyfleet_app.keeper_runs\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_keeper_run_change();\n"
+    }
+  ],
+  "has_create_action": true,
+  "hash": "4057AD6E5C1834EF71A6E5425A071C9F4DB0853B5AEFB907EE73D27E526D0654",
+  "identities": [],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.KeyFleet.Repo",
+  "schema": null,
+  "table": "keeper_runs"
+}
