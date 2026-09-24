@@ -12,6 +12,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Accounts.LinkedIdentity.Providers
   alias KeyFleet.Actors.Human
   alias KeyFleet.Chain
+  alias KeyFleet.Chain.RewardsWaiting
   alias KeyFleet.Fleets
   alias KeyFleet.Fleets.Presets
   alias KeyFleet.Graph
@@ -343,6 +344,13 @@ defmodule KeyFleetWeb.ShellLive do
 
   def handle_info({:check_proposals, _ref}, socket), do: {:noreply, socket}
 
+  # A read for a key no longer open is dropped.
+  @impl true
+  def handle_async(:rewards, result, %{assigns: %{key_profile: %{issued?: true}}} = socket),
+    do: {:noreply, update(socket, :key_profile, &%{&1 | rewards: rewards_shown(result)})}
+
+  def handle_async(:rewards, _result, socket), do: {:noreply, socket}
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -437,6 +445,8 @@ defmodule KeyFleetWeb.ShellLive do
           fleet_id: fleet_id,
           name: fleet.name,
           contract_address: fleet.contract_address,
+          rewards_address: fleet.rewards_address,
+          usdc_address: fleet.usdc_address,
           deployed?: deployed?,
           current?: current?,
           progress: progress,
@@ -552,11 +562,40 @@ defmodule KeyFleetWeb.ShellLive do
         send_key: Ash.UUID.generate()
       })
     )
+    |> read_rewards(before)
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
 
   defp load_key_profile(socket, _before),
     do: socket |> assign(:key_profile, nil) |> stream(:key_thread, [], reset: true)
+
+  # What an issued key has waiting is read from the chain once the window is
+  # open, so the window never waits for the chain. The same key shown again
+  # keeps the figure it has.
+  defp read_rewards(
+         %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
+         %{
+           key_profile: %{fleet_id: fleet_id, token_id: token_id, rewards: {:ok, _amount} = shown}
+         }
+       ),
+       do: update(socket, :key_profile, &Map.put(&1, :rewards, shown))
+
+  defp read_rewards(
+         %{assigns: %{fleet: fleet, key_profile: %{issued?: true, token_id: token_id}}} = socket,
+         _before
+       ) do
+    rewards = Map.take(fleet, [:fleet_id, :rewards_address, :usdc_address])
+    client = Chain.Client.configured()
+
+    socket
+    |> update(:key_profile, &Map.put(&1, :rewards, :reading))
+    |> start_async(:rewards, fn -> RewardsWaiting.read(rewards, token_id, client) end)
+  end
+
+  defp read_rewards(socket, _before), do: socket
+
+  defp rewards_shown({:ok, {:ok, amount}}), do: {:ok, amount}
+  defp rewards_shown(_failed), do: :failed
 
   # The messages written to a key; the next key on sale has none yet.
   defp key_thread(%{issued?: true, thread: thread}), do: thread
@@ -586,6 +625,7 @@ defmodule KeyFleetWeb.ShellLive do
         |> Map.delete(:thread)
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
       )
+      |> read_rewards(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
       recheck_composer(socket)

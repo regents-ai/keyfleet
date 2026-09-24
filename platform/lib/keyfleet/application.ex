@@ -15,6 +15,9 @@ defmodule KeyFleet.Application do
         {KeyFleet.Accounts.RequestRateLimiter, []},
         database_child(),
         {Phoenix.PubSub, name: KeyFleet.PubSub},
+        # A key's profile reads its rewards wherever the site runs, so their
+        # table stands apart from the fleets' readers below.
+        KeyFleet.Chain.RewardsWaiting,
         chain_child(),
         keeper_child(),
         graph_children(),

@@ -1,6 +1,6 @@
 import {expect, test, type Browser, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {prepareFleet, sellKey} from "./support/fleet_chain"
+import {offerRewards, prepareFleet, sellKey} from "./support/fleet_chain"
 
 // A key's profile opens over its fleet's page: from the key list, from the
 // map, or straight from an address naming the key. Every run starts from the
@@ -117,6 +117,31 @@ test.describe("a key's profile", () => {
       await openFleet(other, `?key=${key}`)
       return other
     }
+  })
+
+  test("shows the rewards waiting for the key once they are read", async ({page}) => {
+    const key = sellKey(fleet, me)
+    offerRewards(fleet, key, 2_500_000)
+    const errors = await signIn(page)
+    await openFleet(page, `?key=${key}`)
+
+    await expect(page.locator("#key-profile-rewards")).toHaveText("2.5 USDC")
+    expect(errors).toEqual([])
+  })
+
+  test("says so when the rewards can't be read, and the rest of it still works", async ({page}) => {
+    const key = sellKey(fleet, me)
+    const errors = await signIn(page)
+    await openFleet(page, `?key=${key}`)
+
+    await expect(page.locator("#key-profile-rewards")).toHaveText("Couldn’t read rewards right now.")
+    await page.locator("#key-profile-composer-body").fill("Rewards later")
+    await page.locator("#key-profile-composer button[type=submit]").click()
+    await expect(page.locator("#key-profile-thread")).toContainText("Rewards later")
+
+    await page.locator("#key-profile-close").click()
+    await expect(profile(page)).toHaveCount(0)
+    expect(errors).toEqual([])
   })
 
   test.describe("its foil card", () => {

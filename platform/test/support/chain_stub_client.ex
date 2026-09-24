@@ -7,6 +7,11 @@ defmodule KeyFleet.Chain.StubClient do
 
   Like a real node, it knows nothing above its head: a head behind the logs
   stands for a node that has not caught up.
+
+  A process a test starts, such as a page's background read, answers with
+  the chain of the test that started it. The browser test server, whose pages
+  no test starts, shares one chain with all of them (`share_chain/2`). Each
+  process keeps the requests it made itself.
   """
 
   @behaviour KeyFleet.Chain.Client
@@ -24,8 +29,17 @@ defmodule KeyFleet.Chain.StubClient do
   `observations/0` returns, and `:calls`, a function answering each contract
   read `call(to, data, block_hash)`, which by default answers none.
   """
-  def put_chain(head, logs, opts \\ []) do
-    Process.put(__MODULE__, %{
+  def put_chain(head, logs, opts \\ []), do: Process.put(__MODULE__, new_chain(head, logs, opts))
+
+  @doc """
+  Puts the chain that every process answers with when neither it nor any
+  process that started it put one, as `put_chain/3` does. For the browser
+  test server only.
+  """
+  def share_chain(head, opts), do: :persistent_term.put(__MODULE__, new_chain(head, [], opts))
+
+  defp new_chain(head, logs, opts) do
+    %{
       head: head,
       logs: logs,
       chain_id: Keyword.get(opts, :chain_id, 8_453),
@@ -36,7 +50,7 @@ defmodule KeyFleet.Chain.StubClient do
       log_requests: [],
       call_requests: [],
       observations: []
-    })
+    }
   end
 
   @doc "Every `get_logs/4` request since `put_chain/3`, oldest first."
@@ -98,7 +112,20 @@ defmodule KeyFleet.Chain.StubClient do
     chain.calls.(to, data, block_hash)
   end
 
-  defp chain, do: Process.get(__MODULE__) || raise("call put_chain/2 before reading the chain")
+  defp chain do
+    Enum.find_value([self() | Process.get(:"$callers", [])], &put_by/1) ||
+      :persistent_term.get(__MODULE__, nil) ||
+      raise("call put_chain/2 before reading the chain")
+  end
+
+  defp put_by(pid) when pid == self(), do: Process.get(__MODULE__)
+
+  defp put_by(pid) do
+    case Process.info(pid, :dictionary) do
+      {:dictionary, dictionary} -> dictionary[__MODULE__]
+      nil -> nil
+    end
+  end
 
   defp quantity("0x" <> hex), do: String.to_integer(hex, 16)
 end

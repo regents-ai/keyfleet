@@ -373,6 +373,8 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
         refute_patched(view)
       end
 
+      # Key 12 is sold, so its profile asks the chain what it has waiting.
+      StubClient.put_chain(chain_head(1_000), [])
       render_patch(view, @path <> "?key=12")
       assert_push_event(view, "keymap:select", %{token_id: 12})
       assert text(view, "#key-map-selected") == "Key 12 chosen."

@@ -12,6 +12,11 @@ defmodule KeyFleet.BrowserChain do
   The server holds its database in one transaction for as long as it runs
   (`hold_database!/0`), and the transaction is never committed, so every run
   starts from the same unsold fleets.
+
+  The pages' own chain reads, of the rewards waiting for a key, are answered
+  by one chain the server's pages share: a key offered rewards
+  (`offer_rewards!/3`) has them waiting, and for any other key the node
+  fails.
   """
 
   alias KeyFleet.Actors.Agent
@@ -29,6 +34,8 @@ defmodule KeyFleet.BrowserChain do
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
+  # cast sig "accrued(address,uint256)"
+  @accrued <<0xBF, 0xE8, 0x7F, 0x4D>>
   @operator %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
@@ -76,7 +83,28 @@ defmodule KeyFleet.BrowserChain do
     end
 
     pass!(fleet_id, [])
+
+    StubClient.share_chain(
+      %{number: 1, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()},
+      calls: &answer_rewards/3
+    )
+
     minted(fleet_id)
+  end
+
+  @doc "Key `token_id` of the fleet has `amount` atomic USDC waiting from now on."
+  def offer_rewards!(fleet_id, token_id, amount) do
+    %{rewards_address: rewards} = Fleets.get_fleet!(fleet_id)
+    :persistent_term.put(__MODULE__, Map.put(offered_rewards(), {rewards, token_id}, amount))
+  end
+
+  defp offered_rewards, do: :persistent_term.get(__MODULE__, %{})
+
+  defp answer_rewards(rewards, <<@accrued, _usdc::binary-size(32), token_id::256>>, _block_hash) do
+    case Map.fetch(offered_rewards(), {rewards, token_id}) do
+      {:ok, amount} -> {:ok, <<amount::256>>}
+      :error -> {:error, :chain_unavailable}
+    end
   end
 
   @doc "Sells the fleet's next key to `owner`; returns its number."

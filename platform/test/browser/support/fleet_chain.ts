@@ -42,5 +42,9 @@ export const fillLevel = (fleet: string, owner: string) => JSON.parse(call("fill
 /** Moves a key to `owner`. */
 export const moveKey = (fleet: string, key: number, owner: string) => void call("transfer!", [fleet, key, owner])
 
+/** A key has `atoms` USDC waiting from now on; any other key's rewards can't be read. */
+export const offerRewards = (fleet: string, key: number, atoms: number) =>
+  void call("offer_rewards!", [fleet, key, atoms])
+
 /** An agent asks to run a key, and its owner approves. */
 export const pairKey = (fleet: string, key: number) => void call("pair!", [fleet, key])

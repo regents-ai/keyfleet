@@ -5,6 +5,8 @@ defmodule KeyFleetWeb.Live.KeyProfileTest do
 
   alias KeyFleet.Accounts
   alias KeyFleet.Actors
+  alias KeyFleet.Chain.RewardsWaiting
+  alias KeyFleet.Chain.StubClient
   alias KeyFleet.ChainHelpers
   alias KeyFleet.Fleets
   alias KeyFleet.Keys
@@ -16,10 +18,13 @@ defmodule KeyFleetWeb.Live.KeyProfileTest do
   @fleet "fibonacci_cascade"
   @path "/app/fleets/fibonacci_cascade"
   @system %Actors.System{}
+  @rewards "0x" <> String.duplicate("8", 40)
 
   # Key 12 was sold to a and passed to e, who also holds keys 3 and 20. Keys 1
-  # to 20 are sold, so key 21 is the next on sale.
+  # to 20 are sold, so key 21 is the next on sale. No key has rewards waiting.
   setup do
+    :ets.delete_all_objects(RewardsWaiting)
+    rewards_answer(fn _to, _data, _block_hash -> {:ok, <<0::256>>} end)
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!()
     deploy!()
@@ -210,6 +215,100 @@ defmodule KeyFleetWeb.Live.KeyProfileTest do
 
     refute has_element?(view, "#key-profile-key-3")
     assert text(view, "#key-profile-holder-keys") == "3"
+  end
+
+  describe "the rewards waiting for the key" do
+    test "are read once the window is open, which never waits for them", %{conn: conn} do
+      test = self()
+
+      rewards_answer(fn _to, _data, _block_hash ->
+        send(test, {:reading, self()})
+
+        receive do
+          :answer -> {:ok, <<2_500_000::256>>}
+        end
+      end)
+
+      assert conn |> get(@path <> "?key=12") |> html_response(200) =~ "Reading…"
+      refute_received {:reading, _reader}
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      assert_receive {:reading, reader}
+      assert text(view, "#key-profile-rewards") == "Reading…"
+      assert text(view, "#key-profile-holder") == "0xeeee…eeee"
+
+      send(reader, :answer)
+      render_async(view)
+      assert text(view, "#key-profile-rewards") == "2.5 USDC"
+    end
+
+    test "opening the key ten times within 30 seconds reads the chain once", %{conn: conn} do
+      test = self()
+
+      rewards_answer(fn to, _data, _block_hash ->
+        send(test, {:read, to})
+        {:ok, <<1_000_000::256>>}
+      end)
+
+      for _opening <- 1..10 do
+        {:ok, view, _html} = live(conn, @path <> "?key=12")
+        render_async(view)
+        assert text(view, "#key-profile-rewards") == "1 USDC"
+      end
+
+      assert_received {:read, @rewards}
+      refute_received {:read, _rewards}
+    end
+
+    test "a read that fails says so, and the rest of the window still works", %{conn: conn} do
+      rewards_answer(fn _to, _data, _block_hash -> {:error, :chain_unavailable} end)
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+
+      render_async(view)
+      assert text(view, "#key-profile-rewards") == "Couldn’t read rewards right now."
+      assert text(view, "#key-profile-holder") == "0xeeee…eeee"
+
+      view
+      |> form("#key-profile-composer", post: %{body: "Hull survey started"})
+      |> render_submit()
+
+      assert has_element?(view, "#key-profile-thread li", "Hull survey started")
+    end
+
+    test "only the key on show takes its answer", %{conn: conn} do
+      test = self()
+
+      rewards_answer(fn _to, <<_selector::32, _usdc::256, token_id::256>>, _block_hash ->
+        send(test, {:reading, token_id, self()})
+
+        receive do
+          :answer -> {:ok, <<token_id * 1_000_000::256>>}
+        end
+      end)
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      assert_receive {:reading, 12, key_12}
+      view |> element("#key-profile-key-3") |> render_click()
+      assert_receive {:reading, 3, key_3}
+
+      finished = Process.monitor(key_12)
+      send(key_12, :answer)
+      assert_receive {:DOWN, ^finished, :process, _pid, _reason}
+      assert text(view, "#key-profile-rewards") == "Reading…"
+
+      send(key_3, :answer)
+      render_async(view)
+      assert text(view, "#key-profile-rewards") == "3 USDC"
+    end
+  end
+
+  # What the fleet's rewards contract answers, at a head the chain has.
+  defp rewards_answer(calls) do
+    StubClient.put_chain(
+      %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
+      [],
+      calls: calls
+    )
   end
 
   defp deploy! do

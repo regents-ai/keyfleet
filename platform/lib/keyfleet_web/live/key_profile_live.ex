@@ -155,6 +155,10 @@ defmodule KeyFleetWeb.KeyProfileLive do
           <dd>{FleetLive.usdc(@profile.issue_price)}</dd>
         </div>
         <div>
+          <dt>Rewards waiting</dt>
+          <dd id="key-profile-rewards" aria-live="polite">{rewards(@profile.rewards)}</dd>
+        </div>
+        <div>
           <dt>Held since</dt>
           <dd id="key-profile-held-since">{day(@profile.held_since)}</dd>
         </div>
@@ -360,6 +364,11 @@ defmodule KeyFleetWeb.KeyProfileLive do
 
   defp held_by(%{yours?: true}), do: "You"
   defp held_by(%{holder: wallet}), do: FleetLive.short_wallet(wallet)
+
+  # The USDC the key has earned and not yet paid out, read after the window opens.
+  defp rewards(:reading), do: "Reading…"
+  defp rewards({:ok, amount}), do: FleetLive.usdc(amount)
+  defp rewards(:failed), do: "Couldn’t read rewards right now."
 
   defp times(0), do: "Never"
   defp times(1), do: "Once"
