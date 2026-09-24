@@ -689,7 +689,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
 
   test "the fleet's page leads to its proposals", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
-    assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "See the proposals")
+    assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "Proposals")
   end
 
   # Every wallet button reaches the wallet whatever the page shows: what the

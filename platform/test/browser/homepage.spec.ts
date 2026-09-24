@@ -33,7 +33,7 @@ const waitForHomepage = async (page: Page) => {
 const waitForPreviews = (page: Page) =>
   expect
     .poll(() =>
-      page.locator(".rl-fleet-preview").evaluateAll(elements =>
+      page.locator(".key-map-preview").evaluateAll(elements =>
         elements.map(element => element.querySelectorAll("svg polygon").length > 0),
       ),
     )
@@ -66,8 +66,8 @@ test("the homepage reads without scripts: what a fleet is, then every fleet and 
     await expect(card.getByRole("heading", {level: 3})).toHaveText(name)
     await expect(card.locator("a.rl-fleet-card__link")).toHaveAttribute("href", `/app/fleets/${id}`)
     await expect(card.locator("a.rl-fleet-card__link")).not.toHaveAttribute("target", /.+/)
-    await expect(card.locator(".rl-fleet-preview")).toHaveAttribute("data-layout", layout)
-    await expect(card.locator(".rl-fleet-preview")).toHaveAttribute("aria-hidden", "true")
+    await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
+    await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
     await expect(card.locator("[data-fleet-progress]")).not.toBeEmpty()
   }
 

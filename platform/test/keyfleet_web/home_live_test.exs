@@ -42,7 +42,7 @@ defmodule KeyFleetWeb.HomeLiveTest do
              "144 keys, every one at 10 USDC."
            )
 
-    assert attribute(html, ".rl-fleet-preview", "data-layout") ==
+    assert attribute(html, ".key-map-preview", "data-layout") ==
              ~w(fibonacci fibonacci classic accelerant)
   end
 

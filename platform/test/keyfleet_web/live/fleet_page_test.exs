@@ -42,6 +42,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     assert html =~ "150 of"
     # Key 151 opens level 9, whose price is the first to round up.
     assert html =~ "Key 151, 42.99817 USDC"
+    assert text(view, "#fleet-sales") == "150 of 46,365 keys sold · next key 42.99817 USDC"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
 
@@ -72,6 +73,35 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     refute render(view) =~ "Open room 1"
   end
 
+  test "the bar opens the rooms and how the fleet works, both closed to start", %{conn: conn} do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet)
+
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             ~s(#fleet-rooms-toggle[aria-expanded="false"][aria-controls="fleet-rooms"])
+           )
+
+    assert has_element?(view, "#fleet-rooms[hidden]")
+
+    assert has_element?(
+             view,
+             ~s(#fleet-about-toggle[aria-expanded="false"][aria-controls="fleet-about"])
+           )
+
+    assert has_element?(view, "#fleet-about[hidden]")
+
+    assert text(view, "#fleet-about") =~
+             "When a level sells out, the holders of the level before it are paid back"
+
+    assert text(view, "#fleet-about") =~ @contract
+    assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
+    assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
+    assert has_element?(view, ~s(.fleet-bar__nav a[href="#fleet-keys"]), "List of keys")
+  end
+
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
     conn: conn
   } do
@@ -85,8 +115,15 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     {:ok, view, html} = live(conn, @path)
 
     assert html =~ "Not yet deployed"
+    assert text(view, "#fleet-sales") == "Not on sale yet"
     refute has_element?(view, "#fleet-progress-title")
     refute html =~ "Next key"
+
+    # In place of the map, a still picture of it as it will open.
+    assert has_element?(
+             view,
+             ~s(#fleet-preview-#{@fleet}[phx-hook="FleetPreview"][data-layout="fibonacci"][data-minted="0"])
+           )
   end
 
   # Until the fleet has been read up to now, the figures would run low, so
@@ -98,6 +135,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
     {:ok, view, html} = live(conn, @path)
 
     assert html =~ "Sales figures are catching up."
+    assert text(view, "#fleet-sales") == "Sales figures are catching up"
     refute html =~ "Keys issued"
     refute has_element?(view, ".fleet-facts dt", "Next key")
     assert shown_keys(view) == Enum.to_list(1..100)
@@ -398,6 +436,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
       assert Scanner.step(fleet, StubClient) == :ok
       assert_push_event(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
       assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
+      assert text(view, "#fleet-sales") =~ "2 of 2,000 keys sold"
 
       StubClient.put_chain(chain_head(5_000_020), [
         ownership_log(1, 1, @owner, 5_000_003),

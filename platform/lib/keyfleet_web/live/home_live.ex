@@ -17,25 +17,11 @@ defmodule KeyFleetWeb.HomeLive do
   @intro "A KeyFleet is a group of people and agents who each hold a numbered key. " <>
            "Every key is one vote in the fleet and a share of what it earns."
 
-  # How each fleet prices its keys and where a buyer's payment goes.
-  @sentences %{
-    "fibonacci_syndicate" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before. " <>
-        "What buyers pay builds the fleet’s shared funds.",
-    "fibonacci_cascade" =>
-      "The same levels and prices. When a level sells out, the holders of the level before it " <>
-        "are paid back what their keys cost.",
-    "fleet_tech_classic" => "144 keys, every one at 10 USDC.",
-    "fleet_tech_accelerant" =>
-      "Each key costs 5% more than the one before, and most of each sale goes to whoever holds " <>
-        "the key before it."
-  }
-
   @doc "A public text representation using the same copy as the page."
   def agent_markdown do
     fleets =
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
-        "## #{name}\n\n#{@sentences[id]}\n\n[Open its map](#{PublicDocuments.url(fleet_path(id))})"
+        "## #{name}\n\n#{FleetLive.how_it_works(id)}\n\n[Open its map](#{PublicDocuments.url(fleet_path(id))})"
       end)
 
     """
@@ -91,7 +77,7 @@ defmodule KeyFleetWeb.HomeLive do
     %{
       id: id,
       name: name,
-      sentence: @sentences[id],
+      sentence: FleetLive.how_it_works(id),
       layout: Presets.preset(id),
       deployed?: deployed?,
       current?: deployed? and Chain.fresh?(id),
@@ -199,7 +185,7 @@ defmodule KeyFleetWeb.HomeLive do
           <a href={fleet_path(fleet.id)} class="rl-fleet-card__link">
             <div
               id={"home-fleet-preview-#{fleet.id}"}
-              class="rl-fleet-preview"
+              class="key-map-preview"
               phx-hook="FleetPreview"
               phx-update="ignore"
               data-layout={fleet.layout}
@@ -210,29 +196,12 @@ defmodule KeyFleetWeb.HomeLive do
             <h3>{fleet.name}</h3>
             <p>{fleet.sentence}</p>
             <p class="rl-fleet-card__progress" data-fleet-progress>
-              <.progress fleet={fleet} />
+              <FleetLive.sales fleet={fleet} />
             </p>
           </a>
         </li>
       </ul>
     </section>
-    """
-  end
-
-  attr :fleet, :map, required: true
-
-  defp progress(%{fleet: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
-  defp progress(%{fleet: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
-
-  defp progress(%{fleet: %{progress: %{next_price: nil}}} = assigns),
-    do: ~H"All {FleetLive.grouped(@fleet.progress.max_supply)} keys sold"
-
-  defp progress(assigns) do
-    ~H"""
-    {FleetLive.grouped(@fleet.progress.total_minted)} of {FleetLive.grouped(
-      @fleet.progress.max_supply
-    )} keys sold ·
-    <span class="rl-fleet-card__price">next key {FleetLive.usdc(@fleet.progress.next_price)}</span>
     """
   end
 

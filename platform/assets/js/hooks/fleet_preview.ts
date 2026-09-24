@@ -7,10 +7,10 @@ type FleetPreviewHook = {
 }
 
 /**
- * A fleet card's still preview of the fleet's map. The drawing loads as its
- * own chunk and is drawn again whenever the page changes `data-minted`.
- * Mount it on a `phx-update="ignore"` element carrying `data-layout` and
- * `data-minted`.
+ * A still picture of a fleet's map, on its homepage card and on the page of
+ * a fleet not yet on sale. The drawing loads as its own chunk and is drawn
+ * again whenever the page changes `data-minted`. Mount it on a
+ * `phx-update="ignore"` element carrying `data-layout` and `data-minted`.
  */
 export const FleetPreview: Hook = {
   mounted(this: FleetPreviewHook) {

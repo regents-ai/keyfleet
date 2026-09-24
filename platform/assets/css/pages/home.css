@@ -57,20 +57,9 @@
   .rl-fleet-card__link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
   .rl-fleet-card h3 { font-family: var(--font-family-title); font-size: 1.375rem; font-weight: 400; line-height: 1.15; }
   .rl-fleet-card p { font-size: .9375rem; line-height: 1.45; }
-  .rl-fleet-card__price { white-space: nowrap; }
   .rl-fleet-card__progress { padding-block-start: var(--space-1); border-block-start: 1px solid var(--rl-line); color: var(--rl-muted); font-variant-numeric: tabular-nums; }
 
-  /* A still drawing of the fleet's map, in the map's own tones and marks. */
-  .rl-fleet-preview { aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid var(--rl-line); background: var(--ash-ground); }
-  .rl-fleet-preview svg { display: block; width: 100%; height: 100%; }
-  .rl-fleet-preview polygon { --km-tone: var(--km-tone-0); --km-face: var(--km-tone); --km-rim: var(--km-face); fill: var(--km-face); stroke: var(--km-rim); stroke-width: 1.5; }
-  .rl-fleet-preview polygon[data-tone="1"] { --km-tone: var(--km-tone-1); }
-  .rl-fleet-preview polygon[data-tone="2"] { --km-tone: var(--km-tone-2); }
-  .rl-fleet-preview polygon[data-tone="3"] { --km-tone: var(--km-tone-3); }
-  .rl-fleet-preview polygon[data-tone] { --km-rim: color-mix(in oklch, var(--ash-ink) 16%, var(--km-tone)); }
-  .rl-fleet-preview polygon[data-level="on-sale"] { --km-face: color-mix(in oklch, var(--ash-accent) 22%, var(--km-tone)); }
-  .rl-fleet-preview polygon[data-state="unsold"] { --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground)); --km-rim: var(--km-face); }
-  .rl-fleet-preview polygon[data-state="next"] { --km-rim: var(--palette-tangerine-tango); --km-face: var(--ash-ground); stroke-width: 2.5; }
+  .rl-fleet-card .key-map-preview { aspect-ratio: 16 / 10; border: 1px solid var(--rl-line); }
 
   .rl-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding: var(--rg-panel-padding); font-size: .8125rem; }
   .rl-document-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
