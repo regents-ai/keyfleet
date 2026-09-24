@@ -119,7 +119,8 @@ Regent's retry job, which asks again for keys still waiting on a seed, does not
 retry while the subscription is below the 0.02 ETH alert level or while Base gas
 is above the 2 gwei lane's price cap, since a request made then would only wait
 too. Anyone can still ask again with `requestReveal(tokenId)`; the rule governs
-Regent's own job.
+Regent's own job. That job is the keeper, and [keeper.md](keeper.md) is how to
+run it.
 
 On a fork of Base the coordinator is Base's own, so a rehearsal creates and
 funds its own subscription on the fork from the lab account, writes that id into

@@ -593,9 +593,9 @@ Only fully sold Fibonacci levels share income, and a level shares in everything
 recognized after its last key sells, including income that had been waiting
 before then. Whoever recognizes income therefore picks the moment the split is
 taken: someone who buys the last key of a level and recognizes at once brings
-that level into income that built up earlier. Regent runs a regular job that
-releases vested SUBJECT and recognizes income promptly, so little waits between
-one recognition and the next. Recognition first syncs a launch the strategy has settled but nobody has
+that level into income that built up earlier. Regent runs a regular job, the
+keeper, that releases vested SUBJECT and recognizes income promptly, so little
+waits between one recognition and the next; `docs/keeper.md` is how to run it. Recognition first syncs a launch the strategy has settled but nobody has
 synced yet, so income can never be booked the old way after the launch is over.
 Anyone may call it, and nobody chooses where the money goes. The fleet never
 swaps, sells or stakes what it receives; holders decide that for themselves.
@@ -772,6 +772,10 @@ Both scripts share `script/KeyfleetManifest.sol`, which reads the inputs
 values, so the suite runs the real deployment and the real record against local
 mocks without reading or writing a file. `docs/deployment.md` is how to run both
 steps, what each refuses, and what the Safe does next.
+
+`script/KeeperLab.s.sol` is no part of a release. It puts one fleet, with
+stand-in USDC, staking and VRF coordinator, on a plain local anvil for the
+keeper's external test in `platform/`, which runs it; `docs/keeper.md` says how.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
