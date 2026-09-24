@@ -12,6 +12,9 @@ type PrivyBridgeModule = {
   }) => Promise<{sessionChanged: boolean}>
 }
 
+// A product page other than the Account page, for walking onto the Account page.
+const fleetPath = "/app/fleets/fibonacci_syndicate"
+
 const retryViewports = [
   {name: "desktop", width: 1280, height: 720},
   {name: "narrow", width: 320, height: 720},
@@ -165,7 +168,7 @@ test("anonymous load does not request the deferred Privy bridge", async ({page})
     if (bridgePattern.test(request.url())) bridgeRequests.push(request.url())
   })
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.locator("#account-auth-status")).toBeHidden()
   await page.waitForLoadState("networkidle")
@@ -173,16 +176,16 @@ test("anonymous load does not request the deferred Privy bridge", async ({page})
   expect(bridgeRequests).toEqual([])
 })
 
-// The sign-in offered on the Overview is the Privy sign-in, the same one the
+// The sign-in offered on the Account page is the Privy sign-in, the same one the
 // header runs: Privy signs the visitor in and connects the wallet's accounts with it.
-test("anonymous Overview sign-in loads Privy and opens its sign-in", async ({page}) => {
+test("anonymous Account page sign-in loads Privy and opens its sign-in", async ({page}) => {
   await page.route(bridgePattern, route =>
     route.fulfill({body: bridgeStub, contentType: "application/javascript"}),
   )
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#account-control [data-account-target='sign-in']")).toBeVisible()
-  await page.locator("#overview-page [data-account-target='sign-in']").click()
+  await page.locator("#account-page .account-signed-out [data-account-target='sign-in']").click()
 
   const bridgeCalls = () =>
     page.evaluate(() => (window as Window & {__u3BridgeCalls?: string[]}).__u3BridgeCalls ?? [])
@@ -205,7 +208,7 @@ for (const invalidHandoff of [
       if (bridgePattern.test(request.url())) bridgeRequests += 1
     })
 
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#account-control").getByRole("button", {name: "Sign In"})).toBeVisible()
     await page.waitForLoadState("networkidle")
     expect(bridgeRequests).toBe(0)
@@ -230,7 +233,7 @@ test("a production-like digested bridge source remains same-origin and callable"
 }) => {
   const digest = "0123456789abcdef0123456789abcdef"
   if (!baseURL) throw new Error("Playwright base URL is unavailable")
-  await page.route(new URL("/app", baseURL).href, async route => {
+  await page.route(new URL("/account", baseURL).href, async route => {
     const response = await route.fetch()
     const body = (await response.text()).replace(
       "/assets/js/privy_bridge.js",
@@ -242,7 +245,7 @@ test("a production-like digested bridge source remains same-origin and callable"
     route.fulfill({body: bridgeStub, contentType: "application/javascript"}),
   )
 
-  await page.goto("/app")
+  await page.goto("/account")
   await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
   await expect
     .poll(() =>
@@ -277,7 +280,7 @@ for (const viewport of retryViewports) {
       await route.fulfill({body: bridgeStub, contentType: "application/javascript"})
     })
 
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
     await page.evaluate(() => document.fonts.ready)
     const headerHeight = (await page.locator("#shell-header").boundingBox())?.height
@@ -337,7 +340,7 @@ test("the bounded failure report survives the recommended immediate reload exact
     route.fulfill({status: 503, body: "deferred bridge unavailable"}),
   )
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
   await expect(page.locator("#account-auth-status")).toContainText(
@@ -392,7 +395,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
       /name="csrf-token" content="([^"]+)"/.exec(html)?.[1] ?? renderedCsrfToken
   })
 
-  await page.goto("/app")
+  await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.locator("#account-auth-status")).toBeHidden()
   await expect
@@ -412,7 +415,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
 
   expect(bridgeRequests).toBe(1)
   expect(sessionDeletes).toBe(0)
-  expect(documentRequests).toEqual([pageUrl(page, "/app")])
+  expect(documentRequests).toEqual([pageUrl(page, fleetPath)])
   // Remaining signed in is not a session event: startup reaches the session
   // endpoint not at all, so the signed cookie and the token the page was
   // rendered with are the ones it still holds afterwards.
@@ -446,7 +449,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   })
   expect(sessionPosts).toBe(0)
   expect(sessionDeletes).toBe(0)
-  expect(documentRequests).toEqual([pageUrl(page, "/app")])
+  expect(documentRequests).toEqual([pageUrl(page, fleetPath)])
   expect((await page.request.get("/auth/session")).status()).toBe(200)
 })
 
@@ -647,7 +650,7 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
 
   await establishLocalSession(page)
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#account-menu [data-account-target='profile']")).toBeVisible()
   await page.locator("#account-menu summary").click()
   await page.getByRole("button", {name: "Disconnect"}).click()
@@ -750,7 +753,7 @@ test("a valid handoff uses the real session resource and refuses authenticated t
     return route.fulfill({body: bridgeStub, contentType: "application/javascript"})
   })
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect.poll(() => sessionReads).toContain("/auth/session")
   await page.waitForLoadState("networkidle")
   expect(sessionReads.filter(path => path === "/auth/session")).toHaveLength(1)
@@ -787,7 +790,7 @@ test("the second document proves anonymous server truth before importing Privy",
   })
 
   await establishLocalSession(page)
-  await page.goto("/app")
+  await page.goto("/account")
   await expect.poll(() => bridgeLoads).toBe(1)
   await page.locator("#account-menu summary").click()
   await page.getByRole("button", {name: "Disconnect"}).click()
@@ -836,7 +839,7 @@ for (const failure of [
     }
 
     await establishLocalSession(page)
-    await page.goto("/app")
+    await page.goto("/account")
 
     await page.waitForTimeout(failure.settleMs)
     await expect(page.locator("#account-auth-status")).toBeHidden()
@@ -847,7 +850,7 @@ for (const failure of [
     const finalSession = await page.request.get("/auth/session")
     expect((await finalSession.json()).authenticated).toBe(true)
     expect(sessionDeletes).toBe(0)
-    expect(documentRequests).toEqual([pageUrl(page, "/app")])
+    expect(documentRequests).toEqual([pageUrl(page, "/account")])
   })
 }
 
@@ -877,7 +880,7 @@ function stubBridge(page: import("@playwright/test").Page) {
 // Runs the real in-page establishment, so the renewal rotates this browser's
 // CSRF state and announces it the way the product does.
 async function refreshInPage(page: import("@playwright/test").Page) {
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await page.evaluate(async identityToken => {
     const source = "/assets/js/privy_bridge.js"
@@ -909,7 +912,7 @@ test("COOKIE_TO_CSRF_HAS_A_REAL_LIVESOCKET_BARRIER: nothing connects before the 
     await route.continue()
   })
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   const connected = () =>
     page.evaluate(() =>
@@ -956,7 +959,7 @@ test("COOKIE_TO_CSRF_HAS_A_REAL_LIVESOCKET_BARRIER: nothing connects before the 
 
   // Released, the held reconnect goes out once and lands, with no reload.
   await expect.poll(connected).toBe(true)
-  expect(documents.map(url => new URL(url).pathname)).toEqual(["/app"])
+  expect(documents.map(url => new URL(url).pathname)).toEqual(["/account"])
   await expect(page.locator("#account-menu [data-account-target='profile']")).toBeVisible()
 })
 
@@ -983,7 +986,7 @@ test("a tab left stale by a failed adoption recovers on its next connect", async
     await route.continue()
   })
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   const connected = () =>
     page.evaluate(() =>
@@ -1033,7 +1036,7 @@ test("a tab left stale by a failed adoption recovers on its next connect", async
   // the renewed cookie carries.
   await expect.poll(connected).toBe(true)
   expect(await metaCsrfToken(page)).not.toBe(staleToken)
-  expect(documents.map(url => new URL(url).pathname)).toEqual(["/app"])
+  expect(documents.map(url => new URL(url).pathname)).toEqual(["/account"])
   expect(sessionPosts).toBe(1)
 })
 
@@ -1060,7 +1063,7 @@ test("a refresh between another tab's dead render and its connect recovers in on
     await route.continue()
   })
 
-  await waitingTab.goto("/app", {waitUntil: "commit"})
+  await waitingTab.goto("/account", {waitUntil: "commit"})
   await expect(waitingTab.locator("#app-shell")).toBeVisible()
   const renderedToken = await metaCsrfToken(waitingTab)
 
@@ -1074,7 +1077,7 @@ test("a refresh between another tab's dead render and its connect recovers in on
   await expect(waitingTab.locator("#account-menu [data-account-target='profile']")).toBeVisible()
   await waitingTab.waitForLoadState("networkidle")
 
-  expect(documents.map(url => new URL(url).pathname)).toEqual(["/app", "/app"])
+  expect(documents.map(url => new URL(url).pathname)).toEqual(["/account", "/account"])
   expect(await metaCsrfToken(waitingTab)).not.toBe(renderedToken)
   expect(
     await waitingTab.evaluate(() =>
@@ -1093,7 +1096,7 @@ test("a refresh in one tab leaves another tab mounted and its next reconnect use
   await establishLocalSession(refreshingTab)
   const documents = trackDocuments(mountedTab)
 
-  await mountedTab.goto("/app")
+  await mountedTab.goto("/account")
   await expect(mountedTab.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   const mountedToken = await metaCsrfToken(mountedTab)
   const mountedView = await mountedTab.locator("[data-phx-session]").first().getAttribute("id")
@@ -1145,7 +1148,7 @@ test("a tab holding a stale token still signs out, and the revoked lineage canno
   await signingOutTab.addInitScript(() => {
     Object.defineProperty(window, "BroadcastChannel", {value: undefined})
   })
-  await signingOutTab.goto("/app")
+  await signingOutTab.goto("/account")
   await expect(signingOutTab.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   const staleToken = await metaCsrfToken(signingOutTab)
 
@@ -1192,7 +1195,7 @@ test("a rejected bearer leaves the browser anonymous without a duplicate delete 
   )
 
   await establishLocalSession(page)
-  await page.goto("/app")
+  await page.goto("/account")
 
   // The server already revoked and dropped the authority with its 401, so the
   // bridge adds no delete of its own and the single reload lands anonymous.
@@ -1200,7 +1203,7 @@ test("a rejected bearer leaves the browser anonymous without a duplicate delete 
   await page.waitForLoadState("networkidle")
 
   expect(deletes).toEqual([])
-  expect(documents).toEqual(["/app", "/app"])
+  expect(documents).toEqual(["/account", "/account"])
 
   const session = await page.request.get("/auth/session")
   expect((await session.json()).authenticated).toBe(false)
@@ -1247,9 +1250,9 @@ for (const refused of ["signed out", "replaced"] as const) {
     const kept = (await context.cookies()).find(cookie => cookie.name === "_keyfleet_key")
     expect(kept?.value).not.toBe(refusedCookie)
 
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
     await page.waitForLoadState("networkidle")
-    expect(new URL(page.url()).pathname).toBe("/app")
+    expect(new URL(page.url()).pathname).toBe("/account")
   })
 }

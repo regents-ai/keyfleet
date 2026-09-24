@@ -15,7 +15,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     signed_in = init_test_session(conn, %{human_account_id: account.id})
     %{"session_lineage" => lineage, "live_socket_id" => cookie_topic} = get_session(signed_in)
 
-    markup = html_response(get(signed_in, "/app"), 200)
+    markup = html_response(get(signed_in, "/app/fleets/fibonacci_syndicate"), 200)
 
     # Phoenix.LiveView.Static signs this token with Phoenix.Token, which is
     # integrity-only: anyone holding the markup can read what it carries.
@@ -23,7 +23,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
 
     assert session == %{
              "render_topic" => SessionAuthority.topic(lineage),
-             "render_route" => "/app",
+             "render_route" => "/app/fleets/fibonacci_syndicate",
              "theme" => "dark"
            }
 
@@ -40,8 +40,11 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
   end
 
   test "CANONICAL_AUTHORITY_ROW: an anonymous render signs only its route and colour theme" do
-    assert %{session: %{"render_route" => "/app"} = session} =
-             build_conn() |> get("/app") |> html_response(200) |> static_session!()
+    assert %{session: %{"render_route" => "/app/fleets/fibonacci_syndicate"} = session} =
+             build_conn()
+             |> get("/app/fleets/fibonacci_syndicate")
+             |> html_response(200)
+             |> static_session!()
 
     assert Map.keys(session) == ["render_route", "theme"]
   end
@@ -98,8 +101,8 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     # The socket's own session names a different lineage and a decoy route.
     handshake = Map.put(get_session(browser), "render_route", "/account")
 
-    assert {:error, {:redirect, %{to: "/app"}}} =
-             page |> connects_with(handshake) |> live("/app")
+    assert {:error, {:redirect, %{to: "/app/fleets/fibonacci_syndicate"}}} =
+             page |> connects_with(handshake) |> live("/app/fleets/fibonacci_syndicate")
   end
 
   test "HANDSHAKE_IS_CONNECTED_AUTHORITY: an already-sent static render loses to the current handshake",
@@ -108,7 +111,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     signed_in = init_test_session(conn, %{human_account_id: account.id})
 
     # The dead render happens under the exact claim of its own moment.
-    static = get(signed_in, "/app")
+    static = get(signed_in, "/app/fleets/fibonacci_syndicate")
     assert html_response(static, 200) =~ @signed_in_markup
 
     # Two refreshes land before that already-sent page connects its socket.
@@ -138,10 +141,10 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
           %{}
         ] do
       assert {:error, {:redirect, %{to: "/"}}} =
-               signed_in |> connects_with(handshake) |> live("/app")
+               signed_in |> connects_with(handshake) |> live("/app/fleets/fibonacci_syndicate")
     end
 
-    static = get(signed_in, "/app")
+    static = get(signed_in, "/app/fleets/fibonacci_syndicate")
     assert SessionAuthority.revoke(claim(signed_in))
 
     assert {:error, {:redirect, %{to: "/"}}} = static |> connects_with(current) |> live()
@@ -153,7 +156,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     assert SessionAuthority.revoke(claim(signed_in))
 
     # The render names no lineage, but the handshake still asserts one.
-    anonymous = get(build_conn(), "/app")
+    anonymous = get(build_conn(), "/app/fleets/fibonacci_syndicate")
     refute html_response(anonymous, 200) =~ @signed_in_markup
 
     assert {:error, {:redirect, %{to: "/"}}} = anonymous |> connects_with(current) |> live()
@@ -167,18 +170,18 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     browser = init_test_session(conn, %{human_account_id: account!().id})
 
     # The page was fetched without the cookie the socket then connects with.
-    anonymous = get(build_conn(), "/app")
+    anonymous = get(build_conn(), "/app/fleets/fibonacci_syndicate")
 
-    assert {:error, {:redirect, %{to: "/app"}}} =
+    assert {:error, {:redirect, %{to: "/app/fleets/fibonacci_syndicate"}}} =
              anonymous |> connects_with(get_session(browser)) |> live()
 
     # The realigned request names that lineage, so the next mount accepts it.
-    {:ok, view, _html} = live(browser, "/app")
+    {:ok, view, _html} = live(browser, "/app/fleets/fibonacci_syndicate")
     assert has_element?(view, @profile)
   end
 
   test "HANDSHAKE_IS_CONNECTED_AUTHORITY: a handshake and render with no claim mount anonymous" do
-    {:ok, view, _html} = live(build_conn(), "/app")
+    {:ok, view, _html} = live(build_conn(), "/app/fleets/fibonacci_syndicate")
 
     assert has_element?(view, @sign_in, "Sign In")
   end
@@ -188,11 +191,13 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     page = init_test_session(conn, %{human_account_id: account!().id})
     browser = init_test_session(build_conn(), %{human_account_id: account!().id})
 
-    assert {:error, {:redirect, %{to: "/app"}}} =
-             page |> connects_with(get_session(browser)) |> live("/app")
+    assert {:error, {:redirect, %{to: "/app/fleets/fibonacci_syndicate"}}} =
+             page
+             |> connects_with(get_session(browser))
+             |> live("/app/fleets/fibonacci_syndicate")
 
     # The reloaded page is signed for the browser's own lineage and mounts.
-    {:ok, view, _html} = live(browser, "/app")
+    {:ok, view, _html} = live(browser, "/app/fleets/fibonacci_syndicate")
     assert has_element?(view, @profile)
   end
 
@@ -202,7 +207,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     account = account!()
     signed_in = init_test_session(conn, %{human_account_id: account.id})
 
-    {:ok, view, _html} = live(signed_in, "/app")
+    {:ok, view, _html} = live(signed_in, "/app/fleets/fibonacci_syndicate")
     assert has_element?(view, @profile)
 
     assert {:ok, :refresh, _drifted} = SessionAuthority.sign_in(claim(signed_in), account.id)
@@ -217,7 +222,8 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     assert has_element?(view, @sign_in, "Sign In")
 
     # The revoked lease halts navigation at the authority hook itself.
-    assert {:error, {:redirect, %{to: "/"}}} = render_patch(view, "/app")
+    assert {:error, {:redirect, %{to: "/"}}} =
+             render_patch(view, "/app/fleets/fibonacci_syndicate")
   end
 
   test "MOUNTED_LEASE_POLICY_C: a mounted socket dies when the account's provider evidence lapses",
@@ -225,7 +231,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     account = account!()
     signed_in = init_test_session(conn, %{human_account_id: account.id})
 
-    {:ok, view, _html} = live(signed_in, "/app")
+    {:ok, view, _html} = live(signed_in, "/app/fleets/fibonacci_syndicate")
     assert has_element?(view, @profile)
 
     assert {:ok, _lapsed} = Accounts.refresh_verified(account, nil, [], actor: %System{})
@@ -233,9 +239,10 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     render_click(view, "refresh_verified_connections", %{})
     assert has_element?(view, @sign_in, "Sign In")
 
-    # /app renders for anonymous visitors, so only the authority hook can be
-    # refusing this navigation.
-    assert {:error, {:redirect, %{to: "/"}}} = render_patch(view, "/app")
+    # A fleet's page renders for anonymous visitors, so only the authority hook
+    # can be refusing this navigation.
+    assert {:error, {:redirect, %{to: "/"}}} =
+             render_patch(view, "/app/fleets/fibonacci_syndicate")
   end
 
   test "MOUNTED_LEASE_POLICY_C: an invalid claim exposes no private dead render", %{conn: conn} do
@@ -243,7 +250,8 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     signed_in = init_test_session(conn, %{human_account_id: account.id})
     current = get_session(signed_in)
 
-    assert html_response(get(signed_in, "/app"), 200) =~ @signed_in_markup
+    assert html_response(get(signed_in, "/app/fleets/fibonacci_syndicate"), 200) =~
+             @signed_in_markup
 
     for session <- [
           %{current | "session_generation" => current["session_generation"] - 1},
@@ -255,7 +263,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
       dead =
         build_conn()
         |> Phoenix.ConnTest.init_test_session(session)
-        |> get("/app")
+        |> get("/app/fleets/fibonacci_syndicate")
         |> html_response(200)
 
       refute dead =~ @signed_in_markup
@@ -271,7 +279,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     topic = get_session(signed_in, :live_socket_id)
     KeyFleetWeb.Endpoint.subscribe(topic)
 
-    {:ok, view, _html} = live(signed_in, "/app")
+    {:ok, view, _html} = live(signed_in, "/app/fleets/fibonacci_syndicate")
     assert Process.alive?(view.pid)
 
     deleted =
@@ -285,7 +293,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
 
     # The browser still holds the revoked claim, so its reconnect is refused
     # rather than quietly downgraded.
-    assert {:error, {:redirect, %{to: "/"}}} = live(signed_in, "/app")
+    assert {:error, {:redirect, %{to: "/"}}} = live(signed_in, "/app/fleets/fibonacci_syndicate")
   end
 
   defp account! do

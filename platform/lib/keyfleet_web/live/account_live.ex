@@ -1,7 +1,8 @@
 defmodule KeyFleetWeb.AccountLive do
   @moduledoc """
-  The signed-in person's own page: who the site knows them as, the wallets
-  their sign-in verified and the accounts they have connected.
+  The signed-in person's own page: who the site knows them as, the keys their
+  wallets hold, the wallets their sign-in verified and the accounts they have
+  connected.
 
   Everything here is read from the sign-in the shell already holds; nothing on
   the page asks the visitor to sign in again.
@@ -12,11 +13,16 @@ defmodule KeyFleetWeb.AccountLive do
   import KeyFleetWeb.Components.VerifiedConnections
 
   alias KeyFleet.PublicIdentity
+  alias KeyFleetWeb.KeyLinks
 
   attr :account, :map, default: nil
   attr :account_control, :map, required: true
   attr :verified_connections, :list, default: []
   attr :verified_connections_notice, :map, default: nil
+
+  attr :held_keys, :list,
+    default: [],
+    doc: "the keys the account's wallets hold, as `%{fleet_id, name, token_ids}` per fleet"
 
   def page(assigns) do
     ~H"""
@@ -62,6 +68,29 @@ defmodule KeyFleetWeb.AccountLive do
             </div>
           </div>
         </Regent.HolographicCard.card>
+
+        <section
+          id="account-keys"
+          class="account-panel account-keys"
+          aria-labelledby="account-keys-title"
+        >
+          <h2 id="account-keys-title">Your keys</h2>
+          <p :if={@held_keys == []}>
+            Your wallets don’t hold any keys yet. Choose a fleet on the
+            <.link navigate={~p"/"}>home page</.link>
+            to buy one.
+          </p>
+          <div :for={fleet <- @held_keys} class="account-keys__fleet">
+            <h3>
+              <.link patch={"/app/fleets/#{fleet.fleet_id}"}>{fleet.name}</.link>
+            </h3>
+            <ul class="account-keys__list">
+              <li :for={token_id <- fleet.token_ids}>
+                <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
+              </li>
+            </ul>
+          </div>
+        </section>
 
         <section class="account-panel account-details" aria-labelledby="account-details-title">
           <h2 id="account-details-title">Details</h2>

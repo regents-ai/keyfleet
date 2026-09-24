@@ -25,7 +25,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
        result: nil,
        identities: [],
        connection_notice: nil,
-       route_spec: KeyFleetWeb.RouteCatalog.fetch!(:app),
+       route_spec: KeyFleetWeb.RouteCatalog.fetch!(:account),
        account: %KeyFleet.AccessContext.AccountControl{
          kind: :preview,
          label: "Fixture"
@@ -504,7 +504,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
                       verified with a real account. Wallet fixture state is separate.
                     </p>
                   </P.disclosure><h3>Product pages</h3><div class="sc-row">
-                    <a href="/app">Overview ↗</a><a href="/account">Account ↗</a>
+                    <a href="/">Home ↗</a><a href="/account">Account ↗</a>
                   </div><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="real-actions"

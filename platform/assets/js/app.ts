@@ -22,6 +22,7 @@ import {
 import {BuyKey} from "./hooks/buy_key"
 import {CopyText} from "./hooks/copy_text"
 import {FleetAction} from "./hooks/fleet_action"
+import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomeField} from "./hooks/home_field"
 import {HomeHero} from "./hooks/home_hero"
@@ -327,6 +328,7 @@ const hooks = {
   BuyKey,
   CopyText,
   FleetAction,
+  FleetPreview,
   HolographicCard,
   HomeField,
   HomeHero,

@@ -6,9 +6,9 @@
 [![Ash 3.33](https://img.shields.io/badge/ash-3.33-lightgrey)](https://ash-hq.org)
 
 The Phoenix/Ash web application of KeyFleet. It serves the public home
-page, Privy wallet sign-in, the signed-in Overview (`/app`) and Account
-(`/account`) pages, the public pages, health and metrics, and the public HTTP
-API.
+page, where a visitor chooses a fleet, each fleet's page (`/app/fleets/<fleet>`),
+Privy wallet sign-in, the Account page (`/account`), the public pages, health and
+metrics, and the public HTTP API.
 
 ## Shared dependencies
 
@@ -112,7 +112,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. Open while the launch gate is closed. |
 | `/`, `/docs`, `/about`, `/contact`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. |
-| `/app`, `/account` | GET | The signed-in shell. |
+| `/app/fleets/<fleet>`, `/account` | GET | The signed-in shell. |
 
 ## Repository layout
 

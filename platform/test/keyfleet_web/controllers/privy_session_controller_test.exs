@@ -465,7 +465,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     KeyFleetWeb.Endpoint.subscribe(topic)
 
     {:ok, view, _html} =
-      build_conn() |> init_test_session(get_session(signed_in)) |> live("/app")
+      build_conn() |> init_test_session(get_session(signed_in)) |> live("/account")
 
     assert Process.alive?(view.pid)
 
@@ -500,11 +500,11 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     topic = get_session(signed_in, :live_socket_id)
     KeyFleetWeb.Endpoint.subscribe(topic)
 
-    for read <- [&get(&1, "/app"), &get(&1, "/auth/session"), &get(&1, "/auth/csrf")] do
+    for read <- [&get(&1, "/account"), &get(&1, "/auth/session"), &get(&1, "/auth/csrf")] do
       refute browser |> recycled() |> read.() |> session_cookie()
     end
 
-    {:ok, view, _html} = browser |> recycled() |> live("/app")
+    {:ok, view, _html} = browser |> recycled() |> live("/account")
     assert Process.alive?(view.pid)
 
     # Remaining signed in is not a session event: the generation this browser
@@ -966,7 +966,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     assert {:error, {:redirect, %{to: "/"}}} =
              build_conn()
              |> init_test_session(get_session(signed_in))
-             |> live("/app")
+             |> live("/account")
   end
 
   test "STALE_LOGOUT_REVOKES: lapsed wallet evidence fails closed on the same rule" do
@@ -1098,7 +1098,11 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
   end
 
   defp assert_no_session_cookie(browser) do
-    for read <- [&get(&1, "/account"), &get(&1, "/auth/session"), &get(&1, "/app")] do
+    for read <- [
+          &get(&1, "/account"),
+          &get(&1, "/auth/session"),
+          &get(&1, "/app/fleets/fibonacci_syndicate")
+        ] do
       refute browser |> recycled() |> read.() |> session_cookie()
     end
   end

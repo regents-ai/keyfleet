@@ -4,6 +4,9 @@ defmodule KeyFleetWeb.ShellLiveTest do
   alias KeyFleet.AccessContext.AccountControl
   alias KeyFleet.Accounts
   alias KeyFleet.Actors.System
+  alias KeyFleet.ChainHelpers
+  alias KeyFleet.Fleets
+  alias KeyFleet.Keys
   alias KeyFleetWeb.Components.Shell
   alias KeyFleetWeb.RouteCatalog
 
@@ -20,7 +23,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   end
 
   test "an anonymous socket rejects a forged verified connection request", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/app")
+    {:ok, view, _html} = live(conn, "/account")
 
     render_hook(view, "request_verified_connection", %{
       "action" => "link",
@@ -31,7 +34,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   end
 
   test "the switch states the theme the server just served", %{conn: conn} do
-    {:ok, dark, _html} = live(conn, "/app")
+    {:ok, dark, _html} = live(conn, "/account")
 
     assert has_element?(
              dark,
@@ -42,7 +45,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
     {:ok, light, _html} =
       conn
       |> Plug.Test.put_req_cookie("regent_theme", "light")
-      |> live("/app")
+      |> live("/account")
 
     assert has_element?(
              light,
@@ -57,7 +60,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   end
 
   test "anonymous account control renders Sign In separately from the brand link", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/app")
+    {:ok, view, _html} = live(conn, "/account")
 
     assert has_element?(view, ~s(#shell-brand[href="/"]), "KeyFleet")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-light")
@@ -77,7 +80,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/app")
+      |> live("/account")
 
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x1111…1111")
 
@@ -106,7 +109,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/app")
+      |> live("/account")
 
     assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign In")
     refute has_element?(view, "#account-control [data-account-target=sign-out]", "Disconnect")
@@ -118,7 +121,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
     {:ok, view, html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/app")
+      |> live("/app/fleets/fibonacci_syndicate")
 
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
@@ -227,6 +230,44 @@ defmodule KeyFleetWeb.ShellLiveTest do
            )
   end
 
+  test "Account lists the keys the person's wallets hold, fleet by fleet", %{conn: conn} do
+    wallet = "0x5555555555555555555555555555555555555555"
+    other = "0x4444444444444444444444444444444444444444"
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.open_cursor!("fibonacci_cascade")
+    ChainHelpers.open_cursor!("fleet_tech_classic")
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-keys", wallet, [wallet, other],
+               actor: %System{}
+             )
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-keys p", "Your wallets don’t hold any keys yet.")
+
+    issue!("fleet_tech_classic", 2, wallet)
+    issue!("fibonacci_cascade", 5, other)
+    issue!("fibonacci_cascade", 3, wallet)
+    issue!("fibonacci_cascade", 4, "0x" <> String.duplicate("3", 40))
+
+    {view, html} = open_account(conn, account)
+
+    assert html
+           |> LazyHTML.from_document()
+           |> LazyHTML.query("#account-keys h3")
+           |> LazyHTML.text() ==
+             "Keyfleet CascadeKeyfleet Classic"
+
+    assert keys_listed(html) == [
+             "/app/fleets/fibonacci_cascade?key=3",
+             "/app/fleets/fibonacci_cascade?key=5",
+             "/app/fleets/fleet_tech_classic?key=2"
+           ]
+
+    view |> element("#account-keys a", "Key 5") |> render_click()
+    assert_patch(view, "/app/fleets/fibonacci_cascade?key=5")
+  end
+
   test "a connection is only called connected once the account's own record says so", %{
     conn: conn
   } do
@@ -313,7 +354,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   end
 
   test "in-shell navigation keeps the LiveView and shell identity", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/app")
+    {:ok, view, html} = live(conn, "/app/fleets/fibonacci_syndicate")
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
 
@@ -336,6 +377,30 @@ defmodule KeyFleetWeb.ShellLiveTest do
     {view, html}
   end
 
+  defp keys_listed(html),
+    do:
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("#account-keys li a")
+      |> LazyHTML.attribute("href")
+
+  defp issue!(fleet_id, token_id, owner) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: fleet_id,
+        token_id: token_id,
+        ownership_epoch: 0,
+        owner_wallet: owner,
+        block_number: 10 + token_id,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash:
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{token_id}"), case: :lower),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+  end
+
   defp register_account(suffix, wallet) do
     assert {:ok, account} =
              Accounts.register_verified("did:privy:#{suffix}", wallet, [wallet], actor: %System{})
@@ -344,7 +409,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   end
 
   defp render_shell(account_control) do
-    route_spec = RouteCatalog.fetch!(:app, %{})
+    route_spec = RouteCatalog.fetch!(:account, %{})
 
     render_component(&Shell.shell/1,
       route_spec: route_spec,

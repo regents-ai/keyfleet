@@ -301,7 +301,7 @@ describe("shell motion", () => {
     current = [node("region", 80), node("background")]
     root.current = current
     root.dataset.motionApp = "product"
-    root.dataset.destination = "/app"
+    root.dataset.destination = "/app/fleets/fibonacci_syndicate"
     ShellMotion.updated.call(state)
     const firstCount = animations.length
     expect(firstCount).toBeGreaterThan(0)

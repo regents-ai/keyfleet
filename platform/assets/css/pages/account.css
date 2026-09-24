@@ -1,5 +1,5 @@
 @layer regents-product {
-/* Account stands on the Overview grammar: one ground, hairline panels, the
+/* Account stands on the product pages' grammar: one ground, hairline panels, the
    display face for headings and a mono voice for kickers. The identity card
    is the shared holographic card and brings its own graphite ground. */
 
@@ -133,6 +133,43 @@
 
 .account-identity__name code {
   color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
+}
+
+/* Your keys */
+
+.account-keys__fleet {
+  display: grid;
+  gap: 0.5rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--ash-line);
+}
+
+.account-keys__fleet h3 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-size: 1.05rem;
+  font-weight: 400;
+}
+
+.account-keys__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-keys__list a {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--ash-line);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.account-keys__list a:hover {
+  border-color: var(--ash-line-strong);
 }
 
 /* Details */

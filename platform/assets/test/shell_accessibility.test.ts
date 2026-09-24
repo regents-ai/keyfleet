@@ -290,7 +290,7 @@ describe("mobile shell navigation", () => {
     page.accountMenu.setAttribute("open", "")
     hook.beforeUpdate?.call(context)
     page.accountMenu.removeAttribute("open")
-    page.shell.dataset.destination = "/app"
+    page.shell.dataset.destination = "/app/fleets/fibonacci_syndicate"
     hook.updated?.call(context)
 
     expect(page.shell.dataset.menuOpen).toBe("false")

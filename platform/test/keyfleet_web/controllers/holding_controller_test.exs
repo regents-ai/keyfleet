@@ -5,7 +5,7 @@ defmodule KeyFleetWeb.HoldingControllerTest do
     Application.put_env(:keyfleet, :app_surfaces, false)
     on_exit(fn -> Application.put_env(:keyfleet, :app_surfaces, true) end)
 
-    {:ok, document: build_conn() |> get("/app") |> html_response(503)}
+    {:ok, document: build_conn() |> get("/account") |> html_response(503)}
   end
 
   test "[U5] the holding page says the area is not open yet and sends people home", %{

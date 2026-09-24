@@ -8,8 +8,8 @@ import {
 } from "../js/shell_state"
 
 const state = (overrides: Partial<ShellState> = {}): ShellState => ({
-  routeId: "app",
-  destination: "/app",
+  routeId: "fleet",
+  destination: "/app/fleets/fibonacci_syndicate",
   menuOpen: false,
   ...overrides,
 })
@@ -35,7 +35,7 @@ describe("shell state restoration", () => {
   it("requests top scroll only when the actual destination changes", () => {
     const current = state({routeId: "account", destination: "/account"})
 
-    expect(shellDestinationChanged(current, state({routeId: "app", destination: "/app"}))).toBe(true)
+    expect(shellDestinationChanged(current, state({routeId: "fleet", destination: "/app/fleets/fibonacci_syndicate"}))).toBe(true)
     expect(shellDestinationChanged(current, state({routeId: "account", destination: "/account"}))).toBe(false)
   })
 })

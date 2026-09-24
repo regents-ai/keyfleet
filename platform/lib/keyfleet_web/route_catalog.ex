@@ -1,6 +1,7 @@
 defmodule KeyFleetWeb.RouteCatalog do
   @moduledoc "Canonical behavior metadata for the route allowlist."
 
+  alias KeyFleet.Fleets
   alias KeyFleetWeb.NotFoundError
 
   alias __MODULE__.{
@@ -27,13 +28,6 @@ defmodule KeyFleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :home
-    },
-    %Entry{
-      path_pattern: "/app",
-      live_action: :app,
-      parameter_schema: %{},
-      reserved_values: %{},
-      route_spec_id: :app
     },
     %Entry{
       path_pattern: "/account",
@@ -95,30 +89,25 @@ defmodule KeyFleetWeb.RouteCatalog do
 
   @specs %{
     home: {:home, nil, nil, "KeyFleet", "/", [], :home, :landing, %{}},
-    app:
-      {:app, :product, "KeyFleet", "Overview", "/app", [:profile_actions], :product, :overview,
-       %{}},
     account:
-      {:account, :product, "KeyFleet", "Account", "/app", [:profile_actions], :product, :detail,
-       %{}},
+      {:account, :product, "KeyFleet", "Account", "/", [:profile_actions], :product, :detail, %{}},
     fleet:
-      {:fleet, :product, "KeyFleet", "Fleet", "/app", [:profile_actions], :product, :detail, %{}},
-    keys:
-      {:keys, :product, "KeyFleet", "Key", "/app", [:profile_actions], :product, :detail, %{}},
+      {:fleet, :product, "KeyFleet", "Fleet", "/", [:profile_actions], :product, :detail, %{}},
+    keys: {:keys, :product, "KeyFleet", "Key", "/", [:profile_actions], :product, :detail, %{}},
     rooms:
-      {:rooms, :product, "KeyFleet", "Rooms", "/app", [:profile_actions], :product, :detail, %{}},
+      {:rooms, :product, "KeyFleet", "Rooms", "/", [:profile_actions], :product, :detail, %{}},
     workspace:
-      {:workspace, :product, "KeyFleet", "Workspace", "/app", [:profile_actions], :product,
-       :detail, %{}},
+      {:workspace, :product, "KeyFleet", "Workspace", "/", [:profile_actions], :product, :detail,
+       %{}},
     workspace_item:
-      {:workspace_item, :product, "KeyFleet", "Workspace", "/app", [:profile_actions], :product,
+      {:workspace_item, :product, "KeyFleet", "Workspace", "/", [:profile_actions], :product,
        :detail, %{}},
     proposals:
-      {:proposals, :product, "KeyFleet", "Proposals", "/app", [:profile_actions], :product,
-       :detail, %{}},
+      {:proposals, :product, "KeyFleet", "Proposals", "/", [:profile_actions], :product, :detail,
+       %{}},
     proposal:
-      {:proposal, :product, "KeyFleet", "Proposals", "/app", [:profile_actions], :product,
-       :detail, %{}}
+      {:proposal, :product, "KeyFleet", "Proposals", "/", [:profile_actions], :product, :detail,
+       %{}}
   }
 
   def entries, do: @entries
@@ -179,13 +168,15 @@ defmodule KeyFleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
+  # The four fleets' pages, then the account page.
   defp sidebar_model(:product) do
+    fleets =
+      for %{id: id, name: name} <- Fleets.catalog(),
+          do: %RouteTarget{route_id: :fleet, label: name, path: "/app/fleets/#{id}"}
+
     %SidebarModel{
       id: :product,
-      targets: [
-        %RouteTarget{route_id: :app, label: "Overview", path: "/app"},
-        %RouteTarget{route_id: :account, label: "Account", path: "/account"}
-      ]
+      targets: fleets ++ [%RouteTarget{route_id: :account, label: "Account", path: "/account"}]
     }
   end
 

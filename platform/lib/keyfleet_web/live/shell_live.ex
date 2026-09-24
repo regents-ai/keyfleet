@@ -31,7 +31,6 @@ defmodule KeyFleetWeb.ShellLive do
     KeyMap,
     KeysLive,
     NotFoundError,
-    OverviewLive,
     ProposalsLive,
     ProposalsPage,
     RoomsLive,
@@ -78,6 +77,7 @@ defmodule KeyFleetWeb.ShellLive do
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: [],
        verified_connections_notice: nil,
+       held_keys: [],
        fleet: nil,
        fleet_params: nil,
        keys_topic: nil,
@@ -108,6 +108,7 @@ defmodule KeyFleetWeb.ShellLive do
      socket
      |> assign(:route_spec, route_spec)
      |> load_verified_connections(route_spec)
+     |> load_held_keys(route_spec)
      |> load_fleet(route_spec, params)
      |> load_key_profile(socket.assigns)
      |> load_key(route_spec, params)
@@ -361,18 +362,13 @@ defmodule KeyFleetWeb.ShellLive do
       theme={@theme}
     >
       <:content>
-        <OverviewLive.page
-          :if={@route_spec.route_id == :app}
-          account_control={@account_control}
-          account={current_account(@access_context)}
-        />
-
         <AccountLive.page
           :if={@route_spec.route_id == :account}
           account={current_account(@access_context)}
           account_control={@account_control}
           verified_connections={@verified_connections}
           verified_connections_notice={@verified_connections_notice}
+          held_keys={@held_keys}
         />
 
         <FleetLive.page
@@ -1232,6 +1228,22 @@ defmodule KeyFleetWeb.ShellLive do
       nil ->
         assign(socket, verified_connections: [])
     end
+  end
+
+  defp load_held_keys(socket, %{route_id: :account}),
+    do: assign(socket, :held_keys, held_keys(human_actor(socket)))
+
+  defp load_held_keys(socket, _route_spec), do: assign(socket, :held_keys, [])
+
+  # Every key the signed-in person's wallets hold, fleet by fleet in catalog
+  # order, leaving out fleets where they hold none.
+  defp held_keys(nil), do: []
+
+  defp held_keys(%Human{wallet_addresses: wallets} = actor) do
+    for %{id: fleet_id, name: name} <- Fleets.catalog(),
+        keys = Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor),
+        keys != [],
+        do: %{fleet_id: fleet_id, name: name, token_ids: Enum.map(keys, & &1.token_id)}
   end
 
   defp linked_identity_provider(provider) do

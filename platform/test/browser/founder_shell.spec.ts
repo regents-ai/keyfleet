@@ -4,7 +4,9 @@ import {
   matchesAuthenticatedPrivyBridgeUrl,
 } from "./support/authenticated_privy"
 
-const shellRoutes = ["/app", "/account"]
+// The first fleet's page stands for every fleet's page.
+const fleetPath = "/app/fleets/fibonacci_syndicate"
+const shellRoutes = [fleetPath, "/account"]
 
 // The shell holds one live session across every page, so a link to another page
 // patches the page it is already on. Content links do this in the product; the test
@@ -36,7 +38,7 @@ function readFamily(page: Page) {
 }
 
 async function chooseTheme(page: Page, choice: "light" | "dark") {
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   if ((await page.locator("html").getAttribute("data-theme")) !== choice) {
     await page.locator("#theme-control [data-theme-toggle]").click()
@@ -58,9 +60,9 @@ test("[U2] the ruled shell keeps one palette across pages", async ({page}) => {
       palette[choice] ??= colors
       expect(colors).toEqual(palette[choice])
     }
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-    for (const destination of ["/account", "/app"]) {
+    for (const destination of [fleetPath, "/account"]) {
       await patchTo(page, destination)
       await expect(page).toHaveURL(new RegExp(`${destination}$`))
       await expect.poll(() => readFamily(page)).toEqual(palette[choice])
@@ -74,7 +76,7 @@ test("[U2] direct page loads seed the canonical RegentUI brand", async ({
   request,
 }) => {
   for (const [route, brand] of [
-    ["/app", "platform"],
+    [fleetPath, "platform"],
     ["/account", "platform"],
   ] as const) {
     const served = await (await request.get(route)).text()
@@ -109,107 +111,12 @@ test("all approved routes render within their page budget", async ({page, reques
     expect((await response.body()).byteLength, route).toBeLessThanOrEqual(100 * 1024)
   }
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toBeVisible()
 })
 
-test("the public homepage presents the hero and its chapters", async ({page}) => {
-  await page.goto("/")
-
-  await expect(page.locator("#public-home")).toBeVisible()
-  await expect(page.locator("#home-prism .rl-hero-art")).toHaveAttribute(
-    "src",
-    "/images/home/hero-bg-dark.svg",
-  )
-  await expect(page.locator("#home-title")).toHaveText("KeyFleet")
-  // The cards name the three highlights; the chapters below them are a separate story.
-  await expect(page.locator("[data-home-hero-card]")).toHaveCount(3)
-  expect(
-    await page
-      .locator("[data-home-hero-card]")
-      .evaluateAll(elements => elements.map(element => element.dataset.homeHeroCard)),
-  ).toEqual(["signin", "account", "agents"])
-
-  const sectionTops = await page
-    .locator("#signin, #account, #agents")
-    .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top + scrollY))
-  expect(sectionTops).toHaveLength(3)
-  expect(sectionTops).toEqual([...sectionTops].sort((left, right) => left - right))
-  expect(await page.evaluate(() => document.fonts.check('16px "Geist Pixel Square"'))).toBe(true)
-  await expect(page.locator("#app-shell")).toHaveCount(0)
-})
-
-// The crown is decoration the server renders inside the hero: hidden from assistive
-// technology, taking no pointer events, and showing exactly one layer at a time —
-// the still art until the drawn crown is ready, then the drawn crown alone. Whether
-// headless Chromium brings a GPU decides which layer shows, never whether the copy
-// and actions stay reachable.
-test("the bounded technical crown never blocks the action", async ({page}) => {
-  const expectOneHeroLayer = async () => {
-    const layers = await page.locator("#home-prism").evaluate(element => ({
-      art: getComputedStyle(element.querySelector(".rl-hero-art")!).visibility,
-      crownReady: element.getAttribute("data-prism-ready") === "true",
-    }))
-    expect(layers.art).toBe(layers.crownReady ? "hidden" : "visible")
-  }
-
-  for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
-    await page.setViewportSize(viewport)
-    await page.goto("/")
-    const prism = page.locator("#home-prism")
-    await expect(prism).toHaveAttribute("aria-hidden", "true")
-    expect(await prism.evaluate(element => getComputedStyle(element).pointerEvents)).toBe("none")
-    await expectOneHeroLayer()
-    await expect(page.locator("#home-title")).toBeVisible()
-    await page.locator(".rl-hero-actions").getByRole("link", {name: "Open the app"}).click({trial: true})
-    await page.locator("#home-card-agents").getByRole("link", {name: "Read the docs"}).click({trial: true})
-    await page.emulateMedia({reducedMotion: "reduce"})
-    await expectOneHeroLayer()
-    await page.emulateMedia({reducedMotion: "no-preference"})
-  }
-})
-test("the primary homepage action keeps its contrast on hover", async ({page}) => {
-  await page.goto("/")
-
-  const action = page.locator(".rl-closing").getByRole("link", {name: "Open the app"})
-  const before = await action.evaluate(element => {
-    const style = getComputedStyle(element)
-    return {backgroundColor: style.backgroundColor, color: style.color}
-  })
-
-  await action.hover()
-
-  await expect
-    .poll(() =>
-      action.evaluate(element => {
-        const style = getComputedStyle(element)
-        return {backgroundColor: style.backgroundColor, color: style.color}
-      }),
-    )
-    .toEqual(before)
-})
-
-test("the three homepage highlight cards remain full-width and ordered on mobile", async ({page}) => {
-  await page.setViewportSize({width: 390, height: 844})
-  await page.goto("/")
-
-  const boxes = await page.locator("[data-home-hero-card]").evaluateAll(elements =>
-    elements.map(element => {
-      const box = element.getBoundingClientRect()
-      return {left: box.left, right: box.right, top: box.top}
-    }),
-  )
-
-  expect(boxes).toHaveLength(3)
-  expect(boxes.map(box => box.top)).toEqual(
-    [...boxes].map(box => box.top).sort((left, right) => left - right),
-  )
-  expect(boxes.every(box => box.left >= 0 && box.right <= 390)).toBe(true)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
-})
-
 test("anonymous Sign In stays separate from the brand link", async ({page}) => {
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
   const brand = page.locator("#shell-brand")
@@ -259,7 +166,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
 
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.locator("#theme-control [data-theme-toggle]")).toBeVisible()
   await auth.expectAuthenticatedSession()
@@ -292,31 +199,31 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await auth.expectCounts({documents: 2, sessionChecks: 2, syncs: 2})
 })
 
-test("the Overview welcomes a visitor, offers the way in, and reaches the Account page", async ({page}) => {
-  await page.goto("/app")
+test("the sidebar lists the four fleets, then the Account page", async ({page}) => {
+  await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
 
-  const overview = page.locator("#overview-page")
-  await expect(overview.getByRole("heading", {level: 1, name: "Welcome."})).toBeVisible()
-  await expect(page.locator("#shell-brand")).toContainText("KeyFleet")
+  const sidebar = page.locator("#shell-sidebar")
+  const links = await sidebar.locator("a[href^='/app/fleets/'], a[href='/account']").evaluateAll(elements =>
+    elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
+  )
+  expect(links).toEqual([
+    ["Keyfleet Syndicate", "/app/fleets/fibonacci_syndicate"],
+    ["Keyfleet Cascade", "/app/fleets/fibonacci_cascade"],
+    ["Keyfleet Classic", "/app/fleets/fleet_tech_classic"],
+    ["Keyfleet Accelerant", "/app/fleets/fleet_tech_accelerant"],
+    ["Account", "/account"],
+  ])
 
-  // A visitor is offered the sign-in, never an invented account.
-  await expect(overview.getByRole("heading", {level: 2, name: "Sign in to get started"})).toBeVisible()
-  await expect(overview.getByRole("button", {name: "Sign in"})).toBeVisible()
-
-  const developers = overview.getByRole("navigation", {name: "Developer links"})
-  await expect(developers.getByRole("link", {name: "Documentation"})).toHaveAttribute("href", "/docs")
-  await expect(developers.getByRole("link", {name: "Agent guide"})).toHaveAttribute("href", "/llms.txt")
-  await expect(developers.getByRole("link", {name: "OpenAPI"})).toHaveAttribute("href", "/openapi.json")
-
-  await page.locator("#shell-sidebar").getByRole("link", {name: "Account"}).click()
+  await sidebar.getByRole("link", {name: "Account"}).click()
   await expect(page).toHaveURL(/\/account$/)
   await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
   await expect(page.getByRole("heading", {level: 2, name: "Sign in to see your account"})).toBeVisible()
 })
 
 test("[U2][U6] navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {
-  await page.goto("/app")
+  await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   const shellInstance = await page.locator("#app-shell").getAttribute("data-shell-instance")
@@ -337,8 +244,8 @@ test("[U2][U6] navigation keeps brand, document, shell identity, and starts at t
   ).toBe(true)
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
 
-  await patchTo(page, "/app")
-  await expect(page).toHaveURL(/\/app$/)
+  await patchTo(page, fleetPath)
+  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   await page.evaluate(() => {
     document
@@ -360,23 +267,23 @@ test("[U2][U6] navigation keeps brand, document, shell identity, and starts at t
     document.querySelector("#app-shell-scroller")?.scrollTo(0, 1000)
   })
   await page.goForward()
-  await expect(page).toHaveURL(/\/app$/)
+  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-shell-instance", shellInstance ?? "")
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
 })
 
 test("rapid page switches settle only the latest scene and remove motion copies", async ({page}) => {
-  await page.goto("/app")
+  await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
   await patchTo(page, "/account")
   await expect(page).toHaveURL(/\/account$/)
-  await patchTo(page, "/app")
+  await patchTo(page, fleetPath)
 
-  await expect(page).toHaveURL(/\/app$/)
+  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-motion-app", "product")
-  await expect(page.getByRole("heading", {level: 1, name: "Welcome."})).toBeVisible()
+  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
   await expect(page.locator("[data-motion-copy]"), "outgoing copies are disposable").toHaveCount(0)
   await expect(page.locator("#route-content")).toHaveCSS("opacity", "1")
 })
@@ -384,7 +291,7 @@ test("rapid page switches settle only the latest scene and remove motion copies"
 test("theme and reduced-motion preferences apply immediately", async ({browser}) => {
   const context = await browser.newContext({reducedMotion: "reduce"})
   const page = await context.newPage()
-  await page.goto("/app")
+  await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
   await expect(page.locator("html")).toHaveAttribute("data-reduced-motion", "true")
@@ -419,7 +326,7 @@ test("theme and reduced-motion preferences apply immediately", async ({browser})
 for (const width of [320, 390]) {
   test(`${width}px drawer contains focus and cleans up every close path`, async ({page}) => {
     await page.setViewportSize({width, height: 720})
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
     const menu = page.getByRole("button", {name: "Menu"})
@@ -456,7 +363,7 @@ for (const width of [320, 390]) {
     await expect(menu).toBeFocused()
 
     await menu.click()
-    const destination = sidebar.locator('a[href]:not([href="/app"])').first()
+    const destination = sidebar.locator('a[href]:not([href="/account"])').first()
     await destination.click()
     await expect(menu).toHaveAttribute("aria-expanded", "false")
     await expect(scrim).toBeHidden()
@@ -475,7 +382,7 @@ test("tablet, desktop, and effective 200 percent zoom have no horizontal overflo
     {width: 640, height: 900},
   ]) {
     await page.setViewportSize(viewport)
-    await page.goto("/app")
+    await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       viewport.width,

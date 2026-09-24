@@ -6,7 +6,7 @@ defmodule KeyFleetWeb.LaunchGateTest do
   alias KeyFleetWeb.Live.LaunchGateHook
   alias KeyFleetWeb.Plugs.LaunchGate
 
-  @gated_shell_paths ~w(/app /account)
+  @gated_shell_paths ~w(/account /app/fleets/fibonacci_syndicate)
   @closed_message "This part of the site isn't open yet."
 
   setup do
@@ -30,13 +30,13 @@ defmodule KeyFleetWeb.LaunchGateTest do
   end
 
   test "[U1] the switch takes effect between requests of one running build" do
-    assert get(build_conn(), "/app").status == 200
+    assert get(build_conn(), "/account").status == 200
 
     close_surfaces()
-    assert get(build_conn(), "/app").status == 503
+    assert get(build_conn(), "/account").status == 503
 
     open_surfaces()
-    assert get(build_conn(), "/app").status == 200
+    assert get(build_conn(), "/account").status == 200
   end
 
   test "[U1] production refuses to boot without an explicit setting, and records the state" do
@@ -73,10 +73,10 @@ defmodule KeyFleetWeb.LaunchGateTest do
   end
 
   test "[U2] gated pages and JSON answers carry the same browser security headers as an open page" do
-    open = get(build_conn(), "/app")
+    open = get(build_conn(), "/account")
     close_surfaces()
 
-    assert secure_headers(get(build_conn(), "/app")) == secure_headers(open)
+    assert secure_headers(get(build_conn(), "/account")) == secure_headers(open)
 
     assert secure_headers(get(build_conn(), "/auth/session")) == secure_headers(open)
 
@@ -138,10 +138,10 @@ defmodule KeyFleetWeb.LaunchGateTest do
   end
 
   test "[U2] a page open when the gate closes cannot keep browsing product routes", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/app")
+    {:ok, view, _html} = live(conn, "/account")
 
     close_surfaces()
-    render_patch(view, "/account")
+    render_patch(view, "/app/fleets/fibonacci_syndicate")
 
     assert_redirect(view, "/")
   end
