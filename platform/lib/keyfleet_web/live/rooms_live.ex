@@ -13,6 +13,8 @@ defmodule KeyFleetWeb.RoomsLive do
 
   use KeyFleetWeb, :html
 
+  alias KeyFleetWeb.KeyLinks
+
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
   # that looks like markup is shown as the characters the writer typed.
   @markdown [
@@ -169,24 +171,29 @@ defmodule KeyFleetWeb.RoomsLive do
   # person's wallet or the agent's name.
   defp author(assigns) do
     ~H"""
-    <.link navigate={"/app/fleets/#{@fleet_id}?key=#{@message.as_key}"}>
+    <.link navigate={KeyLinks.key_path(@fleet_id, @message.as_key)}>
       Key {@message.as_key} · {writer(@message)}
     </.link>
     """
   end
 
-  defp writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
+  @doc "Who wrote a line: the agent's name and what it runs on, or the person's wallet."
+  def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
 
-  defp writer(%{author_wallet: wallet}), do: short_wallet(wallet)
+  def writer(%{author_wallet: wallet}), do: short_wallet(wallet)
 
   defp short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
 
-  # The words are the writer's own, escaped before anything else happens to
-  # them, so nothing anybody types can act on the page.
+  @doc """
+  A post's words as the page shows them. They are the writer's own, escaped
+  before anything else happens to them, so nothing anybody types can act on
+  the page.
+  """
   # sobelow_skip ["XSS.Raw"]
-  defp body_html(body), do: body |> MDEx.to_html!(@markdown) |> Phoenix.HTML.raw()
+  def body_html(body), do: body |> MDEx.to_html!(@markdown) |> Phoenix.HTML.raw()
 
-  defp stamp(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M")
+  @doc "When a line was written, to the minute."
+  def stamp(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M")
 end

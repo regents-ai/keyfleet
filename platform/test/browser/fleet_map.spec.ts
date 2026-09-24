@@ -147,39 +147,35 @@ test.describe("the fleet page's map", () => {
     expect(errors).toEqual([])
   })
 
-  test("the chosen key goes into the address, and back and forward follow it", async ({page}) => {
-    const first = sellKey(fleet, me)
-    const second = sellKey(fleet, me)
+  test("a key chosen on the map opens its profile, which Back closes and Forward opens again", async ({page}) => {
+    const key = sellKey(fleet, me)
     const errors = await openFleet(page)
     const chosen = page.locator("#key-map-selected")
     await expect(chosen).toHaveText("No key chosen yet.")
 
-    for (const key of [first, second]) {
-      const at = await tileAt(page, key)
-      expect(at, `key ${key} is on screen`).toBeDefined()
-      await page.mouse.click(at.x, at.y)
-      await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
-      await expect(chosen).toHaveText(`Key ${key.toLocaleString("en-US")} chosen.`)
-      await expectMarks(page, key, ["selected"])
-    }
+    const at = await tileAt(page, key)
+    expect(at, `key ${key} is on screen`).toBeDefined()
+    await page.mouse.click(at.x, at.y)
+    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key.toLocaleString("en-US")}`)
+    await expect(chosen).toHaveText(`Key ${key.toLocaleString("en-US")} chosen.`)
+    await expectMarks(page, key, ["selected"])
 
-    await page.goBack()
-    await expect(page).toHaveURL(new RegExp(`\\?key=${first}$`))
-    await expect(chosen).toHaveText(`Key ${first.toLocaleString("en-US")} chosen.`)
-    await expectMarks(page, first, ["selected"])
-    await expectMarks(page, second, [], ["selected"])
-
-    await page.goForward()
-    await expect(page).toHaveURL(new RegExp(`\\?key=${second}$`))
-    await expect(chosen).toHaveText(`Key ${second.toLocaleString("en-US")} chosen.`)
-    await expectMarks(page, second, ["selected"])
-    await expectMarks(page, first, [], ["selected"])
-
-    await page.goBack()
     await page.goBack()
     await expect(page).toHaveURL(new RegExp(`/app/fleets/${fleet}$`))
+    await expect(page.locator("#key-profile")).toHaveCount(0)
     await expect(chosen).toHaveText("No key chosen yet.")
-    await expectMarks(page, second, [], ["selected"])
+    await expectMarks(page, key, [], ["selected"])
+
+    await page.goForward()
+    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page.locator("#key-profile-title")).toBeFocused()
+    await expectMarks(page, key, ["selected"])
+
+    // Closing hands focus back to the map.
+    await page.keyboard.press("Escape")
+    await expect(page.locator("#key-profile")).toHaveCount(0)
+    await expect(page.locator(`#key-map-${fleet}`)).toBeFocused()
     expect(await stillOpen(page)).toBe(true)
     expect(errors).toEqual([])
   })

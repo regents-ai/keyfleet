@@ -78,4 +78,29 @@ defmodule KeyFleet.Fleets.PresetsTest do
     assert %{next_price: 11_025_000, next_token_id: 3} =
              Presets.progress("fleet_tech_accelerant", 2)
   end
+
+  # A key's price is what the fleet asked for it once the key before it sold.
+  test "a key was issued for the price the fleet offered it at, at every level's edges" do
+    edges =
+      for token_id <- 1..46_364,
+          Presets.fibonacci_level_of(token_id) != Presets.fibonacci_level_of(token_id + 1),
+          edge <- [token_id, token_id + 1],
+          do: edge
+
+    assert length(edges) == 38
+
+    cases =
+      Enum.map([1 | edges] ++ [46_365], &{"fibonacci_cascade", &1}) ++
+        Enum.map([1, 2, 144], &{"fleet_tech_classic", &1}) ++
+        Enum.map([1, 2, 2_000], &{"fleet_tech_accelerant", &1})
+
+    for {fleet_id, token_id} <- cases do
+      assert Presets.issue_price(fleet_id, token_id) ==
+               Presets.progress(fleet_id, token_id - 1).next_price,
+             "#{fleet_id} key #{token_id}"
+    end
+
+    assert Presets.issue_price("fibonacci_cascade", 12) == 17_280_000
+    assert Presets.issue_price("fleet_tech_accelerant", 2_000) == Presets.accelerant_price(1_999)
+  end
 end

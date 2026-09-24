@@ -56,6 +56,14 @@ defmodule KeyFleet.Fleets.Presets do
     }
   end
 
+  @doc """
+  What the fleet's contract charged, or will charge, for key `token_id` when
+  it is sold, in atomic USDC: the price `progress/2` offered once the key
+  before it had sold.
+  """
+  def issue_price(fleet_id, token_id) when is_integer(token_id) and token_id >= 1,
+    do: next_price(preset(fleet_id), token_id - 1)
+
   @doc "A fleet's preset: `:fibonacci`, `:classic` or `:accelerant`."
   def preset(fleet_id), do: Map.fetch!(@presets, fleet_id)
 

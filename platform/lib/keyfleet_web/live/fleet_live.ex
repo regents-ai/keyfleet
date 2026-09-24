@@ -10,10 +10,15 @@ defmodule KeyFleetWeb.FleetLive do
 
   use KeyFleetWeb, :html
 
+  alias KeyFleetWeb.KeyLinks
+  alias KeyFleetWeb.KeyProfileLive
   alias KeyFleetWeb.RoomsLive
 
   attr :fleet, :map, required: true
+  attr :params, :map, required: true, doc: "the page's address"
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
+  attr :profile, :map, default: nil, doc: "the key open over the page, if any"
+  attr :thread, :any, required: true, doc: "the messages written to the open key"
 
   def page(assigns) do
     ~H"""
@@ -114,7 +119,12 @@ defmodule KeyFleetWeb.FleetLive do
 
           <ol id="fleet-key-list" class="fleet-key-list" phx-update="stream">
             <li :for={{dom_id, key} <- @keys} id={dom_id}>
-              <.link navigate={"/app/keys/#{@fleet.fleet_id}/#{key.token_id}"} class="fleet-name">
+              <.link
+                id={"fleet-key-link-#{key.token_id}"}
+                patch={KeyLinks.key_path(@fleet.fleet_id, key.token_id, @params)}
+                replace={@profile != nil}
+                class="fleet-name"
+              >
                 Key {key.token_id}
               </.link>
               <span>Held by {short_wallet(key.owner_wallet)}</span>
@@ -136,6 +146,14 @@ defmodule KeyFleetWeb.FleetLive do
           </nav>
         </section>
       </div>
+
+      <KeyProfileLive.dialog
+        :if={@profile}
+        profile={@profile}
+        fleet={@fleet}
+        params={@params}
+        thread={@thread}
+      />
     </article>
     """
   end
@@ -300,11 +318,12 @@ defmodule KeyFleetWeb.FleetLive do
   defp keys(1), do: "1 key"
   defp keys(count), do: "#{grouped(count)} keys"
 
-  defp short_wallet(wallet),
+  @doc "A wallet shortened to its first six and last four characters."
+  def short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
 
-  # Atomic USDC shown exactly, since it is what the purchase pays.
-  defp usdc(atoms) do
+  @doc "Atomic USDC shown exactly, since it is what a purchase pays."
+  def usdc(atoms) do
     fraction =
       atoms
       |> rem(1_000_000)
@@ -318,7 +337,8 @@ defmodule KeyFleetWeb.FleetLive do
     end
   end
 
-  defp grouped(number) do
+  @doc "A whole number with its thousands separated by commas."
+  def grouped(number) do
     number
     |> Integer.to_string()
     |> String.reverse()

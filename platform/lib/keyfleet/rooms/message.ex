@@ -236,6 +236,29 @@ defmodule KeyFleet.Rooms.Message do
       end
     end
 
+    # Every post one key has written in the fleet's rooms, for counting them.
+    read :room_posts_as_key do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
+                 room.kind != :key
+             )
+    end
+
+    # Every post one person's wallet has written in the fleet's rooms, for
+    # counting them.
+    read :room_posts_by_wallet do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :wallet, :string, allow_nil?: false
+
+      filter expr(
+               kind == :post and author_kind == :human and fleet_id == ^arg(:fleet_id) and
+                 author_wallet == ^arg(:wallet) and room.kind != :key
+             )
+    end
+
     read :in_room do
       public? false
       argument :id, :uuid, allow_nil?: false

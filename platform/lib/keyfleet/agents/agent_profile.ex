@@ -35,9 +35,10 @@ defmodule KeyFleet.Agents.AgentProfile do
     end
 
     # The identity an agent presents to the key owners it works for: its name,
-    # what it runs on, and what it says it is doing. Nothing else leaves here.
+    # what it runs on, and what it says it is doing and since when. Nothing
+    # else leaves here.
     read :public_profile do
-      prepare build(select: [:id, :name, :declared_harness, :current_status])
+      prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
     end
 
     update :edit_my_profile do

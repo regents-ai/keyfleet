@@ -52,6 +52,8 @@ defmodule KeyFleet.Keys.KeyAttachment do
       index([:fleet_id, :owner_wallet, :token_id])
       # What a stretch of blocks recorded, which every pass reads again.
       index([:fleet_id, :block_number])
+      # The keys a wallet holds across every fleet.
+      index([:owner_wallet])
     end
 
     custom_statements do
@@ -247,6 +249,29 @@ defmodule KeyFleet.Keys.KeyAttachment do
              )
 
       prepare build(select: [:token_id], sort: [token_id: :asc])
+    end
+
+    # Every key one wallet holds right now, in every fleet.
+    read :held_by_wallet do
+      argument :owner_wallet, :string, allow_nil?: false
+
+      filter expr(
+               owner_wallet == ^arg(:owner_wallet) and
+                 ownership_epoch == current_ownership_epoch
+             )
+    end
+
+    # Every record of one wallet holding any of some of the fleet's keys, then
+    # or now.
+    read :held_among do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :owner_wallet, :string, allow_nil?: false
+      argument :token_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and owner_wallet == ^arg(:owner_wallet) and
+                 token_id in ^arg(:token_ids)
+             )
     end
 
     # The lowest-numbered key a person's wallets hold in this fleet right now.

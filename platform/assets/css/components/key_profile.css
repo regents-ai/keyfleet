@@ -1,0 +1,318 @@
+/* One key's profile, open over its fleet's page. Laptops see the card beside
+   everything else, tablets above it, and phones the whole screen. */
+.key-profile {
+  width: min(1200px, 94vw);
+  max-width: none;
+  height: min(860px, 92svh);
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--ash-panel);
+  color: var(--ash-ink);
+  overflow: hidden;
+}
+
+.key-profile[open] {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.key-profile::backdrop {
+  background: var(--ash-scrim);
+}
+
+/* While the visitor signs in, the profile stays where it was, above the page
+   and below the sign-in window. */
+.key-profile[open]:not(:modal) {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  margin: auto;
+}
+
+.key-profile__card {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  border-inline-end: 1px solid var(--ash-line);
+  overflow: auto;
+}
+
+.key-profile__body {
+  display: grid;
+  align-content: start;
+  gap: 1.5rem;
+  min-width: 0;
+  padding: 0 clamp(1rem, 3vw, 2rem) 2rem;
+  overflow: auto;
+}
+
+.key-profile__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 1rem;
+  border-block-end: 1px solid var(--ash-line);
+  background: var(--ash-panel);
+}
+
+.key-profile__header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.key-profile__header h2:focus {
+  outline: none;
+}
+
+.key-profile__header h2:focus-visible {
+  outline: 2px solid var(--ash-accent);
+  outline-offset: 3px;
+}
+
+.key-profile__header form {
+  margin: 0;
+}
+
+.key-profile__section {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.key-profile__section h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.key-profile__section a {
+  color: inherit;
+}
+
+.key-profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.85rem 1.25rem;
+  margin: 0;
+}
+
+.key-profile-facts div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.key-profile-facts dt {
+  color: var(--ash-muted);
+  font-size: 0.875rem;
+}
+
+.key-profile-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.key-profile-traits,
+.key-profile-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.key-profile-traits {
+  display: grid;
+}
+
+.key-profile-keys a[aria-current="true"] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.key-profile-muted,
+.key-profile-status {
+  margin: 0;
+  color: var(--ash-muted);
+}
+
+.key-profile-status {
+  display: block;
+}
+
+.key-profile .rooms-composer {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.key-profile .rooms-composer textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--ash-line);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  resize: vertical;
+}
+
+.key-profile__signed-out {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.key-profile__signed-out p {
+  margin: 0;
+}
+
+/* Read out to screen readers when a message arrives; nothing to see. */
+.key-profile-news {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The card: graphite in both themes, like the object it stands for. */
+.key-profile-card {
+  width: min(100%, 26rem);
+  aspect-ratio: 63 / 88;
+  background: var(--rg-holo-graphite);
+  clip-path: var(--rg-holo-clip);
+}
+
+.key-profile-card .rg-holo__content {
+  height: 100%;
+}
+
+.key-profile-card__face {
+  display: grid;
+  grid-template: auto 1fr auto auto / 1fr auto;
+  height: 100%;
+  gap: 0.35rem;
+}
+
+.key-profile-card__face p {
+  margin: 0;
+}
+
+.key-profile-card__fleet {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+.key-profile-card__level {
+  font-family: var(--font-family-mono);
+}
+
+.key-profile-card__mark {
+  position: relative;
+  display: grid;
+  grid-column: 1 / -1;
+  place-items: center;
+  align-self: center;
+  width: 78%;
+  justify-self: center;
+}
+
+.key-profile-card__mark svg {
+  width: 100%;
+  fill: none;
+  stroke: var(--rg-holo-ink);
+  stroke-width: 1;
+}
+
+.key-profile-card__mark span {
+  position: absolute;
+  inset: 42% 0 auto;
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-size: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.key-profile-card__name,
+.key-profile-card__trait {
+  grid-column: 1 / -1;
+}
+
+.key-profile-card__name {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.key-profile-card__trait {
+  color: color-mix(in srgb, var(--rg-holo-ink) 75%, transparent);
+}
+
+/* Tablets and phones: one column, the title and Close first and kept at the
+   top while the card and the rest scroll under them. */
+@media (max-width: 959px) {
+  .key-profile[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow: auto;
+  }
+
+  .key-profile__body {
+    display: contents;
+  }
+
+  .key-profile__header {
+    order: -1;
+    padding-inline: clamp(1rem, 3vw, 2rem);
+  }
+
+  .key-profile__card {
+    position: static;
+    padding: 0 1rem;
+    border-inline-end: 0;
+    overflow: visible;
+  }
+
+  .key-profile-card {
+    width: auto;
+    height: min(46svh, 36rem);
+  }
+
+  .key-profile__section {
+    padding-inline: clamp(1rem, 3vw, 2rem);
+  }
+
+  .key-profile__section:last-child {
+    padding-block-end: 2rem;
+  }
+}
+
+@media (max-width: 599px) {
+  .key-profile {
+    width: 100vw;
+    height: 100dvh;
+    max-width: 100vw;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    padding-block-end: env(safe-area-inset-bottom);
+  }
+
+  .key-profile-card {
+    width: 58vw;
+    height: auto;
+  }
+
+  .key-profile-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

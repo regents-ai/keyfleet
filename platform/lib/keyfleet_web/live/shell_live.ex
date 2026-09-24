@@ -17,6 +17,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleet.Graph
   alias KeyFleet.Graph.Errors.UnknownFleetError
   alias KeyFleet.Keys
+  alias KeyFleet.Keys.Profile
   alias KeyFleet.Proposals
   alias KeyFleet.Rooms
   alias KeyFleet.Rooms.Checks.RoomPoster
@@ -25,6 +26,7 @@ defmodule KeyFleetWeb.ShellLive do
   alias KeyFleetWeb.{
     AccountLive,
     FleetLive,
+    KeyLinks,
     KeyMap,
     KeysLive,
     NotFoundError,
@@ -45,6 +47,8 @@ defmodule KeyFleetWeb.ShellLive do
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
   @thread_kept 200
+  # A key's profile keeps the latest hundred messages written to it.
+  @key_thread_kept 100
   # How long a workspace page waits after a notice of changes before it reads
   # them, so a burst of writes is read once.
   @workspace_refresh_after 1_000
@@ -65,6 +69,8 @@ defmodule KeyFleetWeb.ShellLive do
      |> stream(:posts, [])
      |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
      |> stream(:fleet_keys, [])
+     |> stream_configure(:key_thread, dom_id: &"key-message-#{&1.id}")
+     |> stream(:key_thread, [])
      |> assign(
        theme: session["theme"],
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
@@ -74,6 +80,7 @@ defmodule KeyFleetWeb.ShellLive do
        fleet: nil,
        fleet_params: nil,
        keys_topic: nil,
+       key_profile: nil,
        key: nil,
        key_notice: nil,
        room: nil,
@@ -101,6 +108,7 @@ defmodule KeyFleetWeb.ShellLive do
      |> assign(:route_spec, route_spec)
      |> load_verified_connections(route_spec)
      |> load_fleet(route_spec, params)
+     |> load_key_profile(socket.assigns)
      |> load_key(route_spec, params)
      |> load_room(route_spec, params)
      |> load_workspace(route_spec, params)
@@ -147,6 +155,26 @@ defmodule KeyFleetWeb.ShellLive do
     {:noreply, post(socket, body)}
   end
 
+  def handle_event("post_to_key", %{"post" => %{"body" => body}}, socket) do
+    {:noreply, post_to_key(socket, body)}
+  end
+
+  # A key the visitor arrived on closes by taking it out of the address in
+  # place, so closing adds no step to go back through.
+  def handle_event(
+        "close_key",
+        _params,
+        %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket
+      ) do
+    {:noreply,
+     push_patch(socket,
+       to: KeyLinks.closed_path(fleet_id, socket.assigns.fleet_params),
+       replace: true
+     )}
+  end
+
+  def handle_event("close_key", _params, socket), do: {:noreply, socket}
+
   # The map on a deployed fleet's page asks for its keys when it loads and
   # every time it reconnects.
   def handle_event("keymap_ready", _params, %{assigns: %{fleet: %{deployed?: true}}} = socket) do
@@ -154,8 +182,9 @@ defmodule KeyFleetWeb.ShellLive do
     {:reply, KeyMap.snapshot(fleet_id, progress, human_actor(socket)), socket}
   end
 
-  # A key chosen on the map goes into the address, so the back and forward
-  # buttons step through the keys chosen.
+  # A key chosen on the map goes into the address and its profile opens over
+  # the page, so Back closes it. Chosen while a profile is open, it takes that
+  # profile's place in the address, so closing still just closes.
   def handle_event(
         "select_key",
         %{"token_id" => token_id},
@@ -164,7 +193,8 @@ defmodule KeyFleetWeb.ShellLive do
     if KeyMap.choosable?(fleet.progress, token_id) do
       {:noreply,
        push_patch(socket,
-         to: chosen_key_path(fleet.fleet_id, socket.assigns.fleet_params, token_id)
+         to: KeyLinks.key_path(fleet.fleet_id, token_id, socket.assigns.fleet_params),
+         replace: socket.assigns.key_profile != nil
        )}
     else
       {:noreply, socket}
@@ -206,14 +236,17 @@ defmodule KeyFleetWeb.ShellLive do
   def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
 
   # Keys changed in the fleet on show: its sales figures and the key on offer
-  # are read again, the key list only when a changed key is on it, and the map
-  # is told the changed keys' marks, or told to load again when too many
-  # changed to list.
+  # are read again, the key list only when a changed key is on it, the open
+  # key's profile when the key or one of its holder's changed, and the map is
+  # told the changed keys' marks, or told to load again when too many changed
+  # to list.
   def handle_info(
         {:keys_changed, fleet_id, token_ids},
         %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket
       ) do
-    socket = socket |> refresh_sales() |> refresh_listed(token_ids)
+    socket =
+      socket |> refresh_sales() |> refresh_listed(token_ids) |> refresh_key_profile(token_ids)
+
     progress = socket.assigns.fleet.progress
 
     case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
@@ -225,7 +258,17 @@ defmodule KeyFleetWeb.ShellLive do
   # A notice for a fleet the page has since left, or one not yet on sale.
   def handle_info({:keys_changed, _fleet_id, _token_ids}, socket), do: {:noreply, socket}
 
-  # Keys' own threads are not shown on any page yet.
+  # Something written as, or to, the open key or another of its holder's keys:
+  # the key's new messages are read from its thread, and its posts again.
+  def handle_info(
+        {:key_activity, fleet_id, token_id},
+        %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true} = profile}} = socket
+      ) do
+    if token_id == profile.token_id or token_id in profile.holder_keys,
+      do: {:noreply, show_key_activity(socket)},
+      else: {:noreply, socket}
+  end
+
   def handle_info({:key_activity, _fleet_id, _token_id}, socket), do: {:noreply, socket}
 
   # A room created or named in the fleet on show changes its list of rooms, and
@@ -275,6 +318,15 @@ defmodule KeyFleetWeb.ShellLive do
     end
   end
 
+  # Votes recorded in the fleet move the open key's two vote figures.
+  def handle_info(
+        {:proposals_changed, fleet_id},
+        %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true} = profile}} = socket
+      ) do
+    votes = Profile.votes(fleet_id, profile.token_id, profile.holder)
+    {:noreply, assign(socket, :key_profile, Map.merge(profile, votes))}
+  end
+
   def handle_info({notice, _fleet_id}, socket)
       when notice in [:proposals_changed, :balances_changed],
       do: {:noreply, socket}
@@ -318,7 +370,10 @@ defmodule KeyFleetWeb.ShellLive do
         <FleetLive.page
           :if={@route_spec.route_id == :fleet}
           fleet={@fleet}
+          params={@fleet_params}
           keys={@streams.fleet_keys}
+          profile={@key_profile}
+          thread={@streams.key_thread}
         />
 
         <KeysLive.page :if={@route_spec.route_id == :keys} key={@key} notice={@key_notice} />
@@ -476,13 +531,132 @@ defmodule KeyFleetWeb.ShellLive do
     end
   end
 
-  # The key list's page and any referral stay in the address with the key chosen.
-  defp chosen_key_path(fleet_id, params, token_id) do
-    kept =
-      for name <- ["after", "before", "ref"], is_binary(params[name]), do: {name, params[name]}
+  # The key named in the address opens over its fleet's page. The page starts
+  # listening to the fleet's rooms and votes before it reads, so a message
+  # that lands while it loads still reaches it.
+  defp load_key_profile(%{assigns: %{fleet: %{chosen_key: token_id} = fleet}} = socket, before)
+       when is_integer(token_id) do
+    socket = socket |> listen_to(fleet.fleet_id) |> follow_proposals(fleet.fleet_id)
+    profile = Profile.read(fleet.fleet_id, token_id, human_actor(socket))
 
-    "/app/fleets/#{fleet_id}?#{URI.encode_query(kept ++ [{"key", token_id}])}"
+    socket
+    |> assign(
+      :key_profile,
+      profile
+      |> Map.delete(:thread)
+      |> Map.merge(%{
+        close: closing(before, fleet.fleet_id),
+        news: nil,
+        notice: nil,
+        draft: "",
+        send_key: Ash.UUID.generate()
+      })
+    )
+    |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
+
+  defp load_key_profile(socket, _before),
+    do: socket |> assign(:key_profile, nil) |> stream(:key_thread, [], reset: true)
+
+  # The messages written to a key; the next key on sale has none yet.
+  defp key_thread(%{issued?: true, thread: thread}), do: thread
+  defp key_thread(%{issued?: false}), do: []
+
+  # How the profile closes: by going back when the fleet's page opened it, so
+  # Close and Back agree; in place when the visitor arrived with the key in
+  # the address. Another key opened while a profile is open takes its place in
+  # the address rather than adding a step, so it closes as the first one did.
+  defp closing(%{fleet: %{fleet_id: fleet_id, chosen_key: nil}}, fleet_id), do: "back"
+  defp closing(%{key_profile: %{fleet_id: fleet_id, close: close}}, fleet_id), do: close
+  defp closing(_before, _fleet_id), do: "replace"
+
+  # The open key is read again when it was sold, or when it or another key
+  # changed hands to or from its holder. What the visitor was writing stays,
+  # and the thread keeps its messages. Otherwise only who may write is checked
+  # again: the visitor may have bought their first key, or the fleet's key
+  # ownership become fresh.
+  defp refresh_key_profile(%{assigns: %{key_profile: %{} = shown}} = socket, token_ids) do
+    if holder_moved?(shown, token_ids) do
+      profile = Profile.read(shown.fleet_id, shown.token_id, human_actor(socket))
+
+      socket
+      |> assign(
+        :key_profile,
+        profile
+        |> Map.delete(:thread)
+        |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
+      )
+      |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
+    else
+      recheck_composer(socket)
+    end
+  end
+
+  defp refresh_key_profile(socket, _token_ids), do: socket
+
+  defp holder_moved?(%{issued?: false, token_id: token_id}, token_ids), do: token_id in token_ids
+
+  defp holder_moved?(%{issued?: true, fleet_id: fleet_id, holder: holder}, token_ids),
+    do: Profile.held_any?(fleet_id, holder, token_ids)
+
+  # The next key on sale has no thread, so no one writes to it yet. A notice
+  # about the last message sent goes once what the profile says about writing
+  # has changed, which explains it.
+  defp recheck_composer(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
+    case Profile.composer(human_actor(socket), profile.fleet_id) do
+      composer when composer == profile.composer -> socket
+      composer -> assign(socket, :key_profile, %{profile | composer: composer, notice: nil})
+    end
+  end
+
+  defp recheck_composer(socket), do: socket
+
+  # Only the messages after the last one on show are read and added.
+  defp show_key_activity(%{assigns: %{key_profile: profile}} = socket) do
+    %{fleet_id: fleet_id, token_id: token_id} = profile
+    messages = Profile.thread_after(fleet_id, token_id, profile.last_seq)
+
+    socket
+    |> assign(
+      :key_profile,
+      profile
+      |> Map.merge(Profile.activity(fleet_id, token_id, profile.holder))
+      |> Map.merge(%{
+        last_seq: Profile.last_seq(messages, profile.last_seq),
+        news: if(messages != [], do: "New message to Key #{FleetLive.grouped(token_id)}.")
+      })
+    )
+    |> stream(:key_thread, messages, limit: -@key_thread_kept)
+  end
+
+  # The message is written straight to the key's thread, and the profile then
+  # reads back what the thread holds after the last message it was showing.
+  defp post_to_key(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket, body) do
+    %{fleet_id: fleet_id, token_id: token_id} = profile
+
+    case Rooms.send_to_key(
+           %{
+             fleet_id: fleet_id,
+             token_id: token_id,
+             body: body,
+             idempotency_key: profile.send_key
+           },
+           actor: human_actor(socket)
+         ) do
+      {:ok, _message} ->
+        socket
+        |> update(:key_profile, &%{&1 | draft: "", notice: nil, send_key: Ash.UUID.generate()})
+        |> show_key_activity()
+        |> update(:key_profile, &%{&1 | news: nil})
+
+      {:error, refusal} ->
+        socket
+        |> update(:key_profile, &%{&1 | draft: body, notice: post_refusal(refusal, fleet_id)})
+        |> recheck_composer()
+    end
+  end
+
+  defp post_to_key(socket, _body), do: socket
 
   # What the wallet is asked to pay for the next key, read from the fleet's
   # deployment and the latest reading of its sales. A reading that has fallen
@@ -704,11 +878,15 @@ defmodule KeyFleetWeb.ShellLive do
     |> stream(:posts, posts, reset: true, limit: -@thread_kept)
   end
 
+  # A key open over its fleet's page keeps listening to the fleet's rooms.
   defp load_room(socket, _route_spec, _params) do
     socket
-    |> listen_to(nil)
+    |> listen_to(open_key_fleet(socket))
     |> assign(room: nil, room_notice: nil, send_key: nil)
   end
+
+  defp open_key_fleet(%{assigns: %{key_profile: %{fleet_id: fleet_id}}}), do: fleet_id
+  defp open_key_fleet(_socket), do: nil
 
   # The fleet's rooms, and what the page shows of the one it is on.
   defp show_rooms(%{slug: slug} = shown, rooms) do
@@ -950,9 +1128,10 @@ defmodule KeyFleetWeb.ShellLive do
     |> read_proposals()
   end
 
+  # A key open over its fleet's page keeps hearing about the fleet's votes.
   defp load_proposals(socket, _route_spec, _params) do
     socket
-    |> follow_proposals(nil)
+    |> follow_proposals(open_key_fleet(socket))
     |> assign(proposals: nil, proposals_params: nil, proposals_check: nil)
   end
 

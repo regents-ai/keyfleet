@@ -40,6 +40,10 @@ defmodule KeyFleet.Proposals.Vote do
       index([:proposal_id, :record_seq])
       # What the second reading of the last blocks compares with.
       index([:fleet_id, :block_number])
+      # The votes a key has been used in.
+      index([:token_ids], using: "GIN")
+      # The votes a wallet has cast in a fleet.
+      index([:fleet_id, :voter])
     end
 
     custom_statements do
@@ -109,6 +113,24 @@ defmodule KeyFleet.Proposals.Vote do
                fleet_id == ^arg(:fleet_id) and block_number >= ^arg(:from_block) and
                  block_number <= ^arg(:to_block)
              )
+    end
+
+    # Every vote in the fleet that used key `token_id`.
+    read :with_key do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @max_bigint]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment("? @> ARRAY[?]::bigint[]", token_ids, ^arg(:token_id))
+             )
+    end
+
+    # Every vote `voter` has cast in the fleet.
+    read :by_voter do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :voter, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and voter == ^arg(:voter))
     end
   end
 
