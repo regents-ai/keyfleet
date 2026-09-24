@@ -5,9 +5,14 @@ defmodule KeyFleet.Keeper.Income do
   fleet's protocol share to the Regents staking contract once a day.
 
   For a fleet whose launch is still at auction as the fleet last recorded
-  it, while the strategy already has its verdict, graduated or failed, it
-  sends the fleet's `syncLaunch()` to record that verdict; the next round
-  goes on from the recorded state.
+  it, it opens a settle round (`KeyFleet.Keeper.Sender.settle_round/3`)
+  and sends, in this order:
+
+    * the strategy's `migrate` of the fleet's auction, once the auction
+      may be settled and nobody has settled it yet, which gives the
+      strategy its verdict, graduated or failed;
+    * the fleet's `syncLaunch()`, once the strategy has its verdict, to
+      record it; the next round goes on from the recorded state.
 
   For a fleet whose launch has graduated, and which has recorded that, it
   opens an income round (`KeyFleet.Keeper.Sender.income_round/3`) and
@@ -79,7 +84,7 @@ defmodule KeyFleet.Keeper.Income do
         income_round(fleet, acc)
 
       {:ok, :auction_created} ->
-        sync_launch(fleet, acc)
+        settle_round(fleet, acc)
 
       {:ok, _none_or_failed} ->
         {:cont, acc}
@@ -90,17 +95,17 @@ defmodule KeyFleet.Keeper.Income do
     end
   end
 
-  # A launch at auction as the fleet last recorded it: `syncLaunch()` is sent
-  # only when calling it now would record the strategy's verdict.
-  defp sync_launch(fleet, acc) do
-    send_due(fleet, nil, {:sync_launch, fleet.contract_address, nil}, acc)
-  end
+  defp settle_round(fleet, acc),
+    do: in_round(&Sender.settle_round/3, "settle", fleet, &settle_calls(fleet, &1), acc)
 
-  defp income_round(fleet, {sender, income, tally}) do
-    case Sender.income_round(sender, fleet.id, fn sender, round ->
+  defp income_round(fleet, acc),
+    do: in_round(&Sender.income_round/3, "income", fleet, &income_calls(fleet, &1), acc)
+
+  defp in_round(open, name, fleet, calls, {sender, income, tally}) do
+    case open.(sender, fleet.id, fn sender, round ->
            {next, {sender, income, tally}} =
-             fleet
-             |> income_calls(round)
+             round
+             |> calls.()
              |> send_all(fleet, round, {sender, income, tally})
 
            {{next, income, tally}, sender}
@@ -113,10 +118,13 @@ defmodule KeyFleet.Keeper.Income do
         {:cont, {sender, income, tally}}
 
       {:error, reason, sender} ->
-        Logger.warning("Keeper could not open #{fleet.id}'s income round: #{inspect(reason)}")
+        Logger.warning("Keeper could not open #{fleet.id}'s #{name} round: #{inspect(reason)}")
         {:cont, {sender, income, tally}}
     end
   end
+
+  defp settle_calls(fleet, round),
+    do: [{:migrate, round.strategy, round.auction}, {:sync_launch, fleet.contract_address, nil}]
 
   defp income_calls(fleet, round) do
     [{:release, round.escrow, nil}, {:collect, round.locker, round.lp_token_id}] ++
@@ -170,6 +178,14 @@ defmodule KeyFleet.Keeper.Income do
 
   # Whether a call would do anything now: `{:ok, due?, income}`, or
   # `{:error, reason}` when the chain could not say.
+  defp due(sender, income, fleet, _round, {:migrate, _strategy, _auction}) do
+    with {:ok, distribution} <- Sender.read(sender, fleet.contract_address, :launch_distribution),
+         {:ok, block} <- sender.node.latest_block() do
+      {:ok, distribution.lifecycle == :active and block.number >= distribution.migration_block,
+       income}
+    end
+  end
+
   defp due(sender, income, _fleet, _round, {:sync_launch, fleet_address, nil}) do
     with {:ok, call} <- Calls.new(:sync_launch, fleet_address, nil),
          {:ok, state} <- Sender.dry_run(sender, call),

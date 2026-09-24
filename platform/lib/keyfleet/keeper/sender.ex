@@ -13,6 +13,8 @@ defmodule KeyFleet.Keeper.Sender do
       read inside `income_round/3`, and only once the fleet's launch record
       and distribution agree and the distribution, escrow, splitter and
       receiver all name the fleet as their treasury;
+    * `migrate` goes to the strategy the fleet's factory names, with only
+      the fleet's own auction, as read inside `settle_round/3`;
     * `collect` takes only the launch's LP position, and `sweep`,
       `recognizeSurplusRevenue` and `recognizeSurplus` only its USDC,
       REGENT or subject token, which a round reads too.
@@ -164,9 +166,26 @@ defmodule KeyFleet.Keeper.Sender do
   `{:ok, result, sender}`, or `{:error, reason, sender}` without calling
   `fun` when the round cannot be opened.
   """
-  def income_round(%__MODULE__{} = sender, fleet_id, fun) do
+  def income_round(%__MODULE__{} = sender, fleet_id, fun),
+    do: open_round(sender, fleet_id, &read_round/2, fun)
+
+  @doc """
+  Runs `fun` inside one settle round for a fleet whose launch is still at
+  auction, and closes the round after it, as `income_round/3` does.
+
+  The round reads the strategy the fleet's factory names and the fleet's
+  auction. Only inside the round may `migrate` be sent for the fleet, and
+  only to that strategy with that auction.
+
+  `fun` gets the sender and the round, a map naming the `:strategy` and the
+  `:auction`.
+  """
+  def settle_round(%__MODULE__{} = sender, fleet_id, fun),
+    do: open_round(sender, fleet_id, &read_settle_round/2, fun)
+
+  defp open_round(sender, fleet_id, read, fun) do
     with {:ok, fleet} <- fleet(sender, fleet_id),
-         {:ok, round} <- read_round(sender, fleet) do
+         {:ok, round} <- read.(sender, fleet) do
       {result, sender} = fun.(%{sender | income: Map.put(sender.income, fleet_id, round)}, round)
       {:ok, result, %{sender | income: Map.delete(sender.income, fleet_id)}}
     else
@@ -283,8 +302,14 @@ defmodule KeyFleet.Keeper.Sender do
     if target == fleet.contract_address, do: :ok, else: {:error, :foreign_target}
   end
 
+  defp allowed_target(_fleet, %{strategy: strategy}, %Call{fn: :migrate, target: target}) do
+    if target == strategy, do: :ok, else: {:error, :foreign_target}
+  end
+
+  defp allowed_target(_fleet, _round, %Call{fn: :migrate}), do: {:error, :foreign_target}
+
   defp allowed_target(_fleet, %{} = round, %Call{fn: fun, target: target}) do
-    if Map.fetch!(round, Map.fetch!(@income_contracts, fun)) == target,
+    if Map.get(round, Map.fetch!(@income_contracts, fun)) == target,
       do: :ok,
       else: {:error, :foreign_target}
   end
@@ -295,9 +320,17 @@ defmodule KeyFleet.Keeper.Sender do
     if arg == lp_token_id, do: :ok, else: {:error, :foreign_argument}
   end
 
-  defp allowed_argument(round, %Call{fn: fun, arg: token}) when fun in @token_functions do
-    if is_map(round) and token in round.tokens, do: :ok, else: {:error, :foreign_argument}
+  defp allowed_argument(%{auction: auction}, %Call{fn: :migrate, arg: arg}) do
+    if arg == auction, do: :ok, else: {:error, :foreign_argument}
   end
+
+  defp allowed_argument(%{tokens: tokens}, %Call{fn: fun, arg: token})
+       when fun in @token_functions do
+    if token in tokens, do: :ok, else: {:error, :foreign_argument}
+  end
+
+  defp allowed_argument(_round, %Call{fn: fun}) when fun in @token_functions,
+    do: {:error, :foreign_argument}
 
   defp allowed_argument(_round, _call), do: :ok
 
@@ -321,6 +354,13 @@ defmodule KeyFleet.Keeper.Sender do
          :ok <- treasuries(sender, fleet, round) do
       {:ok, round}
     end
+  end
+
+  defp read_settle_round(sender, fleet) do
+    with {:ok, record} <- read(sender, fleet.contract_address, :launch_record),
+         {:ok, factory} <- read(sender, fleet.contract_address, :factory),
+         {:ok, strategy} <- read(sender, factory, :strategy),
+         do: {:ok, %{strategy: strategy, auction: record.auction}}
   end
 
   defp same_launch(fleet, record, distribution) do
@@ -709,6 +749,8 @@ defmodule KeyFleet.Keeper.Sender do
       {:ok, call}
     end
   end
+
+  defp round_for(sender, fleet, %Call{fn: :migrate}), do: read_settle_round(sender, fleet)
 
   defp round_for(sender, fleet, %Call{fn: fun}) when fun in @round_functions,
     do: read_round(sender, fleet)

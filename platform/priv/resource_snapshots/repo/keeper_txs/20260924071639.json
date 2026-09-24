@@ -1,0 +1,536 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "job",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "function",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "target",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "from_address",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "args",
+      "type": "map"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "chain_id",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "nonce",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "max_fee",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "max_priority_fee",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "gas_limit",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "tx_hash",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "replaces_tx_hash",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": true,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "sent_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "status",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "block_number",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "gas_used",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "effective_gas_price",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "l1_fee_wei",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "cost_wei",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "result",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "settled_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "keeper_txs_fleet_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "fleets"
+      },
+      "scale": null,
+      "size": null,
+      "source": "fleet_id",
+      "type": "text"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "job"
+      ],
+      "base_filter": null,
+      "check": "job IN ('reveal', 'income')",
+      "name": "keeper_txs_job"
+    },
+    {
+      "attribute": [
+        "function"
+      ],
+      "base_filter": null,
+      "check": "function IN ('collect', 'migrate', 'recognize_surplus', 'recognize_surplus_revenue', 'release', 'request_reveal', 'send_protocol_share', 'sweep', 'sync_launch')",
+      "name": "keeper_txs_function"
+    },
+    {
+      "attribute": [
+        "status"
+      ],
+      "base_filter": null,
+      "check": "status IN ('mined', 'reverted', 'replaced', 'replaced_externally')",
+      "name": "keeper_txs_status"
+    },
+    {
+      "attribute": [
+        "target"
+      ],
+      "base_filter": null,
+      "check": "target ~ '^0x[0-9a-f]{40}$'",
+      "name": "keeper_txs_target_shape"
+    },
+    {
+      "attribute": [
+        "from_address"
+      ],
+      "base_filter": null,
+      "check": "from_address ~ '^0x[0-9a-f]{40}$'",
+      "name": "keeper_txs_from_address_shape"
+    },
+    {
+      "attribute": [
+        "tx_hash"
+      ],
+      "base_filter": null,
+      "check": "tx_hash ~ '^0x[0-9a-f]{64}$'",
+      "name": "keeper_txs_tx_hash_shape"
+    },
+    {
+      "attribute": [
+        "replaces_tx_hash"
+      ],
+      "base_filter": null,
+      "check": "replaces_tx_hash ~ '^0x[0-9a-f]{64}$'",
+      "name": "keeper_txs_replaces_tx_hash_shape"
+    },
+    {
+      "attribute": [
+        "chain_id"
+      ],
+      "base_filter": null,
+      "check": "chain_id > 0",
+      "name": "keeper_txs_positive_chain_id"
+    },
+    {
+      "attribute": [
+        "nonce"
+      ],
+      "base_filter": null,
+      "check": "nonce >= 0",
+      "name": "keeper_txs_nonnegative_nonce"
+    },
+    {
+      "attribute": [
+        "max_fee"
+      ],
+      "base_filter": null,
+      "check": "max_fee >= 0",
+      "name": "keeper_txs_nonnegative_max_fee"
+    },
+    {
+      "attribute": [
+        "max_priority_fee"
+      ],
+      "base_filter": null,
+      "check": "max_priority_fee >= 0",
+      "name": "keeper_txs_nonnegative_max_priority_fee"
+    },
+    {
+      "attribute": [
+        "gas_limit"
+      ],
+      "base_filter": null,
+      "check": "gas_limit >= 0",
+      "name": "keeper_txs_nonnegative_gas_limit"
+    },
+    {
+      "attribute": [
+        "block_number"
+      ],
+      "base_filter": null,
+      "check": "block_number >= 0",
+      "name": "keeper_txs_nonnegative_block_number"
+    },
+    {
+      "attribute": [
+        "gas_used"
+      ],
+      "base_filter": null,
+      "check": "gas_used >= 0",
+      "name": "keeper_txs_nonnegative_gas_used"
+    },
+    {
+      "attribute": [
+        "effective_gas_price"
+      ],
+      "base_filter": null,
+      "check": "effective_gas_price >= 0",
+      "name": "keeper_txs_nonnegative_effective_gas_price"
+    },
+    {
+      "attribute": [
+        "l1_fee_wei"
+      ],
+      "base_filter": null,
+      "check": "l1_fee_wei >= 0",
+      "name": "keeper_txs_nonnegative_l1_fee_wei"
+    },
+    {
+      "attribute": [
+        "cost_wei"
+      ],
+      "base_filter": null,
+      "check": "cost_wei >= 0",
+      "name": "keeper_txs_nonnegative_cost_wei"
+    },
+    {
+      "attribute": [
+        "status"
+      ],
+      "base_filter": null,
+      "check": "num_nonnulls(status, settled_at) IN (0, 2) AND\nCASE WHEN status IN ('mined', 'reverted')\n  THEN num_nonnulls(block_number, gas_used, effective_gas_price, cost_wei) = 4\n  ELSE num_nonnulls(block_number, gas_used, effective_gas_price, l1_fee_wei, cost_wei) = 0\nEND AND\n(status IS NOT NULL OR result IS NULL)\n",
+      "name": "keeper_txs_outcome_fields"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "chain_id",
+        "from_address",
+        "nonce"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "chain_id"
+        },
+        {
+          "type": "atom",
+          "value": "from_address"
+        },
+        {
+          "type": "atom",
+          "value": "nonce"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": "status IS NULL"
+    }
+  ],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP FUNCTION keyfleet_app.protect_keeper_tx();",
+      "global?": false,
+      "name": "keeper_txs_function",
+      "up": "CREATE FUNCTION keyfleet_app.protect_keeper_tx() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  IF TG_OP <> 'UPDATE' THEN\n    RAISE EXCEPTION 'keeper transactions cannot be deleted' USING ERRCODE = '23514';\n  END IF;\n  IF ROW(NEW.id, NEW.job, NEW.fleet_id, NEW.function, NEW.target, NEW.from_address,\n         NEW.args, NEW.chain_id, NEW.nonce, NEW.tx_hash, NEW.replaces_tx_hash, NEW.max_fee,\n         NEW.max_priority_fee, NEW.gas_limit, NEW.sent_at)\n     IS DISTINCT FROM\n     ROW(OLD.id, OLD.job, OLD.fleet_id, OLD.function, OLD.target, OLD.from_address,\n         OLD.args, OLD.chain_id, OLD.nonce, OLD.tx_hash, OLD.replaces_tx_hash, OLD.max_fee,\n         OLD.max_priority_fee, OLD.gas_limit, OLD.sent_at) THEN\n    RAISE EXCEPTION 'what a keeper transaction sent cannot be changed' USING ERRCODE = '23514';\n  END IF;\n  IF OLD.status IS NOT NULL THEN\n    RAISE EXCEPTION 'a settled keeper transaction cannot be changed' USING ERRCODE = '23514';\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER protect_keeper_txs ON keyfleet_app.keeper_txs;",
+      "global?": false,
+      "name": "keeper_txs_trigger",
+      "up": "CREATE TRIGGER protect_keeper_txs BEFORE UPDATE OR DELETE ON keyfleet_app.keeper_txs\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.protect_keeper_tx();\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER untruncatable_keeper_txs ON keyfleet_app.keeper_txs;",
+      "global?": false,
+      "name": "untruncatable_keeper_txs_trigger",
+      "up": "CREATE TRIGGER untruncatable_keeper_txs BEFORE TRUNCATE ON keyfleet_app.keeper_txs\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.protect_keeper_tx();\n"
+    }
+  ],
+  "has_create_action": true,
+  "hash": "B2256047E082685E362CD2FD970F04D823DC7BAE0D5B93EACC90683AE1A39575",
+  "identities": [
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "keeper_txs_unique_tx_hash_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "tx_hash"
+        }
+      ],
+      "name": "unique_tx_hash",
+      "nils_distinct?": true,
+      "where": null
+    }
+  ],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.KeyFleet.Repo",
+  "schema": null,
+  "table": "keeper_txs"
+}

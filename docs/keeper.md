@@ -2,7 +2,7 @@
 
 The keeper is the one part of the site that sends transactions. It runs inside
 the site on Base, from one wallet Regent keeps for nothing else, and sends only
-eight permissionless calls. None of them lets the caller choose where money
+nine permissionless calls. None of them lets the caller choose where money
 goes:
 
 - every 30 seconds, `requestReveal(tokenId)` for keys that were sold but never
@@ -11,9 +11,10 @@ goes:
   launch has graduated: `release()` on its vesting escrow, `collect(lpTokenId)`
   on its LP locker, `sweep(token)` on its payment receiver,
   `recognizeSurplusRevenue(token)` on its splitter and `recognizeSurplus(token)`
-  on the fleet, each only when the chain says it would move something, and
-  `syncLaunch()` on a fleet whose auction has ended but which has not yet
-  recorded the result;
+  on the fleet, each only when the chain says it would move something; and for
+  each fleet whose launch is still at auction, `migrate(auction)` on the
+  Autolaunch strategy once the auction may be settled and nobody has settled
+  it, then `syncLaunch()` on the fleet once the strategy has its result;
 - once a day for each fleet, `sendProtocolShare()` while the fleet owes any.
 
 It holds itself to these limits, which are fixed in the code:

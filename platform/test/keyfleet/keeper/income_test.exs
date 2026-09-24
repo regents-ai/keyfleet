@@ -18,6 +18,7 @@ defmodule KeyFleet.Keeper.IncomeTest do
   @regent KeeperHelpers.address(:regent)
   @subject KeeperHelpers.address(:subject)
   @stranger KeeperHelpers.address(:stranger)
+  @strategy KeeperHelpers.address(:strategy)
   @lp_token_id KeeperHelpers.lp_token_id()
   @registry "0x" <> String.duplicate("ab", 20)
   @tokens [@usdc, @regent, @subject]
@@ -25,6 +26,8 @@ defmodule KeyFleet.Keeper.IncomeTest do
   @year 365 * 86_400
   @owes_nothing %{[@fleet, :protocol_share_owed] => [0]}
   @sync {:sync_launch, @fleet, nil}
+  # The launch record's auction is the stranger's address.
+  @migrate {:migrate, @strategy, @stranger}
   @other "0x" <> String.duplicate("c1", 20)
   @other_share {:send_protocol_share, @other, nil}
 
@@ -230,11 +233,40 @@ defmodule KeyFleet.Keeper.IncomeTest do
       assert calls() == [@sync, {:send_protocol_share, @fleet, nil}]
     end
 
-    test "at auction with no verdict yet is not synced" do
-      StubNode.put_chain(calls: answering(chain([due_all(), at_auction(1), @owes_nothing])))
+    test "at auction before its auction may settle gets nothing sent" do
+      StubNode.put_chain(
+        calls:
+          answering(
+            chain([due_all(), at_auction(1), @owes_nothing], %{
+              lifecycle: 1,
+              migration_block: 1_000_000
+            })
+          )
+      )
 
       assert capture_log(fn -> run(start!(), Income.new()) end) == ""
       assert sent() == []
+    end
+
+    test "at auction once its auction may settle is settled, then synced once settled" do
+      StubNode.put_chain(
+        calls:
+          answering(
+            chain([due_all(), at_auction(1), @owes_nothing], %{
+              lifecycle: 1,
+              migration_block: 1_000
+            })
+          )
+      )
+
+      {sender, income} = Income.run(start!(), Income.new())
+      assert calls() == [@migrate]
+
+      # The chain once the settle is included: the strategy has its verdict.
+      StubNode.update(calls: answering(chain([due_all(), at_auction(2), @owes_nothing])))
+      Income.run(sender, income)
+
+      assert calls() == [@migrate, @sync]
     end
 
     test "whose sync the fleet refuses is not synced" do
@@ -350,7 +382,7 @@ defmodule KeyFleet.Keeper.IncomeTest do
   # The calls the keeper sent, in order, as `{function, contract, argument}`.
   defp calls do
     by_calldata =
-      Map.new([@sync, @other_share | @calls], fn {fun, to, arg} = call ->
+      Map.new([@sync, @migrate, @other_share | @calls], fn {fun, to, arg} = call ->
         {{to, calldata!(fun, to, arg)}, call}
       end)
 
@@ -360,7 +392,7 @@ defmodule KeyFleet.Keeper.IncomeTest do
   # The chain with nothing for the income job to do, changed by each of
   # `changes`: maps from `[contract, view]` or `[contract, view, args]` to
   # what it answers.
-  defp chain(changes) do
+  defp chain(changes, distribution \\ %{}) do
     idle =
       %{
         [@fleet, :launch_state] => [2],
@@ -390,7 +422,7 @@ defmodule KeyFleet.Keeper.IncomeTest do
     changes
     |> Enum.reduce(idle, &Map.merge(&2, &1))
     |> Map.new(fn {path, answer} -> {key(path), answer} end)
-    |> Map.merge(launch())
+    |> Map.merge(launch(distribution: distribution))
   end
 
   defp key([@locker, :collect]), do: {@locker, calldata!(:collect, @locker, @lp_token_id)}

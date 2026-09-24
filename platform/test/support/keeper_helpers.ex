@@ -106,7 +106,9 @@ defmodule KeyFleet.KeeperHelpers do
   The fleet's launch as the chain answers it, as `answering/1` takes it: its
   record and distribution, its factory's strategy and LP locker, the
   splitter's USDC and REGENT, and each income contract's treasury.
-  `:distribution` changes what the distribution says, and `:treasury` maps
+  `:distribution` changes what the distribution says (its `:lifecycle`,
+  graduated by default, `:migration_block`, `:treasury`, `:splitter` and
+  `:lp_token_id`), and `:treasury` maps
   a contract to the treasury it names instead of the fleet.
   """
   def launch(opts \\ []) do
@@ -120,7 +122,13 @@ defmodule KeyFleet.KeeperHelpers do
 
     distribution =
       Map.merge(
-        %{splitter: a.splitter, treasury: a.fleet, lp_token_id: @lp_token_id},
+        %{
+          lifecycle: 2,
+          migration_block: 4,
+          splitter: a.splitter,
+          treasury: a.fleet,
+          lp_token_id: @lp_token_id
+        },
         Keyword.get(opts, :distribution, %{})
       )
 
@@ -139,11 +147,11 @@ defmodule KeyFleet.KeeperHelpers do
         @lp_token_id
       ],
       {a.fleet, :launch_distribution} => [
-        2,
+        distribution.lifecycle,
         1,
         2,
         3,
-        4,
+        distribution.migration_block,
         5,
         6,
         7,

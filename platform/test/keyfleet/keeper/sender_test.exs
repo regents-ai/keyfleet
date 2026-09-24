@@ -25,6 +25,8 @@ defmodule KeyFleet.Keeper.SenderTest do
   @regent KeeperHelpers.address(:regent)
   @subject KeeperHelpers.address(:subject)
   @stranger KeeperHelpers.address(:stranger)
+  @strategy KeeperHelpers.address(:strategy)
+  @factory KeeperHelpers.address(:factory)
   @lp_token_id KeeperHelpers.lp_token_id()
 
   @gwei 1_000_000_000
@@ -186,9 +188,10 @@ defmodule KeyFleet.Keeper.SenderTest do
             request(:recognize_surplus, @escrow, @usdc),
             request(:send_protocol_share, @splitter, nil),
             request(:sync_launch, @escrow, nil),
-            # Income contracts are known only inside a round.
+            # Income contracts and the strategy are known only inside a round.
             request(:release, @escrow, nil),
-            request(:sweep, @receiver, @usdc)
+            request(:sweep, @receiver, @usdc),
+            request(:migrate, @strategy, @stranger)
           ] do
         assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
       end
@@ -200,9 +203,29 @@ defmodule KeyFleet.Keeper.SenderTest do
                        request(:collect, @escrow, @lp_token_id),
                        request(:sweep, @fleet, @usdc),
                        request(:recognize_surplus_revenue, @receiver, @usdc),
-                       request(:recognize_surplus, @splitter, @usdc)
+                       request(:recognize_surplus, @splitter, @usdc),
+                       request(:migrate, @strategy, @stranger)
                      ] do
                    assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
+                 end
+
+                 {:refused, sender}
+               end)
+
+      assert {:ok, :refused, sender} =
+               Sender.settle_round(sender, @fleet_id, fn sender, _round ->
+                 for request <- [
+                       request(:migrate, @factory, @stranger),
+                       request(:release, @escrow, nil)
+                     ] do
+                   assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
+                 end
+
+                 for request <- [
+                       request(:migrate, @strategy, @escrow),
+                       request(:recognize_surplus, @fleet, @usdc)
+                     ] do
+                   assert {:error, :foreign_argument, _sender} = Sender.send(sender, request)
                  end
 
                  {:refused, sender}
@@ -254,9 +277,10 @@ defmodule KeyFleet.Keeper.SenderTest do
         request(:recognize_surplus_revenue, @splitter, @usdc)
       ]
 
-      assert Enum.sort(Enum.map(requests, & &1.call.fn)) == Calls.functions()
+      settle = request(:migrate, @strategy, @stranger)
+      assert Enum.sort(Enum.map([settle | requests], & &1.call.fn)) == Calls.functions()
 
-      assert {:ok, round, _sender} =
+      assert {:ok, round, sender} =
                Sender.income_round(sender, @fleet_id, fn sender, round ->
                  sender =
                    Enum.reduce(requests, sender, fn request, sender ->
@@ -278,7 +302,14 @@ defmodule KeyFleet.Keeper.SenderTest do
                tokens: [@usdc, @regent, @subject]
              }
 
-      assert Enum.map(StubNode.sent(), &decode(&1).nonce) == Enum.to_list(0..7)
+      assert {:ok, round, _sender} =
+               Sender.settle_round(sender, @fleet_id, fn sender, round ->
+                 assert {:ok, %{status: :mined}, _receipt, sender} = Sender.send(sender, settle)
+                 {round, sender}
+               end)
+
+      assert round == %{strategy: @strategy, auction: @stranger}
+      assert Enum.map(StubNode.sent(), &decode(&1).nonce) == Enum.to_list(0..8)
     end
 
     test "takes only the launch's LP position and its USDC, REGENT or subject token" do

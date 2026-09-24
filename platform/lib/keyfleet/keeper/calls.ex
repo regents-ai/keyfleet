@@ -2,7 +2,7 @@ defmodule KeyFleet.Keeper.Calls do
   @moduledoc """
   Everything the keeper may say to a contract.
 
-  It sends only the eight permissionless functions below, each with at most one
+  It sends only the nine permissionless functions below, each with at most one
   argument of a fixed type and never with ETH. A `%Call{}` names one of them,
   the contract and the argument; its calldata is built here and nowhere else,
   so nothing outside this module can put other bytes on the chain.
@@ -32,7 +32,8 @@ defmodule KeyFleet.Keeper.Calls do
     recognize_surplus_revenue: {"recognizeSurplusRevenue(address)", :address},
     recognize_surplus: {"recognizeSurplus(address)", :address},
     send_protocol_share: {"sendProtocolShare()", nil},
-    sync_launch: {"syncLaunch()", nil}
+    sync_launch: {"syncLaunch()", nil},
+    migrate: {"migrate(address)", :address}
   }
 
   # Each view's signature, argument types and return types. Enums come back
@@ -175,7 +176,7 @@ defmodule KeyFleet.Keeper.Calls do
 
   @doc """
   A call to send, or `{:error, reason}`: `:unknown_function` for anything
-  but the eight functions, `:malformed_target` unless the contract is a
+  but the nine functions, `:malformed_target` unless the contract is a
   nonzero address, `:malformed_argument` unless the argument has the
   function's type.
   """

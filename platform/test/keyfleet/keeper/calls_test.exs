@@ -27,7 +27,9 @@ defmodule KeyFleet.Keeper.CallsTest do
             {:recognize_surplus, @usdc,
              "0xaef04030000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"},
             {:send_protocol_share, nil, "0xcb097587"},
-            {:sync_launch, nil, "0x8e9e57df"}
+            {:sync_launch, nil, "0x8e9e57df"},
+            {:migrate, @usdc,
+             "0xce5494bb000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913"}
           ] do
         assert {:ok, %Call{fn: ^fun, target: @fleet, arg: ^arg} = call} =
                  Calls.new(fun, @fleet, arg)
@@ -38,7 +40,7 @@ defmodule KeyFleet.Keeper.CallsTest do
     end
 
     test "an unknown function is refused, however it is asked for" do
-      for fun <- [:transfer, :approve, :migrate, :fund_subscription_with_native, "release", nil] do
+      for fun <- [:transfer, :approve, :fund_subscription_with_native, "release", nil] do
         assert Calls.new(fun, @fleet, nil) == {:error, :unknown_function}
 
         assert Calls.calldata(%Call{fn: fun, target: @fleet, arg: nil}) ==
@@ -70,6 +72,8 @@ defmodule KeyFleet.Keeper.CallsTest do
             release: @usdc,
             send_protocol_share: 1,
             sync_launch: @fleet,
+            migrate: nil,
+            migrate: 1,
             request_reveal: nil,
             request_reveal: -1,
             request_reveal: @max_uint256 + 1,
@@ -146,9 +150,10 @@ defmodule KeyFleet.Keeper.CallsTest do
       end
     end
 
-    test "the functions are the eight the keeper may call" do
+    test "the functions are the nine the keeper may call" do
       assert Calls.functions() == [
                :collect,
+               :migrate,
                :recognize_surplus,
                :recognize_surplus_revenue,
                :release,
