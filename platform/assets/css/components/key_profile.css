@@ -82,13 +82,11 @@
   line-height: 1.1;
 }
 
-.key-profile__header h2:focus {
+/* The title takes focus when the profile opens so it is read out first; it
+   is not something to press, so it shows no focus ring. Named by id to
+   outrank the shell's ring for everything inside it. */
+#key-profile-title:focus {
   outline: none;
-}
-
-.key-profile__header h2:focus-visible {
-  outline: 2px solid var(--ash-accent);
-  outline-offset: 3px;
 }
 
 .key-profile__header form {
