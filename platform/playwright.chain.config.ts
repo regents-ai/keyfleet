@@ -49,9 +49,11 @@ export default defineConfig({
     timeout: 180_000,
   },
   projects: [
+    // Headless Chromium lends WebGPU only when asked, so a key's foil really
+    // draws there; Firefox and WebKit have none and show the still foil.
     {
       name: "chromium",
-      use: {...devices["Desktop Chrome"]},
+      use: {...devices["Desktop Chrome"], launchOptions: {args: ["--enable-unsafe-webgpu"]}},
     },
     {
       name: "firefox",

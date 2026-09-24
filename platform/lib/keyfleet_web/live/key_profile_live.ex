@@ -36,6 +36,7 @@ defmodule KeyFleetWeb.KeyProfileLive do
     >
       <div class="key-profile__card">
         <.card profile={@profile} fleet_name={@fleet.name} />
+        <.traits :if={@profile.issued?} profile={@profile} />
       </div>
 
       <div class="key-profile__body" data-modal-scroll>
@@ -66,13 +67,16 @@ defmodule KeyFleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :fleet_name, :string, required: true
 
-  # The key's face over the still foil: its fleet, its level, its number in a
+  # The key's face over the Regents foil: its fleet, its level, its number in a
   # triangle, and whether it is still revealing or the rarest trait it drew.
+  # The card keeps its id from key to key, so only the face changes and the
+  # foil beneath it goes on drawing.
   defp card(assigns) do
     ~H"""
     <Regent.HolographicCard.card
       id="key-profile-card"
       class="key-profile-card"
+      phx-hook="HolographicCard"
       data-holo-crown="false"
     >
       <div class="key-profile-card__face">
@@ -88,6 +92,23 @@ defmodule KeyFleetWeb.KeyProfileLive do
         <p class="key-profile-card__trait">{face_note(@profile)}</p>
       </div>
     </Regent.HolographicCard.card>
+    """
+  end
+
+  attr :profile, :map, required: true
+
+  defp traits(assigns) do
+    ~H"""
+    <section class="key-profile__traits" aria-labelledby="key-profile-traits-title">
+      <h3 id="key-profile-traits-title">Traits</h3>
+      <p :if={is_nil(@profile.traits)} class="key-profile-muted">Revealing</p>
+      <ul :if={@profile.traits} class="key-profile-traits">
+        <li :for={trait <- @profile.traits}>
+          {trait.trait}: {trait.value}
+          <span class="key-profile-muted">({share(trait.share)} of keys)</span>
+        </li>
+      </ul>
+    </section>
     """
   end
 
@@ -128,18 +149,6 @@ defmodule KeyFleetWeb.KeyProfileLive do
         <div :if={@profile.level}>
           <dt>Level</dt>
           <dd>{@profile.level}</dd>
-        </div>
-        <div>
-          <dt>Traits</dt>
-          <dd :if={is_nil(@profile.traits)}>Revealing</dd>
-          <dd :if={@profile.traits}>
-            <ul class="key-profile-traits">
-              <li :for={trait <- @profile.traits}>
-                {trait.trait}: {trait.value}
-                <span class="key-profile-muted">({share(trait.share)} of keys)</span>
-              </li>
-            </ul>
-          </dd>
         </div>
         <div>
           <dt>Issued for</dt>

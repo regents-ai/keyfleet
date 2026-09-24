@@ -36,9 +36,22 @@
   display: grid;
   align-content: start;
   justify-items: center;
+  gap: 1.5rem;
   padding: clamp(1rem, 3vw, 2rem);
   border-inline-end: 1px solid var(--ash-line);
   overflow: auto;
+}
+
+/* The traits the key drew, under its card. */
+.key-profile__traits {
+  display: grid;
+  gap: 0.6rem;
+  width: min(100%, 26rem);
+}
+
+.key-profile__traits h3 {
+  margin: 0;
+  font-size: 1.1rem;
 }
 
 .key-profile__body {

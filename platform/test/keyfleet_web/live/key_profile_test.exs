@@ -38,6 +38,14 @@ defmodule KeyFleetWeb.Live.KeyProfileTest do
 
     assert has_element?(view, "dialog#key-profile[data-close='replace']")
     assert text(view, "#key-profile-title") == "Key 12"
+
+    assert has_element?(
+             view,
+             "#key-profile-card[phx-hook='HolographicCard'][data-holo-crown='false'] svg polygon"
+           )
+
+    assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
+    assert text(view, ".key-profile__card .key-profile__traits p") == "Revealing"
     assert text(view, "#key-profile-holder") == "0xeeee…eeee"
     assert render(view) =~ "17.28 USDC"
     assert render(view) =~ "Once"

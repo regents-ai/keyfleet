@@ -119,6 +119,150 @@ test.describe("a key's profile", () => {
     }
   })
 
+  test.describe("its foil card", () => {
+    const card = (page: Page) => page.locator("#key-profile-card")
+    const liveFoils = (page: Page) => page.locator('[data-holo-ready="true"]').count()
+    const drawsFoil = (page: Page) =>
+      page.evaluate(async () => Boolean(navigator.gpu && (await navigator.gpu.requestAdapter())))
+    const tilt = (page: Page) => card(page).evaluate(element => element.style.getPropertyValue("--rg-holo-tilt-x"))
+
+    // The console's errors as well as the page's uncaught ones.
+    async function watch(page: Page) {
+      const errors = await signIn(page)
+      page.on("console", message => {
+        if (message.type() === "error") errors.push(message.text())
+      })
+      return errors
+    }
+
+    async function sweep(page: Page) {
+      const box = (await card(page).boundingBox())!
+      for (const [x, y] of [[0.2, 0.2], [0.8, 0.3], [0.7, 0.8], [0.3, 0.7]]) {
+        await page.mouse.move(box.x + box.width * x, box.y + box.height * y, {steps: 4})
+      }
+    }
+
+    test("stays within two live foils through five switches and five closes, keeping one canvas", async ({page}) => {
+      const keys = Array.from({length: 6}, () => sellKey(fleet, me))
+      const errors = await watch(page)
+      await openFleet(page)
+      const gpu = await drawsFoil(page)
+
+      await page.locator(`#fleet-key-link-${keys[0]}`).hover()
+      await page.locator(`#fleet-key-link-${keys[0]}`).click()
+      await expect(card(page)).toBeVisible()
+      if (gpu) await expect(card(page)).toHaveAttribute("data-holo-ready", "true")
+      else await expect(card(page)).not.toHaveAttribute("data-holo-ready")
+      await card(page).locator("canvas").evaluate(canvas => Object.assign(canvas, {firstCanvas: true}))
+
+      for (const key of keys.slice(1)) {
+        await page.locator(`#key-profile-key-${key}`).click()
+        await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key}`)
+        await sweep(page)
+        expect(await liveFoils(page)).toBeLessThanOrEqual(2)
+        expect(await card(page).locator("canvas").evaluate(canvas => "firstCanvas" in canvas)).toBe(true)
+      }
+
+      for (const key of keys.slice(0, 5)) {
+        await page.keyboard.press("Escape")
+        await expect(profile(page)).toHaveCount(0)
+        expect(await liveFoils(page)).toBeLessThanOrEqual(1)
+        await page.locator(`#fleet-key-link-${key}`).click()
+        await expect(card(page)).toBeVisible()
+        if (gpu) await expect(card(page)).toHaveAttribute("data-holo-ready", "true")
+        expect(await liveFoils(page)).toBeLessThanOrEqual(2)
+      }
+      expect(errors).toEqual([])
+    })
+
+    test("turns and lights under a mouse where the foil draws", async ({page}) => {
+      const key = sellKey(fleet, me)
+      const errors = await watch(page)
+      await openFleet(page, `?key=${key}`)
+      test.skip(!(await drawsFoil(page)), "this browser draws no foil, so the card stays still")
+
+      await expect(card(page)).toHaveAttribute("data-holo-ready", "true")
+      await sweep(page)
+      await expect.poll(() => tilt(page)).toMatch(/^-?\d/)
+      expect(await tilt(page)).not.toBe("0rad")
+      expect(errors).toEqual([])
+    })
+
+    test("without WebGPU shows the still foil and no errors", async ({page}) => {
+      await page.addInitScript(() => Object.defineProperty(Navigator.prototype, "gpu", {get: () => undefined}))
+      const key = sellKey(fleet, me)
+      const errors = await watch(page)
+      await openFleet(page, `?key=${key}`)
+      await expect(card(page)).toBeVisible()
+
+      await sweep(page)
+      await expect(card(page)).not.toHaveAttribute("data-holo-ready")
+      const still = await card(page)
+        .locator(".rg-holo__stage")
+        .evaluate(stage => getComputedStyle(stage, "::before").content)
+      expect(still).not.toBe("none")
+      expect(await tilt(page)).toBe("")
+      expect(errors).toEqual([])
+    })
+
+    test("never turns for a visitor who asked for less motion", async ({page}) => {
+      await page.emulateMedia({reducedMotion: "reduce"})
+      const key = sellKey(fleet, me)
+      const errors = await watch(page)
+      await openFleet(page, `?key=${key}`)
+      await expect(card(page)).toBeVisible()
+
+      await sweep(page)
+      await expect(card(page)).not.toHaveAttribute("data-holo-ready")
+      expect(await tilt(page)).toBe("")
+      expect(await card(page).evaluate(element => getComputedStyle(element).transform)).toBe("none")
+      expect(errors).toEqual([])
+    })
+
+    test("keeps an outline and stands still in forced colours", async ({page, browserName}) => {
+      test.skip(browserName === "webkit", "WebKit cannot be asked for forced colours")
+      await page.emulateMedia({forcedColors: "active"})
+      const key = sellKey(fleet, me)
+      await signIn(page)
+      await openFleet(page, `?key=${key}`)
+      await sweep(page)
+
+      const look = await card(page).evaluate(element => {
+        const stage = element.querySelector(".rg-holo__stage")!
+        return {
+          forced: matchMedia("(forced-colors: active)").matches,
+          transform: getComputedStyle(element).transform,
+          edge: getComputedStyle(stage).backgroundColor,
+          face: getComputedStyle(stage, "::before").backgroundColor,
+        }
+      })
+      expect(look.forced).toBe(true)
+      expect(look.transform).toBe("none")
+      expect(look.edge).not.toBe(look.face)
+    })
+  })
+
+  test.describe("on a touch screen", () => {
+    test.skip(({browserName}) => browserName === "firefox", "Firefox cannot pose as a phone")
+    test.use({viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true})
+
+    test("the card never turns", async ({page}) => {
+      const key = sellKey(fleet, me)
+      const errors = await signIn(page)
+      await openFleet(page, `?key=${key}`)
+      const card = page.locator("#key-profile-card")
+      await expect(card).toBeVisible()
+      expect(await page.evaluate(() => matchMedia("(pointer: fine)").matches)).toBe(false)
+
+      const box = (await card.boundingBox())!
+      await card.tap({position: {x: box.width * 0.8, y: box.height * 0.3}})
+      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2, {steps: 4})
+      const turned = await card.evaluate(element => element.style.getPropertyValue("--rg-holo-tilt-x"))
+      expect(["", "0rad"]).toContain(turned)
+      expect(errors).toEqual([])
+    })
+  })
+
   test.describe("on a phone", () => {
     test.use({viewport: {width: 375, height: 812}})
 
