@@ -121,7 +121,8 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_refresh?: false,
        proposals_check: nil,
        launch_plans: nil,
-       check_ins_timer: nil
+       check_ins_timer: nil,
+       send_agent_open: false
      )}
   end
 
@@ -129,9 +130,10 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_params(params, _uri, socket) do
     route_spec = RouteCatalog.fetch!(socket.assigns.live_action, params)
 
+    # Going anywhere, back and forward included, closes "Send your agent".
     {:noreply,
      socket
-     |> assign(:route_spec, route_spec)
+     |> assign(route_spec: route_spec, send_agent_open: false)
      |> load_verified_connections(route_spec)
      |> load_held_keys(route_spec)
      |> load_fleet(route_spec, params)
@@ -221,6 +223,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   def handle_event("close_key", _params, socket), do: {:noreply, socket}
 
+  def handle_event("open_send_agent", _params, socket),
+    do: {:noreply, assign(socket, :send_agent_open, true)}
+
+  def handle_event("close_send_agent", _params, socket),
+    do: {:noreply, assign(socket, :send_agent_open, false)}
+
   # "Show earlier" adds the next page of "What's happening" below the ones
   # shown, up to five pages.
   def handle_event(
@@ -301,11 +309,12 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info({:room_head, _room_id, _seq}, socket),
     do: {:noreply, refresh_activity_soon(socket, fleet_on_show(socket))}
 
-  # Keys changed in the fleet on show: its sales figures and the key on offer
-  # are read again, the key list only when a changed key is on it, the open
-  # key's profile when the key or one of its holder's changed, and the map is
-  # told the changed keys' marks, or told to load again when too many changed
-  # to list.
+  # Keys changed in the fleet on show: its sales figures, the key on offer and
+  # the agents here are read again (an agent starting or stopping on a key
+  # sends this notice too), the key list only when a changed key is on it, the
+  # open key's profile when the key or one of its holder's changed, and the
+  # map is told the changed keys' marks, or told to load again when too many
+  # changed to list.
   def handle_info(
         {:keys_changed, fleet_id, token_ids},
         %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket
@@ -313,6 +322,7 @@ defmodule KeyfleetWeb.ShellLive do
     socket =
       socket
       |> refresh_sales()
+      |> refresh_agents()
       |> refresh_listed(token_ids)
       |> refresh_key_profile(token_ids)
       |> refresh_activity_soon(fleet_id)
@@ -477,6 +487,7 @@ defmodule KeyfleetWeb.ShellLive do
           thread={@streams.key_thread}
           activity={@streams.activity}
           now={now_shown(@activity)}
+          send_agent_open={@send_agent_open}
         />
 
         <KeysLive.page
@@ -720,15 +731,20 @@ defmodule KeyfleetWeb.ShellLive do
 
   # "Who's here", the key list and the open key's agent, as the agents'
   # check-ins say now.
-  defp refresh_check_ins(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
+  defp refresh_check_ins(socket) do
     socket
-    |> assign(:fleet, %{
+    |> refresh_agents()
+    |> reread_listed()
+    |> refresh_key_operator()
+  end
+
+  # "Who's here" and the bar's count of agents.
+  defp refresh_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
+    assign(socket, :fleet, %{
       fleet
       | agents: Directory.agents(fleet_id),
         agents_here: Agents.count_agents_here!(fleet_id)
     })
-    |> reread_listed()
-    |> refresh_key_operator()
   end
 
   defp refresh_key_operator(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),

@@ -11,15 +11,42 @@ defmodule KeyfleetWeb.Components.SendAgent do
   """
   use KeyfleetWeb, :html
 
-  @home_instruction "Visit keyfleet.ai and read its joining guide. Explore the fleets and " <>
-                      "recommend one based on my interests, your capabilities and its " <>
-                      "membership terms. Explain the key cost and permissions before joining. " <>
-                      "Once authorized, participate within those limits, find something useful " <>
-                      "or interesting to contribute, and keep me informed. Do not share my " <>
-                      "private information or commit resources beyond my authorization."
+  # The founder's instruction, whose middle sentence names what the agent
+  # looks at: every fleet on the homepage, one fleet on its own page.
+  @lead "Visit keyfleet.ai and read its joining guide."
+  @rest "Explain the key cost and permissions before joining. Once authorized, participate " <>
+          "within those limits, find something useful or interesting to contribute, and keep " <>
+          "me informed. Do not share my private information or commit resources beyond my " <>
+          "authorization."
 
   @doc "The instruction the homepage offers: the agent looks at every fleet."
-  def home_instruction, do: @home_instruction
+  def home_instruction do
+    Enum.join(
+      [
+        @lead,
+        "Explore the fleets and recommend one based on my interests, your capabilities and " <>
+          "its membership terms.",
+        @rest
+      ],
+      " "
+    )
+  end
+
+  @doc """
+  The instruction a fleet's page offers: the agent looks at the fleet named
+  `name`, whose id is `fleet_id`, and says whether it fits.
+  """
+  def fleet_instruction(name, fleet_id) do
+    Enum.join(
+      [
+        @lead,
+        "Look at the #{name} fleet (keyfleet.ai/fleets/#{fleet_id}.md) and tell me whether " <>
+          "it fits my interests, your capabilities and its membership terms.",
+        @rest
+      ],
+      " "
+    )
+  end
 
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
   attr :instruction, :string, required: true, doc: "what the person pastes to their agent"

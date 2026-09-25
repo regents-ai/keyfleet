@@ -56,7 +56,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert html =~ "150 of"
     # Key 151 opens level 9, whose price is the first to round up.
     assert html =~ "Key 151, 42.99817 USDC"
-    assert text(view, "#fleet-sales") == "150 of 46,365 keys sold · next key 42.99817 USDC"
+    assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
 
@@ -133,7 +133,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     {:ok, view, html} = live(conn, @path)
 
     assert html =~ "Not on Base yet"
-    assert text(view, "#fleet-sales") == "Not on sale yet"
+    assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
+    refute has_element?(view, "#fleet-get-key")
     refute has_element?(view, "#fleet-progress-title")
     refute html =~ "Next key"
 
@@ -153,25 +154,27 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     {:ok, view, html} = live(conn, @path)
 
     assert html =~ "Sales figures are catching up."
-    assert text(view, "#fleet-sales") == "Sales figures are catching up"
+    assert text(view, "#fleet-sales") == "Sales figures are catching up · 0 agents here"
     refute html =~ "Keys issued"
     refute has_element?(view, ".fleet-facts dt", "Next key")
     assert shown_keys(view) == Enum.to_list(1..100)
   end
 
   describe "buying the next key" do
-    # Key 151 opens level 9, where a wallet may hold 8 keys.
+    # Key 151 opens level 9, where a wallet may hold 8 keys. The offer is in
+    # "How this fleet works", under "Buying a key".
     test "offers the next key's number, exact price and level", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
 
       {:ok, view, _html} = live(conn, @path)
 
+      assert text(view, "#fleet-about #buy-key-title") == "Buying a key"
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#buy-key-level") == "9"
-      assert render(view) =~ "One wallet may hold 8 keys of level 9."
-      assert text(view, "#buy-key-button") == "Buy key 151"
+      assert text(view, "#buy-key") =~ "One wallet may hold 8 keys of level 9."
+      assert text(view, "#fleet-about #buy-key-offer #buy-key-button") == "Buy key 151"
       refute has_element?(view, "#buy-key-sold-out")
     end
 
@@ -262,6 +265,29 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @path)
 
       refute has_element?(view, "#buy-key")
+    end
+
+    # "Get a key" opens the offer's panel in the one place the panels share,
+    # closes the other two, and takes the reader to buying a key.
+    test "Get a key opens How this fleet works at Buying a key", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+
+      {:ok, view, _html} = live(conn, @path)
+      commands = click_commands(view, "#fleet-get-key")
+
+      assert ["remove_attr", %{"attr" => "hidden", "to" => "#fleet-about"}] in commands
+
+      assert ["set_attr", %{"attr" => ["aria-expanded", "true"], "to" => "#fleet-about-toggle"}] in commands
+
+      for other <- ["fleet-now", "fleet-who"] do
+        assert ["set_attr", %{"attr" => ["hidden", "hidden"], "to" => "##{other}"}] in commands
+
+        assert ["set_attr", %{"attr" => ["aria-expanded", "false"], "to" => "##{other}-toggle"}] in commands
+      end
+
+      assert ["focus", %{"to" => "#buy-key-title"}] in commands
+      assert has_element?(view, ~s(#fleet-about #buy-key #buy-key-title[tabindex="-1"]))
     end
   end
 
@@ -454,7 +480,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert Scanner.step(fleet, StubClient) == :ok
       assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
       assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
-      assert text(view, "#fleet-sales") =~ "2 of 2,000 keys sold"
+      assert text(view, "#fleet-sales") == "2 keys sold · 0 agents here"
 
       StubClient.put_chain(chain_head(5_000_020), [
         ownership_log(1, 1, @owner, 5_000_003),
@@ -482,6 +508,25 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       Keys.step_down!(pairing, %{}, actor: operator())
       assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
+    end
+
+    # A pairing's notice is the fleet's keys changing, so the bar counts the
+    # agent as soon as it starts, and stops counting it once it stops.
+    test "the bar counts an agent that starts on a key, and stops when it stops", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+
+      pairing = pair!(7)
+      assert_pushed(view, "keymap:patch", %{keys: [[7, 3]]})
+      assert text(view, "#fleet-sales") == "150 keys sold · 1 agent here"
+      assert has_element?(view, "#fleet-who-list", "Orbit runner")
+
+      Keys.detach_operator!(pairing, %{}, actor: owner())
+      assert_pushed(view, "keymap:patch", %{keys: [[7, 1]]})
+      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+      assert has_element?(view, "#fleet-who-empty")
     end
 
     test "more than 2,000 keys changed at once tells the map to load again", %{conn: conn} do
@@ -554,6 +599,30 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
       end
     end
+  end
+
+  # The fleet's own "Send your agent" asks the agent to look at this fleet.
+  test "Send your agent gives an instruction naming this fleet and its page for agents", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @path)
+    refute has_element?(view, "#fleet-send-agent-dialog")
+
+    view |> element(".fleet-bar #fleet-send-agent") |> render_click()
+
+    instruction = text(view, "#fleet-send-agent-instruction")
+
+    assert instruction =~
+             "Look at the Keyfleet Cascade fleet (keyfleet.ai/fleets/fibonacci_cascade.md) and " <>
+               "tell me whether it fits my interests"
+
+    assert has_element?(
+             view,
+             ~s(#fleet-send-agent-copy[data-copy-text="#{instruction}"])
+           )
+
+    render_hook(view, "close_send_agent", %{})
+    refute has_element?(view, "#fleet-send-agent-dialog")
   end
 
   # The page names the signed-in wallets so the button can say when the

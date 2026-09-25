@@ -1,12 +1,13 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page: its map of keys filling the page under a slim bar with the
-  fleet's name, how far it has sold, a way to buy the next key, and links to
-  its rooms, workspace and proposals. Three panels open beside the map, one
-  at a time: "What's happening", the fleet's latest activity, open to start
-  on a wide screen; "How this fleet works", with its pricing, sales figures
-  and contract; and "Who's here", with the agents running its keys. Every
-  key it has issued is listed below the map.
+  fleet's name, how many keys it has sold and how many agents are here, "Get
+  a key", "Send your agent", and links to its rooms, workspace and proposals.
+  Three panels open beside the map, one at a time: "What's happening", the
+  fleet's latest activity, open to start on a wide screen; "How this fleet
+  works", with its pricing, sales figures, the next key to buy and its
+  contract; and "Who's here", with the agents running its keys. Every key it
+  has issued is listed below the map.
 
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
@@ -19,6 +20,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.ProposalsPage
@@ -33,24 +35,27 @@ defmodule KeyfleetWeb.FleetLive do
     {"#fleet-who", "#fleet-who-toggle"}
   ]
 
-  attr :fleet, :map, required: true
-
   @doc """
-  How far a fleet has sold, in one line. A fleet not yet deployed, or one
-  whose sales are still being read, shows no figures.
+  How many keys a fleet has sold and how many agents run them, in one line,
+  as the homepage's card and the fleet's own bar both say it. `sales` says
+  whether the fleet is `deployed?`, whether its figures are `current?`, and
+  how many `keys` it has sold: a fleet not yet deployed, or one whose sales
+  are still being read, shows no key count.
   """
-  def sales(%{fleet: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
-  def sales(%{fleet: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
+  def headcount(sales, agents), do: "#{sold(sales)} · #{agents_here(agents)}"
 
-  def sales(%{fleet: %{progress: %{next_price: nil}}} = assigns),
-    do: ~H"All {grouped(@fleet.progress.max_supply)} keys sold"
+  defp sold(%{deployed?: false}), do: "Not on sale yet"
+  defp sold(%{current?: false}), do: "Sales figures are catching up"
+  defp sold(%{keys: keys}), do: "#{Rules.keys(keys)} sold"
 
-  def sales(assigns) do
-    ~H"""
-    {grouped(@fleet.progress.total_minted)} of {grouped(@fleet.progress.max_supply)} keys sold ·
-    <span class="fleet-sales__price">next key {usdc(@fleet.progress.next_price)}</span>
-    """
-  end
+  defp agents_here(1), do: "1 agent here"
+  defp agents_here(count), do: "#{grouped(count)} agents here"
+
+  # The fleet's sales as `headcount/2` reads them.
+  defp sold_so_far(%{deployed?: false}), do: %{deployed?: false}
+
+  defp sold_so_far(fleet),
+    do: %{deployed?: true, current?: fleet.current?, keys: fleet.progress.total_minted}
 
   attr :fleet, :map, required: true
   attr :params, :map, required: true, doc: "the page's address"
@@ -58,6 +63,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
+  attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
 
   attr :now, :map,
     required: true,
@@ -76,15 +82,27 @@ defmodule KeyfleetWeb.FleetLive do
         <header class="fleet-bar">
           <div class="fleet-bar__title">
             <h1 tabindex="-1">{@fleet.name}</h1>
-            <p id="fleet-sales" class="fleet-bar__sales"><.sales fleet={@fleet} /></p>
+            <p id="fleet-sales" class="fleet-bar__sales">
+              {headcount(sold_so_far(@fleet), @fleet.agents_here)}
+            </p>
           </div>
 
-          <.buy_key
-            :if={@fleet.buy}
-            buy={@fleet.buy}
-            current?={@fleet.current?}
-            signed_in={@fleet.signed_in}
-          />
+          <div class="fleet-bar__actions">
+            <Regent.Primitives.button
+              :if={@fleet.buy}
+              id="fleet-get-key"
+              type="button"
+              aria-controls="fleet-about"
+              phx-click={get_key()}
+            >
+              Get a key
+            </Regent.Primitives.button>
+            <SendAgent.button
+              id="fleet-send-agent"
+              instruction={SendAgent.fleet_instruction(@fleet.name, @fleet.fleet_id)}
+              open={@send_agent_open}
+            />
+          </div>
 
           <nav class="fleet-bar__nav" aria-label="This fleet">
             <div class="fleet-menu">
@@ -231,6 +249,22 @@ defmodule KeyfleetWeb.FleetLive do
       {other, button}, js -> close_quietly(js, other, button)
     end)
     |> JS.focus(to: panel <> "-title")
+  end
+
+  # "Get a key" opens "How this fleet works", closing the others, and takes the
+  # reader to buying a key.
+  defp get_key do
+    @panels
+    |> Enum.reduce(%JS{}, fn
+      {"#fleet-about" = panel, button}, js ->
+        js
+        |> JS.remove_attribute("hidden", to: panel)
+        |> JS.set_attribute({"aria-expanded", "true"}, to: button)
+
+      {other, button}, js ->
+        close_quietly(js, other, button)
+    end)
+    |> JS.focus(to: "#buy-key-title")
   end
 
   defp close(panel, button),
@@ -508,8 +542,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
 
-  # Opens beside the map: the fleet's pricing, its sales so far, what a buyer
-  # should know, and where its contract lives.
+  # Opens beside the map: the fleet's pricing, the next key to buy, its sales
+  # so far, and where its contract lives.
   defp about(assigns) do
     ~H"""
     <aside
@@ -531,6 +565,14 @@ defmodule KeyfleetWeb.FleetLive do
       </div>
 
       <p>{Rules.pricing(@fleet.fleet_id)}</p>
+
+      <.buy_key
+        :if={@fleet.buy}
+        fleet_id={@fleet.fleet_id}
+        buy={@fleet.buy}
+        current?={@fleet.current?}
+        signed_in={@fleet.signed_in}
+      />
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>
@@ -555,17 +597,6 @@ defmodule KeyfleetWeb.FleetLive do
         </dl>
         <p :if={@fleet.current? and is_nil(@fleet.progress.next_price)} class="fleet-detail">
           Every key has been issued.
-        </p>
-      </section>
-
-      <section :if={@fleet.buy && @fleet.buy.price} aria-labelledby="fleet-buying-title">
-        <h3 id="fleet-buying-title">Buying a key</h3>
-        <p :if={@fleet.buy.level} class="fleet-detail">
-          {Rules.holding_limit_sentence(@fleet.fleet_id, @fleet.buy.token_id)}
-        </p>
-        <p class="fleet-detail">
-          Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
-          this much USDC, it first asks you to approve exactly {usdc(@fleet.buy.price)}.
         </p>
       </section>
 
@@ -681,10 +712,14 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :fleet_id, :string, required: true
   attr :buy, :map, required: true
   attr :current?, :boolean, required: true
   attr :signed_in, :list, required: true, doc: "the signed-in person's wallets, primary first"
 
+  # "Buying a key", in "How this fleet works": what a buyer should know, then
+  # the key on offer with its price beside Buy.
+  #
   # Every press of Buy goes to the wallet: the button is never disabled, and
   # nothing here decides on the buyer's behalf whether a purchase would succeed.
   # A fleet that sells out while the page is open keeps the buyer's messages
@@ -693,8 +728,15 @@ defmodule KeyfleetWeb.FleetLive do
   # connected wallet.
   defp buy_key(assigns) do
     ~H"""
-    <section id="buy-key" class="fleet-buy" aria-labelledby="buy-key-title">
-      <h2 id="buy-key-title" class="visually-hidden">Buy a key</h2>
+    <section id="buy-key" aria-labelledby="buy-key-title">
+      <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
+      <p :if={@buy.price && @buy.level} class="fleet-detail">
+        {Rules.holding_limit_sentence(@fleet_id, @buy.token_id)}
+      </p>
+      <p :if={@buy.price} class="fleet-detail">
+        Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
+        this much USDC, it first asks you to approve exactly {usdc(@buy.price)}.
+      </p>
 
       <div
         id="buy-key-order"

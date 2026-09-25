@@ -18,8 +18,8 @@ defmodule KeyfleetWeb.HomeLive do
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
-  alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{ActivityLines, PublicDocuments, RouteCatalog, Time}
+  alias Keyfleet.Fleets.Presets
+  alias KeyfleetWeb.{ActivityLines, FleetLive, PublicDocuments, RouteCatalog, Time}
   alias KeyfleetWeb.Components.{RegentLinks, SendAgent}
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -245,13 +245,6 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp opportunity_path(%{id: id}), do: "/opportunities##{id}"
 
-  defp sold(%{deployed?: false}), do: "Not on sale yet"
-  defp sold(%{current?: false}), do: "Sales figures are catching up"
-  defp sold(%{keys: keys}), do: "#{Rules.keys(keys)} sold"
-
-  defp agents(1), do: "1 agent here"
-  defp agents(count), do: "#{Rules.grouped(count)} agents here"
-
   # What the featured item is, in a word or two.
   defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Problem raised"
   defp label(%{kind: :status, facts: %{status: "achieved"}}), do: "Done"
@@ -404,7 +397,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     ~H"""
     <div class="rl-fleet-card__now">
-      <p class="rl-fleet-card__who" data-fleet-who>{sold(@sales)} · {agents(@now.agents)}</p>
+      <p class="rl-fleet-card__who" data-fleet-who>{FleetLive.headcount(@sales, @now.agents)}</p>
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>
