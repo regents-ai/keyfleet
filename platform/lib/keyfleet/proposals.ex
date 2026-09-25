@@ -135,6 +135,28 @@ defmodule Keyfleet.Proposals do
     |> then(fn {proposals, older} -> {proposals, older != []} end)
   end
 
+  @doc """
+  The fleet's launch proposals that point to a version of its launch plan
+  `object_id` by their digest, newest first, `limit` at most, as `status/3`
+  needs them, and whether older ones remain.
+  """
+  def launches_of_plan(fleet_id, object_id, limit) do
+    Proposal
+    |> Ash.Query.filter(
+      fleet_id == ^fleet_id and kind == :autolaunch and
+        exists(
+          Keyfleet.Graph.LaunchPlanRevision,
+          fleet_id == parent(fleet_id) and digest == parent(digest) and object_id == ^object_id
+        )
+    )
+    |> Ash.Query.sort(number: :desc)
+    |> Ash.Query.limit(limit + 1)
+    |> Ash.Query.load(@summary)
+    |> Ash.read!()
+    |> Enum.split(limit)
+    |> then(fn {proposals, older} -> {proposals, older != []} end)
+  end
+
   defp below(query, nil), do: query
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
 

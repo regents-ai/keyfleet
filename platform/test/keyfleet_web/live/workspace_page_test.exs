@@ -3,8 +3,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   import Keyfleet.WorkspaceFixtures
 
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
+  alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
@@ -472,6 +474,53 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              ]
     end
 
+    test "a launch plan names the launch proposals that point to it, and where each stands", %{
+      conn: conn
+    } do
+      now = DateTime.utc_now()
+      ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+      plan = create(@fleet, "launch_card", %{"title" => "Cascade Research", "name" => "CSR"})
+      edit(@fleet, plan, %{"symbol" => "CSR"})
+      other = create(@fleet, "launch_card", %{"title" => "Another plan"})
+
+      ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch, digest: digest(plan, 1))
+
+      ProposalHelpers.proposal!(@fleet, 2,
+        kind: :autolaunch,
+        digest: digest(plan, 2),
+        closes_at: DateTime.add(now, -3600),
+        eligible_keys: 1
+      )
+
+      ProposalHelpers.vote!(@fleet, 2, ProposalHelpers.wallet("e"), true, [1])
+      ProposalHelpers.execution!(@fleet, 2, ProposalHelpers.wallet("e"))
+      ProposalHelpers.proposal!(@fleet, 3, kind: :autolaunch, digest: digest(other, 1))
+      ProposalHelpers.proposal!(@fleet, 4, digest: digest(plan, 1))
+
+      {:ok, view, _html} = live(conn, item_path(plan))
+
+      assert lines(view, "#workspace-proposed > li") == [
+               "Proposed as Proposal 2 (Launched), version 2",
+               "Proposed as Proposal 1 (Voting open), version 1"
+             ]
+
+      assert has_element?(
+               view,
+               ~s|#workspace-proposed a[href="/app/fleets/#{@fleet}/proposals/2"]|,
+               "Proposal 2"
+             )
+
+      {:ok, view, _html} = live(conn, item_path(other))
+
+      assert lines(view, "#workspace-proposed > li") == [
+               "Proposed as Proposal 3 (Voting open), version 1"
+             ]
+
+      task = create(@fleet, "task", %{"title" => "Draft", "progress" => "todo"})
+      {:ok, view, _html} = live(conn, item_path(task))
+      refute has_element?(view, "#workspace-proposed")
+    end
+
     test "links and history come fifty at a time", %{conn: conn} do
       hub = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
@@ -937,6 +986,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)
+
+  defp digest(id, version) do
+    [revision] =
+      Graph.current_launch_plan_revisions!(@fleet, [%{object_id: id, version: version}])
+
+    revision.digest
+  end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
 

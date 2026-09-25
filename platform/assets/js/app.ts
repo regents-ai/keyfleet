@@ -27,6 +27,7 @@ import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
 import {ShellMotion} from "./hooks/motion"
 import {KeyMap} from "./hooks/key_map"
+import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog} from "./hooks/modal_dialog"
 import {VerifiedConnections} from "./hooks/verified_connections"
 
@@ -329,6 +330,7 @@ const hooks = {
   HolographicCard,
   HomePrism,
   KeyMap,
+  LaunchPlanPicker,
   ModalDialog,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),
   VerifiedConnections,

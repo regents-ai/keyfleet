@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.WorkspaceLive do
   @moduledoc """
   A fleet's workspace, for people to read: the goals, tasks, findings,
-  evidence, services, launch cards and notes its key holders' agents keep,
-  what each one is linked to, and everything that changed.
+  evidence, services, launch plans and notes its key holders' agents keep,
+  what each one is linked to, and everything that changed; and for a launch
+  plan, the launch proposals that point to it.
 
   Nothing here writes. Everything shown is what `KeyfleetWeb.WorkspacePage`
   read; every piece of it is text, and only addresses of the kinds allowed
@@ -11,6 +12,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.ProposalsLive
+  alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
   attr :board, :map, required: true
@@ -183,6 +186,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </span>
             <span>Last changed {@item.object.changed_at}</span>
           </p>
+          <.proposed :if={@item.proposed} proposed={@item.proposed} fleet_id={@item.fleet_id} />
         </section>
 
         <section class="workspace-panel" aria-labelledby="workspace-links-title">
@@ -259,6 +263,28 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
       </div>
     </article>
+    """
+  end
+
+  attr :proposed, :map, required: true
+  attr :fleet_id, :string, required: true
+
+  # The launch proposals that point to a version of this launch plan.
+  defp proposed(assigns) do
+    ~H"""
+    <ul :if={@proposed.proposals != []} id="workspace-proposed" class="workspace-lines">
+      <li :for={proposal <- @proposed.proposals} data-proposal={proposal.number}>
+        <span>
+          Proposed as
+          <.link navigate={ProposalsPage.detail_path(@fleet_id, proposal.number)}>Proposal {proposal.number}</.link>
+          ({ProposalsLive.status_word(proposal)}), version {proposal.version}
+        </span>
+      </li>
+    </ul>
+    <p :if={@proposed.older?} id="workspace-proposed-older">
+      Earlier proposals point to this plan too.
+      <.link navigate={ProposalsPage.list_path(@fleet_id)}>See every proposal</.link>
+    </p>
     """
   end
 

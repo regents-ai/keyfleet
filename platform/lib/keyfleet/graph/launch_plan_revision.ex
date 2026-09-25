@@ -38,6 +38,10 @@ defmodule Keyfleet.Graph.LaunchPlanRevision do
   end
 
   actions do
+    # What a proposal is matched against when it is asked whether it points
+    # to a version of a plan.
+    defaults [:read]
+
     # The plan versions that these digests name, as proposals carry them.
     read :for_digests do
       argument :fleet_id, :string, allow_nil?: false

@@ -188,6 +188,17 @@
   white-space: pre-line;
 }
 
+.proposals-plan {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  justify-items: start;
+}
+
+.proposals-plan > * {
+  max-width: 100%;
+}
+
 .proposals-token {
   font-size: 0.85em;
 }

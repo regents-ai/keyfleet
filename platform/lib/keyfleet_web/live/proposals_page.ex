@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   `list/3` is the fleet's proposals, newest first, twenty to a page, with
   its budget once it is on chain: the latest reading of its balances, and
   its latest launch income and payments. `detail/4` is one proposal with its votes, fifty to a
-  page. Once the fleet is on chain, each carries what its wallet buttons
+  page, and for a launch the version of the fleet's launch plan it points to by its digest.
+  The form for a new launch starts from the fleet's launch plans. Once the fleet is on chain, each carries what its wallet buttons
   need: the fleet's network, its two contracts, and the wallets of the
   person signed in, which the buttons name when the connected wallet is
   another. Each answers
@@ -19,6 +20,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
   alias KeyfleetWeb.FleetLive
@@ -44,6 +47,24 @@ defmodule KeyfleetWeb.ProposalsPage do
   @launch_window_days 30
 
   @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from the budget"}
+
+  # A launch's details as a launch plan names them, and as the page words
+  # them when they differ.
+  @launch_texts [
+    {:name, "name", "name"},
+    {:symbol, "symbol", "symbol"},
+    {:description, "description", "description"},
+    {:website, "website", "website"},
+    {:image, "image", "image"}
+  ]
+
+  # What a launch plan says beyond the launch's details, as the page names it.
+  @plan_fields [
+    {"who_we_serve", "Who it’s for"},
+    {"what_we_sell", "What we offer"},
+    {"why_raise", "What the money is for"},
+    {"commitments", "Who does what afterwards"}
+  ]
 
   @doc """
   The page of proposals below the one `params` names, if it names one, with
@@ -168,15 +189,54 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
 
   # What the forms for new proposals start from: each asset the budget
-  # holds, and a launch that can be carried out for 30 days.
+  # holds, a launch that can be carried out for 30 days, and the launch
+  # plans a launch can start from.
   defp propose(fleet, balances, now) do
     known = assets(fleet)
 
     %{
       assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known)),
       launch_until:
-        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M")
+        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M"),
+      launch_plans: launch_plans(fleet.id)
     }
+  end
+
+  # Each launch plan a launch can be proposed from, at its current version:
+  # its six launch details exactly as that version holds them, and the
+  # digest a proposal carries to point to it.
+  defp launch_plans(fleet_id) do
+    case Graph.proposable_launch_plans!(fleet_id) do
+      [] ->
+        []
+
+      plans ->
+        revisions =
+          fleet_id
+          |> Graph.current_launch_plan_revisions!(
+            Enum.map(plans, &%{object_id: &1.id, version: &1.version})
+          )
+          |> Map.new(&{{&1.object_id, &1.version}, &1})
+
+        for plan <- plans, revision <- List.wrap(revisions[{plan.id, plan.version}]) do
+          data = revision.data
+
+          %{
+            id: plan.id,
+            title: data["title"],
+            version: revision.version,
+            digest: revision.digest,
+            fields: %{
+              name: data["name"],
+              symbol: data["symbol"],
+              description: data["description"],
+              website: data["website"],
+              image: data["image"],
+              raise: data["required_regent_raised"]
+            }
+          }
+        end
+    end
   end
 
   defp budget_assets(fleet, nil), do: [fleet.usdc_address]
@@ -237,6 +297,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       text_cut?: proposal.text_bytes != nil and proposal.text_bytes > @text_cap,
       pay: pay(proposal, fleet),
       launch: launch(proposal),
+      plan: plan(proposal),
       executor: proposal.execution && proposal.execution.executor
     }
   end
@@ -266,6 +327,70 @@ defmodule KeyfleetWeb.ProposalsPage do
   end
 
   defp launch(_proposal), do: nil
+
+  # The launch plan version a launch points to by its digest, when the
+  # fleet's workspace has it: what that version says, whether the plan has
+  # changed or been archived since, and which of the launch's details, once
+  # read, differ from it.
+  defp plan(%{kind: :autolaunch, digest: nil}), do: %{found?: false}
+
+  defp plan(%{kind: :autolaunch} = proposal) do
+    case Graph.launch_plan_revisions!(proposal.fleet_id, [proposal.digest]) do
+      [] -> %{found?: false}
+      [revision] -> found_plan(proposal, revision)
+    end
+  end
+
+  defp plan(_proposal), do: nil
+
+  defp found_plan(proposal, revision) do
+    data = revision.data
+    current = Graph.read_object!(proposal.fleet_id, revision.object_id)
+
+    %{
+      found?: true,
+      object_id: revision.object_id,
+      title: data["title"],
+      version: revision.version,
+      changed?: LaunchPlanDigest.plan(current.data) != data,
+      archived?: current.sys["archived"] == true,
+      fields:
+        for(
+          {field, label} <- @plan_fields,
+          data[field] not in [nil, ""],
+          do: {label, data[field]}
+        ),
+      mismatches: mismatches(proposal.launch_envelope, data)
+    }
+  end
+
+  # Unknown until the launch's details have been read.
+  defp mismatches(nil, _data), do: nil
+
+  defp mismatches(envelope, data) do
+    texts =
+      for {field, key, words} <- @launch_texts,
+          Map.fetch!(envelope, field) != data[key],
+          do: words
+
+    raise? = Decimal.to_integer(envelope.required_regent_raised) != regent_atoms(data)
+    if raise?, do: texts ++ ["the REGENT to raise"], else: texts
+  end
+
+  # A plan names the REGENT to raise in whole REGENT, as a decimal string
+  # with up to eighteen places; the launch holds it in REGENT's smallest
+  # units.
+  defp regent_atoms(%{"required_regent_raised" => nil}), do: nil
+
+  defp regent_atoms(%{"required_regent_raised" => text}) do
+    {whole, fraction} =
+      case String.split(text, ".") do
+        [whole] -> {whole, ""}
+        [whole, fraction] -> {whole, fraction}
+      end
+
+    String.to_integer(whole <> String.pad_trailing(fraction, @regent_decimals, "0"))
+  end
 
   defp vote(vote) do
     %{

@@ -18,6 +18,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.ProposalsPage
+  alias KeyfleetWeb.WorkspacePage
 
   @status_words %{
     voting: "Voting open",
@@ -218,6 +219,12 @@ defmodule KeyfleetWeb.ProposalsLive do
             This proposal is longer than can be shown here. Its first 64 KB are shown.
           </p>
         </section>
+
+        <.plan
+          :if={@page.proposal.plan}
+          plan={@page.proposal.plan}
+          fleet_id={@page.fleet_id}
+        />
 
         <section class="proposals-panel proposals-votes" aria-labelledby="proposal-votes-title">
           <h2 id="proposal-votes-title">Votes</h2>
@@ -432,6 +439,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :propose, :map, required: true
 
   # The five fields a launch shows, exactly as its holders will read them.
+  # Choosing a launch plan fills them in from its current version and makes
+  # the proposal point to that version; the picker, the fields and what the
+  # proposal points to are the page's own until it is reloaded, so a new
+  # reading of the page never changes a choice under the person making it.
   defp propose_launch(assigns) do
     ~H"""
     <section id="propose-launch" class="proposals-panel" aria-labelledby="propose-launch-title">
@@ -441,8 +452,14 @@ defmodule KeyfleetWeb.ProposalsLive do
       </p>
       <.action id="propose-launch-action" to={@wallet.votes} wallet={@wallet}>
         <:fields>
-          <div id="propose-launch-fields" class="proposals-form" phx-update="ignore">
+          <div
+            id="propose-launch-fields"
+            class="proposals-form"
+            phx-update="ignore"
+            phx-hook="LaunchPlanPicker"
+          >
             <.key_field id="propose-launch-key" />
+            <.launch_plan_picker plans={@propose.launch_plans} />
             <.text_field id="propose-launch-name" name="name" label="Name" />
             <.text_field id="propose-launch-symbol" name="symbol" label="Symbol" />
             <Regent.Primitives.field :let={field} id="propose-launch-description" label="Description">
@@ -479,7 +496,6 @@ defmodule KeyfleetWeb.ProposalsLive do
               />
               <:hint>It has to come after voting on it closes.</:hint>
             </Regent.Primitives.field>
-            <.text_field id="propose-launch-digest" name="digest" label="Document code (optional)" />
           </div>
         </:fields>
         <:buttons>
@@ -489,6 +505,50 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:buttons>
       </.action>
     </section>
+    """
+  end
+
+  attr :plans, :list, required: true
+
+  # Each option carries its plan's launch details and digest for the page to
+  # copy into the form; the hidden digest is what the proposal points to,
+  # and is empty, pointing nowhere, until a plan is chosen.
+  defp launch_plan_picker(assigns) do
+    ~H"""
+    <Regent.Primitives.field :let={field} id="propose-launch-plan" label="Start from a launch plan">
+      <select id={field.id} aria-describedby={field.described_by} data-launch-plans>
+        <option value="">Don’t use a plan</option>
+        <option
+          :for={plan <- @plans}
+          value={plan.digest}
+          data-title={plan.title}
+          data-version={plan.version}
+          data-name={plan.fields.name}
+          data-symbol={plan.fields.symbol}
+          data-description={plan.fields.description}
+          data-website={plan.fields.website}
+          data-image={plan.fields.image}
+          data-raise={plan.fields.raise}
+        >
+          {plan.title}, version {plan.version}
+        </option>
+      </select>
+      <:hint :if={@plans == []}>
+        No launch plan in the workspace has all six launch details filled in yet.
+      </:hint>
+      <:hint :if={@plans != []}>
+        Fills in the launch details below from that version of the plan.
+      </:hint>
+    </Regent.Primitives.field>
+    <input id="propose-launch-digest" type="hidden" name="digest" value="" />
+    <p
+      id="propose-launch-plan-status"
+      class="proposals-detail"
+      aria-live="polite"
+      data-launch-plan-status
+    >
+      This proposal won’t point to a launch plan.
+    </p>
     """
   end
 
@@ -809,6 +869,51 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
+  attr :plan, :map, required: true
+  attr :fleet_id, :string, required: true
+
+  defp plan(assigns) do
+    ~H"""
+    <section id="proposal-plan" class="proposals-panel" aria-labelledby="proposal-plan-title">
+      <h2 id="proposal-plan-title">The plan behind this launch</h2>
+      <p :if={not @plan.found?} id="proposal-no-plan" class="proposals-detail">
+        This launch doesn’t point to a plan in the workspace.
+      </p>
+      <div :if={@plan.found?} class="proposals-plan">
+        <p id="proposal-plan-version">
+          This launch points to <.link navigate={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>{@plan.title}</.link>, version {@plan.version}.
+        </p>
+        <p :if={@plan.changed?} id="proposal-plan-changed" class="proposals-detail">
+          The plan has changed since; this proposal carries version {@plan.version}.
+          <.link navigate={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>
+            See the plan as it is now
+          </.link>
+        </p>
+        <p :if={@plan.archived?} id="proposal-plan-archived" class="proposals-detail">
+          This plan has since been archived.
+        </p>
+        <p
+          :if={@plan.mismatches not in [nil, []]}
+          id="proposal-plan-mismatch"
+          class="proposals-notice"
+          role="note"
+        >
+          These launch details differ from the plan: {Enum.join(@plan.mismatches, ", ")}.
+        </p>
+        <dl :if={@plan.fields != []} id="proposal-plan-fields" class="proposals-fields">
+          <div :for={{label, value} <- @plan.fields}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        </dl>
+        <p id="proposal-plan-benefits" class="proposals-rule">
+          Who benefits: the fleet receives the launch’s income; after a 2% fee to Regent, a fifth goes to its budget and the rest to its keys.
+        </p>
+      </div>
+    </section>
+    """
+  end
+
   defp catching_up(assigns) do
     ~H"""
     <p id="proposals-catching-up" class="proposals-notice" role="status">
@@ -856,8 +961,9 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp assets(assets),
     do: Jason.encode!(Map.new(assets, &{&1.address, %{decimals: &1.decimals, unit: &1.unit}}))
 
-  defp status_word(%{status: :executed, kind: kind}), do: Map.fetch!(@executed_words, kind)
-  defp status_word(%{status: status}), do: Map.fetch!(@status_words, status)
+  @doc "Where a proposal stands, in the words its pages use."
+  def status_word(%{status: :executed, kind: kind}), do: Map.fetch!(@executed_words, kind)
+  def status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
   defp tally(proposal),
     do:
