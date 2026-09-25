@@ -66,13 +66,16 @@ defmodule Keyfleet.Graph.TryingNowTest do
     assert by_goal[quiet] == [quiet_task]
   end
 
-  test "who's on what lists only tasks a key has taken and is working on" do
+  test "who's on what lists the tasks in progress, with the key on each if any" do
     taken = task("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
-    task("Marked doing, nobody on it", %{"progress" => "doing"})
+    unclaimed = task("Marked doing, nobody on it", %{"progress" => "doing"})
     task("Claimed, not started", %{"assignee_key" => 9})
     task("Finished", %{"progress" => "done", "assignee_key" => 3})
 
-    assert [%{task: %{id: ^taken}, assignee_key: 12}] = Graph.trying_now(@fleet).taken
+    assert [
+             %{task: %{id: ^unclaimed}, assignee_key: nil},
+             %{task: %{id: ^taken}, assignee_key: 12}
+           ] = Graph.trying_now(@fleet).taken
   end
 
   test "the three newest findings are listed, newest first" do
@@ -86,7 +89,7 @@ defmodule Keyfleet.Graph.TryingNowTest do
 
   test "a contradicts link is an open problem until it is unlinked" do
     target = goal("Sell the first audit")
-    finding = Workspace.create(@fleet, "finding", %{"title" => "No buyers", "statement" => "S"})
+    finding = finding("No buyers")
     link = Workspace.link(@fleet, finding, target, "contradicts")
     Workspace.link(@fleet, finding, target, "supports")
 
@@ -98,14 +101,46 @@ defmodule Keyfleet.Graph.TryingNowTest do
     assert Graph.trying_now(@fleet).problems == []
   end
 
-  test "a problem raised by or about an archived object isn't open" do
+  test "a problem raised by an archived finding isn't open" do
     target = goal("Sell the first audit")
-    finding = Workspace.create(@fleet, "finding", %{"title" => "No buyers", "statement" => "S"})
+    finding = finding("No buyers")
     Workspace.link(@fleet, finding, target, "contradicts")
 
     Workspace.archive(@fleet, finding)
 
     assert Graph.trying_now(@fleet).problems == []
+  end
+
+  test "a problem about an archived goal isn't open" do
+    target = goal("Sell the first audit")
+    Workspace.link(@fleet, finding("No buyers"), target, "contradicts")
+
+    Workspace.archive(@fleet, target)
+
+    assert Graph.trying_now(@fleet).problems == []
+  end
+
+  test "a problem's ends are read in its own fleet, where an object of the same id may differ" do
+    Workspace.open_log(@other_fleet)
+
+    # The same four ids in both fleets, linked the same way. Here all of
+    # them stay; there, one link's goal and the other's finding are archived.
+    for fleet <- [@fleet, @other_fleet] do
+      Workspace.create(fleet, "goal", %{"title" => "G", "outcome" => "O"}, id: "goal#12")
+      Workspace.create(fleet, "goal", %{"title" => "H", "outcome" => "O"}, id: "goal#13")
+      Workspace.create(fleet, "finding", %{"title" => "F", "statement" => "S"}, id: "finding#7")
+      Workspace.create(fleet, "finding", %{"title" => "E", "statement" => "S"}, id: "finding#8")
+      Workspace.link(fleet, "finding#7", "goal#12", "contradicts")
+      Workspace.link(fleet, "finding#8", "goal#13", "contradicts")
+    end
+
+    Workspace.archive(@other_fleet, "goal#12")
+    Workspace.archive(@other_fleet, "finding#8")
+
+    assert @fleet |> Graph.trying_now() |> problem_ends() ==
+             [{"finding#8", "goal#13"}, {"finding#7", "goal#12"}]
+
+    assert Graph.trying_now(@other_fleet).problems == []
   end
 
   test "the open question is the newest open goal's first one" do
@@ -149,6 +184,12 @@ defmodule Keyfleet.Graph.TryingNowTest do
     Workspace.link(@fleet, task, goal, "implements")
     task
   end
+
+  defp finding(title),
+    do: Workspace.create(@fleet, "finding", %{"title" => title, "statement" => "S"})
+
+  defp problem_ends(%{problems: problems}),
+    do: Enum.map(problems, &{&1.source.id, &1.target.id})
 
   defp service_data,
     do: %{"title" => "Audit", "customer" => "C", "problem" => "P", "deliverable" => "D"}

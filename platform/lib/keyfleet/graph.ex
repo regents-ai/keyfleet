@@ -109,8 +109,9 @@ defmodule Keyfleet.Graph do
       `implements`, the newest link first: `%{goal: goal, tasks: [%{task:
       task, assignee_key: key | nil, progress: progress}]}`. Archived tasks
       aren't listed.
-    * `taken`: who's on what: up to #{@taken_shown} tasks a key has taken
-      and is working on (`:tasks_doing`), `%{task: task, assignee_key: key}`.
+    * `taken`: who's on what: up to #{@taken_shown} tasks in progress
+      (`:tasks_doing`), `%{task: task, assignee_key: key | nil}`; the key is
+      nil for a task marked doing that no key has taken.
     * `findings`: the #{@findings_shown} most recently changed findings.
     * `problems`: the #{@problems_shown} newest `contradicts` links still in
       place, `%{relation: link, source: object, target: object}`. Unlinking
@@ -119,6 +120,11 @@ defmodule Keyfleet.Graph do
     * `question`: the question `open_question/1` gives, or nil.
 
   Every object comes with its `title` and `card`.
+
+  Never call it inside a transaction: its snapshot has to be its
+  transaction's first statement. Inside an ordinary transaction that fails
+  loudly; inside a repeatable-read one it doesn't fail, but quietly makes the
+  rest of the outer transaction read-only.
   """
   def trying_now(fleet_id) do
     {:ok, now} = in_snapshot(fn -> read_trying_now(fleet_id) end)
@@ -191,8 +197,10 @@ defmodule Keyfleet.Graph do
   Runs `read` in one read-only snapshot of the workspace's read tables and
   answers `{:ok, result}`: Postgres fixes a repeatable-read snapshot at the
   transaction's first query, so everything `read` reads comes from one
-  moment. It must be the transaction's first statement, so it can't run
-  inside another transaction.
+  moment. Never call it inside a transaction: the setting has to be the
+  transaction's first statement. Inside an ordinary transaction that fails
+  loudly; inside a repeatable-read one it doesn't fail, but quietly makes the
+  rest of the outer transaction read-only.
   """
   def in_snapshot(read) do
     Ash.transact(@tables, fn ->

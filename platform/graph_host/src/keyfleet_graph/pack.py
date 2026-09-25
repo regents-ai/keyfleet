@@ -68,7 +68,8 @@ class WorkObject(_Model):
 class Goal(WorkObject):
     outcome: _text(2000, required=True, multiline=True)
     success_criteria: list[_text(500)] = _items()
-    open_questions: list[_text(500)] = _items()
+    # A question is never empty, so a goal's first one is always one to ask.
+    open_questions: list[_text(500, required=True)] = _items()
     status: Literal["open", "achieved", "dropped"] = "open"
 
 

@@ -71,6 +71,7 @@ defmodule Keyfleet.Graph.Relation do
     # its source still in the workspace. Read by loading an object's
     # `links_in`, which names the object they point at.
     read :into do
+      public? false
       argument :type, :string, allow_nil?: false, constraints: @text
       argument :source_type, :string, allow_nil?: false, constraints: @text
 

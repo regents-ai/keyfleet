@@ -302,6 +302,18 @@ def test_multi_line_text_keeps_its_newlines_and_tabs(seeded):
     assert seeded.graph.get_object(note["id"]).data["body"] == body
 
 
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_goal_never_holds_an_empty_open_question(seeded, blank):
+    create = {"type": "goal", "scope": "fleet", "data": {**GOAL, "open_questions": ["Who pays?", blank]}}
+    patch = {"id": "goal#1", "expected_version": 2, "set": {"open_questions": [blank]}}
+
+    assert _call(seeded, request("create", create, command("q1")))["error"]["code"] == "invalid"
+    assert _call(seeded, request("patch", patch, command("q2")))["error"]["code"] == "invalid"
+
+    asked = _ok(seeded, "create", {**create, "data": {**GOAL, "open_questions": ["Who pays?"]}}, "q3")
+    assert seeded.graph.get_object(asked["id"]).data["open_questions"] == ["Who pays?"]
+
+
 def test_a_reopened_host_serves_the_same_graph_and_ledger(db):
     first = HostProcess(db)
     assert first.send(request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1")))["ok"]

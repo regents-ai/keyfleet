@@ -81,6 +81,9 @@ defmodule Keyfleet.DirectoryTest do
         "next_step" => "Draft the price"
       })
 
+    unclaimed =
+      Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
+
     Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "done"})
     Workspace.create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"})
 
@@ -91,12 +94,14 @@ defmodule Keyfleet.DirectoryTest do
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 1}
+    assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 2}
     assert Enum.map(fleet.work.open_goals, & &1.id) == [open]
     assert Enum.map(fleet.work.tasks_untaken, & &1.id) == [untaken]
 
-    assert [%{id: ^doing, title: "Underway", gist: "Draft the price", assignee_key: 12}] =
-             fleet.work.tasks_in_progress
+    assert [
+             %{id: ^unclaimed, assignee_key: nil},
+             %{id: ^doing, title: "Underway", gist: "Draft the price", assignee_key: 12}
+           ] = fleet.work.tasks_in_progress
 
     assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
   end
