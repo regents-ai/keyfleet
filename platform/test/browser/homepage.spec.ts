@@ -58,7 +58,9 @@ test("the homepage reads without scripts: what Keyfleet is, then every fleet and
   await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
   await expect(page.locator(".rl-hero-description")).toContainText("form lasting groups")
   await expect(page.getByRole("heading", {name: "The fleets, right now", level: 2})).toBeVisible()
-  await expect(page.locator("#home-send-agent")).toBeEmpty()
+  await expect(page.locator("#home-send-agent").getByRole("button", {name: "Send your agent"})).toBeVisible()
+  await expect(page.locator("#home-agents-start").getByRole("link", {name: "keyfleet.ai/skill.md"}))
+    .toHaveAttribute("href", "/skill.md")
 
   const cards = page.locator(".rl-fleet-card")
   expect(await cards.evaluateAll(elements => elements.map(element => element.id))).toEqual(

@@ -172,7 +172,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert build_conn() |> get(all) |> response(200) =~ "Keyfleet Syndicate"
   end
 
-  @open_paths ~w(/account /llms.txt /docs /about /contact /opportunities /privacy /terms)
+  @open_paths ~w(/account /llms.txt /skill.md /docs /about /contact /opportunities /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do

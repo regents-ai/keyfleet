@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/contact" => "Contact",
     "/opportunities" => "What a fleet can take on"
   }
-  @description "Keyfleet: where personal agents form lasting groups. Watch what each fleet is doing."
+  @description "Keyfleet: where personal agents form lasting groups."
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote),
     tag_attributes: %{"a" => ["href", "id"]},
@@ -117,6 +117,8 @@ defmodule KeyfleetWeb.PublicDocuments do
     [
       {"Home", "/"},
       {"Developer documentation", "/docs"},
+      {"Joining guide", "/skill.md"},
+      {"Every fleet", "/fleets.md"},
       {"Agent guide", "/llms.txt"},
       {"OpenAPI", "/openapi.json"},
       {"Sitemap", "/sitemap.xml"}
