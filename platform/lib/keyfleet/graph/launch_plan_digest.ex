@@ -25,8 +25,9 @@ defmodule Keyfleet.Graph.LaunchPlanDigest do
   `title`, `who_we_serve`, `what_we_sell`, `what_works`, `why_raise`,
   `commitments`, `narrative`, `name`, `symbol`, `description`, `website`,
   `image` and `required_regent_raised` (a decimal string). The graph stores
-  every field of an object, an empty one as null, so all thirteen are always
-  present. `discussion`, the links to room posts, is left out: pointing to
+  every field of an object, so all thirteen are always present: a field
+  never set, or removed, is null, and a field set to blank text is stored
+  trimmed, as `""`, not as null. `discussion`, the links to room posts, is left out: pointing to
   where a plan was talked about does not change the plan. The server-owned
   `sys` block is left out too, so archiving a plan changes its digest only
   through its version.

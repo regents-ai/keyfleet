@@ -1276,8 +1276,9 @@ components:
 
         plan is object.data with exactly these thirteen fields, each a string or null, all always
         present: title, who_we_serve, what_we_sell, what_works, why_raise, commitments, narrative,
-        name, symbol, description, website, image, required_regent_raised. discussion and sys are
-        left out.
+        name, symbol, description, website, image, required_regent_raised. A field never set, or
+        removed, is null; a field set to blank text is stored trimmed, as "", not as null. Use the
+        values exactly as object.data holds them. discussion and sys are left out.
 
         canonical_json is RFC 8785 (JSON Canonicalization Scheme): keys sorted, no whitespace,
         integers in decimal, strings as UTF-8 with only the quote and backslash escaped, \b \f \n

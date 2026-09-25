@@ -228,6 +228,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert head > 1
     assert tables()[Graph.Event] == []
     assert tables()[Graph.Object] == []
+    assert tables()[Graph.LaunchPlanRevision] == []
     assert [%{applied_seq: 1}] = tables()[Graph.Cursor]
   end
 
@@ -492,8 +493,8 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert Enum.map(revisions, & &1.version) == [1, 2, 3]
     assert revisions |> Enum.map(& &1.digest) |> Enum.uniq() |> length() == 3
 
-    # Version 2 as the graph stores it: every field of the plan, the empty
-    # ones as null, and not where it was discussed.
+    # Version 2 as the graph stores it: every field of the plan, the ones
+    # never set as null, and not where it was discussed.
     blank =
       Map.new(
         ~w(title who_we_serve what_we_sell what_works why_raise commitments narrative name symbol
