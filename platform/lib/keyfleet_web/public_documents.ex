@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.PublicDocuments do
           "url" => url("/"),
           "logo" => url("/mark.png"),
           "description" => @description,
-          "sameAs" => [],
+          "sameAs" => ["https://github.com/regents-ai", "https://x.com/regents_sh"],
           "contactPoint" => %{"@type" => "ContactPoint", "email" => "build@regents.sh"}
         },
         %{

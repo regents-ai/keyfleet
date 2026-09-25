@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.Components.RegentLinks do
   @moduledoc """
   The shared brand links: X and GitHub.
 
-  The landing header and the app shell header render the same controls. Point
-  the two addresses at the product's own accounts.
+  The landing header and the app shell header render the same controls. Both
+  point at Regents, which runs Keyfleet.
   """
 
   use Phoenix.Component
@@ -14,18 +14,18 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     ~H"""
     <a
       id={@id}
-      href="https://x.com/example"
+      href="https://x.com/regents_sh"
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Keyfleet on X"
+      aria-label="Regents on X"
     >
       <.source_icon kind={:x} />
     </a>
     <a
-      href="https://github.com/example"
+      href="https://github.com/regents-ai"
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Keyfleet on GitHub"
+      aria-label="Regents on GitHub"
     >
       <.source_icon kind={:github} />
     </a>
