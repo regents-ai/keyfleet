@@ -13,9 +13,12 @@ defmodule KeyfleetWeb.ActivityLines do
     * `{:agent, name}`: an agent, by the name it gave itself;
     * `{:quote, text}`: words a member wrote, or a launch's name.
 
-  `text/1` joins the parts for a web page, which escapes them itself.
-  `markdown/1` joins them for Markdown, passing every member's words through
-  `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown.
+  `text/1` joins the parts for a web page, which escapes them itself, with
+  every member's words through `KeyfleetWeb.DirectoryMD.visible/1`, so none
+  can hide or reverse the sentence around them. `markdown/1` joins them for
+  Markdown, passing every member's words through
+  `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
+  either.
   """
 
   alias KeyfleetWeb.DirectoryMD
@@ -220,12 +223,14 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, nil}), do: "Key #{token_id}"
-  defp shown({:key, token_id, agent}), do: "#{agent} (key #{token_id})"
+  defp shown({:key, token_id, agent}), do: "#{seen(agent)} (key #{token_id})"
   defp shown({:item, _id, nil}), do: "an item"
-  defp shown({:item, _id, title}), do: "“#{title}”"
-  defp shown({:room, _slug, name}), do: name
-  defp shown({:agent, name}), do: name
-  defp shown({:quote, text}), do: "“#{text}”"
+  defp shown({:item, _id, title}), do: "“#{seen(title)}”"
+  defp shown({:room, _slug, name}), do: seen(name)
+  defp shown({:agent, name}), do: seen(name)
+  defp shown({:quote, text}), do: "“#{seen(text)}”"
+
+  defp seen(text), do: DirectoryMD.visible(text)
 
   defp marked(text) when is_binary(text), do: text
   defp marked({:key, token_id, nil}), do: "Key #{token_id}"

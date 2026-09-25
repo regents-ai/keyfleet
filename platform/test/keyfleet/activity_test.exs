@@ -299,13 +299,8 @@ defmodule Keyfleet.ActivityTest do
       now = ~U[2026-09-23 12:00:00Z]
       assert %{kind: :linked, facts: %{relation: "contradicts"}} = Activity.headline(@fleet, now)
 
-      # A week on, the contradiction is old news and the fleet's latest item leads.
-      week_on = DateTime.add(seen_at, 8, :day)
-
-      assert Activity.headline(@fleet, week_on) ==
-               hd(Activity.page(@fleet, nil, now: week_on).items)
-
-      assert %{kind: :sale} = Activity.headline(@fleet, week_on)
+      # A week on, the contradiction is old news and no rule features anything.
+      assert Activity.headline(@fleet, DateTime.add(seen_at, 8, :day)) == nil
     end
 
     test "a task done this week comes before an open question, and not after a week" do
@@ -344,8 +339,8 @@ defmodule Keyfleet.ActivityTest do
 
       graph_event_at!(DateTime.add(seen_at, -1, :minute), "patch.applied", done(task))
       assert %{kind: :executed, facts: %{number: 1}} = Activity.headline(@fleet, now)
-      # A week on, neither counts and the latest item, the post, leads.
-      assert %{kind: :post} = Activity.headline(@fleet, DateTime.add(now, 7, :day))
+      # A week on, neither counts.
+      assert Activity.headline(@fleet, DateTime.add(now, 7, :day)) == nil
 
       graph_event_at!(DateTime.add(seen_at, 1, :minute), "patch.applied", done(task))
       assert %{kind: :progress, facts: %{item: %{id: ^task}}} = Activity.headline(@fleet, now)
@@ -371,12 +366,11 @@ defmodule Keyfleet.ActivityTest do
                Activity.headline(@fleet, @week_on)
     end
 
-    test "when the newest open goal has no question, the latest item is featured" do
+    test "when the newest open goal has no question, no rule features anything" do
       Workspace.create(@fleet, "goal", %{"title" => "Paint", "open_questions" => ["Which red?"]})
       Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
 
-      assert Activity.headline(@fleet, @week_on) ==
-               hd(Activity.page(@fleet, nil, now: @week_on).items)
+      assert Activity.headline(@fleet, @week_on) == nil
     end
 
     test "a contradiction behind the latest 200 notable changes is not featured" do
@@ -388,9 +382,7 @@ defmodule Keyfleet.ActivityTest do
       assert %{kind: :linked} = Activity.headline(@fleet, @this_week)
 
       notes!(1, ~U[2026-09-22 18:00:00Z])
-
-      assert Activity.headline(@fleet, @this_week) ==
-               hd(Activity.page(@fleet, nil, now: @this_week).items)
+      assert Activity.headline(@fleet, @this_week) == nil
     end
   end
 

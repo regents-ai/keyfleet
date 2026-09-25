@@ -4,8 +4,9 @@ defmodule Keyfleet.Fleets.Rules do
   wallet may hold, and the terms every member joins under, with the numbers
   in them written the one way every page writes them.
 
-  The fleet page, the homepage and the open fleet directory all say these the
-  same way, so they are written once, here.
+  The fleet page and the open fleet directory say these the same way, so they
+  are written once, here. The homepage says none of them; it only writes its
+  numbers through `keys/1` and `grouped/1`.
   """
 
   alias Keyfleet.Fleets.Presets

@@ -95,18 +95,24 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   @doc """
-  Member-written `text` made safe to place inside a line of Markdown: every
-  run of whitespace, line breaks included, becomes one space, characters
-  that can't be seen are removed, curly quotation marks become straight ones
-  so the text can't seem to close its own quotes, the text is cut to `limit`
-  characters, every character Markdown or HTML could act on is escaped with
-  a backslash, and the whole is wrapped in curly quotation marks.
+  Member-written `text` as one line of what can be seen: every run of
+  whitespace, line breaks included, becomes one space, and control and
+  format characters, which can't be seen or reverse the text around them,
+  are removed. Pages show member text through this, as `inline/2` does.
+  """
+  def visible(text), do: ~r/\s+/u |> Regex.replace(text, " ") |> String.replace(@invisible, "")
+
+  @doc """
+  Member-written `text` made safe to place inside a line of Markdown: the
+  text as `visible/1` gives it, with curly quotation marks made straight so
+  the text can't seem to close its own quotes, cut to `limit` characters,
+  with every character Markdown or HTML could act on escaped with a
+  backslash, and the whole wrapped in curly quotation marks.
   """
   def inline(text, limit) do
     text =
-      ~r/\s+/u
-      |> Regex.replace(text, " ")
-      |> String.replace(@invisible, "")
+      text
+      |> visible()
       |> String.replace(["“", "”"], "\"")
       |> String.trim()
       |> String.codepoints()

@@ -4,10 +4,11 @@ defmodule KeyfleetWeb.HomeLive do
   what a fleet can take on.
 
   Each fleet's card shows its map, how many keys it has sold and how many
-  agents run them, the goal it is trying, the one item `Keyfleet.Activity.headline/2`
-  features and its latest item, and opens that fleet's map.
+  agents run them, the goal it is trying, the one item it features and its
+  latest item, and opens that fleet's map. A fleet not yet deployed, or one
+  whose sales are still being read, shows no key count.
 
-  The first render reads only how many keys each fleet has sold, for its map.
+  The first render reads only each fleet's record and sales, for its map.
   Once connected, each card reads the rest on its own, and reads again a few
   seconds after a notice that something changed in its fleet: once for a
   burst of notices, and only for the fleet the notice was about.
@@ -68,11 +69,12 @@ defmodule KeyfleetWeb.HomeLive do
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared funds.",
     "fibonacci_cascade" =>
-      "Keys come in the same levels, and when a level sells out, the holders of the level " <>
-        "before it are paid back.",
+      "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
+        "the level before it are paid back.",
     "fleet_tech_classic" => "A fixed set of 144 keys.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 keys, and most of each sale goes to whoever holds the key before it."
+      "Up to 2,000 keys, and most of each sale after the first goes to whoever holds the " <>
+        "key before it."
   }
 
   @doc """
@@ -99,7 +101,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     #{@intro}
 
-    What every fleet is doing right now, its open goals, work and latest posts: [all fleets](#{PublicDocuments.url("/fleets.md")}).
+    [Every fleet](#{PublicDocuments.url("/fleets.md")}) in brief, with counts, and a link to each fleet’s own page, which has its open goals, work and latest posts.
 
     #{fleets}
 
@@ -118,20 +120,28 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+
     socket =
       assign(socket,
         route_spec: RouteCatalog.fetch!(:home),
-        fleets: Enum.map(Fleets.catalog(), &card/1),
+        fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
         refreshing: MapSet.new()
       )
 
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
   end
 
-  # A fleet's card before its first read: its name and its map.
-  defp card(%{id: id, name: name}) do
-    {:ok, keys} = Chain.minted(id)
-    %{id: id, name: name, layout: Presets.preset(id), keys: keys, now: nil}
+  # A fleet's card before its first read: its name, its sales and its map.
+  defp card(%{id: id, name: name}, recorded),
+    do: %{id: id, name: name, layout: Presets.preset(id), sales: sales(id, recorded), now: nil}
+
+  # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
+  # whose sales are still being read isn't current, and shows no count.
+  defp sales(fleet_id, recorded) do
+    deployed? = recorded != nil and recorded.contract_address != nil
+    {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
+    %{deployed?: deployed?, current?: deployed? and Chain.fresh?(fleet_id), keys: minted}
   end
 
   defp watch(socket) do
@@ -151,17 +161,18 @@ defmodule KeyfleetWeb.HomeLive do
   defp start_read(socket, fleet_id),
     do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
 
-  # Everything a card shows about its fleet right now.
+  # Everything a card shows about its fleet right now. With nothing else to
+  # feature, the card features its latest item.
   defp read(fleet_id, now) do
-    {:ok, keys} = Chain.minted(fleet_id)
+    latest =
+      fleet_id |> Activity.page(nil, limit: 1, now: now) |> Map.fetch!(:items) |> List.first()
 
     %{
-      keys: keys,
+      sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),
       agents: Agents.count_agents_here!(fleet_id),
       trying: trying(fleet_id),
-      featured: Activity.headline(fleet_id, now),
-      latest:
-        fleet_id |> Activity.page(nil, limit: 1, now: now) |> Map.fetch!(:items) |> List.first()
+      featured: Activity.headline(fleet_id, now) || latest,
+      latest: latest
     }
   end
 
@@ -207,10 +218,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   # A read that failed leaves the card as it was; the next notice reads again.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, %{keys: keys} = now}, socket) do
+  def handle_async({:now, fleet_id}, {:ok, %{sales: sales} = now}, socket) do
     fleets =
       Enum.map(socket.assigns.fleets, fn
-        %{id: ^fleet_id} = card -> %{card | keys: keys, now: Map.delete(now, :keys)}
+        %{id: ^fleet_id} = card -> %{card | sales: sales, now: Map.delete(now, :sales)}
         other -> other
       end)
 
@@ -223,11 +234,15 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp opportunity_path(%{id: id}), do: "/opportunities##{id}"
 
+  defp sold(%{deployed?: false}), do: "Not on sale yet"
+  defp sold(%{current?: false}), do: "Sales figures are catching up"
+  defp sold(%{keys: keys}), do: "#{Rules.keys(keys)} sold"
+
   defp agents(1), do: "1 agent here"
   defp agents(count), do: "#{Rules.grouped(count)} agents here"
 
   # What the featured item is, in a word or two.
-  defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Open problem"
+  defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Problem raised"
   defp label(%{kind: :status, facts: %{status: "achieved"}}), do: "Done"
   defp label(%{kind: :progress, facts: %{progress: "done"}}), do: "Done"
   defp label(%{kind: :executed}), do: "Done"
@@ -345,12 +360,12 @@ defmodule KeyfleetWeb.HomeLive do
               phx-hook="FleetPreview"
               phx-update="ignore"
               data-layout={fleet.layout}
-              data-minted={fleet.keys}
+              data-minted={fleet.sales.keys}
               aria-hidden="true"
             >
             </div>
             <h3>{fleet.name}</h3>
-            <.right_now :if={fleet.now} keys={fleet.keys} now={fleet.now} />
+            <.right_now :if={fleet.now} sales={fleet.sales} now={fleet.now} />
           </a>
         </li>
       </ul>
@@ -358,7 +373,7 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  attr :keys, :integer, required: true
+  attr :sales, :map, required: true
   attr :now, :map, required: true
 
   defp right_now(assigns) do
@@ -366,7 +381,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     ~H"""
     <div class="rl-fleet-card__now">
-      <p class="rl-fleet-card__who" data-fleet-who>{Rules.keys(@keys)} · {agents(@now.agents)}</p>
+      <p class="rl-fleet-card__who" data-fleet-who>{sold(@sales)} · {agents(@now.agents)}</p>
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>

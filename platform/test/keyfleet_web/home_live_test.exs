@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.HomeLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.Fleets
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, KeeperHelpers, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
 
   # Invariants covered:
@@ -9,8 +9,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the four fleets in catalog order, each opening its own map
   # - a card shows its fleet's newest open goal and featured item once connected,
   #   and the first render reads neither
+  # - a card counts sold keys only once its fleet is on sale and read up to now
   # - a notice about one fleet refreshes that fleet's card alone, and only
   #   after the pause
+  # - a burst of notices about one fleet is answered by one refresh
   # - the Markdown homepage links each fleet to its own page for what it is
   #   doing, and every fleet's page, and those pages exist
   # - launch-gate: internal links stay on the fleets' maps, the account page,
@@ -55,7 +57,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(static, "[data-fleet-trying]", "class") == []
 
     {:ok, view, _html} = live(conn, "/")
-    render_async(view)
+    render_async(view, 3_000)
 
     assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") ==
              "Trying: Sell the first audit"
@@ -78,24 +80,80 @@ defmodule KeyfleetWeb.HomeLiveTest do
   test "a notice about one fleet refreshes that fleet's card alone, after a pause",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    render_async(view)
+    render_async(view, 3_000)
 
     goal("Sell the first audit")
     Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
 
     send(view.pid, {:graph_head, @syndicate, "log_fixture", 2})
     render(view)
-    render_async(view)
+    render_async(view, 3_000)
     assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") == "No goal set yet"
 
     send(view.pid, {:refresh, @syndicate})
     render(view)
-    render_async(view)
+    render_async(view, 3_000)
 
     assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") ==
              "Trying: Sell the first audit"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
+  end
+
+  test "a card counts sold keys only once its fleet is on sale and read up to now",
+       %{conn: conn} do
+    classic = "fleet_tech_classic"
+
+    for fleet <- [@syndicate, @cascade],
+        do: KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 8_453)
+
+    ChainHelpers.seed_cursor!(@syndicate)
+    ChainHelpers.seed_cursor!(@cascade, head_block: 5_000, next_block: 1_000)
+    for token_id <- 1..3, do: issue!(@syndicate, token_id)
+
+    {:ok, view, html} = live(conn, "/")
+
+    assert attribute(html, "#home-fleet-preview-#{@syndicate}", "data-minted") == ["3"]
+    assert attribute(html, "#home-fleet-preview-#{classic}", "data-minted") == ["0"]
+
+    render_async(view, 3_000)
+
+    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
+             "3 keys sold · 0 agents here"
+
+    assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
+             "Sales figures are catching up · 0 agents here"
+
+    assert text(view, "#home-fleet-#{classic} [data-fleet-who]") ==
+             "Not on sale yet · 0 agents here"
+  end
+
+  test "a burst of notices about one fleet is answered by one refresh", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+
+    # Watch the pauses the page sets before reading a fleet again.
+    :erlang.trace_pattern({:erlang, :send_after, 3}, true, [:global])
+    :erlang.trace(view.pid, true, [:call])
+    on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
+
+    send(view.pid, {:graph_head, @syndicate, "log_fixture", 2})
+    send(view.pid, {:graph_head, @syndicate, "log_fixture", 3})
+    send(view.pid, {:proposals_changed, @syndicate})
+    send(view.pid, {:rooms_changed, @cascade})
+    render(view)
+
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @syndicate}]}}
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @cascade}]}}
+    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
+
+    # Once the fleet has read again, its next notice sets a pause of its own.
+    send(view.pid, {:refresh, @syndicate})
+    send(view.pid, {:graph_head, @syndicate, "log_fixture", 4})
+    render(view)
+
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @syndicate}]}}
+    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
   end
 
   test "the Markdown homepage sends agents to each fleet's own page for what it is doing",
@@ -110,7 +168,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       assert build_conn() |> get(path) |> response(200) =~ name
     end
 
-    [_, all] = Regex.run(~r{\[all fleets\]\(https?://[^/]+(/[^)]+)\)}, markdown)
+    [_, all] = Regex.run(~r{\[Every fleet\]\(https?://[^/]+(/[^)]+)\)}, markdown)
     assert build_conn() |> get(all) |> response(200) =~ "Keyfleet Syndicate"
   end
 
@@ -133,6 +191,23 @@ defmodule KeyfleetWeb.HomeLiveTest do
         [path] -> assert path in @open_paths or path in fleet_paths
       end
     end
+  end
+
+  defp issue!(fleet_id, token_id) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: fleet_id,
+        token_id: token_id,
+        ownership_epoch: 0,
+        owner_wallet: "0x" <> String.duplicate("a", 40),
+        block_number: 10 + token_id,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash:
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{token_id}"), case: :lower),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
   end
 
   defp goal(title, data \\ %{}),

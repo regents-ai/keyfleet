@@ -221,11 +221,13 @@ defmodule Keyfleet.Activity do
     1. the latest `contradicts` link, if made in the last seven days;
     2. the latest goal achieved, task marked done or proposal carried out, if
        in the last seven days;
-    3. the first open question of the most recently changed open goal;
-    4. the fleet's latest item.
+    3. the first open question of the most recently changed open goal.
+
+  Nil when no rule finds one, and the fleet's latest item, the first of
+  `page/3`, is featured instead; the caller has read it already.
 
   Links, achieved goals and finished tasks are looked for among the fleet's
-  200 latest notable workspace changes. Nil when the fleet has no activity.
+  200 latest notable workspace changes.
   """
   @spec headline(String.t(), DateTime.t()) :: item() | nil
   def headline(fleet_id, %DateTime{} = now) do
@@ -239,10 +241,7 @@ defmodule Keyfleet.Activity do
         ]) ||
         open_question(fleet_id)
 
-    case featured do
-      nil -> fleet_id |> page(nil, limit: 1, now: now) |> Map.fetch!(:items) |> List.first()
-      entry -> entry |> List.wrap() |> name(fleet_id) |> hd()
-    end
+    if featured, do: [featured] |> name(fleet_id) |> hd()
   end
 
   defp mark(fleet_id, mark) do

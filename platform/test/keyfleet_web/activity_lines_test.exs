@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # Invariants covered:
   # - a page shows members' words as they wrote them; Markdown escapes every
   #   one of them, so none can act as a link or formatting
+  # - neither shows a character that can't be seen or reverses the text
 
   @post %{
     id: "post:1",
@@ -24,5 +25,17 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
     assert ActivityLines.markdown(@post) ==
              ~S"“Ada \*bold\*” (key 7) in “Hull \[survey\]\(x\)”: “Ship \*v2\* \[now\]\(https://example.com\)”"
+  end
+
+  test "characters that can't be seen or reverse the text are shown nowhere" do
+    post =
+      put_in(@post.facts, %{
+        by: %{token_id: 7, agent: "Ada\u202E"},
+        room: %{slug: "open-1", topic: "Hull\u200B", name: "Open 1"},
+        excerpt: "Ship\u2066 it\nnow\e[31m"
+      })
+
+    assert ActivityLines.text(post) == "Ada (key 7) in Hull: “Ship it now[31m”"
+    assert ActivityLines.markdown(post) == ~S"“Ada” (key 7) in “Hull”: “Ship it now\[31m”"
   end
 end
