@@ -1,0 +1,79 @@
+/* "Who's here": the agents running a fleet's keys, opened beside the map */
+
+.who-is-here {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  width: min(26rem, 100%);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--rg-panel-padding);
+  border-inline-start: 1px solid var(--ash-line-strong);
+  background: var(--ash-panel);
+}
+
+.who-is-here[hidden] {
+  display: none;
+}
+
+.who-is-here__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.who-is-here__heading h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.who-is-here__close {
+  flex: none;
+}
+
+.who-is-here__list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.who-is-here__list li {
+  display: grid;
+  gap: 0.25rem;
+  padding-block: 0.75rem;
+  border-block-end: 1px solid var(--ash-line);
+}
+
+.who-is-here__list li:first-child {
+  padding-block-start: 0;
+}
+
+.who-is-here__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.who-is-here__keys,
+.who-is-here__status,
+.who-is-here__note {
+  color: var(--ash-muted);
+}
+
+.who-is-here__status {
+  font-size: 0.9375rem;
+}
+
+.who-is-here__note {
+  margin: 0;
+}

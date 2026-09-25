@@ -3,6 +3,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   import Plug.Conn
 
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Chain
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
@@ -873,6 +874,76 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     end
   end
 
+  test "a sync records the agent's check-in and tells it its keys, their limits and the unfinished tasks they have taken",
+       c do
+    start_graph(c)
+    [ann, bea] = pair_agents(c)
+
+    doing =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{
+          title: "Draft the brief",
+          progress: "doing",
+          assignee_key: 1,
+          next_step: "Pick a customer"
+        }
+      })
+
+    for {agent, key, id, data} <- [
+          {ann, 1, "t-2", %{title: "Finished", progress: "done", assignee_key: 1}},
+          {ann, 1, "t-3", %{title: "Nobody's yet"}},
+          {bea, 2, "t-4", %{title: "Bea's", progress: "doing", assignee_key: 2}}
+        ],
+        do: write!(c, agent, "create", %{as_key: key, command_id: id, type: "task", data: data})
+
+    synced = sync(c, ann, %{"general" => 0}, 0, %{kind: "scheduled", every_minutes: 60})
+
+    assert synced.status == 200
+    assert ContractSchema.errors(synced.body, "FleetSync") == []
+
+    assert %{
+             "status" => "confirming_schedule",
+             "status_label" => "Waiting for a second scheduled check-in",
+             "schedule_minutes" => 60,
+             "schedule_confirmed" => false
+           } = synced.body["check_in"]
+
+    doing_id = doing["id"]
+
+    assert %{
+             "as_key" => 1,
+             "keys" => [%{"token_id" => 1, "limits" => %{"written_at" => _} = limits}],
+             "tasks" => [
+               %{
+                 "id" => ^doing_id,
+                 "title" => "Draft the brief",
+                 "progress" => "doing",
+                 "next_step" => "Pick a customer",
+                 "version" => 1
+               }
+             ]
+           } = synced.body["yours"]
+
+    assert Map.delete(limits, "written_at") == %{
+             "money" => Keys.default_limits().money,
+             "your_information" => Keys.default_limits().information,
+             "outside_keyfleet" => Keys.default_limits().outside,
+             "check_with_owner_first" => Keys.default_limits().check_first
+           }
+
+    # Its writes in the workspace are its latest contribution here.
+    {:ok, profile} = Agents.get_my_profile(actor: agent_actor(ann))
+    assert %{last_contribution_kind: :workspace} = Agents.get_check_in!(profile.id, @fleet)
+
+    # An agent running no key here has nothing of its own in the fleet.
+    visitor = sync(c, join(c, "Cy"), %{"general" => 0}, 0)
+    assert visitor.body["check_in"]["status"] == "connected_now"
+    assert visitor.body["yours"] == %{"as_key" => nil, "keys" => [], "tasks" => []}
+  end
+
   defp start_graph(c, opts \\ []) do
     opts =
       Keyword.merge(
@@ -1038,11 +1109,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     written.body["result"]
   end
 
-  defp sync(c, agent, rooms, graph_after_seq) do
+  defp sync(c, agent, rooms, graph_after_seq, run \\ %{kind: "session"}) do
     send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/sync", %{
       rooms: Enum.map(rooms, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
       graph: %{after_seq: graph_after_seq},
-      proposals: %{after_seq: 0}
+      proposals: %{after_seq: 0},
+      run: run
     })
   end
 

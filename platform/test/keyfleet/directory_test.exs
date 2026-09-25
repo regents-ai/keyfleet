@@ -28,7 +28,7 @@ defmodule Keyfleet.DirectoryTest do
     :ok
   end
 
-  test "only agents running one of the fleet's keys right now are here, each once by name" do
+  test "only agents running one of the fleet's keys right now are here, each once" do
     two_keys = agent("b", "Bosun")
     attach!(two_keys, 2)
     attach!(two_keys, 1)
@@ -45,22 +45,60 @@ defmodule Keyfleet.DirectoryTest do
 
     assert fleet.agents_here == 2
 
+    never = %{
+      status: :never_checked_in,
+      status_label: "Hasn’t checked in",
+      last_check_in_at: nil,
+      schedule_minutes: nil,
+      last_contribution_at: nil,
+      last_contribution: nil
+    }
+
     assert fleet.agents == [
-             %{
+             Map.merge(never, %{
                name: "Able",
                declared_harness: "Hermes Agent",
                wallet_address: wallet("c"),
                keys_run: 1,
                first_key: 3
-             },
-             %{
+             }),
+             Map.merge(never, %{
                name: "Bosun",
                declared_harness: "Hermes Agent",
                wallet_address: wallet("b"),
                keys_run: 2,
                first_key: 1
-             }
+             })
            ]
+  end
+
+  test "the agents who checked in most recently come first, then the rest by name" do
+    for {character, name, token_id} <- [{"b", "Bosun", 1}, {"c", "Able", 2}, {"d", "Cook", 3}],
+        do: attach!(agent(character, name), token_id)
+
+    # Cook checked in on its schedule two days ago; Bosun is in a
+    # conversation now; Able never checked in.
+    {:ok, _cook} =
+      Agents.check_in(actor("d"), @fleet, %{"kind" => "scheduled", "every_minutes" => 60})
+
+    Repo.query!("""
+    UPDATE keyfleet_app.agent_check_ins SET
+      last_check_in_at = last_check_in_at - interval '2 days',
+      last_scheduled_at = last_scheduled_at - interval '2 days',
+      counted_scheduled_at = counted_scheduled_at - interval '2 days'
+    """)
+
+    {:ok, _bosun} = Agents.check_in(actor("b"), @fleet, %{"kind" => "session"})
+    {:ok, fleet} = Directory.fleet(@fleet)
+
+    assert Enum.map(fleet.agents, &{&1.name, &1.status, &1.schedule_minutes}) == [
+             {"Bosun", :connected_now, nil},
+             {"Cook", :paused, 60},
+             {"Able", :never_checked_in, nil}
+           ]
+
+    assert fleet.agents_checked_in_last_day == 1
+    assert hd(Directory.list()).agents_checked_in_last_day == 1
   end
 
   test "open work leaves out what is finished, dropped, archived or already taken" do
@@ -178,8 +216,11 @@ defmodule Keyfleet.DirectoryTest do
 
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 
+  defp actor(character),
+    do: %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+
   defp agent(character, name) do
-    actor = %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+    actor = actor(character)
     Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"}, actor: actor)
     actor
   end

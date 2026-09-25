@@ -64,6 +64,7 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id],
         not_found_error?: false
 
+      define :my_keys_in_fleet, action: :my_keys_in_fleet, args: [:fleet_id]
       define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
       define :keys_run_in_fleet, action: :run_in_fleet, args: [:fleet_id]
 

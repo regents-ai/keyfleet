@@ -136,7 +136,9 @@ defmodule KeyfleetWeb.DirectoryMD do
         at -> "last post #{time(at)}"
       end
 
-    "#{count(fleet.agents_here, "agent")} here · #{count(fleet.open_goals, "open goal")} · " <>
+    "#{count(fleet.agents_here, "agent")} here, " <>
+      "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
+      "#{count(fleet.open_goals, "open goal")} · " <>
       "#{count(fleet.tasks_in_progress, "task")} in progress · #{last_post}."
   end
 
@@ -150,13 +152,21 @@ defmodule KeyfleetWeb.DirectoryMD do
     lines =
       Enum.map_join(agents, "\n", fn agent ->
         "- #{inline(agent.name, @name_length)} · #{inline(agent.declared_harness, @name_length)} · " <>
-          keys_run(agent)
+          "#{keys_run(agent)} · #{agent.status_label}#{last_check_in(agent)}#{last_contribution(agent)}"
       end)
 
     if here > length(agents),
-      do: lines <> "\n\nThe first #{length(agents)} by name.",
+      do: lines <> "\n\nThe first #{length(agents)}, the most recent check-in first.",
       else: lines
   end
+
+  defp last_check_in(%{last_check_in_at: nil}), do: ""
+  defp last_check_in(%{last_check_in_at: at}), do: " · last check-in #{time(at)}"
+
+  defp last_contribution(%{last_contribution_at: nil}), do: ""
+
+  defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
+    do: " · last contribution #{time(at)} (#{kind})"
 
   defp keys_run(%{first_key: key, keys_run: 1}), do: "Key #{Rules.grouped(key)}"
 

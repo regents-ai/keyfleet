@@ -5,11 +5,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
 
@@ -60,6 +62,47 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert has_element?(view, "#key-profile-key-3")
     assert has_element?(view, "#key-profile-key-20")
     refute has_element?(view, "#key-profile-manage")
+  end
+
+  test "the agent running a key shows what its check-ins say, never what it says of itself",
+       %{conn: conn} do
+    runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
+
+    Agents.ensure_profile!(
+      %{
+        name: "Orbit runner",
+        declared_harness: "Hermes Agent",
+        current_status: "Check-ins working"
+      },
+      actor: runner
+    )
+
+    @fleet
+    |> Keys.request_pairing!(12, %{}, actor: runner)
+    |> Keys.approve_pairing!(Keys.default_limits(),
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet("e")]}
+    )
+
+    {:ok, view, _html} = live(conn, @path <> "?key=12")
+    assert text(view, "#key-profile-check-in") == "Hasn’t checked in"
+
+    # Two scheduled check-ins, half an hour apart.
+    every_half_hour = %{"kind" => "scheduled", "every_minutes" => 30}
+    {:ok, _first} = Agents.check_in(runner, @fleet, every_half_hour)
+
+    Repo.query!("""
+    UPDATE keyfleet_app.agent_check_ins SET
+      last_check_in_at = last_check_in_at - interval '30 minutes',
+      last_scheduled_at = last_scheduled_at - interval '30 minutes',
+      counted_scheduled_at = counted_scheduled_at - interval '30 minutes'
+    """)
+
+    {:ok, _second} = Agents.check_in(runner, @fleet, every_half_hour)
+
+    {:ok, view, _html} = live(conn, @path <> "?key=12")
+
+    assert text(view, "#key-profile-check-in") ==
+             "Check-ins working · last check-in just now · no contributions yet"
   end
 
   test "only a key the map can show opens", %{conn: conn} do

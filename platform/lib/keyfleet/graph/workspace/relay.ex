@@ -14,11 +14,16 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   see `Keyfleet.Graph.Projector.await/3`. The answer's `watermark` says how
   far along the write's log the tables were known to be: at or past
   `head_seq`, a read made now includes the write.
+
+  A new write by an agent is recorded as its latest contribution to the
+  fleet. The write already stands in the graph, so a record that fails is
+  logged and the write is answered as it was.
   """
   use Ash.Resource.Actions.Implementation
 
   require Logger
 
+  alias Keyfleet.Actors.Agent
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -40,11 +45,16 @@ defmodule Keyfleet.Graph.Workspace.Relay do
       KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
     end
 
-    fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id)
+    fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id, context.actor)
   end
 
-  defp write_reply({:ok, %{"run_id" => run_id, "head_seq" => head_seq} = reply}, fleet_id) do
+  defp write_reply(
+         {:ok, %{"run_id" => run_id, "head_seq" => head_seq} = reply},
+         fleet_id,
+         actor
+       ) do
     watermark = Projector.await(fleet_id, run_id, head_seq)
+    unless reply["replayed"], do: note_contribution(actor, fleet_id)
 
     {:ok,
      %{
@@ -55,10 +65,25 @@ defmodule Keyfleet.Graph.Workspace.Relay do
      }}
   end
 
-  defp write_reply({:error, :indeterminate}, fleet_id),
+  defp write_reply({:error, :indeterminate}, fleet_id, _actor),
     do: {:error, IndeterminateError.exception(fleet_id: fleet_id)}
 
-  defp write_reply(error, fleet_id), do: refused(error, fleet_id)
+  defp write_reply(error, fleet_id, _actor), do: refused(error, fleet_id)
+
+  defp note_contribution(%Agent{} = actor, fleet_id) do
+    case Keyfleet.Agents.note_contribution(actor, fleet_id, :workspace) do
+      {:ok, _check_in} ->
+        :ok
+
+      {:error, error} ->
+        Logger.warning(
+          "workspace write for #{fleet_id} not recorded as a contribution: " <>
+            Exception.message(error)
+        )
+    end
+  end
+
+  defp note_contribution(_actor, _fleet_id), do: :ok
 
   defp refused({:error, %{"code" => code, "message" => reason, "details" => details}}, _fleet_id),
     do: {:error, RefusedError.exception(code: code, reason: reason, details: details)}

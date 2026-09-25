@@ -308,11 +308,11 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"POST", @sync_path, ~s({"rooms":[{"slug":"general"}]})},
           {"POST", @sync_path, ~s({"rooms":[],"graph":{"after_seq":0}})},
           {"POST", @sync_path,
-           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0},"all":true})},
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0},"all":true,"run":{"kind":"session"}})},
           {"POST", @sync_path,
-           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0,"all":true}})},
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0,"all":true},"run":{"kind":"session"}})},
           {"POST", @sync_path,
-           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":"0"}})},
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":"0"},"run":{"kind":"session"}})},
           {"POST", @read_proposal, ~s({"number":1})},
           {"POST", @read_proposal, ~s({"number":"1","votes_after_seq":0})},
           {"POST", @read_proposal, ~s({"number":1,"votes_after_seq":0,"limit":5})},
@@ -338,7 +338,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert send_signed(c, "POST", @send_general, padded).status == 413
   end
 
-  test "a place no room can reach and a room named twice are refused as bad requests", c do
+  test "a place no room can reach, a schedule outside its range and a room named twice are refused as bad requests",
+       c do
     pair(c)
 
     for {path, body} <- [
@@ -349,6 +350,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {@sync_path, sync_body(%{"general" => 0}, 2 ** 70)},
           {@sync_path, sync_body(%{"general" => 0}, 0, -1)},
           {@sync_path, sync_body(%{"general" => 0}, 0, 2 ** 70)},
+          {@sync_path,
+           sync_body(%{"general" => 0}, 0, 0, %{kind: "scheduled", every_minutes: 5})},
+          {@sync_path,
+           sync_body(%{"general" => 0}, 0, 0, %{kind: "scheduled", every_minutes: 1441})},
           {@read_proposal, ~s({"number":0,"votes_after_seq":0})},
           {@read_proposal, ~s({"number":#{2 ** 70},"votes_after_seq":0})},
           {@read_proposal, ~s({"number":1,"votes_after_seq":-1})}
@@ -361,7 +366,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       Jason.encode!(%{
         rooms: [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}],
         graph: %{after_seq: 0},
-        proposals: %{after_seq: 0}
+        proposals: %{after_seq: 0},
+        run: %{kind: "session"}
       })
 
     refused = send_signed(c, "POST", @sync_path, twice)
@@ -866,13 +872,19 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
   defp send_body(body, key), do: Jason.encode!(%{body: body, idempotency_key: key})
 
-  defp sync_body(cursors, graph_after_seq \\ 0, proposals_after_seq \\ 0),
-    do:
-      Jason.encode!(%{
-        rooms: Enum.map(cursors, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
-        graph: %{after_seq: graph_after_seq},
-        proposals: %{after_seq: proposals_after_seq}
-      })
+  defp sync_body(
+         cursors,
+         graph_after_seq \\ 0,
+         proposals_after_seq \\ 0,
+         run \\ %{kind: "session"}
+       ),
+       do:
+         Jason.encode!(%{
+           rooms: Enum.map(cursors, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
+           graph: %{after_seq: graph_after_seq},
+           proposals: %{after_seq: proposals_after_seq},
+           run: run
+         })
 
   defp send_signed(c, method, path, body \\ "{}"),
     do: c |> signed(method, path, body) |> then(&deliver(c, &1))

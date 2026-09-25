@@ -48,6 +48,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       pricing: fleet.pricing,
       sales: sales(fleet.sales),
       agents_here: fleet.agents_here,
+      agents_checked_in_last_day: fleet.agents_checked_in_last_day,
       open_goals: fleet.open_goals,
       tasks_in_progress: fleet.tasks_in_progress,
       last_post_at: fleet.last_post_at

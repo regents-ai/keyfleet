@@ -136,6 +136,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
       change Keyfleet.Rooms.Changes.AnnouncePost
+      change Keyfleet.Agents.Changes.NoteContribution
     end
 
     # A post written to one of the fleet's keys, in that key's thread, which
@@ -167,6 +168,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Rooms.Validations.IssuedKey
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
       change Keyfleet.Rooms.Changes.AnnouncePost
+      change Keyfleet.Agents.Changes.NoteContribution
     end
 
     # The line an open room takes when a member names it, written inside the

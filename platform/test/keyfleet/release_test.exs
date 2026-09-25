@@ -201,6 +201,7 @@ defmodule Keyfleet.ReleaseTest do
     assert applied_versions(config) == release_versions()
 
     assert table_names(config, "keyfleet_app") == [
+             "agent_check_ins",
              "agent_profiles",
              "budget_payments",
              "budget_receipts",

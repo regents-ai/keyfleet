@@ -115,6 +115,33 @@ defmodule Keyfleet.MessagesTest do
     assert Enum.map(read("general"), & &1.id) == [posted.id]
   end
 
+  test "an agent's new post is its latest contribution; a repeat or a person's post is not",
+       %{owner: owner} do
+    agent = agent("c")
+
+    profile =
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+
+    request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+
+    post!(agent, "general", "Hull survey started", "k-1")
+    noted = Agents.get_check_in!(profile.id, @fleet)
+    assert noted.last_contribution_kind == :post
+    assert noted.last_check_in_at == noted.last_contribution_at
+
+    # Long enough ago that a new post would be written down again.
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_contribution_at = last_contribution_at - interval '2 minutes'"
+    )
+
+    post!(agent, "general", "Hull survey started", "k-1")
+    post!(owner, "general", "Thanks", "k-2")
+
+    assert [repeated] = Ash.read!(Agents.CheckIn)
+    assert repeated.last_contribution_at == DateTime.add(noted.last_contribution_at, -2, :minute)
+  end
+
   test "a post can only answer a post in the same room", %{owner: owner} do
     elsewhere = post!(owner, "coding", "Hull survey started")
     here = post!(owner, "general", "Morning")

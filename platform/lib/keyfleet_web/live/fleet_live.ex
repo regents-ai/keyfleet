@@ -3,8 +3,9 @@ defmodule KeyfleetWeb.FleetLive do
   One fleet's page: its map of keys filling the page under a slim bar with the
   fleet's name, how far it has sold, a way to buy the next key, and links to
   its rooms, workspace and proposals. "How this fleet works" opens beside the
-  map with its pricing, sales figures and contract, and every key it has
-  issued is listed below the map.
+  map with its pricing, sales figures and contract, "Who's here" opens there
+  with the agents running its keys, and every key it has issued is listed
+  below the map.
 
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
@@ -15,6 +16,7 @@ defmodule KeyfleetWeb.FleetLive do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.RoomsLive
@@ -104,9 +106,24 @@ defmodule KeyfleetWeb.FleetLive do
               variant="secondary"
               aria-expanded="false"
               aria-controls="fleet-about"
-              phx-click={toggle("#fleet-about", "#fleet-about-toggle")}
+              phx-click={
+                toggle("#fleet-about", "#fleet-about-toggle")
+                |> close_quietly("#fleet-who", "#fleet-who-toggle")
+              }
             >
               How this fleet works
+            </Regent.Primitives.button>
+            <Regent.Primitives.button
+              id="fleet-who-toggle"
+              variant="secondary"
+              aria-expanded="false"
+              aria-controls="fleet-who"
+              phx-click={
+                toggle("#fleet-who", "#fleet-who-toggle")
+                |> close_quietly("#fleet-about", "#fleet-about-toggle")
+              }
+            >
+              Who’s here
             </Regent.Primitives.button>
             <a href="#fleet-keys" class="rg-button rg-button--secondary">List of keys</a>
           </nav>
@@ -116,6 +133,11 @@ defmodule KeyfleetWeb.FleetLive do
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
           <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
           <.about fleet={@fleet} />
+          <CheckIns.who_is_here
+            agents={@fleet.agents}
+            agents_here={@fleet.agents_here}
+            on_close={close("#fleet-who", "#fleet-who-toggle")}
+          />
         </div>
       </div>
 
@@ -139,7 +161,8 @@ defmodule KeyfleetWeb.FleetLive do
               Key {key.token_id}
             </.link>
             <span>Held by {short_wallet(key.owner_wallet)}</span>
-            <span>{key.operator_name || "No agent"}</span>
+            <span :if={is_nil(key.operator)}>No agent</span>
+            <span :if={key.operator}>{key.operator.name} · {key.operator.status_label}</span>
           </li>
         </ol>
 
@@ -175,10 +198,15 @@ defmodule KeyfleetWeb.FleetLive do
     |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: button)
   end
 
-  defp close(panel, button) do
-    JS.set_attribute({"hidden", "hidden"}, to: panel)
+  defp close(panel, button),
+    do: %JS{} |> close_quietly(panel, button) |> JS.focus(to: button)
+
+  # The panels beside the map open one at a time: opening one closes the
+  # other without moving the reader's focus.
+  defp close_quietly(js, panel, button) do
+    js
+    |> JS.set_attribute({"hidden", "hidden"}, to: panel)
     |> JS.set_attribute({"aria-expanded", "false"}, to: button)
-    |> JS.focus(to: button)
   end
 
   attr :fleet, :map, required: true

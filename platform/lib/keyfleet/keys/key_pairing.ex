@@ -399,6 +399,20 @@ defmodule Keyfleet.Keys.KeyPairing do
       get? true
     end
 
+    # Every key of the fleet this operator runs right now, by number, each
+    # with the owner's limits on it.
+    read :my_keys_in_fleet do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and operator_wallet == ^actor(:wallet_address) and
+                 effective?
+             )
+
+      prepare build(sort: [token_id: :asc], limit: 100)
+    end
+
     read :my_open_request do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
@@ -432,7 +446,13 @@ defmodule Keyfleet.Keys.KeyPairing do
       authorize_if always()
     end
 
-    policy action([:my_pairings, :my_open_request, :my_active_pairing, :my_identity_in_fleet]) do
+    policy action([
+             :my_pairings,
+             :my_open_request,
+             :my_active_pairing,
+             :my_identity_in_fleet,
+             :my_keys_in_fleet
+           ]) do
       authorize_if Keyfleet.Checks.AgentActor
     end
 

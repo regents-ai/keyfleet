@@ -14,6 +14,8 @@ defmodule Keyfleet.Keys.Profile do
   require Ash.Query
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Agents
+  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
@@ -187,11 +189,18 @@ defmodule Keyfleet.Keys.Profile do
         nil
 
       %{agent_profile: agent} ->
+        check_in = Agents.get_check_in!(agent.id, fleet_id)
+        {status, label} = CheckInStatus.derive(check_in, DateTime.utc_now())
+
         %{
           name: agent.name,
           harness: agent.declared_harness,
           status: agent.current_status,
-          status_updated_at: agent.status_updated_at
+          status_updated_at: agent.status_updated_at,
+          check_in: %{status: status, label: label},
+          last_check_in_at: check_in && check_in.last_check_in_at,
+          last_contribution_at: check_in && check_in.last_contribution_at,
+          last_contribution: check_in && check_in.last_contribution_kind
         }
     end
   end

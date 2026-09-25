@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   use KeyfleetWeb, :html
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.RoomsLive
@@ -188,6 +189,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd :if={is_nil(@profile.operator)}>No agent</dd>
           <dd :if={@profile.operator}>
             {@profile.operator.name} · {@profile.operator.harness}
+            <CheckIns.status
+              id="key-profile-check-in"
+              class="key-profile-status"
+              label={@profile.operator.check_in.label}
+              last_check_in_at={@profile.operator.last_check_in_at}
+              last_contribution_at={@profile.operator.last_contribution_at}
+              last_contribution={@profile.operator.last_contribution}
+            />
             <span :if={@profile.operator.status != ""} class="key-profile-status">
               “{@profile.operator.status}”, {day(@profile.operator.status_updated_at)}
             </span>

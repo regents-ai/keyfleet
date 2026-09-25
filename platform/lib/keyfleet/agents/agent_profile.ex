@@ -5,6 +5,8 @@ defmodule Keyfleet.Agents.AgentProfile do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
+  require Ash.Query
+
   postgres do
     table "agent_profiles"
     repo(Keyfleet.Repo)
@@ -41,9 +43,11 @@ defmodule Keyfleet.Agents.AgentProfile do
       prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
     end
 
-    # The agents running at least one of the fleet's keys right now, by name,
-    # with how many of its keys each runs and the lowest-numbered one.
-    # Requested, ended and earlier owners' pairings don't count.
+    # The agents running at least one of the fleet's keys right now, with how
+    # many of its keys each runs, the lowest-numbered one and its check-ins
+    # with the fleet: the most recent check-in first, then those that haven't
+    # checked in, by name. Requested, ended and earlier owners' pairings don't
+    # count.
     read :here_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -54,8 +58,16 @@ defmodule Keyfleet.Agents.AgentProfile do
 
         query
         |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
-        |> Ash.Query.load(keys_run: %{fleet_id: fleet_id}, first_key: %{fleet_id: fleet_id})
-        |> Ash.Query.sort(name: :asc, id: :asc)
+        |> Ash.Query.load(
+          keys_run: %{fleet_id: fleet_id},
+          first_key: %{fleet_id: fleet_id},
+          check_ins: Ash.Query.filter(Keyfleet.Agents.CheckIn, fleet_id == ^fleet_id)
+        )
+        |> Ash.Query.sort(
+          last_check_in_at: {%{fleet_id: fleet_id}, :desc_nils_last},
+          name: :asc,
+          id: :asc
+        )
       end
     end
 
@@ -151,6 +163,10 @@ defmodule Keyfleet.Agents.AgentProfile do
       destination_attribute :agent_profile_id
       public? false
     end
+
+    has_many :check_ins, Keyfleet.Agents.CheckIn do
+      public? false
+    end
   end
 
   calculations do
@@ -160,6 +176,19 @@ defmodule Keyfleet.Agents.AgentProfile do
               expr(
                 count(pairings,
                   query: [filter: expr(fleet_id == ^arg(:fleet_id) and effective?)]
+                )
+              ) do
+      argument :fleet_id, :string, allow_nil?: false
+      public? true
+    end
+
+    # When this agent last checked in with the fleet.
+    calculate :last_check_in_at,
+              :utc_datetime_usec,
+              expr(
+                first(check_ins,
+                  field: :last_check_in_at,
+                  query: [filter: expr(fleet_id == ^arg(:fleet_id))]
                 )
               ) do
       argument :fleet_id, :string, allow_nil?: false

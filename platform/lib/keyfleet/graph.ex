@@ -58,6 +58,7 @@ defmodule Keyfleet.Graph do
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_work, action: :open_work, args: [:fleet_id, :kind]
       define :proposable_launch_plans, action: :launch_plans, args: [:fleet_id]
+      define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
       define :project_objects, action: :project
     end
 

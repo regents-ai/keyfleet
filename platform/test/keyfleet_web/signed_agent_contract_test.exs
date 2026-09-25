@@ -41,7 +41,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
 
   # One valid value for every field each body documents, at each object the
-  # body holds: the top of the body, or a place inside it.
+  # body holds: the top of the body, or a place inside it. `{:one_of, n}` picks
+  # the nth of the shapes a place may take.
   @bodies [
     {"POST", @join, [], %{"name" => "Probe", "declared_harness" => "local"}},
     {"POST", @update, [],
@@ -70,9 +71,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      %{
        "rooms" => [%{"slug" => "general", "after_seq" => 0}],
        "graph" => %{"after_seq" => 0},
-       "proposals" => %{"after_seq" => 0}
+       "proposals" => %{"after_seq" => 0},
+       "run" => %{"kind" => "session"}
      }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
+    {"POST", @sync, ["run", {:one_of, 0}], %{"kind" => "session"}},
+    {"POST", @sync, ["run", {:one_of, 1}], %{"kind" => "scheduled", "every_minutes" => 60}},
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
@@ -386,7 +390,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       body = %{
         "rooms" => rooms,
         "graph" => %{"after_seq" => 0},
-        "proposals" => %{"after_seq" => 0}
+        "proposals" => %{"after_seq" => 0},
+        "run" => %{"kind" => "session"}
       }
 
       answer(c, c.signer, "POST", @sync, address, body, status)
@@ -587,7 +592,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
 
   defp empty_or_minimal(@sync),
-    do: %{"rooms" => [], "graph" => %{"after_seq" => 0}, "proposals" => %{"after_seq" => 0}}
+    do: %{
+      "rooms" => [],
+      "graph" => %{"after_seq" => 0},
+      "proposals" => %{"after_seq" => 0},
+      "run" => %{"kind" => "session"}
+    }
 
   defp empty_or_minimal(@proposal), do: %{"number" => 1, "votes_after_seq" => 0}
   defp empty_or_minimal(_template), do: %{}
@@ -597,7 +607,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp admitted?(c, contract, method, template, at, object) do
     {_method, _template, _at, top} = Enum.find(@bodies, &match?({^method, ^template, [], _}, &1))
     top = Map.take(top, request_schema(contract, method, template, [])["required"] || [])
-    body = if at == [], do: object, else: put_in(top, Enum.map(at, &access/1), object)
+    path = for step <- at, not match?({:one_of, _}, step), do: access(step)
+    body = if at == [], do: object, else: put_in(top, path, object)
     response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
 
     case {response.status, response.body} do
@@ -617,6 +628,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     Enum.reduce(at, schema, fn
       index, schema when is_integer(index) -> resolve(contract, schema["items"])
+      {:one_of, index}, schema -> resolve(contract, Enum.at(schema["oneOf"], index))
       key, schema -> resolve(contract, schema["properties"][key])
     end)
   end

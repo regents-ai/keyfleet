@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.AgentPairingController do
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Keys.Errors.ProfileRequiredError
   alias Keyfleet.Keys.Errors.UnknownKeyError
+  alias KeyfleetWeb.PairingJSON
 
   @fields [
     :id,
@@ -66,21 +67,7 @@ defmodule KeyfleetWeb.AgentPairingController do
   end
 
   defp pairing_json(pairing),
-    do: pairing |> Map.take(@fields) |> Map.put(:limits, limits_json(pairing))
-
-  # What the owner allows the agent to commit to; an agent holding its own key
-  # has no limits written.
-  defp limits_json(%{limits_written_at: nil}), do: nil
-
-  defp limits_json(pairing) do
-    %{
-      money: pairing.limits_money,
-      your_information: pairing.limits_information,
-      outside_keyfleet: pairing.limits_outside,
-      check_with_owner_first: pairing.limits_check_first,
-      written_at: pairing.limits_written_at
-    }
-  end
+    do: pairing |> Map.take(@fields) |> Map.put(:limits, PairingJSON.limits(pairing))
 
   # A pairing the agent has just opened, taken back or stepped down from is
   # answered with the standing the list endpoint would give it, which the key

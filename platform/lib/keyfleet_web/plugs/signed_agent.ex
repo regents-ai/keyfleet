@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.Agents.CheckInStatus
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
@@ -381,14 +382,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp valid_topic_body?(_params), do: false
 
-  defp check_sync_body(%{"rooms" => rooms, "graph" => graph, "proposals" => proposals} = params)
-       when map_size(params) == 3 and is_list(rooms) do
+  defp check_sync_body(
+         %{"rooms" => rooms, "graph" => graph, "proposals" => proposals, "run" => run} = params
+       )
+       when map_size(params) == 4 and is_list(rooms) do
     cond do
-      not (Enum.all?(rooms, &cursor?/1) and log_cursor?(graph) and log_cursor?(proposals)) ->
+      not (Enum.all?(rooms, &cursor?/1) and Enum.all?([graph, proposals], &log_cursor?/1) and
+               run?(run)) ->
         :invalid
 
-      length(rooms) > @max_sync_rooms or
-          not Enum.all?([graph, proposals | rooms], &(&1["after_seq"] in 0..@max_seq)) ->
+      not (sync_in_range?(rooms, [graph, proposals | rooms]) and run_in_range?(run)) ->
         :out_of_range
 
       length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->
@@ -417,6 +420,25 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: map_size(log) == 1 and is_integer(after_seq)
 
   defp log_cursor?(_log), do: false
+
+  # How the agent is running as it syncs: in a conversation, or on the
+  # schedule it names.
+  defp run?(%{"kind" => "session"} = run), do: map_size(run) == 1
+
+  defp run?(%{"kind" => "scheduled", "every_minutes" => minutes} = run),
+    do: map_size(run) == 2 and is_integer(minutes)
+
+  defp run?(_run), do: false
+
+  defp sync_in_range?(rooms, cursors),
+    do:
+      length(rooms) <= @max_sync_rooms and
+        Enum.all?(cursors, &(&1["after_seq"] in 0..@max_seq))
+
+  defp run_in_range?(%{"kind" => "session"}), do: true
+
+  defp run_in_range?(%{"every_minutes" => minutes}),
+    do: minutes in CheckInStatus.schedule_minutes()
 
   defp answers_a_post?(nil), do: true
   defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)

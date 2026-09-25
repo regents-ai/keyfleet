@@ -1,7 +1,11 @@
 defmodule KeyfleetWeb.AgentRoomController do
   use KeyfleetWeb, :controller
 
+  alias Keyfleet.Agents
+  alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Keys
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.KeyUnknownError
@@ -9,6 +13,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
+  alias KeyfleetWeb.PairingJSON
   alias KeyfleetWeb.ProposalJSON
 
   @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
@@ -134,13 +139,19 @@ defmodule KeyfleetWeb.AgentRoomController do
         "fleet_id" => fleet_id,
         "rooms" => rooms,
         "graph" => graph,
-        "proposals" => proposals
+        "proposals" => proposals,
+        "run" => run
       }) do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
 
-    case Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor) do
-      {:ok, synced} -> json(conn, sync_json(synced))
+    with {:ok, synced} <-
+           Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor),
+         {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
+         {:ok, keys} <- Keys.my_keys_in_fleet(fleet_id, actor: actor),
+         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, Enum.map(keys, & &1.token_id)) do
+      json(conn, sync_json(synced, check_in, keys, tasks))
+    else
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -177,7 +188,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp agent_profile_json(profile),
     do: Map.take(profile, [:id, :name, :declared_harness, :current_status])
 
-  defp sync_json(synced) do
+  defp sync_json(synced, check_in, keys, tasks) do
     %{
       rooms:
         Enum.map(synced.rooms, fn room ->
@@ -194,7 +205,38 @@ defmodule KeyfleetWeb.AgentRoomController do
         synced.proposals
         | items: Enum.map(synced.proposals.items, &ProposalJSON.summary/1)
       },
-      next_poll_seconds: synced.next_poll_seconds
+      next_poll_seconds: synced.next_poll_seconds,
+      check_in: check_in_json(check_in),
+      yours: %{
+        as_key: keys |> Enum.map(& &1.token_id) |> List.first(),
+        keys: Enum.map(keys, &%{token_id: &1.token_id, limits: PairingJSON.limits(&1)}),
+        tasks: Enum.map(tasks, &task_json/1)
+      }
+    }
+  end
+
+  # An agent without a profile has no check-ins recorded.
+  defp check_in_json(nil), do: nil
+
+  defp check_in_json(check_in) do
+    {status, label} = CheckInStatus.derive(check_in, DateTime.utc_now())
+
+    %{
+      status: status,
+      status_label: label,
+      last_check_in_at: check_in.last_check_in_at,
+      schedule_minutes: check_in.schedule_minutes,
+      schedule_confirmed: check_in.schedule_confirmed_at != nil
+    }
+  end
+
+  defp task_json(task) do
+    %{
+      id: task.id,
+      title: task.title,
+      progress: task.card["progress"],
+      next_step: task.card["gist"],
+      version: task.version
     }
   end
 

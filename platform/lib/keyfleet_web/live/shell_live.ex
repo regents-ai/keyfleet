@@ -11,8 +11,11 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Agents
+  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
+  alias Keyfleet.Directory
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
@@ -490,7 +493,9 @@ defmodule KeyfleetWeb.ShellLive do
           layout: Presets.preset(fleet_id),
           chosen_key: if(deployed?, do: chosen_key(progress, params["key"])),
           levels: if(deployed?, do: KeyMap.levels(progress), else: []),
-          signed_in?: actor != nil
+          signed_in?: actor != nil,
+          agents: Directory.agents(fleet_id),
+          agents_here: Agents.count_agents_here!(fleet_id)
         })
         |> assign(:fleet_params, params)
         |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor), reset: true)
@@ -825,18 +830,30 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_page_path(fleet_id, position, kept),
     do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position ++ kept)}"
 
+  # Each key with the agent running it, if any, and what that agent's
+  # check-ins with the fleet say.
   defp fleet_keys(fleet_id, keys, actor) do
-    operators =
+    pairings = Keys.fleet_operators!(fleet_id, Enum.map(keys, & &1.token_id), actor: actor)
+
+    check_ins =
       Map.new(
-        Keys.fleet_operators!(fleet_id, Enum.map(keys, & &1.token_id), actor: actor),
-        &{&1.token_id, &1.agent_profile.name}
+        Agents.check_ins_in_fleet!(fleet_id, Enum.map(pairings, & &1.agent_profile.id)),
+        &{&1.agent_profile_id, &1}
       )
+
+    now = DateTime.utc_now()
+
+    operators =
+      Map.new(pairings, fn %{agent_profile: agent} = pairing ->
+        {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
+        {pairing.token_id, %{name: agent.name, status_label: label}}
+      end)
 
     for key <- keys do
       %{
         token_id: key.token_id,
         owner_wallet: key.owner_wallet,
-        operator_name: operators[key.token_id]
+        operator: operators[key.token_id]
       }
     end
   end

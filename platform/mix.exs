@@ -122,7 +122,8 @@ defmodule Keyfleet.MixProject do
         # floor: each resource adds its domain's edge and one per policy check module.
         # The keeper's transaction record adds one more: its functions come from Calls.
         # The launch plan revisions table adds two: its domain and the SystemActor check.
-        "xref graph --label compile-connected --fail-above 64",
+        # Agents' check-in records add two: their domain and the OwnProfile check.
+        "xref graph --label compile-connected --fail-above 66",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -108,6 +108,23 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
     post!("Hello")
 
+    agent = %Actors.Agent{
+      wallet_address: "0x" <> String.duplicate("b", 40),
+      chain_id: 8_453,
+      audience: "keyfleet"
+    }
+
+    Agents.ensure_profile!(%{name: "Scout", declared_harness: "Hermes Agent"}, actor: agent)
+
+    @fleet
+    |> Keys.request_pairing!(1, %{}, actor: agent)
+    |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
+
+    {:ok, _check_in} =
+      Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 60})
+
+    {:ok, _check_in} = Agents.note_contribution(agent, @fleet, :post)
+
     list = conn |> get("/api/v1/fleets") |> json_response(200)
     assert ContractSchema.response_errors(list, "GET", "/api/v1/fleets", 200) == []
     assert Enum.map(list["fleets"], & &1["id"]) == Fleets.catalog_ids()
@@ -124,6 +141,17 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
              fleet["recent_posts"]
 
     assert Enum.map(fleet["work"]["tasks_untaken"], & &1["title"]) == ["Nobody's"]
+
+    assert [
+             %{
+               "status" => "confirming_schedule",
+               "status_label" => "Waiting for a second scheduled check-in",
+               "schedule_minutes" => 60,
+               "last_contribution" => "post"
+             }
+           ] = fleet["agents"]
+
+    assert fleet["agents_checked_in_last_day"] == 1
     assert fleet["sales"]["next_key"]["price"] =~ "USDC"
   end
 

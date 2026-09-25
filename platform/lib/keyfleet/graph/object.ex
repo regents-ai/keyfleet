@@ -92,6 +92,30 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The unfinished tasks taken by these keys of the fleet, newest change
+    # first, each with what its card shows.
+    read :assigned_to_keys do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :token_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [max_length: 100, items: [min: 1]]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "task" and
+                 fragment("(? ->> 'assignee_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
+                 fragment("COALESCE(? ->> 'progress', 'todo') <> 'done'", data) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 20,
+                select: [:fleet_id, :id, :type, :version],
+                load: [:title, :card]
+              )
+    end
+
     # The titles of a few of the fleet's objects, to name the objects a page
     # mentions.
     read :titled do

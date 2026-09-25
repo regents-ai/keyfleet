@@ -4,8 +4,8 @@ defmodule Keyfleet.Directory do
   included, can read to compare the fleets before joining one.
 
   For each fleet it gives the rules, how far the fleet has sold, the agents
-  running its keys, the work still open in its workspace and its latest room
-  posts. Every read here is public and runs with no actor, and every list is
+  running its keys and what their check-ins say, the work still open in its
+  workspace and its latest room posts. Every read here is public and runs with no actor, and every list is
   bounded, so a fleet's summary and its detail each cost a fixed number of
   queries however large the fleet grows.
 
@@ -14,6 +14,7 @@ defmodule Keyfleet.Directory do
   """
 
   alias Keyfleet.{Agents, Chain, Fleets, Graph, Rooms}
+  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Fleets.{Presets, Rules}
 
   @agents_shown 50
@@ -29,15 +30,26 @@ defmodule Keyfleet.Directory do
 
   @doc """
   One fleet's summary with everything the directory says about it: the terms
-  members join under, up to #{@agents_shown} agents running its keys by name,
-  up to #{@work_shown} of each kind of open work, its own rooms, and its
-  #{@posts_shown} latest posts. `:unknown` for a fleet outside the catalog.
+  members join under, up to #{@agents_shown} agents running its keys (see
+  `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
+  and its #{@posts_shown} latest posts. `:unknown` for a fleet outside the
+  catalog.
   """
   def fleet(fleet_id) do
     case Enum.find(Fleets.catalog(), &(&1.id == fleet_id)) do
       nil -> :unknown
       entry -> {:ok, detail(entry, Fleets.get_fleet!(fleet_id))}
     end
+  end
+
+  @doc """
+  Up to #{@agents_shown} of the agents running the fleet's keys, each with
+  what its check-ins with the fleet say: the most recent check-in first, then
+  those that haven't checked in, by name.
+  """
+  def agents(fleet_id) do
+    now = DateTime.utc_now()
+    Enum.map(Agents.agents_here!(fleet_id, query: [limit: @agents_shown]), &agent(&1, now))
   end
 
   defp detail(%{id: id} = entry, recorded) do
@@ -48,7 +60,7 @@ defmodule Keyfleet.Directory do
     |> summary(recorded, posts)
     |> Map.merge(%{
       terms: Rules.membership_terms(),
-      agents: Enum.map(Agents.agents_here!(id, query: [limit: @agents_shown]), &agent/1),
+      agents: agents(id),
       work: %{
         open_goals: open_work(id, :goals_open),
         tasks_in_progress: open_work(id, :tasks_doing),
@@ -67,6 +79,7 @@ defmodule Keyfleet.Directory do
       pricing: Rules.pricing(id),
       sales: sales(id, recorded),
       agents_here: Agents.count_agents_here!(id),
+      agents_checked_in_last_day: Agents.count_agents_checked_in_last_day!(id),
       open_goals: Graph.count_open_work!(id, :goals_open),
       tasks_in_progress: Graph.count_open_work!(id, :tasks_doing),
       last_post_at:
@@ -127,13 +140,23 @@ defmodule Keyfleet.Directory do
     end)
   end
 
-  defp agent(profile) do
+  # The agent's check-ins are those with this fleet only: none, or one.
+  defp agent(profile, now) do
+    check_in = List.first(profile.check_ins)
+    {status, label} = CheckInStatus.derive(check_in, now)
+
     %{
       name: profile.name,
       declared_harness: profile.declared_harness,
       wallet_address: profile.wallet_address,
       keys_run: profile.keys_run,
-      first_key: profile.first_key
+      first_key: profile.first_key,
+      status: status,
+      status_label: label,
+      last_check_in_at: check_in && check_in.last_check_in_at,
+      schedule_minutes: check_in && check_in.schedule_minutes,
+      last_contribution_at: check_in && check_in.last_contribution_at,
+      last_contribution: check_in && check_in.last_contribution_kind
     }
   end
 
