@@ -31,21 +31,15 @@ defmodule Keyfleet.Chain.RepeatTest do
       capture_log(fn ->
         pid = start!(failing ++ [:raise, :ok] ++ List.duplicate(:ok, 100))
 
-        failed = for _read <- 1..4, do: next_read()
-        assert :sys.get_state(pid).wait == 80
-
         # One that raises is logged in full, waited on as a failure, and the
         # reads go on.
-        raised = next_read()
-        assert :sys.get_state(pid).wait == 160
+        reads = for _read <- 1..6, do: next_read()
+        assert Enum.map(reads, &elem(&1, 1)) == [10, 20, 40, 80, 160, 5]
         assert Process.alive?(pid)
 
-        succeeded = next_read()
-        assert :sys.get_state(pid).wait == 5
-
         # Each read came no sooner than the wait set after the one before it.
-        reads = failed ++ [raised, succeeded]
-        gaps = Enum.zip_with(tl(reads), reads, &-/2)
+        at = Enum.map(reads, &elem(&1, 0))
+        gaps = Enum.zip_with(tl(at), at, &-/2)
 
         for {gap, wait} <- Enum.zip(gaps, [10, 20, 40, 80, 160]), do: assert(gap >= wait)
       end)
@@ -70,14 +64,32 @@ defmodule Keyfleet.Chain.RepeatTest do
     assert length(String.split(log, ":second")) == 2
   end
 
+  # When a read was made, and the wait the process set once it had handled it.
   defp next_read do
     assert_receive {:read, at}, @read_guard
-    at
+    assert_receive {:handled, wait}, @read_guard
+    {at, wait}
   end
 
+  # Started with a debug hook that sends the process's state to the test after
+  # each message it handles, in order, so a wait is read before the next read
+  # can change it. `Repeat.start_link/1` starts the same process without one.
   defp start!(answers) do
     {:ok, agent} = Agent.start_link(fn -> answers end)
-    fleet = %{id: "repeat_test", answers: agent, test: self()}
-    start_supervised!({Repeat, {Reader, fleet, 5}})
+    test = self()
+    fleet = %{id: "repeat_test", answers: agent, test: test}
+    handled = {&handled/3, test}
+
+    start_supervised!(%{
+      id: Repeat,
+      start: {GenServer, :start_link, [Repeat, {Reader, fleet, 5}, [debug: [install: handled]]]}
+    })
   end
+
+  defp handled(test, {:noreply, state}, _name) do
+    send(test, {:handled, state.wait})
+    test
+  end
+
+  defp handled(test, _event, _name), do: test
 end
