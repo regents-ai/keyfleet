@@ -1,6 +1,7 @@
 <!DOCTYPE html> <% home? = @conn.request_path == "/" %>
 <% theme = if home?, do: "dark", else: @theme %>
 <% metadata = KeyfleetWeb.PublicDocuments.metadata(@conn.request_path) %>
+<% title = if assigns[:page_title], do: "#{@page_title} · Keyfleet", else: "Keyfleet" %>
 <html
   lang="en"
   data-brand="platform"
@@ -10,7 +11,7 @@
   <head>
     <meta charset="utf-8" />
     <Regent.AgentMetadata.head
-      title={metadata.title}
+      title={title}
       description={metadata.description}
       canonical={metadata.canonical}
       site_name="Keyfleet"
@@ -35,7 +36,7 @@
       name="privy-bridge-src"
       content={KeyfleetWeb.Endpoint.static_path("/assets/js/privy_bridge.js")}
     />
-    <.live_title default={metadata.title} suffix={if assigns[:page_title], do: " · Keyfleet"}>
+    <.live_title default="Keyfleet" suffix={if assigns[:page_title], do: " · Keyfleet"}>
       {assigns[:page_title]}
     </.live_title>
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href={~p"/favicon.ico"} />

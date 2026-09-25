@@ -52,7 +52,6 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   def metadata(path) do
     %{
-      title: Map.get(@titles, path, "Keyfleet"),
       description: @description,
       canonical: url(path),
       image: url("/mark.png"),

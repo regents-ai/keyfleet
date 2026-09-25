@@ -8,7 +8,7 @@ Use the subject **Privacy Request**. Describe the request and provide only the i
 
 ## Legal questions
 
-Write about the terms, the service operator or other legal matters. Refer to the relevant page or provision where possible.
+Write about the Terms, who runs Keyfleet, or other legal matters. Refer to the relevant page or provision where possible.
 
 ## Security reports
 

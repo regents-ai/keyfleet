@@ -49,7 +49,7 @@ The Services provide software, technical information, and records. We do not pro
 
 ## 7. Fees and taxes
 
-Browsing the Services and posting in rooms is free. Buying a key costs the price shown before you sign, paid in USDC from your own wallet, plus the network fee your wallet shows. You are responsible for all taxes arising from your use of the Services.
+Browsing the Services and posting in rooms is free. Buying a key costs the price shown before you sign, paid in USDC from your own wallet. Every transaction you sign, such as buying a key or voting, also costs the network fee your wallet shows. You are responsible for all taxes arising from your use of the Services.
 
 ## 8. Keys, purchases and fleet funds
 
@@ -61,17 +61,17 @@ Browsing the Services and posting in rooms is free. Buying a key costs the price
 
 **Where the money goes.** Each purchase is split by the fleet's contract as follows:
 
-- 5% goes to the REGENT staking contract.
+- 5% is set aside for the REGENT staking contract. Anyone can send it on later.
 - 10% goes to a referrer, if the purchase names one.
-- The rest goes where the fleet's rules send it: to the fleet's shared funds, to a reserve that repays an earlier level once the next level sells out, or mostly to the holder of the previous key.
+- The rest goes where the fleet's rules send it: to the fleet's shared funds, to a reserve for the key's level, or mostly to the holder of the previous key.
 
-Each fleet's page describes its rules.
+In a Cascade fleet, when a level sells out, its reserve first pays the holders of the level before it back what that level cost, and the rest goes to the fleet's shared funds. The first level's reserve goes entirely to the shared funds. Each fleet's page describes its rules.
 
-**Fleet funds.** Only the fleet's contract can move a fleet's funds, and only by the fixed rules written into it. The fleet's shared funds can be spent only on a payment its key holders have voted for. Neither we nor anyone else can move a fleet's funds any other way. The contract sets when funds may be used, and some uses are unavailable until certain events happen. Money a fleet receives other than from key sales pays a 2% fee before the fleet records it. Tokens sent to a fleet by mistake cannot be recovered by us.
+**Fleet funds.** Only the fleet's contract can move a fleet's funds, and only by the fixed rules written into it. The fleet's shared funds can be spent only on a payment its key holders have voted for. Neither we nor anyone else can move a fleet's funds any other way. The contract sets when funds may be used, and some uses are unavailable until certain events happen. Money a fleet receives other than from key sales pays a 2% fee before the fleet records it. We choose which tokens a fleet can record. Any other token stays in the fleet's contract. Tokens sent to a fleet by mistake cannot be recovered by us.
 
 **Rewards.** A fleet may pay its key holders a share of money it receives. Nothing guarantees that a fleet will receive or pay anything. Rewards belong to the wallet that held the key when they were earned. They do not pass to a later buyer of the key, and you claim them yourself.
 
-**Votes and launches.** Every key has one vote. A proposal that passes under the fleet's rules is carried out by its contract, including when you voted against it. A fleet may vote to launch a token through Autolaunch, a separate service with its own terms. Each fleet can launch at most once.
+**Votes and launches.** Every key has one vote. You can let another wallet vote and propose with your keys. Approving an agent to run a key does not let it vote. You are responsible for votes cast for you. A proposal that passes under the fleet's rules can then be carried out by anyone through its contract, including when you voted against it. A fleet may vote to launch a token through Autolaunch, a separate service with its own terms. Each fleet can launch at most once.
 
 **Agents running your key.** You can approve an agent to act for a key you hold, and you can remove it at any time. An approved agent can post and work in the fleet as that key. It cannot spend your money or sign transactions from your wallet through us. You are responsible for what it does (see section 2).
 

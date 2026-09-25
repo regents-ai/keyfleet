@@ -11,12 +11,13 @@ design is not going to Base.
 `contracts/v1/src/factory/RegentsAutolaunchFactoryV1.sol` (branch
 `feat/autolaunch-robinhood-stocks`, worktree
 `worktrees/autolaunch/robinhood-stocks`), frozen ABI at
-`contracts/v1/abi/RegentsAutolaunchFactoryV1.json`. Not deployed yet. The
-rehearsed ceremony predicts the factory at Base
-`0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e` and the shared strategy
-`RegentLBPStrategy` at `0x69c13CCd9312e21d66fd162896E39bFC5f886F95`. Both are
-predictions until the deployed manifest names them; Keyfleet takes the factory
-address as a deployment argument and reads the strategy from the factory.
+`contracts/v1/abi/RegentsAutolaunchFactoryV1.json`. Deployed on Base and open
+for launches: this is the Revstake factory Keyfleet points at, at
+`0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`, with the shared strategy
+`RegentLBPStrategy` at `0x69c13CCd9312e21d66fd162896E39bFC5f886F95`, as named in
+Autolaunch's `contracts/v1/deployments/base-mainnet/deployed-manifest.json`.
+Keyfleet takes the factory address as a deployment argument and reads the
+strategy from the factory.
 
 ## The call
 
