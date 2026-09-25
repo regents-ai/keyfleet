@@ -1,7 +1,9 @@
 /* "Send your agent": the instruction a person copies for their agent, in a
-   small dialog over the page. Phones see it across the whole width. */
+   small dialog over the page. Phones see it across the whole width. It keeps
+   its own text size, whatever the bar or hero holding its button uses. */
 .send-agent {
   width: min(36rem, calc(100vw - 2rem));
+  font-size: 1rem;
   max-width: none;
   padding: clamp(1rem, 4vw, 1.5rem);
   border: 1px solid var(--ash-line-strong);

@@ -89,7 +89,7 @@ defmodule KeyfleetWeb.FleetLive do
 
           <div class="fleet-bar__actions">
             <Regent.Primitives.button
-              :if={@fleet.buy}
+              :if={@fleet.buy && @fleet.buy.price}
               id="fleet-get-key"
               type="button"
               aria-controls="fleet-about"
@@ -588,12 +588,6 @@ defmodule KeyfleetWeb.FleetLive do
             <dt>Levels complete</dt>
             <dd>{@fleet.progress.completed_levels} of {@fleet.progress.levels}</dd>
           </div>
-          <div :if={@fleet.progress.next_price}>
-            <dt>Next key</dt>
-            <dd>
-              Key {@fleet.progress.next_token_id}, {usdc(@fleet.progress.next_price)}
-            </dd>
-          </div>
         </dl>
         <p :if={@fleet.current? and is_nil(@fleet.progress.next_price)} class="fleet-detail">
           Every key has been issued.
@@ -717,8 +711,8 @@ defmodule KeyfleetWeb.FleetLive do
   attr :current?, :boolean, required: true
   attr :signed_in, :list, required: true, doc: "the signed-in person's wallets, primary first"
 
-  # "Buying a key", in "How this fleet works": what a buyer should know, then
-  # the key on offer with its price beside Buy.
+  # "Buying a key", in "How this fleet works": the key on offer with its price
+  # beside Buy, then what a buyer should know.
   #
   # Every press of Buy goes to the wallet: the button is never disabled, and
   # nothing here decides on the buyer's behalf whether a purchase would succeed.
@@ -730,13 +724,6 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
       <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
-      <p :if={@buy.price && @buy.level} class="fleet-detail">
-        {Rules.holding_limit_sentence(@fleet_id, @buy.token_id)}
-      </p>
-      <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
-        this much USDC, it first asks you to approve exactly {usdc(@buy.price)}.
-      </p>
 
       <div
         id="buy-key-order"
@@ -801,6 +788,14 @@ defmodule KeyfleetWeb.FleetLive do
         ></p>
         <ol id="buy-key-status" class="fleet-buy-status" phx-update="ignore" aria-live="polite"></ol>
       </div>
+
+      <p :if={@buy.price} class="fleet-detail">
+        Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
+        this much USDC, it first asks you to approve exactly {usdc(@buy.price)}.
+      </p>
+      <p :if={@buy.price && @buy.level} class="fleet-detail">
+        {Rules.holding_limit_sentence(@fleet_id, @buy.token_id)}
+      </p>
     </section>
     """
   end

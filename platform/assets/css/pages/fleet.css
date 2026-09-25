@@ -446,16 +446,11 @@
     padding: 0.75rem 1rem;
   }
 
-  /* Smaller on a phone, so the bar leaves the map more room. The dialog
-     behind Send your agent keeps its own size. */
+  /* Smaller on a phone, so the bar leaves the map more room. */
   .fleet-bar__actions,
   .fleet-bar__nav {
     gap: 0.375rem;
     font-size: 0.875rem;
-  }
-
-  .fleet-bar__actions > dialog {
-    font-size: 1rem;
   }
 
   /* The directions stay for screen readers; on a phone the map is the page. */

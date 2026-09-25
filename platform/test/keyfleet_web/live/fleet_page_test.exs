@@ -54,8 +54,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert Enum.max(rows) <= 101
     assert html =~ "150 of"
-    # Key 151 opens level 9, whose price is the first to round up.
-    assert html =~ "Key 151, 42.99817 USDC"
     assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
@@ -136,7 +134,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
     refute has_element?(view, "#fleet-get-key")
     refute has_element?(view, "#fleet-progress-title")
-    refute html =~ "Next key"
 
     # In place of the map, a still picture of it as it will open.
     assert has_element?(
@@ -156,13 +153,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert html =~ "Sales figures are catching up."
     assert text(view, "#fleet-sales") == "Sales figures are catching up · 0 agents here"
     refute html =~ "Keys issued"
-    refute has_element?(view, ".fleet-facts dt", "Next key")
     assert shown_keys(view) == Enum.to_list(1..100)
   end
 
   describe "buying the next key" do
-    # Key 151 opens level 9, where a wallet may hold 8 keys. The offer is in
-    # "How this fleet works", under "Buying a key".
+    # Key 151 opens level 9, whose price is the first to round up and where a
+    # wallet may hold 8 keys. The offer is in "How this fleet works", under
+    # "Buying a key".
     test "offers the next key's number, exact price and level", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
@@ -225,6 +222,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-sold-out") == "All 144 keys in this fleet have been sold."
       refute has_element?(view, "#buy-key-offer")
       refute has_element?(view, "#buy-key-button")
+      refute has_element?(view, "#fleet-get-key")
     end
 
     # The buyer's messages about their purchases stay when the last key sells
