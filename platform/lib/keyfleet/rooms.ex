@@ -37,6 +37,7 @@ defmodule Keyfleet.Rooms do
       define :send_to_key, action: :send_to_key
       define :read_key_thread, action: :read_key_thread, args: [:fleet_id, :token_id]
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
+      define :recent_posts, action: :recent_in_fleet, args: [:fleet_id]
 
       define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
 

@@ -42,6 +42,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
       |> unavailable()
       |> json(%{error: "This part of the site isn't open yet."})
 
+  defp closed(conn, "md"),
+    do:
+      conn
+      |> put_secure_browser_headers()
+      |> unavailable()
+      |> put_resp_content_type("text/markdown")
+      |> send_resp(503, "This part of the site isn't open yet.\n")
+
   defp closed(conn, "html"),
     do: conn |> put_secure_browser_headers() |> unavailable() |> HoldingController.call(:show)
 

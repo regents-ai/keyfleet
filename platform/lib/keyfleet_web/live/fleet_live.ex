@@ -12,26 +12,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   use KeyfleetWeb, :html
 
+  alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.RoomsLive
-
-  # How each fleet prices its keys and where a buyer's payment goes.
-  @how_it_works %{
-    "fibonacci_syndicate" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before. " <>
-        "What buyers pay builds the fleet’s shared funds.",
-    "fibonacci_cascade" =>
-      "The same levels and prices. When a level sells out, the holders of the level before it " <>
-        "are paid back what their keys cost.",
-    "fleet_tech_classic" => "144 keys, every one at 10 USDC.",
-    "fleet_tech_accelerant" =>
-      "Each key costs 5% more than the one before, and most of each sale goes to whoever holds " <>
-        "the key before it."
-  }
-
-  @doc "One sentence on how a fleet prices its keys and where a buyer's payment goes."
-  def how_it_works(fleet_id), do: Map.fetch!(@how_it_works, fleet_id)
 
   attr :fleet, :map, required: true
 
@@ -219,7 +203,7 @@ defmodule KeyfleetWeb.FleetLive do
         </Regent.Primitives.button>
       </div>
 
-      <p>{how_it_works(@fleet.fleet_id)}</p>
+      <p>{Rules.pricing(@fleet.fleet_id)}</p>
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>

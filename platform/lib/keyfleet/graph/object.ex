@@ -70,6 +70,28 @@ defmodule Keyfleet.Graph.Object do
                  stable_sort: [fleet_id: :desc, id: :desc]
     end
 
+    # The work still open in the fleet's workspace, the most recently changed
+    # first: its open goals, the tasks in progress or the tasks nobody has
+    # taken yet, as `kind` says (`Keyfleet.Graph.Preparations.OpenWork`).
+    # Each object comes with what its card shows, not its text. Callers bound
+    # it with a limit, or count it.
+    read :open_work do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :kind, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:goals_open, :tasks_doing, :tasks_untaken]]
+
+      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare Keyfleet.Graph.Preparations.OpenWork
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                select: [:fleet_id, :id, :type, :sys, :version, :changed_seq, :changed_at],
+                load: [:title, :card]
+              )
+    end
+
     # The titles of a few of the fleet's objects, to name the objects a page
     # mentions.
     read :titled do

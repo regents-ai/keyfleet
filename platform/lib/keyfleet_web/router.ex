@@ -18,6 +18,14 @@ defmodule KeyfleetWeb.Router do
     plug KeyfleetWeb.Plugs.LaunchGate
   end
 
+  # The open fleet directory's Markdown. The format is set before the gate,
+  # so a closed site answers these in Markdown too.
+  pipeline :directory do
+    plug :put_format, "md"
+    plug KeyfleetWeb.Plugs.LaunchGate
+    plug :put_secure_browser_headers
+  end
+
   pipeline :public_documents do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -77,6 +85,18 @@ defmodule KeyfleetWeb.Router do
     get "/about", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
     get "/opportunities", PublicPagesController, :show
+  end
+
+  scope "/", KeyfleetWeb do
+    pipe_through :directory
+    get "/fleets.md", DirectoryController, :index_md
+    get "/fleets/:file", DirectoryController, :show_md
+  end
+
+  scope "/api/v1", KeyfleetWeb do
+    pipe_through :api
+    get "/fleets", DirectoryController, :index_json
+    get "/fleets/:fleet_id", DirectoryController, :show_json
   end
 
   scope "/api/v1" do

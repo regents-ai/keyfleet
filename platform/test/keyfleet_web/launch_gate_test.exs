@@ -96,6 +96,19 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
   end
 
+  test "the fleet directory's Markdown answers one plain 503 line" do
+    close_surfaces()
+
+    for path <- ["/fleets.md", "/fleets/fibonacci_syndicate.md"] do
+      conn = get(build_conn(), path)
+
+      assert response(conn, 503) == @closed_message <> "\n"
+      assert response_content_type(conn, :md) =~ "text/markdown"
+      assert get_resp_header(conn, "retry-after") == ["3600"]
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
+    end
+  end
+
   test "the marketing page, health check and static files are untouched by the gate" do
     close_surfaces()
     home = get(build_conn(), "/")

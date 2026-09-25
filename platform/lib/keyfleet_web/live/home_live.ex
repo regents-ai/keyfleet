@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.HomeLive do
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Chain, Fleets, Keys}
-  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Fleets.{Presets, Rules}
   alias KeyfleetWeb.Components.RegentLinks
   alias KeyfleetWeb.{FleetLive, PublicDocuments, RouteCatalog}
 
@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.HomeLive do
   def agent_markdown do
     fleets =
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
-        "## #{name}\n\n#{FleetLive.how_it_works(id)}\n\n[Open its map](#{PublicDocuments.url(fleet_path(id))})"
+        "## #{name}\n\n#{Rules.pricing(id)}\n\n[Open its map](#{PublicDocuments.url(fleet_path(id))})"
       end)
 
     """
@@ -79,7 +79,7 @@ defmodule KeyfleetWeb.HomeLive do
     %{
       id: id,
       name: name,
-      sentence: FleetLive.how_it_works(id),
+      sentence: Rules.pricing(id),
       layout: Presets.preset(id),
       deployed?: deployed?,
       current?: deployed? and Chain.fresh?(id),

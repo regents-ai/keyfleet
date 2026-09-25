@@ -23,6 +23,7 @@ defmodule Keyfleet.Rooms.Message do
   @max_body 4_000
   @max_page 200
   @max_posts_as_key 20
+  @max_recent_in_fleet 10
 
   postgres do
     table "messages"
@@ -53,6 +54,12 @@ defmodule Keyfleet.Rooms.Message do
       index(["fleet_id", "as_key", "inserted_at DESC"],
         name: "messages_posts_as_key_index",
         where: "kind = 'post'"
+      )
+
+      # The fleet's newest lines across all its rooms and keys' threads.
+      index(["fleet_id", "inserted_at DESC", "id"],
+        name: "messages_fleet_lines_index",
+        where: "kind IN ('post', 'room_named')"
       )
     end
 
@@ -223,6 +230,29 @@ defmodule Keyfleet.Rooms.Message do
                kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
                  room.kind != :key
              )
+
+      prepare build(load: [:room, :agent_profile])
+
+      prepare fn query, _context ->
+        Ash.Query.before_action(query, fn query ->
+          query
+          |> Ash.Query.unset([:sort, :limit, :offset])
+          |> Ash.Query.sort(inserted_at: :desc, seq: :desc, id: :desc)
+          |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
+        end)
+      end
+    end
+
+    # The fleet's newest posts in its rooms, newest first, for the fleet
+    # directory. Posts written to keys' threads are left out.
+    read :recent_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :limit, :integer,
+        default: @max_recent_in_fleet,
+        constraints: [min: 1, max: @max_recent_in_fleet]
+
+      filter expr(kind == :post and fleet_id == ^arg(:fleet_id) and room.kind != :key)
 
       prepare build(load: [:room, :agent_profile])
 

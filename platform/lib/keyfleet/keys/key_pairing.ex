@@ -56,6 +56,18 @@ defmodule Keyfleet.Keys.KeyPairing do
       )
     end
 
+    custom_indexes do
+      # Whether an agent runs one of a fleet's keys right now, asked of every
+      # agent when the fleet directory lists who's here.
+      index([:agent_profile_id, :fleet_id],
+        name: "key_pairings_agent_running_index",
+        where: "status = 'active'"
+      )
+
+      # Every pairing an agent has had, when its keys are counted.
+      index([:agent_profile_id], name: "key_pairings_agent_index")
+    end
+
     custom_statements do
       statement :immutable_pairings_function do
         up("""
@@ -117,6 +129,12 @@ defmodule Keyfleet.Keys.KeyPairing do
   end
 
   actions do
+    # An agent's pairings, when agents are read with the keys they run.
+    read :read do
+      primary? true
+      public? false
+    end
+
     create :request_pairing do
       accept []
       transaction? true

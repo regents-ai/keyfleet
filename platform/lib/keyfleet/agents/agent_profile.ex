@@ -41,6 +41,24 @@ defmodule Keyfleet.Agents.AgentProfile do
       prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
     end
 
+    # The agents running at least one of the fleet's keys right now, by name,
+    # with how many of its keys each runs and the lowest-numbered one.
+    # Requested, ended and earlier owners' pairings don't count.
+    read :here_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(exists(pairings, fleet_id == ^arg(:fleet_id) and effective?))
+
+      prepare fn query, _context ->
+        fleet_id = Ash.Query.get_argument(query, :fleet_id)
+
+        query
+        |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
+        |> Ash.Query.load(keys_run: %{fleet_id: fleet_id}, first_key: %{fleet_id: fleet_id})
+        |> Ash.Query.sort(name: :asc, id: :asc)
+      end
+    end
+
     update :edit_my_profile do
       atomic_upgrade_with :get_my_profile
 
@@ -59,7 +77,7 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   policies do
-    policy action(:public_profile) do
+    policy action([:public_profile, :here_in_fleet]) do
       authorize_if always()
     end
 
@@ -68,7 +86,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     policy action_type([:read, :update]) do
-      authorize_if action(:public_profile)
+      authorize_if action([:public_profile, :here_in_fleet])
       authorize_if expr(wallet_address == ^actor(:wallet_address))
     end
   end
@@ -118,6 +136,40 @@ defmodule Keyfleet.Agents.AgentProfile do
       allow_nil?: false,
       writable?: false,
       default: &DateTime.utc_now/0
+  end
+
+  relationships do
+    has_many :pairings, Keyfleet.Keys.KeyPairing do
+      destination_attribute :agent_profile_id
+      public? false
+    end
+  end
+
+  calculations do
+    # How many of the fleet's keys this agent runs right now.
+    calculate :keys_run,
+              :integer,
+              expr(
+                count(pairings,
+                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and effective?)]
+                )
+              ) do
+      argument :fleet_id, :string, allow_nil?: false
+      public? true
+    end
+
+    # The lowest-numbered of the fleet's keys this agent runs right now.
+    calculate :first_key,
+              :integer,
+              expr(
+                min(pairings,
+                  field: :token_id,
+                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and effective?)]
+                )
+              ) do
+      argument :fleet_id, :string, allow_nil?: false
+      public? true
+    end
   end
 
   identities do

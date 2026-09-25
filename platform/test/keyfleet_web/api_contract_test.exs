@@ -31,6 +31,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/keys/{fleet_id}/{token_id}/step-down",
              "/api/v1/agent/pairings",
              "/api/v1/agent/profile/update",
+             "/api/v1/fleets",
+             "/api/v1/fleets/{fleet_id}",
              "/api/v1/profile",
              "/api/v1/profile/sync",
              "/auth/csrf",

@@ -41,6 +41,7 @@ defmodule Keyfleet.Graph do
       define :read_objects, action: :with_ids, args: [:fleet_id, :ids]
       define :workspace_cards, action: :cards, args: [:fleet_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
+      define :open_work, action: :open_work, args: [:fleet_id, :kind]
       define :project_objects, action: :project
     end
 
@@ -58,6 +59,17 @@ defmodule Keyfleet.Graph do
 
       define :project_launch_plan_revisions, action: :project
     end
+  end
+
+  @doc """
+  How many objects of one kind of open work the fleet's workspace holds:
+  `:goals_open`, `:tasks_doing` or `:tasks_untaken`, as the `:open_work` read
+  of `Keyfleet.Graph.Object` defines them.
+  """
+  def count_open_work!(fleet_id, kind) do
+    Keyfleet.Graph.Object
+    |> Ash.Query.for_read(:open_work, %{fleet_id: fleet_id, kind: kind})
+    |> Ash.count!()
   end
 
   @doc """
