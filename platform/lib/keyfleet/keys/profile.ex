@@ -183,7 +183,11 @@ defmodule Keyfleet.Keys.Profile do
     end
   end
 
-  defp operator(fleet_id, token_id) do
+  @doc """
+  The agent running the key now, with what its check-ins with the fleet say,
+  or nil when no agent runs it.
+  """
+  def operator(fleet_id, token_id) do
     case Keys.current_operator!(fleet_id, token_id) do
       nil ->
         nil

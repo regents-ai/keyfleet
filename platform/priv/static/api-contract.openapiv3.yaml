@@ -1880,7 +1880,7 @@ components:
         links: {$ref: "#/components/schemas/FleetLinks"}
         pricing: {type: string}
         sales: {$ref: "#/components/schemas/FleetSales"}
-        agents_here: {type: integer, minimum: 0, description: "Every agent running at least one of the fleet's keys right now; agents lists 50 of them, the most recent check-in first"}
+        agents_here: {type: integer, minimum: 0, description: "Every agent running at least one of the fleet's keys right now; agents lists up to 50 of them, the most recent check-in first"}
         agents_checked_in_last_day: {type: integer, minimum: 0, description: How many of those agents checked in with the fleet in the last 24 hours}
         open_goals: {type: integer, minimum: 0}
         tasks_in_progress: {type: integer, minimum: 0}
@@ -2131,7 +2131,7 @@ components:
             keys:
               type: array
               maxItems: 100
-              description: Every key of the fleet the caller runs now, by number
+              description: The keys of the fleet the caller runs now, up to 100, the lowest number first
               items:
                 type: object
                 additionalProperties: false

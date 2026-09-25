@@ -68,6 +68,9 @@ defmodule KeyfleetWeb.ShellLive do
   # when the buyer confirms it. The wallet and the words it shows read it
   # from the page.
   @purchase_deadline_seconds 600
+  # A check-in status changes as time passes, so an open fleet page reads its
+  # agents' check-ins again this often.
+  @check_ins_refresh_after 60_000
 
   @impl true
   def mount(params, session, socket) do
@@ -106,7 +109,8 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_topic: nil,
        proposals_refresh?: false,
        proposals_check: nil,
-       launch_plans: nil
+       launch_plans: nil,
+       check_ins_timer: nil
      )}
   end
 
@@ -368,6 +372,17 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info(:refresh_proposals, socket),
     do: {:noreply, assign(socket, :proposals_refresh?, false)}
 
+  # Time has passed on an open fleet page: its agents' statuses are read
+  # again, and the page waits for the next minute. A page that has left the
+  # fleet stops.
+  def handle_info(:refresh_check_ins, %{assigns: %{fleet: %{agents: _}}} = socket),
+    do:
+      {:noreply,
+       socket |> assign(:check_ins_timer, nil) |> refresh_check_ins() |> watch_check_ins()}
+
+  def handle_info(:refresh_check_ins, socket),
+    do: {:noreply, assign(socket, :check_ins_timer, nil)}
+
   # Only the check the page last set reads; one a later read replaced is dropped.
   def handle_info({:check_proposals, ref}, %{assigns: %{proposals_check: ref}} = socket),
     do: {:noreply, read_proposals(socket)}
@@ -449,6 +464,7 @@ defmodule KeyfleetWeb.ShellLive do
     |> follow_keys(fleet_id)
     |> read_fleet(route_spec, params)
     |> tell_map_chosen(shown)
+    |> watch_check_ins()
   end
 
   defp load_fleet(socket, _route_spec, _params),
@@ -517,26 +533,61 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The key list's page is read again only when a changed key is on it. Its
   # rows change in place, and a key sold onto its end joins it.
-  defp refresh_listed(%{assigns: %{fleet: %{listed: {from, to}} = fleet}} = socket, token_ids) do
-    if Enum.any?(token_ids, &(&1 >= from and (is_nil(to) or &1 <= to))) do
-      %{fleet_id: fleet_id} = fleet
-      params = socket.assigns.fleet_params
-      actor = human_actor(socket)
-      page = key_page!(fleet_id, params, actor)
-      pages = page_links(fleet_id, page, params)
+  defp refresh_listed(%{assigns: %{fleet: %{listed: {from, to}}}} = socket, token_ids) do
+    if Enum.any?(token_ids, &(&1 >= from and (is_nil(to) or &1 <= to))),
+      do: reread_listed(socket),
+      else: socket
+  end
 
-      socket
-      |> assign(:fleet, %{
-        fleet
-        | pages: pages,
-          listed: listed(page, pages),
-          no_keys?: page.results == [] and not paged?(params)
-      })
-      |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor))
+  defp reread_listed(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
+    params = socket.assigns.fleet_params
+    actor = human_actor(socket)
+    page = key_page!(fleet_id, params, actor)
+    pages = page_links(fleet_id, page, params)
+
+    socket
+    |> assign(:fleet, %{
+      fleet
+      | pages: pages,
+        listed: listed(page, pages),
+        no_keys?: page.results == [] and not paged?(params)
+    })
+    |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor))
+  end
+
+  # One timer per page, set while a fleet's page is open.
+  defp watch_check_ins(%{assigns: %{fleet: %{agents: _}, check_ins_timer: nil}} = socket) do
+    if connected?(socket) do
+      timer = Process.send_after(self(), :refresh_check_ins, @check_ins_refresh_after)
+      assign(socket, :check_ins_timer, timer)
     else
       socket
     end
   end
+
+  defp watch_check_ins(socket), do: socket
+
+  # "Who's here", the key list and the open key's agent, as the agents'
+  # check-ins say now.
+  defp refresh_check_ins(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
+    socket
+    |> assign(:fleet, %{
+      fleet
+      | agents: Directory.agents(fleet_id),
+        agents_here: Agents.count_agents_here!(fleet_id)
+    })
+    |> reread_listed()
+    |> refresh_key_operator()
+  end
+
+  defp refresh_key_operator(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
+    do:
+      assign(socket, :key_profile, %{
+        shown
+        | operator: Profile.operator(shown.fleet_id, shown.token_id)
+      })
+
+  defp refresh_key_operator(socket), do: socket
 
   # The key numbers a list page holds, as `{first, last}`. The last page has
   # no last number, since a key sold later joins it.

@@ -9,6 +9,7 @@ defmodule Keyfleet.CheckInsTest do
   alias Keyfleet.Repo
 
   @fleet "fibonacci_syndicate"
+  @t0 ~U[2026-09-25 12:00:00.000000Z]
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -138,6 +139,91 @@ defmodule Keyfleet.CheckInsTest do
     assert Agents.note_contribution(actor, @fleet, :post) == {:ok, nil}
   end
 
+  describe "at the exact edges of an interval, on a database clock the test sets" do
+    # `statement_timestamp()` resolves to a stand-in ahead of pg_catalog in
+    # the search path, answering whatever time the test last set. The schema,
+    # the setting and the search path all go with the test's transaction.
+    setup do
+      Repo.query!("CREATE SCHEMA test_clock")
+
+      Repo.query!("""
+      CREATE FUNCTION test_clock.statement_timestamp() RETURNS timestamptz
+      LANGUAGE sql STABLE AS $$ SELECT current_setting('test_clock.now')::timestamptz $$
+      """)
+
+      Repo.query!("SET LOCAL search_path = test_clock, pg_catalog, keyfleet_app, public")
+      clock!(0)
+      :ok
+    end
+
+    test "a check-in just under half an interval after the counted one is too soon",
+         %{actor: actor} do
+      scheduled!(actor, 60)
+      clock!(minutes(30) - 1)
+
+      assert %{counted_scheduled_at: @t0, schedule_confirmed_at: nil} = scheduled!(actor, 60)
+    end
+
+    test "a check-in half an interval after the counted one confirms the schedule",
+         %{actor: actor} do
+      scheduled!(actor, 60)
+      clock!(minutes(30))
+
+      assert %{schedule_confirmed_at: confirmed, counted_scheduled_at: counted} =
+               scheduled!(actor, 60)
+
+      assert confirmed == at(minutes(30))
+      assert counted == at(minutes(30))
+    end
+
+    test "half of an odd interval is measured to the second", %{actor: actor} do
+      {other, _profile} = agent("c", "Able")
+      scheduled!(actor, 15)
+      scheduled!(other, 15)
+
+      clock!(minutes(7) + seconds(29))
+      assert %{schedule_confirmed_at: nil} = scheduled!(actor, 15)
+
+      clock!(minutes(7) + seconds(30))
+      assert %{schedule_confirmed_at: %DateTime{}} = scheduled!(other, 15)
+    end
+
+    test "a check-in the interval plus the grace after the counted one still confirms",
+         %{actor: actor} do
+      scheduled!(actor, 60)
+      clock!(minutes(60 + CheckInStatus.grace_minutes()))
+
+      assert %{schedule_confirmed_at: %DateTime{}} = scheduled!(actor, 60)
+    end
+
+    test "one second later it counts, and only the next on-time one confirms",
+         %{actor: actor} do
+      late = minutes(60 + CheckInStatus.grace_minutes()) + seconds(1)
+      scheduled!(actor, 60)
+      clock!(late)
+
+      assert %{schedule_confirmed_at: nil, counted_scheduled_at: counted} = scheduled!(actor, 60)
+      assert counted == at(late)
+
+      clock!(late + minutes(60))
+      assert %{schedule_confirmed_at: %DateTime{}} = scheduled!(actor, 60)
+    end
+
+    test "twice the interval plus the grace keeps a confirmation; one second more loses it",
+         %{actor: actor} do
+      gap = minutes(2 * 60 + CheckInStatus.grace_minutes())
+      scheduled!(actor, 60)
+      clock!(minutes(60))
+      %{schedule_confirmed_at: confirmed} = scheduled!(actor, 60)
+
+      clock!(minutes(60) + gap)
+      assert %{schedule_confirmed_at: ^confirmed} = scheduled!(actor, 60)
+
+      clock!(minutes(60) + 2 * gap + seconds(1))
+      assert %{schedule_confirmed_at: nil} = scheduled!(actor, 60)
+    end
+  end
+
   defp confirm!(actor, minutes) do
     scheduled!(actor, minutes)
     minutes_pass!(minutes)
@@ -164,6 +250,17 @@ defmodule Keyfleet.CheckInsTest do
   defp status(check_in), do: check_in |> CheckInStatus.derive(DateTime.utc_now()) |> elem(0)
 
   defp minutes_pass!(minutes), do: seconds_pass!(minutes * 60)
+
+  # The stand-in database clock reads `microseconds` after @t0.
+  defp clock!(microseconds),
+    do:
+      Repo.query!("SELECT set_config('test_clock.now', $1, true)", [
+        DateTime.to_iso8601(at(microseconds))
+      ])
+
+  defp at(microseconds), do: DateTime.add(@t0, microseconds, :microsecond)
+  defp seconds(count), do: count * 1_000_000
+  defp minutes(count), do: seconds(count * 60)
 
   # Time passing, as far as the recorded check-ins can tell: every time on
   # them moves back.

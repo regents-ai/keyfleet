@@ -105,6 +105,43 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
              "Check-ins working · last check-in just now · no contributions yet"
   end
 
+  # A status is only as honest as the time it is read at, so an open page
+  # reads its agents' check-ins again as time moves on.
+  test "an agent's status on an open page goes stale once time moves on", %{conn: conn} do
+    runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
+
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "Hermes Agent"},
+      actor: runner
+    )
+
+    @fleet
+    |> Keys.request_pairing!(12, %{}, actor: runner)
+    |> Keys.approve_pairing!(Keys.default_limits(),
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet("e")]}
+    )
+
+    {:ok, _check_in} = Agents.check_in(runner, @fleet, %{"kind" => "session"})
+
+    {:ok, view, _html} = live(conn, @path <> "?key=12")
+    assert text(view, "#fleet-key-12") =~ "Orbit runner · Connected now"
+    assert text(view, "#fleet-who-12") =~ "Connected now · last check-in just now"
+    assert text(view, "#key-profile-check-in") =~ "Connected now · last check-in just now"
+
+    Repo.query!("""
+    UPDATE keyfleet_app.agent_check_ins SET
+      last_check_in_at = last_check_in_at - interval '3 minutes',
+      last_session_at = last_session_at - interval '3 minutes'
+    """)
+
+    send(view.pid, :refresh_check_ins)
+
+    assert text(view, "#fleet-key-12") =~ "Orbit runner · No scheduled check-ins"
+    assert text(view, "#fleet-who-12") =~ "No scheduled check-ins · last check-in 3 minutes ago"
+
+    assert text(view, "#key-profile-check-in") =~
+             "No scheduled check-ins · last check-in 3 minutes ago"
+  end
+
   test "only a key the map can show opens", %{conn: conn} do
     for key <- ["0", "22", "twelve", "-1"] do
       {:ok, view, _html} = live(conn, @path <> "?key=" <> key)

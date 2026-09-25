@@ -149,7 +149,7 @@ defmodule KeyfleetWeb.AgentRoomController do
            Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, keys} <- Keys.my_keys_in_fleet(fleet_id, actor: actor),
-         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, Enum.map(keys, & &1.token_id)) do
+         {:ok, tasks} <- tasks_taken(fleet_id, keys) do
       json(conn, sync_json(synced, check_in, keys, tasks))
     else
       {:error, error} -> refuse(conn, error)
@@ -214,6 +214,13 @@ defmodule KeyfleetWeb.AgentRoomController do
       }
     }
   end
+
+  # The unfinished tasks the agent's keys have taken; an agent running no
+  # keys here has taken none.
+  defp tasks_taken(_fleet_id, []), do: {:ok, []}
+
+  defp tasks_taken(fleet_id, keys),
+    do: Graph.tasks_assigned_to(fleet_id, Enum.map(keys, & &1.token_id))
 
   # An agent without a profile has no check-ins recorded.
   defp check_in_json(nil), do: nil

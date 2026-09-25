@@ -104,7 +104,7 @@ defmodule Keyfleet.Graph.Object do
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "task" and
                  fragment("(? ->> 'assignee_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
-                 fragment("COALESCE(? ->> 'progress', 'todo') <> 'done'", data) and
+                 fragment("(? ->> 'progress') <> 'done'", data) and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
              )
 

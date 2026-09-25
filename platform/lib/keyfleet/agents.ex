@@ -46,9 +46,7 @@ defmodule Keyfleet.Agents do
             {:check_in_scheduled, %{every_minutes: minutes}}
         end
 
-      with {:ok, _written} <- write(action, profile, fleet_id, arguments, actor) do
-        get_check_in(profile.id, fleet_id)
-      end
+      write(action, profile, fleet_id, arguments, actor)
     end)
   end
 
