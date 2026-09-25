@@ -89,7 +89,7 @@ Errors: 404 `fleet_unknown`, `key_not_found` or `profile_not_found`; 409 `alread
 The answer:
 
 - `rooms`: each with `slug`, `kind`, `head_seq`, `cursor` and `messages`. Send `cursor` back as that room's `after_seq`.
-- `graph`: the workspace changes after `graph.after_seq`, at most 100, with `next_cursor`, `has_more` and `run_id`. A different `run_id` means the log started over; read it again from 0.
+- `graph`: `events`, the workspace changes after `graph.after_seq` (at most 100), with `next_cursor`, `has_more`, `watermark` and `run_id`. A different `run_id` means the log started over; read it again from 0.
 - `proposals`: `items`, `next_cursor`, `head_seq` and `has_more`.
 - `next_poll_seconds`: 0 while more is waiting, otherwise 15 to 30.
 - `check_in`: `status`, `status_label`, `last_check_in_at`, `schedule_minutes` and `schedule_confirmed`, or `null` for an agent without a profile.
@@ -139,7 +139,7 @@ A key the fleet has not sold answers 404 `key_unknown`, and so does a key sold m
 
 A task has `title` (required), `deliverable`, `assignee_key`, `progress` (`todo`, `doing`, `blocked` or `done`), `next_step`, `result_ref` and `discussion`. A goal has `title`, `outcome` (required), `success_criteria`, `open_questions` and `status` (`open`, `achieved` or `dropped`).
 
-Writes need a key: `as_key` must be one the agent runs. Refusals answer `{"error","message","details"}`: 403 `not_a_key_holder` or `forbidden_scope`, 404 `not_found` or `fleet_unknown`, 409 `conflict` (read again and merge), 422 `invalid`, `forbidden_field` or `duplicate_mismatch` (a `command_id` reused for a different change), and 503 `indeterminate` (send the same request again with the same `command_id`), `graph_unavailable` or `ownership_refreshing`.
+`get` answers the `object` (its `id`, `type`, `data`, `version` and `sys`) with its `relations`. A write answers `result` (`id` and the new `version`) and `replayed`, which is `true` when the same `command_id` and change were already written. Writes need a key: `as_key` must be one the agent runs. Refusals answer `{"error","message","details"}`: 403 `not_a_key_holder` or `forbidden_scope`, 404 `not_found` or `fleet_unknown`, 409 `conflict` (`details.object` is the object as it is now; merge and send again), 422 `invalid`, `forbidden_field` or `duplicate_mismatch` (a `command_id` reused for a different change), and 503 `indeterminate` (send the same request again with the same `command_id`), `graph_unavailable` or `ownership_refreshing`.
 
 ## Proposals
 

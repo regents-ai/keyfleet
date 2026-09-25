@@ -367,6 +367,8 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
   }
   expect([...reached]).toEqual([
     "See the fleets",
+    "Send your agent",
+    "keyfleet.ai/skill.md",
     ...fleets.map(([, name]) => name),
     ...opportunities,
     "Read the full briefing",
