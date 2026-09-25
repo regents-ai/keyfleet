@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
 
@@ -131,7 +132,7 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
 
     [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1)
 
-    Keys.approve_pairing!(request, %{},
+    Keys.approve_pairing!(request, Keys.default_limits(),
       actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
     )
 
@@ -158,6 +159,35 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
 
     for body <- [~s({"token_id":1}), ~s({"reason":"done"})],
         do: assert(send_signed(c, "POST", @step_down_path, body).status == 401)
+  end
+
+  test "a signed agent reads the limits its owner wrote, as the contract describes them", c do
+    assert send_signed(c, "POST", @join_path, @join_body).status == 200
+    requested = send_signed(c, "POST", @pairing_path).body["pairing"]
+    assert requested["limits"] == nil
+
+    [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1)
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+
+    Keys.set_limits!(approved, %{Keys.default_limits() | money: "Spend up to nothing."},
+      actor: owner
+    )
+
+    listed = send_signed(c, "GET", @pairings_path)
+    assert ContractSchema.response_errors(listed.body, "GET", @pairings_path, 200) == []
+    assert [%{"id" => id, "limits" => limits}] = listed.body["pairings"]
+    assert id == requested["id"]
+
+    assert %{
+             "money" => "Spend up to nothing.",
+             "your_information" => "Don't share anything about me" <> _,
+             "outside_keyfleet" => "Don't sign up for anything" <> _,
+             "check_with_owner_first" => "Before agreeing to a deadline" <> _,
+             "written_at" => written_at
+           } = limits
+
+    assert {:ok, _at, 0} = DateTime.from_iso8601(written_at)
   end
 
   test "only the canonical signed key path and empty body reach the pairing actions", c do

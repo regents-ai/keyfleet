@@ -979,7 +979,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     owner = %Actors.Human{human_account_id: token_id, wallet_addresses: [owner_wallet]}
     [request] = Keys.list_pairing_requests!(fleet, token_id, actor: owner)
-    Keys.approve_pairing!(request, %{}, actor: owner)
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
   end
 
   defp commands(c, agent, fleet \\ @fleet) do

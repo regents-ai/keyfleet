@@ -843,7 +843,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
     [request] = Keys.list_pairing_requests!(fleet, token_id, actor: owner)
-    Keys.approve_pairing!(request, %{}, actor: owner)
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
   end
 
   defp pair(c) do
@@ -852,7 +852,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
     [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1, actor: owner)
-    Keys.approve_pairing!(request, %{}, actor: owner)
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
   end
 
   defp key_thread(c, token_id, action, body \\ "{}", fleet \\ "fibonacci_syndicate"),

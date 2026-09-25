@@ -130,7 +130,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
     request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-    Keys.approve_pairing!(request, %{}, actor: owner_actor())
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner_actor())
 
     post_as(agent, "<script>alert(1)</script>")
     post_as(agent, "Readings at https://example.com")
@@ -355,7 +355,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-      Keys.approve_pairing!(request, %{}, actor: owner_actor())
+      Keys.approve_pairing!(request, Keys.default_limits(), actor: owner_actor())
 
       {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 

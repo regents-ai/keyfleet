@@ -3,8 +3,16 @@ defmodule Keyfleet.Keys.KeyPairing do
   One operator's attachment to one key, for one ownership epoch.
 
   A pairing never changes the key it names, the epoch it belongs to or the
-  operator it attaches. Only its lifecycle columns move, so the table is the
-  complete history of who operated a key and under which owner.
+  operator it attaches. Only its lifecycle columns and the owner's limits move,
+  so the table is the complete history of who operated a key and under which
+  owner.
+
+  The limits are four plain sentences the owner writes when approving, and may
+  change while the agent runs the key: what it may commit about money, about
+  the owner's information, outside Keyfleet, and what it must check with the
+  owner first. Keyfleet shows them to everyone and enforces nothing more
+  because of them. An agent signing from the owner's own wallet holds its own
+  key, and its pairing has none.
   """
   use Ash.Resource,
     otp_app: :keyfleet,
@@ -13,6 +21,8 @@ defmodule Keyfleet.Keys.KeyPairing do
     authorizers: [Ash.Policy.Authorizer]
 
   @bigint 9_223_372_036_854_775_807
+  @limit [min_length: 1, max_length: 500, trim?: true]
+  @limit_arguments [:money, :information, :outside, :check_first]
 
   postgres do
     table "key_pairings"
@@ -38,6 +48,12 @@ defmodule Keyfleet.Keys.KeyPairing do
           check: "#{field} ~ '^0x[0-9a-f]{40}$'"
         )
       end
+
+      # The four limits and when they were written are all there or all absent.
+      check_constraint(:limits_money, "key_pairings_limits_whole",
+        check:
+          "num_nulls(limits_money, limits_information, limits_outside, limits_check_first, limits_written_at) IN (0, 5)"
+      )
     end
 
     custom_statements do
@@ -118,11 +134,30 @@ defmodule Keyfleet.Keys.KeyPairing do
       accept []
       require_atomic? false
       transaction? true
+
+      for limit <- @limit_arguments do
+        argument limit, :string, allow_nil?: false, constraints: @limit
+      end
+
       change {Keyfleet.Keys.Changes.DecideOnce, from: :requested}
       change Keyfleet.Keys.Changes.TakeOverKey
       change set_attribute(:status, :active)
       change set_attribute(:approved_at, &DateTime.utc_now/0)
+      change Keyfleet.Keys.Changes.WriteLimits
       change Keyfleet.Keys.Changes.AnnounceOperator
+    end
+
+    # The owner rewrites the limits of the agent running their key.
+    update :set_limits do
+      accept []
+      require_atomic? false
+
+      for limit <- @limit_arguments do
+        argument limit, :string, allow_nil?: false, constraints: @limit
+      end
+
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :active}
+      change Keyfleet.Keys.Changes.WriteLimits
     end
 
     update :decline_pairing do
@@ -319,7 +354,7 @@ defmodule Keyfleet.Keys.KeyPairing do
       authorize_if expr(operator_wallet == ^actor(:wallet_address))
     end
 
-    policy action([:approve_pairing, :decline_pairing, :detach_operator]) do
+    policy action([:approve_pairing, :set_limits, :decline_pairing, :detach_operator]) do
       authorize_if Keyfleet.Keys.Checks.KeyOwner
     end
 
@@ -370,6 +405,12 @@ defmodule Keyfleet.Keys.KeyPairing do
     for field <- [:approved_at, :ended_at] do
       attribute field, :utc_datetime_usec, writable?: false, public?: true
     end
+
+    for field <- [:limits_money, :limits_information, :limits_outside, :limits_check_first] do
+      attribute field, :string, public?: true, writable?: false, constraints: @limit
+    end
+
+    attribute :limits_written_at, :utc_datetime_usec, public?: true, writable?: false
   end
 
   relationships do

@@ -552,7 +552,7 @@ defmodule Keyfleet.FleetRoomsTest do
     runner = agent(character)
     Keyfleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
     request = Keys.request_pairing!(fleet, token_id, %{}, actor: runner)
-    Keys.approve_pairing!(request, %{}, actor: owner(token_id))
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner(token_id))
     runner
   end
 

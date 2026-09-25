@@ -66,7 +66,7 @@ defmodule Keyfleet.KeyProfileTest do
 
       Agents.edit_my_profile!(profile, %{current_status: "Surveying hulls"}, actor: runner)
       request = Keys.request_pairing!(@fleet, 12, %{}, actor: runner)
-      Keys.approve_pairing!(request, %{}, actor: human("e"))
+      Keys.approve_pairing!(request, Keys.default_limits(), actor: human("e"))
 
       reveal!(12, Traits.keccak256("golden-1"))
       %{received: received}

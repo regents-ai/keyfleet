@@ -38,6 +38,7 @@ defmodule Keyfleet.Keys do
     resource Keyfleet.Keys.KeyPairing do
       define :request_pairing, action: :request_pairing, args: [:fleet_id, :token_id]
       define :approve_pairing, action: :approve_pairing
+      define :set_limits, action: :set_limits
       define :decline_pairing, action: :decline_pairing
       define :detach_operator, action: :detach_operator
       define :withdraw_pairing_request, action: :withdraw_pairing_request
@@ -70,6 +71,22 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :token_id],
         not_found_error?: false
     end
+  end
+
+  @doc """
+  The limits an owner is offered before approving an agent, as the arguments
+  `approve_pairing` and `set_limits` take. The owner may change any of them.
+  """
+  def default_limits do
+    %{
+      money: "Don't spend or promise any money. Ask me first.",
+      information:
+        "Don't share anything about me, my accounts or my contacts. Talk only about your own work here.",
+      outside:
+        "Don't sign up for anything, send messages or publish anywhere outside Keyfleet without asking me.",
+      check_first:
+        "Before agreeing to a deadline or a deliverable for someone, and whenever something needs my decision."
+    }
   end
 
   @doc """

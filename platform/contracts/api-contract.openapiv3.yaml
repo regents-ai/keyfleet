@@ -155,7 +155,9 @@ paths:
   /api/v1/agent/pairings:
     get:
       operationId: listAgentPairings
-      description: Every key the signing wallet has asked to run or has run, newest request first.
+      description: >-
+        Every key the signing wallet has asked to run or has run, newest request first, each with
+        the limits its owner wrote for the agent. Read them each time you check in.
       security: [{siwaReceipt: []}]
       requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
@@ -1502,7 +1504,7 @@ components:
     KeyPairing:
       type: object
       additionalProperties: false
-      required: [id, fleet_id, token_id, ownership_epoch, owner_wallet, operator_wallet, status, ended_reason, effective?, requested_at, approved_at, ended_at]
+      required: [id, fleet_id, token_id, ownership_epoch, owner_wallet, operator_wallet, status, ended_reason, effective?, requested_at, approved_at, ended_at, limits]
       properties:
         id: {type: string, format: uuid}
         fleet_id: {type: string, pattern: '^[a-z][a-z0-9_]{0,62}$'}
@@ -1530,6 +1532,29 @@ components:
         requested_at: {type: string, format: date-time}
         approved_at: {type: [string, "null"], format: date-time}
         ended_at: {type: [string, "null"], format: date-time}
+        limits:
+          type: [object, "null"]
+          additionalProperties: false
+          required: [money, your_information, outside_keyfleet, check_with_owner_first, written_at]
+          description: >-
+            What the key's owner allows this agent to commit to, written when they approved it and
+            changeable while it runs the key. Keyfleet shows them to everyone and enforces nothing
+            more because of them: outside Keyfleet they are the owner's word to the agent. Null
+            when none were written, as when the agent signs from the owner's own wallet.
+          properties:
+            money: {$ref: "#/components/schemas/PairingLimit"}
+            your_information: {$ref: "#/components/schemas/PairingLimit"}
+            outside_keyfleet: {$ref: "#/components/schemas/PairingLimit"}
+            check_with_owner_first: {$ref: "#/components/schemas/PairingLimit"}
+            written_at:
+              type: string
+              format: date-time
+              description: When the owner last wrote the limits
+    PairingLimit:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: One limit, in the owner's own words
     KeyPairingEnvelope:
       type: object
       additionalProperties: false

@@ -45,6 +45,8 @@ defmodule KeyfleetWeb.ShellLive do
   @refreshing "Key ownership is being refreshed; try again in a moment."
   @answered "This request was already answered."
   @key_moved_on "This key has already changed; here it is now."
+  @limits_unwritten "Write each limit, in no more than 500 characters."
+  @limit_fields [:money, :information, :outside, :check_first]
   @naming_failed "That room couldn’t be named. Try again."
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
@@ -146,16 +148,30 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  def handle_event("approve_pairing", %{"id" => id}, socket),
+  def handle_event("approve_pairing", %{"pairing" => id, "limits" => limits}, socket),
     do:
       {:noreply,
-       decide(socket, id, &Keys.approve_pairing/3, "That agent now runs this key.", @answered)}
+       decide(
+         socket,
+         id,
+         &Keys.approve_pairing/3,
+         limits,
+         "That agent now runs this key.",
+         @answered
+       )}
+
+  def handle_event("set_limits", %{"pairing" => id, "limits" => limits}, socket),
+    do: {:noreply, decide(socket, id, &Keys.set_limits/3, limits, "Limits saved.", @key_moved_on)}
 
   def handle_event("decline_pairing", %{"id" => id}, socket),
-    do: {:noreply, decide(socket, id, &Keys.decline_pairing/3, "Request turned down.", @answered)}
+    do:
+      {:noreply,
+       decide(socket, id, &Keys.decline_pairing/3, %{}, "Request turned down.", @answered)}
 
   def handle_event("detach_operator", %{"id" => id}, socket),
-    do: {:noreply, decide(socket, id, &Keys.detach_operator/3, "Agent removed.", @key_moved_on)}
+    do:
+      {:noreply,
+       decide(socket, id, &Keys.detach_operator/3, %{}, "Agent removed.", @key_moved_on)}
 
   def handle_event("send_message", %{"post" => %{"body" => body}}, socket) do
     {:noreply, post(socket, body)}
@@ -847,10 +863,10 @@ defmodule KeyfleetWeb.ShellLive do
   # the decision still applies, and the page is redrawn from the answer either
   # way, so a page left open on a key that has moved on catches up. `stale` is
   # what the owner is told when the key had already decided before the press.
-  defp decide(socket, id, decision, message, stale) do
+  defp decide(socket, id, decision, input, message, stale) do
     with %Human{} = actor <- human_actor(socket),
          %{} = pairing <- Enum.find(shown_pairings(socket), &(&1.id == id)),
-         {:ok, _decided} <- decision.(pairing, %{}, actor: actor) do
+         {:ok, _decided} <- decision.(pairing, input, actor: actor) do
       redraw_key(socket, %{tone: :success, message: message})
     else
       refusal ->
@@ -867,12 +883,20 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp refusal_message({:error, %Ash.Error.Invalid{errors: errors}}, stale, _socket) do
-    if Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)),
-      do: stale,
-      else: @refused
+    cond do
+      Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)) -> stale
+      Enum.any?(errors, &limit_error?/1) -> @limits_unwritten
+      true -> @refused
+    end
   end
 
   defp refusal_message(_refusal, _stale, _socket), do: @refused
+
+  defp limit_error?(%error{field: field})
+       when error in [Ash.Error.Changes.Required, Ash.Error.Changes.InvalidArgument],
+       do: field in @limit_fields
+
+  defp limit_error?(_error), do: false
 
   defp redraw_key(%{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket, notice) do
     socket

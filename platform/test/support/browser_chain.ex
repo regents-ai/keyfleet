@@ -141,7 +141,7 @@ defmodule Keyfleet.BrowserChain do
     Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: @operator)
     request = Keys.request_pairing!(fleet_id, token_id, %{}, actor: @operator)
     owner = %Human{human_account_id: 1, wallet_addresses: [request.owner_wallet]}
-    Keys.approve_pairing!(request, %{}, actor: owner)
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
     :ok
   end
 

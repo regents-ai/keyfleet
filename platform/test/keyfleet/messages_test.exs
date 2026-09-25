@@ -102,7 +102,7 @@ defmodule Keyfleet.MessagesTest do
     assert {:error, %Ash.Error.Forbidden{}} = send_as(agent, "general", "Standing by", "k-1")
 
     request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-    Keys.approve_pairing!(request, %{}, actor: human("a"))
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: human("a"))
 
     posted = post!(agent, "general", "Hull survey started", "k-2")
     assert posted.author_kind == :agent
@@ -290,7 +290,7 @@ defmodule Keyfleet.MessagesTest do
     for token_id <- [40, 12] do
       epoch!(token_id: token_id)
       request = Keys.request_pairing!(@fleet, token_id, %{}, actor: agent)
-      Keys.approve_pairing!(request, %{}, actor: owner)
+      Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
     end
 
     first = post!(agent, "general", "Hull survey started")

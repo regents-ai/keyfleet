@@ -292,7 +292,7 @@ defmodule Keyfleet.KeyThreadsTest do
     runner = agent(character)
     Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
     request = Keys.request_pairing!(@fleet, token_id, %{}, actor: runner)
-    Keys.approve_pairing!(request, %{}, actor: human(owner_of(token_id)))
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: human(owner_of(token_id)))
     runner
   end
 

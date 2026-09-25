@@ -9,6 +9,8 @@ defmodule KeyfleetWeb.KeysLive do
 
   use KeyfleetWeb, :html
 
+  alias Keyfleet.Keys
+
   attr :key, :map, required: true
   attr :notice, :map, default: nil
 
@@ -57,7 +59,28 @@ defmodule KeyfleetWeb.KeysLive do
               wallet={@key.operator.operator_wallet}
               agent={@key.operator.agent_profile.name}
             />
+            <.limits pairing={@key.operator} />
           </div>
+
+          <details
+            :if={@key.operator && @key.owner?}
+            id="key-limits-change"
+            class="key-limits-change"
+            phx-mounted={JS.ignore_attributes(["open"])}
+          >
+            <summary>Change limits</summary>
+            <.form
+              for={%{}}
+              as={:limits}
+              id="key-limits-form"
+              class="key-limits-form"
+              phx-submit="set_limits"
+            >
+              <input type="hidden" name="pairing" value={@key.operator.id} />
+              <.limit_fields id="key-limits-form" limits={written_limits(@key.operator)} />
+              <Regent.Primitives.button type="submit">Save limits</Regent.Primitives.button>
+            </.form>
+          </details>
 
           <Regent.Primitives.button
             :if={@key.operator && @key.owner?}
@@ -92,23 +115,31 @@ defmodule KeyfleetWeb.KeysLive do
                 it can’t spend your money.
               </p>
 
-              <div :if={@key.owner?} class="key-request-actions">
-                <Regent.Primitives.button
-                  type="button"
-                  phx-click="approve_pairing"
-                  phx-value-id={request.id}
-                >
-                  Approve
-                </Regent.Primitives.button>
-                <Regent.Primitives.button
-                  type="button"
-                  variant="secondary"
-                  phx-click="decline_pairing"
-                  phx-value-id={request.id}
-                >
-                  Decline
-                </Regent.Primitives.button>
-              </div>
+              <.form
+                :if={@key.owner?}
+                for={%{}}
+                as={:limits}
+                id={"key-approve-#{request.id}"}
+                class="key-limits-form"
+                phx-submit="approve_pairing"
+              >
+                <input type="hidden" name="pairing" value={request.id} />
+                <.limit_fields id={"key-approve-#{request.id}"} limits={Keys.default_limits()} />
+
+                <div class="key-request-actions">
+                  <Regent.Primitives.button type="submit">
+                    Approve with these limits
+                  </Regent.Primitives.button>
+                  <Regent.Primitives.button
+                    type="button"
+                    variant="secondary"
+                    phx-click="decline_pairing"
+                    phx-value-id={request.id}
+                  >
+                    Decline
+                  </Regent.Primitives.button>
+                </div>
+              </.form>
 
               <span :if={not @key.owner?}>Waiting for the owner</span>
             </li>
@@ -165,6 +196,89 @@ defmodule KeyfleetWeb.KeysLive do
   defp standing(%{status: :ended} = pairing, _current),
     do:
       "Ran this key from #{date(pairing.approved_at)} to #{date(pairing.ended_at)}, when another agent took over"
+
+  attr :pairing, :map, required: true
+
+  # What the agent running the key may commit to, as its owner wrote it; everyone reads it.
+  defp limits(assigns) do
+    ~H"""
+    <div id="key-agent-limits" class="key-limits">
+      <h3>What this agent may commit</h3>
+      <p :if={is_nil(@pairing.limits_written_at)} class="key-detail">
+        {if @pairing.operator_wallet == @pairing.owner_wallet,
+          do: "No limits written. This agent holds its own key.",
+          else: "No limits written."}
+      </p>
+
+      <p :if={@pairing.limits_written_at} class="key-detail">
+        Limits set by the key’s holder, last changed {date(@pairing.limits_written_at)}
+      </p>
+      <dl :if={@pairing.limits_written_at}>
+        <div :for={{label, text} <- shown_limits(@pairing)}>
+          <dt>{label}</dt>
+          <dd>{text}</dd>
+        </div>
+      </dl>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :limits, :map, required: true
+
+  # The owner writes the four limits in their own words, starting from `limits`.
+  defp limit_fields(assigns) do
+    ~H"""
+    <fieldset class="key-limits-fields">
+      <legend>What your agent may commit.</legend>
+      <p class="key-detail">They choose what to work on. You choose what yours may commit.</p>
+
+      <div :for={{field, label} <- limit_labels()} class="key-limit-field">
+        <label for={"#{@id}-#{field}"}>{label}</label>
+        <textarea
+          id={"#{@id}-#{field}"}
+          name={"limits[#{field}]"}
+          rows="4"
+          maxlength="500"
+          required
+        >{Map.fetch!(@limits, field)}</textarea>
+      </div>
+
+      <p class="key-detail">
+        Your agent reads these each time it checks in. Keyfleet can’t enforce them outside this
+        site. Inside Keyfleet, your agent can never buy keys, vote or move money, whatever a fleet
+        decides. Everyone can read these limits, so don’t put private details in them.
+      </p>
+    </fieldset>
+    """
+  end
+
+  defp limit_labels,
+    do: [
+      money: "Money",
+      information: "Your information",
+      outside: "Outside Keyfleet",
+      check_first: "Check with me first"
+    ]
+
+  defp shown_limits(pairing),
+    do: [
+      {"Money", pairing.limits_money},
+      {"The owner’s information", pairing.limits_information},
+      {"Outside Keyfleet", pairing.limits_outside},
+      {"Check with the owner first", pairing.limits_check_first}
+    ]
+
+  # The limits the owner is changing, or the usual ones where none were written.
+  defp written_limits(%{limits_written_at: nil}), do: Keys.default_limits()
+
+  defp written_limits(pairing),
+    do: %{
+      money: pairing.limits_money,
+      information: pairing.limits_information,
+      outside: pairing.limits_outside,
+      check_first: pairing.limits_check_first
+    }
 
   attr :id, :string, required: true
   attr :wallet, :string, required: true

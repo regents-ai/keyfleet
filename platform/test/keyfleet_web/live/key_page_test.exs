@@ -13,7 +13,8 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
   @operator "0x" <> String.duplicate("c", 40)
-  @approve ~s(button[phx-click="approve_pairing"])
+  @approve ~s(form[phx-submit="approve_pairing"])
+  @change ~s(form[phx-submit="set_limits"])
   @decline ~s(button[phx-click="decline_pairing"])
   @detach ~s(button[phx-click="detach_operator"])
 
@@ -69,8 +70,18 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert has_element?(view, @approve)
     assert has_element?(view, @decline)
     refute has_element?(view, @detach)
+    refute has_element?(view, @change)
 
-    html = view |> element(@approve) |> render_click()
+    # The owner starts from the usual limits and may rewrite any of them.
+    approve = "#key-approve-#{request.id}"
+
+    for {field, text} <- Keys.default_limits(),
+        do: assert(has_element?(view, "#{approve}-#{field}", text))
+
+    assert view |> element(approve <> " button[type=submit]") |> render() =~
+             "Approve with these limits"
+
+    html = view |> form(approve, limits: %{money: "Spend nothing at all."}) |> render_submit()
 
     assert html =~ "That agent now runs this key."
     assert html =~ "Running this key since"
@@ -78,6 +89,18 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     refute has_element?(view, @approve)
     assert has_element?(view, @detach)
     assert Keys.current_operator!(@fleet, 1).id == request.id
+    assert Keys.current_operator!(@fleet, 1).limits_money == "Spend nothing at all."
+
+    assert has_element?(view, "#key-agent-limits", "Limits set by the key’s holder, last changed")
+    assert has_element?(view, "#key-agent-limits dd", "Spend nothing at all.")
+    assert has_element?(view, "#key-limits-form-money", "Spend nothing at all.")
+
+    html =
+      view |> form(@change, limits: %{outside: "Nothing outside Keyfleet."}) |> render_submit()
+
+    assert html =~ "Limits saved."
+    assert has_element?(view, "#key-agent-limits dd", "Nothing outside Keyfleet.")
+    assert Keys.current_operator!(@fleet, 1).limits_outside == "Nothing outside Keyfleet."
 
     assert view |> element("#key-agent-address") |> render() =~ ~s(data-copy-text="#{@operator}")
     assert view |> element(@detach) |> render_click() =~ "Agent removed."
@@ -102,9 +125,61 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
       refute has_element?(view, selector)
     end
 
-    assert render_click(view, "approve_pairing", %{"id" => request.id}) =~ "didn’t go through"
+    approve = %{"pairing" => request.id, "limits" => Keys.default_limits()}
+    assert render_click(view, "approve_pairing", approve) =~ "didn’t go through"
     assert Keys.current_operator!(@fleet, 1) == nil
     assert Keys.list_pairing_requests!(@fleet, 1) |> Enum.map(& &1.id) == [request.id]
+  end
+
+  test "everyone reads the limits of the agent running a key; only the owner changes them", %{
+    conn: conn,
+    request: request
+  } do
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+    assert has_element?(view, "#key-agent-limits", "Limits set by the key’s holder, last changed")
+
+    for {_field, text} <- Keys.default_limits(),
+        do: assert(has_element?(view, "#key-agent-limits dd", text))
+
+    refute has_element?(view, @change)
+
+    change = %{"pairing" => approved.id, "limits" => %{Keys.default_limits() | money: "Anything"}}
+    assert render_click(view, "set_limits", change) =~ "didn’t go through"
+    assert Keys.current_operator!(@fleet, 1).limits_money == approved.limits_money
+  end
+
+  test "an owner who leaves a limit blank is asked to write it, and nothing is approved", %{
+    conn: conn,
+    request: request
+  } do
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+
+    html =
+      view |> form("#key-approve-#{request.id}", limits: %{check_first: "   "}) |> render_submit()
+
+    assert html =~ "Write each limit, in no more than 500 characters."
+    assert Keys.current_operator!(@fleet, 1) == nil
+    assert Keys.list_pairing_requests!(@fleet, 1) |> Enum.map(& &1.id) == [request.id]
+  end
+
+  test "an agent signing from the owner's own wallet runs the key with no limits written", %{
+    conn: conn
+  } do
+    own = %Actors.Agent{wallet_address: @owner, chain_id: 8453, audience: "keyfleet"}
+    Agents.ensure_profile!(%{name: "Home agent", declared_harness: "hermes"}, actor: own)
+    Keys.request_pairing!(@fleet, 1, %{}, actor: own)
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+    assert has_element?(
+             view,
+             "#key-agent-limits",
+             "No limits written. This agent holds its own key."
+           )
   end
 
   test "a page that has not caught up is told the request was answered", %{
@@ -115,7 +190,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
     Keys.withdraw_pairing_request!(request, %{}, actor: agent)
 
-    html = view |> element(@approve) |> render_click()
+    html = view |> form("#key-approve-#{request.id}") |> render_submit()
 
     assert html =~ "This request was already answered."
     assert html =~ "No one has asked to run this key."
@@ -128,7 +203,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     request: request
   } do
     owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    approved = Keys.approve_pairing!(request, %{}, actor: owner)
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
     {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
     Keys.step_down!(approved, %{}, actor: agent)
 
@@ -145,7 +220,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     request: request
   } do
     owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    approved = Keys.approve_pairing!(request, %{}, actor: owner)
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
     Keys.step_down!(approved, %{}, actor: agent)
 
     {:ok, _view, html} = conn |> signed_in_as(@stranger) |> live(@path)

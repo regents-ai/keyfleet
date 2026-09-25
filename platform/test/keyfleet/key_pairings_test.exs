@@ -12,6 +12,19 @@ defmodule Keyfleet.KeyPairingsTest do
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
   @decision [:id, :status, :ended_reason, :approved_at, :ended_at]
+  @limits [
+    :limits_money,
+    :limits_information,
+    :limits_outside,
+    :limits_check_first,
+    :limits_written_at
+  ]
+  @edited %{
+    money: "Spend nothing.",
+    information: "Keep my name out of it.",
+    outside: "Stay inside Keyfleet.",
+    check_first: "Any promise to anyone."
+  }
   @identity [
     :id,
     :fleet_id,
@@ -49,6 +62,8 @@ defmodule Keyfleet.KeyPairingsTest do
     attached = Keys.request_pairing!(@fleet, 1, %{}, actor: owner)
     assert attached.status == :active
     assert %DateTime{} = attached.approved_at
+    # An agent holding its own key answers to no one else's limits.
+    assert Enum.all?(@limits, &(Map.fetch!(attached, &1) == nil))
     assert Keys.current_operator!(@fleet, 1).id == attached.id
 
     assert {:error, %Ash.Error.Invalid{errors: [%Keys.Errors.AlreadyOperatingError{}]}} =
@@ -65,7 +80,7 @@ defmodule Keyfleet.KeyPairingsTest do
     request = request!(agent("b"), "Operator agent")
     refute_received {:keys_changed, _fleet, _token_ids}
 
-    approved = Keys.approve_pairing!(request, %{}, actor: human(owner))
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: human(owner))
     assert_received {:keys_changed, @fleet, [1]}
 
     Keys.detach_operator!(approved, %{}, actor: human(owner))
@@ -118,7 +133,7 @@ defmodule Keyfleet.KeyPairingsTest do
     second = request!(agent("c"), "Second operator")
     third = request!(agent("d"), "Third operator")
 
-    approved = Keys.approve_pairing!(second, %{}, actor: human(owner))
+    approved = Keys.approve_pairing!(second, Keys.default_limits(), actor: human(owner))
     assert approved.status == :active
     assert %DateTime{} = approved.approved_at
     assert Keys.current_operator!(@fleet, 1).id == approved.id
@@ -137,7 +152,9 @@ defmodule Keyfleet.KeyPairingsTest do
     other = human(agent("e"))
 
     for actor <- [nil, other, @system, owner] do
-      assert {:error, %Ash.Error.Forbidden{}} = Keys.approve_pairing(request, %{}, actor: actor)
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.approve_pairing(request, Keys.default_limits(), actor: actor)
+
       assert {:error, %Ash.Error.Forbidden{}} = Keys.decline_pairing(request, %{}, actor: actor)
     end
 
@@ -162,7 +179,7 @@ defmodule Keyfleet.KeyPairingsTest do
     )
 
     assert {:error, %Ash.Error.Forbidden{}} =
-             Keys.approve_pairing(request, %{}, actor: human(owner))
+             Keys.approve_pairing(request, Keys.default_limits(), actor: human(owner))
 
     assert {:error, %Ash.Error.Forbidden{errors: [%Keys.Errors.OwnershipRefreshingError{}]}} =
              Keys.request_pairing(@fleet, 1, %{}, actor: owner)
@@ -184,7 +201,7 @@ defmodule Keyfleet.KeyPairingsTest do
     assert Keys.list_pairing_requests!(@fleet, 1) == []
 
     assert {:error, %Ash.Error.Forbidden{}} =
-             Keys.approve_pairing(request, %{}, actor: human(owner))
+             Keys.approve_pairing(request, Keys.default_limits(), actor: human(owner))
 
     assert {:error, %Ash.Error.Forbidden{}} =
              Keys.detach_operator(attached, %{}, actor: human(owner))
@@ -197,7 +214,9 @@ defmodule Keyfleet.KeyPairingsTest do
     assert Keys.current_operator!(@fleet, 1).id == renewed.id
 
     approved =
-      Keys.approve_pairing!(request!(agent("3"), "Later hopeful"), %{}, actor: human(new_owner))
+      Keys.approve_pairing!(request!(agent("3"), "Later hopeful"), Keys.default_limits(),
+        actor: human(new_owner)
+      )
 
     assert Keys.current_operator!(@fleet, 1).id == approved.id
 
@@ -311,7 +330,7 @@ defmodule Keyfleet.KeyPairingsTest do
     assert again.id != attached.id
     assert again.status == :requested
 
-    Keys.approve_pairing!(again, %{}, actor: human(owner))
+    Keys.approve_pairing!(again, Keys.default_limits(), actor: human(owner))
 
     assert Enum.map(Keys.pairing_history!(@fleet, 1), &{&1.id, &1.status, &1.ended_reason}) ==
              [{attached.id, :ended, :stepped_down}, {again.id, :active, nil}]
@@ -323,11 +342,101 @@ defmodule Keyfleet.KeyPairingsTest do
     withdrawn = Keys.withdraw_pairing_request!(request, %{}, actor: operator)
 
     assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
-             Keys.approve_pairing(request, %{}, actor: human(owner))
+             Keys.approve_pairing(request, Keys.default_limits(), actor: human(owner))
 
     assert [unchanged] = Keys.pairing_history!(@fleet, 1)
     assert Map.take(unchanged, @decision) == Map.take(withdrawn, @decision)
     assert Keys.current_operator!(@fleet, 1) == nil
+  end
+
+  test "an owner approves only with all four limits, and the pairing keeps them", %{
+    owner: owner
+  } do
+    request = request!(agent("b"), "Operator")
+
+    for missing <- Map.keys(@edited) do
+      assert {:error, %Ash.Error.Invalid{}} =
+               Keys.approve_pairing(request, Map.delete(@edited, missing), actor: human(owner))
+    end
+
+    assert {:error, %Ash.Error.Invalid{}} =
+             Keys.approve_pairing(request, %{@edited | outside: "   "}, actor: human(owner))
+
+    assert {:error, %Ash.Error.Invalid{}} =
+             Keys.approve_pairing(request, %{@edited | money: String.duplicate("m", 501)},
+               actor: human(owner)
+             )
+
+    assert [waiting] = Keys.list_pairing_requests!(@fleet, 1)
+
+    assert {waiting.id, waiting.status, waiting.limits_written_at} ==
+             {request.id, :requested, nil}
+
+    approved = Keys.approve_pairing!(request, @edited, actor: human(owner))
+
+    assert Map.take(approved, Enum.drop(@limits, -1)) == %{
+             limits_money: "Spend nothing.",
+             limits_information: "Keep my name out of it.",
+             limits_outside: "Stay inside Keyfleet.",
+             limits_check_first: "Any promise to anyone."
+           }
+
+    assert %DateTime{} = approved.limits_written_at
+    assert Map.take(Keys.current_operator!(@fleet, 1), @limits) == Map.take(approved, @limits)
+  end
+
+  test "the owner rewrites the limits of the agent running the key; nothing else moves", %{
+    owner: owner
+  } do
+    attached = attach!(agent("b"), "Operator")
+    changed = Keys.set_limits!(attached, @edited, actor: human(owner))
+
+    assert changed.limits_money == "Spend nothing."
+    assert changed.limits_check_first == "Any promise to anyone."
+    assert DateTime.after?(changed.limits_written_at, attached.limits_written_at)
+
+    assert [stored] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(stored, @identity ++ @decision) == Map.take(attached, @identity ++ @decision)
+    assert Map.take(stored, @limits) == Map.take(changed, @limits)
+
+    assert {:error, %Ash.Error.Invalid{}} =
+             Keys.set_limits(changed, %{@edited | information: String.duplicate("i", 501)},
+               actor: human(owner)
+             )
+
+    assert Map.take(Keys.current_operator!(@fleet, 1), @limits) == Map.take(changed, @limits)
+  end
+
+  test "only the wallet that owns the key today may change its agent's limits", %{owner: owner} do
+    runner = agent("b")
+    attached = attach!(runner, "Operator")
+
+    for actor <- [human(agent("e")), runner, owner, @system, nil] do
+      assert {:error, %Ash.Error.Forbidden{}} = Keys.set_limits(attached, @edited, actor: actor)
+    end
+
+    assert Map.take(Keys.current_operator!(@fleet, 1), @limits) == Map.take(attached, @limits)
+
+    new_owner = agent("1")
+    epoch!(ownership_epoch: 1, owner_wallet: new_owner.wallet_address, log_index: 1)
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Keys.set_limits(attached, @edited, actor: human(owner))
+
+    assert [unchanged] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(unchanged, @limits) == Map.take(attached, @limits)
+  end
+
+  test "the limits of a pairing that has ended stay as they were", %{owner: owner} do
+    runner = agent("b")
+    attached = attach!(runner, "Operator")
+    Keys.step_down!(attached, %{}, actor: runner)
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+             Keys.set_limits(attached, @edited, actor: human(owner))
+
+    assert [ended] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(ended, @limits) == Map.take(attached, @limits)
   end
 
   test "the database refuses a second attached operator, a delete, and an edited identity" do
@@ -372,6 +481,16 @@ defmodule Keyfleet.KeyPairingsTest do
                )
     end
 
+    # Limits come whole: all four and when they were written, or none at all.
+    for field <- @limits do
+      assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+               Repo.query(
+                 "UPDATE keyfleet_app.key_pairings SET #{field} = NULL WHERE id = $1",
+                 [Ecto.UUID.dump!(attached.id)],
+                 mode: :savepoint
+               )
+    end
+
     assert Keys.current_operator!(@fleet, 1).id == attached.id
   end
 
@@ -403,7 +522,7 @@ defmodule Keyfleet.KeyPairingsTest do
 
   defp attach!(actor, name) do
     request = request!(actor, name)
-    Keys.approve_pairing!(request, %{}, actor: owner_of(request))
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner_of(request))
   end
 
   defp owner_of(%{owner_wallet: wallet}),

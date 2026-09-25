@@ -669,7 +669,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   defp pair!(token_id) do
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: operator())
     request = Keys.request_pairing!(@fleet, token_id, %{}, actor: operator())
-    Keys.approve_pairing!(request, %{}, actor: owner())
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner())
   end
 
   defp operator,
