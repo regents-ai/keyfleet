@@ -25,6 +25,7 @@ defmodule Keyfleet.Treasury do
     resource Keyfleet.Treasury.AssetDetails do
       define :record_asset_details, action: :record
       define :asset_details, action: :of_fleet, args: [:fleet_id]
+      define :details_of_assets, action: :of_assets, args: [:fleet_id, :assets]
     end
 
     resource Keyfleet.Treasury.BudgetReceipt do
@@ -88,13 +89,15 @@ defmodule Keyfleet.Treasury do
   What an amount of the fleet's assets is shown with: `%{usdc: address,
   details: %{asset => {symbol, decimals}}}`, the fleet's USDC and each
   asset's symbol and decimals as its token reported them, either nil when
-  the token has not said.
+  the token has not said. `assets/2` reads the details of the `assets` named
+  only.
   """
-  def assets(fleet) do
-    %{
-      usdc: fleet.usdc_address,
-      details: fleet.id |> asset_details!() |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
-    }
+  def assets(fleet), do: shown_with(fleet, asset_details!(fleet.id))
+
+  def assets(fleet, assets), do: shown_with(fleet, details_of_assets!(fleet.id, assets))
+
+  defp shown_with(fleet, details) do
+    %{usdc: fleet.usdc_address, details: Map.new(details, &{&1.asset, {&1.symbol, &1.decimals}})}
   end
 
   defp assets_of(query, fleet_id) do

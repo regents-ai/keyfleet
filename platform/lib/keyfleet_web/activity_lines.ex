@@ -13,20 +13,21 @@ defmodule KeyfleetWeb.ActivityLines do
     * `{:agent, name}`: an agent, by the name it gave itself;
     * `{:quote, text}`: words a member wrote, or a launch's name;
     * `{:proposal, number}`: a proposal;
-    * `{:amount, text, token}`: an amount paid, as
-      `KeyfleetWeb.ProposalsPage.amount/3` words it, with its token's
-      address, or nil for the fleet's own USDC.
+    * `{:amount, text, token}`: an amount paid in a token other than the
+      fleet's USDC, as `KeyfleetWeb.ProposalsPage.amount/3` words it with
+      the symbol the token chose, and the token's address.
 
-  Every member's words in the parts have been through
+  Every member's words and every token's symbol in the parts have been through
   `KeyfleetWeb.DirectoryMD.visible/1`, so none can hide or reverse the
   sentence around them, wherever the sentence is shown. Numbers are written
   the one way every page writes them, "Key 1,234".
 
   `text/1` joins the parts for a web page, which escapes them itself.
-  `markdown/1` joins them for Markdown, passing every member's words, and
-  every amount in a token other than the fleet's USDC, whose symbol the
-  token chose, through `KeyfleetWeb.DirectoryMD.inline/2`, so none of them
-  can act as Markdown either.
+  `markdown/1` joins them for Markdown, passing every member's words and
+  every amount in a token's own symbol through
+  `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
+  either. Both quote an amount in a token's own symbol, so the symbol can't
+  pass for the site's words, such as whom the fleet paid.
   """
 
   alias Keyfleet.Fleets.Rules
@@ -312,11 +313,18 @@ defmodule KeyfleetWeb.ActivityLines do
 
   # "12.5 USDC to 0x12ab…cd34".
   defp paid(payment) do
-    %{text: text, token: token} =
-      ProposalsPage.amount(payment.amount, payment.asset, payment.assets)
-
-    [{:amount, text, token}, " to #{FleetLive.short_wallet(payment.recipient)}"]
+    amount = ProposalsPage.amount(payment.amount, payment.asset, payment.assets)
+    [amount(amount), " to #{FleetLive.short_wallet(payment.recipient)}"]
   end
+
+  # The fleet's USDC, and a token that hasn't said its symbol, are named in
+  # the site's words; any other token by the symbol it chose.
+  defp amount(%{text: text, token: nil}), do: visible(text)
+
+  defp amount(%{text: text, token: token, symbol?: false}),
+    do: "#{text} #{FleetLive.short_wallet(token)}"
+
+  defp amount(%{text: text, token: token, symbol?: true}), do: {:amount, visible(text), token}
 
   defp launch(%{name: name, symbol: symbol}), do: words("#{name} (#{symbol})")
 
@@ -347,9 +355,8 @@ defmodule KeyfleetWeb.ActivityLines do
   @doc ~S|How a proposal is named on a page: "Proposal 12".|
   def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
 
-  @doc ~S|How an amount is named on a page: "12.5 USDC", or "3 FOO 0xabcd…ef01" in any token but the fleet's USDC.|
-  def amount_name(text, nil), do: text
-  def amount_name(text, token), do: "#{text} #{FleetLive.short_wallet(token)}"
+  @doc ~S|How an amount in a token's own symbol is named on a page: "“3 FOO” 0xabcd…ef01".|
+  def amount_name(text, token), do: "“#{text}” #{FleetLive.short_wallet(token)}"
 
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
@@ -373,7 +380,6 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:agent, name}), do: said(name, :agent)
   defp marked({:quote, text}), do: said(text, :quote)
   defp marked({:proposal, number}), do: proposal_name(number)
-  defp marked({:amount, text, nil}), do: text
 
   defp marked({:amount, text, token}),
     do: said(text, :amount) <> " " <> FleetLive.short_wallet(token)

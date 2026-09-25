@@ -138,26 +138,27 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   @doc """
   An amount of an asset as every page shows it, `%{text: text, token: address
-  | nil}`, grouped: in its own units with its symbol when the token has
-  reported both, and otherwise as the whole number the chain holds. Every
-  asset but the fleet's own USDC, known by its address, comes with its
+  | nil, symbol?: boolean}`, grouped: in its own units with its symbol when
+  the token has reported both, and otherwise as the whole number the chain
+  holds. `symbol?` says whether `text` ends in the symbol the token chose.
+  Every asset but the fleet's own USDC, known by its address, comes with its
   address as `token`, so a token calling itself USDC is never taken for it.
   `assets` is as `Keyfleet.Treasury.assets/1` reads them.
   """
   def amount(atoms, asset, %{usdc: usdc, details: details}) do
-    text =
+    {text, symbol?} =
       case {details[asset], asset == usdc} do
         {{symbol, decimals}, _usdc?} when is_binary(symbol) and is_integer(decimals) ->
-          "#{units(atoms, decimals)} #{symbol}"
+          {"#{units(atoms, decimals)} #{symbol}", true}
 
         {_unknown, true} ->
-          "#{units(atoms, 0)} in USDC’s smallest units"
+          {"#{units(atoms, 0)} in USDC’s smallest units", false}
 
         {_unknown, false} ->
-          "#{units(atoms, 0)} in the smallest units of token"
+          {"#{units(atoms, 0)} in the smallest units of token", false}
       end
 
-    %{text: text, token: if(asset != usdc, do: asset)}
+    %{text: text, token: if(asset != usdc, do: asset), symbol?: symbol?}
   end
 
   # REGENT, which has eighteen decimals.

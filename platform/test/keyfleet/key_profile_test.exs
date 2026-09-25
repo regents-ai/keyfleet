@@ -2,6 +2,7 @@ defmodule Keyfleet.KeyProfileTest do
   use ExUnit.Case, async: false
 
   import Keyfleet.ProposalHelpers, only: [proposal!: 2, vote!: 5, wallet: 1]
+  import Keyfleet.QueryHelpers, only: [queries_during: 1]
 
   alias Keyfleet.Actors
   alias Keyfleet.Agents
@@ -193,35 +194,6 @@ defmodule Keyfleet.KeyProfileTest do
 
     assert %{holder_keys: listed, holder_key_count: 103} = Profile.read(@fleet, 103, nil)
     assert listed == Enum.to_list(1..100)
-  end
-
-  defp queries_during(fun) do
-    test_pid = self()
-    handler = "key-profile-queries-#{System.unique_integer([:positive])}"
-
-    :telemetry.attach(
-      handler,
-      [:keyfleet, :repo, :query],
-      fn _event, _measurements, _meta, _config -> send(test_pid, :query) end,
-      nil
-    )
-
-    result =
-      try do
-        fun.()
-      after
-        :telemetry.detach(handler)
-      end
-
-    {count_queries(0), result}
-  end
-
-  defp count_queries(count) do
-    receive do
-      :query -> count_queries(count + 1)
-    after
-      0 -> count
-    end
   end
 
   defp deploy!(fleet_id) do

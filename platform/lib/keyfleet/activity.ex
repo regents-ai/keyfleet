@@ -799,9 +799,13 @@ defmodule Keyfleet.Activity do
     end)
   end
 
-  # The fleet's assets are read once for every payment on the page.
+  # The page's payments' assets are read once for all of them.
   defp assets(_fleet_id, nil), do: nil
-  defp assets(fleet_id, _refs), do: fleet_id |> Fleets.get_fleet!() |> Treasury.assets()
+
+  defp assets(fleet_id, refs) do
+    assets = refs |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+    fleet_id |> Fleets.get_fleet!() |> Treasury.assets(assets)
+  end
 
   defp resolve(facts, names) when is_map(facts) and not is_struct(facts),
     do: Map.new(facts, fn {key, value} -> {key, resolve(value, names)} end)

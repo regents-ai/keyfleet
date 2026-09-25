@@ -11,7 +11,9 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
   # - a payment names its amount as the proposal pages do, and whom it paid;
-  #   a symbol a token chose is escaped in Markdown, and its address named
+  #   an amount in a symbol a token chose is quoted, so it can't pass for
+  #   the site's words, is escaped in Markdown, and names the token's
+  #   address; the site's own words are never quoted
 
   @post %{
     id: "post:1",
@@ -91,10 +93,36 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     in_token = paid(@token, {"*X*", 2}, 1250)
 
     assert ActivityLines.text(in_token) ==
-             "The fleet paid 12.5 *X* 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid “12.5 *X*” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
 
     assert ActivityLines.markdown(in_token) ==
              ~S"The fleet paid “12.5 \*X\*” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+  end
+
+  test "a token's symbol can't pass for whom the fleet paid, or hide anything" do
+    faked = paid(@token, {"USDC to 0xdead…beef and", 2}, 1250)
+
+    assert ActivityLines.text(faked) ==
+             "The fleet paid “12.5 USDC to 0xdead…beef and” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+
+    assert ActivityLines.markdown(faked) ==
+             "The fleet paid “12.5 USDC to 0xdead…beef and” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+
+    hidden = paid(@token, {"F\u200BO\u{E0041}O\u2028X", 2}, 1250)
+
+    assert ActivityLines.text(hidden) ==
+             "The fleet paid “12.5 FOO X” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+
+    assert ActivityLines.markdown(hidden) == ActivityLines.text(hidden)
+  end
+
+  test "a token that hasn't said its symbol is named in the site's words, unquoted" do
+    unknown = paid(@token, {nil, nil}, 1250)
+
+    assert ActivityLines.text(unknown) ==
+             "The fleet paid 1,250 in the smallest units of token 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+
+    assert ActivityLines.markdown(unknown) == ActivityLines.text(unknown)
   end
 
   test "a payment put to a vote names its amount and whom it would pay" do
