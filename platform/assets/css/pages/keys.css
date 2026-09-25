@@ -208,6 +208,7 @@
   max-width: 56ch;
   margin: 0;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .key-limits-change {

@@ -88,6 +88,7 @@ defmodule KeyfleetWeb.ShellLive do
        key_profile: nil,
        key: nil,
        key_notice: nil,
+       key_drafts: %{},
        room: nil,
        room_notice: nil,
        room_topic: nil,
@@ -148,20 +149,23 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  def handle_event("approve_pairing", %{"pairing" => id, "limits" => limits}, socket),
-    do:
-      {:noreply,
-       decide(
-         socket,
-         id,
-         &Keys.approve_pairing/3,
-         limits,
-         "That agent now runs this key.",
-         @answered
-       )}
+  def handle_event("approve_pairing", %{"pairing" => id, "limits" => limits}, socket) do
+    limits = written(limits)
 
-  def handle_event("set_limits", %{"pairing" => id, "limits" => limits}, socket),
-    do: {:noreply, decide(socket, id, &Keys.set_limits/3, limits, "Limits saved.", @key_moved_on)}
+    {:noreply,
+     socket
+     |> decide(id, &Keys.approve_pairing/3, limits, "That agent now runs this key.", @answered)
+     |> keep_draft(id, limits)}
+  end
+
+  def handle_event("set_limits", %{"pairing" => id, "limits" => limits}, socket) do
+    limits = written(limits)
+
+    {:noreply,
+     socket
+     |> decide(id, &Keys.set_limits/3, limits, "Limits saved.", @key_moved_on)
+     |> keep_draft(id, limits)}
+  end
 
   def handle_event("decline_pairing", %{"id" => id}, socket),
     do:
@@ -400,7 +404,12 @@ defmodule KeyfleetWeb.ShellLive do
           thread={@streams.key_thread}
         />
 
-        <KeysLive.page :if={@route_spec.route_id == :keys} key={@key} notice={@key_notice} />
+        <KeysLive.page
+          :if={@route_spec.route_id == :keys}
+          key={@key}
+          notice={@key_notice}
+          drafts={@key_drafts}
+        />
 
         <RoomsLive.page
           :if={@route_spec.route_id == :rooms}
@@ -830,11 +839,13 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
     assign(socket,
       key: key_view(socket, fleet_id, String.to_integer(token_id)),
-      key_notice: nil
+      key_notice: nil,
+      key_drafts: %{}
     )
   end
 
-  defp load_key(socket, _route_spec, _params), do: assign(socket, key: nil, key_notice: nil)
+  defp load_key(socket, _route_spec, _params),
+    do: assign(socket, key: nil, key_notice: nil, key_drafts: %{})
 
   defp key_view(socket, fleet_id, token_id) do
     actor = human_actor(socket)
@@ -891,6 +902,17 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp refusal_message(_refusal, _stale, _socket), do: @refused
+
+  # The four limits as the owner typed them, by name.
+  defp written(limits),
+    do: Map.new(@limit_fields, &{&1, Map.get(limits, Atom.to_string(&1), "")})
+
+  # A refused save leaves the owner's words in the form they typed them in, so
+  # they fix one limit instead of writing all four again; a saved one is gone.
+  defp keep_draft(%{assigns: %{key_notice: %{tone: :error}}} = socket, id, limits),
+    do: update(socket, :key_drafts, &Map.put(&1, id, limits))
+
+  defp keep_draft(socket, id, _limits), do: update(socket, :key_drafts, &Map.delete(&1, id))
 
   defp limit_error?(%error{field: field})
        when error in [Ash.Error.Changes.Required, Ash.Error.Changes.InvalidArgument],

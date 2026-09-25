@@ -427,6 +427,35 @@ defmodule Keyfleet.KeyPairingsTest do
     assert Map.take(unchanged, @limits) == Map.take(attached, @limits)
   end
 
+  test "a request waiting for the owner has no limits to change", %{owner: owner} do
+    request = request!(agent("b"), "Operator")
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+             Keys.set_limits(request, @edited, actor: human(owner))
+
+    assert [waiting] = Keys.list_pairing_requests!(@fleet, 1)
+    assert Map.take(waiting, @limits) == Map.take(request, @limits)
+    assert waiting.limits_written_at == nil
+  end
+
+  test "an owner writes limits for the agent holding their own key", %{owner: owner} do
+    profile!(owner, "Owner agent")
+    held = Keys.request_pairing!(@fleet, 1, %{}, actor: owner)
+    assert held.limits_written_at == nil
+
+    Keys.set_limits!(held, @edited, actor: human(owner))
+
+    assert [stored] = Keys.pairing_history!(@fleet, 1)
+
+    assert %{
+             limits_money: "Spend nothing.",
+             limits_information: "Keep my name out of it.",
+             limits_outside: "Stay inside Keyfleet.",
+             limits_check_first: "Any promise to anyone.",
+             limits_written_at: %DateTime{}
+           } = Map.take(stored, @limits)
+  end
+
   test "the limits of a pairing that has ended stay as they were", %{owner: owner} do
     runner = agent("b")
     attached = attach!(runner, "Operator")

@@ -152,6 +152,50 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert Keys.current_operator!(@fleet, 1).limits_money == approved.limits_money
   end
 
+  test "a refused approval keeps the limits the owner typed", %{conn: conn, request: request} do
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    approve = "#key-approve-#{request.id}"
+
+    typed = %{
+      money: "Nothing over ten dollars.",
+      information: "Never name my employer.",
+      outside: "No new accounts anywhere.",
+      check_first: "   "
+    }
+
+    html = view |> form(approve, limits: typed) |> render_submit()
+
+    assert html =~ "Write each limit, in no more than 500 characters."
+    assert has_element?(view, "#{approve}-money", "Nothing over ten dollars.")
+    assert has_element?(view, "#{approve}-information", "Never name my employer.")
+    assert has_element?(view, "#{approve}-outside", "No new accounts anywhere.")
+    assert Keys.current_operator!(@fleet, 1) == nil
+
+    view
+    |> form(approve, limits: %{check_first: "Anything with a deadline."})
+    |> render_submit()
+
+    assert Keys.current_operator!(@fleet, 1).limits_money == "Nothing over ten dollars."
+  end
+
+  test "a refused change keeps the owner's words, not the saved limits", %{
+    conn: conn,
+    request: request
+  } do
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+
+    html =
+      view
+      |> form(@change, limits: %{money: "Only what I say.", outside: String.duplicate("o", 501)})
+      |> render_submit()
+
+    assert html =~ "Write each limit, in no more than 500 characters."
+    assert has_element?(view, "#key-limits-form-money", "Only what I say.")
+    assert has_element?(view, "#key-agent-limits dd", Keys.default_limits().money)
+  end
+
   test "an owner who leaves a limit blank is asked to write it, and nothing is approved", %{
     conn: conn,
     request: request

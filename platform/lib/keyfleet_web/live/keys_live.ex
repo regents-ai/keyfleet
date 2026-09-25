@@ -14,6 +14,10 @@ defmodule KeyfleetWeb.KeysLive do
   attr :key, :map, required: true
   attr :notice, :map, default: nil
 
+  attr :drafts, :map,
+    default: %{},
+    doc: "limits the owner typed in a save that was refused, by pairing"
+
   def page(assigns) do
     ~H"""
     <article id="key-page" class="key-page">
@@ -77,7 +81,10 @@ defmodule KeyfleetWeb.KeysLive do
               phx-submit="set_limits"
             >
               <input type="hidden" name="pairing" value={@key.operator.id} />
-              <.limit_fields id="key-limits-form" limits={written_limits(@key.operator)} />
+              <.limit_fields
+                id="key-limits-form"
+                limits={Map.get(@drafts, @key.operator.id, written_limits(@key.operator))}
+              />
               <Regent.Primitives.button type="submit">Save limits</Regent.Primitives.button>
             </.form>
           </details>
@@ -124,7 +131,10 @@ defmodule KeyfleetWeb.KeysLive do
                 phx-submit="approve_pairing"
               >
                 <input type="hidden" name="pairing" value={request.id} />
-                <.limit_fields id={"key-approve-#{request.id}"} limits={Keys.default_limits()} />
+                <.limit_fields
+                  id={"key-approve-#{request.id}"}
+                  limits={Map.get(@drafts, request.id, Keys.default_limits())}
+                />
 
                 <div class="key-request-actions">
                   <Regent.Primitives.button type="submit">
