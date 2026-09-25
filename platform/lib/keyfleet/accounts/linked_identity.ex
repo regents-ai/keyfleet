@@ -11,7 +11,7 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
 
       argument :provider, :atom,
         allow_nil?: false,
-        constraints: [one_of: [:x, :github, :farcaster, :world]]
+        constraints: [one_of: [:x, :github, :farcaster]]
 
       argument :subject, :string, allow_nil?: false
       argument :username, :string
@@ -78,7 +78,7 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
     attribute :provider, :atom do
       allow_nil? false
       public? true
-      constraints one_of: [:x, :github, :farcaster, :world]
+      constraints one_of: [:x, :github, :farcaster]
     end
 
     attribute :subject, :string, allow_nil?: false

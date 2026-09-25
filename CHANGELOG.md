@@ -40,3 +40,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   (for example `mix keyfleet.route_handoff`), and pages, titles and legal text
   say Keyfleet. The app name `keyfleet`, the database names and the
   `KEYFLEET_` settings are unchanged. Entries above keep the old spelling.
+- Brought over the template's clean-up. `make check` now also runs the CLI and
+  contract checks. Unused pictures, fonts, scripts and the old homepage pieces
+  are gone, along with the local acceptance setup and reset tasks. The route
+  handoff files are now `priv/handoff/route-catalog.*`. Sign-in uses the shared
+  Privy session from `elixir-utils`, and its error messages no longer name
+  Regent. The World ID row is gone from Account.
+- `PRIVY_VERIFICATION_KEY` is read exactly as stored, so it must hold the PEM
+  with real line breaks. Escaped `\n` text is no longer turned into line breaks.

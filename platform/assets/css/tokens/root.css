@@ -1,7 +1,6 @@
-/* The one palette the shell, Stake and Redeem stand on: the founder's Regents light and
-   Regents dark sheets, swatch for swatch. Every colour on those surfaces is one of the
-   eight swatches or a mix of exactly two of them, and nothing else states a colour.
-   The marketing page uses the same saved light/dark choice and shared semantic roles. */
+/* The one palette every surface stands on: eight swatches. Every colour is one
+   of them or a mix of exactly two, and nothing else states a colour. The
+   homepage uses the same saved light/dark choice and shared semantic roles. */
 
 /* RegentUI states one colour scheme per product, at a weight that would
    otherwise decide the document's for it, so the shell's own statement is made
@@ -49,18 +48,13 @@
   );
 
   /* The palette carries two accents and the shell reads them as two. Blue is what
-     the page points at: focus, links, the revenue share. Orange is what carries
-     value or risk: the REGENT figures, compounding, disconnecting, an error.
+     the page points at: focus and links. Orange is what carries value or risk,
+     such as disconnecting or an error.
      Dark takes both swatches raw. Light folds each into Primary only as far as
      4.5:1 on the deepest light panel needs — blue reads 4.7:1 there and orange
      4.6:1, and both clear 5:1 on Surface. */
   --ash-accent: light-dark(color-mix(in oklab, var(--palette-powder-blue) 50%, var(--palette-charcoal)), var(--palette-powder-blue));
   --ash-accent-warm: light-dark(color-mix(in oklab, var(--palette-tangerine-tango) 68%, var(--palette-charcoal)), var(--palette-tangerine-tango));
-
-  /* Collection art is a picture, not a surface: it keeps Primary as its ground in
-     both themes so a single Surface-white monogram reads on every card. */
-  --ash-art: var(--palette-charcoal);
-  --ash-art-ink: var(--color-surface);
 
   /* Behind a dialog the page is dimmed toward Primary in both themes, so the sheet
      in front of it reads the same whichever ground it was opened from. */

@@ -14,7 +14,6 @@ vi.mock("../js/auth_lazy", () => ({
   installCrossTabCsrf: vi.fn(),
   retireRefusedSession: vi.fn(),
 }))
-vi.mock("../js/hooks/home_hero", () => ({HomeHero: {}}))
 vi.mock("../js/hooks/motion", () => ({ShellMotion: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {

@@ -39,18 +39,6 @@
   margin-inline-end: 1.7rem;
 }
 
-.shell-reconnect-dialog {
-  width: min(28rem, calc(100vw - 2rem));
-  padding: clamp(1.1rem, 4vw, 1.75rem);
-  border: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
-  color: var(--ash-ink);
-}
-
-.shell-reconnect-dialog::backdrop { background: var(--ash-scrim); }
-.shell-reconnect-dialog h2 { margin: 0 0 0.75rem; font-size: 1.15rem; }
-.shell-reconnect-request { margin: 0 0 1.25rem; overflow-wrap: anywhere; }
-
 #shell-header a,
 #shell-sidebar a {
   color: inherit;
@@ -511,7 +499,7 @@ details[open] > summary .shell-chevron {
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 47.99rem) {
-  /* One row on a phone: brand, Menu, theme, account. The X, $REGENT and GitHub
+  /* One row on a phone: brand, Menu, theme, account. The X and GitHub
      links stay reachable in the footer, so the header never wraps over content. */
   #shell-header { flex-wrap: nowrap; }
   #shell-header .rl-header-links { display: none; }

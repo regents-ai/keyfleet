@@ -20,7 +20,6 @@
 .loading-skeleton--title { width: 70%; height: 1.5rem; }
 .loading-skeleton--metric { width: 80%; height: 2rem; }
 .loading-skeleton--control { height: 2.75rem; }
-.loading-skeleton--inline { display: inline-block; width: 5ch; height: 1em; vertical-align: middle; }
 
 @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
   [aria-busy="true"] .loading-skeleton { animation: loading-pulse 1.4s ease-in-out infinite alternate; }

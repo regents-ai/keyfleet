@@ -24,13 +24,6 @@ defmodule Keyfleet.Accounts.HumanAccount do
       filter expr(id == ^arg(:id))
     end
 
-    read :public_profile_source do
-      public? false
-      get? true
-      argument :id, :integer, allow_nil?: false
-      filter expr(id == ^arg(:id))
-    end
-
     create :register_verified do
       accept []
       argument :privy_did, :string, allow_nil?: false
@@ -54,7 +47,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
   end
 
   policies do
-    policy action([:by_privy_did, :register_verified, :refresh_verified, :public_profile_source]) do
+    policy action([:by_privy_did, :register_verified, :refresh_verified]) do
       authorize_if Keyfleet.Checks.SystemActor
     end
 
@@ -65,7 +58,6 @@ defmodule Keyfleet.Accounts.HumanAccount do
 
   identities do
     identity :unique_privy_user_id, [:privy_user_id]
-    identity :unique_world_human_id, [:world_human_id]
   end
 
   attributes do
@@ -73,8 +65,6 @@ defmodule Keyfleet.Accounts.HumanAccount do
     attribute :privy_user_id, :string, allow_nil?: false, sensitive?: true
     attribute :wallet_address, :string, sensitive?: true
     attribute :wallet_addresses, {:array, :string}, default: [], sensitive?: true
-    attribute :world_human_id, :string, sensitive?: true
-    attribute :world_verified_at, :utc_datetime
     attribute :display_name, :string, public?: true, constraints: [max_length: 80]
     attribute :avatar, :map
     create_timestamp :created_at

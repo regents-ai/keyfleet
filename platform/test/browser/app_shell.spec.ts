@@ -46,7 +46,7 @@ async function chooseTheme(page: Page, choice: "light" | "dark") {
   await expect(page.locator("html")).toHaveAttribute("data-theme", choice)
 }
 
-test("[U2] the ruled shell keeps one palette across pages", async ({page}) => {
+test("the ruled shell keeps one palette across pages", async ({page}) => {
   const palette: Record<string, {ground: string | null; text: string | null}> = {}
   for (const choice of ["light", "dark"] as const) {
     await chooseTheme(page, choice)
@@ -71,7 +71,7 @@ test("[U2] the ruled shell keeps one palette across pages", async ({page}) => {
   expect(palette.light).not.toEqual(palette.dark)
 })
 
-test("[U2] direct page loads seed the canonical RegentUI brand", async ({
+test("direct page loads seed the canonical RegentUI brand", async ({
   page,
   request,
 }) => {
@@ -222,13 +222,13 @@ test("the sidebar lists the four fleets, then the Account page", async ({page}) 
   await expect(page.getByRole("heading", {level: 2, name: "Sign in to see your account"})).toBeVisible()
 })
 
-test("[U2][U6] navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {
+test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   const shellInstance = await page.locator("#app-shell").getAttribute("data-shell-instance")
   await page.evaluate(() => {
-    ;(window as Window & {founderShellDocument?: object}).founderShellDocument = {}
+    ;(window as Window & {shellDocument?: object}).shellDocument = {}
     const content = document.querySelector("#route-content")
     content?.insertAdjacentHTML("beforeend", '<div style="height:2000px"></div>')
     document.querySelector("#app-shell-scroller")?.scrollTo(0, 1000)
@@ -240,7 +240,7 @@ test("[U2][U6] navigation keeps brand, document, shell identity, and starts at t
   await expect(page.locator("#app-shell")).toHaveAttribute("data-shell-instance", shellInstance ?? "")
 
   expect(
-    await page.evaluate(() => Boolean((window as Window & {founderShellDocument?: object}).founderShellDocument)),
+    await page.evaluate(() => Boolean((window as Window & {shellDocument?: object}).shellDocument)),
   ).toBe(true)
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
 

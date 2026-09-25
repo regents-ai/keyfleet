@@ -6,7 +6,7 @@ import {expect, test} from "@playwright/test"
 // and test/keyfleet_web/controllers/holding_controller_test.exs, which flip the
 // setting between requests.
 
-test("[U3] the marketing page is served with product surfaces open", async ({page, request}) => {
+test("the marketing page is served with product surfaces open", async ({page, request}) => {
   const response = await request.get("/")
   expect(response.status()).toBe(200)
   expect(response.headers()["cache-control"]).not.toContain("no-store")
@@ -15,7 +15,7 @@ test("[U3] the marketing page is served with product surfaces open", async ({pag
   await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
 })
 
-test("[U4] product routes render the shell while surfaces are open", async ({page, request}) => {
+test("product routes render the shell while surfaces are open", async ({page, request}) => {
   for (const route of ["/app/fleets/fibonacci_syndicate", "/account"]) {
     const response = await request.get(route)
     expect(response.status()).toBe(200)
@@ -26,7 +26,7 @@ test("[U4] product routes render the shell while surfaces are open", async ({pag
   }
 })
 
-test("[U3] the health check stays plain and open", async ({request}) => {
+test("the health check stays plain and open", async ({request}) => {
   const response = await request.get("/healthz")
   expect(response.status()).toBe(200)
   expect(await response.text()).toBe("ok")

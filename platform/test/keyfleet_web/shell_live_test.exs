@@ -195,7 +195,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']", "Copy")
     assert has_element?(view, ".account-wallet-list code", other)
     assert has_element?(view, ".account-details dd", "Not set")
-    assert has_element?(view, ".account-details dd", "Not verified")
 
     assert has_element?(
              view,

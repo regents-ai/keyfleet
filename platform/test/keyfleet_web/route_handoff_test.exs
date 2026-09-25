@@ -3,8 +3,8 @@ defmodule KeyfleetWeb.RouteHandoffTest do
 
   alias KeyfleetWeb.RouteCatalog
 
-  @json_path "priv/handoff/founder-shell-route-catalog.json"
-  @digest_path "priv/handoff/founder-shell-route-catalog.sha256"
+  @json_path "priv/handoff/route-catalog.json"
+  @digest_path "priv/handoff/route-catalog.sha256"
 
   test "materialized Design handoff exactly matches the route catalog owner" do
     handoff = RouteCatalog.design_handoff()

@@ -224,7 +224,7 @@ describe("lazy browser authentication", () => {
       headers: {"content-type": "application/json", "x-csrf-token": "csrf-safe"},
       body: JSON.stringify({reason: "provider_error"}),
     })
-    expect(warning).toHaveBeenCalledWith("Regent Privy sign-in failure", "provider_error")
+    expect(warning).toHaveBeenCalledWith("Privy sign-in failure", "provider_error")
   })
 
   it("reports a client-owned session diagnostic that never reached a rejecting endpoint", async () => {
@@ -246,7 +246,7 @@ describe("lazy browser authentication", () => {
         body: JSON.stringify({reason: "session_exchange"}),
       }),
     )
-    expect(warning).toHaveBeenCalledWith("Regent Privy sign-in failure", "session_exchange")
+    expect(warning).toHaveBeenCalledWith("Privy sign-in failure", "session_exchange")
   })
 
   it("does not duplicate a session diagnostic already emitted by the rejecting endpoint", async () => {
@@ -267,7 +267,7 @@ describe("lazy browser authentication", () => {
 
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(fetcher).not.toHaveBeenCalled()
-    expect(warning).toHaveBeenCalledWith("Regent Privy sign-in failure", "session_exchange")
+    expect(warning).toHaveBeenCalledWith("Privy sign-in failure", "session_exchange")
   })
 
   it("cancels an uncommitted establishment before one local deletion and blocks later writes", async () => {
@@ -621,7 +621,7 @@ describe("lazy browser authentication", () => {
       "true",
       "true",
     ])
-    expect(warning).toHaveBeenCalledWith("Regent Privy sign-in failure", "bridge_startup")
+    expect(warning).toHaveBeenCalledWith("Privy sign-in failure", "bridge_startup")
     expect(JSON.stringify(warning.mock.calls)).not.toContain("chunk unavailable")
 
     const replacementStatus = page.replaceStatus()
@@ -652,9 +652,9 @@ describe("lazy browser authentication", () => {
 
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Privy finished the wallet step, but Regent couldn’t finish sign-in. Reload this page or contact support.",
+      "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
     )
-    expect(warning).toHaveBeenLastCalledWith("Regent Privy sign-in failure", "session_exchange")
+    expect(warning).toHaveBeenLastCalledWith("Privy sign-in failure", "session_exchange")
   })
 
   it("loads Privy for the first anonymous wallet connection without starting sign in", async () => {
@@ -755,7 +755,7 @@ describe("lazy browser authentication", () => {
     await vi.waitFor(() => expect(startPrivyBridge).toHaveBeenCalledOnce())
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Privy finished the wallet step, but Regent couldn’t finish sign-in. Reload this page or contact support.",
+      "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
     )
   })
 

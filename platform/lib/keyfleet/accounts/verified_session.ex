@@ -6,7 +6,7 @@ defmodule Keyfleet.Accounts.VerifiedSession do
 
   @social_providers [:x, :github, :farcaster]
 
-  def establish(%Keyfleet.VerifiedPrivyIdentity{privy_user_id: did} = verified)
+  def establish(%RegentPrivy.Session{privy_user_id: did} = verified)
       when is_binary(did) and did != "" do
     actor = %System{}
 
@@ -154,10 +154,7 @@ defmodule Keyfleet.Accounts.VerifiedSession do
 
   defp remove_missing_socials(existing, token_providers, actor) do
     existing
-    |> Enum.filter(
-      &(&1.provider in @social_providers and
-          not MapSet.member?(token_providers, &1.provider))
-    )
+    |> Enum.reject(&MapSet.member?(token_providers, &1.provider))
     |> Enum.reduce_while(:ok, fn identity, :ok ->
       case Accounts.remove_linked_identity(identity, actor: actor) do
         {:ok, _identity} -> {:cont, :ok}

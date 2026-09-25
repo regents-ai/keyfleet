@@ -864,7 +864,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "verified registration is idempotent under concurrent attempts" do
-    verified = %Keyfleet.VerifiedPrivyIdentity{
+    verified = %RegentPrivy.Session{
+      app_id: "test-app",
       privy_user_id: "did:privy:concurrent",
       session_id: "concurrent-session",
       wallet_address: "0x3333333333333333333333333333333333333333",

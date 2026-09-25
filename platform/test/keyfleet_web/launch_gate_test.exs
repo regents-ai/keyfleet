@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   defp close_surfaces, do: Application.put_env(:keyfleet, :app_surfaces, false)
   defp open_surfaces, do: Application.put_env(:keyfleet, :app_surfaces, true)
 
-  test "[U1] one switch is open by default and reads both explicit states" do
+  test "one switch is open by default and reads both explicit states" do
     Application.delete_env(:keyfleet, :app_surfaces)
     assert LaunchGate.app_surfaces_enabled?()
 
@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     refute LaunchGate.app_surfaces_enabled?()
   end
 
-  test "[U1] the switch takes effect between requests of one running build" do
+  test "the switch takes effect between requests of one running build" do
     assert get(build_conn(), "/account").status == 200
 
     close_surfaces()
@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert get(build_conn(), "/account").status == 200
   end
 
-  test "[U1] production refuses to boot without an explicit setting, and records the state" do
+  test "production refuses to boot without an explicit setting, and records the state" do
     original = System.get_env("KEYFLEET_APP_SURFACES")
     on_exit(fn -> restore_setting(original) end)
     System.delete_env("KEYFLEET_APP_SURFACES")
@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert log =~ "App surfaces disabled"
   end
 
-  test "[U2] every product route answers 503 with no product markup and no caching" do
+  test "every product route answers 503 with no product markup and no caching" do
     close_surfaces()
 
     for path <- @gated_shell_paths do
@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
   end
 
-  test "[U2] gated pages and JSON answers carry the same browser security headers as an open page" do
+  test "gated pages and JSON answers carry the same browser security headers as an open page" do
     open = get(build_conn(), "/account")
     close_surfaces()
 
@@ -83,7 +83,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert secure_headers(open) != %{}
   end
 
-  test "[U2] session and API JSON endpoints answer one plain 503 line" do
+  test "session and API JSON endpoints answer one plain 503 line" do
     close_surfaces()
 
     for conn <- [
@@ -96,7 +96,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
   end
 
-  test "[U3] the marketing page, health check and static files are untouched by the gate" do
+  test "the marketing page, health check and static files are untouched by the gate" do
     close_surfaces()
     home = get(build_conn(), "/")
 
@@ -118,7 +118,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert get(build_conn(), "/terms").status == 200
   end
 
-  test "[U2] signing out stays available while every other session endpoint closes" do
+  test "signing out stays available while every other session endpoint closes" do
     close_surfaces()
 
     assert json_response(delete(build_conn(), "/auth/privy/session"), 200) == %{"ok" => true}
@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
              %{"error" => @closed_message}
   end
 
-  test "[U2] a mount arriving over the socket is sent to the marketing page instead" do
+  test "a mount arriving over the socket is sent to the marketing page instead" do
     close_surfaces()
 
     assert {:halt, halted} =
@@ -137,7 +137,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert halted.redirected == {:redirect, %{to: "/", status: 302}}
   end
 
-  test "[U2] a page open when the gate closes cannot keep browsing product routes", %{conn: conn} do
+  test "a page open when the gate closes cannot keep browsing product routes", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 
     close_surfaces()

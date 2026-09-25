@@ -13,11 +13,14 @@ Put the real local values in the ignored `.env.local`:
 
 ```dotenv
 export PRIVY_APP_ID='YOUR_PRIVY_APP_ID'
-export PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----'
+export PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----'
 ```
 
-`PRIVY_VERIFICATION_KEY` is Privy's PEM-encoded ES256 verification public key, not the Privy app
-secret. Native multiline PEM and one-line `\n`-escaped values are both accepted.
+`PRIVY_VERIFICATION_KEY` is Privy's ES256 verification public key, not the Privy app secret. Paste
+the PEM exactly as Privy shows it, with real line breaks; `\n` written out as two characters is not
+a line break and the key will not load.
 
 ## Before the first sign in
 

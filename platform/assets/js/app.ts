@@ -24,11 +24,8 @@ import {CopyText} from "./hooks/copy_text"
 import {FleetAction} from "./hooks/fleet_action"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
-import {HomeField} from "./hooks/home_field"
-import {HomeHero} from "./hooks/home_hero"
 import {HomePrism} from "./hooks/home_prism"
 import {ShellMotion} from "./hooks/motion"
-import {InfoDialog} from "./hooks/info_dialog"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog} from "./hooks/modal_dialog"
 import {VerifiedConnections} from "./hooks/verified_connections"
@@ -330,10 +327,7 @@ const hooks = {
   FleetAction,
   FleetPreview,
   HolographicCard,
-  HomeField,
-  HomeHero,
   HomePrism,
-  InfoDialog,
   KeyMap,
   ModalDialog,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),

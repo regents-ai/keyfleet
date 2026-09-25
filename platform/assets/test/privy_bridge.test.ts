@@ -927,7 +927,7 @@ describe("Privy session bridge", () => {
     callbacks.onError?.(malicious as never)
 
     expect(showFailure).toHaveBeenCalledWith("provider")
-    expect(warning).toHaveBeenCalledWith("Regent Privy sign-in failure", "provider_error")
+    expect(warning).toHaveBeenCalledWith("Privy sign-in failure", "provider_error")
     expect(JSON.stringify(warning.mock.calls)).not.toContain(malicious)
   })
 

@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.HoldingControllerTest do
     {:ok, document: build_conn() |> get("/account") |> html_response(503)}
   end
 
-  test "[U5] the holding page says the area is not open yet and sends people home", %{
+  test "the holding page says the area is not open yet and sends people home", %{
     document: document
   } do
     assert copy(document) =~ "Not open yet"
@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.HoldingControllerTest do
     assert copy(document) =~ "homepage"
   end
 
-  test "[U5] the only control on the holding page goes to the marketing page", %{
+  test "the only control on the holding page goes to the marketing page", %{
     document: document
   } do
     page = LazyHTML.from_document(document)
@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.HoldingControllerTest do
     assert page |> LazyHTML.query("main button, main form, main input") |> Enum.count() == 0
   end
 
-  test "[U2] the holding page is the site's own page, not a bare fragment", %{document: document} do
+  test "the holding page is the site's own page, not a bare fragment", %{document: document} do
     assert document =~ "<!DOCTYPE html>"
     assert document =~ ~s(<meta name="csrf-token")
 

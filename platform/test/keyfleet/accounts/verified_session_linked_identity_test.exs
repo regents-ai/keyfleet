@@ -1,7 +1,7 @@
 defmodule Keyfleet.Accounts.VerifiedSessionLinkedIdentityTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{Accounts, VerifiedPrivyIdentity}
+  alias Keyfleet.Accounts
   alias Keyfleet.Accounts.VerifiedSession
   alias Keyfleet.Actors.{Human, System}
 
@@ -18,31 +18,6 @@ defmodule Keyfleet.Accounts.VerifiedSessionLinkedIdentityTest do
 
     assert {:ok, []} =
              Accounts.list_my_linked_identities(actor: %Human{human_account_id: account.id})
-  end
-
-  test "session refresh leaves World identities untouched" do
-    verified = verified_identity("preserve", [social(:github, "github-7", "regents-ai")])
-    assert {:ok, account, []} = VerifiedSession.establish(verified)
-
-    assert {:ok, _identity} =
-             Accounts.upsert_linked_identity(
-               :world,
-               "world-nullifier",
-               "world-nullifier",
-               nil,
-               DateTime.utc_now(),
-               %{},
-               account.id,
-               actor: %System{}
-             )
-
-    assert {:ok, ^account, []} =
-             VerifiedSession.establish(%{verified | linked_socials: []})
-
-    assert {:ok, identities} =
-             Accounts.list_linked_identities_for_account(account.id, actor: %System{})
-
-    assert Enum.map(identities, & &1.provider) == [:world]
   end
 
   test "a subject owned by another account is skipped without ending the session" do
@@ -147,7 +122,8 @@ defmodule Keyfleet.Accounts.VerifiedSessionLinkedIdentityTest do
 
     wallet = "0x" <> String.pad_leading(wallet_suffix, 40, "0")
 
-    %VerifiedPrivyIdentity{
+    %RegentPrivy.Session{
+      app_id: "test-app",
       privy_user_id: "did:privy:linked-session:#{suffix}:#{wallet_suffix}",
       session_id: "session-#{suffix}",
       wallet_address: wallet,

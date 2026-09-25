@@ -9,22 +9,11 @@ config :sentry,
   release: System.get_env("SENTRY_RELEASE"),
   environment_name: System.get_env("SENTRY_ENVIRONMENT", to_string(config_env()))
 
-privy_verification_key =
-  case System.get_env("PRIVY_VERIFICATION_KEY") do
-    nil ->
-      nil
-
-    value ->
-      value
-      |> String.replace("\\r\\n", "\n")
-      |> String.replace("\\n", "\n")
-  end
-
 config :keyfleet, :privy,
   app_id: System.get_env("PRIVY_APP_ID"),
-  verification_key: privy_verification_key
+  verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
 
-# The browser acceptance server signs in through a deterministic test-only
+# The browser test server signs in through a deterministic test-only
 # verifier. Production can never take this branch.
 if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   config :keyfleet, :privy, app_id: "browser-test-public-id", verification_key: nil

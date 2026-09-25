@@ -15,7 +15,7 @@ const state = (overrides: Partial<ShellState> = {}): ShellState => ({
 })
 
 describe("shell brand reconciliation", () => {
-  it("[U2] maps shell applications to the canonical RegentUI brands", () => {
+  it("maps shell applications to the canonical RegentUI brands", () => {
     expect(brandForShellApp("product")).toBe("platform")
     expect(brandForShellApp(undefined)).toBe("platform")
   })

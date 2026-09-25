@@ -1,10 +1,10 @@
 defmodule Mix.Tasks.Keyfleet.RouteHandoff do
-  @shortdoc "Writes or checks the generated founder-shell route handoff"
+  @shortdoc "Writes or checks the generated route handoff"
 
   use Mix.Task
 
-  @json_path "priv/handoff/founder-shell-route-catalog.json"
-  @digest_path "priv/handoff/founder-shell-route-catalog.sha256"
+  @json_path "priv/handoff/route-catalog.json"
+  @digest_path "priv/handoff/route-catalog.sha256"
 
   @impl Mix.Task
   def run(args) do
@@ -22,10 +22,10 @@ defmodule Mix.Tasks.Keyfleet.RouteHandoff do
     stale = Enum.reject(expected, fn {path, contents} -> File.read(path) == {:ok, contents} end)
 
     if stale == [] do
-      IO.puts("Founder-shell route handoff is current")
+      IO.puts("Route handoff is current")
     else
       paths = Enum.map_join(stale, ", ", &elem(&1, 0))
-      Mix.raise("Founder-shell route handoff is stale: #{paths}")
+      Mix.raise("Route handoff is stale: #{paths}")
     end
   end
 

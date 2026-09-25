@@ -3,7 +3,6 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   alias Keyfleet.AccessContext
   alias Keyfleet.Accounts.{RequestRateLimiter, SessionAuthority, VerifiedSession}
-  alias Keyfleet.Privy
 
   require Logger
 
@@ -53,7 +52,8 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   def create(conn, _untrusted_params) do
     with {:ok, pair} <- session_pair(conn),
-         {:ok, verified} <- verifier().verify_session_pair(pair),
+         {:ok, verified} <-
+           verifier().verify(pair, Application.get_env(:keyfleet, :privy, [])),
          {:ok, account, identity_conflicts} <- establish(verified) do
       bind(conn, account, identity_conflicts)
     else
@@ -305,7 +305,7 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   defp drop_session(conn), do: configure_session(conn, drop: true)
 
-  defp verifier, do: Application.get_env(:keyfleet, :privy_verifier, Privy)
+  defp verifier, do: Application.get_env(:keyfleet, :privy_verifier, RegentPrivy.Session)
 
   defp session_payload(nil),
     do: %{

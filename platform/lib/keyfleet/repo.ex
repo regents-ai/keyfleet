@@ -6,6 +6,9 @@ defmodule Keyfleet.Repo do
   # that read tables owned elsewhere name their schema themselves.
   @schema "keyfleet_app"
 
+  # Keep this at 14 even though the server runs 17: at 17 AshPostgres writes
+  # upserts as MERGE statements, which drop the schema prefix and fail with
+  # "relation ... does not exist".
   def min_pg_version, do: %Version{major: 14, minor: 0, patch: 0}
   def installed_extensions, do: ["ash-functions"]
   def default_prefix, do: @schema

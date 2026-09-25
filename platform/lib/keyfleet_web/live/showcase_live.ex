@@ -844,7 +844,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
     config = Application.get_env(:keyfleet, :privy, [])
 
     cond do
-      Application.get_env(:keyfleet, :privy_verifier, Keyfleet.Privy) != Keyfleet.Privy ->
+      Application.get_env(:keyfleet, :privy_verifier, RegentPrivy.Session) !=
+          RegentPrivy.Session ->
         :fixture
 
       Enum.all?([:app_id, :verification_key], fn key ->

@@ -62,7 +62,6 @@ defmodule Keyfleet.MixProject do
            "REGENT_SIWA_PATH",
            Path.join(shared, "elixir-utils/siwa/siwa-elixir/apps/siwa")
          )},
-      {:picosat_elixir, "~> 0.2.3"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},

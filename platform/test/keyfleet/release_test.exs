@@ -5,8 +5,6 @@ defmodule Keyfleet.ReleaseTest do
 
   import ExUnit.CaptureIO
 
-  alias Keyfleet.LocalDatabaseFixture
-  alias Keyfleet.LocalDatabaseFixture.PostgresAdapter
   alias Keyfleet.Release
 
   @moduletag timeout: 300_000
@@ -307,15 +305,22 @@ defmodule Keyfleet.ReleaseTest do
   # every case that points the release commands somewhere else takes it down
   # first and puts it back exactly as it was.
   defp disposable_database do
-    run_id = "regent2e7_#{System.unique_integer([:positive])}"
-    config = LocalDatabaseFixture.local_acceptance_config!(run_id)
+    config = [
+      hostname: "127.0.0.1",
+      port: 5432,
+      database: "keyfleet_release_#{System.unique_integer([:positive])}",
+      username: System.fetch_env!("USER"),
+      password: nil,
+      pool_size: 2
+    ]
+
     previous = Application.get_env(:keyfleet, Keyfleet.Repo)
 
     :ok = Supervisor.terminate_child(Keyfleet.Supervisor, Keyfleet.Repo)
-    :ok = PostgresAdapter.create(config)
+    :ok = Ecto.Adapters.Postgres.storage_up(config)
 
     on_exit(fn ->
-      PostgresAdapter.drop(config)
+      Ecto.Adapters.Postgres.storage_down(config)
       Application.put_env(:keyfleet, Keyfleet.Repo, previous)
       {:ok, _pid} = Supervisor.restart_child(Keyfleet.Supervisor, Keyfleet.Repo)
       Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual)
@@ -335,7 +340,10 @@ defmodule Keyfleet.ReleaseTest do
 
   defp migrations_directory(files) do
     directory =
-      Path.join(System.tmp_dir!(), "regent-2e7-migrations-#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "keyfleet-release-migrations-#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(directory)
     on_exit(fn -> File.rm_rf!(directory) end)

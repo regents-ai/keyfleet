@@ -123,13 +123,6 @@ defmodule KeyfleetWeb.AccountLive do
               <dt>Display name</dt>
               <dd>{@account.display_name || "Not set"}</dd>
             </div>
-            <div>
-              <dt>World ID</dt>
-              <dd :if={@account.world_verified_at}>
-                Verified on {date(@account.world_verified_at)}
-              </dd>
-              <dd :if={is_nil(@account.world_verified_at)}>Not verified</dd>
-            </div>
           </dl>
         </section>
 
@@ -168,6 +161,4 @@ defmodule KeyfleetWeb.AccountLive do
     do: PublicIdentity.short_wallet(wallet)
 
   defp short_wallet(_account), do: nil
-
-  defp date(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
 end

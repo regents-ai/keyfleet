@@ -1,2 +1,7 @@
 packages:
   - "packages/keyfleet-cli"
+
+# Vite 7 still asks for an esbuild with a published advisory; the floor is what
+# the lockfile and the advisory check read.
+overrides:
+  esbuild: ">=0.28.1"

@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     :ok
   end
 
-  test "[U2] only the public operational routes, marketing page and sign-out stay open" do
+  test "only the public operational routes, marketing page and sign-out stay open" do
     still_open =
       for route <- routes(),
           conn = request(route),
@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
            ]
   end
 
-  test "[U2] every product LiveView mounts through the gate" do
+  test "every product LiveView mounts through the gate" do
     ungated =
       for route <- routes(),
           live_view = route.metadata[:phoenix_live_view],

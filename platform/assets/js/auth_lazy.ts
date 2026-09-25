@@ -508,7 +508,7 @@ export function showAccountAuthFailure(
           provider:
             "Your wallet responded, but Privy couldn’t finish sign-in. Reload this page before trying again.",
           session:
-            "Privy finished the wallet step, but Regent couldn’t finish sign-in. Reload this page or contact support.",
+            "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
           startup: "Sign-in is unavailable on this page. Reload it or contact support.",
         }[signInFailure]
       : {
@@ -557,7 +557,7 @@ export function reportSignInFailure(
   failure: SignInFailureDiagnostic,
   fetcher: typeof fetch = fetch,
 ): void {
-  console.warn("Regent Privy sign-in failure", failure)
+  console.warn("Privy sign-in failure", failure)
 
   void (async () => {
     if (!csrfStateIsCurrent()) await adoptUnreadRenewal(fetcher)
@@ -912,7 +912,7 @@ export function installAccountAuthLazyLoader(
       const diagnostic = classified?.diagnostic ?? "bridge_startup"
 
       if (classified?.diagnosticReported) {
-        console.warn("Regent Privy sign-in failure", diagnostic)
+        console.warn("Privy sign-in failure", diagnostic)
       } else {
         reportSignInFailure(diagnostic)
       }
@@ -1002,7 +1002,7 @@ export function installAccountAuthLazyLoader(
         showLoadFailure("sign-out", undefined)
         return
       }
-      // Disconnect is one command. The Regent session is gone; every wallet
+      // Disconnect is one command. The site session is gone; every wallet
       // Privy holds is released here, before this document is replaced, so the
       // wallet apps are asked while the page that asked them still exists. They
       // get the same window the provider sign out gets, and the page goes
