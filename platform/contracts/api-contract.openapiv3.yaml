@@ -2151,7 +2151,7 @@ components:
                   id: {$ref: "#/components/schemas/WorkspaceId"}
                   title: {type: [string, "null"], maxLength: 200}
                   progress: {type: [string, "null"], maxLength: 32}
-                  next_step: {type: [string, "null"], maxLength: 240, description: "The start of the task's next step, or its deliverable"}
+                  next_step: {type: [string, "null"], maxLength: 1000, description: "The task's next step, or null when it has none"}
                   version: {type: integer, minimum: 1, description: Send it as expected_version to change the task}
     ProposalChanges:
       type: object

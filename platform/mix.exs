@@ -71,6 +71,7 @@ defmodule Keyfleet.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:sentry, "~> 13.0"},
       {:jason, "~> 1.2"},
+      {:yaml_elixir, "~> 2.12"},
       {:ex_secp256k1, "~> 0.8.0"},
       {:ex_keccak, "~> 0.7.8"},
       {:req, "== 0.6.2"},

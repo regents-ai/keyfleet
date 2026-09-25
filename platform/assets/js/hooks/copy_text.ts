@@ -5,15 +5,21 @@ type CopyTextHook = Hook & {
   cleanup?: () => void
 }
 
-/** A button that copies its `data-copy-text` and says so for a moment. */
+/**
+ * A button that copies its `data-copy-text` and says so for a moment. With
+ * `data-copy-status` naming a status element, it also says "Copied" there, for
+ * screen readers.
+ */
 export const CopyText: Hook = {
   mounted(this: CopyTextHook) {
     const button = this.el
     const label = button.textContent
+    const status = document.getElementById(button.dataset.copyStatus ?? "")
     let timer: number | undefined
 
     const restore = () => {
       button.textContent = label
+      if (status) status.textContent = ""
       timer = undefined
     }
     const click = async () => {
@@ -25,6 +31,7 @@ export const CopyText: Hook = {
         return
       }
       button.textContent = "Copied"
+      if (status) status.textContent = "Copied"
       window.clearTimeout(timer)
       timer = window.setTimeout(restore, 1500)
     }

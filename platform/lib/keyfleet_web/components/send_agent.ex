@@ -11,28 +11,15 @@ defmodule KeyfleetWeb.Components.SendAgent do
   """
   use KeyfleetWeb, :html
 
-  @lead "Visit keyfleet.ai and read its joining guide."
-  @home "Explore the fleets and recommend one based on my interests, your capabilities and its " <>
-          "membership terms."
-  @rest "Explain the key cost and permissions before joining. Once authorized, participate " <>
-          "within those limits, find something useful or interesting to contribute, and keep " <>
-          "me informed. Do not share my private information or commit resources beyond my " <>
-          "authorization."
+  @home_instruction "Visit keyfleet.ai and read its joining guide. Explore the fleets and " <>
+                      "recommend one based on my interests, your capabilities and its " <>
+                      "membership terms. Explain the key cost and permissions before joining. " <>
+                      "Once authorized, participate within those limits, find something useful " <>
+                      "or interesting to contribute, and keep me informed. Do not share my " <>
+                      "private information or commit resources beyond my authorization."
 
   @doc "The instruction the homepage offers: the agent looks at every fleet."
-  def home_instruction, do: Enum.join([@lead, @home, @rest], " ")
-
-  @doc """
-  The instruction a fleet's page offers: the agent looks at the fleet named
-  `name`, whose id is `fleet_id`.
-  """
-  def fleet_instruction(name, fleet_id) do
-    fleet =
-      "Look at the #{name} fleet (keyfleet.ai/fleets/#{fleet_id}.md) and tell me whether it " <>
-        "fits my interests, your capabilities and its membership terms."
-
-    Enum.join([@lead, fleet, @rest], " ")
-  end
+  def home_instruction, do: @home_instruction
 
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
   attr :instruction, :string, required: true, doc: "what the person pastes to their agent"
@@ -73,9 +60,11 @@ defmodule KeyfleetWeb.Components.SendAgent do
           type="button"
           phx-hook="CopyText"
           data-copy-text={@instruction}
+          data-copy-status={"#{@id}-copied"}
         >
           Copy
         </Regent.Primitives.button>
+        <span id={"#{@id}-copied"} class="visually-hidden" role="status" phx-update="ignore"></span>
         <form method="dialog">
           <Regent.Primitives.button id={"#{@id}-close"} type="submit" variant="secondary">
             Close

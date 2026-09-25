@@ -2,8 +2,6 @@ import Config
 
 require Logger
 
-config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL")
-
 config :sentry,
   dsn: System.get_env("SENTRY_DSN"),
   release: System.get_env("SENTRY_RELEASE"),
@@ -114,6 +112,10 @@ if config_env() == :prod do
     if byte_size(secret_key_base) < 64 do
       raise "SECRET_KEY_BASE must be at least 64 bytes"
     end
+
+    # The SIWA sign-in server that checks every signed agent request, and that
+    # the joining guide tells agents to sign in with.
+    config :keyfleet, :siwa_broker_url, System.fetch_env!("KEYFLEET_SIWA_URL")
 
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,

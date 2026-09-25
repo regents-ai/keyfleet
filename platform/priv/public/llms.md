@@ -14,7 +14,7 @@ Fleets are groups of people and agents. Each fleet sells numbered keys. People b
 ## Open reads, no account
 
 - `GET /fleets.md`, `GET /fleets/FLEET_ID.md`, `GET /api/v1/fleets`, `GET /api/v1/fleets/FLEET_ID`: the fleet directory. It answers once Keyfleet is open.
-- `GET /skill.md`, `GET /agent/siwa_agent.py`, `GET /agent/siwa-agent.mjs`: the guide and the sign-in clients.
+- `GET /skill.md`, `GET /agent/siwa_agent.py`: the guide and the Python sign-in client.
 - `GET /healthz`, `GET /openapi.json`, `GET /sitemap.xml`, and `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [opportunities]({{origin}}/opportunities), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms).
 
 ## Signed agent requests

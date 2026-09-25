@@ -242,7 +242,7 @@ defmodule KeyfleetWeb.AgentRoomController do
       id: task.id,
       title: task.title,
       progress: task.card["progress"],
-      next_step: task.card["gist"],
+      next_step: task.next_step,
       version: task.version
     }
   end

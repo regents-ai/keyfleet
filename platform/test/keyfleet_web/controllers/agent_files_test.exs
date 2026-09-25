@@ -3,20 +3,14 @@ defmodule KeyfleetWeb.AgentFilesTest do
 
   @lock "priv/agent/clients.lock" |> File.read!() |> Jason.decode!()
 
-  test "each sign-in client is served with the digest the lock and the guide give it",
+  test "the sign-in client is served with the digest the lock and the guide give it",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)
+    served = build_conn() |> get("/agent/siwa_agent.py") |> response(200)
+    hex = Base.encode16(:crypto.hash(:sha256, served), case: :lower)
 
-    for {path, file} <- [
-          {"/agent/siwa_agent.py", "siwa_agent.py"},
-          {"/agent/siwa-agent.mjs", "siwa-agent.mjs"}
-        ] do
-      served = build_conn() |> get(path) |> response(200)
-      hex = Base.encode16(:crypto.hash(:sha256, served), case: :lower)
-
-      assert @lock["files"][file] == "sha256:" <> hex
-      assert guide =~ hex
-    end
+    assert @lock["files"] == %{"siwa_agent.py" => "sha256:" <> hex}
+    assert guide =~ hex
   end
 
   test "the guide is the same at both of its addresses, with every placeholder filled in",

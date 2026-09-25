@@ -1,7 +1,6 @@
 {
-  "commit": "2a7c853e7973697e960b5ef9807e0d13b5ad777e",
+  "commit": "3e782153c94f1bd07a0941149ddbe5517d05e603",
   "files": {
-    "siwa-agent.mjs": "sha256:83e452fe48e7cd6fbe2f825a980667deda8a2062b0e2ba484ee0d07ee464ebb7",
     "siwa_agent.py": "sha256:d0db5237b4f6d3aa76ec165ebf55cf929021e5651dc50101ea101423b793d9a3"
   },
   "source": "elixir-utils"

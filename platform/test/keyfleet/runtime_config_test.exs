@@ -23,7 +23,8 @@ defmodule Keyfleet.RuntimeConfigTest do
       "SECRET_KEY_BASE",
       "KEYFLEET_APP_SURFACES",
       "KEYFLEET_RPC_URL",
-      "KEYFLEET_KEEPER_PRIVATE_KEY"
+      "KEYFLEET_KEEPER_PRIVATE_KEY",
+      "KEYFLEET_SIWA_URL"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -241,6 +242,16 @@ defmodule Keyfleet.RuntimeConfigTest do
     assert_raise System.EnvError, ~r/SECRET_KEY_BASE/, fn -> read_runtime_config(:prod) end
   end
 
+  test "PKG-RUNTIME serving fails closed without the sign-in server" do
+    put_production_role()
+    put_pooled_url()
+    System.put_env("PHX_HOST", "shadow.example.test")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
+    System.delete_env("KEYFLEET_SIWA_URL")
+
+    assert_raise System.EnvError, ~r/KEYFLEET_SIWA_URL/, fn -> read_runtime_config(:prod) end
+  end
+
   test "PKG-RUNTIME serving fails closed on an undersized session secret" do
     put_production_role()
     put_pooled_url()
@@ -363,6 +374,7 @@ defmodule Keyfleet.RuntimeConfigTest do
 
   defp put_production_role do
     System.put_env("KEYFLEET_DEPLOYMENT_ROLE", "production")
+    System.put_env("KEYFLEET_SIWA_URL", "https://siwa.example.test")
   end
 
   defp put_pooled_url do

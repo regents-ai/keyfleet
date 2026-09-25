@@ -112,7 +112,7 @@ defmodule Keyfleet.Graph.Object do
                 sort: [changed_seq: :desc],
                 limit: 20,
                 select: [:fleet_id, :id, :type, :version],
-                load: [:title, :card]
+                load: [:title, :card, :next_step]
               )
     end
 
@@ -207,6 +207,9 @@ defmodule Keyfleet.Graph.Object do
 
   calculations do
     calculate :title, :string, expr(fragment("left(? ->> 'title', 200)", data)), public?: true
+
+    # A task's next step as its author wrote it; nothing for any other object.
+    calculate :next_step, :string, expr(fragment("? ->> 'next_step'", data)), public?: true
 
     # A goal's first open question, the one it most needs answered.
     calculate :first_open_question,

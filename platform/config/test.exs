@@ -12,6 +12,10 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 
 config :keyfleet, :privy_verifier, Keyfleet.TestPrivyVerifier
+
+# The SIWA sign-in server agents use. The agent API tests start their own and
+# point this at it; a browser test server may name a local one.
+config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://127.0.0.1:4100")
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.StubNode, receipt_poll_ms: 0
 

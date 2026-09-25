@@ -35,7 +35,6 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/.well-known/skills/keyfleet/SKILL.md"},
              {:get, "/.well-known/skills/index.json"},
              {:get, "/agent/siwa_agent.py"},
-             {:get, "/agent/siwa-agent.mjs"},
              {:get, "/metadata/:slot/:token_id"},
              {:get, "/docs"},
              {:get, "/about"},

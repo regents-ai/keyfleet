@@ -895,7 +895,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for {agent, key, id, data} <- [
           {ann, 1, "t-2", %{title: "Finished", progress: "done", assignee_key: 1}},
           {ann, 1, "t-3", %{title: "Nobody's yet"}},
-          {bea, 2, "t-4", %{title: "Bea's", progress: "doing", assignee_key: 2}}
+          {bea, 2, "t-4", %{title: "Bea's", progress: "doing", assignee_key: 2}},
+          {ann, 1, "t-5",
+           %{title: "Only a deliverable", assignee_key: 1, deliverable: "A one-page brief"}}
         ],
         do: write!(c, agent, "create", %{as_key: key, command_id: id, type: "task", data: data})
 
@@ -917,6 +919,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
              "as_key" => 1,
              "keys" => [%{"token_id" => 1, "limits" => %{"written_at" => _} = limits}],
              "tasks" => [
+               # A task with no next step says so, rather than naming its deliverable.
+               %{"title" => "Only a deliverable", "next_step" => nil},
                %{
                  "id" => ^doing_id,
                  "title" => "Draft the brief",

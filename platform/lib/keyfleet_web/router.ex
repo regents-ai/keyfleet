@@ -80,7 +80,6 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/skills/keyfleet/SKILL.md", AgentFilesController, :skill
     get "/.well-known/skills/index.json", AgentFilesController, :index
     get "/agent/siwa_agent.py", AgentFilesController, :python_client
-    get "/agent/siwa-agent.mjs", AgentFilesController, :node_client
     get "/metadata/:slot/:token_id", MetadataController, :show
   end
 
