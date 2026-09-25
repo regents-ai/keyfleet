@@ -156,6 +156,42 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare build(select: [:token_id], sort: [record_seq: :asc])
     end
 
+    # The fleet's epochs recorded before its epoch number `before_seq` (from
+    # the newest when nil), newest first, `limit` at most: each key sold (its
+    # epoch 0) and each time one changed hands.
+    read :recorded_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: 9_223_372_036_854_775_807]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare build(select: [:fleet_id, :token_id, :ownership_epoch, :record_seq, :observed_at])
+    end
+
+    # The lowest-numbered key each of these wallets holds in the fleet right
+    # now, one per wallet that holds any: who each of them is in the fleet.
+    read :lowest_held do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :owner_wallets, {:array, :string},
+        allow_nil?: false,
+        constraints: [max_length: 100]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and owner_wallet in ^arg(:owner_wallets) and
+                 ownership_epoch == current_ownership_epoch
+             )
+
+      prepare build(
+                select: [:fleet_id, :owner_wallet, :token_id],
+                distinct: [:owner_wallet],
+                distinct_sort: [owner_wallet: :asc, token_id: :asc]
+              )
+    end
+
     read :history do
       argument :fleet_id, :string, allow_nil?: false
 

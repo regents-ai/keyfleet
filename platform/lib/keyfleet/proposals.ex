@@ -35,6 +35,14 @@ defmodule Keyfleet.Proposals do
         args: [:fleet_id, :from_block, :to_block]
 
       define :launches_without_envelope, action: :launches_without_envelope, args: [:fleet_id]
+
+      define :proposals_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
+
+      define :proposals_closed_before,
+        action: :closed_before,
+        args: [:fleet_id, :before_at, :before_number, :limit]
     end
 
     resource Keyfleet.Proposals.LaunchEnvelope do
@@ -47,6 +55,10 @@ defmodule Keyfleet.Proposals do
       define :votes_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :votes_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
     end
 
     resource Keyfleet.Proposals.Execution do
@@ -55,6 +67,10 @@ defmodule Keyfleet.Proposals do
       define :executions_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :executions_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
     end
   end
 

@@ -27,6 +27,12 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :from_block, :to_block]
 
       define :epochs_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+
+      define :epochs_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
+
+      define :lowest_keys_held, action: :lowest_held, args: [:fleet_id, :owner_wallets]
     end
 
     resource Keyfleet.Keys.KeyReveal do
@@ -60,6 +66,18 @@ defmodule Keyfleet.Keys do
 
       define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
       define :keys_run_in_fleet, action: :run_in_fleet, args: [:fleet_id]
+
+      define :arrivals_before,
+        action: :arrivals_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
+      define :departures_before,
+        action: :departures_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
+      define :runs_elsewhere,
+        action: :runs_elsewhere,
+        args: [:fleet_id, :agent_profile_ids, :after]
 
       define :my_open_request,
         action: :my_open_request,

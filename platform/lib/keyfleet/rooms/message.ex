@@ -242,14 +242,8 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare build(load: [:room, :agent_profile])
 
-      prepare fn query, _context ->
-        Ash.Query.before_action(query, fn query ->
-          query
-          |> Ash.Query.unset([:sort, :limit, :offset])
-          |> Ash.Query.sort(inserted_at: :desc, seq: :desc, id: :desc)
-          |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
-        end)
-      end
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [inserted_at: :desc, id: :asc], before: []}
     end
 
     # The fleet's newest posts in its rooms, newest first, for the fleet
@@ -265,14 +259,42 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare build(load: [:room, :agent_profile])
 
-      prepare fn query, _context ->
-        Ash.Query.before_action(query, fn query ->
-          query
-          |> Ash.Query.unset([:sort, :limit, :offset])
-          |> Ash.Query.sort(inserted_at: :desc, seq: :desc, id: :desc)
-          |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
-        end)
-      end
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [inserted_at: :desc, id: :asc], before: []}
+    end
+
+    # The fleet's lines in its rooms older than one line, newest first, for
+    # the fleet's activity: posts and namings, without the posts written to
+    # keys' threads. Ties in time come in id order. Each line comes with its
+    # room and author but only the start of its words. It reads the fleet's
+    # lines index (`messages_fleet_lines_index`) from the given line down.
+    read :fleet_lines_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec
+      argument :before_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment("? IN ('post', 'room_named')", kind) and room.kind != :key
+             )
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [inserted_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare build(
+                select: [
+                  :id,
+                  :fleet_id,
+                  :room_id,
+                  :kind,
+                  :author_kind,
+                  :as_key,
+                  :agent_profile_id,
+                  :inserted_at
+                ],
+                load: [:excerpt, :room, :agent_profile]
+              )
     end
 
     # Every post one key has written in the fleet's rooms, for counting them.
@@ -426,6 +448,9 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   calculations do
+    # The first 160 characters of the line's words, cut in the database.
+    calculate :excerpt, :string, expr(fragment("left(?, 160)", body)), public?: true
+
     # The place of the post this one answers, which is always in the same room.
     calculate :reply_to_seq,
               :integer,

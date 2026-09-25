@@ -115,6 +115,32 @@ defmodule Keyfleet.Proposals.Vote do
              )
     end
 
+    # The fleet's votes recorded before its record number `before_seq` (from
+    # the newest when nil), newest first, `limit` at most, each with the
+    # number of the proposal it was cast on.
+    read :recorded_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare build(
+                select: [
+                  :id,
+                  :fleet_id,
+                  :proposal_id,
+                  :support,
+                  :token_ids,
+                  :record_seq,
+                  :observed_at
+                ],
+                load: [:proposal_number]
+              )
+    end
+
     # Every vote in the fleet that used key `token_id`.
     read :with_key do
       argument :fleet_id, :string, allow_nil?: false
@@ -188,6 +214,8 @@ defmodule Keyfleet.Proposals.Vote do
   calculations do
     # Every key is one vote.
     calculate :key_count, :integer, expr(length(token_ids)), public?: true
+
+    calculate :proposal_number, :integer, expr(proposal.number), public?: true
   end
 
   relationships do

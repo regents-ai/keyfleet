@@ -39,6 +39,10 @@ defmodule Keyfleet.Rooms do
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
       define :recent_posts, action: :recent_in_fleet, args: [:fleet_id]
 
+      define :fleet_lines_before,
+        action: :fleet_lines_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
       define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
 
       define :get_post_under_send_key,

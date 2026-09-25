@@ -68,6 +68,20 @@ defmodule Keyfleet.Keys.KeyPairing do
       index([:agent_profile_id], name: "key_pairings_agent_index")
     end
 
+    custom_indexes do
+      # The fleet's agents starting and stopping work on its keys, newest
+      # first, for its activity.
+      index(["fleet_id", "approved_at DESC"],
+        name: "key_pairings_approved_index",
+        where: "approved_at IS NOT NULL"
+      )
+
+      index(["fleet_id", "ended_at DESC"],
+        name: "key_pairings_ended_index",
+        where: "ended_at IS NOT NULL AND approved_at IS NOT NULL"
+      )
+    end
+
     custom_statements do
       statement :immutable_pairings_function do
         up("""
@@ -279,6 +293,65 @@ defmodule Keyfleet.Keys.KeyPairing do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and effective?)
       prepare build(select: [:token_id], sort: [token_id: :asc])
+    end
+
+    # The fleet's pairings approved before the one approved at `before_at`
+    # with `before_id` (from the newest when nil), newest first, `limit` at
+    # most: each an agent starting work on a key.
+    read :arrivals_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec
+      argument :before_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and not is_nil(approved_at))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [approved_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare build(load: [:agent_profile])
+    end
+
+    # The fleet's approved pairings that ended before the one that ended at
+    # `before_at` with `before_id`, the same way: each an agent that stopped
+    # work on a key, for whatever reason.
+    read :departures_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec
+      argument :before_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and not is_nil(ended_at) and not is_nil(approved_at)
+             )
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [ended_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare build(load: [:agent_profile])
+    end
+
+    # For each of these agents, the latest key it was approved for after
+    # `after` in a fleet other than `fleet_id` and still runs there.
+    read :runs_elsewhere do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :agent_profile_ids, {:array, :uuid},
+        allow_nil?: false,
+        constraints: [max_length: 100]
+
+      argument :after, :utc_datetime_usec, allow_nil?: false
+
+      filter expr(
+               agent_profile_id in ^arg(:agent_profile_ids) and fleet_id != ^arg(:fleet_id) and
+                 approved_at > ^arg(:after) and effective?
+             )
+
+      prepare build(
+                select: [:id, :fleet_id, :token_id, :agent_profile_id, :approved_at],
+                distinct: [:agent_profile_id],
+                distinct_sort: [agent_profile_id: :asc, approved_at: :desc]
+              )
     end
 
     read :pairing_requests do

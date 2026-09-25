@@ -14,6 +14,8 @@ defmodule Keyfleet.Graph.Event do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
+  require Ash.Query
+
   @bigint 9_223_372_036_854_775_807
   @text [trim?: false]
   # A page stops at this many bytes of events, or after its first event when
@@ -24,6 +26,22 @@ defmodule Keyfleet.Graph.Event do
   # How many of one object's changes its page lists at a time.
   @history 50
   @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
+  # How many of the latest notable events a featured change is looked for in.
+  @marks_window 200
+
+  # The changes worth telling people who watch a fleet: every new object; a
+  # patch that moves a status, progress or who has taken a task, archives an
+  # object, or changes a goal, service or launch plan; and a link saying that
+  # one object supports, contradicts or produces another. Edits to other
+  # objects' words, unlinks, attention notices and command records are left
+  # out. The same words make the partial index and the reads that use it, so
+  # the index answers exactly the events that match.
+  @notable """
+  type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service', 'launch_card')))\
+  """
+
+  # The oldest place in the fleet's latest 200 notable changes.
+  @window_floor "COALESCE((SELECT w.seq FROM keyfleet_app.graph_events AS w WHERE w.fleet_id = ? AND (#{@notable}) ORDER BY w.seq DESC OFFSET ? LIMIT 1), 0)"
 
   postgres do
     table "graph_events"
@@ -46,6 +64,9 @@ defmodule Keyfleet.Graph.Event do
       index(["fleet_id", "(payload ->> 'source')", "seq"],
         name: "graph_events_payload_source_index"
       )
+
+      # The fleet's notable changes, newest first, for its activity.
+      index(["fleet_id", "seq DESC"], name: "graph_events_notable_index", where: @notable)
     end
   end
 
@@ -94,6 +115,50 @@ defmodule Keyfleet.Graph.Event do
         |> Ash.Query.select(@brief_fields)
         |> Ash.Query.load(:brief)
       end
+    end
+
+    # The fleet's notable changes before `before_seq` (from the newest when
+    # nil), newest first, `limit` at most, each with what a line about it
+    # needs and not the text it carries.
+    read :notable_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: @bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 60]
+
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
+      prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: [:before_seq]}
+      prepare build(select: @brief_fields, load: [:brief])
+    end
+
+    # The latest disagreement (`:contradiction`, a `contradicts` link) or the
+    # latest finished work (`:completion`, a goal achieved or a task done)
+    # among the fleet's 200 latest notable changes, or none.
+    read :latest_mark do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :mark, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:contradiction, :completion]]
+
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare fn query, _context ->
+        fleet_id = Ash.Query.get_argument(query, :fleet_id)
+
+        query
+        |> Ash.Query.filter(^sql(@notable))
+        |> Ash.Query.filter(seq >= ^sql(@window_floor, [fleet_id, @marks_window - 1]))
+        |> mark(Ash.Query.get_argument(query, :mark))
+        |> Ash.Query.unset([:sort, :limit, :offset])
+        |> Ash.Query.sort(seq: :desc)
+        |> Ash.Query.limit(1)
+        |> Ash.Query.select(@brief_fields)
+        |> Ash.Query.load(:brief)
+      end
+
+      get? true
     end
 
     # Every change to one object up to `through_seq`, newest first, one more
@@ -275,6 +340,36 @@ defmodule Keyfleet.Graph.Event do
       destination_attribute :fleet_id
       define_attribute? false
     end
+  end
+
+  # A fragment of SQL kept in one module attribute, so the same words can
+  # make an index and the reads that use it; the expression macro takes only
+  # literal SQL.
+  defp sql(sql, args \\ []) do
+    {:ok, fragment} = Ash.Query.Function.Fragment.new([sql | args])
+    fragment
+  end
+
+  defp mark(query, :contradiction) do
+    Ash.Query.filter(
+      query,
+      type == "relation.created" and
+        fragment("(? #>> '{relation,type}') = 'contradicts'", payload)
+    )
+  end
+
+  defp mark(query, :completion) do
+    Ash.Query.filter(
+      query,
+      type == "patch.applied" and
+        fragment(
+          "((split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved') OR (split_part(? ->> 'target', '#', 1) = 'task' AND (? #>> '{diff,progress,new}') = 'done'))",
+          payload,
+          payload,
+          payload,
+          payload
+        )
+    )
   end
 
   @doc "The event as a reader receives it."

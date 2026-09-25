@@ -45,6 +45,8 @@ defmodule Keyfleet.Graph do
     resource Keyfleet.Graph.Event do
       define :read_events, action: :page, args: [:fleet_id, :after_seq, :limit]
       define :latest_activity, action: :activity, args: [:fleet_id]
+      define :notable_before, action: :notable_before, args: [:fleet_id, :before_seq, :limit]
+      define :latest_mark, action: :latest_mark, args: [:fleet_id, :mark], not_found_error?: false
       define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
     end

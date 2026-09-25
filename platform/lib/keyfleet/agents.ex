@@ -8,6 +8,7 @@ defmodule Keyfleet.Agents do
       define :get_my_profile, action: :get_my_profile, not_found_error?: false
       define :edit_my_profile, action: :edit_my_profile
       define :agents_here, action: :here_in_fleet, args: [:fleet_id]
+      define :agents_by_wallets, action: :by_wallets, args: [:wallets]
     end
   end
 

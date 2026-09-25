@@ -84,6 +84,8 @@ defmodule Keyfleet.Proposals.Proposal do
       index([:fleet_id, :block_number])
       index([:fleet_id, :digest])
       index([:fleet_id, :envelope_hash])
+      # The fleet's proposals by when their votes close, latest first.
+      index(["fleet_id", "closes_at DESC"], name: "proposals_closes_index")
     end
 
     custom_statements do
@@ -168,6 +170,64 @@ defmodule Keyfleet.Proposals.Proposal do
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare build(sort: [number: :desc], limit: 1, select: [:number])
       get? true
+    end
+
+    # The fleet's proposals recorded before its record number `before_seq`
+    # (from the newest when nil), newest first, `limit` at most, with the
+    # start of their text and the name of the launch they propose.
+    read :recorded_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.select([
+          :id,
+          :fleet_id,
+          :number,
+          :kind,
+          :proposer,
+          :asset,
+          :amount,
+          :recipient,
+          :record_seq,
+          :observed_at
+        ])
+        |> Ash.Query.load([:text_start, launch_envelope: launch_name()])
+      end
+    end
+
+    # The fleet's proposals whose votes closed before the one closing at
+    # `before_at` numbered `before_number` (strictly before `before_at` when
+    # nil), latest closing first, `limit` at most, as
+    # `Keyfleet.Proposals.status/3` needs them.
+    read :closed_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec, allow_nil?: false
+      argument :before_number, :integer, constraints: [min: 1, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [closes_at: :desc, number: :asc], before: [:before_at, :before_number]}
+
+      prepare build(
+                select: [
+                  :id,
+                  :fleet_id,
+                  :number,
+                  :kind,
+                  :closes_at,
+                  :eligible_keys,
+                  :execution_expiry
+                ],
+                load: [:yes_keys, :no_keys, :execution, :fleet_launched?]
+              )
     end
 
     # The fleet's launch proposals whose launch has not been read yet.
@@ -324,6 +384,17 @@ defmodule Keyfleet.Proposals.Proposal do
     # fleet contract then refuses every other.
     exists :fleet_launched?, :fleet_launches, public?: true
   end
+
+  calculations do
+    # The first bytes of a decision's or payment's text, enough for 160
+    # characters, cut in the database so a page never loads whole texts.
+    calculate :text_start, :binary, expr(fragment("substring(? from 1 for 640)", text)),
+      public?: true
+  end
+
+  @doc "What a line about a launch loads of it: its name and symbol."
+  def launch_name,
+    do: Ash.Query.select(Keyfleet.Proposals.LaunchEnvelope, [:id, :proposal_id, :name, :symbol])
 
   identities do
     identity :unique_number, [:fleet_id, :number]

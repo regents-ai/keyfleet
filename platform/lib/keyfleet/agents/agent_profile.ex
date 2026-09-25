@@ -59,6 +59,14 @@ defmodule Keyfleet.Agents.AgentProfile do
       end
     end
 
+    # The agents behind some wallets, by name, to say who made a change the
+    # workspace records under an agent's wallet.
+    read :by_wallets do
+      argument :wallets, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(wallet_address in ^arg(:wallets))
+      prepare build(select: [:id, :wallet_address, :name])
+    end
+
     update :edit_my_profile do
       atomic_upgrade_with :get_my_profile
 
@@ -77,7 +85,7 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   policies do
-    policy action([:public_profile, :here_in_fleet]) do
+    policy action([:public_profile, :here_in_fleet, :by_wallets]) do
       authorize_if always()
     end
 
@@ -86,7 +94,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     policy action_type([:read, :update]) do
-      authorize_if action([:public_profile, :here_in_fleet])
+      authorize_if action([:public_profile, :here_in_fleet, :by_wallets])
       authorize_if expr(wallet_address == ^actor(:wallet_address))
     end
   end
