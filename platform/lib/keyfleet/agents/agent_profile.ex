@@ -71,6 +71,14 @@ defmodule Keyfleet.Agents.AgentProfile do
       end
     end
 
+    # The agents running at least one key in any of these fleets right now, by
+    # the same rule as `:here_in_fleet`, each once however many fleets it runs
+    # keys in.
+    read :here_in_fleets do
+      argument :fleet_ids, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(exists(pairings, fleet_id in ^arg(:fleet_ids) and effective?))
+    end
+
     # The agents behind some wallets, by name, to say who made a change the
     # workspace records under an agent's wallet.
     read :by_wallets do
@@ -97,7 +105,7 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   policies do
-    policy action([:public_profile, :here_in_fleet, :by_wallets]) do
+    policy action([:public_profile, :here_in_fleet, :here_in_fleets, :by_wallets]) do
       authorize_if always()
     end
 
@@ -106,7 +114,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     policy action_type([:read, :update]) do
-      authorize_if action([:public_profile, :here_in_fleet, :by_wallets])
+      authorize_if action([:public_profile, :here_in_fleet, :here_in_fleets, :by_wallets])
       authorize_if expr(wallet_address == ^actor(:wallet_address))
     end
   end

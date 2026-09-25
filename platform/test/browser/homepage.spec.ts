@@ -421,11 +421,34 @@ test("on a phone the hero reads top to bottom, then the fleets", async ({page}) 
       await waitForHomepage(page)
       await assertNoOverflow(page)
 
-      const order = ["#home-tally", "#home-title", "#home-instruction", ".rl-hero-mark", ".rl-hero-pill", "#fleets-title"]
+      const order = [
+        "#home-tally",
+        "#home-title",
+        "#home-instruction-copy",
+        "#home-instruction",
+        ".rl-hero-mark",
+        ".rl-hero-pill",
+        "#fleets-title",
+      ]
       const boxes = await Promise.all(order.map(selector => boxOf(page, selector)))
       for (const [index, box] of boxes.entries()) {
         if (index > 0) expect(boxes[index - 1].bottom, order[index]).toBeLessThanOrEqual(box.top)
       }
+    })
+  }
+})
+
+// On a phone, Copy sits above the instruction, on the first screen.
+test("on a phone Copy is on the first screen", async ({page}) => {
+  for (const viewport of [{width: 375, height: 812}, {width: 320, height: 720}]) {
+    await test.step(`${viewport.width} wide`, async () => {
+      await page.setViewportSize(viewport)
+      await page.goto("/")
+      await waitForHomepage(page)
+
+      const copy = await boxOf(page, "#home-instruction-copy")
+      expect(copy.top).toBeGreaterThanOrEqual(0)
+      expect(copy.bottom).toBeLessThanOrEqual(viewport.height)
     })
   }
 })

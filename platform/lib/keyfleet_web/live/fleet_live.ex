@@ -48,8 +48,9 @@ defmodule KeyfleetWeb.FleetLive do
   defp sold(%{current?: false}), do: "Sales figures are catching up"
   defp sold(%{keys: keys}), do: "#{Rules.keys(keys)} sold"
 
-  defp agents_here(1), do: "1 agent here"
-  defp agents_here(count), do: "#{grouped(count)} agents here"
+  @doc "How many agents are here, in words."
+  def agents_here(1), do: "1 agent here"
+  def agents_here(count), do: "#{grouped(count)} agents here"
 
   # The fleet's sales as `headcount/2` reads them.
   defp sold_so_far(%{deployed?: false}), do: %{deployed?: false}

@@ -35,10 +35,11 @@
     position: relative; isolation: isolate;
     padding: clamp(1.5rem, 4.5svh, 3rem) var(--rg-panel-padding) 0;
   }
-  /* The renderer and its still art fill the hero behind the words, showing at
-     both sides and fading out toward the centre column and the fleets. */
+  /* The renderer and its still art sit behind the top of the hero, no bigger
+     than the crown's old stage, showing at both sides and fading out toward
+     the centre column and downward. */
   .rl-hero-prism {
-    position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; contain: strict;
+    position: absolute; inset: 0 0 auto; block-size: clamp(22rem, calc(60svh - 5rem), 32rem); z-index: -1; overflow: hidden; pointer-events: none; contain: strict;
     mask-image: linear-gradient(90deg, #000, transparent 30% 70%, #000), linear-gradient(#000 55%, transparent);
     mask-composite: intersect;
   }
@@ -69,14 +70,18 @@
   .rl-hero-runtimes { display: flex; flex-wrap: wrap; justify-content: center; gap: .375rem; margin: 0; padding: 0; list-style: none; }
   .rl-hero-runtimes li { padding: .125rem .5rem; border: 1px solid var(--rl-line); color: var(--rl-ink); font-family: var(--font-family-mono); font-size: .75rem; letter-spacing: .04em; }
 
-  /* The instruction, whole, as a line typed at a prompt. */
+  /* The instruction, whole, as a line typed at a prompt, with Copy beside it;
+     on a phone, the prompt mark and Copy sit on a row above it. */
   .rl-hero-command {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-2);
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "prompt text copy";
+    align-items: start; gap: var(--space-2);
     width: min(100%, 60rem); margin-block-start: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
     border: 1px solid var(--ash-line-strong); background: var(--rl-panel); text-align: start;
   }
-  .rl-hero-command__text { position: relative; padding-inline-start: 2ch; color: var(--rl-muted); font-family: var(--font-family-mono); font-size: .9375rem; line-height: 1.6; overflow-wrap: anywhere; }
-  .rl-hero-command__text::before { content: "$" / ""; position: absolute; inset-inline-start: 0; color: var(--ash-accent-warm); }
+  .rl-hero-command__prompt, .rl-hero-command__text { font-family: var(--font-family-mono); font-size: .9375rem; line-height: 1.6; }
+  .rl-hero-command__prompt { grid-area: prompt; color: var(--ash-accent-warm); }
+  .rl-hero-command__text { grid-area: text; color: var(--rl-muted); overflow-wrap: anywhere; }
+  .rl-hero-command__copy { grid-area: copy; }
   .rl-hero-command__lead { color: var(--rl-ink); }
   .rl-hero-column > .rl-hero-reads { margin-block-start: .75rem; color: var(--rl-muted); font-size: .8125rem; }
   .rl-hero-column > .rl-hero-then { margin-block-start: var(--space-3); max-width: 60ch; font-size: clamp(1rem, .9rem + .3vw, 1.125rem); line-height: 1.45; text-wrap: balance; }
@@ -124,7 +129,7 @@
   .rl-fleets-fan { display: none; grid-area: 1 / 1; position: relative; pointer-events: none; }
   .rl-fleets-fan svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .rl-fleets-fan path { fill: none; stroke: color-mix(in oklch, var(--rl-ink) 32%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  @media (min-width: 40rem) {
+  @media (min-width: 34rem) {
     .rl-fleet-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (min-width: 64rem) {
@@ -190,10 +195,10 @@
   @media (max-width: 47.99rem) {
     .rl-hero-copy { padding: 0; }
     .rl-hero-copy h1 { font-size: clamp(2.5rem, 10vw, 4.5rem); }
-    .rl-hero-prism { opacity: .6; }
-    .rl-hero-command { grid-template-columns: minmax(0, 1fr); padding: var(--space-2); }
-    .rl-hero-command__text { font-size: .875rem; }
-    .rl-hero-command__copy { justify-self: start; }
+    .rl-hero-prism { inset-inline: var(--rg-panel-padding); block-size: 12rem; opacity: .6; }
+    .rl-hero-command { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prompt copy" "text text"; align-items: center; row-gap: .75rem; padding: var(--space-2); }
+    .rl-hero-command__prompt, .rl-hero-command__text { font-size: .8125rem; line-height: 1.5; }
+    .rl-hero-command__copy { justify-self: end; }
     .rl-brand { font-size: .875rem; }
   }
   @media (max-width: 24rem) {

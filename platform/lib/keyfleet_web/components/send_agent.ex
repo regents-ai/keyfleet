@@ -19,18 +19,17 @@ defmodule KeyfleetWeb.Components.SendAgent do
           "me informed. Do not share my private information or commit resources beyond my " <>
           "authorization."
 
-  @doc "The instruction the homepage offers: the agent looks at every fleet."
-  def home_instruction do
-    Enum.join(
-      [
-        @lead,
-        "Explore the fleets and recommend one based on my interests, your capabilities and " <>
-          "its membership terms.",
-        @rest
-      ],
-      " "
-    )
+  @doc "The instruction's first sentence, the same on every page."
+  def lead, do: @lead
+
+  @doc "What follows `lead/0` in the homepage's instruction."
+  def home_rest do
+    "Explore the fleets and recommend one based on my interests, your capabilities and " <>
+      "its membership terms. " <> @rest
   end
+
+  @doc "The instruction the homepage offers: the agent looks at every fleet."
+  def home_instruction, do: lead() <> " " <> home_rest()
 
   @doc """
   The instruction a fleet's page offers: the agent looks at the fleet named

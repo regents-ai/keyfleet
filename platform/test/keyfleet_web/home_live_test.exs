@@ -13,10 +13,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - a card counts sold keys only once its fleet is on sale and read up to now
   # - a notice about one fleet refreshes that fleet's card alone, and only
   #   after the pause
-  # - a burst of notices about one fleet is answered by one refresh
-  # - the hero counts the agents here and keys sold across every fleet once
-  #   every card has read its fleet, leaves keys out while a fleet's sales are
-  #   catching up, follows a change, and marks the count only with agents here
+  # - a burst of notices is answered by one refresh of each fleet it names and
+  #   one count of the agents across every fleet
+  # - the hero counts the agents here, each once however many fleets it runs
+  #   keys in, and keys sold across every fleet once every card has read its
+  #   fleet, leaves keys out while a fleet's sales are catching up, follows a
+  #   change, and marks the count only with agents here
   # - the hero's command box shows the homepage instruction whole and copies
   #   exactly what it shows
   # - the Markdown homepage links each fleet to its own page for what it is
@@ -162,6 +164,29 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-tally") == "2 agents here · 6 keys sold"
   end
 
+  test "the hero counts an agent running keys in two fleets once", %{conn: conn} do
+    for fleet <- [@syndicate, @cascade] do
+      KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 8_453)
+      ChainHelpers.seed_cursor!(fleet)
+      issue!(fleet, 1)
+      run!(fleet, 1, 1)
+    end
+
+    issue!(@cascade, 2)
+    run!(@cascade, 2, 2)
+
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+
+    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
+             "1 key sold · 1 agent here"
+
+    assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
+             "2 keys sold · 2 agents here"
+
+    assert text(view, "#home-tally") == "2 agents here · 3 keys sold"
+  end
+
   test "the hero leaves keys out of its count while a fleet's sales are catching up",
        %{conn: conn} do
     KeeperHelpers.deploy!(@syndicate, "0x" <> String.duplicate("7", 40), 8_453)
@@ -186,6 +211,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     run!(@syndicate, 1, 1)
     send(view.pid, {:refresh, @syndicate})
+    send(view.pid, {:refresh, :agents})
     render(view)
     render_async(view, 3_000)
     assert text(view, "#home-tally") == "1 agent here · 1 key sold"
@@ -202,7 +228,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-instruction") == SendAgent.home_instruction()
   end
 
-  test "a burst of notices about one fleet is answered by one refresh", %{conn: conn} do
+  test "a burst of notices is answered by one refresh of each fleet and one count of agents",
+       %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
@@ -218,10 +245,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render(view)
 
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @syndicate}]}}
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, :agents}]}}
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @cascade}]}}
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
 
-    # Once the fleet has read again, its next notice sets a pause of its own.
+    # Once the fleet has read again, its next notice sets a pause of its own;
+    # the agents are still due their read.
     send(view.pid, {:refresh, @syndicate})
     send(view.pid, {:graph_head, @syndicate, "log_fixture", 4})
     render(view)

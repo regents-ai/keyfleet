@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.HomeLive do
   what a fleet can take on. Its hero shows the instruction a person gives
   their agent, with a button that copies it, and points at the joining guide
   the agent reads. Above the headline it counts the agents here and the keys
-  sold across every fleet, once every card has read its fleet.
+  sold across every fleet, once every card has read its fleet: each agent
+  once, however many fleets it runs keys in.
 
   Each fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
@@ -14,7 +15,9 @@ defmodule KeyfleetWeb.HomeLive do
   The first render reads only each fleet's record and sales, for its map.
   Once connected, each card reads the rest on its own, and reads again a few
   seconds after a notice that something changed in its fleet: once for a
-  burst of notices, and only for the fleet the notice was about.
+  burst of notices, and only for the fleet the notice was about. The count
+  of agents across every fleet is read alongside, once for a burst of notices
+  about any fleet.
   """
 
   use KeyfleetWeb, :live_view
@@ -131,6 +134,7 @@ defmodule KeyfleetWeb.HomeLive do
       assign(socket,
         route_spec: RouteCatalog.fetch!(:home),
         fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
+        agents: nil,
         refreshing: MapSet.new()
       )
 
@@ -150,6 +154,8 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp watch(socket) do
+    socket = start_agents_read(socket)
+
     Enum.reduce(Fleets.catalog_ids(), socket, fn fleet_id, socket ->
       for topic <- [
             Keys.topic(fleet_id),
@@ -165,6 +171,12 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp start_read(socket, fleet_id),
     do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
+
+  # Every agent here across the fleets, each once.
+  defp start_agents_read(socket) do
+    fleet_ids = Fleets.catalog_ids()
+    start_async(socket, :agents, fn -> Agents.count_agents_in_fleets!(fleet_ids) end)
+  end
 
   # Everything a card shows about its fleet right now. With nothing else to
   # feature, the card features its latest item.
@@ -189,8 +201,9 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # Something changed in one fleet: its card reads again once, a moment
-  # later, for however many notices come in the meantime. A room's head
+  # Something changed in one fleet: its card, and the count of agents across
+  # every fleet, read again once, a moment later, for however many notices
+  # come in the meantime. A room's head
   # names no fleet; the post or naming behind it also sends a notice that
   # does. Balances aren't on the card.
   @impl true
@@ -207,17 +220,26 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
 
+  def handle_info({:refresh, :agents}, socket) do
+    socket = update(socket, :refreshing, &MapSet.delete(&1, :agents))
+    {:noreply, start_agents_read(socket)}
+  end
+
   def handle_info({:refresh, fleet_id}, socket) do
     socket = update(socket, :refreshing, &MapSet.delete(&1, fleet_id))
     {:noreply, start_read(socket, fleet_id)}
   end
 
-  defp nudge(socket, fleet_id) do
-    if MapSet.member?(socket.assigns.refreshing, fleet_id) do
+  defp nudge(socket, fleet_id), do: socket |> later(fleet_id) |> later(:agents)
+
+  # Reads `what` (a fleet's card, or `:agents`) again shortly, unless it is
+  # already due.
+  defp later(socket, what) do
+    if MapSet.member?(socket.assigns.refreshing, what) do
       socket
     else
-      Process.send_after(self(), {:refresh, fleet_id}, @refresh_after)
-      update(socket, :refreshing, &MapSet.put(&1, fleet_id))
+      Process.send_after(self(), {:refresh, what}, @refresh_after)
+      update(socket, :refreshing, &MapSet.put(&1, what))
     end
   end
 
@@ -234,6 +256,11 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   def handle_async({:now, _fleet_id}, {:exit, _reason}, socket), do: {:noreply, socket}
+
+  def handle_async(:agents, {:ok, agents}, socket),
+    do: {:noreply, assign(socket, :agents, agents)}
+
+  def handle_async(:agents, {:exit, _reason}, socket), do: {:noreply, socket}
 
   defp fleet_path(fleet_id), do: "/app/fleets/#{fleet_id}"
 
@@ -260,7 +287,7 @@ defmodule KeyfleetWeb.HomeLive do
 
       <main>
         <Regent.Structure.row rail={false}>
-          <.hero tally={tally(@fleets)} instruction={instruction()} />
+          <.hero tally={tally(@fleets, @agents)} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}><.fleets fleets={@fleets} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
@@ -275,14 +302,14 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp opportunities, do: @opportunities
 
-  # Every agent here and every key sold, summed over the fleets' cards, once
-  # each card has read its fleet; nothing before. An agent running keys in
-  # two fleets is counted in both. While any fleet's sales are catching up
-  # the keys are left out rather than undercounted.
-  defp tally(fleets) do
-    if Enum.all?(fleets, & &1.now) do
+  # Every agent here, each once, and every key sold, summed over the fleets'
+  # cards, once the agents and each card have been read; nothing before.
+  # While any fleet's sales are catching up the keys are left out rather than
+  # undercounted.
+  defp tally(fleets, agents) do
+    if agents && Enum.all?(fleets, & &1.now) do
       %{
-        agents: Enum.sum_by(fleets, & &1.now.agents),
+        agents: agents,
         keys:
           if(Enum.all?(fleets, &sales_read?(&1.sales)), do: Enum.sum_by(fleets, & &1.sales.keys))
       }
@@ -291,17 +318,6 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp sales_read?(%{deployed?: false}), do: true
   defp sales_read?(%{current?: current?}), do: current?
-
-  defp agents_here(1), do: "1 agent here"
-  defp agents_here(count), do: "#{Rules.grouped(count)} agents here"
-
-  # The homepage's instruction, and its first sentence apart from the rest,
-  # which the command box shows brighter.
-  defp instruction do
-    text = SendAgent.home_instruction()
-    [lead, rest] = String.split(text, ". ", parts: 2)
-    %{text: text, lead: lead <> ".", rest: rest}
-  end
 
   attr :theme, :string, default: "dark"
 
@@ -334,13 +350,12 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
-  attr :instruction, :map, required: true
 
   defp hero(assigns) do
     ~H"""
     <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
       <%!-- Keep the real thirteen-cube renderer. It is a bounded, inert backdrop
-            behind the whole hero, faded away from the centre column; neither its
+            behind the top of the hero, faded away from the centre column; neither its
             canvas nor its still art sizes the content. --%>
       <div
         id="home-prism"
@@ -364,7 +379,9 @@ defmodule KeyfleetWeb.HomeLive do
         <div id="home-tally" class="rl-hero-tally">
           <p :if={@tally} class="rl-hero-tally__pill">
             <span :if={@tally.agents > 0} class="rl-hero-tally__dot" data-tally-dot aria-hidden="true"></span>
-            {agents_here(@tally.agents)}<span :if={@tally.keys}> · {Rules.keys(@tally.keys)} sold</span>
+            <span class="rl-hero-tally__text">{FleetLive.agents_here(@tally.agents)}<span :if={
+              @tally.keys
+            }> · {Rules.keys(@tally.keys)} sold</span></span>
           </p>
         </div>
 
@@ -383,20 +400,21 @@ defmodule KeyfleetWeb.HomeLive do
         </div>
 
         <div class="rl-hero-command">
-          <p id="home-instruction" class="rl-hero-command__text">
-            <span class="rl-hero-command__lead">{@instruction.lead}</span> {@instruction.rest}
-          </p>
+          <span class="rl-hero-command__prompt" aria-hidden="true">$</span>
           <Regent.Primitives.button
             id="home-instruction-copy"
             variant="secondary"
             class="rl-hero-command__copy"
             phx-hook="CopyText"
-            data-copy-text={@instruction.text}
+            data-copy-text={SendAgent.home_instruction()}
             data-copy-status="home-instruction-copied"
             aria-label="Copy the instruction"
           >
             Copy
           </Regent.Primitives.button>
+          <p id="home-instruction" class="rl-hero-command__text">
+            <span class="rl-hero-command__lead">{SendAgent.lead()}</span> {SendAgent.home_rest()}
+          </p>
           <span id="home-instruction-copied" class="visually-hidden" role="status" phx-update="ignore"></span>
         </div>
         <p id="home-agents-start" class="rl-hero-reads">

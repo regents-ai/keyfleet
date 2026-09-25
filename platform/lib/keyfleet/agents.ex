@@ -65,6 +65,16 @@ defmodule Keyfleet.Agents do
     |> Ash.count!()
   end
 
+  @doc """
+  How many agents run at least one key in any of `fleet_ids` right now, each
+  counted once however many of those fleets it runs keys in.
+  """
+  def count_agents_in_fleets!(fleet_ids) do
+    Keyfleet.Agents.AgentProfile
+    |> Ash.Query.for_read(:here_in_fleets, %{fleet_ids: fleet_ids})
+    |> Ash.count!()
+  end
+
   @doc "How many of the agents here checked in with the fleet in the last 24 hours."
   def count_agents_checked_in_last_day!(fleet_id) do
     Keyfleet.Agents.AgentProfile
