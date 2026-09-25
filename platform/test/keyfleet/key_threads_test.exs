@@ -251,8 +251,8 @@ defmodule Keyfleet.KeyThreadsTest do
             %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_as_key"}}} =
              Repo.query(
                "INSERT INTO keyfleet_app.messages " <>
-                 "(seq, kind, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
-                 "SELECT seq + 1, kind, author_kind, author_wallet, NULL, body, body_digest, 'k-none', fleet_id, room_id " <>
+                 "(seq, kind, in_key_thread, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
+                 "SELECT seq + 1, kind, in_key_thread, author_kind, author_wallet, NULL, body, body_digest, 'k-none', fleet_id, room_id " <>
                  "FROM keyfleet_app.messages WHERE id = $1",
                [Ecto.UUID.dump!(posted.id)],
                mode: :savepoint

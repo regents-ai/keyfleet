@@ -465,6 +465,7 @@ defmodule Keyfleet.ActivityTest do
           fleet_id: @fleet,
           room_id: Ecto.UUID.dump!(room.id),
           kind: "post",
+          in_key_thread: false,
           author_kind: "human",
           author_wallet: wallet("a"),
           as_key: 1,

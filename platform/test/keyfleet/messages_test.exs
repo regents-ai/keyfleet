@@ -285,8 +285,8 @@ defmodule Keyfleet.MessagesTest do
             %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_kind"}}} =
              Repo.query(
                "INSERT INTO keyfleet_app.messages " <>
-                 "(seq, kind, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
-                 "SELECT seq + 1, 'level', author_kind, author_wallet, as_key, body, body_digest, 'k-level', fleet_id, room_id " <>
+                 "(seq, kind, in_key_thread, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
+                 "SELECT seq + 1, 'level', in_key_thread, author_kind, author_wallet, as_key, body, body_digest, 'k-level', fleet_id, room_id " <>
                  "FROM keyfleet_app.messages WHERE id = $1",
                [Ecto.UUID.dump!(posted.id)],
                mode: :savepoint

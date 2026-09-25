@@ -3,7 +3,8 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   Puts one line in its room, of the kind the action names (`kind: :post` or
   `kind: :room_named`), or hands back the line this sender already made. With
   `in: :room` the room is the fleet's room named by `slug`; with `in: :key` it
-  is the thread of the key `token_id`, opened by its first post.
+  is the thread of the key `token_id`, opened by its first post, and the line
+  is marked `in_key_thread`.
 
   Every line is written as the author's key in the fleet
   (`Keyfleet.Keys.identity/2`), which is kept on the line as `as_key`.
@@ -101,6 +102,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     |> Ash.Changeset.force_change_attributes(
       Map.merge(author, %{
         kind: kind,
+        in_key_thread: room.kind == :key,
         fleet_id: room.fleet_id,
         room_id: room.id,
         seq: seq(room, earlier),

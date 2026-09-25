@@ -53,13 +53,13 @@ defmodule Keyfleet.Rooms.Message do
       # A key's newest posts in the fleet's rooms.
       index(["fleet_id", "as_key", "inserted_at DESC"],
         name: "messages_posts_as_key_index",
-        where: "kind = 'post'"
+        where: "kind = 'post' AND NOT in_key_thread"
       )
 
-      # The fleet's newest lines across all its rooms and keys' threads.
+      # The fleet's newest lines across its rooms, without keys' threads.
       index(["fleet_id", "inserted_at DESC", "id"],
         name: "messages_fleet_lines_index",
-        where: "kind IN ('post', 'room_named')"
+        where: "NOT in_key_thread"
       )
 
       # Each room's naming lines, counted to tell its posts from its lines.
@@ -239,7 +239,7 @@ defmodule Keyfleet.Rooms.Message do
 
       filter expr(
                kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
-                 room.kind != :key
+                 not in_key_thread
              )
 
       prepare build(load: [:room, :agent_profile])
@@ -257,7 +257,7 @@ defmodule Keyfleet.Rooms.Message do
         default: @max_recent_in_fleet,
         constraints: [min: 1, max: @max_recent_in_fleet]
 
-      filter expr(kind == :post and fleet_id == ^arg(:fleet_id) and room.kind != :key)
+      filter expr(kind == :post and fleet_id == ^arg(:fleet_id) and not in_key_thread)
 
       prepare build(load: [:room, :agent_profile])
 
@@ -276,10 +276,7 @@ defmodule Keyfleet.Rooms.Message do
       argument :before_id, :uuid
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
 
-      filter expr(
-               fleet_id == ^arg(:fleet_id) and
-                 fragment("? IN ('post', 'room_named')", kind) and room.kind != :key
-             )
+      filter expr(fleet_id == ^arg(:fleet_id) and not in_key_thread)
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [inserted_at: :desc, id: :asc], before: [:before_at, :before_id]}
@@ -306,7 +303,7 @@ defmodule Keyfleet.Rooms.Message do
 
       filter expr(
                kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
-                 room.kind != :key
+                 not in_key_thread
              )
     end
 
@@ -318,7 +315,7 @@ defmodule Keyfleet.Rooms.Message do
 
       filter expr(
                kind == :post and author_kind == :human and fleet_id == ^arg(:fleet_id) and
-                 author_wallet == ^arg(:wallet) and room.kind != :key
+                 author_wallet == ^arg(:wallet) and not in_key_thread
              )
     end
 
@@ -375,6 +372,14 @@ defmodule Keyfleet.Rooms.Message do
       public?: true,
       writable?: false,
       constraints: [one_of: [:post, :room_named]]
+
+    # Whether the line is in a key's thread rather than one of the fleet's
+    # rooms, kept on the line so the fleet's room lines are read without
+    # looking at their rooms.
+    attribute :in_key_thread, :boolean,
+      allow_nil?: false,
+      public?: false,
+      writable?: false
 
     attribute :author_kind, :atom,
       allow_nil?: false,
