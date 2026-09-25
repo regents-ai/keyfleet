@@ -51,11 +51,11 @@ defmodule KeyfleetWeb.ProposalsPage do
   # A launch's details as a launch plan names them, and as the page words
   # them when they differ.
   @launch_texts [
-    {:name, "name", "name"},
-    {:symbol, "symbol", "symbol"},
-    {:description, "description", "description"},
-    {:website, "website", "website"},
-    {:image, "image", "image"}
+    {:name, "name"},
+    {:symbol, "symbol"},
+    {:description, "description"},
+    {:website, "website"},
+    {:image, "image"}
   ]
 
   # What a launch plan says beyond the launch's details, as the page names it.
@@ -189,23 +189,24 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
 
   # What the forms for new proposals start from: each asset the budget
-  # holds, a launch that can be carried out for 30 days, and the launch
-  # plans a launch can start from.
+  # holds and a launch that can be carried out for 30 days.
   defp propose(fleet, balances, now) do
     known = assets(fleet)
 
     %{
       assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known)),
       launch_until:
-        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M"),
-      launch_plans: launch_plans(fleet.id)
+        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M")
     }
   end
 
-  # Each launch plan a launch can be proposed from, at its current version:
-  # its six launch details exactly as that version holds them, and the
-  # digest a proposal carries to point to it.
-  defp launch_plans(fleet_id) do
+  @doc """
+  Each launch plan of the fleet a launch can be proposed from, at its
+  current version: its six launch details exactly as that version holds
+  them, and the digest a proposal carries to point to it. The launch form
+  reads them once, when it is first shown, and keeps them after.
+  """
+  def launch_plans(fleet_id) do
     case Graph.proposable_launch_plans!(fleet_id) do
       [] ->
         []
@@ -218,7 +219,8 @@ defmodule KeyfleetWeb.ProposalsPage do
           )
           |> Map.new(&{{&1.object_id, &1.version}, &1})
 
-        for plan <- plans, revision <- List.wrap(revisions[{plan.id, plan.version}]) do
+        for plan <- plans do
+          revision = Map.fetch!(revisions, {plan.id, plan.version})
           data = revision.data
 
           %{
@@ -369,9 +371,9 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp mismatches(envelope, data) do
     texts =
-      for {field, key, words} <- @launch_texts,
+      for {field, key} <- @launch_texts,
           Map.fetch!(envelope, field) != data[key],
-          do: words
+          do: key
 
     raise? = Decimal.to_integer(envelope.required_regent_raised) != regent_atoms(data)
     if raise?, do: texts ++ ["the REGENT to raise"], else: texts

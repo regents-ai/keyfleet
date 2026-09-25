@@ -50,6 +50,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   }
 
   attr :page, :map, required: true
+  attr :launch_plans, :list, required: true
 
   def list(%{page: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="proposals-page" />|
@@ -124,7 +125,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <div :if={@page.wallet} class="proposals-grid">
         <.propose_decision wallet={@page.wallet} propose={@page.propose} />
         <.propose_payment wallet={@page.wallet} propose={@page.propose} />
-        <.propose_launch wallet={@page.wallet} propose={@page.propose} />
+        <.propose_launch wallet={@page.wallet} propose={@page.propose} launch_plans={@launch_plans} />
         <.voting_delegate wallet={@page.wallet} />
       </div>
 
@@ -368,7 +369,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               <textarea id={field.id} name="text" rows="4" aria-describedby={field.described_by}></textarea>
             </Regent.Primitives.field>
             <.document_code_field id="propose-decision-digest">
-              The SHA-256 of the exact document this is about: 64 characters, 0–9 and a–f. Leave empty if there isn’t one.
+              A code for the exact document this is about: 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one.
             </.document_code_field>
           </div>
         </:fields>
@@ -421,7 +422,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               <textarea id={field.id} name="text" rows="3" aria-describedby={field.described_by}></textarea>
             </Regent.Primitives.field>
             <.document_code_field id="propose-payment-digest">
-              The SHA-256 of the exact invoice or work this pays for: 64 characters, 0–9 and a–f. Leave empty if there isn’t one.
+              A code for the exact invoice or work this pays for: 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one.
             </.document_code_field>
           </div>
         </:fields>
@@ -437,6 +438,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :wallet, :map, required: true
   attr :propose, :map, required: true
+  attr :launch_plans, :list, required: true
 
   # The five fields a launch shows, exactly as its holders will read them.
   # Choosing a launch plan fills them in from its current version and makes
@@ -459,7 +461,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             phx-hook="LaunchPlanPicker"
           >
             <.key_field id="propose-launch-key" />
-            <.launch_plan_picker plans={@propose.launch_plans} />
+            <.launch_plan_picker plans={@launch_plans} />
             <.text_field id="propose-launch-name" name="name" label="Name" />
             <.text_field id="propose-launch-symbol" name="symbol" label="Symbol" />
             <Regent.Primitives.field :let={field} id="propose-launch-description" label="Description">
@@ -516,7 +518,12 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp launch_plan_picker(assigns) do
     ~H"""
     <Regent.Primitives.field :let={field} id="propose-launch-plan" label="Start from a launch plan">
-      <select id={field.id} aria-describedby={field.described_by} data-launch-plans>
+      <select
+        id={field.id}
+        aria-describedby={field.described_by}
+        autocomplete="off"
+        data-launch-plans
+      >
         <option value="">Don’t use a plan</option>
         <option
           :for={plan <- @plans}
@@ -540,7 +547,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         Fills in the launch details below from that version of the plan.
       </:hint>
     </Regent.Primitives.field>
-    <input id="propose-launch-digest" type="hidden" name="digest" value="" />
+    <input id="propose-launch-digest" type="hidden" name="digest" value="" autocomplete="off" />
     <p
       id="propose-launch-plan-status"
       class="proposals-detail"

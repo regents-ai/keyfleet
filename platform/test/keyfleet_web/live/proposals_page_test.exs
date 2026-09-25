@@ -498,9 +498,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"][data-raise="250000.5"]|
              )
 
+      # Going back to the page shows the form as new, never a plan the
+      # browser remembers with its details and digest gone.
+      assert has_element?(view, ~s|#propose-launch-plan[autocomplete="off"]|)
+
       assert has_element?(
                view,
-               ~s|#propose-launch-digest[type="hidden"][name="digest"][value=""]|
+               ~s|#propose-launch-digest[type="hidden"][name="digest"][value=""][autocomplete="off"]|
              )
 
       refute has_element?(

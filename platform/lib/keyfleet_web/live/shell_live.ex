@@ -102,7 +102,8 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
-       proposals_check: nil
+       proposals_check: nil,
+       launch_plans: nil
      )}
   end
 
@@ -421,7 +422,11 @@ defmodule KeyfleetWeb.ShellLive do
 
         <WorkspaceLive.board :if={@route_spec.route_id == :workspace} board={@workspace} />
         <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
-        <ProposalsLive.list :if={@route_spec.route_id == :proposals} page={@proposals} />
+        <ProposalsLive.list
+          :if={@route_spec.route_id == :proposals}
+          page={@proposals}
+          launch_plans={@launch_plans}
+        />
         <ProposalsLive.detail :if={@route_spec.route_id == :proposal} page={@proposals} />
       </:content>
     </.shell>
@@ -1211,12 +1216,15 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The page starts listening before it reads, so votes recorded while it
-  # loads still reach it. Each visit, reconnection included, reads afresh.
+  # loads still reach it. Each visit, reconnection included, reads afresh;
+  # the launch plans the launch form offers are read only then, since the
+  # form keeps what it first showed.
   defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
        when route_id in [:proposals, :proposal] do
     socket
     |> follow_proposals(fleet_id)
     |> assign(:proposals_params, params)
+    |> assign(:launch_plans, if(route_id == :proposals, do: ProposalsPage.launch_plans(fleet_id)))
     |> read_proposals()
   end
 
@@ -1224,7 +1232,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_proposals(socket, _route_spec, _params) do
     socket
     |> follow_proposals(fleet_of_open_key(socket))
-    |> assign(proposals: nil, proposals_params: nil, proposals_check: nil)
+    |> assign(proposals: nil, proposals_params: nil, proposals_check: nil, launch_plans: nil)
   end
 
   # Each read sets the one check that comes when a proposal on show could
