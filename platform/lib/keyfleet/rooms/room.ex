@@ -1,9 +1,9 @@
-defmodule KeyFleet.Rooms.Room do
+defmodule Keyfleet.Rooms.Room do
   @moduledoc """
   A room with a stable identity within its fleet.
 
   Every fleet has five fixed rooms and five open rooms, which only trusted
-  setup code opens (`KeyFleet.Rooms.bootstrap_rooms!/0`). An open room starts
+  setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/0`). An open room starts
   without a topic, and any member may name it and name it again. Agents
   running the fleet's keys create rooms of their own, up to 100 in a fleet.
   Every member posts in every room. Nobody renames a fixed or created room, and
@@ -22,7 +22,7 @@ defmodule KeyFleet.Rooms.Room do
   is renamed at most once a minute.
   """
   use Ash.Resource,
-    domain: KeyFleet.Rooms,
+    domain: Keyfleet.Rooms,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -63,7 +63,7 @@ defmodule KeyFleet.Rooms.Room do
 
   postgres do
     table "rooms"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     custom_indexes do
       # No two rooms of a fleet go by the same name, whatever its case: a room
@@ -85,7 +85,7 @@ defmodule KeyFleet.Rooms.Room do
     end
 
     check_constraints do
-      # `KeyFleet.Rooms.Sequence` moves this column with a statement of its own,
+      # `Keyfleet.Rooms.Sequence` moves this column with a statement of its own,
       # so the floor is kept where that statement cannot step over it.
       check_constraint(:head_seq, "rooms_nonnegative_head", check: "head_seq >= 0")
 
@@ -127,7 +127,7 @@ defmodule KeyFleet.Rooms.Room do
 
     read :for_fleet do
       argument :fleet_id, :string, allow_nil?: false
-      validate KeyFleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(fleet_id == ^arg(:fleet_id) and kind != :key)
       prepare build(sort: [position: :asc, slug: :asc])
     end
@@ -135,7 +135,7 @@ defmodule KeyFleet.Rooms.Room do
     read :in_fleet do
       argument :fleet_id, :string, allow_nil?: false
       argument :slug, :string, allow_nil?: false
-      validate KeyFleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(fleet_id == ^arg(:fleet_id) and slug == ^arg(:slug) and kind != :key)
       get? true
     end
@@ -169,21 +169,21 @@ defmodule KeyFleet.Rooms.Room do
     create :create do
       accept [:fleet_id, :slug, :name]
 
-      change {KeyFleet.Rooms.Changes.NormalizeName, attribute: :name}
+      change {Keyfleet.Rooms.Changes.NormalizeName, attribute: :name}
 
       validate match(:slug, @slug), message: "must be lowercase letters, digits and single dashes"
       validate match(:slug, @not_own_slug), message: "is one of the fleet's own rooms"
       validate match(:slug, @not_key_slug), message: "is kept for a key's messages"
       validate match(:name, @plain_text), message: @plain_text_message
-      validate KeyFleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Graph.Validations.KnownFleet
 
       change set_attribute(:kind, :created)
-      change KeyFleet.Rooms.Changes.LimitCreatedRooms
+      change Keyfleet.Rooms.Changes.LimitCreatedRooms
 
       # Everyone watching the fleet's rooms sees the new one.
       change after_transaction(fn
                _changeset, {:ok, room}, _context ->
-                 KeyFleet.Rooms.rooms_changed(room.fleet_id)
+                 Keyfleet.Rooms.rooms_changed(room.fleet_id)
                  {:ok, room}
 
                _changeset, result, _context ->
@@ -225,14 +225,14 @@ defmodule KeyFleet.Rooms.Room do
       accept [:topic]
       require_atomic? false
 
-      change {KeyFleet.Rooms.Changes.NormalizeName, attribute: :topic}
+      change {Keyfleet.Rooms.Changes.NormalizeName, attribute: :topic}
 
       validate attribute_equals(:kind, :open), message: "is not an open room"
       validate present(:topic)
       validate match(:topic, @plain_text), message: @plain_text_message
 
-      change KeyFleet.Rooms.Changes.LimitRenames
-      change KeyFleet.Rooms.Changes.NameRoom
+      change Keyfleet.Rooms.Changes.LimitRenames
+      change Keyfleet.Rooms.Changes.NameRoom
     end
   end
 
@@ -242,17 +242,17 @@ defmodule KeyFleet.Rooms.Room do
     end
 
     policy action([:bootstrap, :open_key_thread]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
 
     # People name the open rooms; creating rooms is for the agents running the
     # fleet's keys.
     policy action(:create) do
-      authorize_if {KeyFleet.Rooms.Checks.RoomPoster, agents_only?: true}
+      authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
     end
 
     policy action(:set_topic) do
-      authorize_if KeyFleet.Rooms.Checks.RoomPoster
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
     end
   end
 
@@ -297,7 +297,7 @@ defmodule KeyFleet.Rooms.Room do
     attribute :topic_set_at, :utc_datetime_usec, public?: true, writable?: false
 
     # How many posts this room has taken, which is also the place the newest one
-    # holds. Only `KeyFleet.Rooms.Sequence` moves it.
+    # holds. Only `Keyfleet.Rooms.Sequence` moves it.
     attribute :head_seq, :integer,
       allow_nil?: false,
       public?: true,
@@ -307,7 +307,7 @@ defmodule KeyFleet.Rooms.Room do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.WorkspaceLastChanged do
+defmodule Keyfleet.Repo.Migrations.WorkspaceLastChanged do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

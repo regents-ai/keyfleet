@@ -1,13 +1,13 @@
-defmodule KeyFleetWeb.AgentGraphController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.AgentGraphController do
+  use KeyfleetWeb, :controller
 
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Errors.IndeterminateError
-  alias KeyFleet.Graph.Errors.NotKeyHolderError
-  alias KeyFleet.Graph.Errors.RefusedError
-  alias KeyFleet.Graph.Errors.UnavailableError
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Errors.IndeterminateError
+  alias Keyfleet.Graph.Errors.NotKeyHolderError
+  alias Keyfleet.Graph.Errors.RefusedError
+  alias Keyfleet.Graph.Errors.UnavailableError
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   # The graph's own refusals, by the status each is answered with.
   @refusal_statuses %{

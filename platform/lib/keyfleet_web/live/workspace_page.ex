@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.WorkspacePage do
+defmodule KeyfleetWeb.WorkspacePage do
   @moduledoc """
   What a fleet's workspace pages show, read from the workspace's read tables
   alone, never from the fleet's writer.
@@ -16,11 +16,11 @@ defmodule KeyFleetWeb.WorkspacePage do
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph
-  alias KeyFleet.Rooms
-  alias KeyFleetWeb.NotFoundError
-  alias KeyFleetWeb.RoomsLive
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph
+  alias Keyfleet.Rooms
+  alias KeyfleetWeb.NotFoundError
+  alias KeyfleetWeb.RoomsLive
 
   @types ~w(goal task finding evidence service launch_card note)
 
@@ -579,7 +579,7 @@ defmodule KeyFleetWeb.WorkspacePage do
   defp who(actor) do
     case Regex.run(@member, actor, capture: :all_but_first) do
       [token_id] -> {:key, String.to_integer(token_id)}
-      nil -> "KeyFleet"
+      nil -> "Keyfleet"
     end
   end
 

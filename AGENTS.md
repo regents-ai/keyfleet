@@ -1,4 +1,4 @@
-# KeyFleet
+# Keyfleet
 
 - `platform/`: Phoenix/Ash application. Read its instructions for web changes.
 - `cli/`: pnpm workspace for the `keyfleet` command. Only `help` and

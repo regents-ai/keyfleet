@@ -1,4 +1,4 @@
-defmodule KeyFleet.ReleasePackageTest do
+defmodule Keyfleet.ReleasePackageTest do
   use ExUnit.Case, async: true
 
   @package_root Path.expand("../..", __DIR__)

@@ -1,7 +1,7 @@
-defmodule KeyFleet.Keeper.Node do
+defmodule Keyfleet.Keeper.Node do
   @moduledoc """
   What the keeper asks of the chain: a JSON-RPC node in production
-  (`KeyFleet.Keeper.RpcNode`) and a stand-in in tests.
+  (`Keyfleet.Keeper.RpcNode`) and a stand-in in tests.
 
   Everything is read at the latest block; on Base the sequencer's first
   block is final enough (nothing waits for L1). Addresses and hashes are
@@ -53,5 +53,5 @@ defmodule KeyFleet.Keeper.Node do
   @callback receipt(tx_hash :: String.t()) :: {:ok, receipt() | nil} | {:error, term()}
 
   @doc "The node this application is configured with."
-  def configured, do: Application.fetch_env!(:keyfleet, KeyFleet.Keeper)[:node]
+  def configured, do: Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:node]
 end

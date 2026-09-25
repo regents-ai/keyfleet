@@ -1,17 +1,17 @@
-defmodule KeyFleet.Treasury.Reading do
+defmodule Keyfleet.Treasury.Reading do
   @moduledoc """
   A fleet's balances as its contracts held them at one block: the budget,
   reward backing and pay period of each asset the budget or the reward
   ledger has held, the Cascade completion reserve, the protocol share owed
   and whether the launch has settled.
 
-  `KeyFleet.Chain.TreasuryReader` reads them about once a minute at the
+  `Keyfleet.Chain.TreasuryReader` reads them about once a minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
   the block kept, or of an earlier one, is ignored, and comes back marked
   `upsert_skipped` in its metadata.
   """
   use Ash.Resource,
-    domain: KeyFleet.Treasury,
+    domain: Keyfleet.Treasury,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.Treasury.Reading do
 
   postgres do
     table "treasury_readings"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:block_hash, "treasury_readings_block_hash_shape",
@@ -77,7 +77,7 @@ defmodule KeyFleet.Treasury.Reading do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -107,14 +107,14 @@ defmodule KeyFleet.Treasury.Reading do
 
     # USDC, then each reward asset in the order the reward ledger registered
     # them, then every other asset the budget has held, as
-    # `KeyFleet.Treasury.budget_assets/2` lists them.
-    attribute :assets, {:array, KeyFleet.Treasury.AssetBalance},
+    # `Keyfleet.Treasury.budget_assets/2` lists them.
+    attribute :assets, {:array, Keyfleet.Treasury.AssetBalance},
       allow_nil?: false,
       public?: true
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

@@ -1,9 +1,9 @@
-defmodule KeyFleet.CreatedRoomRaceTest do
+defmodule Keyfleet.CreatedRoomRaceTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Fleets
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Fleets
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   # Each creation runs on a connection of its own and commits, so the rooms
   # this test leaves behind are removed when it ends.

@@ -1,10 +1,10 @@
-defmodule KeyFleet.Keeper.RpcNode do
-  @moduledoc "`KeyFleet.Keeper.Node` over JSON-RPC to the node at `KEYFLEET_RPC_URL`."
-  @behaviour KeyFleet.Keeper.Node
+defmodule Keyfleet.Keeper.RpcNode do
+  @moduledoc "`Keyfleet.Keeper.Node` over JSON-RPC to the node at `KEYFLEET_RPC_URL`."
+  @behaviour Keyfleet.Keeper.Node
 
   require Logger
 
-  alias KeyFleet.Chain.{Abi, JsonRpc}
+  alias Keyfleet.Chain.{Abi, JsonRpc}
 
   @impl true
   def chain_id, do: quantity("eth_chainId", [])

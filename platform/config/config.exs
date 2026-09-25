@@ -7,7 +7,7 @@
 # General application configuration
 import Config
 
-config :regent_identity, repo: KeyFleet.Repo, ash_domains: [RegentIdentity]
+config :regent_identity, repo: Keyfleet.Repo, ash_domains: [RegentIdentity]
 
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
@@ -17,33 +17,33 @@ config :ash, default_string_length_count: :codepoints
 
 # Key ownership is read from each deployed fleet every few seconds, by the
 # JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
-config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.RpcClient, poll_interval_ms: 4_000
+config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interval_ms: 4_000
 
 # The keeper sends through the same node, and looks for each receipt once a
 # second. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY` is set.
-config :keyfleet, KeyFleet.Keeper, node: KeyFleet.Keeper.RpcNode, receipt_poll_ms: 1_000
+config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.RpcNode, receipt_poll_ms: 1_000
 
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
   local_showcase: false,
   ash_domains: [
-    KeyFleet.Accounts,
-    KeyFleet.Fleets,
-    KeyFleet.Rooms,
-    KeyFleet.Agents,
-    KeyFleet.Keys,
-    KeyFleet.Chain,
-    KeyFleet.Proposals,
-    KeyFleet.Treasury,
-    KeyFleet.Graph,
-    KeyFleet.Keeper
+    Keyfleet.Accounts,
+    Keyfleet.Fleets,
+    Keyfleet.Rooms,
+    Keyfleet.Agents,
+    Keyfleet.Keys,
+    Keyfleet.Chain,
+    Keyfleet.Proposals,
+    Keyfleet.Treasury,
+    Keyfleet.Graph,
+    Keyfleet.Keeper
   ],
   generators: [timestamp_type: :utc_datetime]
 
-config :keyfleet, ecto_repos: [KeyFleet.Repo]
+config :keyfleet, ecto_repos: [Keyfleet.Repo]
 
-config :keyfleet, KeyFleet.Repo,
+config :keyfleet, Keyfleet.Repo,
   database: "keyfleet_disabled",
   hostname: "127.0.0.1",
   port: 1,
@@ -82,18 +82,18 @@ config :keyfleet, :session_options,
   http_only: true
 
 # Configure the endpoint
-config :keyfleet, KeyFleetWeb.Endpoint,
+config :keyfleet, KeyfleetWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [
-      html: KeyFleetWeb.ErrorHTML,
-      json: KeyFleetWeb.ErrorJSON,
-      md: KeyFleetWeb.ErrorMD
+      html: KeyfleetWeb.ErrorHTML,
+      json: KeyfleetWeb.ErrorJSON,
+      md: KeyfleetWeb.ErrorMD
     ],
     layout: false
   ],
-  pubsub_server: KeyFleet.PubSub,
+  pubsub_server: Keyfleet.PubSub,
   live_view: [signing_salt: "RH19ZPg2"]
 
 # Configure esbuild (the version is required)

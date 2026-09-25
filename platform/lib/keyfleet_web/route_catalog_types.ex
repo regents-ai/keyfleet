@@ -1,28 +1,28 @@
-defmodule KeyFleetWeb.RouteCatalog.Entry do
+defmodule KeyfleetWeb.RouteCatalog.Entry do
   @moduledoc false
   @enforce_keys [:path_pattern, :live_action, :parameter_schema, :reserved_values, :route_spec_id]
   defstruct @enforce_keys
 end
 
-defmodule KeyFleetWeb.RouteCatalog.SidebarModel do
+defmodule KeyfleetWeb.RouteCatalog.SidebarModel do
   @moduledoc false
   @enforce_keys [:id, :targets]
   defstruct @enforce_keys
 end
 
-defmodule KeyFleetWeb.RouteCatalog.RouteTarget do
+defmodule KeyfleetWeb.RouteCatalog.RouteTarget do
   @moduledoc false
   @enforce_keys [:route_id, :label, :path]
   defstruct @enforce_keys
 end
 
-defmodule KeyFleetWeb.RouteCatalog.SidebarHeading do
+defmodule KeyfleetWeb.RouteCatalog.SidebarHeading do
   @moduledoc false
   @enforce_keys [:label]
   defstruct @enforce_keys
 end
 
-defmodule KeyFleetWeb.RouteCatalog.Spec do
+defmodule KeyfleetWeb.RouteCatalog.Spec do
   @moduledoc false
   @enforce_keys [
     :route_id,

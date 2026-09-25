@@ -1,10 +1,10 @@
-defmodule KeyFleet.Keeper.CallsTest do
+defmodule Keyfleet.Keeper.CallsTest do
   use ExUnit.Case, async: true
 
   import Bitwise
 
-  alias KeyFleet.Keeper.Calls
-  alias KeyFleet.Keeper.Calls.Call
+  alias Keyfleet.Keeper.Calls
+  alias Keyfleet.Keeper.Calls.Call
 
   @fleet "0x5fbdb2315678afecb367f032d93f642f64180aa3"
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"

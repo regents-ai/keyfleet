@@ -44,4 +44,4 @@ fi
 
 export KEYFLEET_ACCEPTANCE_RUN_ID=$run_id
 mix deps.get
-MIX_ENV=test mix key_fleet.setup_local --run-id "$run_id"
+MIX_ENV=test mix keyfleet.setup_local --run-id "$run_id"

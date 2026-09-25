@@ -1,8 +1,8 @@
-defmodule KeyFleet.AccessContext do
+defmodule Keyfleet.AccessContext do
   @moduledoc "Principal-aware access context for public shell routes."
 
   alias __MODULE__.AccountControl
-  alias KeyFleet.PublicIdentity
+  alias Keyfleet.PublicIdentity
 
   @enforce_keys [:principal, :capabilities]
   defstruct @enforce_keys

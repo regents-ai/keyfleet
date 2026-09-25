@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Seq do
+defmodule Keyfleet.Graph.Seq do
   @moduledoc """
   A place in a fleet's graph log: a whole number from 1 to the largest the
   database stores.

@@ -1,10 +1,10 @@
-defmodule KeyFleet.Keys.Checks.KeyOwner do
+defmodule Keyfleet.Keys.Checks.KeyOwner do
   @moduledoc false
   use Ash.Policy.FilterCheck
 
   require Ash.Expr
 
-  alias KeyFleet.Actors.Human
+  alias Keyfleet.Actors.Human
 
   @impl true
   def describe(_opts),
@@ -16,7 +16,7 @@ defmodule KeyFleet.Keys.Checks.KeyOwner do
     do:
       Ash.Expr.expr(
         owner_wallet in ^wallets and ownership_epoch == current_ownership_epoch and
-          exists(KeyFleet.Chain.Cursor, fleet_id == parent(fleet_id) and fresh?)
+          exists(Keyfleet.Chain.Cursor, fleet_id == parent(fleet_id) and fresh?)
       )
 
   def filter(_actor, _authorizer, _opts), do: Ash.Expr.expr(false)

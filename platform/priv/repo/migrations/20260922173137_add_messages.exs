@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddMessages do
+defmodule Keyfleet.Repo.Migrations.AddMessages do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

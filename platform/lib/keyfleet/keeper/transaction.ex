@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Transaction do
+defmodule Keyfleet.Keeper.Transaction do
   @moduledoc """
   One transaction the keeper signed, recorded before it is sent, with its
   outcome once the chain has one.
@@ -8,18 +8,18 @@ defmodule KeyFleet.Keeper.Transaction do
   reads or writes here.
   """
   use Ash.Resource,
-    domain: KeyFleet.Keeper,
+    domain: Keyfleet.Keeper,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   @bigint 9_223_372_036_854_775_807
   @jobs [:reveal, :income]
-  @functions KeyFleet.Keeper.Calls.functions()
+  @functions Keyfleet.Keeper.Calls.functions()
   @statuses [:mined, :reverted, :replaced, :replaced_externally]
 
   postgres do
     table "keeper_txs"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(sent_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -153,7 +153,7 @@ defmodule KeyFleet.Keeper.Transaction do
       ]
     end
 
-    # Run only through `KeyFleet.Keeper.settle/2`, whose query finds the row
+    # Run only through `Keyfleet.Keeper.settle/2`, whose query finds the row
     # only while it is unsettled.
     update :settle do
       accept [
@@ -246,7 +246,7 @@ defmodule KeyFleet.Keeper.Transaction do
 
   policies do
     policy always() do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -303,7 +303,7 @@ defmodule KeyFleet.Keeper.Transaction do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
     end

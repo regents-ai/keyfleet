@@ -1,4 +1,4 @@
-defmodule KeyFleet.SiwaBroker do
+defmodule Keyfleet.SiwaBroker do
   @moduledoc "Product configuration and transport for the shared SIWA broker."
   @behaviour Siwa.AgentAuthPlug.Client
 
@@ -10,7 +10,7 @@ defmodule KeyFleet.SiwaBroker do
           Map.update!(
             payload,
             "headers",
-            &Map.take(&1, KeyFleetWeb.Plugs.SignedAgent.proof_headers())
+            &Map.take(&1, KeyfleetWeb.Plugs.SignedAgent.proof_headers())
           )
 
         Siwa.AgentAuthPlug.BrokerClient.verify_http_request(payload,

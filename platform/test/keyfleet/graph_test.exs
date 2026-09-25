@@ -1,12 +1,12 @@
-defmodule KeyFleet.GraphTest do
+defmodule Keyfleet.GraphTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Writer
-  alias KeyFleet.Keys
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Writer
+  alias Keyfleet.Keys
 
   @moduletag :tmp_dir
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.GraphTest do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
     # inside the sandbox only when its transaction is at that level already.
     owner =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
         shared: true,
         isolation: "REPEATABLE READ"
       )
@@ -58,7 +58,7 @@ defmodule KeyFleet.GraphTest do
     )
 
     start_supervised!(
-      {KeyFleet.Graph.Supervisor,
+      {Keyfleet.Graph.Supervisor,
        fleets: [@fleet],
        data_dir: Path.join(tmp_dir, "graph"),
        reply_timeout: 5_000,
@@ -68,7 +68,7 @@ defmodule KeyFleet.GraphTest do
     )
 
     await_ready()
-    start_supervised!({KeyFleet.Graph.Projectors, fleets: [@fleet]})
+    start_supervised!({Keyfleet.Graph.Projectors, fleets: [@fleet]})
     :ok
   end
 

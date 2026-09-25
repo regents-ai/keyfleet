@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.AgentJoinJourneyTest do
+defmodule KeyfleetWeb.AgentJoinJourneyTest do
   use ExUnit.Case, async: false
   import Plug.Conn
   @path "/api/v1/agent/join/status"
@@ -6,7 +6,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
 
   setup do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
+    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
@@ -62,7 +62,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
       end)
 
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
-    app = server(:product, &KeyFleetWeb.Endpoint.call(&1, KeyFleetWeb.Endpoint.init(&2)))
+    app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
 
@@ -224,7 +224,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
     assert oversized.status == 413
     refute_receive {:broker_payload, _}
     conn = Plug.Test.conn("POST", @path, @body)
-    assert {:error, _} = KeyFleetWeb.Plugs.SignedAgent.before_verify(conn, %{})
+    assert {:error, _} = KeyfleetWeb.Plugs.SignedAgent.before_verify(conn, %{})
   end
 
   test "verification transport never retries or follows redirects", c do
@@ -289,7 +289,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
                401
     end
 
-    for header <- KeyFleetWeb.Plugs.SignedAgent.proof_headers() do
+    for header <- KeyfleetWeb.Plugs.SignedAgent.proof_headers() do
       assert send_request(c, %{signed | headers: Map.delete(signed.headers, header)}).status ==
                401
 
@@ -302,7 +302,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
           ]
       }
 
-      assert KeyFleetWeb.Endpoint.call(duplicate, []).status == 401
+      assert KeyfleetWeb.Endpoint.call(duplicate, []).status == 401
     end
 
     for {method, path} <- [
@@ -371,7 +371,7 @@ defmodule KeyFleetWeb.AgentJoinJourneyTest do
 
     for data <- invalid do
       assert {:error, _} =
-               KeyFleetWeb.Plugs.SignedAgent.accept(Plug.Test.conn("POST", @path), data, nil)
+               KeyfleetWeb.Plugs.SignedAgent.accept(Plug.Test.conn("POST", @path), data, nil)
     end
   end
 

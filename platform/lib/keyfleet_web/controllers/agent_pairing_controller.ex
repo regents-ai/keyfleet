@@ -1,12 +1,12 @@
-defmodule KeyFleetWeb.AgentPairingController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.AgentPairingController do
+  use KeyfleetWeb, :controller
 
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Keys
-  alias KeyFleet.Keys.Errors.AlreadyOperatingError
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
-  alias KeyFleet.Keys.Errors.ProfileRequiredError
-  alias KeyFleet.Keys.Errors.UnknownKeyError
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Keys
+  alias Keyfleet.Keys.Errors.AlreadyOperatingError
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Keys.Errors.ProfileRequiredError
+  alias Keyfleet.Keys.Errors.UnknownKeyError
 
   @fields [
     :id,

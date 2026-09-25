@@ -1,8 +1,8 @@
-defmodule KeyFleet.Accounts do
+defmodule Keyfleet.Accounts do
   use Ash.Domain
 
   resources do
-    resource KeyFleet.Accounts.HumanAccount do
+    resource Keyfleet.Accounts.HumanAccount do
       define :get_by_privy_did,
         action: :by_privy_did,
         args: [:privy_did],
@@ -24,9 +24,9 @@ defmodule KeyFleet.Accounts do
         args: [:wallet_address, :wallet_addresses]
     end
 
-    resource KeyFleet.Accounts.SessionAuthority
+    resource Keyfleet.Accounts.SessionAuthority
 
-    resource KeyFleet.Accounts.LinkedIdentity do
+    resource Keyfleet.Accounts.LinkedIdentity do
       define :upsert_linked_identity,
         action: :upsert_verified,
         args: [

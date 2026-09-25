@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.RouterGateCoverageTest do
+defmodule KeyfleetWeb.RouterGateCoverageTest do
   @moduledoc """
   Walks the router's own route table so a route added later cannot quietly
   escape the launch gate: a new pipeline without the gate, a route with no
@@ -6,9 +6,9 @@ defmodule KeyFleetWeb.RouterGateCoverageTest do
   all fail here.
   """
 
-  use KeyFleetWeb.ConnCase, async: false
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleetWeb.Live.LaunchGateHook
+  alias KeyfleetWeb.Live.LaunchGateHook
 
   setup do
     Application.put_env(:keyfleet, :app_surfaces, false)
@@ -56,14 +56,14 @@ defmodule KeyFleetWeb.RouterGateCoverageTest do
   # The development workshop has an independent loopback gate, exercised by
   # ShowcaseTest for both HTTP and connected mounts. It is absent in production.
   defp routes do
-    KeyFleetWeb.Router
+    KeyfleetWeb.Router
     |> Phoenix.Router.routes()
     |> Enum.reject(fn route ->
       method = route.verb |> Atom.to_string() |> String.upcase()
 
       info =
         Phoenix.Router.route_info(
-          KeyFleetWeb.Router,
+          KeyfleetWeb.Router,
           method,
           concrete_path(route.path),
           "localhost"

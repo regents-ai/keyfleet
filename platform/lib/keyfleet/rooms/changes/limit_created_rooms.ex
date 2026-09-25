@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.LimitCreatedRooms do
+defmodule Keyfleet.Rooms.Changes.LimitCreatedRooms do
   @moduledoc """
   Keeps a fleet at no more than 100 created rooms, beside its own ten.
 
@@ -8,7 +8,7 @@ defmodule KeyFleet.Rooms.Changes.LimitCreatedRooms do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Rooms.Errors.CreatedRoomLimitError
+  alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
 
   @limit 100
 
@@ -17,11 +17,11 @@ defmodule KeyFleet.Rooms.Changes.LimitCreatedRooms do
     Ash.Changeset.before_action(changeset, fn changeset ->
       fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
 
-      KeyFleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      Keyfleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
         Jason.encode!(["created_rooms", fleet_id])
       ])
 
-      if KeyFleet.Rooms.count_created_rooms!(fleet_id) < @limit,
+      if Keyfleet.Rooms.count_created_rooms!(fleet_id) < @limit,
         do: changeset,
         else: Ash.Changeset.add_error(changeset, CreatedRoomLimitError.exception(limit: @limit))
     end)

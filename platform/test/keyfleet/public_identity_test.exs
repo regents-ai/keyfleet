@@ -1,7 +1,7 @@
-defmodule KeyFleet.PublicIdentityTest do
+defmodule Keyfleet.PublicIdentityTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleet.PublicIdentity
+  alias Keyfleet.PublicIdentity
 
   test "public labels resolve the display name, then the abbreviated wallet" do
     identity = %{

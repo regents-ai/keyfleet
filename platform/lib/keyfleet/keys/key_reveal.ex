@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.KeyReveal do
+defmodule Keyfleet.Keys.KeyReveal do
   @moduledoc """
   One key's reveal, from its fleet's `KeyRevealed` log: the seed its traits
   are drawn from. A key is revealed once. Only the chain reader writes it, and
@@ -12,7 +12,7 @@ defmodule KeyFleet.Keys.KeyReveal do
   was made.
   """
   use Ash.Resource,
-    domain: KeyFleet.Keys,
+    domain: Keyfleet.Keys,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -20,7 +20,7 @@ defmodule KeyFleet.Keys.KeyReveal do
 
   postgres do
     table "key_reveals"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -89,7 +89,7 @@ defmodule KeyFleet.Keys.KeyReveal do
       upsert_condition expr(false)
       return_skipped_upsert? true
       # A reveal is its seed and request, wherever on the chain it is read.
-      change {KeyFleet.Chain.Changes.RecordOnce,
+      change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:fleet_id, :token_id],
               number: :reveal_seq,
               fields: [:request_id, :seed],
@@ -112,7 +112,7 @@ defmodule KeyFleet.Keys.KeyReveal do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -154,7 +154,7 @@ defmodule KeyFleet.Keys.KeyReveal do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

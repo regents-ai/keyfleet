@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.JsonRpc do
+defmodule Keyfleet.Chain.JsonRpc do
   @moduledoc """
   One JSON-RPC request to the node at `KEYFLEET_RPC_URL`, shared by the fleet
   reader and the keeper.
@@ -17,7 +17,7 @@ defmodule KeyFleet.Chain.JsonRpc do
   transport's `:reason`.
   """
   def request(method, params) do
-    case Req.post(Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:rpc_url],
+    case Req.post(Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:rpc_url],
            json: %{jsonrpc: "2.0", id: 1, method: method, params: params},
            receive_timeout: @timeout,
            retry: false

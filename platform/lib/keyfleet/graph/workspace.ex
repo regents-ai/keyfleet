@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Workspace do
+defmodule Keyfleet.Graph.Workspace do
   @moduledoc """
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
   launch cards and notes its members keep, and the links between them.
@@ -8,19 +8,19 @@ defmodule KeyFleet.Graph.Workspace do
   choosing; the same command id with the same body answers the original result
   instead of writing twice. Every object sits in a scope, the whole fleet or
   one of a Fibonacci fleet's levels, and a write may touch only objects in the
-  scopes its key may write; see `KeyFleet.Graph.Checks.KeyActor`.
+  scopes its key may write; see `Keyfleet.Graph.Checks.KeyActor`.
 
   Anyone may read a workspace. Reads are answered from the read tables copied
-  from the graph's log, never by the writer; see `KeyFleet.Graph.Workspace.Read`.
+  from the graph's log, never by the writer; see `Keyfleet.Graph.Workspace.Read`.
   """
   use Ash.Resource,
-    domain: KeyFleet.Graph,
+    domain: Keyfleet.Graph,
     authorizers: [Ash.Policy.Authorizer]
 
-  alias KeyFleet.Graph.Validations.FreshOwnership
-  alias KeyFleet.Graph.Validations.KnownFleet
-  alias KeyFleet.Graph.Workspace.Read
-  alias KeyFleet.Graph.Workspace.Relay
+  alias Keyfleet.Graph.Validations.FreshOwnership
+  alias Keyfleet.Graph.Validations.KnownFleet
+  alias Keyfleet.Graph.Workspace.Read
+  alias Keyfleet.Graph.Workspace.Relay
 
   @bigint 9_223_372_036_854_775_807
   # Ids, names and text are passed on exactly as written; the graph checks them.
@@ -125,7 +125,7 @@ defmodule KeyFleet.Graph.Workspace do
     end
 
     policy action([:create, :patch, :link, :unlink, :archive]) do
-      authorize_if KeyFleet.Graph.Checks.KeyActor
+      authorize_if Keyfleet.Graph.Checks.KeyActor
     end
   end
 end

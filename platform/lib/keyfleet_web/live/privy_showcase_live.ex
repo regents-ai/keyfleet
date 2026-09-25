@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.PrivyShowcaseLive do
+defmodule KeyfleetWeb.PrivyShowcaseLive do
   @moduledoc """
   Local, executable reference for the Privy integration.
 
@@ -7,10 +7,10 @@ defmodule KeyFleetWeb.PrivyShowcaseLive do
   dispatcher. PrivyShowcase only observes the existing wallet store and publishes
   its selected address; it never creates a provider, session, signature or payment.
   """
-  use KeyFleetWeb, :live_view
+  use KeyfleetWeb, :live_view
 
-  alias KeyFleetWeb.Components.Shell
-  alias KeyFleetWeb.ShowcaseLive
+  alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.ShowcaseLive
   alias Regent.Primitives, as: P
 
   @wallet ~r/\A0x[0-9a-fA-F]{40}\z/
@@ -114,7 +114,7 @@ defmodule KeyFleetWeb.PrivyShowcaseLive do
             </li>
             <li>
               Create your local PostgreSQL database (<code>keyfleet_dev</code>
-              by default), then run <code>mix key_fleet.setup_local_auth</code>. Use <code>MIX_ENV=dev</code>, not a browser-test server, for real sign-in.
+              by default), then run <code>mix keyfleet.setup_local_auth</code>. Use <code>MIX_ENV=dev</code>, not a browser-test server, for real sign-in.
             </li>
             <li>
               Build the assets with <code>mix assets.build</code>, start <code>mix phx.server</code>, then open <code>/showcase/privy</code>.

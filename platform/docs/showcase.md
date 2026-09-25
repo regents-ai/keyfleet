@@ -8,7 +8,7 @@ headers do not grant access. Gallery styles and metadata use the same guard.
 ## What it shows
 
 The workshop renders the active components installed from `regent_ui` and
-`KeyFleetWeb.Components`, plus both layouts, composed in the shared
+`KeyfleetWeb.Components`, plus both layouts, composed in the shared
 `Regent.Structure` frames, rows, section bars and panels. The shell preview
 includes working navigation and theme behavior but omits sign-in controls.
 
@@ -35,7 +35,7 @@ signature.
 
 For real testing, use the configured development server and a Privy-allowed
 localhost origin with `PRIVY_APP_ID` and `PRIVY_VERIFICATION_KEY` set. Prepare
-the local database (`keyfleet_dev`), run `mix key_fleet.setup_local_auth`,
+the local database (`keyfleet_dev`), run `mix keyfleet.setup_local_auth`,
 then `mix assets.build` and `mix phx.server`. Do not use browser-test
 configuration as proof of real Privy sign-in.
 
@@ -74,7 +74,7 @@ created with `MIX_ENV=test mix ecto.create`.
 Run the disposable test server with that partition and port:
 
 ```sh
-env MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, :auto)'
+env MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :auto)'
 ```
 
 That command belongs only in the isolated test context. Use its printed URL and

@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.ErrorMD do
+defmodule KeyfleetWeb.ErrorMD do
   @moduledoc "Public recovery instructions without private request or exception details."
 
-  alias KeyFleetWeb.PublicDocuments
+  alias KeyfleetWeb.PublicDocuments
 
   def render(template, _assigns) do
     links =

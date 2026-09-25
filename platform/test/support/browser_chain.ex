@@ -1,4 +1,4 @@
-defmodule KeyFleet.BrowserChain do
+defmodule Keyfleet.BrowserChain do
   @moduledoc """
   The browser tests' chain. Called on the browser test server's own node, it
   sells, moves and pairs keys of one fleet through the real chain reader and
@@ -19,18 +19,18 @@ defmodule KeyFleet.BrowserChain do
   fails.
   """
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Agents
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.OwnershipLog
-  alias KeyFleet.Chain.Scanner
-  alias KeyFleet.Chain.StubClient
-  alias KeyFleet.Fleets
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Agents
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.OwnershipLog
+  alias Keyfleet.Chain.Scanner
+  alias Keyfleet.Chain.StubClient
+  alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)

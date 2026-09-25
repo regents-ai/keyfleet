@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Metadata do
+defmodule Keyfleet.Keys.Metadata do
   @moduledoc """
   A key's ERC-721 metadata, as each fleet's `tokenURI` names it: the fleet's
   `baseTokenURI`, `<site>/metadata/<slot>/`, followed by the key's number.
@@ -9,10 +9,10 @@ defmodule KeyFleet.Keys.Metadata do
   change only if an operator corrects the reveal by hand after a reorg.
   """
 
-  alias KeyFleet.Fleets
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Keys
-  alias KeyFleet.Traits
+  alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Keys
+  alias Keyfleet.Traits
 
   # The key numbers a `tokenURI` can name: the contract's decimal digits, and
   # no more of them than a database integer holds.

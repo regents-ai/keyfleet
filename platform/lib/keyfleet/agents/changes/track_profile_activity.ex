@@ -1,4 +1,4 @@
-defmodule KeyFleet.Agents.Changes.TrackProfileActivity do
+defmodule Keyfleet.Agents.Changes.TrackProfileActivity do
   @moduledoc false
   use Ash.Resource.Change
 

@@ -1,9 +1,9 @@
-defmodule KeyFleet.Accounts.VerifiedSessionLinkedIdentityTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule Keyfleet.Accounts.VerifiedSessionLinkedIdentityTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.{Accounts, VerifiedPrivyIdentity}
-  alias KeyFleet.Accounts.VerifiedSession
-  alias KeyFleet.Actors.{Human, System}
+  alias Keyfleet.{Accounts, VerifiedPrivyIdentity}
+  alias Keyfleet.Accounts.VerifiedSession
+  alias Keyfleet.Actors.{Human, System}
 
   test "session refresh adds and removes verified social identities" do
     verified = verified_identity("reconcile", [social(:x, "x-42", "regent")])

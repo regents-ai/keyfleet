@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Components.RegentLinks do
+defmodule KeyfleetWeb.Components.RegentLinks do
   @moduledoc """
   The shared brand links: X and GitHub.
 
@@ -17,7 +17,7 @@ defmodule KeyFleetWeb.Components.RegentLinks do
       href="https://x.com/example"
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="KeyFleet on X"
+      aria-label="Keyfleet on X"
     >
       <.source_icon kind={:x} />
     </a>
@@ -25,7 +25,7 @@ defmodule KeyFleetWeb.Components.RegentLinks do
       href="https://github.com/example"
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="KeyFleet on GitHub"
+      aria-label="Keyfleet on GitHub"
     >
       <.source_icon kind={:github} />
     </a>

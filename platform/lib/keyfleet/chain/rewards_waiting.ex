@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.RewardsWaiting do
+defmodule Keyfleet.Chain.RewardsWaiting do
   @moduledoc """
   The USDC one key has earned and not yet had paid out: what the fleet's
   `KeyfleetRewards.accrued(usdc, tokenId)` answers at the block the node
@@ -10,7 +10,7 @@ defmodule KeyFleet.Chain.RewardsWaiting do
   """
   use GenServer
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   @table __MODULE__
   @kept_ms 30_000

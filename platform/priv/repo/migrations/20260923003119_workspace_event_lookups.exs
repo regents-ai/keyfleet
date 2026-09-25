@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.WorkspaceEventLookups do
+defmodule Keyfleet.Repo.Migrations.WorkspaceEventLookups do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

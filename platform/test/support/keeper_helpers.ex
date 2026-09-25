@@ -1,8 +1,8 @@
-defmodule KeyFleet.KeeperHelpers do
+defmodule Keyfleet.KeeperHelpers do
   @moduledoc """
   What the keeper's tests share: one fleet's launch on Base, as the chain
   answers the keeper's reads about it, a sender started on
-  `KeyFleet.Keeper.StubNode`, and the transactions it sent read back from
+  `Keyfleet.Keeper.StubNode`, and the transactions it sent read back from
   their bytes.
 
   The keeper's wallet is anvil's first public test account, never a real
@@ -11,9 +11,9 @@ defmodule KeyFleet.KeeperHelpers do
 
   import ExUnit.Assertions
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper, Repo}
-  alias KeyFleet.Keeper.{Calls, Run, Sender, StubNode, Wallet}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Fleets, Keeper, Repo}
+  alias Keyfleet.Keeper.{Calls, Run, Sender, StubNode, Wallet}
 
   @addresses %{
     keeper: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",

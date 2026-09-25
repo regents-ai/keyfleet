@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.RefuseEmptyingKeyRecords do
+defmodule Keyfleet.Repo.Migrations.RefuseEmptyingKeyRecords do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

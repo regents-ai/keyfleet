@@ -1,4 +1,4 @@
-defmodule KeyFleet.PublicIdentity do
+defmodule Keyfleet.PublicIdentity do
   @moduledoc """
   Resolves the public name and picture for a signed human without exposing its
   private identity.

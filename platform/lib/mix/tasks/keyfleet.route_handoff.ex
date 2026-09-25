@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.KeyFleet.RouteHandoff do
+defmodule Mix.Tasks.Keyfleet.RouteHandoff do
   @shortdoc "Writes or checks the generated founder-shell route handoff"
 
   use Mix.Task
@@ -8,7 +8,7 @@ defmodule Mix.Tasks.KeyFleet.RouteHandoff do
 
   @impl Mix.Task
   def run(args) do
-    handoff = KeyFleetWeb.RouteCatalog.design_handoff()
+    handoff = KeyfleetWeb.RouteCatalog.design_handoff()
     expected = %{@json_path => handoff.json, @digest_path => handoff.digest <> "\n"}
 
     if "--check" in args do

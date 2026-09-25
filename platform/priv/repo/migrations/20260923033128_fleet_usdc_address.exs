@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.FleetUsdcAddress do
+defmodule Keyfleet.Repo.Migrations.FleetUsdcAddress do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

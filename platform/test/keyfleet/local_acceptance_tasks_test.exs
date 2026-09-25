@@ -1,8 +1,8 @@
-defmodule KeyFleet.LocalAcceptanceTasksTest do
+defmodule Keyfleet.LocalAcceptanceTasksTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.LocalDatabaseFixture
-  alias KeyFleet.TestLocalAcceptanceDatabaseAdapter, as: Adapter
+  alias Keyfleet.LocalDatabaseFixture
+  alias Keyfleet.TestLocalAcceptanceDatabaseAdapter, as: Adapter
 
   setup do
     start_supervised!(Adapter)
@@ -185,7 +185,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
     Process.put(:reset_steps, [])
 
     assert :ok =
-             Mix.Tasks.KeyFleet.ResetLocal.reset!("ordered",
+             Mix.Tasks.Keyfleet.ResetLocal.reset!("ordered",
                preflight: fn run_id ->
                  record_reset_step({:preflight, run_id})
                  :owned
@@ -213,7 +213,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
     Process.put(:reset_steps, [])
 
     assert :ok =
-             Mix.Tasks.KeyFleet.ResetLocal.run_reset!("already_absent",
+             Mix.Tasks.Keyfleet.ResetLocal.run_reset!("already_absent",
                database_exists: fn run_id, opts ->
                  record_reset_step({:exists, run_id, opts})
                  false
@@ -233,7 +233,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
     Process.put(:reset_steps, [])
 
     assert :ok =
-             Mix.Tasks.KeyFleet.ResetLocal.run_reset!("present",
+             Mix.Tasks.Keyfleet.ResetLocal.run_reset!("present",
                database_exists: fn run_id, opts ->
                  record_reset_step({:exists, run_id, opts})
                  true
@@ -335,7 +335,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
     parent = self()
 
     assert_raise RuntimeError, "marker mismatch", fn ->
-      Mix.Tasks.KeyFleet.ResetLocal.reset!("wrong_marker",
+      Mix.Tasks.Keyfleet.ResetLocal.reset!("wrong_marker",
         preflight: fn _run_id -> raise "marker mismatch" end,
         identity_cleanup: fn _opts -> send(parent, :unexpected_identity_cleanup) end,
         database_reset: fn _run_id, _opts -> send(parent, :unexpected_database_reset) end,
@@ -364,7 +364,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
 
       Enum.each(injected_options, fn {key, value} ->
         assert_raise RuntimeError, "local acceptance reset refused injected cleanup", fn ->
-          Mix.Tasks.KeyFleet.ResetLocal.reset!("injected", [{key, value}])
+          Mix.Tasks.Keyfleet.ResetLocal.reset!("injected", [{key, value}])
         end
       end)
     after
@@ -396,7 +396,7 @@ defmodule KeyFleet.LocalAcceptanceTasksTest do
 
       Enum.each(injected_options, fn {key, value} ->
         assert_raise RuntimeError, "local acceptance reset refused injected orchestration", fn ->
-          Mix.Tasks.KeyFleet.ResetLocal.run_reset!("injected", [{key, value}])
+          Mix.Tasks.Keyfleet.ResetLocal.run_reset!("injected", [{key, value}])
         end
       end)
     after

@@ -1,4 +1,4 @@
-defmodule KeyFleet.ContractSchema do
+defmodule Keyfleet.ContractSchema do
   @moduledoc """
   Checks an answer against a schema of the API contract, so a test can show
   that what the server really sends is what the contract promises.

@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.PublicDocuments do
+defmodule KeyfleetWeb.PublicDocuments do
   @moduledoc "Public documents only; never projects a signed-in page or account."
 
   @directory Application.app_dir(:keyfleet, "priv/public")
@@ -10,10 +10,10 @@ defmodule KeyFleetWeb.PublicDocuments do
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
   @titles %{
     "/docs" => "Developer documentation",
-    "/about" => "About KeyFleet",
-    "/contact" => "Contact KeyFleet"
+    "/about" => "About Keyfleet",
+    "/contact" => "Contact Keyfleet"
   }
-  @description "KeyFleet: sign in with a wallet, manage your account and read the developer documentation."
+  @description "Keyfleet: sign in with a wallet, manage your account and read the developer documentation."
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote),
     tag_attributes: %{"a" => ["href"]},
@@ -23,16 +23,16 @@ defmodule KeyFleetWeb.PublicDocuments do
     link_rel: "noopener noreferrer"
   ]
 
-  def url(path), do: KeyFleetWeb.Endpoint.url() <> path
+  def url(path), do: KeyfleetWeb.Endpoint.url() <> path
 
   def document("/"),
-    do: %{title: "KeyFleet", markdown: KeyFleetWeb.HomeLive.agent_markdown()}
+    do: %{title: "Keyfleet", markdown: KeyfleetWeb.HomeLive.agent_markdown()}
 
   def document("/privacy"),
-    do: %{title: "Privacy Policy", markdown: KeyFleet.Legal.markdown(:privacy)}
+    do: %{title: "Privacy Policy", markdown: Keyfleet.Legal.markdown(:privacy)}
 
   def document("/terms"),
-    do: %{title: "Terms of Use", markdown: KeyFleet.Legal.markdown(:terms)}
+    do: %{title: "Terms of Use", markdown: Keyfleet.Legal.markdown(:terms)}
 
   def document(path) when is_map_key(@titles, path),
     do: %{title: @titles[path], markdown: source(String.trim_leading(path, "/"))}
@@ -49,7 +49,7 @@ defmodule KeyFleetWeb.PublicDocuments do
 
   def metadata(path) do
     %{
-      title: Map.get(@titles, path, "KeyFleet"),
+      title: Map.get(@titles, path, "Keyfleet"),
       description: @description,
       canonical: url(path),
       image: url("/mark.png"),
@@ -90,8 +90,8 @@ defmodule KeyFleetWeb.PublicDocuments do
         %{
           "@type" => "Organization",
           "@id" => url("/#organization"),
-          "name" => "KeyFleet",
-          "legalName" => "KeyFleet",
+          "name" => "Keyfleet",
+          "legalName" => "Keyfleet",
           "url" => url("/"),
           "logo" => url("/mark.png"),
           "description" => @description,
@@ -109,7 +109,7 @@ defmodule KeyFleetWeb.PublicDocuments do
           "@type" => "WebSite",
           "@id" => url("/#website"),
           "url" => url("/"),
-          "name" => "KeyFleet",
+          "name" => "Keyfleet",
           "publisher" => %{"@id" => url("/#organization")}
         }
       ]

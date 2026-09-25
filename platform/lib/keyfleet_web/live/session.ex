@@ -1,11 +1,11 @@
-defmodule KeyFleetWeb.Live.Session do
+defmodule KeyfleetWeb.Live.Session do
   @moduledoc false
 
   import Phoenix.LiveView,
     only: [attach_hook: 4, connected?: 1, get_connect_info: 2, redirect: 2]
 
-  alias KeyFleet.AccessContext
-  alias KeyFleet.Accounts.SessionAuthority
+  alias Keyfleet.AccessContext
+  alias Keyfleet.Accounts.SessionAuthority
 
   @public_root "/"
 

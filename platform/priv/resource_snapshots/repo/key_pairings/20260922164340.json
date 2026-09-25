@@ -291,7 +291,7 @@
     "global": null,
     "strategy": null
   },
-  "repo": "Elixir.KeyFleet.Repo",
+  "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
   "table": "key_pairings"
 }

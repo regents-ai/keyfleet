@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
+defmodule Mix.Tasks.Keyfleet.ResetBrowserIdentity do
   use Mix.Task
 
   @moduledoc false
@@ -61,7 +61,7 @@ defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
 
   def preflight!(run_id, opts \\ []) do
     env = Keyword.get(opts, :env, current_env())
-    repo_config = Keyword.get_lazy(opts, :repo_config, &KeyFleet.Repo.config/0)
+    repo_config = Keyword.get_lazy(opts, :repo_config, &Keyfleet.Repo.config/0)
     environment = Keyword.get_lazy(opts, :environment, &System.get_env/0)
     adapter = Keyword.get(opts, :adapter, __MODULE__.RepoAdapter)
 
@@ -69,7 +69,7 @@ defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
     identity = owned_identity!(opts, env, adapter)
     marker_rows = adapter.ownership_marker_rows()
 
-    KeyFleet.LocalDatabaseFixture.validate_ownership_marker!(
+    Keyfleet.LocalDatabaseFixture.validate_ownership_marker!(
       marker_rows,
       run_id,
       to_string(repo_config[:database]),
@@ -91,10 +91,10 @@ defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
       raise "browser identity reset refused mismatched acceptance run"
     end
 
-    KeyFleet.LocalDatabaseFixture.reject_remote_environment!(environment)
+    Keyfleet.LocalDatabaseFixture.reject_remote_environment!(environment)
     expected_username = System.fetch_env!("USER")
 
-    KeyFleet.LocalDatabaseFixture.validate_acceptance_target!(
+    Keyfleet.LocalDatabaseFixture.validate_acceptance_target!(
       env,
       repo_config,
       expected_username
@@ -153,7 +153,7 @@ defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
   defmodule RepoAdapter do
     @moduledoc false
 
-    def transaction(fun), do: KeyFleet.Repo.transaction(fun)
+    def transaction(fun), do: Keyfleet.Repo.transaction(fun)
 
     def ownership_marker_rows do
       query!(
@@ -176,6 +176,6 @@ defmodule Mix.Tasks.KeyFleet.ResetBrowserIdentity do
       ).num_rows
     end
 
-    defp query!(sql, params), do: Ecto.Adapters.SQL.query!(KeyFleet.Repo, sql, params)
+    defp query!(sql, params), do: Ecto.Adapters.SQL.query!(Keyfleet.Repo, sql, params)
   end
 end

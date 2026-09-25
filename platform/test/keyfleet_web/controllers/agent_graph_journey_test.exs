@@ -1,16 +1,16 @@
-defmodule KeyFleetWeb.AgentGraphJourneyTest do
+defmodule KeyfleetWeb.AgentGraphJourneyTest do
   use ExUnit.Case, async: false
   import Plug.Conn
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Chain
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.ContractSchema
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph.Projector
-  alias KeyFleet.Graph.Writer
-  alias KeyFleet.Keys
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.Chain
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph.Projector
+  alias Keyfleet.Graph.Writer
+  alias Keyfleet.Keys
+  alias Keyfleet.Rooms
 
   @moduletag :tmp_dir
 
@@ -33,7 +33,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
     # inside the sandbox only when its transaction is at that level already.
     owner =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
         shared: true,
         isolation: "REPEATABLE READ"
       )
@@ -49,7 +49,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     old = Application.get_env(:keyfleet, :siwa_broker_url)
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
     Application.put_env(:keyfleet, :siwa_broker_url, server(:broker, &broker(&1, &2, secret)))
-    app = server(:product, &KeyFleetWeb.Endpoint.call(&1, KeyFleetWeb.Endpoint.init(&2)))
+    app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
 
     %{app: app, secret: secret, data_dir: Path.join(tmp_dir, "graph"), sandbox: owner}
   end
@@ -271,7 +271,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, _bea] = pair_agents(c)
-    stop_supervised!(KeyFleet.Graph.Projectors)
+    stop_supervised!(Keyfleet.Graph.Projectors)
 
     written = graph(c, ann, "create", goal_command("g-1"))
     assert written.status == 200
@@ -681,7 +681,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
       assert {missing.status, missing.body["error"]} == {404, "fleet_unknown"}
     end
 
-    stop_supervised!(KeyFleet.Graph.Supervisor)
+    stop_supervised!(Keyfleet.Graph.Supervisor)
 
     refused = graph(c, ann, "create", create)
     assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
@@ -728,10 +728,10 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
 
     # Only the sandbox's owner may reach the database now, so the writer's
     # ownership reads fail when the write's turn comes.
-    Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, :manual)
+    Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual)
     :sys.resume(writer)
     refused = Task.await(waiting, 15_000)
-    Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, {:shared, c.sandbox})
+    Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, {:shared, c.sandbox})
 
     assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
     assert refused.body["message"] =~ "nothing was written"
@@ -887,7 +887,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
         opts
       )
 
-    start_supervised!({KeyFleet.Graph.Supervisor, opts})
+    start_supervised!({Keyfleet.Graph.Supervisor, opts})
 
     for fleet <- opts[:fleets],
         do: await(fn -> match?({:ok, _}, Writer.request(fleet, "hello", %{})) end)
@@ -895,7 +895,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
     # Writes ask the projector to copy them; with no rounds of its own during
     # a test, nothing else reaches the writer. Its first round is done once
     # it answers.
-    start_supervised!({KeyFleet.Graph.Projectors, [catch_up_interval: 60_000] ++ opts})
+    start_supervised!({Keyfleet.Graph.Projectors, [catch_up_interval: 60_000] ++ opts})
     for fleet <- opts[:fleets], do: Projector.await(fleet, log_id(fleet), 0)
   end
 
@@ -955,7 +955,7 @@ defmodule KeyFleetWeb.AgentGraphJourneyTest do
   end
 
   defp writer do
-    [{pid, _timeout}] = Registry.lookup(KeyFleet.Graph.Registry, @fleet)
+    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, @fleet)
     pid
   end
 

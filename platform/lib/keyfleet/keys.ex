@@ -1,15 +1,15 @@
-defmodule KeyFleet.Keys do
+defmodule Keyfleet.Keys do
   @moduledoc """
   Key ownership and reveals projected from contract events, and who operates
   each key.
   """
   use Ash.Domain
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Actors.Human
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
 
   resources do
-    resource KeyFleet.Keys.KeyAttachment do
+    resource Keyfleet.Keys.KeyAttachment do
       define :record_epoch, action: :record_epoch
       define :key_history, action: :history, args: [:fleet_id, :token_id]
       define :current_key, action: :current, args: [:fleet_id, :token_id], not_found_error?: false
@@ -29,13 +29,13 @@ defmodule KeyFleet.Keys do
       define :epochs_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
     end
 
-    resource KeyFleet.Keys.KeyReveal do
+    resource Keyfleet.Keys.KeyReveal do
       define :record_reveal, action: :record
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
     end
 
-    resource KeyFleet.Keys.KeyPairing do
+    resource Keyfleet.Keys.KeyPairing do
       define :request_pairing, action: :request_pairing, args: [:fleet_id, :token_id]
       define :approve_pairing, action: :approve_pairing
       define :decline_pairing, action: :decline_pairing
@@ -107,7 +107,7 @@ defmodule KeyFleet.Keys do
   """
   def unrevealed(fleet_id, minted, except, limit) do
     # Raw SQL, not an Ash read: the keys it lists have no row (key_reveals has only revealed ones).
-    case KeyFleet.Repo.query(
+    case Keyfleet.Repo.query(
            """
            SELECT key.token_id FROM generate_series(1, $2::bigint) AS key(token_id)
            WHERE key.token_id <> ALL($3::bigint[])

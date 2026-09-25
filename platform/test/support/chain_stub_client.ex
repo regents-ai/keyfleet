@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.StubClient do
+defmodule Keyfleet.Chain.StubClient do
   @moduledoc """
   The chain as a test describes it: a chain id, a head, a list of raw logs and
   the hash of each block, held in the calling process so tests running side by
@@ -14,7 +14,7 @@ defmodule KeyFleet.Chain.StubClient do
   process keeps the requests it made itself.
   """
 
-  @behaviour KeyFleet.Chain.Client
+  @behaviour Keyfleet.Chain.Client
 
   # Every block's hash unless a test names another, and the hash the chain
   # tests give each log.

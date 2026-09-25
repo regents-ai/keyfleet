@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Projection do
+defmodule Keyfleet.Graph.Projection do
   @moduledoc """
   Copies a fleet's graph log into the read tables, page by page, from where
   its cursor stands.
@@ -17,9 +17,9 @@ defmodule KeyFleet.Graph.Projection do
   copied again from the beginning.
   """
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Writer
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Writer
 
   @system %System{}
   @page 500

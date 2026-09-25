@@ -1,11 +1,11 @@
-defmodule KeyFleet.Chain.OwnershipLog do
+defmodule Keyfleet.Chain.OwnershipLog do
   @moduledoc """
   Reads a fleet contract's `OwnershipEpoch(uint256 indexed tokenId, uint64
   epoch, address indexed from, address indexed to)` logs into the fields
-  `KeyFleet.Keys.record_epoch/2` takes.
+  `Keyfleet.Keys.record_epoch/2` takes.
   """
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   # cast keccak "OwnershipEpoch(uint256,uint64,address,address)"
   @topic "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"

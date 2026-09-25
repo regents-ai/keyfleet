@@ -1,16 +1,16 @@
-defmodule KeyFleet.KeyThreadsTest do
+defmodule Keyfleet.KeyThreadsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Errors.KeyUnknownError
-  alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
-  alias KeyFleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
+  alias Keyfleet.Rooms.Errors.RoomUnknownError
 
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
@@ -189,7 +189,7 @@ defmodule KeyFleet.KeyThreadsTest do
 
   test "a post tells the keys it concerns once, and a repeat tells nobody",
        %{first: first, fifth: fifth} do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Rooms.fleet_topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")
     assert_receive {:room_head, room_id, 1}
@@ -263,7 +263,7 @@ defmodule KeyFleet.KeyThreadsTest do
 
   # The key after the highest one the fleet has recorded.
   defp unsold_key do
-    {:ok, minted} = KeyFleet.Chain.minted(@fleet)
+    {:ok, minted} = Keyfleet.Chain.minted(@fleet)
     minted + 1
   end
 

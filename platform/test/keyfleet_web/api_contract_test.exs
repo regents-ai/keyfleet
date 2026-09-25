@@ -1,5 +1,5 @@
-defmodule KeyFleetWeb.ApiContractTest do
-  use KeyFleetWeb.ConnCase, async: true
+defmodule KeyfleetWeb.ApiContractTest do
+  use KeyfleetWeb.ConnCase, async: true
 
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   @served_contract Application.app_dir(:keyfleet, "priv/static/api-contract.openapiv3.yaml")
@@ -348,7 +348,7 @@ defmodule KeyFleetWeb.ApiContractTest do
 
     served =
       for %{path: "/api/v1/agent/" <> _ = path, verb: verb} <-
-            Phoenix.Router.routes(KeyFleetWeb.Router),
+            Phoenix.Router.routes(KeyfleetWeb.Router),
           do: {verb |> to_string() |> String.upcase(), Regex.replace(~r/:(\w+)/, path, "{\\1}")}
 
     documented =

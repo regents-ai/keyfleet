@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.Cursor do
+defmodule Keyfleet.Chain.Cursor do
   @moduledoc """
   How far one fleet's key history has been read from the chain, and whether it
   can be trusted right now.
@@ -14,7 +14,7 @@ defmodule KeyFleet.Chain.Cursor do
   (`read_through_at`), which is how far votes are known to be counted.
   """
   use Ash.Resource,
-    domain: KeyFleet.Chain,
+    domain: Keyfleet.Chain,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -25,7 +25,7 @@ defmodule KeyFleet.Chain.Cursor do
 
   postgres do
     table "chain_cursors"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       for field <- [
@@ -120,7 +120,7 @@ defmodule KeyFleet.Chain.Cursor do
     end
 
     policy action([:open, :advance, :flag_divergence, :clear_divergence]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -141,7 +141,7 @@ defmodule KeyFleet.Chain.Cursor do
     attribute :rescan_from, :integer, public?: true, constraints: [min: 0]
 
     # The last number given to one of the fleet's proposal, vote, execution,
-    # income split or budget payment records. It is moved only by `KeyFleet.Chain.take_proposal_seq!/1`.
+    # income split or budget payment records. It is moved only by `Keyfleet.Chain.take_proposal_seq!/1`.
     attribute :proposal_seq, :integer,
       allow_nil?: false,
       default: 0,
@@ -149,7 +149,7 @@ defmodule KeyFleet.Chain.Cursor do
       constraints: [min: 0]
 
     # The last number given to one of the fleet's key reveals. It is moved only
-    # by `KeyFleet.Chain.take_reveal_seq!/1`.
+    # by `Keyfleet.Chain.take_reveal_seq!/1`.
     attribute :reveal_seq, :integer,
       allow_nil?: false,
       default: 0,
@@ -157,7 +157,7 @@ defmodule KeyFleet.Chain.Cursor do
       constraints: [min: 0]
 
     # The last number given to one of the fleet's ownership epochs. It is moved
-    # only by `KeyFleet.Chain.take_ownership_seq!/1`.
+    # only by `Keyfleet.Chain.take_ownership_seq!/1`.
     attribute :ownership_seq, :integer,
       allow_nil?: false,
       default: 0,
@@ -169,7 +169,7 @@ defmodule KeyFleet.Chain.Cursor do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       primary_key? true
       allow_nil? false

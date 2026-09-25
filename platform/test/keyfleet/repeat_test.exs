@@ -1,9 +1,9 @@
-defmodule KeyFleet.Chain.RepeatTest do
+defmodule Keyfleet.Chain.RepeatTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Chain.Repeat
+  alias Keyfleet.Chain.Repeat
 
   # Answers each read with the next of the fleet's answers, and tells the test.
   defmodule Reader do

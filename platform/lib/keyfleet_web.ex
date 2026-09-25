@@ -1,12 +1,12 @@
-defmodule KeyFleetWeb do
+defmodule KeyfleetWeb do
   @moduledoc """
   The entrypoint for defining your web interface, such
   as controllers, components, channels, and so on.
 
   This can be used in your application as:
 
-      use KeyFleetWeb, :controller
-      use KeyFleetWeb, :html
+      use KeyfleetWeb, :controller
+      use KeyfleetWeb, :html
 
   The definitions below will be executed for every controller,
   component, etc, so keep them short and clean, focused
@@ -56,7 +56,7 @@ defmodule KeyFleetWeb do
 
   def live_view do
     quote do
-      use Phoenix.LiveView, layout: {KeyFleetWeb.Layouts, :app}
+      use Phoenix.LiveView, layout: {KeyfleetWeb.Layouts, :app}
 
       unquote(html_helpers())
     end
@@ -86,7 +86,7 @@ defmodule KeyFleetWeb do
   defp html_helpers do
     quote do
       # Common modules used in templates
-      alias KeyFleetWeb.Layouts
+      alias KeyfleetWeb.Layouts
       alias Phoenix.LiveView.JS
 
       # Routes generation with the ~p sigil
@@ -97,9 +97,9 @@ defmodule KeyFleetWeb do
   def verified_routes do
     quote do
       use Phoenix.VerifiedRoutes,
-        endpoint: KeyFleetWeb.Endpoint,
-        router: KeyFleetWeb.Router,
-        statics: KeyFleetWeb.static_paths()
+        endpoint: KeyfleetWeb.Endpoint,
+        router: KeyfleetWeb.Router,
+        statics: KeyfleetWeb.static_paths()
     end
   end
 

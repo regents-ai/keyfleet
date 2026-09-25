@@ -1,16 +1,16 @@
-defmodule KeyFleet.Graph.ProjectionTest do
+defmodule Keyfleet.Graph.ProjectionTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias KeyFleet.Actors
-  alias KeyFleet.ContractSchema
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Projection
-  alias KeyFleet.Graph.Projector
-  alias KeyFleet.Graph.Writer
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.ContractSchema
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Projection
+  alias Keyfleet.Graph.Projector
+  alias Keyfleet.Graph.Writer
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   @moduletag :tmp_dir
 
@@ -73,7 +73,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
       assert Enum.sort(Map.keys(payload)) == ~w(events op principal result)
     end
 
-    stop_supervised!(KeyFleet.Graph.Projectors)
+    stop_supervised!(Keyfleet.Graph.Projectors)
     @fleet |> Graph.get_cursor!(actor: @system) |> Graph.forget_cursor!(actor: @system)
     assert Enum.all?(Map.values(tables()), &(&1 == []))
 
@@ -88,7 +88,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
     assert Projector.await(@fleet, log_id(), head) == head
     copied = tables()
 
-    stop_supervised!(KeyFleet.Graph.Projectors)
+    stop_supervised!(Keyfleet.Graph.Projectors)
     @fleet |> Graph.get_cursor!(actor: @system) |> Graph.forget_cursor!(actor: @system)
     Graph.start_cursor!(%{fleet_id: @fleet, run_id: "log_elsewhere"}, actor: @system)
 
@@ -124,13 +124,13 @@ defmodule KeyFleet.Graph.ProjectionTest do
     lost = Enum.reduce(1..3, 0, fn n, _ -> write!("create", note("Lost #{n}"), "lost-#{n}") end)
     assert Projector.await(@fleet, run_id, lost) == lost
 
-    stop_supervised!(KeyFleet.Graph.Supervisor)
+    stop_supervised!(Keyfleet.Graph.Supervisor)
     start_writer(Path.join(tmp_dir, "backup"))
     assert log_id() == run_id
     restored = write!("create", note("Restored"), "restored-1")
     assert restored < lost
 
-    stop_supervised!(KeyFleet.Graph.Projectors)
+    stop_supervised!(Keyfleet.Graph.Projectors)
     start_projector(catch_up_interval: 60_000)
     assert Projector.await(@fleet, run_id, restored) == restored
 
@@ -149,7 +149,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
     copier = Task.async(fn -> hold_here(test, fn -> Projection.catch_up(@fleet) end) end)
     assert_receive {:held, pid}, 10_000
 
-    stop_supervised!(KeyFleet.Graph.Supervisor)
+    stop_supervised!(Keyfleet.Graph.Supervisor)
     start_writer(Path.join(tmp_dir, "fresh"))
     write!("create", note("Fresh"), "fresh-1")
     new_run = log_id()
@@ -162,7 +162,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
   end
 
   test "a write the projector was never told about is copied on its next round" do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Graph.head_topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Graph.head_topic(@fleet))
     start_projector(catch_up_interval: 200)
 
     # Straight to the writer, so nothing asks the projector to copy it.
@@ -500,7 +500,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
     old_run = log_id()
     assert Projector.await(@fleet, old_run, old_head) == old_head
 
-    stop_supervised!(KeyFleet.Graph.Supervisor)
+    stop_supervised!(Keyfleet.Graph.Supervisor)
     start_writer(Path.join(tmp_dir, "fresh"))
     new_run = log_id()
     assert new_run != old_run
@@ -618,7 +618,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
   # Counts the rows each query of the events table hands back to this process.
   defp count_rows_read do
     id = {__MODULE__, :rows, make_ref()}
-    :telemetry.attach(id, [:key_fleet, :repo, :query], &__MODULE__.report_rows/4, self())
+    :telemetry.attach(id, [:keyfleet, :repo, :query], &__MODULE__.report_rows/4, self())
     on_exit(fn -> :telemetry.detach(id) end)
   end
 
@@ -641,7 +641,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
   # cursor, tells the test, and goes on when the test sends `:go`.
   defp hold_after_cursor_read do
     id = {__MODULE__, :hold, make_ref()}
-    :telemetry.attach(id, [:key_fleet, :repo, :query], &__MODULE__.hold/4, nil)
+    :telemetry.attach(id, [:keyfleet, :repo, :query], &__MODULE__.hold/4, nil)
     on_exit(fn -> :telemetry.detach(id) end)
   end
 
@@ -687,7 +687,7 @@ defmodule KeyFleet.Graph.ProjectionTest do
 
   defp start_writer(data_dir) do
     start_supervised!(
-      {KeyFleet.Graph.Supervisor,
+      {Keyfleet.Graph.Supervisor,
        fleets: [@fleet],
        data_dir: data_dir,
        reply_timeout: 5_000,
@@ -702,11 +702,11 @@ defmodule KeyFleet.Graph.ProjectionTest do
   defp start_projector(opts),
     do:
       start_supervised!(
-        {KeyFleet.Graph.Projectors, [fleets: [@fleet], projection_wait: 30_000] ++ opts}
+        {Keyfleet.Graph.Projectors, [fleets: [@fleet], projection_wait: 30_000] ++ opts}
       )
 
   defp writer do
-    [{pid, _timeout}] = Registry.lookup(KeyFleet.Graph.Registry, @fleet)
+    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, @fleet)
     pid
   end
 

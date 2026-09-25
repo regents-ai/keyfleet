@@ -1,11 +1,11 @@
-defmodule KeyFleet.Chain.RevealLog do
+defmodule Keyfleet.Chain.RevealLog do
   @moduledoc """
   Reads a fleet contract's `KeyRevealed(uint256 indexed tokenId, uint256
-  indexed requestId, bytes32 seed)` logs into the fields `KeyFleet.Keys`
+  indexed requestId, bytes32 seed)` logs into the fields `Keyfleet.Keys`
   records.
   """
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   # cast keccak "KeyRevealed(uint256,uint256,bytes32)"
   @topic "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"

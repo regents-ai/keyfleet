@@ -1,13 +1,13 @@
-defmodule KeyFleet.RenameRaceTest do
+defmodule Keyfleet.RenameRaceTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
 
   # Each naming runs on a connection of its own and commits. The room, its
   # naming lines, the keys and the fleet's key reading are all removed when the

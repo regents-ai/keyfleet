@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain do
+defmodule Keyfleet.Chain do
   @moduledoc """
   What the site knows about each fleet from its contracts: how far its key
   and proposal history has been read, whether that reading is fresh enough to
@@ -6,13 +6,13 @@ defmodule KeyFleet.Chain do
   """
   use Ash.Domain
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain.Cursor
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Keys.KeyAttachment
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.Cursor
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Keys.KeyAttachment
 
   resources do
-    resource KeyFleet.Chain.Cursor do
+    resource Keyfleet.Chain.Cursor do
       define :open_cursor, action: :open
       define :fresh_cursor, action: :fresh, args: [:fleet_id], not_found_error?: false
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
@@ -59,7 +59,7 @@ defmodule KeyFleet.Chain do
   """
   def take_proposal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "UPDATE keyfleet_app.chain_cursors SET proposal_seq = proposal_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING proposal_seq",
         [fleet_id]
@@ -71,7 +71,7 @@ defmodule KeyFleet.Chain do
   @doc "Takes the next number for one of the fleet's key reveals, as `take_proposal_seq!/1` does."
   def take_reveal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "UPDATE keyfleet_app.chain_cursors SET reveal_seq = reveal_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING reveal_seq",
         [fleet_id]
@@ -83,7 +83,7 @@ defmodule KeyFleet.Chain do
   @doc "Takes the next number for one of the fleet's ownership epochs, as `take_proposal_seq!/1` does."
   def take_ownership_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "UPDATE keyfleet_app.chain_cursors SET ownership_seq = ownership_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING ownership_seq",
         [fleet_id]

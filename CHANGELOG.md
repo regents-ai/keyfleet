@@ -32,3 +32,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Moved the mint HTTP client to 1.10.1, which closes the medium-severity
   EEF-CVE-2026-82672 (HTTP/1 response smuggling through an unvalidated
   chunk-size line). Lockfile-only change.
+
+## 2026-09-25 — Spelled Keyfleet everywhere
+
+- The product name is spelled Keyfleet in code, copy and documents. The Elixir
+  modules are `Keyfleet` and `KeyfleetWeb`, the Mix tasks are `mix keyfleet.*`
+  (for example `mix keyfleet.route_handoff`), and pages, titles and legal text
+  say Keyfleet. The app name `keyfleet`, the database names and the
+  `KEYFLEET_` settings are unchanged. Entries above keep the old spelling.

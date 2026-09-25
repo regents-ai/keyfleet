@@ -1,57 +1,57 @@
-defmodule KeyFleetWeb.Router do
-  use KeyFleetWeb, :router
+defmodule KeyfleetWeb.Router do
+  use KeyfleetWeb, :router
 
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :enforce_session_authority
     plug :fetch_live_flash
-    plug KeyFleetWeb.Plugs.Theme
-    plug :put_root_layout, html: {KeyFleetWeb.Layouts, :root}
-    plug KeyFleetWeb.Plugs.LaunchGate
+    plug KeyfleetWeb.Plugs.Theme
+    plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
+    plug KeyfleetWeb.Plugs.LaunchGate
     plug :protect_from_forgery
     plug :put_secure_browser_headers
   end
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug KeyFleetWeb.Plugs.LaunchGate
+    plug KeyfleetWeb.Plugs.LaunchGate
   end
 
   pipeline :public_documents do
     plug :accepts, ["html"]
     plug :fetch_session
-    plug KeyFleetWeb.Plugs.Theme
-    plug :put_root_layout, html: {KeyFleetWeb.Layouts, :root}
+    plug KeyfleetWeb.Plugs.Theme
+    plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
   end
 
   def enforce_session_authority(conn, _opts) do
-    KeyFleetWeb.PrivySessionController.enforce_authority(conn)
+    KeyfleetWeb.PrivySessionController.enforce_authority(conn)
   end
 
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do
-      plug KeyFleetWeb.Showcase.LocalOnly
+      plug KeyfleetWeb.Showcase.LocalOnly
       plug :accepts, ["html", "json"]
       plug :fetch_session
       plug :enforce_session_authority
       plug :fetch_live_flash
-      plug KeyFleetWeb.Plugs.Theme
-      plug :put_root_layout, html: {KeyFleetWeb.Layouts, :root}
+      plug KeyfleetWeb.Plugs.Theme
+      plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
       plug :protect_from_forgery
       plug :put_secure_browser_headers
     end
 
-    scope "/showcase", KeyFleetWeb do
+    scope "/showcase", KeyfleetWeb do
       pipe_through :local_showcase
       get "/catalog", Showcase.CatalogController, :show
       get "/style.css", Showcase.CatalogController, :style
 
       live_session :local_showcase,
-        session: {KeyFleetWeb.Live.Session, :render_context, []},
-        on_mount: [KeyFleetWeb.Showcase.LocalOnly, {KeyFleetWeb.Live.Session, :load_human}] do
+        session: {KeyfleetWeb.Live.Session, :render_context, []},
+        on_mount: [KeyfleetWeb.Showcase.LocalOnly, {KeyfleetWeb.Live.Session, :load_human}] do
         live "/", ShowcaseLive, :index
         live "/preview", ShowcaseLive, :preview
         live "/privy", PrivyShowcaseLive, :index
@@ -60,7 +60,7 @@ defmodule KeyFleetWeb.Router do
     end
   end
 
-  scope "/", KeyFleetWeb do
+  scope "/", KeyfleetWeb do
     get "/healthz", HealthController, :show
     get "/metrics", MetricsController, :show
     get "/developers", PublicPagesController, :developers
@@ -71,7 +71,7 @@ defmodule KeyFleetWeb.Router do
     get "/metadata/:slot/:token_id", MetadataController, :show
   end
 
-  scope "/", KeyFleetWeb do
+  scope "/", KeyfleetWeb do
     pipe_through :public_documents
     get "/docs", PublicPagesController, :show
     get "/about", PublicPagesController, :show
@@ -83,7 +83,7 @@ defmodule KeyFleetWeb.Router do
     forward "/profile", RegentIdentity.HTTP, otp_app: :keyfleet
   end
 
-  scope "/api/v1/agent", KeyFleetWeb do
+  scope "/api/v1/agent", KeyfleetWeb do
     pipe_through :api
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
@@ -108,7 +108,7 @@ defmodule KeyFleetWeb.Router do
     post "/fleets/:fleet_id/graph/archive", AgentGraphController, :archive
   end
 
-  scope "/", KeyFleetWeb do
+  scope "/", KeyfleetWeb do
     pipe_through :browser
 
     live "/", HomeLive, :home
@@ -122,8 +122,8 @@ defmodule KeyFleetWeb.Router do
     delete "/auth/privy/session", PrivySessionController, :delete
 
     live_session :product_shell,
-      session: {KeyFleetWeb.Live.Session, :render_context, []},
-      on_mount: [KeyFleetWeb.Live.LaunchGateHook, {KeyFleetWeb.Live.Session, :load_human}] do
+      session: {KeyfleetWeb.Live.Session, :render_context, []},
+      on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :load_human}] do
       live "/account", ShellLive, :account
       live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys

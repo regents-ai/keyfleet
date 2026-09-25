@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.SignedAgentContractTest do
+defmodule KeyfleetWeb.SignedAgentContractTest do
   @moduledoc """
   Holds every signed agent route to the served contract: the bodies it
   admits, and the answers it really gives.
@@ -6,13 +6,13 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   use ExUnit.Case, async: false
   import Plug.Conn
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.ContractSchema
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.ProposalHelpers
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Rooms
 
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   # A field the signed-request check admits has to be spelled in its source.
@@ -118,17 +118,17 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
 
   # Where each body's fields go once admitted, less the ones its address supplies.
   @actions [
-             {@update, KeyFleet.Agents.AgentProfile, :edit_my_profile},
-             {@create, KeyFleet.Rooms.Room, :create},
-             {@topic, KeyFleet.Rooms.Room, :set_topic},
-             {@read, KeyFleet.Rooms.Message, :read_messages},
-             {@send, KeyFleet.Rooms.Message, :send_message},
-             {@key_read, KeyFleet.Rooms.Message, :read_key_thread},
-             {@key_send, KeyFleet.Rooms.Message, :send_to_key}
+             {@update, Keyfleet.Agents.AgentProfile, :edit_my_profile},
+             {@create, Keyfleet.Rooms.Room, :create},
+             {@topic, Keyfleet.Rooms.Room, :set_topic},
+             {@read, Keyfleet.Rooms.Message, :read_messages},
+             {@send, Keyfleet.Rooms.Message, :send_message},
+             {@key_read, Keyfleet.Rooms.Message, :read_key_thread},
+             {@key_send, Keyfleet.Rooms.Message, :send_to_key}
            ] ++
              for(
                op <- ~w(get changes create patch link unlink archive),
-               do: {@graph <> op, KeyFleet.Graph.Workspace, String.to_atom(op)}
+               do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
 
   # Nothing can make these happen on demand: the owner deciding a request in
@@ -139,7 +139,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     # Syncs read the workspace in a repeatable-read snapshot, which Postgres
     # allows inside the sandbox only when its transaction is at that level already.
     owner =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
         shared: true,
         isolation: "REPEATABLE READ"
       )
@@ -157,7 +157,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
     broker = server(:broker, &broker(&1, &2, secret))
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
-    app = server(:product, &KeyFleetWeb.Endpoint.call(&1, KeyFleetWeb.Endpoint.init(&2)))
+    app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
 
@@ -229,7 +229,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
 
     # Joining names a new profile and its harness; everything else is set later.
     joining = Map.keys(request_schema(contract, "POST", @join, [])["properties"])
-    ensure = Ash.Resource.Info.action(KeyFleet.Agents.AgentProfile, :ensure_profile)
+    ensure = Ash.Resource.Info.action(Keyfleet.Agents.AgentProfile, :ensure_profile)
     assert joining -- Enum.map(ensure.accept, &to_string/1) == []
   end
 
@@ -331,7 +331,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
 
     # A key's thread: read before its first post, written to, repeated,
     # conflicting, misplaced, for a key not sold, and by an outsider.
-    {:ok, minted} = KeyFleet.Chain.minted(@fleet)
+    {:ok, minted} = Keyfleet.Chain.minted(@fleet)
     unsold = Map.put(@address, "token_id", Integer.to_string(minted + 1))
     # A send key is the agent's across the fleet, so the thread's posts take new ones.
     thread_post = %{post | "idempotency_key" => "t-1"}
@@ -619,7 +619,7 @@ defmodule KeyFleetWeb.SignedAgentContractTest do
   defp candidate_fields(contract) do
     resources =
       Enum.flat_map(
-        [KeyFleet.Agents, KeyFleet.Keys, KeyFleet.Rooms, KeyFleet.Graph, KeyFleet.Proposals],
+        [Keyfleet.Agents, Keyfleet.Keys, Keyfleet.Rooms, Keyfleet.Graph, Keyfleet.Proposals],
         &Ash.Domain.Info.resources/1
       )
 

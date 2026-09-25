@@ -1,5 +1,5 @@
-defmodule KeyFleetWeb.HealthControllerTest do
-  use KeyFleetWeb.ConnCase, async: true
+defmodule KeyfleetWeb.HealthControllerTest do
+  use KeyfleetWeb.ConnCase, async: true
 
   test "PKG-HEALTH public GET /healthz returns only plain-text liveness", %{conn: conn} do
     response = get(conn, "/healthz")

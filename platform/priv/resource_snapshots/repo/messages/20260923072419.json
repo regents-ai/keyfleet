@@ -353,7 +353,7 @@
     "global": null,
     "strategy": null
   },
-  "repo": "Elixir.KeyFleet.Repo",
+  "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
   "table": "messages"
 }

@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.ProposalsLive do
+defmodule KeyfleetWeb.ProposalsLive do
   @moduledoc """
   A fleet's proposals, for anyone to read: what its key holders have put to
   a vote, how each vote stands, and each proposal's text, payment or launch
@@ -11,12 +11,12 @@ defmodule KeyFleetWeb.ProposalsLive do
   about a proposal or the budget is said beside a button and never stops a
   press: the contract decides, and its answer is shown under the button.
 
-  Everything shown is what `KeyFleetWeb.ProposalsPage` read.
+  Everything shown is what `KeyfleetWeb.ProposalsPage` read.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  alias KeyFleetWeb.ProposalsPage
+  alias KeyfleetWeb.ProposalsPage
 
   @status_words %{
     voting: "Voting open",
@@ -831,7 +831,7 @@ defmodule KeyFleetWeb.ProposalsLive do
     <article id={@id} class="proposals-page">
       <header class="proposals-heading">
         <p class="proposals-kicker">Fleet</p>
-        <h1 tabindex="-1">KeyFleet</h1>
+        <h1 tabindex="-1">Keyfleet</h1>
       </header>
 
       <section id="proposals-unavailable" class="proposals-panel">

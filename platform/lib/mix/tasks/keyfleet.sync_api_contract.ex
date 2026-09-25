@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.KeyFleet.SyncApiContract do
+defmodule Mix.Tasks.Keyfleet.SyncApiContract do
   use Mix.Task
 
   @shortdoc "Syncs the canonical API contract to its served location"
@@ -8,7 +8,7 @@ defmodule Mix.Tasks.KeyFleet.SyncApiContract do
     check? = args == ["--check"]
 
     unless check? or args == [] do
-      Mix.raise("usage: mix key_fleet.sync_api_contract [--check]")
+      Mix.raise("usage: mix keyfleet.sync_api_contract [--check]")
     end
 
     source = Path.expand("../../../contracts/api-contract.openapiv3.yaml", __DIR__)

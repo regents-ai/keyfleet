@@ -22,4 +22,4 @@ fi
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
 export KEYFLEET_ACCEPTANCE_RUN_ID=$run_id
-MIX_ENV=test mix key_fleet.reset_local --run-id "$run_id"
+MIX_ENV=test mix keyfleet.reset_local --run-id "$run_id"

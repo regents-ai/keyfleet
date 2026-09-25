@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeyProfile do
+defmodule Keyfleet.Repo.Migrations.KeyProfile do
   @moduledoc """
   Indexes a key's profile reads: the keys a wallet holds across fleets, the
   votes a key was used in, and the votes a wallet cast in a fleet. Generated

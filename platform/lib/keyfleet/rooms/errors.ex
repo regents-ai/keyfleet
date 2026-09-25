@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Errors.RoomUnknownError do
+defmodule Keyfleet.Rooms.Errors.RoomUnknownError do
   @moduledoc "Raised when a fleet has no room under the name a caller asked for."
   use Splode.Error, fields: [:fleet_id, :slug], class: :invalid
 
@@ -6,7 +6,7 @@ defmodule KeyFleet.Rooms.Errors.RoomUnknownError do
     do: "#{fleet_id} has no #{slug} room"
 end
 
-defmodule KeyFleet.Rooms.Errors.ReplyOutsideRoomError do
+defmodule Keyfleet.Rooms.Errors.ReplyOutsideRoomError do
   @moduledoc "Raised when a post answers a post that is not in the same room or key thread."
   use Splode.Error, fields: [:reply_to_id], class: :invalid
 
@@ -14,7 +14,7 @@ defmodule KeyFleet.Rooms.Errors.ReplyOutsideRoomError do
     do: "post #{reply_to_id} is not in this room"
 end
 
-defmodule KeyFleet.Rooms.Errors.SendConflictError do
+defmodule Keyfleet.Rooms.Errors.SendConflictError do
   @moduledoc "Raised when a sender reuses one send key for different words."
   use Splode.Error, fields: [:idempotency_key], class: :invalid
 
@@ -22,14 +22,14 @@ defmodule KeyFleet.Rooms.Errors.SendConflictError do
     do: "send key #{idempotency_key} was already used for a different post"
 end
 
-defmodule KeyFleet.Rooms.Errors.CreatedRoomLimitError do
+defmodule Keyfleet.Rooms.Errors.CreatedRoomLimitError do
   @moduledoc "Raised when a fleet already has as many created rooms as it may."
   use Splode.Error, fields: [:limit], class: :invalid
 
   def message(%{limit: limit}), do: "this fleet already has #{limit} created rooms"
 end
 
-defmodule KeyFleet.Rooms.Errors.RenameTooSoonError do
+defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
   @moduledoc "Raised when an open room is renamed again within a minute of its last naming."
   use Splode.Error, fields: [:retry_after], class: :invalid
 
@@ -37,7 +37,7 @@ defmodule KeyFleet.Rooms.Errors.RenameTooSoonError do
     do: "this room was renamed less than a minute ago; try again in #{retry_after} seconds"
 end
 
-defmodule KeyFleet.Rooms.Errors.NoKeyToWriteAsError do
+defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do
   @moduledoc """
   Raised when a writer no longer holds or runs any key of the fleet by the time
   its line is written, because the key changed hands while it was being sent.
@@ -47,7 +47,7 @@ defmodule KeyFleet.Rooms.Errors.NoKeyToWriteAsError do
   def message(%{fleet_id: fleet_id}), do: "no key of #{fleet_id} to write as"
 end
 
-defmodule KeyFleet.Rooms.Errors.KeyUnknownError do
+defmodule Keyfleet.Rooms.Errors.KeyUnknownError do
   @moduledoc """
   Raised when a fleet has not issued the key a caller named, as far as its sales
   have been read: a key sold moments ago is unknown until the sale is seen.

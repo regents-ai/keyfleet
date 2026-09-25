@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddAgentProfiles do
+defmodule Keyfleet.Repo.Migrations.AddAgentProfiles do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

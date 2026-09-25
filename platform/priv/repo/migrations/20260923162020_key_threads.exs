@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeyThreads do
+defmodule Keyfleet.Repo.Migrations.KeyThreads do
   @moduledoc """
   Gives every line in a room the key it was written as, and every key a thread
   of its own: a room of kind `key` at the address `key-N`, which no created

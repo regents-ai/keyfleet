@@ -1,10 +1,10 @@
-defmodule KeyFleet.Chain.RpcClient do
-  @moduledoc "`KeyFleet.Chain.Client` over JSON-RPC to the node at `KEYFLEET_RPC_URL`."
-  @behaviour KeyFleet.Chain.Client
+defmodule Keyfleet.Chain.RpcClient do
+  @moduledoc "`Keyfleet.Chain.Client` over JSON-RPC to the node at `KEYFLEET_RPC_URL`."
+  @behaviour Keyfleet.Chain.Client
 
   require Logger
 
-  alias KeyFleet.Chain.{Abi, JsonRpc}
+  alias Keyfleet.Chain.{Abi, JsonRpc}
 
   @impl true
   def chain_id do

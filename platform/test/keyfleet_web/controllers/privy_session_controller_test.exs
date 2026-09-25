@@ -1,11 +1,11 @@
-defmodule KeyFleetWeb.PrivySessionControllerTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.PrivySessionControllerTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Accounts.{RequestRateLimiter, SessionAuthority}
-  alias KeyFleet.Actors.System
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.{RequestRateLimiter, SessionAuthority}
+  alias Keyfleet.Actors.System
 
   @canonical_session_keys [
     "_csrf_token",
@@ -462,7 +462,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     assert %{"authenticated" => true} = json_response(signed_in, 200)
     topic = get_session(signed_in, :live_socket_id)
     lineage = get_session(signed_in, :session_lineage)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
 
     {:ok, view, _html} =
       build_conn() |> init_test_session(get_session(signed_in)) |> live("/account")
@@ -498,7 +498,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     {browser, signed_in} = signed_in_browser()
     {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
 
     for read <- [&get(&1, "/account"), &get(&1, "/auth/session"), &get(&1, "/auth/csrf")] do
       refute browser |> recycled() |> read.() |> session_cookie()
@@ -544,7 +544,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
       |> post("/auth/privy/session", %{})
 
     topic = get_session(signed_in, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
     flush_test_messages()
 
     switched =
@@ -583,7 +583,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     topic = get_session(signed_in, :live_socket_id)
 
     assert {:ok, :refresh, _advanced} = SessionAuthority.sign_in(claim(signed_in), account.id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
     flush_test_messages()
 
     deleted =
@@ -654,7 +654,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     assert payload["account_control"]["avatar_src"] =~ "data:image/svg+xml;base64,"
   end
 
-  @identity KeyFleet.TestPrivyVerifier.identity_token("valid")
+  @identity Keyfleet.TestPrivyVerifier.identity_token("valid")
 
   # The one rendered diagnostic line; this repository's development formatter
   # drops metadata, so the whole classification lives in the message.
@@ -685,12 +685,12 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
       # Evidence signed for a different session is evidence for no session here.
       [
         {"authorization", "Bearer valid"},
-        {"privy-id-token", KeyFleet.TestPrivyVerifier.identity_token("other-account")}
+        {"privy-id-token", Keyfleet.TestPrivyVerifier.identity_token("other-account")}
       ],
       # Neither token verifies at all.
       [
         {"authorization", "Bearer invalid"},
-        {"privy-id-token", KeyFleet.TestPrivyVerifier.identity_token("invalid")}
+        {"privy-id-token", Keyfleet.TestPrivyVerifier.identity_token("invalid")}
       ]
     ]
 
@@ -761,7 +761,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
       put_headers(browser(), [{"privy-id-token", @identity}]),
       put_headers(browser(), [
         {"authorization", "Bearer valid"},
-        {"privy-id-token", KeyFleet.TestPrivyVerifier.identity_token("other-account")}
+        {"privy-id-token", Keyfleet.TestPrivyVerifier.identity_token("other-account")}
       ]),
       put_privy_pair(browser(), "unverifiable"),
       put_privy_pair(browser(), "no-wallet")
@@ -780,7 +780,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     {browser, signed_in} = signed_in_browser()
     {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
     {browser, csrf} = refreshed_csrf(browser)
     flush_test_messages()
 
@@ -839,7 +839,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     |> put_req_header("authorization", "Bearer #{access_token}")
     |> put_req_header(
       "privy-id-token",
-      KeyFleet.TestPrivyVerifier.identity_token(access_token)
+      Keyfleet.TestPrivyVerifier.identity_token(access_token)
     )
   end
 
@@ -864,7 +864,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
   end
 
   test "verified registration is idempotent under concurrent attempts" do
-    verified = %KeyFleet.VerifiedPrivyIdentity{
+    verified = %Keyfleet.VerifiedPrivyIdentity{
       privy_user_id: "did:privy:concurrent",
       session_id: "concurrent-session",
       wallet_address: "0x3333333333333333333333333333333333333333",
@@ -873,7 +873,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
 
     results =
       1..2
-      |> Task.async_stream(fn _ -> KeyFleet.Accounts.VerifiedSession.establish(verified) end,
+      |> Task.async_stream(fn _ -> Keyfleet.Accounts.VerifiedSession.establish(verified) end,
         max_concurrency: 2,
         ordered: false
       )
@@ -940,7 +940,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     {browser, signed_in} = signed_in_browser()
     {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
     {browser, csrf} = refreshed_csrf(browser)
     flush_test_messages()
 
@@ -1049,7 +1049,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
     assert {:ok, []} = Accounts.list_linked_identities_for_account(account.id, actor: %System{})
 
     topic = get_session(response, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
 
     refreshed =
       build_conn()
@@ -1118,7 +1118,7 @@ defmodule KeyFleetWeb.PrivySessionControllerTest do
 
     cookie =
       Plug.Session.COOKIE.put(
-        %{build_conn() | secret_key_base: KeyFleetWeb.Endpoint.config(:secret_key_base)},
+        %{build_conn() | secret_key_base: KeyfleetWeb.Endpoint.config(:secret_key_base)},
         nil,
         session,
         options

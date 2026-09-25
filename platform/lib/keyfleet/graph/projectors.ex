@@ -1,9 +1,9 @@
-defmodule KeyFleet.Graph.Projectors do
+defmodule Keyfleet.Graph.Projectors do
   @moduledoc """
-  Runs one `KeyFleet.Graph.Projector` per catalog fleet beside the registry
+  Runs one `Keyfleet.Graph.Projector` per catalog fleet beside the registry
   that names them.
 
-  It runs beside `KeyFleet.Graph.Supervisor`, not under it: a projector reads
+  It runs beside `Keyfleet.Graph.Supervisor`, not under it: a projector reads
   the log through its fleet's writer, but the writers never depend on the
   projectors, and while a writer is down its projector's rounds fail and are
   retried. The registry starts first under `rest_for_one`, and the projectors
@@ -17,7 +17,7 @@ defmodule KeyFleet.Graph.Projectors do
   """
   use Supervisor
 
-  alias KeyFleet.Graph.Projector
+  alias Keyfleet.Graph.Projector
 
   @projector_opts [:catch_up_interval, :projection_wait]
 
@@ -32,12 +32,12 @@ defmodule KeyFleet.Graph.Projectors do
 
     projectors =
       opts
-      |> Keyword.get_lazy(:fleets, &KeyFleet.Fleets.catalog_ids/0)
+      |> Keyword.get_lazy(:fleets, &Keyfleet.Fleets.catalog_ids/0)
       |> Enum.map(&{Projector, [{:fleet_id, &1} | projector_opts]})
 
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: KeyFleet.Graph.ProjectorRegistry},
+        {Registry, keys: :unique, name: Keyfleet.Graph.ProjectorRegistry},
         %{
           id: :projectors,
           type: :supervisor,

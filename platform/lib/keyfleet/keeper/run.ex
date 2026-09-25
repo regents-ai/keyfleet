@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Run do
+defmodule Keyfleet.Keeper.Run do
   @moduledoc """
   One round of a keeper job that sent something, or where a pause began or
   ended: each `:paused_*` outcome has its `:unpaused_*`, and a VRF balance
@@ -10,7 +10,7 @@ defmodule KeyFleet.Keeper.Run do
   until a later run `:resumed` clears it; `bin/keeper-resume` writes that.
   """
   use Ash.Resource,
-    domain: KeyFleet.Keeper,
+    domain: Keyfleet.Keeper,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -29,7 +29,7 @@ defmodule KeyFleet.Keeper.Run do
 
   postgres do
     table "keeper_runs"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:job, "keeper_runs_job",
@@ -151,7 +151,7 @@ defmodule KeyFleet.Keeper.Run do
 
   policies do
     policy always() do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -173,6 +173,6 @@ defmodule KeyFleet.Keeper.Run do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet, attribute_type: :string
+    belongs_to :fleet, Keyfleet.Fleets.Fleet, attribute_type: :string
   end
 end

@@ -1,7 +1,7 @@
-defmodule KeyFleet.Chain.Poller do
+defmodule Keyfleet.Chain.Poller do
   @moduledoc """
   Keeps one deployed fleet's key ownership and proposals current by running
-  `KeyFleet.Chain.Scanner` every few seconds.
+  `Keyfleet.Chain.Scanner` every few seconds.
 
   It first proves the node serves the fleet's chain and refuses to read at all
   otherwise. A failed read is logged and retried after a delay that doubles up
@@ -11,8 +11,8 @@ defmodule KeyFleet.Chain.Poller do
 
   require Logger
 
-  alias KeyFleet.Chain.Client
-  alias KeyFleet.Chain.Scanner
+  alias Keyfleet.Chain.Client
+  alias Keyfleet.Chain.Scanner
 
   @max_delay 60_000
 
@@ -23,7 +23,7 @@ defmodule KeyFleet.Chain.Poller do
 
   @impl true
   def init(fleet) do
-    interval = Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:poll_interval_ms]
+    interval = Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:poll_interval_ms]
     send(self(), :tick)
 
     {:ok,

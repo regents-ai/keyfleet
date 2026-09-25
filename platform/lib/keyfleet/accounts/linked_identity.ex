@@ -1,7 +1,7 @@
-defmodule KeyFleet.Accounts.LinkedIdentity do
+defmodule Keyfleet.Accounts.LinkedIdentity do
   use Ash.Resource,
     otp_app: :keyfleet,
-    domain: KeyFleet.Accounts,
+    domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -59,11 +59,11 @@ defmodule KeyFleet.Accounts.LinkedIdentity do
 
   policies do
     policy action([:upsert_verified, :for_account, :by_provider_subject, :remove_verified]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
 
     policy action(:read_mine) do
-      authorize_if KeyFleet.Accounts.Checks.HumanActor
+      authorize_if Keyfleet.Accounts.Checks.HumanActor
     end
   end
 
@@ -90,7 +90,7 @@ defmodule KeyFleet.Accounts.LinkedIdentity do
   end
 
   relationships do
-    belongs_to :human_account, KeyFleet.Accounts.HumanAccount do
+    belongs_to :human_account, Keyfleet.Accounts.HumanAccount do
       allow_nil? false
       attribute_type :integer
     end
@@ -98,6 +98,6 @@ defmodule KeyFleet.Accounts.LinkedIdentity do
 
   postgres do
     table "linked_identities"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
   end
 end

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.LevelAndTopicRooms do
+defmodule Keyfleet.Repo.Migrations.LevelAndTopicRooms do
   @moduledoc """
   Gives every room its kind (core, level or topic) and the level whose rule it
   follows, if any.

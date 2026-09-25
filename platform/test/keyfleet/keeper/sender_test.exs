@@ -1,13 +1,13 @@
-defmodule KeyFleet.Keeper.SenderTest do
+defmodule Keyfleet.Keeper.SenderTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
 
-  import KeyFleet.KeeperHelpers
+  import Keyfleet.KeeperHelpers
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper, KeeperHelpers, Repo}
-  alias KeyFleet.Keeper.{Calls, Sender, StubNode, Transaction, Wallet}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Fleets, Keeper, KeeperHelpers, Repo}
+  alias Keyfleet.Keeper.{Calls, Sender, StubNode, Transaction, Wallet}
 
   @anvil_key KeeperHelpers.anvil_key()
   @keeper KeeperHelpers.address(:keeper)

@@ -1,9 +1,9 @@
-defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Accounts.SessionAuthority
-  alias KeyFleet.Actors.System
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.SessionAuthority
+  alias Keyfleet.Actors.System
 
   @wallet "0x1111111111111111111111111111111111111111"
   @profile "#account-control [data-account-target=profile]"
@@ -277,7 +277,7 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
     account = account!()
     signed_in = init_test_session(conn, %{human_account_id: account.id})
     topic = get_session(signed_in, :live_socket_id)
-    KeyFleetWeb.Endpoint.subscribe(topic)
+    KeyfleetWeb.Endpoint.subscribe(topic)
 
     {:ok, view, _html} = live(signed_in, "/app/fleets/fibonacci_syndicate")
     assert Process.alive?(view.pid)
@@ -311,10 +311,10 @@ defmodule KeyFleetWeb.Live.SessionAuthorityGateTest do
   # over the endpoint's live_view signing salt, wrapping {token_vsn, data}.
   defp static_session!(markup) do
     [_match, token] = Regex.run(~r/data-phx-session="([^"]+)"/, markup)
-    salt = KeyFleetWeb.Endpoint.config(:live_view)[:signing_salt]
+    salt = KeyfleetWeb.Endpoint.config(:live_view)[:signing_salt]
 
     {:ok, {_version, data}} =
-      Phoenix.Token.verify(KeyFleetWeb.Endpoint, salt, token, max_age: 1_209_600)
+      Phoenix.Token.verify(KeyfleetWeb.Endpoint, salt, token, max_age: 1_209_600)
 
     data
   end

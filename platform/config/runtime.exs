@@ -59,7 +59,7 @@ rpc_url =
   end
 
 if config_env() != :test do
-  config :keyfleet, KeyFleet.Chain, rpc_url: rpc_url
+  config :keyfleet, Keyfleet.Chain, rpc_url: rpc_url
 end
 
 # Only production reads the keeper's key, and signs through the same node;
@@ -76,7 +76,7 @@ if config_env() == :prod do
           String.trim(key) == "" ->
             nil
 
-          KeyFleet.Keeper.Wallet.private_key(key) == :error ->
+          Keyfleet.Keeper.Wallet.private_key(key) == :error ->
             raise "KEYFLEET_KEEPER_PRIVATE_KEY is malformed"
 
           is_nil(rpc_url) ->
@@ -87,13 +87,13 @@ if config_env() == :prod do
         end
     end
 
-  config :keyfleet, KeyFleet.Keeper, private_key: keeper_key
+  config :keyfleet, Keyfleet.Keeper, private_key: keeper_key
 end
 
 # Each fleet's trait table ships with the release, named by its hash; the
 # tests keep theirs with the other fixtures.
 if config_env() != :test do
-  config :keyfleet, KeyFleet.Traits,
+  config :keyfleet, Keyfleet.Traits,
     directory: Application.app_dir(:keyfleet, "priv/trait_tables")
 end
 
@@ -101,14 +101,14 @@ migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
 database_config =
   if config_env() == :prod and migrating? do
-    KeyFleet.DatabaseConfig.release_config!()
+    Keyfleet.DatabaseConfig.release_config!()
   else
-    KeyFleet.DatabaseConfig.runtime_config!(config_env())
+    Keyfleet.DatabaseConfig.runtime_config!(config_env())
   end
 
 if database_config do
   config :keyfleet, :database_startup_enabled, true
-  config :keyfleet, KeyFleet.Repo, database_config
+  config :keyfleet, Keyfleet.Repo, database_config
 end
 
 if config_env() == :prod do
@@ -126,7 +126,7 @@ if config_env() == :prod do
       raise "SECRET_KEY_BASE must be at least 64 bytes"
     end
 
-    config :keyfleet, KeyFleetWeb.Endpoint,
+    config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],
       http: [

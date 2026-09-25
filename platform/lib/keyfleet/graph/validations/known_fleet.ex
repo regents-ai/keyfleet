@@ -1,8 +1,8 @@
-defmodule KeyFleet.Graph.Validations.KnownFleet do
+defmodule Keyfleet.Graph.Validations.KnownFleet do
   @moduledoc "The request names one of the catalog's fleets, each of which has a workspace."
   use Ash.Resource.Validation
 
-  alias KeyFleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Graph.Errors.UnknownFleetError
 
   @impl true
   def supports(_opts), do: [Ash.ActionInput, Ash.Changeset, Ash.Query]
@@ -11,7 +11,7 @@ defmodule KeyFleet.Graph.Validations.KnownFleet do
   def validate(input, _opts, _context) do
     fleet_id = fleet_id(input)
 
-    if fleet_id in KeyFleet.Fleets.catalog_ids(),
+    if fleet_id in Keyfleet.Fleets.catalog_ids(),
       do: :ok,
       else: {:error, UnknownFleetError.exception(fleet_id: fleet_id)}
   end

@@ -1,13 +1,13 @@
-defmodule KeyFleet.Accounts.HumanAccount do
+defmodule Keyfleet.Accounts.HumanAccount do
   use Ash.Resource,
-    domain: KeyFleet.Accounts,
+    domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "platform_human_users"
     schema("regent_names")
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migrate?(false)
   end
 
@@ -49,13 +49,13 @@ defmodule KeyFleet.Accounts.HumanAccount do
       require_atomic? false
       argument :wallet_address, :string
       argument :wallet_addresses, {:array, :string}
-      change KeyFleet.Accounts.Changes.RefreshWalletEvidence
+      change Keyfleet.Accounts.Changes.RefreshWalletEvidence
     end
   end
 
   policies do
     policy action([:by_privy_did, :register_verified, :refresh_verified, :public_profile_source]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
 
     policy action(:read_self) do

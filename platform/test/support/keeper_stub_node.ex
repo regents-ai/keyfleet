@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.StubNode do
+defmodule Keyfleet.Keeper.StubNode do
   @moduledoc """
   The chain as a keeper test describes it, held for the test that set it up
   and for any process that test starts, so tests running side by side never
@@ -10,7 +10,7 @@ defmodule KeyFleet.Keeper.StubNode do
   read of the latest block finds the one after the block read before.
   """
 
-  @behaviour KeyFleet.Keeper.Node
+  @behaviour Keyfleet.Keeper.Node
 
   @doc """
   Sets up the chain. `opts` may name the `:chain_id` (8453); the latest

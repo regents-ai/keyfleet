@@ -1,7 +1,7 @@
-defmodule KeyFleet.Checks.SystemActor do
+defmodule Keyfleet.Checks.SystemActor do
   use Ash.Policy.SimpleCheck
 
-  alias KeyFleet.Actors.System
+  alias Keyfleet.Actors.System
 
   @impl true
   def describe(_opts), do: "actor is the internal system principal"

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Treasury.BudgetReceipt do
+defmodule Keyfleet.Treasury.BudgetReceipt do
   @moduledoc """
   One asset received into a fleet's budget, from a `CapitalDeposited` log
   (`:deposit`, paid in by `sender`) or a `SurplusRecognized` log (`:surplus`,
@@ -11,7 +11,7 @@ defmodule KeyFleet.Treasury.BudgetReceipt do
   was made.
   """
   use Ash.Resource,
-    domain: KeyFleet.Treasury,
+    domain: Keyfleet.Treasury,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.Treasury.BudgetReceipt do
 
   postgres do
     table "budget_receipts"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -101,7 +101,7 @@ defmodule KeyFleet.Treasury.BudgetReceipt do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
-      change {KeyFleet.Chain.Changes.RecordOnce,
+      change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index],
               number: :proposal_seq,
               block: :block_number}
@@ -128,7 +128,7 @@ defmodule KeyFleet.Treasury.BudgetReceipt do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -179,7 +179,7 @@ defmodule KeyFleet.Treasury.BudgetReceipt do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

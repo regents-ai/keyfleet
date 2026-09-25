@@ -1,9 +1,9 @@
-defmodule KeyFleet.Chain.RewardsWaitingTest do
+defmodule Keyfleet.Chain.RewardsWaitingTest do
   # The answers are kept in one table the whole application shares.
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Chain.RewardsWaiting
-  alias KeyFleet.Chain.StubClient
+  alias Keyfleet.Chain.RewardsWaiting
+  alias Keyfleet.Chain.StubClient
 
   @fleet %{
     fleet_id: "fibonacci_cascade",

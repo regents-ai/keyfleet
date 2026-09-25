@@ -1,14 +1,14 @@
-defmodule KeyFleetWeb.Live.FleetPageTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.FleetPageTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.Chain.{OwnershipLog, Scanner, StubClient}
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Keys
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Keys
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -57,9 +57,9 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
   end
 
   test "rooms are listed by the names they go by", %{conn: conn} do
-    KeyFleet.Rooms.bootstrap_rooms!()
+    Keyfleet.Rooms.bootstrap_rooms!()
 
-    KeyFleet.Repo.query!(
+    Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
         "topic_set_at = now() WHERE fleet_id = $2 AND slug = 'open-1'",
       [@owner, @fleet]
@@ -105,7 +105,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
     conn: conn
   } do
-    assert_raise KeyFleetWeb.NotFoundError, fn -> live(conn, @path <> "?after=nonsense") end
+    assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @path <> "?after=nonsense") end
   end
 
   # A fleet with no contract has sold nothing and has no price to show.
@@ -749,7 +749,7 @@ defmodule KeyFleetWeb.Live.FleetPageTest do
 
     :telemetry.attach(
       "fleet-page-key-rows",
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         with "key_attachments" <- meta.source,
              {:ok, %{num_rows: rows}} <- meta.result,

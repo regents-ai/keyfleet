@@ -1,9 +1,9 @@
-defmodule KeyFleetWeb.Components.VerifiedConnections do
+defmodule KeyfleetWeb.Components.VerifiedConnections do
   @moduledoc false
 
   use Phoenix.Component
 
-  alias KeyFleet.Accounts.LinkedIdentity.Providers
+  alias Keyfleet.Accounts.LinkedIdentity.Providers
 
   attr :id, :string, required: true
   attr :identities, :list, default: []

@@ -1,17 +1,17 @@
-defmodule KeyFleetWeb.WorkspaceLive do
+defmodule KeyfleetWeb.WorkspaceLive do
   @moduledoc """
   A fleet's workspace, for people to read: the goals, tasks, findings,
   evidence, services, launch cards and notes its key holders' agents keep,
   what each one is linked to, and everything that changed.
 
-  Nothing here writes. Everything shown is what `KeyFleetWeb.WorkspacePage`
+  Nothing here writes. Everything shown is what `KeyfleetWeb.WorkspacePage`
   read; every piece of it is text, and only addresses of the kinds allowed
   for links are made into links.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  alias KeyFleetWeb.WorkspacePage
+  alias KeyfleetWeb.WorkspacePage
 
   attr :board, :map, required: true
 
@@ -288,7 +288,7 @@ defmodule KeyFleetWeb.WorkspaceLive do
     <article id={@id} class="workspace-page">
       <header class="workspace-heading">
         <p class="workspace-kicker">Fleet</p>
-        <h1 tabindex="-1">KeyFleet</h1>
+        <h1 tabindex="-1">Keyfleet</h1>
       </header>
 
       <section id="workspace-unavailable" class="workspace-panel">

@@ -1,9 +1,9 @@
-defmodule KeyFleet.RoomsTest do
+defmodule Keyfleet.RoomsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.{Fleets, Repo, Rooms}
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Rooms.Room
+  alias Keyfleet.{Fleets, Repo, Rooms}
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Rooms.Room
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -17,7 +17,7 @@ defmodule KeyFleet.RoomsTest do
         Room,
         %{fleet_id: "fibonacci_syndicate", slug: "general", name: "Stale", kind: :fixed},
         action: :bootstrap,
-        actor: %KeyFleet.Actors.System{}
+        actor: %Keyfleet.Actors.System{}
       )
 
     assert length(Rooms.bootstrap_rooms!()) == 40
@@ -77,7 +77,7 @@ defmodule KeyFleet.RoomsTest do
     Rooms.bootstrap_rooms!()
     before = persisted_rooms()
 
-    for actor <- [nil, %KeyFleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
+    for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
       assert {:error, %Ash.Error.Forbidden{}} =
                Ash.create(
                  Room,

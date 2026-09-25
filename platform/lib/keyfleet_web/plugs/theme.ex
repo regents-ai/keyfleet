@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Plugs.Theme do
+defmodule KeyfleetWeb.Plugs.Theme do
   @moduledoc """
   Reads the colour theme the visitor last chose so the first server render
   already carries it.

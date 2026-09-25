@@ -1,9 +1,9 @@
-defmodule KeyFleetWeb.Plugs.SignedAgent do
+defmodule KeyfleetWeb.Plugs.SignedAgent do
   @moduledoc "Captures bounded signed agent requests before any parser or method rewrite."
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
-  alias KeyFleet.Actors.Agent
+  alias Keyfleet.Actors.Agent
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
@@ -79,7 +79,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
 
   @impl Plug
   def call(conn, _opts) do
-    if agent_request?(conn) and KeyFleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
+    if agent_request?(conn) and KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
       do: authenticate(conn),
       else: conn
   end
@@ -111,7 +111,7 @@ defmodule KeyFleetWeb.Plugs.SignedAgent do
       conn = %{conn | body_params: params, params: params} |> assign(:raw_body, raw)
 
       Siwa.AgentAuthPlug.call(conn,
-        client: KeyFleet.SiwaBroker,
+        client: Keyfleet.SiwaBroker,
         hooks: __MODULE__,
         audience: "keyfleet",
         signed_path: :path_only,

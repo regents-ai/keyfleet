@@ -1,4 +1,4 @@
-defmodule KeyFleet.VerifiedPrivyIdentity do
+defmodule Keyfleet.VerifiedPrivyIdentity do
   @moduledoc false
 
   @enforce_keys [:privy_user_id, :session_id, :wallet_addresses]

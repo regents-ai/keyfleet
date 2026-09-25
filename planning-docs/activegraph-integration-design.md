@@ -186,14 +186,14 @@ The runtime is single-threaded by design:
 
 ```text
 signed HTTP / LiveView (later: CLI, MCP, WebMCP)
-  -> KeyFleet.Graph (Ash domain): generic actions, key-actor policy
-  -> KeyFleet.Graph.Writer (one GenServer per fleet, Registry name {fleet_id})
+  -> Keyfleet.Graph (Ash domain): generic actions, key-actor policy
+  -> Keyfleet.Graph.Writer (one GenServer per fleet, Registry name {fleet_id})
        handle_call: recheck key authority -> Port request -> await reply
   -> Port (spawn_executable python -m keyfleet_graph --fleet F --db /data/graph/F.sqlite, {:packet,4}, :exit_status)
   -> Python host: flock, Runtime.load/new, load_pack(keyfleet_work@pinned), command loop
   -> /data/graph/<fleet_id>.sqlite  (Fly volume, single machine)
 
-KeyFleet.Graph.Projector (one GenServer per fleet, beside the writers)
+Keyfleet.Graph.Projector (one GenServer per fleet, beside the writers)
   on a write's await(run_id, head_seq), and every catch_up_interval:
     hello -> changes(after_seq: cursor) page by page
     -> one Repo txn per page: events, objects, links, cursor
@@ -205,7 +205,7 @@ Reads (get, changes, sync): one repeatable-read, read-only snapshot of those tab
 ### 6.2 What to keep from the chief engineer's leaning
 
 - One long-lived Python process per fleet, an Erlang Port, no listener, and no service credentials in the host.
-- OTP supervision: a `KeyFleet.Graph.Supervisor` with a `one_for_one` child per fleet in the catalog, and restart backoff.
+- OTP supervision: a `Keyfleet.Graph.Supervisor` with a `one_for_one` child per fleet in the catalog, and restart backoff.
 - A synchronous call.
 - Membership rechecked inside the serialized call.
 - A Postgres read projection tailing the durable log from a persisted cursor.
@@ -213,8 +213,8 @@ Reads (get, changes, sync): one repeatable-read, read-only snapshot of those tab
 ### 6.3 What to change
 
 1. **Framing.** Use `{:packet, 4}` (a 4-byte length plus UTF-8 JSON, max 1 MiB) instead of newline lines. This removes `{:noeol, _}` chunk handling and any stray-newline hazard. The Python side does `os.dup(1)` for the protocol, then `os.dup2(2, 1)` so any stray `print` goes to stderr. The message shapes in §7 do not change.
-2. **Authority check.** `KeyFleet.Rooms.Checks.FleetMember.match?/3` only matches an `%Ash.Changeset{}` subject (`lib/keyfleet/rooms/checks/fleet_member.ex:23-26`). Generic actions pass an `Ash.ActionInput`, so it would always refuse. It also answers "some key in the fleet", not "this key".
-   - Add `KeyFleet.Graph.Checks.KeyActor`. It passes when the actor is either the owner of `as_key` at the current epoch (Human, the same current-epoch owner condition as `KeyAttachment :identity_in_fleet`, which `KeyFleet.Keys.identity/2` reads) or the active effective operator of `as_key` (Agent, the same condition as `KeyPairing :my_identity_in_fleet`, `key_pairing.ex:241-252`).
+2. **Authority check.** `Keyfleet.Rooms.Checks.FleetMember.match?/3` only matches an `%Ash.Changeset{}` subject (`lib/keyfleet/rooms/checks/fleet_member.ex:23-26`). Generic actions pass an `Ash.ActionInput`, so it would always refuse. It also answers "some key in the fleet", not "this key".
+   - Add `Keyfleet.Graph.Checks.KeyActor`. It passes when the actor is either the owner of `as_key` at the current epoch (Human, the same current-epoch owner condition as `KeyAttachment :identity_in_fleet`, which `Keyfleet.Keys.identity/2` reads) or the active effective operator of `as_key` (Agent, the same condition as `KeyPairing :my_identity_in_fleet`, `key_pairing.ex:241-252`).
    - The Writer calls the same function again inside `handle_call`. The Ash policy is the early refusal; the in-call recheck is the authority.
 3. **Idempotency authority lives in SQLite (§3). There is no Postgres command queue in v1.** The GenServer mailbox is the queue, and the recheck runs at execution. The addendum's "queued" HTTP semantics (202) are deferred. See decision 2.
 4. **Timeouts are indeterminate, never "failed".** On call timeout or Port exit:
@@ -235,8 +235,8 @@ Reads (get, changes, sync): one repeatable-read, read-only snapshot of those tab
 | # | Break | Where | Consequence / fix |
 |---|---|---|---|
 | B1 | No key coordinate or credential reference on the agent actor | `lib/keyfleet_web/plugs/signed_agent.ex:131` builds `%Agent{wallet_address, chain_id, audience}` only; receipt fields are validated then dropped | Commands must name `as_key`. The plug must keep a credential reference, such as a digest of `x-siwa-receipt` plus `x-key-id`, for the audit stamp the addendum requires (§13.3). |
-| B2 | Chain freshness | Resolved: the chain projection records each key's ownership epochs from the contract's `OwnershipEpoch` logs (`lib/keyfleet/chain/scanner.ex`), and its cursor says whether that reading is recent enough (`KeyFleet.Chain.fresh?/1`) | The key check fails closed: while the reading is not fresh, a write is refused as `ownership_refreshing` (§7.3). |
-| B3 | Level data | Resolved in S4a: completed levels come from the fleet's sold keys as the chain projection records them (`KeyFleet.Chain.minted/2`, `KeyFleet.Fleets.Presets.writable_levels/2`) | Level scopes are granted only while that reading is fresh (§7.3). |
+| B2 | Chain freshness | Resolved: the chain projection records each key's ownership epochs from the contract's `OwnershipEpoch` logs (`lib/keyfleet/chain/scanner.ex`), and its cursor says whether that reading is recent enough (`Keyfleet.Chain.fresh?/1`) | The key check fails closed: while the reading is not fresh, a write is refused as `ownership_refreshing` (§7.3). |
+| B3 | Level data | Resolved in S4a: completed levels come from the fleet's sold keys as the chain projection records them (`Keyfleet.Chain.minted/2`, `Keyfleet.Fleets.Presets.writable_levels/2`) | Level scopes are granted only while that reading is fresh (§7.3). |
 | B4 | No proposals projection | `Rooms.sync` hard-codes `proposals: []` (`lib/keyfleet/rooms.ex:44-50`) | `launch.prepare` and test 13.11 #5 wait for proposals. |
 | B5 | The image has no Python | `Dockerfile:81-83` is Debian slim plus coreutils | Add a uv-built venv from `uv.lock` (Python ≥3.11) in a build stage, copied into the runtime stage, run as uid 1001. |
 | B6 | No volume | `fly.toml` and `fly.staging.toml` have no `[mounts]` | Add a volume at `/data`. It pins the app to one host and one machine, which `fly.toml:21-22` already requires. A deploy is stop then start, so there is a short write outage. Fly volumes are not replicated: add scheduled `sqlite3 .backup` exports next to Fly snapshots. If someone scales to two machines, each gets its **own** volume and the graphs split silently; flock cannot see across hosts. Keep `fly scale count 1` as a written deploy rule. |
@@ -309,7 +309,7 @@ Everything else is refused as `bad_request`. That includes raw emit, `load_pack`
 3. `expected_version == current.version`.
 4. Scope: every touched object's `sys.scope` is in `writable_scopes`. For `link` and `unlink` this means both endpoints; for `create` it means the requested scope. `sys.scope` is set at creation and no member write can change it.
 
-`writable_scopes` is resolved in Elixir by `KeyFleet.Graph.Checks.KeyActor`, at the write's turn and only while the fleet's key ownership is fresh (otherwise `ownership_refreshing`, 503). Every key writes `fleet`. A key of a Fibonacci fleet whose token is in level K also writes `level:K`, and `level:L` for L > K once every key of level L is sold; never L < K. Level L is complete once the fleet's sold keys reach the last token id of that level (2, 5, 10, 18, …). The number sold is the highest key number the chain projection has recorded: the contract numbers keys from 1 in the order it sells them and has no way to burn one (`contracts/src/Keyfleet.sol`, `purchase` and `_update`), and a transfer adds no key. Every read the check makes gets what is left of its time budget, and none starts once it is spent; a check that runs out answers the write as unavailable (503). Classic and Accelerant keys write `fleet` only. The host checks the scope strings against `^(fleet|level:([1-9]|1[0-9]|20))$` and refuses any other as `bad_request`.
+`writable_scopes` is resolved in Elixir by `Keyfleet.Graph.Checks.KeyActor`, at the write's turn and only while the fleet's key ownership is fresh (otherwise `ownership_refreshing`, 503). Every key writes `fleet`. A key of a Fibonacci fleet whose token is in level K also writes `level:K`, and `level:L` for L > K once every key of level L is sold; never L < K. Level L is complete once the fleet's sold keys reach the last token id of that level (2, 5, 10, 18, …). The number sold is the highest key number the chain projection has recorded: the contract numbers keys from 1 in the order it sells them and has no way to burn one (`contracts/src/Keyfleet.sol`, `purchase` and `_update`), and a transfer adds no key. Every read the check makes gets what is left of its time budget, and none starts once it is spent; a check that runs out answers the write as unavailable (503). Classic and Accelerant keys write `fleet` only. The host checks the scope strings against `^(fleet|level:([1-9]|1[0-9]|20))$` and refuses any other as `bad_request`.
 5. Field rules: the forbidden set, and the `assignee_key` rule.
 6. Schema on the merged data.
 7. `BEGIN IMMEDIATE` … `COMMIT` as in §3.
@@ -397,7 +397,7 @@ An existing link answered again (`existing: true`) asks nothing.
 - `MAX_ATTENTION = 50` attention events. A notice is a hint to look, so fifty is more than a fleet acts on at once. Past it the rest are not asked, and the command still commits. One member's command can use all fifty, for example by finishing a task that many tasks wait on, and the tasks past the fiftieth are then not announced. That is a known and accepted limit: a notice is only a hint, and those tasks can be seen as unblocked in the graph. The settling quantum (64 events) must hold the change, all fifty and the ledger event; a pytest fails if `MAX_ATTENTION` grows past that.
 - `MAX_WORK = 2000` `depends_on` link reads. The host keeps the fleet's `depends_on` links indexed by source and by target: it gathers them once when it opens the fleet's log and records each link it makes or removes after that. A reaction reads the tasks that depend on the changed object, then each one's own dependencies, one read per link, and every read counts against the bound, so a write's work does not grow with the fleet. Two thousand dictionary lookups take a few milliseconds. A task whose check is cut short is not announced, since it cannot be known to be unblocked.
 
-A storm command (200 tasks waiting on one task and on 100 done tasks, 20,200 links) takes about 1 ms in the host. In a fleet with 200,000 `depends_on` links, a write that unblocks one task takes about 0.3 ms (at most 2 ms over 40 writes); reading every link on each such write took 55 ms. While one fleet runs storms back to back, another fleet's plain writes are answered in the same time as before (median about 0.27 ms before and during, measured in `KeyFleet.Graph.WriterTest`), because each fleet has its own writer and host process.
+A storm command (200 tasks waiting on one task and on 100 done tasks, 20,200 links) takes about 1 ms in the host. In a fleet with 200,000 `depends_on` links, a write that unblocks one task takes about 0.3 ms (at most 2 ms over 40 writes); reading every link on each such write took 55 ms. While one fleet runs storms back to back, another fleet's plain writes are answered in the same time as before (median about 0.27 ms before and during, measured in `Keyfleet.Graph.WriterTest`), because each fleet has its own writer and host process.
 
 ---
 
@@ -406,14 +406,14 @@ A storm command (200 tasks waiting on one task and on 100 done tasks, 20,200 lin
 Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left behind.
 
 **S1: Python host and writer supervision (fleet scope only).**
-- Delivers the `platform/graph_host/` Python package (`uv.lock`, pinned activegraph SHA, and the pack from §7.5), the protocol ops `hello/get/changes/create/patch/link/unlink/archive`, the SQLite command ledger, flock, and exit-on-write-error. On the Elixir side it adds `KeyFleet.Graph.Writer` and a Port supervisor for the four catalog fleets, plus Python in the Dockerfile and a `/data` volume in the Fly config.
+- Delivers the `platform/graph_host/` Python package (`uv.lock`, pinned activegraph SHA, and the pack from §7.5), the protocol ops `hello/get/changes/create/patch/link/unlink/archive`, the SQLite command ledger, flock, and exit-on-write-error. On the Elixir side it adds `Keyfleet.Graph.Writer` and a Port supervisor for the four catalog fleets, plus Python in the Dockerfile and a `/data` volume in the Fly config.
 - Done when:
   - pytest covers every error code, the crash-after-commit retry (as in probe p4), append failure leading to exit and a clean reload, the private-seam guard test, and the refusal of every op outside the allowlist;
   - ExUnit starts four writers, kills one mid-command, and sees an indeterminate result, a restart, and a replayed result.
 - Covers 13.11 #3 at the protocol level; duplicate commands and lost replies; failed persistence stops the writer; unauthorized raw Python or runtime actions are unreachable; cross-fleet (the run is fixed per process).
 - No external dependencies.
 
-**S2: `KeyFleet.Graph` Ash actions and signed HTTP (fleet scope).**
+**S2: `Keyfleet.Graph` Ash actions and signed HTTP (fleet scope).**
 - Delivers generic actions `create/patch/link/unlink/archive` plus reads through the Writer; `KeyActor` (owner or effective operator of `as_key`); the in-call recheck and `auth` stamp; a credential reference kept by `SignedAgent`; and `/api/v1/agent/fleets/:fleet_id/graph/*` routes with body shapes added to the plug.
 - Done when:
   - two agents with keys create a goal and a service, and add tasks, evidence and links;

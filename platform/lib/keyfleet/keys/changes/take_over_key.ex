@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Changes.TakeOverKey do
+defmodule Keyfleet.Keys.Changes.TakeOverKey do
   @moduledoc """
   Hands a key to the operator the owner just approved.
 
@@ -7,7 +7,7 @@ defmodule KeyFleet.Keys.Changes.TakeOverKey do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Keys.PairingLedger
+  alias Keyfleet.Keys.PairingLedger
 
   @impl true
   def change(changeset, _opts, _context) do

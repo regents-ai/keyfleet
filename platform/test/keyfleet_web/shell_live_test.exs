@@ -1,14 +1,14 @@
-defmodule KeyFleetWeb.ShellLiveTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.ShellLiveTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.AccessContext.AccountControl
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors.System
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleetWeb.Components.Shell
-  alias KeyFleetWeb.RouteCatalog
+  alias Keyfleet.AccessContext.AccountControl
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors.System
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.RouteCatalog
 
   test "an anonymous visitor to /account is asked to sign in, without private content", %{
     conn: conn
@@ -62,7 +62,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
   test "anonymous account control renders Sign In separately from the brand link", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 
-    assert has_element?(view, ~s(#shell-brand[href="/"]), "KeyFleet")
+    assert has_element?(view, ~s(#shell-brand[href="/"]), "Keyfleet")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-light")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-dark")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
@@ -156,7 +156,7 @@ defmodule KeyFleetWeb.ShellLiveTest do
 
   test "Account owns its own page rather than relabeling the whole shell" do
     html =
-      render_component(&KeyFleetWeb.AccountLive.page/1, %{
+      render_component(&KeyfleetWeb.AccountLive.page/1, %{
         account_control: %AccountControl{kind: :sign_in, label: "Sign In"}
       })
 

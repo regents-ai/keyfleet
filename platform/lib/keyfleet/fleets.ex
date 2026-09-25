@@ -1,8 +1,8 @@
-defmodule KeyFleet.Fleets do
+defmodule Keyfleet.Fleets do
   @moduledoc "The fixed fleet catalog."
   use Ash.Domain
 
-  alias KeyFleet.Fleets.Fleet
+  alias Keyfleet.Fleets.Fleet
 
   @catalog [
     %{id: "fibonacci_syndicate", name: "Keyfleet Syndicate"},
@@ -12,7 +12,7 @@ defmodule KeyFleet.Fleets do
   ]
 
   resources do
-    resource KeyFleet.Fleets.Fleet do
+    resource Keyfleet.Fleets.Fleet do
       define :list_fleets, action: :read
       define :get_fleet, action: :read, get_by: [:id], not_found_error?: false
       define :list_deployed_fleets, action: :deployed
@@ -36,7 +36,7 @@ defmodule KeyFleet.Fleets do
   def bootstrap_catalog! do
     %Ash.BulkResult{records: fleets} =
       Ash.bulk_create!(@catalog, Fleet, :bootstrap,
-        actor: %KeyFleet.Actors.System{},
+        actor: %Keyfleet.Actors.System{},
         return_records?: true,
         return_errors?: true,
         stop_on_error?: true,
@@ -95,7 +95,7 @@ defmodule KeyFleet.Fleets do
               deployed_block: block,
               trait_table_hash: String.downcase(trait_table_hash)
             },
-            actor: %KeyFleet.Actors.System{}
+            actor: %Keyfleet.Actors.System{}
           )
         end
       end)

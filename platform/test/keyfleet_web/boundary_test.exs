@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.BoundaryTest do
+defmodule KeyfleetWeb.BoundaryTest do
   use ExUnit.Case, async: true
 
   @forbidden ["check_origin: false", "../platform", "/platform/"]
@@ -82,8 +82,8 @@ defmodule KeyFleetWeb.BoundaryTest do
   test "production database startup is enabled only after canonical configuration succeeds" do
     runtime = File.read!("config/runtime.exs")
     assert runtime =~ "config :keyfleet, :database_startup_enabled, true"
-    assert runtime =~ "KeyFleet.DatabaseConfig.runtime_config!(config_env())"
-    assert runtime =~ "KeyFleet.DatabaseConfig.release_config!()"
+    assert runtime =~ "Keyfleet.DatabaseConfig.runtime_config!(config_env())"
+    assert runtime =~ "Keyfleet.DatabaseConfig.release_config!()"
     assert runtime =~ ~s|System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"|
   end
 
@@ -100,7 +100,7 @@ defmodule KeyFleetWeb.BoundaryTest do
       "config/dev.exs"
       |> Config.Reader.read!(env: :dev)
       |> Keyword.fetch!(:keyfleet)
-      |> Keyword.fetch!(KeyFleetWeb.Endpoint)
+      |> Keyword.fetch!(KeyfleetWeb.Endpoint)
 
     assert Keyword.fetch!(endpoint_config, :check_origin) == [
              "http://localhost:4000",
@@ -113,7 +113,7 @@ defmodule KeyFleetWeb.BoundaryTest do
       "config/test.exs"
       |> Config.Reader.read!(env: :test)
       |> Keyword.fetch!(:keyfleet)
-      |> Keyword.fetch!(KeyFleetWeb.Endpoint)
+      |> Keyword.fetch!(KeyfleetWeb.Endpoint)
 
     port = endpoint_config |> Keyword.fetch!(:http) |> Keyword.fetch!(:port)
     assert Keyword.fetch!(endpoint_config, :check_origin) == ["http://127.0.0.1:#{port}"]

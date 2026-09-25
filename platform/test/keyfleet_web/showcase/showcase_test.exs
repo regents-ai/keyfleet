@@ -1,10 +1,10 @@
-defmodule KeyFleetWeb.ShowcaseTest do
+defmodule KeyfleetWeb.ShowcaseTest do
   use ExUnit.Case, async: true
   import Plug.Conn
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
-  @endpoint KeyFleetWeb.Endpoint
-  alias KeyFleetWeb.Showcase.{Catalog, LocalOnly, Sample, Utilities}
+  @endpoint KeyfleetWeb.Endpoint
+  alias KeyfleetWeb.Showcase.{Catalog, LocalOnly, Sample, Utilities}
 
   defp local_conn do
     build_conn()

@@ -1,17 +1,17 @@
-defmodule KeyFleet.Keeper.Wallet do
+defmodule Keyfleet.Keeper.Wallet do
   @moduledoc """
   The keeper's signing key and the address it sends from.
 
   It signs EIP-1559 (type 2) transactions of one shape only: one of the calls
-  `KeyFleet.Keeper.Calls` allows, to an existing contract, sending no ETH and
+  `Keyfleet.Keeper.Calls` allows, to an existing contract, sending no ETH and
   carrying no access list. Inspecting a wallet shows its address and never
   its key.
   """
 
   import Bitwise
 
-  alias KeyFleet.Keeper.{Calls, Rlp}
-  alias KeyFleet.Keeper.Calls.Call
+  alias Keyfleet.Keeper.{Calls, Rlp}
+  alias Keyfleet.Keeper.Calls.Call
 
   @derive {Inspect, only: [:address]}
   @enforce_keys [:address, :private_key]
@@ -61,7 +61,7 @@ defmodule KeyFleet.Keeper.Wallet do
   @doc """
   Signs a call and returns `{:ok, {raw, hash}}`: the raw transaction for
   `eth_sendRawTransaction` and its hash, both as bytes. A call that
-  `KeyFleet.Keeper.Calls` refuses is refused here with the same reason.
+  `Keyfleet.Keeper.Calls` refuses is refused here with the same reason.
 
   The last argument gives the chain, the nonce, the fees per gas in wei and
   the gas limit. The value is always zero and the access list always empty.

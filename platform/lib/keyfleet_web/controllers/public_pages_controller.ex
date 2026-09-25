@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.PublicPagesController do
+defmodule KeyfleetWeb.PublicPagesController do
   @moduledoc "Public documentation and discovery; no account or database reads."
-  use KeyFleetWeb, :controller
-  alias KeyFleetWeb.PublicDocuments
+  use KeyfleetWeb, :controller
+  alias KeyfleetWeb.PublicDocuments
 
   def show(conn, _params) do
     document = PublicDocuments.document(conn.request_path)
@@ -30,15 +30,15 @@ defmodule KeyFleetWeb.PublicPagesController do
       |> send_resp(200, PublicDocuments.sitemap())
 end
 
-defmodule KeyFleetWeb.PublicPagesHTML do
+defmodule KeyfleetWeb.PublicPagesHTML do
   @moduledoc false
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
   def show(assigns) do
     ~H"""
     <div class="rl-root legal-root rg-sheet rg-frame public-document">
       <header class="legal-header">
-        <a href={~p"/"} class="legal-home">KeyFleet</a>
+        <a href={~p"/"} class="legal-home">Keyfleet</a>
         <nav class="legal-nav" aria-label="Information">
           <a
             :for={{label, path} <- [{"Docs", "/docs"}, {"About", "/about"}, {"Contact", "/contact"}]}
@@ -50,7 +50,7 @@ defmodule KeyFleetWeb.PublicPagesHTML do
         </nav>
       </header>
       <main class="legal-page">
-        {KeyFleetWeb.PublicDocuments.html(@document.markdown)}
+        {KeyfleetWeb.PublicDocuments.html(@document.markdown)}
       </main>
     </div>
     """

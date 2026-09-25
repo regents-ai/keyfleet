@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.OwnershipSeq do
+defmodule Keyfleet.Repo.Migrations.OwnershipSeq do
   @moduledoc """
   Numbers each fleet's ownership epochs as they are recorded, so a pass can
   name the keys it recorded.

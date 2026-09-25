@@ -1,11 +1,11 @@
-defmodule KeyFleet.Graph.WriterTest do
+defmodule Keyfleet.Graph.WriterTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Graph.Writer
+  alias Keyfleet.Graph.Writer
 
   @moduletag :tmp_dir
 
-  @fleets KeyFleet.Fleets.catalog_ids()
+  @fleets Keyfleet.Fleets.catalog_ids()
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
   @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
@@ -108,7 +108,7 @@ defmodule KeyFleet.Graph.WriterTest do
     start_graph(ctx, [fleet, other], python: hooked_python(ctx.tmp_dir))
     await_ready(fleet)
     await_ready(other)
-    before = {writer(fleet), writer(other), Process.whereis(KeyFleet.Graph.Registry)}
+    before = {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)}
 
     for _ <- 1..10 do
       assert {:error, %{"code" => "bad_request"}} =
@@ -118,7 +118,7 @@ defmodule KeyFleet.Graph.WriterTest do
                Writer.command(fleet, "create", %{type: <<0xFF>>}, authorized("c1"))
     end
 
-    assert {writer(fleet), writer(other), Process.whereis(KeyFleet.Graph.Registry)} == before
+    assert {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)} == before
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
 
     assert {:ok, _hello} = Writer.request(other, "hello", %{})
@@ -132,12 +132,12 @@ defmodule KeyFleet.Graph.WriterTest do
     python = hooked_python(ctx.tmp_dir, crash_fleet: crashing)
     graph = start_graph(ctx, [crashing, healthy], python: python)
     await_ready(healthy)
-    before = {writer(crashing), writer(healthy), Process.whereis(KeyFleet.Graph.Registry)}
+    before = {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)}
 
     await(fn -> Enum.count(launches(ctx.tmp_dir), &(&1["fleet"] == crashing)) >= 8 end)
 
     assert Process.alive?(graph)
-    assert {writer(crashing), writer(healthy), Process.whereis(KeyFleet.Graph.Registry)} == before
+    assert {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)} == before
     assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
 
     assert {:ok, _hello} = Writer.request(healthy, "hello", %{})
@@ -204,7 +204,7 @@ defmodule KeyFleet.Graph.WriterTest do
     top = start_as_application(ctx, [fleet, other])
     await_ready(fleet)
     await_ready(other)
-    graph = Process.whereis(KeyFleet.Graph.Supervisor)
+    graph = Process.whereis(Keyfleet.Graph.Supervisor)
 
     Enum.reduce(1..40, nil, fn _, killed ->
       await(fn -> current_writer(fleet) not in [nil, killed] end)
@@ -216,7 +216,7 @@ defmodule KeyFleet.Graph.WriterTest do
     await_ready(fleet)
     await_ready(other)
     assert Process.alive?(top)
-    refute Process.whereis(KeyFleet.Graph.Supervisor) in [nil, graph]
+    refute Process.whereis(Keyfleet.Graph.Supervisor) in [nil, graph]
   end
 
   test "a write's authority is asked at its turn, and a refusal then sends nothing to the host",
@@ -367,12 +367,12 @@ defmodule KeyFleet.Graph.WriterTest do
   end
 
   defp start_graph(ctx, fleets, opts \\ []) do
-    start_supervised!({KeyFleet.Graph.Supervisor, graph_opts(ctx, fleets, opts)})
+    start_supervised!({Keyfleet.Graph.Supervisor, graph_opts(ctx, fleets, opts)})
   end
 
   # The graph under a supervisor configured like the application's.
   defp start_as_application(ctx, fleets) do
-    graph_child = {KeyFleet.Graph.Supervisor, graph_opts(ctx, fleets, [])}
+    graph_child = {Keyfleet.Graph.Supervisor, graph_opts(ctx, fleets, [])}
 
     start_supervised!(%{
       id: :application,
@@ -548,13 +548,13 @@ defmodule KeyFleet.Graph.WriterTest do
   end
 
   defp writer(fleet) do
-    [{pid, _timeout}] = Registry.lookup(KeyFleet.Graph.Registry, fleet)
+    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, fleet)
     pid
   end
 
   # The registry itself is briefly gone while the graph supervisor restarts.
   defp current_writer(fleet) do
-    case Registry.lookup(KeyFleet.Graph.Registry, fleet) do
+    case Registry.lookup(Keyfleet.Graph.Registry, fleet) do
       [{pid, _timeout}] -> pid
       [] -> nil
     end

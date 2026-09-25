@@ -1,11 +1,11 @@
-defmodule KeyFleet.Keeper.Income do
+defmodule Keyfleet.Keeper.Income do
   @moduledoc """
   The keeper's income job, run five minutes after it starts and then every
   hour: it moves each fleet's launch income into the fleet, and sends the
   fleet's protocol share to the Regents staking contract once a day.
 
   For a fleet whose launch is still at auction as the fleet last recorded
-  it, it opens a settle round (`KeyFleet.Keeper.Sender.settle_round/3`)
+  it, it opens a settle round (`Keyfleet.Keeper.Sender.settle_round/3`)
   and sends, in this order:
 
     * the strategy's `migrate` of the fleet's auction, once the auction
@@ -15,7 +15,7 @@ defmodule KeyFleet.Keeper.Income do
       record it; the next round goes on from the recorded state.
 
   For a fleet whose launch has graduated, and which has recorded that, it
-  opens an income round (`KeyFleet.Keeper.Sender.income_round/3`) and
+  opens an income round (`Keyfleet.Keeper.Sender.income_round/3`) and
   sends, in this order and each only once the one before is included:
 
     * `release`, when the escrow has graduated and more of its subject
@@ -42,9 +42,9 @@ defmodule KeyFleet.Keeper.Income do
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Keeper
-  alias KeyFleet.Keeper.{Calls, Jobs, Sender}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Keeper
+  alias Keyfleet.Keeper.{Calls, Jobs, Sender}
 
   @day_seconds 86_400
   @vesting_seconds 365 * @day_seconds

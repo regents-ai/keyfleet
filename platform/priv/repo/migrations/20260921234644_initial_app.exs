@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.InitialApp do
+defmodule Keyfleet.Repo.Migrations.InitialApp do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

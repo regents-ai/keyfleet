@@ -61,7 +61,7 @@ an operator fixes the record by hand, as below.
    fleet with its contract and first block. Running it again
    with the same manifest changes nothing; a manifest naming other contracts for
    a bound fleet is refused and changes nothing. In development the same step
-   is `mix key_fleet.seed_deployment ../contracts/deployments/<name>.deployed.json`.
+   is `mix keyfleet.seed_deployment ../contracts/deployments/<name>.deployed.json`.
 
    Metadata for a revealed key is drawn from the fleet's trait table, which
    ships with the release: the art agent commits it as
@@ -328,4 +328,4 @@ The running app reads the fleet again on its next pass, from `F`; no restart is
 needed. Clearing the stop also clears the time up to which votes are known to
 be counted, until a pass reaches the head again. Owners and members can act
 again once that pass has read the chain. In development the same step is
-`mix key_fleet.clear_fleet_stop <fleet id>`.
+`mix keyfleet.clear_fleet_stop <fleet id>`.

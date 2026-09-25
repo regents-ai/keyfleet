@@ -1,4 +1,4 @@
-defmodule KeyFleet.AnvilLab do
+defmodule Keyfleet.AnvilLab do
   @moduledoc """
   A short-lived plain anvil for the keeper's external test, with the fleet
   `contracts/script/KeeperLab.s.sol` puts on it.
@@ -35,15 +35,15 @@ defmodule KeyFleet.AnvilLab do
       ])
 
     {:os_pid, os_pid} = Port.info(anvil, :os_pid)
-    chain = Application.fetch_env!(:keyfleet, KeyFleet.Chain)
+    chain = Application.fetch_env!(:keyfleet, Keyfleet.Chain)
 
     on_exit(fn ->
       System.cmd("kill", ["#{os_pid}"])
-      Application.put_env(:keyfleet, KeyFleet.Chain, chain)
+      Application.put_env(:keyfleet, Keyfleet.Chain, chain)
     end)
 
     answering!(url, 150)
-    Application.put_env(:keyfleet, KeyFleet.Chain, Keyword.put(chain, :rpc_url, url))
+    Application.put_env(:keyfleet, Keyfleet.Chain, Keyword.put(chain, :rpc_url, url))
     url
   end
 

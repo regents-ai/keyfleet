@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeeperSenderWallet do
+defmodule Keyfleet.Repo.Migrations.KeeperSenderWallet do
   @moduledoc """
   Names the wallet that sent each keeper transaction, a lowercase address set
   once, and finds a wallet's waiting transactions by chain and nonce.

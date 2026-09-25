@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.KeysLive do
+defmodule KeyfleetWeb.KeysLive do
   @moduledoc """
   One key's page: who owns it, who runs it, who has asked to, and everything
   that came before.
@@ -7,7 +7,7 @@ defmodule KeyFleetWeb.KeysLive do
   the same standing the owner does; only the owner is offered the buttons.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
   attr :key, :map, required: true
   attr :notice, :map, default: nil
@@ -16,7 +16,7 @@ defmodule KeyFleetWeb.KeysLive do
     ~H"""
     <article id="key-page" class="key-page">
       <header class="key-heading">
-        <p class="key-kicker">{@key.fleet_name || "KeyFleet"}</p>
+        <p class="key-kicker">{@key.fleet_name || "Keyfleet"}</p>
         <h1 tabindex="-1">Key {@key.token_id}</h1>
         <p class="key-lede">Who owns this key, and who runs it for them.</p>
       </header>

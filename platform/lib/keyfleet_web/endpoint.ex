@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Endpoint do
+defmodule KeyfleetWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :keyfleet
 
   # A connected mount reads the cookie the socket handshake carried, so the
@@ -9,7 +9,7 @@ defmodule KeyFleetWeb.Endpoint do
     websocket: [connect_info: [:peer_data, :uri, session: @session_options]],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
-  plug KeyFleetWeb.Plugs.ContractHeaders
+  plug KeyfleetWeb.Plugs.ContractHeaders
 
   # Serve at "/" the static files from "priv/static" directory.
   #
@@ -20,8 +20,8 @@ defmodule KeyFleetWeb.Endpoint do
     at: "/",
     from: :keyfleet,
     gzip: not code_reloading?,
-    only: KeyFleetWeb.static_paths(),
-    only_matching: KeyFleetWeb.digested_static_prefixes(),
+    only: KeyfleetWeb.static_paths(),
+    only_matching: KeyfleetWeb.digested_static_prefixes(),
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the
@@ -35,7 +35,7 @@ defmodule KeyFleetWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
-  plug KeyFleetWeb.Plugs.SignedAgent
+  plug KeyfleetWeb.Plugs.SignedAgent
 
   plug Plug.Parsers,
     body_reader: {RegentIdentity.BodyReader, :read_body, []},
@@ -45,11 +45,11 @@ defmodule KeyFleetWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug KeyFleetWeb.Plugs.RuntimeSession
+  plug KeyfleetWeb.Plugs.RuntimeSession
 
   plug RegentAgentAccess.Plug,
-    documents: &KeyFleetWeb.PublicDocuments.document/1,
+    documents: &KeyfleetWeb.PublicDocuments.document/1,
     guide: "/llms.txt"
 
-  plug KeyFleetWeb.Router
+  plug KeyfleetWeb.Router
 end

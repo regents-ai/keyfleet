@@ -1,17 +1,17 @@
-defmodule KeyFleet.KeyProfileTest do
+defmodule Keyfleet.KeyProfileTest do
   use ExUnit.Case, async: false
 
-  import KeyFleet.ProposalHelpers, only: [proposal!: 2, vote!: 5, wallet: 1]
+  import Keyfleet.ProposalHelpers, only: [proposal!: 2, vote!: 5, wallet: 1]
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Keys.Profile
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
-  alias KeyFleet.Traits
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Keys.Profile
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.Traits
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -199,7 +199,7 @@ defmodule KeyFleet.KeyProfileTest do
 
     :telemetry.attach(
       handler,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, _meta, _config -> send(test_pid, :query) end,
       nil
     )

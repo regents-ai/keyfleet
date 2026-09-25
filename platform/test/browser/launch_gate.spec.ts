@@ -12,7 +12,7 @@ test("[U3] the marketing page is served with product surfaces open", async ({pag
   expect(response.headers()["cache-control"]).not.toContain("no-store")
 
   await page.goto("/")
-  await expect(page.getByRole("heading", {name: "KeyFleet", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
 })
 
 test("[U4] product routes render the shell while surfaces are open", async ({page, request}) => {

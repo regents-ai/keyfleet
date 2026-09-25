@@ -1,9 +1,9 @@
-# KeyFleet platform
+# Keyfleet platform
 
-This is the Phoenix/Ash component of the KeyFleet monorepo. Run Mix and npm
+This is the Phoenix/Ash component of the Keyfleet monorepo. Run Mix and npm
 here. `lib/keyfleet/` owns domains; `lib/keyfleet_web/` owns routes and
 live pages. `contracts/` holds the OpenAPI contract, synced to `priv/static/`
-with `mix key_fleet.sync_api_contract`.
+with `mix keyfleet.sync_api_contract`.
 
 Follow the root instructions and the workspace's `regent-workflow`. Use the
 assignment's acceptance and applicable focused checks. Browser fixtures belong to

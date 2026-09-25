@@ -1,4 +1,4 @@
-defmodule KeyFleet.WorkspaceFixtures do
+defmodule Keyfleet.WorkspaceFixtures do
   @moduledoc """
   Writes a fleet's workspace read tables as the projector leaves them after
   copying a log, through the read tables' System-only record actions.
@@ -10,8 +10,8 @@ defmodule KeyFleet.WorkspaceFixtures do
   before the graph itself writes them.
   """
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Graph
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Graph
 
   @system %System{}
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]

@@ -1,9 +1,9 @@
-defmodule KeyFleetWeb.MetricsController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.MetricsController do
+  use KeyfleetWeb, :controller
 
   def show(conn, _params) do
     body =
-      TelemetryMetricsPrometheus.Core.scrape(KeyFleetWeb.Telemetry.prometheus_reporter())
+      TelemetryMetricsPrometheus.Core.scrape(KeyfleetWeb.Telemetry.prometheus_reporter())
 
     conn
     |> put_resp_content_type("text/plain")

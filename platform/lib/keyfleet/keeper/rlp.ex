@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Rlp do
+defmodule Keyfleet.Keeper.Rlp do
   @moduledoc """
   Recursive-length-prefix encoding, the byte form of an Ethereum transaction.
 

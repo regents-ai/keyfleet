@@ -1,9 +1,9 @@
-defmodule KeyFleetWeb.PrivySessionController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.PrivySessionController do
+  use KeyfleetWeb, :controller
 
-  alias KeyFleet.AccessContext
-  alias KeyFleet.Accounts.{RequestRateLimiter, SessionAuthority, VerifiedSession}
-  alias KeyFleet.Privy
+  alias Keyfleet.AccessContext
+  alias Keyfleet.Accounts.{RequestRateLimiter, SessionAuthority, VerifiedSession}
+  alias Keyfleet.Privy
 
   require Logger
 
@@ -327,7 +327,7 @@ defmodule KeyFleetWeb.PrivySessionController do
   defp broadcast_disconnect(nil), do: :ok
 
   defp broadcast_disconnect(topic),
-    do: KeyFleetWeb.Endpoint.broadcast(topic, "disconnect", %{})
+    do: KeyfleetWeb.Endpoint.broadcast(topic, "disconnect", %{})
 
   defp put_identity_conflict_header(conn, []), do: conn
 

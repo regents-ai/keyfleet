@@ -1,4 +1,4 @@
-defmodule KeyFleet.AccessContext.AccountControl do
+defmodule Keyfleet.AccessContext.AccountControl do
   @moduledoc "Ash-owned shell view model for the account target."
 
   @enforce_keys [:kind, :label]

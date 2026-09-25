@@ -1,9 +1,9 @@
-defmodule KeyFleet.Accounts.Checks.HumanActor do
+defmodule Keyfleet.Accounts.Checks.HumanActor do
   @moduledoc false
 
   use Ash.Policy.SimpleCheck
 
-  alias KeyFleet.Actors.Human
+  alias Keyfleet.Actors.Human
 
   @impl true
   def describe(_opts), do: "actor is the browser human principal"

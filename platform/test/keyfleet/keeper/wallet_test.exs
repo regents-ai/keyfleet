@@ -1,10 +1,10 @@
-defmodule KeyFleet.Keeper.WalletTest do
+defmodule Keyfleet.Keeper.WalletTest do
   use ExUnit.Case, async: true
 
   import Bitwise
 
-  alias KeyFleet.Keeper.{Calls, Rlp, Wallet}
-  alias KeyFleet.Keeper.Calls.Call
+  alias Keyfleet.Keeper.{Calls, Rlp, Wallet}
+  alias Keyfleet.Keeper.Calls.Call
 
   # Anvil's first public test account. Never a real key.
   @anvil_key "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"

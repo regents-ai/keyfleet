@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Reveals do
+defmodule Keyfleet.Keeper.Reveals do
   @moduledoc """
   The keeper's reveal job, run every 30 seconds: it asks a fleet's VRF
   coordinator again for keys that were sold but never got their seed.
@@ -26,9 +26,9 @@ defmodule KeyFleet.Keeper.Reveals do
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Chain, Keeper, Keys}
-  alias KeyFleet.Keeper.{Jobs, Sender}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Chain, Keeper, Keys}
+  alias Keyfleet.Keeper.{Jobs, Sender}
 
   @max_base_fee 2_000_000_000
   @min_vrf_balance 20_000_000_000_000_000

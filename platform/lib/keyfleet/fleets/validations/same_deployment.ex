@@ -1,4 +1,4 @@
-defmodule KeyFleet.Fleets.Validations.SameDeployment do
+defmodule Keyfleet.Fleets.Validations.SameDeployment do
   @moduledoc """
   A fleet is bound to one deployment for good: an unbound fleet takes any
   deployment, a bound one only the deployment it already has.

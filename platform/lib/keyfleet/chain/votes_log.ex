@@ -1,13 +1,13 @@
-defmodule KeyFleet.Chain.VotesLog do
+defmodule Keyfleet.Chain.VotesLog do
   @moduledoc """
   Reads the proposal, vote and execution logs of a fleet's `KeyfleetVotes`
-  contract into the fields `KeyFleet.Proposals` records.
+  contract into the fields `Keyfleet.Proposals` records.
 
   A launch or payment proposal is two logs: `ProposalCreated` and, right after
   it in the same transaction, `AutolaunchProposed` or `PayProposed`. Each is
   read here on its own, as `{:proposal, fields}` and `{:autolaunch, %{number:
   n, payload: fields}}` or `{:pay, %{number: n, payload: fields}}`;
-  `KeyFleet.Chain.Logs` joins them.
+  `Keyfleet.Chain.Logs` joins them.
 
   Every key is one vote, so a vote carries its keys and nothing else.
 
@@ -16,7 +16,7 @@ defmodule KeyFleet.Chain.VotesLog do
   launch's text is always empty and is not kept.
   """
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   # cast keccak "ProposalCreated(uint256,uint8,address,uint64,uint256,bytes32,string)"
   @created "0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9"

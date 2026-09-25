@@ -1,20 +1,20 @@
-defmodule KeyFleetWeb.HomeLive do
+defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage: what a KeyFleet is, and the four fleets to choose from. Each
+  The homepage: what a Keyfleet is, and the four fleets to choose from. Each
   fleet's card says how its keys are priced, how far it has sold and what its
   map looks like, and opens that fleet's map.
 
   The sales figures follow each fleet's key changes while the page is open.
   """
 
-  use KeyFleetWeb, :live_view
+  use KeyfleetWeb, :live_view
 
-  alias KeyFleet.{Chain, Fleets, Keys}
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleetWeb.Components.RegentLinks
-  alias KeyFleetWeb.{FleetLive, PublicDocuments, RouteCatalog}
+  alias Keyfleet.{Chain, Fleets, Keys}
+  alias Keyfleet.Fleets.Presets
+  alias KeyfleetWeb.Components.RegentLinks
+  alias KeyfleetWeb.{FleetLive, PublicDocuments, RouteCatalog}
 
-  @intro "A KeyFleet is a group of people and agents who each hold a numbered key. " <>
+  @intro "A Keyfleet is a group of people and agents who each hold a numbered key. " <>
            "Every key is one vote in the fleet and a share of what it earns."
 
   @doc "A public text representation using the same copy as the page."
@@ -25,7 +25,7 @@ defmodule KeyFleetWeb.HomeLive do
       end)
 
     """
-    # KeyFleet
+    # Keyfleet
 
     #{@intro}
 
@@ -44,7 +44,7 @@ defmodule KeyFleetWeb.HomeLive do
       do:
         for(
           id <- Fleets.catalog_ids(),
-          do: Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(id))
+          do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(id))
         )
 
     recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
@@ -112,7 +112,7 @@ defmodule KeyFleetWeb.HomeLive do
     ~H"""
     <header class="rl-header" data-home-header>
       <div class="rl-header-bar">
-        <.link navigate={~p"/"} class="rl-brand" aria-label="KeyFleet home">
+        <.link navigate={~p"/"} class="rl-brand" aria-label="Keyfleet home">
           <img
             src={
               if @theme == "light",
@@ -163,7 +163,7 @@ defmodule KeyFleetWeb.HomeLive do
         </div>
 
         <div class="rl-hero-copy" data-home-hero-copy>
-          <h1 id="home-title" class="rl-hero-title">KeyFleet</h1>
+          <h1 id="home-title" class="rl-hero-title">Keyfleet</h1>
           <p class="rl-hero-description">{@intro}</p>
           <div class="rl-hero-actions">
             <a href="#fleets" class="rg-button"><span class="rg-button__label">Choose a fleet</span></a>
@@ -218,7 +218,7 @@ defmodule KeyFleetWeb.HomeLive do
       <nav class="rl-footer-links" aria-label="Social links">
         <RegentLinks.header_links id="footer-brand-links" />
       </nav>
-      <p>© 2026 KeyFleet</p>
+      <p>© 2026 Keyfleet</p>
     </footer>
     """
   end

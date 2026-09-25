@@ -1,11 +1,11 @@
-defmodule KeyFleetWeb.Live.WorkspacePageTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.WorkspacePageTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  import KeyFleet.WorkspaceFixtures
+  import Keyfleet.WorkspaceFixtures
 
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph
-  alias KeyFleet.Rooms
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph
+  alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
   @other "fibonacci_cascade"
@@ -231,7 +231,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
             "/app/fleets/#{@fleet}/workspace/task%231%232",
             "/app/fleets/#{@fleet}/workspace/rel_1"
           ] do
-        assert_raise KeyFleetWeb.NotFoundError, fn -> live(conn, path) end
+        assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
       end
     end
 
@@ -249,7 +249,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
             item_path(task) <> "?history=#{@too_far}",
             item_path(task) <> "?history=99999999999999999999"
           ] do
-        assert_raise KeyFleetWeb.NotFoundError, fn -> live(conn, path) end
+        assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
       end
     end
 
@@ -314,13 +314,13 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
     test "shows every field, its links both ways, its history and where it was discussed", %{
       conn: conn
     } do
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
           "topic_set_at = now() WHERE fleet_id = $2 AND slug = 'open-2'",
         ["0x" <> String.duplicate("a", 40), @fleet]
       )
 
-      KeyFleet.Rooms.create_room!(%{fleet_id: @fleet, slug: "ship-ops", name: "Ship ops"},
+      Keyfleet.Rooms.create_room!(%{fleet_id: @fleet, slug: "ship-ops", name: "Ship ops"},
         authorize?: false
       )
 
@@ -605,14 +605,14 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
       {:ok, view, _html} = live(conn, @board)
 
       assert Enum.take(activity(view), 2) == [
-               "KeyFleet updated “Draft”: progress is now blocked.",
-               "KeyFleet updated “Draft”."
+               "Keyfleet updated “Draft”: progress is now blocked.",
+               "Keyfleet updated “Draft”."
              ]
 
       assert has_element?(view, "#workspace-activity .workspace-detail", "at 12:05 UTC")
     end
 
-    test "a change made by KeyFleet itself names no key", %{conn: conn} do
+    test "a change made by Keyfleet itself names no key", %{conn: conn} do
       event(@fleet, "keyfleet.something_new", %{}, "keyfleet:gateway")
       note = create(@fleet, "note", %{"title" => "N", "body" => "b"})
 
@@ -628,11 +628,11 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
             payload: %{"target" => note, "diff" => %{"body" => %{"old" => "b", "new" => "c"}}}
           }
         ],
-        actor: %KeyFleet.Actors.System{}
+        actor: %Keyfleet.Actors.System{}
       )
 
       {:ok, view, _html} = live(conn, @board)
-      assert hd(activity(view)) == "KeyFleet updated “N”: note."
+      assert hd(activity(view)) == "Keyfleet updated “N”: note."
     end
 
     test "the latest thirty changes are shown", %{conn: conn} do
@@ -656,7 +656,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
       create(@other, "note", %{"title" => "Other fleet", "body" => "b"})
 
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Graph.head_topic(@other),
         {:graph_head, @other, "log_fixture", 2}
       )
@@ -666,7 +666,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
       refute_receive :workspace_read, 1_300
 
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Graph.head_topic(@fleet),
         {:graph_head, @fleet, "log_fixture", 2}
       )
@@ -681,7 +681,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
       edit(@fleet, task, %{"progress" => "doing"})
 
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Graph.head_topic(@fleet),
         {:graph_head, @fleet, "log_fixture", 4}
       )
@@ -700,7 +700,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
 
       for watermark <- [1, 2, 2] do
         Phoenix.PubSub.broadcast(
-          KeyFleet.PubSub,
+          Keyfleet.PubSub,
           Graph.head_topic(@fleet),
           {:graph_head, @fleet, "log_fixture", watermark}
         )
@@ -714,7 +714,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
       # What the page has already read, or less, is not read again.
       for watermark <- [2, 1] do
         Phoenix.PubSub.broadcast(
-          KeyFleet.PubSub,
+          Keyfleet.PubSub,
           Graph.head_topic(@fleet),
           {:graph_head, @fleet, "log_fixture", watermark}
         )
@@ -724,7 +724,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
 
       # A copy of a fresh log is read however far along it is.
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Graph.head_topic(@fleet),
         {:graph_head, @fleet, "log_fresh", 1}
       )
@@ -913,14 +913,14 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
             "/app/fleets/no_such_fleet/workspace/task%231"
           ] do
         {:ok, view, html} = live(conn, path)
-        assert has_element?(view, "h1", "KeyFleet")
+        assert has_element?(view, "h1", "Keyfleet")
         assert has_element?(view, ".workspace-kicker", "Fleet")
         assert has_element?(view, "#workspace-unavailable h2", "This fleet doesn’t exist.")
         refute html =~ @notice
       end
 
       {:ok, fleet_page, _html} = live(conn, "/app/fleets/no_such_fleet")
-      assert has_element?(fleet_page, "h1", "KeyFleet")
+      assert has_element?(fleet_page, "h1", "Keyfleet")
       assert has_element?(fleet_page, "h2", "This fleet doesn’t exist.")
     end
   end
@@ -931,7 +931,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@board}"]), "Workspace")
   end
 
-  defp item_path(id), do: KeyFleetWeb.WorkspacePage.item_path(@fleet, id)
+  defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
 
@@ -998,7 +998,7 @@ defmodule KeyFleetWeb.Live.WorkspacePageTest do
 
     :telemetry.attach(
       id,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       &__MODULE__.report_read/4,
       {self(), view.pid}
     )

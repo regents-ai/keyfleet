@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.KeyPairing do
+defmodule Keyfleet.Keys.KeyPairing do
   @moduledoc """
   One operator's attachment to one key, for one ownership epoch.
 
@@ -8,7 +8,7 @@ defmodule KeyFleet.Keys.KeyPairing do
   """
   use Ash.Resource,
     otp_app: :keyfleet,
-    domain: KeyFleet.Keys,
+    domain: Keyfleet.Keys,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -16,7 +16,7 @@ defmodule KeyFleet.Keys.KeyPairing do
 
   postgres do
     table "key_pairings"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     # Two agents can ask for the same key inside one transaction, and the order
     # they asked in is what the owner sees, so this is the statement's clock.
     migration_defaults(requested_at: "fragment(\"(clock_timestamp() AT TIME ZONE 'utc')\")")
@@ -109,26 +109,26 @@ defmodule KeyFleet.Keys.KeyPairing do
 
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
 
-      validate KeyFleet.Graph.Validations.KnownFleet
-      change KeyFleet.Keys.Changes.OpenPairing
-      change KeyFleet.Keys.Changes.AnnounceOperator
+      validate Keyfleet.Graph.Validations.KnownFleet
+      change Keyfleet.Keys.Changes.OpenPairing
+      change Keyfleet.Keys.Changes.AnnounceOperator
     end
 
     update :approve_pairing do
       accept []
       require_atomic? false
       transaction? true
-      change {KeyFleet.Keys.Changes.DecideOnce, from: :requested}
-      change KeyFleet.Keys.Changes.TakeOverKey
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :requested}
+      change Keyfleet.Keys.Changes.TakeOverKey
       change set_attribute(:status, :active)
       change set_attribute(:approved_at, &DateTime.utc_now/0)
-      change KeyFleet.Keys.Changes.AnnounceOperator
+      change Keyfleet.Keys.Changes.AnnounceOperator
     end
 
     update :decline_pairing do
       accept []
       require_atomic? false
-      change {KeyFleet.Keys.Changes.DecideOnce, from: :requested}
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :requested}
       change set_attribute(:status, :ended)
       change set_attribute(:ended_reason, :declined)
       change set_attribute(:ended_at, &DateTime.utc_now/0)
@@ -137,7 +137,7 @@ defmodule KeyFleet.Keys.KeyPairing do
     update :withdraw_pairing_request do
       accept []
       require_atomic? false
-      change {KeyFleet.Keys.Changes.DecideOnce, from: :requested}
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :requested}
       change set_attribute(:status, :ended)
       change set_attribute(:ended_reason, :declined)
       change set_attribute(:ended_at, &DateTime.utc_now/0)
@@ -146,14 +146,14 @@ defmodule KeyFleet.Keys.KeyPairing do
     update :detach_operator do
       accept []
       require_atomic? false
-      change {KeyFleet.Keys.Changes.DecideOnce, from: :active}
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :active}
       change set_attribute(:status, :ended)
       change set_attribute(:ended_reason, :detached)
       change set_attribute(:ended_at, &DateTime.utc_now/0)
-      change KeyFleet.Keys.Changes.AnnounceOperator
+      change Keyfleet.Keys.Changes.AnnounceOperator
     end
 
-    # Reached only through `KeyFleet.Keys.PairingLedger`, on behalf of an owner
+    # Reached only through `Keyfleet.Keys.PairingLedger`, on behalf of an owner
     # or operator the calling action has already admitted.
     update :end_pairing do
       public? false
@@ -264,7 +264,7 @@ defmodule KeyFleet.Keys.KeyPairing do
     read :my_open_request do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
-      validate KeyFleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Graph.Validations.KnownFleet
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and
@@ -281,24 +281,24 @@ defmodule KeyFleet.Keys.KeyPairing do
     end
 
     policy action([:my_pairings, :my_open_request, :my_identity_in_fleet]) do
-      authorize_if KeyFleet.Checks.AgentActor
+      authorize_if Keyfleet.Checks.AgentActor
     end
 
     policy action(:request_pairing) do
-      authorize_if KeyFleet.Checks.AgentActor
+      authorize_if Keyfleet.Checks.AgentActor
     end
 
     policy action(:withdraw_pairing_request) do
-      forbid_unless KeyFleet.Checks.AgentActor
+      forbid_unless Keyfleet.Checks.AgentActor
       authorize_if expr(operator_wallet == ^actor(:wallet_address))
     end
 
     policy action([:approve_pairing, :decline_pairing, :detach_operator]) do
-      authorize_if KeyFleet.Keys.Checks.KeyOwner
+      authorize_if Keyfleet.Keys.Checks.KeyOwner
     end
 
     policy action(:end_pairing) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -347,14 +347,14 @@ defmodule KeyFleet.Keys.KeyPairing do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       attribute_writable? false
       allow_nil? false
       public? true
     end
 
-    belongs_to :agent_profile, KeyFleet.Agents.AgentProfile do
+    belongs_to :agent_profile, Keyfleet.Agents.AgentProfile do
       attribute_writable? false
       allow_nil? false
       public? true

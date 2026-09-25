@@ -1,8 +1,8 @@
-defmodule KeyFleet.Accounts.LinkedIdentityTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule Keyfleet.Accounts.LinkedIdentityTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors.{Human, System}
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors.{Human, System}
 
   test "one provider belongs to one account and one subject belongs to one account" do
     first = account!("identity-first")

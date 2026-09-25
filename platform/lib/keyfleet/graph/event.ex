@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Event do
+defmodule Keyfleet.Graph.Event do
   @moduledoc """
   One event of a fleet's graph log, copied at its place (`seq`) in the log.
 
@@ -10,7 +10,7 @@ defmodule KeyFleet.Graph.Event do
   anyone may read.
   """
   use Ash.Resource,
-    domain: KeyFleet.Graph,
+    domain: Keyfleet.Graph,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -27,7 +27,7 @@ defmodule KeyFleet.Graph.Event do
 
   postgres do
     table "graph_events"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     references do
       reference(:cursor, on_delete: :delete)
@@ -187,7 +187,7 @@ defmodule KeyFleet.Graph.Event do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -270,7 +270,7 @@ defmodule KeyFleet.Graph.Event do
   end
 
   relationships do
-    belongs_to :cursor, KeyFleet.Graph.Cursor do
+    belongs_to :cursor, Keyfleet.Graph.Cursor do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       define_attribute? false

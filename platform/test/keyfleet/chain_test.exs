@@ -1,18 +1,18 @@
-defmodule KeyFleet.ChainTest do
+defmodule Keyfleet.ChainTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.{OwnershipLog, Scanner, StubClient}
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Release
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Release
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -72,7 +72,7 @@ defmodule KeyFleet.ChainTest do
     test "a pass names the keys sold or changing hands in the blocks it read first", %{
       fleet: fleet
     } do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
 
       StubClient.put_chain(head(@deployed + 10), [
         log(1, 1, "a", @deployed + 3, 0),
@@ -100,7 +100,7 @@ defmodule KeyFleet.ChainTest do
     # A node that left a sale out of a block, then has it when the pass reads
     # that block again, is heard about like any other sale.
     test "a key sold that only the second reading finds is named too", %{fleet: fleet} do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
 
       assert Scanner.step(fleet, StubClient) == :ok
@@ -123,7 +123,7 @@ defmodule KeyFleet.ChainTest do
     # The node answers in halves; the first half is recorded before the second
     # turns out to hold a log the reader cannot make sense of.
     test "a pass that fails partway still names the keys it recorded", %{fleet: fleet} do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
       malformed = %{log(2, 1, "b", @deployed + 8, 0) | "data" => "0x01"}
 
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0), malformed],
@@ -376,7 +376,7 @@ defmodule KeyFleet.ChainTest do
 
     :telemetry.attach(
       handler,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and
              not String.starts_with?(meta.query, ["SELECT", "begin", "commit"]),

@@ -1,16 +1,16 @@
-defmodule KeyFleet.ProposalsChainTest do
+defmodule Keyfleet.ProposalsChainTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.{LaunchEnvelopes, Logs, Scanner, StubClient}
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Proposals
-  alias KeyFleet.Repo
-  alias KeyFleet.Treasury
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.{LaunchEnvelopes, Logs, Scanner, StubClient}
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Proposals
+  alias Keyfleet.Repo
+  alias Keyfleet.Treasury
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -192,7 +192,7 @@ defmodule KeyFleet.ProposalsChainTest do
     # with the proposal records, so the proposals hint goes out for them too.
     test "budget receipts, launch income and payments are recorded with the proposal records",
          %{fleet: fleet} do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
       logs = budget_history()
       StubClient.put_chain(head(@deployed + 10), logs)
 
@@ -494,7 +494,7 @@ defmodule KeyFleet.ProposalsChainTest do
     test "a pass that makes a new record says so, and one that makes none does not", %{
       fleet: fleet
     } do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
 
       mint = ownership(1, "a", @deployed + 1, 0)
       StubClient.put_chain(head(@deployed + 10), [mint])
@@ -517,7 +517,7 @@ defmodule KeyFleet.ProposalsChainTest do
     } do
       StubClient.put_chain(head(@deployed + 10), history())
       assert Scanner.step(fleet, StubClient) == :ok
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
 
       # Three new logs where the node sends two at most: the first piece holds
       # proposal 3 and its vote, the second a second execution of proposal 1.
@@ -932,7 +932,7 @@ defmodule KeyFleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
       assert StubClient.call_requests() == []
 
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
       assert LaunchEnvelopes.read(fleet, StubClient) == :ok
       assert_received {:proposals_changed, @fleet}
 
@@ -1576,7 +1576,7 @@ defmodule KeyFleet.ProposalsChainTest do
 
     :telemetry.attach(
       handler,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == pass and meta.query =~ "FOR UPDATE" and not Process.get(:held, false) do
           Process.put(:held, true)
@@ -1708,7 +1708,7 @@ defmodule KeyFleet.ProposalsChainTest do
 
     :telemetry.attach(
       handler,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and
              not String.starts_with?(meta.query, ["SELECT", "begin", "commit"]),

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.Abi do
+defmodule Keyfleet.Chain.Abi do
   @moduledoc """
   The parts of Solidity's ABI encoding the fleet reader decodes, read
   strictly: a value is accepted only in the one canonical encoding the

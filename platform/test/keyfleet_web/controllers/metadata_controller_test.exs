@@ -1,12 +1,12 @@
-defmodule KeyFleetWeb.MetadataControllerTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.MetadataControllerTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.ContractSchema
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Traits
+  alias Keyfleet.Actors.System
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Traits
 
   @path "/metadata/{slot}/{token_id}"
   # keccak256 of the fixture table in test/support/fixtures/trait_tables.
@@ -22,7 +22,7 @@ defmodule KeyFleetWeb.MetadataControllerTest do
 
     buy!("fibonacci_cascade", 3)
     buy!("fleet_tech_accelerant", 1)
-    %{site: KeyFleetWeb.Endpoint.url()}
+    %{site: KeyfleetWeb.Endpoint.url()}
   end
 
   test "a key waiting for its traits shows its fleet's waiting picture for 30 seconds", %{

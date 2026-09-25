@@ -1,14 +1,14 @@
-defmodule KeyFleet.RevealsChainTest do
+defmodule Keyfleet.RevealsChainTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.{Logs, RevealLog, Scanner, StubClient}
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.{Logs, RevealLog, Scanner, StubClient}
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -34,7 +34,7 @@ defmodule KeyFleet.RevealsChainTest do
     # revealed and sold in one notice; reading the same blocks again records
     # and names nothing.
     test "each reveal is recorded once with its seed and the keys are named", %{fleet: fleet} do
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
 
       StubClient.put_chain(head(@deployed + 10), [
         mint(1, @deployed + 1, 0),
@@ -88,7 +88,7 @@ defmodule KeyFleet.RevealsChainTest do
 
       assert Scanner.step(fleet, StubClient) == :ok
       recorded = Keys.get_reveal!(@fleet, 1)
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
 
       moved = %{revealed(1, 7, @seed, @deployed + 5, 2) | "blockHash" => @new_hash}
 

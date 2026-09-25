@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.KeyMap do
+defmodule KeyfleetWeb.KeyMap do
   @moduledoc """
   What a fleet page's key map is told: every key's two marks when it loads,
   and the marks of the keys that have just changed after that.
@@ -9,8 +9,8 @@ defmodule KeyFleetWeb.KeyMap do
   how many are sold travels with the marks.
   """
 
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Keys
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Keys
 
   # A change naming more keys than this is sent as a signal to load again,
   # which costs less than the change itself.

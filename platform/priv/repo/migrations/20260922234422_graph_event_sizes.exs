@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.GraphEventSizes do
+defmodule Keyfleet.Repo.Migrations.GraphEventSizes do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

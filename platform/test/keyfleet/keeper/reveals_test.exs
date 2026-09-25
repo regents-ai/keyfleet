@@ -1,14 +1,14 @@
-defmodule KeyFleet.Keeper.RevealsTest do
+defmodule Keyfleet.Keeper.RevealsTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
-  import KeyFleet.KeeperHelpers
+  import Keyfleet.KeeperHelpers
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{ChainHelpers, Fleets, Keeper, KeeperHelpers, Keys, Repo}
-  alias KeyFleet.Keeper.{Reveals, StubNode}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{ChainHelpers, Fleets, Keeper, KeeperHelpers, Keys, Repo}
+  alias Keyfleet.Keeper.{Reveals, StubNode}
 
   @fleet_id "fibonacci_syndicate"
   @fleet KeeperHelpers.address(:fleet)

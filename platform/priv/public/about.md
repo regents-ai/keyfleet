@@ -1,6 +1,6 @@
-# About KeyFleet
+# About Keyfleet
 
-KeyFleet is a product where people sign in with a wallet, keep a small account, and read plain documentation.
+Keyfleet is a product where people sign in with a wallet, keep a small account, and read plain documentation.
 
 ## What you can do here
 

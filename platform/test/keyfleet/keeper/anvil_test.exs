@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.AnvilTest do
+defmodule Keyfleet.Keeper.AnvilTest do
   # The keeper's reveals and protocol share against a real node: a local
   # anvil, never a real network, with the fleet `KeeperLab.s.sol` puts on
   # it. The keeper is anvil's first test account and the lab's buyer its
@@ -6,11 +6,11 @@ defmodule KeyFleet.Keeper.AnvilTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
-  import KeyFleet.KeeperHelpers
+  import Keyfleet.KeeperHelpers
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{AnvilLab, ChainHelpers, Fleets, Keeper, Repo}
-  alias KeyFleet.Keeper.{Income, Reveals, RpcNode, Sender, Wallet}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{AnvilLab, ChainHelpers, Fleets, Keeper, Repo}
+  alias Keyfleet.Keeper.{Income, Reveals, RpcNode, Sender, Wallet}
 
   @moduletag :external
   @moduletag timeout: 600_000

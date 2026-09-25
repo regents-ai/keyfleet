@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Projector do
+defmodule Keyfleet.Graph.Projector do
   @moduledoc """
   Keeps one fleet's workspace read tables copied from its graph log.
 
@@ -12,14 +12,14 @@ defmodule KeyFleet.Graph.Projector do
 
   It remembers which log, and how far along it, the tables reached last; a
   place in one log says nothing about another. Each time that changes, it
-  says so on `KeyFleet.Graph.head_topic/1`.
+  says so on `Keyfleet.Graph.head_topic/1`.
   """
   use GenServer
 
   require Logger
 
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Projection
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Projection
 
   def child_spec(opts) do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
@@ -28,7 +28,7 @@ defmodule KeyFleet.Graph.Projector do
   def start_link(opts) do
     fleet_id = Keyword.fetch!(opts, :fleet_id)
     wait = Keyword.fetch!(opts, :projection_wait)
-    name = {:via, Registry, {KeyFleet.Graph.ProjectorRegistry, fleet_id, wait}}
+    name = {:via, Registry, {Keyfleet.Graph.ProjectorRegistry, fleet_id, wait}}
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
@@ -44,7 +44,7 @@ defmodule KeyFleet.Graph.Projector do
   """
   @spec await(String.t(), String.t(), non_neg_integer()) :: non_neg_integer()
   def await(fleet_id, run_id, seq) do
-    case Registry.lookup(KeyFleet.Graph.ProjectorRegistry, fleet_id) do
+    case Registry.lookup(Keyfleet.Graph.ProjectorRegistry, fleet_id) do
       [{pid, wait}] -> GenServer.call(pid, {:await, run_id, seq}, wait)
       [] -> 0
     end
@@ -96,7 +96,7 @@ defmodule KeyFleet.Graph.Projector do
       {:ok, {run_id, watermark}} ->
         if {run_id, watermark} != {state.run_id, state.watermark} do
           Phoenix.PubSub.broadcast(
-            KeyFleet.PubSub,
+            Keyfleet.PubSub,
             Graph.head_topic(state.fleet_id),
             {:graph_head, state.fleet_id, run_id, watermark}
           )

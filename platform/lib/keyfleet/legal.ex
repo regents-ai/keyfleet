@@ -1,4 +1,4 @@
-defmodule KeyFleet.Legal do
+defmodule Keyfleet.Legal do
   @moduledoc """
   The Privacy Policy and Terms of Use as they are served on the public site.
   """

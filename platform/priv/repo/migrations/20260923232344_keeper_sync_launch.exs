@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeeperSyncLaunch do
+defmodule Keyfleet.Repo.Migrations.KeeperSyncLaunch do
   @moduledoc """
   Lets the keeper record a fleet's `syncLaunch()`. Generated with
   `mix ash.codegen`.

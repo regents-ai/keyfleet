@@ -1,4 +1,4 @@
-defmodule KeyFleet.Proposals.Changes.FindProposal do
+defmodule Keyfleet.Proposals.Changes.FindProposal do
   @moduledoc """
   Points a vote or execution at the recorded proposal its log names by number.
   The reader records a vote or execution only once its proposal is recorded.
@@ -8,7 +8,7 @@ defmodule KeyFleet.Proposals.Changes.FindProposal do
   @impl true
   def change(changeset, _opts, _context) do
     %{id: proposal_id} =
-      KeyFleet.Proposals.get_proposal!(
+      Keyfleet.Proposals.get_proposal!(
         Ash.Changeset.get_attribute(changeset, :fleet_id),
         Ash.Changeset.get_argument(changeset, :proposal_number)
       )

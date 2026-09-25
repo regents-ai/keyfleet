@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Preparations.OneRoom do
+defmodule Keyfleet.Rooms.Preparations.OneRoom do
   @moduledoc """
   Reads one room's posts, oldest first and never more than the reader asked
   for, whatever a caller tried to add to the query.
@@ -12,7 +12,7 @@ defmodule KeyFleet.Rooms.Preparations.OneRoom do
 
   require Ash.Query
 
-  alias KeyFleet.Rooms
+  alias Keyfleet.Rooms
 
   @impl true
   def prepare(query, opts, context) do

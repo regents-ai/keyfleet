@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Checks.KeyActor do
+defmodule Keyfleet.Graph.Checks.KeyActor do
   @moduledoc """
   Who may write a fleet's workspace as one of its keys: the person who owns
   that key today, or the agent that person has attached to it.
@@ -21,12 +21,12 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   """
   use Ash.Policy.SimpleCheck
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Graph.Errors.CheckExpiredError
-  alias KeyFleet.Graph.Errors.NotKeyHolderError
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Graph.Errors.CheckExpiredError
+  alias Keyfleet.Graph.Errors.NotKeyHolderError
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   @impl true
   def describe(_opts),
@@ -74,7 +74,7 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
 
   defp fresh_reading(fleet_id, deadline) do
     with {:ok, opts} <- within(deadline, fleet_id) do
-      case KeyFleet.Chain.fresh_cursor(fleet_id, opts) do
+      case Keyfleet.Chain.fresh_cursor(fleet_id, opts) do
         {:ok, nil} -> {:error, OwnershipRefreshingError.exception(fleet_id: fleet_id)}
         other -> other
       end
@@ -86,7 +86,7 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   # with a fresh reading always has its contract.
   defp key_coordinate(fleet_id, token_id, deadline) do
     with {:ok, opts} <- within(deadline, fleet_id),
-         {:ok, fleet} <- KeyFleet.Fleets.get_fleet(fleet_id, [not_found_error?: true] ++ opts) do
+         {:ok, fleet} <- Keyfleet.Fleets.get_fleet(fleet_id, [not_found_error?: true] ++ opts) do
       {:ok, %{chain_id: fleet.chain_id, contract: fleet.contract_address, token_id: token_id}}
     end
   end
@@ -98,7 +98,7 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   end
 
   defp holding(%Human{wallet_addresses: wallets} = actor, fleet_id, token_id, opts) do
-    case KeyFleet.Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
+    case Keyfleet.Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{owner_wallet: owner} = key} ->
         if owner in wallets,
           do:
@@ -121,7 +121,7 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
   end
 
   defp holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
-    case KeyFleet.Keys.current_operator(fleet_id, token_id, [actor: actor] ++ opts) do
+    case Keyfleet.Keys.current_operator(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{operator_wallet: ^wallet} = pairing} ->
         {:ok,
          %{
@@ -154,7 +154,7 @@ defmodule KeyFleet.Graph.Checks.KeyActor do
 
       true ->
         with {:ok, opts} <- within(deadline, fleet_id),
-             {:ok, minted} <- KeyFleet.Chain.minted(fleet_id, opts) do
+             {:ok, minted} <- Keyfleet.Chain.minted(fleet_id, opts) do
           levels = Presets.writable_levels(token_id, minted)
           {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
         end

@@ -1,19 +1,19 @@
-# KeyFleet Privacy Policy
+# Keyfleet Privacy Policy
 
 **Effective date:** September 3, 2026  
 **Version:** 1.0
 
-This Privacy Policy explains how **KeyFleet** ("we," "us," or "our") collects, uses, discloses, and protects personal information when you use the website, applications, APIs, documentation, and related services that we operate under the **KeyFleet** name (collectively, the "Services").
+This Privacy Policy explains how **Keyfleet** ("we," "us," or "our") collects, uses, discloses, and protects personal information when you use the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").
 
 This Policy does not govern third-party websites, wallets, sign-in providers, or other services that we do not control. Those parties have their own privacy practices.
 
 ## 1. Who is responsible for your information
 
-KeyFleet is the controller of personal information covered by this Policy, except where we process information solely on behalf of a business customer under a separate agreement.
+Keyfleet is the controller of personal information covered by this Policy, except where we process information solely on behalf of a business customer under a separate agreement.
 
 Contact:
 
-**KeyFleet**  
+**Keyfleet**  
 Privacy email: **[privacy@example.com](mailto:privacy@example.com)**
 
 ## 2. Important privacy facts
@@ -69,7 +69,7 @@ We use personal information to:
 3. authenticate users and verify wallet control;
 4. provide support and respond to requests;
 5. detect, investigate, and prevent fraud, abuse, unauthorized access, spam, malware, and security incidents;
-6. enforce our Terms and protect users, third parties, KeyFleet, and the Services;
+6. enforce our Terms and protect users, third parties, Keyfleet, and the Services;
 7. comply with law, sanctions, court orders, and lawful requests;
 8. debug, analyze, and improve reliability and user experience;
 9. communicate operational, security, legal, and product information; and
@@ -172,7 +172,7 @@ We may update this Policy as the Services and law change. We will post the updat
 
 Questions, requests, or complaints may be sent to:
 
-**KeyFleet**  
+**Keyfleet**  
 Privacy email: **[privacy@example.com](mailto:privacy@example.com)**  
 Legal email: **[legal@example.com](mailto:legal@example.com)**
 

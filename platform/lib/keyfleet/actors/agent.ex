@@ -1,4 +1,4 @@
-defmodule KeyFleet.Actors.Agent do
+defmodule Keyfleet.Actors.Agent do
   @moduledoc """
   Product principal constructed by trusted code after SIWA wallet verification.
 

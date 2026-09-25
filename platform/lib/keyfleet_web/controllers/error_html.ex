@@ -1,10 +1,10 @@
-defmodule KeyFleetWeb.ErrorHTML do
+defmodule KeyfleetWeb.ErrorHTML do
   @moduledoc """
   This module is invoked by your endpoint in case of errors on HTML requests.
 
   See config/config.exs.
   """
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
   def render(template, assigns) do
     assigns = assigns |> Map.new() |> Map.put_new(:__changed__, nil)
@@ -29,19 +29,19 @@ defmodule KeyFleetWeb.ErrorHTML do
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{@title} · KeyFleet</title>
+        <title>{@title} · Keyfleet</title>
         <link rel="stylesheet" href="/assets/js/app.css" />
       </head>
       <body>
         <Regent.Structure.frame>
           <Regent.Structure.row rail={false}>
             <main class="rg-inset">
-              <p>KeyFleet</p>
+              <p>Keyfleet</p>
               <h1 class="rg-hero-title">{@title}</h1>
               <p><a class="rg-button rg-button--secondary" href="/">Go to the homepage</a></p>
               <nav aria-label="Recovery links">
                 <ul>
-                  <li :for={{label, path} <- KeyFleetWeb.PublicDocuments.recovery_links()}>
+                  <li :for={{label, path} <- KeyfleetWeb.PublicDocuments.recovery_links()}>
                     <a href={path}>{label}</a>
                   </li>
                 </ul>

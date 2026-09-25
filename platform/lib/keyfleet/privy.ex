@@ -1,4 +1,4 @@
-defmodule KeyFleet.Privy do
+defmodule Keyfleet.Privy do
   @moduledoc false
 
   @type session_pair :: %{access: String.t(), identity: String.t()}
@@ -6,9 +6,9 @@ defmodule KeyFleet.Privy do
   @type rejection :: {stage(), atom()}
 
   @callback verify_session_pair(session_pair()) ::
-              {:ok, KeyFleet.VerifiedPrivyIdentity.t()} | {:error, rejection()}
+              {:ok, Keyfleet.VerifiedPrivyIdentity.t()} | {:error, rejection()}
 
-  alias KeyFleet.VerifiedPrivyIdentity
+  alias Keyfleet.VerifiedPrivyIdentity
 
   # The shared verifier's whole documented vocabulary. Any other result is a
   # shape this boundary has never reviewed, so it is reduced here rather than

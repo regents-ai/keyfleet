@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Changes.DecideOnce do
+defmodule Keyfleet.Keys.Changes.DecideOnce do
   @moduledoc """
   Makes the standing the caller acted on part of the row's own update condition.
 

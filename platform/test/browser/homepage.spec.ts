@@ -53,7 +53,7 @@ test("the homepage reads without scripts: what a fleet is, then every fleet and 
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "KeyFleet", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
   await expect(page.locator(".rl-hero-description")).toContainText("each hold a numbered key")
   await expect(page.getByRole("heading", {name: "The fleets", level: 2})).toBeVisible()
 

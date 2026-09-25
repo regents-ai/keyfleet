@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Cursor do
+defmodule Keyfleet.Graph.Cursor do
   @moduledoc """
   How far one fleet's graph log has been copied into the read tables, and
   from which run of that log.
@@ -8,13 +8,13 @@ defmodule KeyFleet.Graph.Cursor do
   beginning of the log. Only the projector writes here; anyone may read.
   """
   use Ash.Resource,
-    domain: KeyFleet.Graph,
+    domain: Keyfleet.Graph,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "graph_cursors"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:applied_seq, "graph_cursors_nonnegative_applied_seq",
@@ -57,7 +57,7 @@ defmodule KeyFleet.Graph.Cursor do
     end
 
     policy action([:start, :advance, :forget]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -70,7 +70,7 @@ defmodule KeyFleet.Graph.Cursor do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       primary_key? true
       allow_nil? false

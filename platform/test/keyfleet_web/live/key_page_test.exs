@@ -1,12 +1,12 @@
-defmodule KeyFleetWeb.Live.KeyPageTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.KeyPageTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
 
   @fleet "fibonacci_syndicate"
   @path "/app/keys/fibonacci_syndicate/1"

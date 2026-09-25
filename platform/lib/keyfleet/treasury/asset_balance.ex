@@ -1,11 +1,11 @@
-defmodule KeyFleet.Treasury.AssetBalance do
+defmodule Keyfleet.Treasury.AssetBalance do
   @moduledoc """
-  One asset in a `KeyFleet.Treasury.Reading`: the fleet's budget in it
+  One asset in a `Keyfleet.Treasury.Reading`: the fleet's budget in it
   (`freeCapital`), what the reward ledger holds for the key holders in it
   (`backed`), and its current pay period: when it began (nil before any
   payment), its cap and what it has paid. Amounts are in the asset's atomic
   units, any uint256; its symbol and decimals are its
-  `KeyFleet.Treasury.AssetDetails`.
+  `Keyfleet.Treasury.AssetDetails`.
   """
   use Ash.Resource, data_layer: :embedded
 

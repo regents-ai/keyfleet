@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.LimitRenames do
+defmodule Keyfleet.Rooms.Changes.LimitRenames do
   @moduledoc """
   Lets an open room be renamed at most once a minute, counted from when it was
   last named.
@@ -9,8 +9,8 @@ defmodule KeyFleet.Rooms.Changes.LimitRenames do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Rooms.Errors.RenameTooSoonError
-  alias KeyFleet.Rooms.Sequence
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Rooms.Sequence
 
   @interval_ms 60_000
 
@@ -28,7 +28,7 @@ defmodule KeyFleet.Rooms.Changes.LimitRenames do
     # The room as it stands now that it is held; the naming itself was already
     # authorized, and anyone may read a room.
     %{topic_set_at: named_at} =
-      KeyFleet.Rooms.get_room!(room.fleet_id, room.slug, authorize?: false)
+      Keyfleet.Rooms.get_room!(room.fleet_id, room.slug, authorize?: false)
 
     wait_ms =
       if named_at,

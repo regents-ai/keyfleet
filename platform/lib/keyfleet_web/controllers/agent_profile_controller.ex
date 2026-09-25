@@ -1,8 +1,8 @@
-defmodule KeyFleetWeb.AgentProfileController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.AgentProfileController do
+  use KeyfleetWeb, :controller
 
   def status(conn, %{"name" => name, "declared_harness" => harness}) do
-    case KeyFleet.Agents.ensure_profile(%{name: name, declared_harness: harness},
+    case Keyfleet.Agents.ensure_profile(%{name: name, declared_harness: harness},
            actor: conn.assigns.agent_actor
          ) do
       {:ok, profile} ->
@@ -16,8 +16,8 @@ defmodule KeyFleetWeb.AgentProfileController do
   def update(conn, params) do
     actor = conn.assigns.agent_actor
 
-    with {:ok, profile} when not is_nil(profile) <- KeyFleet.Agents.get_my_profile(actor: actor),
-         {:ok, profile} <- KeyFleet.Agents.edit_my_profile(profile, params, actor: actor) do
+    with {:ok, profile} when not is_nil(profile) <- Keyfleet.Agents.get_my_profile(actor: actor),
+         {:ok, profile} <- Keyfleet.Agents.edit_my_profile(profile, params, actor: actor) do
       respond_profile(conn, profile)
     else
       {:ok, nil} -> conn |> put_status(404) |> json(%{error: "profile_not_found"})

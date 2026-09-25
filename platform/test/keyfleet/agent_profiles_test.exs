@@ -1,10 +1,10 @@
-defmodule KeyFleet.AgentProfilesTest do
+defmodule Keyfleet.AgentProfilesTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Agents
-  alias KeyFleet.Agents.AgentProfile
-  alias KeyFleet.Repo
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Agents
+  alias Keyfleet.Agents.AgentProfile
+  alias Keyfleet.Repo
 
   setup context do
     unless context[:independent_connections], do: Ecto.Adapters.SQL.Sandbox.checkout(Repo)

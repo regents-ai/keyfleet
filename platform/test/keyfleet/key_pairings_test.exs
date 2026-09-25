@@ -1,12 +1,12 @@
-defmodule KeyFleet.KeyPairingsTest do
+defmodule Keyfleet.KeyPairingsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
 
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
@@ -49,7 +49,7 @@ defmodule KeyFleet.KeyPairingsTest do
   test "a key gaining or losing the agent running it is announced; a waiting request is not", %{
     owner: owner
   } do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Keys.topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
 
     request = request!(agent("b"), "Operator agent")
     refute_received {:keys_changed, _fleet, _token_ids}

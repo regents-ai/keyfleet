@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddKeyOwnershipEpochs do
+defmodule Keyfleet.Repo.Migrations.AddKeyOwnershipEpochs do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

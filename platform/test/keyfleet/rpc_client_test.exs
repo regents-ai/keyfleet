@@ -1,17 +1,17 @@
-defmodule KeyFleet.Chain.RpcClientTest do
+defmodule Keyfleet.Chain.RpcClientTest do
   # Points the whole app's node address at a local server for each test.
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
   import Plug.Conn
 
-  alias KeyFleet.Chain.RpcClient
+  alias Keyfleet.Chain.RpcClient
 
   @block_hash "0x" <> String.duplicate("b", 64)
 
   setup do
-    config = Application.fetch_env!(:keyfleet, KeyFleet.Chain)
-    on_exit(fn -> Application.put_env(:keyfleet, KeyFleet.Chain, config) end)
+    config = Application.fetch_env!(:keyfleet, Keyfleet.Chain)
+    on_exit(fn -> Application.put_env(:keyfleet, Keyfleet.Chain, config) end)
     %{config: config}
   end
 
@@ -63,7 +63,7 @@ defmodule KeyFleet.Chain.RpcClientTest do
 
     Application.put_env(
       :keyfleet,
-      KeyFleet.Chain,
+      Keyfleet.Chain,
       Keyword.put(config, :rpc_url, "http://127.0.0.1:#{port}")
     )
   end

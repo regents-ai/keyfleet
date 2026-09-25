@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Calls do
+defmodule Keyfleet.Keeper.Calls do
   @moduledoc """
   Everything the keeper may say to a contract.
 
@@ -8,14 +8,14 @@ defmodule KeyFleet.Keeper.Calls do
   so nothing outside this module can put other bytes on the chain.
 
   It also encodes the views the keeper reads before it sends and decodes what
-  they return, strictly, with `KeyFleet.Chain.Abi`.
+  they return, strictly, with `Keyfleet.Chain.Abi`.
 
   Addresses are lowercase `0x` strings, as the chain reader keeps them.
   """
 
   import Bitwise
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   defmodule Call do
     @moduledoc "One call the keeper may send: the function, the contract and its one argument."

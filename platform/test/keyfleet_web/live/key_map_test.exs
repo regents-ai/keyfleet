@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.KeyMapTest do
+defmodule KeyfleetWeb.KeyMapTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleetWeb.KeyMap
+  alias KeyfleetWeb.KeyMap
 
   # Key `id` is bit `(id - 1) rem 8` of byte `(id - 1) div 8`, least
   # significant first, over `ceil(max_supply / 8)` bytes.

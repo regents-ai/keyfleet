@@ -1,9 +1,9 @@
-# KeyFleet Terms of Use
+# Keyfleet Terms of Use
 
 **Effective date:** September 3, 2026  
 **Version:** 1.0
 
-These Terms of Use ("Terms") are a binding agreement between you and **KeyFleet** ("we," "us," or "our"). They govern your access to and use of the website, applications, APIs, documentation, and related services that we operate under the **KeyFleet** name (collectively, the "Services").
+These Terms of Use ("Terms") are a binding agreement between you and **Keyfleet** ("we," "us," or "our"). They govern your access to and use of the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").
 
 **Please read these Terms carefully. By accessing or using the Services, clicking to accept these Terms, signing in with a wallet, or directing an automated agent to use the Services, you agree to these Terms.**
 
@@ -29,9 +29,9 @@ You agree to provide accurate information and keep it current. You may not imper
 
 You are solely responsible for safeguarding wallet private keys and recovery phrases; passwords, passkeys, one-time codes, and authentication methods; signing devices; machine access; and permissions granted to agents.
 
-**KeyFleet will not ask you to send us a wallet private key or recovery phrase.** Do not provide those credentials to us, another user, an agent, or a public record.
+**Keyfleet will not ask you to send us a wallet private key or recovery phrase.** Do not provide those credentials to us, another user, an agent, or a public record.
 
-Wallets used with the Services are supplied through a third-party wallet provider. KeyFleet does not control your wallet credentials and cannot recover lost credentials.
+Wallets used with the Services are supplied through a third-party wallet provider. Keyfleet does not control your wallet credentials and cannot recover lost credentials.
 
 ## 4. Service status and product descriptions
 
@@ -45,7 +45,7 @@ A profile, display name, or identifier is a product record. It does **not** by i
 
 ## 6. No financial, legal, or tax advice
 
-The Services provide software, technical information, and records. KeyFleet does not provide individualized investment, legal, tax, accounting, or fiduciary advice through the Services. You are solely responsible for your decisions and should consult qualified advisers.
+The Services provide software, technical information, and records. Keyfleet does not provide individualized investment, legal, tax, accounting, or fiduciary advice through the Services. You are solely responsible for your decisions and should consult qualified advisers.
 
 ## 7. Fees and taxes
 
@@ -55,7 +55,7 @@ The Services are provided without charge unless a feature says otherwise before 
 
 "User Content" means content you, your organization, or your agent submits through the Services, including profile details and feedback.
 
-You retain ownership of your User Content. You grant KeyFleet a worldwide, non-exclusive, royalty-free, transferable, and sublicensable license to host, store, reproduce, format, transmit, display, and otherwise use User Content as reasonably necessary to operate, secure, improve, and promote the Services.
+You retain ownership of your User Content. You grant Keyfleet a worldwide, non-exclusive, royalty-free, transferable, and sublicensable license to host, store, reproduce, format, transmit, display, and otherwise use User Content as reasonably necessary to operate, secure, improve, and promote the Services.
 
 You represent and warrant that you have all rights and permissions needed to submit the User Content; the User Content and our permitted use of it do not violate law or third-party rights; and you have obtained legally required consents for personal data about other people.
 
@@ -89,21 +89,21 @@ A link, integration, or use of open-source software does not imply endorsement o
 
 ## 11. Our intellectual property and open-source software
 
-The Services, excluding User Content and third-party materials, are owned by KeyFleet or its licensors and are protected by intellectual-property laws. Subject to these Terms, we grant you a limited, revocable, non-exclusive, non-transferable license to access and use the hosted Services for their intended purpose.
+The Services, excluding User Content and third-party materials, are owned by Keyfleet or its licensors and are protected by intellectual-property laws. Subject to these Terms, we grant you a limited, revocable, non-exclusive, non-transferable license to access and use the hosted Services for their intended purpose.
 
-Some KeyFleet software is released under an open-source license. The applicable repository license governs your use of that source code. These Terms govern the hosted Services and do not override rights granted under an open-source license.
+Some Keyfleet software is released under an open-source license. The applicable repository license governs your use of that source code. These Terms govern the hosted Services and do not override rights granted under an open-source license.
 
 You may not use our names, logos, trademarks, or branding in a way that implies sponsorship, endorsement, or affiliation without permission.
 
 ## 12. Feedback
 
-If you provide ideas, suggestions, or feedback, you grant KeyFleet a perpetual, irrevocable, worldwide, royalty-free right to use and incorporate it without restriction or compensation.
+If you provide ideas, suggestions, or feedback, you grant Keyfleet a perpetual, irrevocable, worldwide, royalty-free right to use and incorporate it without restriction or compensation.
 
 ## 13. Suspension, removal, and termination
 
 You may stop using the Services at any time and may request closure of an account through available controls or by contacting us, subject to legal, security, and retention limitations.
 
-We may suspend, restrict, or terminate access, remove content, or disable a feature if we reasonably believe it is necessary to enforce these Terms; comply with law or a service-provider requirement; prevent fraud, abuse, security incidents, or harm; protect users, third parties, KeyFleet, or the Services; address technical or operational risk; or discontinue a Service.
+We may suspend, restrict, or terminate access, remove content, or disable a feature if we reasonably believe it is necessary to enforce these Terms; comply with law or a service-provider requirement; prevent fraud, abuse, security incidents, or harm; protect users, third parties, Keyfleet, or the Services; address technical or operational risk; or discontinue a Service.
 
 ## 14. Disclaimers
 
@@ -125,15 +125,15 @@ These limitations apply regardless of the legal theory and even if a remedy fail
 
 ## 16. Indemnification
 
-To the fullest extent permitted by law, you will defend, indemnify, and hold harmless KeyFleet and its directors, officers, employees, contractors, affiliates, licensors, and service providers from claims, liabilities, damages, losses, and expenses, including reasonable attorneys' fees, arising from or related to your or your agent's use of the Services; your User Content; your violation of these Terms or applicable law; your infringement or violation of another person's rights; or your fraud, negligence, misconduct, or security failures.
+To the fullest extent permitted by law, you will defend, indemnify, and hold harmless Keyfleet and its directors, officers, employees, contractors, affiliates, licensors, and service providers from claims, liabilities, damages, losses, and expenses, including reasonable attorneys' fees, arising from or related to your or your agent's use of the Services; your User Content; your violation of these Terms or applicable law; your infringement or violation of another person's rights; or your fraud, negligence, misconduct, or security failures.
 
-We may control the defense of a covered claim, and you agree to cooperate. You may not settle a claim imposing liability or obligations on KeyFleet without our written consent.
+We may control the defense of a covered claim, and you agree to cooperate. You may not settle a claim imposing liability or obligations on Keyfleet without our written consent.
 
 ## 17. Governing law and disputes
 
 Contact **[legal@example.com](mailto:legal@example.com)** for the current governing law and venue.
 
-Before filing a claim, you and KeyFleet agree to attempt in good faith to resolve the dispute by written notice and 30 days of informal discussion.
+Before filing a claim, you and Keyfleet agree to attempt in good faith to resolve the dispute by written notice and 30 days of informal discussion.
 
 ## 18. Changes to these Terms
 
@@ -141,7 +141,7 @@ We may update these Terms. We will post the updated Terms and revise the effecti
 
 ## 19. Miscellaneous
 
-These Terms, the Privacy Policy, and any applicable supplemental terms form the agreement between you and KeyFleet concerning the Services. If any provision is unenforceable, it will be modified to the minimum extent necessary, and the remaining provisions will remain in effect.
+These Terms, the Privacy Policy, and any applicable supplemental terms form the agreement between you and Keyfleet concerning the Services. If any provision is unenforceable, it will be modified to the minimum extent necessary, and the remaining provisions will remain in effect.
 
 Our failure to enforce a provision is not a waiver. You may not assign these Terms without our consent. We may assign them in connection with a reorganization, financing, merger, acquisition, or sale of assets.
 
@@ -149,7 +149,7 @@ Sections that by their nature should survive termination will survive, including
 
 ## 20. Contact
 
-**KeyFleet**  
+**Keyfleet**  
 Email: **[legal@example.com](mailto:legal@example.com)**
 
 For security reports, use **[security@example.com](mailto:security@example.com)**. Do not include private keys, recovery phrases, or unnecessary personal data.

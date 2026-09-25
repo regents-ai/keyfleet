@@ -1,4 +1,4 @@
-defmodule KeyFleet.LocalDatabaseFixture do
+defmodule Keyfleet.LocalDatabaseFixture do
   @moduledoc false
 
   @acceptance_database_prefix "keyfleet_acceptance_"
@@ -146,7 +146,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
   end
 
   def ensure_human_accounts!(opts \\ []) do
-    repo = Keyword.get_lazy(opts, :repo, fn -> KeyFleet.Repo.config() end)
+    repo = Keyword.get_lazy(opts, :repo, fn -> Keyfleet.Repo.config() end)
     env = Keyword.get_lazy(opts, :env, &current_env/0)
     environment = Keyword.get_lazy(opts, :environment, &System.get_env/0)
 
@@ -178,7 +178,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
 
   defp setup_human_account_fixture! do
     create_shared_tables!()
-    KeyFleet.Repo.migrate!(migrations_path())
+    Keyfleet.Repo.migrate!(migrations_path())
   end
 
   defp fixture_setup!(opts, env) do
@@ -327,7 +327,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
     |> String.split(";\n", trim: true)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
-    |> Enum.each(&Ecto.Adapters.SQL.query!(KeyFleet.Repo, &1, []))
+    |> Enum.each(&Ecto.Adapters.SQL.query!(Keyfleet.Repo, &1, []))
   end
 
   defp migrations_path, do: Application.app_dir(:keyfleet, "priv/repo/migrations")
@@ -349,19 +349,19 @@ defmodule KeyFleet.LocalDatabaseFixture do
 
     def prepare(config, run_id) do
       with_repo(config, fn ->
-        KeyFleet.LocalDatabaseFixture.create_shared_tables!()
-        KeyFleet.Repo.migrate!(Application.app_dir(:keyfleet, "priv/repo/migrations"))
+        Keyfleet.LocalDatabaseFixture.create_shared_tables!()
+        Keyfleet.Repo.migrate!(Application.app_dir(:keyfleet, "priv/repo/migrations"))
 
-        Ecto.Adapters.SQL.query!(KeyFleet.Repo, "CREATE SCHEMA acceptance_harness", [])
+        Ecto.Adapters.SQL.query!(Keyfleet.Repo, "CREATE SCHEMA acceptance_harness", [])
 
         Ecto.Adapters.SQL.query!(
-          KeyFleet.Repo,
+          Keyfleet.Repo,
           "CREATE TABLE acceptance_harness.baseline (run_id text PRIMARY KEY, database_name text NOT NULL, database_owner text NOT NULL, migration_versions text[] NOT NULL, created_at timestamptz NOT NULL DEFAULT now())",
           []
         )
 
         Ecto.Adapters.SQL.query!(
-          KeyFleet.Repo,
+          Keyfleet.Repo,
           "INSERT INTO acceptance_harness.baseline (run_id, database_name, database_owner, migration_versions) VALUES ($1, current_database(), current_user, $2)",
           [run_id, migration_versions!()]
         )
@@ -372,12 +372,12 @@ defmodule KeyFleet.LocalDatabaseFixture do
       with_repo(config, fn ->
         marker =
           Ecto.Adapters.SQL.query!(
-            KeyFleet.Repo,
+            Keyfleet.Repo,
             "SELECT run_id, database_name, database_owner FROM acceptance_harness.baseline",
             []
           )
 
-        KeyFleet.LocalDatabaseFixture.validate_ownership_marker!(
+        Keyfleet.LocalDatabaseFixture.validate_ownership_marker!(
           marker.rows,
           run_id,
           to_string(config[:database]),
@@ -386,7 +386,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
 
         protected_tables =
           Ecto.Adapters.SQL.query!(
-            KeyFleet.Repo,
+            Keyfleet.Repo,
             "SELECT table_schema, table_name FROM information_schema.tables WHERE table_name = ANY($1)",
             [
               [
@@ -407,7 +407,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
     defp verify_empty_protected_table!([schema, table]) do
       count =
         Ecto.Adapters.SQL.query!(
-          KeyFleet.Repo,
+          Keyfleet.Repo,
           "SELECT count(*) FROM #{quote_identifier(schema)}.#{quote_identifier(table)}",
           []
         )
@@ -423,7 +423,7 @@ defmodule KeyFleet.LocalDatabaseFixture do
 
     defp migration_versions! do
       Ecto.Adapters.SQL.query!(
-        KeyFleet.Repo,
+        Keyfleet.Repo,
         "SELECT version::text FROM keyfleet_app.schema_migrations ORDER BY version",
         []
       ).rows
@@ -431,10 +431,10 @@ defmodule KeyFleet.LocalDatabaseFixture do
     end
 
     defp with_repo(config, fun) do
-      previous = Application.get_env(:keyfleet, KeyFleet.Repo)
-      Application.put_env(:keyfleet, KeyFleet.Repo, config)
+      previous = Application.get_env(:keyfleet, Keyfleet.Repo)
+      Application.put_env(:keyfleet, Keyfleet.Repo, config)
       {:ok, _} = Application.ensure_all_started(:ecto_sql)
-      {:ok, pid} = KeyFleet.Repo.start_link()
+      {:ok, pid} = Keyfleet.Repo.start_link()
 
       try do
         fun.()
@@ -442,8 +442,8 @@ defmodule KeyFleet.LocalDatabaseFixture do
         Supervisor.stop(pid)
 
         if previous,
-          do: Application.put_env(:keyfleet, KeyFleet.Repo, previous),
-          else: Application.delete_env(:keyfleet, KeyFleet.Repo)
+          do: Application.put_env(:keyfleet, Keyfleet.Repo, previous),
+          else: Application.delete_env(:keyfleet, Keyfleet.Repo)
       end
     end
   end

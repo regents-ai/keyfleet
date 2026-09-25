@@ -1,16 +1,16 @@
-defmodule KeyFleet.Chain.TreasuryReader do
+defmodule Keyfleet.Chain.TreasuryReader do
   @moduledoc """
   Reads one deployed fleet's balances at the block the node last called its
-  head, and keeps them as the fleet's `KeyFleet.Treasury.Reading`.
-  `KeyFleet.Chain.Repeat` runs it once a minute.
+  head, and keeps them as the fleet's `Keyfleet.Treasury.Reading`.
+  `Keyfleet.Chain.Repeat` runs it once a minute.
 
   Every figure of a reading comes from that one block: for each asset
-  `KeyFleet.Treasury.budget_assets/2` lists, the budget, the reward backing
+  `Keyfleet.Treasury.budget_assets/2` lists, the budget, the reward backing
   and the pay period, beside the Cascade reserve, the protocol share owed and
   whether the launch has settled. A reading that fails in any part keeps
   nothing and is tried again at the next one. A reading of a later block than
   the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
-  on `KeyFleet.Proposals.topic/1`.
+  on `Keyfleet.Proposals.topic/1`.
 
   Once a reading's balances are kept, token symbols and decimals are read at
   the same block; a reading that fails asks no token anything. A token that
@@ -31,10 +31,10 @@ defmodule KeyFleet.Chain.TreasuryReader do
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain.Abi
-  alias KeyFleet.Proposals
-  alias KeyFleet.Treasury
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.Abi
+  alias Keyfleet.Proposals
+  alias Keyfleet.Treasury
 
   # cast sig of each view function read.
   @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
@@ -87,7 +87,7 @@ defmodule KeyFleet.Chain.TreasuryReader do
   defp announce(fleet, reading) do
     unless Ash.Resource.get_metadata(reading, :upsert_skipped) do
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Proposals.topic(fleet.id),
         {:balances_changed, fleet.id}
       )

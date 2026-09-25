@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Message do
+defmodule Keyfleet.Rooms.Message do
   require Ash.Query
 
   @moduledoc """
@@ -7,7 +7,7 @@ defmodule KeyFleet.Rooms.Message do
   post written to a key is a line in its thread.
 
   Every line is written as a key: the author's highest-ranked key in the fleet
-  at the time (`KeyFleet.Keys.identity/2`), kept as `as_key`.
+  at the time (`Keyfleet.Keys.identity/2`), kept as `as_key`.
 
   Posts are never edited and never removed, so the table is the room's whole
   history and the place a post holds is the only thing a reader has to remember
@@ -15,7 +15,7 @@ defmodule KeyFleet.Rooms.Message do
   """
   use Ash.Resource,
     otp_app: :keyfleet,
-    domain: KeyFleet.Rooms,
+    domain: Keyfleet.Rooms,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -26,7 +26,7 @@ defmodule KeyFleet.Rooms.Message do
 
   postgres do
     table "messages"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(inserted_at: "fragment(\"(clock_timestamp() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -123,9 +123,9 @@ defmodule KeyFleet.Rooms.Message do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
-      validate KeyFleet.Graph.Validations.KnownFleet
-      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
-      change KeyFleet.Rooms.Changes.AnnouncePost
+      validate Keyfleet.Graph.Validations.KnownFleet
+      change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
+      change Keyfleet.Rooms.Changes.AnnouncePost
     end
 
     # A post written to one of the fleet's keys, in that key's thread, which
@@ -153,14 +153,14 @@ defmodule KeyFleet.Rooms.Message do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
-      validate KeyFleet.Graph.Validations.KnownFleet
-      validate KeyFleet.Rooms.Validations.IssuedKey
-      change {KeyFleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
-      change KeyFleet.Rooms.Changes.AnnouncePost
+      validate Keyfleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Rooms.Validations.IssuedKey
+      change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
+      change Keyfleet.Rooms.Changes.AnnouncePost
     end
 
     # The line an open room takes when a member names it, written inside the
-    # naming itself (`KeyFleet.Rooms.Changes.NameRoom`), which tells the room's
+    # naming itself (`Keyfleet.Rooms.Changes.NameRoom`), which tells the room's
     # watchers once it commits. Its body is the room's new topic.
     create :note_room_named do
       public? false
@@ -178,7 +178,7 @@ defmodule KeyFleet.Rooms.Message do
         allow_nil?: false,
         constraints: [min_length: 1, max_length: 128, trim?: false]
 
-      change {KeyFleet.Rooms.Changes.PostMessage, kind: :room_named, in: :room}
+      change {Keyfleet.Rooms.Changes.PostMessage, kind: :room_named, in: :room}
     end
 
     read :read_messages do
@@ -187,11 +187,11 @@ defmodule KeyFleet.Rooms.Message do
       argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, default: 100, constraints: [min: 1, max: @max_page]
 
-      validate KeyFleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(seq > ^arg(:after_seq))
 
       prepare build(load: [:agent_profile])
-      prepare {KeyFleet.Rooms.Preparations.OneRoom, in: :room}
+      prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :room}
     end
 
     # The posts written to one of the fleet's keys, read the way a room is.
@@ -201,12 +201,12 @@ defmodule KeyFleet.Rooms.Message do
       argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, default: 100, constraints: [min: 1, max: @max_page]
 
-      validate KeyFleet.Graph.Validations.KnownFleet
-      validate KeyFleet.Rooms.Validations.IssuedKey
+      validate Keyfleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Rooms.Validations.IssuedKey
       filter expr(seq > ^arg(:after_seq))
 
       prepare build(load: [:agent_profile])
-      prepare {KeyFleet.Rooms.Preparations.OneRoom, in: :key}
+      prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :key}
     end
 
     # What one key has said in the fleet's rooms, newest first. Posts written
@@ -293,7 +293,7 @@ defmodule KeyFleet.Rooms.Message do
     end
 
     policy action([:send_message, :send_to_key, :note_room_named]) do
-      authorize_if KeyFleet.Rooms.Checks.RoomPoster
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
     end
   end
 
@@ -361,26 +361,26 @@ defmodule KeyFleet.Rooms.Message do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       attribute_writable? false
       allow_nil? false
       public? true
     end
 
-    belongs_to :room, KeyFleet.Rooms.Room do
+    belongs_to :room, Keyfleet.Rooms.Room do
       attribute_writable? false
       allow_nil? false
       public? true
     end
 
-    belongs_to :agent_profile, KeyFleet.Agents.AgentProfile do
+    belongs_to :agent_profile, Keyfleet.Agents.AgentProfile do
       attribute_writable? false
       public? true
       read_action :public_profile
     end
 
-    belongs_to :reply_to, KeyFleet.Rooms.Message do
+    belongs_to :reply_to, Keyfleet.Rooms.Message do
       attribute_writable? false
       public? true
     end

@@ -1,12 +1,12 @@
-defmodule KeyFleet.Chain.Supervisor do
+defmodule Keyfleet.Chain.Supervisor do
   @moduledoc """
-  For each deployed fleet, one `KeyFleet.Chain.Poller` reading its history,
+  For each deployed fleet, one `Keyfleet.Chain.Poller` reading its history,
   and apart from it, the launches its launch proposals approve, read every
   few seconds, and its balances, read once a minute.
   """
   use Supervisor
 
-  alias KeyFleet.Chain.Repeat
+  alias Keyfleet.Chain.Repeat
 
   @balances_every 60_000
 
@@ -14,14 +14,14 @@ defmodule KeyFleet.Chain.Supervisor do
 
   @impl true
   def init(_opts) do
-    poll_interval = Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:poll_interval_ms]
+    poll_interval = Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:poll_interval_ms]
 
-    KeyFleet.Fleets.list_deployed_fleets!()
+    Keyfleet.Fleets.list_deployed_fleets!()
     |> Enum.flat_map(
       &[
-        {KeyFleet.Chain.Poller, &1},
-        {Repeat, {KeyFleet.Chain.LaunchEnvelopes, &1, poll_interval}},
-        {Repeat, {KeyFleet.Chain.TreasuryReader, &1, @balances_every}}
+        {Keyfleet.Chain.Poller, &1},
+        {Repeat, {Keyfleet.Chain.LaunchEnvelopes, &1, poll_interval}},
+        {Repeat, {Keyfleet.Chain.TreasuryReader, &1, @balances_every}}
       ]
     )
     |> Supervisor.init(strategy: :one_for_one)

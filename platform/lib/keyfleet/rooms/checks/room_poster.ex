@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Checks.RoomPoster do
+defmodule Keyfleet.Rooms.Checks.RoomPoster do
   @moduledoc """
   Who may post in a fleet's rooms and its keys' threads, name its open rooms
   and create rooms in it: the people holding the fleet's keys today, and the
@@ -13,9 +13,9 @@ defmodule KeyFleet.Rooms.Checks.RoomPoster do
   """
   use Ash.Policy.SimpleCheck
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Rooms.Message
-  alias KeyFleet.Rooms.Room
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Rooms.Message
+  alias Keyfleet.Rooms.Room
 
   @impl true
   def describe(opts) do
@@ -35,12 +35,12 @@ defmodule KeyFleet.Rooms.Checks.RoomPoster do
 
   @doc """
   Whether this actor may post in the fleet's rooms right now: it has a key in
-  the fleet to write as (`KeyFleet.Keys.identity/2`) while the fleet's key
+  the fleet to write as (`Keyfleet.Keys.identity/2`) while the fleet's key
   ownership is fresh.
 
   The same question the policy asks, so a page can offer somebody the box to
   write in exactly when the post would be taken.
   """
   def may_post?(actor, fleet_id),
-    do: KeyFleet.Chain.fresh?(fleet_id) and KeyFleet.Keys.identity(actor, fleet_id) != nil
+    do: Keyfleet.Chain.fresh?(fleet_id) and Keyfleet.Keys.identity(actor, fleet_id) != nil
 end

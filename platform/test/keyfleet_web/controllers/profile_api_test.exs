@@ -1,14 +1,14 @@
-defmodule KeyFleetWeb.ProfileApiTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.ProfileApiTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   setup_all do
-    database = KeyFleet.Repo.config()[:database]
+    database = Keyfleet.Repo.config()[:database]
 
     unless database == "keyfleet" <> System.fetch_env!("MIX_TEST_PARTITION") <> "_test",
       do: raise("Profile tests require the prepared disposable database")
 
-    RegentIdentity.Migrator.up(KeyFleet.Repo)
-    assert RegentIdentity.Migrator.up(KeyFleet.Repo) == []
+    RegentIdentity.Migrator.up(Keyfleet.Repo)
+    assert RegentIdentity.Migrator.up(Keyfleet.Repo) == []
     :ok
   end
 

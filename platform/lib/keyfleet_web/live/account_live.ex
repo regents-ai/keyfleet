@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.AccountLive do
+defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's own page: who the site knows them as, the keys their
   wallets hold, the wallets their sign-in verified and the accounts they have
@@ -8,12 +8,12 @@ defmodule KeyFleetWeb.AccountLive do
   the page asks the visitor to sign in again.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  import KeyFleetWeb.Components.VerifiedConnections
+  import KeyfleetWeb.Components.VerifiedConnections
 
-  alias KeyFleet.PublicIdentity
-  alias KeyFleetWeb.KeyLinks
+  alias Keyfleet.PublicIdentity
+  alias KeyfleetWeb.KeyLinks
 
   attr :account, :map, default: nil
   attr :account_control, :map, required: true
@@ -28,7 +28,7 @@ defmodule KeyFleetWeb.AccountLive do
     ~H"""
     <article id="account-page" class="account-page">
       <header class="account-heading">
-        <p class="account-kicker">KeyFleet</p>
+        <p class="account-kicker">Keyfleet</p>
         <h1 tabindex="-1">Account</h1>
         <p class="account-lede">
           The wallet you signed in with and the accounts you have connected.

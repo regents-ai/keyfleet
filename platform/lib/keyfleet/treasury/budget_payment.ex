@@ -1,4 +1,4 @@
-defmodule KeyFleet.Treasury.BudgetPayment do
+defmodule Keyfleet.Treasury.BudgetPayment do
   @moduledoc """
   One `BudgetPaid` log: a passed payment paid out of the fleet's budget, with
   the start of the 30-day period it counts against and how much that period
@@ -10,7 +10,7 @@ defmodule KeyFleet.Treasury.BudgetPayment do
   was made.
   """
   use Ash.Resource,
-    domain: KeyFleet.Treasury,
+    domain: Keyfleet.Treasury,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -18,7 +18,7 @@ defmodule KeyFleet.Treasury.BudgetPayment do
 
   postgres do
     table "budget_payments"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -100,7 +100,7 @@ defmodule KeyFleet.Treasury.BudgetPayment do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
-      change {KeyFleet.Chain.Changes.RecordOnce,
+      change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index],
               number: :proposal_seq,
               block: :block_number}
@@ -127,7 +127,7 @@ defmodule KeyFleet.Treasury.BudgetPayment do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -174,7 +174,7 @@ defmodule KeyFleet.Treasury.BudgetPayment do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

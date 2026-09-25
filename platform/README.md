@@ -1,11 +1,11 @@
-# KeyFleet platform
+# Keyfleet platform
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](../LICENSE)
 [![Elixir 1.19](https://img.shields.io/badge/elixir-1.19-lightgrey)](https://elixir-lang.org)
 [![Phoenix 1.8](https://img.shields.io/badge/phoenix-1.8-lightgrey)](https://www.phoenixframework.org)
 [![Ash 3.33](https://img.shields.io/badge/ash-3.33-lightgrey)](https://ash-hq.org)
 
-The Phoenix/Ash web application of KeyFleet. It serves the public home
+The Phoenix/Ash web application of Keyfleet. It serves the public home
 page, where a visitor chooses a fleet, each fleet's page (`/app/fleets/<fleet>`),
 Privy wallet sign-in, the Account page (`/account`), the public pages, health and
 metrics, and the public HTTP API.
@@ -40,7 +40,7 @@ cp .env.example .env
 touch .env.local
 printf '%s\n' 'source_env .env' 'source_env_if_exists .env.local' > .envrc
 mix setup
-mix key_fleet.setup_local_auth
+mix keyfleet.setup_local_auth
 mix phx.server
 ```
 

@@ -1,13 +1,13 @@
-defmodule KeyFleet.ReleaseTest do
+defmodule Keyfleet.ReleaseTest do
   # The bootstrap and listing cases point the application repository at a
   # disposable database, so this module runs alone.
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
 
-  alias KeyFleet.LocalDatabaseFixture
-  alias KeyFleet.LocalDatabaseFixture.PostgresAdapter
-  alias KeyFleet.Release
+  alias Keyfleet.LocalDatabaseFixture
+  alias Keyfleet.LocalDatabaseFixture.PostgresAdapter
+  alias Keyfleet.Release
 
   @moduletag timeout: 300_000
 
@@ -27,7 +27,7 @@ defmodule KeyFleet.ReleaseTest do
   #!/bin/sh
   set -eu
 
-  KEYFLEET_RELEASE_COMMAND=migrate exec "$(dirname "$0")/keyfleet" eval 'KeyFleet.Release.migrate()'
+  KEYFLEET_RELEASE_COMMAND=migrate exec "$(dirname "$0")/keyfleet" eval 'Keyfleet.Release.migrate()'
   """
 
   # Two cases migrate a database from scratch inside one VM, so the same
@@ -81,7 +81,7 @@ defmodule KeyFleet.ReleaseTest do
     script = File.read!("rel/overlays/bin/migrate")
 
     assert script == @migrate_launcher
-    assert script =~ "KeyFleet.Release.migrate()"
+    assert script =~ "Keyfleet.Release.migrate()"
     assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
     refute script =~ "KEYFLEET_DATABASE_TARGET_MODE="
     refute script =~ "bootstrap"
@@ -99,7 +99,7 @@ defmodule KeyFleet.ReleaseTest do
         ] do
       script = File.read!(path)
 
-      assert script =~ "KeyFleet.Release.#{command}()"
+      assert script =~ "Keyfleet.Release.#{command}()"
       assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
       refute script =~ "KEYFLEET_DEPLOYMENT_ROLE="
       refute script =~ "echo"
@@ -124,7 +124,7 @@ defmodule KeyFleet.ReleaseTest do
         ] do
       script = File.read!(path)
 
-      assert script =~ ~s{KeyFleet.Release.#{command}(System.fetch_env!("#{env}"))}
+      assert script =~ ~s{Keyfleet.Release.#{command}(System.fetch_env!("#{env}"))}
       assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
       refute script =~ "DATABASE_POOLED_URL"
       refute script =~ "DATABASE_DIRECT_URL"
@@ -309,16 +309,16 @@ defmodule KeyFleet.ReleaseTest do
   defp disposable_database do
     run_id = "regent2e7_#{System.unique_integer([:positive])}"
     config = LocalDatabaseFixture.local_acceptance_config!(run_id)
-    previous = Application.get_env(:keyfleet, KeyFleet.Repo)
+    previous = Application.get_env(:keyfleet, Keyfleet.Repo)
 
-    :ok = Supervisor.terminate_child(KeyFleet.Supervisor, KeyFleet.Repo)
+    :ok = Supervisor.terminate_child(Keyfleet.Supervisor, Keyfleet.Repo)
     :ok = PostgresAdapter.create(config)
 
     on_exit(fn ->
       PostgresAdapter.drop(config)
-      Application.put_env(:keyfleet, KeyFleet.Repo, previous)
-      {:ok, _pid} = Supervisor.restart_child(KeyFleet.Supervisor, KeyFleet.Repo)
-      Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, :manual)
+      Application.put_env(:keyfleet, Keyfleet.Repo, previous)
+      {:ok, _pid} = Supervisor.restart_child(Keyfleet.Supervisor, Keyfleet.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual)
     end)
 
     config
@@ -460,7 +460,7 @@ defmodule KeyFleet.ReleaseTest do
   defp locking_migration_status(config) do
     with_config(config, fn ->
       {:ok, migrations, _started} =
-        Ecto.Migrator.with_repo(KeyFleet.Repo, fn repo ->
+        Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
           Ecto.Migrator.migrations(repo, [release_migrations_path()],
             prefix: repo.default_prefix(),
             skip_table_creation: true
@@ -474,7 +474,7 @@ defmodule KeyFleet.ReleaseTest do
   defp query!(config, sql, params \\ []) do
     with_config(config, fn ->
       {:ok, result, _started} =
-        Ecto.Migrator.with_repo(KeyFleet.Repo, fn repo ->
+        Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
           Ecto.Adapters.SQL.query!(repo, sql, params)
         end)
 
@@ -483,15 +483,15 @@ defmodule KeyFleet.ReleaseTest do
   end
 
   defp with_config(config, fun) do
-    previous = Application.get_env(:keyfleet, KeyFleet.Repo)
-    Application.put_env(:keyfleet, KeyFleet.Repo, config)
+    previous = Application.get_env(:keyfleet, Keyfleet.Repo)
+    Application.put_env(:keyfleet, Keyfleet.Repo, config)
 
     try do
       fun.()
     after
       if previous,
-        do: Application.put_env(:keyfleet, KeyFleet.Repo, previous),
-        else: Application.delete_env(:keyfleet, KeyFleet.Repo)
+        do: Application.put_env(:keyfleet, Keyfleet.Repo, previous),
+        else: Application.delete_env(:keyfleet, Keyfleet.Repo)
     end
   end
 end

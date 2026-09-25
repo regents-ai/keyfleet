@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.AnnouncePost do
+defmodule Keyfleet.Rooms.Changes.AnnouncePost do
   @moduledoc """
   Tells everyone watching the fleet's rooms that a room has taken a new post,
   once the post is committed, and that the keys it concerns have something new:
@@ -15,17 +15,17 @@ defmodule KeyFleet.Rooms.Changes.AnnouncePost do
 
   defp announce(changeset, {:ok, message} = result) do
     unless Ash.Resource.get_metadata(message, :upsert_skipped) do
-      topic = KeyFleet.Rooms.fleet_topic(message.fleet_id)
+      topic = Keyfleet.Rooms.fleet_topic(message.fleet_id)
 
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         topic,
         {:room_head, message.room_id, message.seq}
       )
 
       for token_id <- Enum.uniq([message.as_key, thread_key(changeset)]), token_id != nil do
         Phoenix.PubSub.broadcast(
-          KeyFleet.PubSub,
+          Keyfleet.PubSub,
           topic,
           {:key_activity, message.fleet_id, token_id}
         )

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Treasury do
+defmodule Keyfleet.Treasury do
   @moduledoc """
   A fleet's budget as its contract reports it: assets received into it,
   launch income split between the budget and the keys, payments out of the
@@ -11,23 +11,23 @@ defmodule KeyFleet.Treasury do
 
   require Ash.Query
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
 
   @latest 20
 
   resources do
-    resource KeyFleet.Treasury.Reading do
+    resource Keyfleet.Treasury.Reading do
       define :record_reading, action: :record
       define :get_reading, action: :read, get_by: [:fleet_id], not_found_error?: false
     end
 
-    resource KeyFleet.Treasury.AssetDetails do
+    resource Keyfleet.Treasury.AssetDetails do
       define :record_asset_details, action: :record
       define :asset_details, action: :of_fleet, args: [:fleet_id]
     end
 
-    resource KeyFleet.Treasury.BudgetReceipt do
+    resource Keyfleet.Treasury.BudgetReceipt do
       define :record_budget_receipt, action: :record
 
       define :budget_receipts_recorded_in_blocks,
@@ -35,7 +35,7 @@ defmodule KeyFleet.Treasury do
         args: [:fleet_id, :from_block, :to_block]
     end
 
-    resource KeyFleet.Treasury.IncomeSplit do
+    resource Keyfleet.Treasury.IncomeSplit do
       define :record_income_split, action: :record
 
       define :income_splits_recorded_in_blocks,
@@ -43,7 +43,7 @@ defmodule KeyFleet.Treasury do
         args: [:fleet_id, :from_block, :to_block]
     end
 
-    resource KeyFleet.Treasury.BudgetPayment do
+    resource Keyfleet.Treasury.BudgetPayment do
       define :record_budget_payment, action: :record
 
       define :budget_payments_recorded_in_blocks,

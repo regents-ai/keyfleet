@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo do
+defmodule Keyfleet.Repo do
   use AshPostgres.Repo, otp_app: :keyfleet
 
   # This product's own tables live in this schema of the shared database, beside

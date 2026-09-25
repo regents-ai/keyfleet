@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: KeyFleet API
+  title: Keyfleet API
   version: 1.0.0
 paths:
   /api/v1/profile:

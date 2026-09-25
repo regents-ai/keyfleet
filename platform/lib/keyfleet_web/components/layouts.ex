@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.Layouts do
+defmodule KeyfleetWeb.Layouts do
   @moduledoc "Root document layout for the public page and persistent shell."
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
   embed_templates("layouts/*")
 
@@ -28,9 +28,9 @@ defmodule KeyFleetWeb.Layouts do
   def product_links(assigns) do
     ~H"""
     <footer aria-label="Project links" class="product-links">
-      <KeyFleetWeb.Components.Shell.theme_toggle id="footer-theme-control" theme={@theme} />
+      <KeyfleetWeb.Components.Shell.theme_toggle id="footer-theme-control" theme={@theme} />
       <div class="rl-header-links">
-        <KeyFleetWeb.Components.RegentLinks.header_links id="footer-token-menu" />
+        <KeyfleetWeb.Components.RegentLinks.header_links id="footer-token-menu" />
       </div>
       <a href="/llms.txt">For agents</a>
     </footer>

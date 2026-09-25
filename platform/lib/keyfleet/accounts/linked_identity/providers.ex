@@ -1,4 +1,4 @@
-defmodule KeyFleet.Accounts.LinkedIdentity.Providers do
+defmodule Keyfleet.Accounts.LinkedIdentity.Providers do
   @moduledoc false
 
   @providers [

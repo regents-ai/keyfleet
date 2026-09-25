@@ -1,13 +1,13 @@
-defmodule KeyFleetWeb.Live.RoomPageTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.RoomPageTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Rooms
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
   @path "/app/fleets/fibonacci_syndicate/rooms/general"
@@ -107,7 +107,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     # anything with them, someone else posts.
     :telemetry.attach(
       "room-page-post-while-reading",
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() != test_pid and meta.source == "messages" and
              String.starts_with?(meta.query, "SELECT") and
@@ -377,7 +377,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
     end
 
     test "a fleet without rooms says it does not exist", %{conn: conn} do
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_accelerant'"
       )
 
@@ -390,7 +390,7 @@ defmodule KeyFleetWeb.Live.RoomPageTest do
 
   # Moves the room's last naming back a minute, so it may be renamed.
   defp a_minute_passes(slug) do
-    KeyFleet.Repo.query!(
+    Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.rooms SET topic_set_at = topic_set_at - interval '61 seconds' " <>
         "WHERE fleet_id = $1 AND slug = $2",
       [@fleet, slug]

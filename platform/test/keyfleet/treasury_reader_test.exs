@@ -1,16 +1,16 @@
-defmodule KeyFleet.TreasuryReaderTest do
+defmodule Keyfleet.TreasuryReaderTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain.{StubClient, TreasuryReader}
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.ProposalHelpers
-  alias KeyFleet.Proposals
-  alias KeyFleet.Repo
-  alias KeyFleet.Treasury
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.{StubClient, TreasuryReader}
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Proposals
+  alias Keyfleet.Repo
+  alias Keyfleet.Treasury
 
   @fleet "fleet_tech_accelerant"
   @contract "0x" <> String.duplicate("7", 40)
@@ -64,7 +64,7 @@ defmodule KeyFleet.TreasuryReaderTest do
   # and the proposal pages are told. The tokens are asked what they are
   # after, those payment proposals name among them.
   test "a reading keeps every balance from the one block it was read at", %{fleet: fleet} do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
     ProposalHelpers.budget_receipt!(@fleet, asset: @deposited)
     ProposalHelpers.budget_receipt!(@fleet, asset: @deposited, kind: :surplus)
     ProposalHelpers.income_split!(@fleet, asset: @other)
@@ -153,7 +153,7 @@ defmodule KeyFleet.TreasuryReaderTest do
   # to one that fails may be the node's: nothing is kept, the balances are
   # kept and announced all the same, and the token is asked again.
   test "a budget token whose call fails is asked again at the next reading", %{fleet: fleet} do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
     unavailable = Map.put(chain(), {@usdc, @decimals}, {:error, :chain_unavailable})
     StubClient.put_chain(head(40), [], calls: answers(unavailable))
 
@@ -294,7 +294,7 @@ defmodule KeyFleet.TreasuryReaderTest do
   # A reading from an earlier block, or the same one, never replaces the one
   # kept, and is not announced.
   test "an earlier reading does not replace a later one", %{fleet: fleet} do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Proposals.topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
     StubClient.put_chain(head(40), [], calls: answers(chain()))
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
     assert_received {:balances_changed, @fleet}

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Changes.AnnounceOperator do
+defmodule Keyfleet.Keys.Changes.AnnounceOperator do
   @moduledoc """
   Tells everyone watching a fleet's keys that a key has gained or lost the
   agent running it, once the change is committed.
@@ -16,8 +16,8 @@ defmodule KeyFleet.Keys.Changes.AnnounceOperator do
   defp announce(_changeset, {:ok, %{status: status} = pairing} = result)
        when status in [:active, :ended] do
     Phoenix.PubSub.broadcast(
-      KeyFleet.PubSub,
-      KeyFleet.Keys.topic(pairing.fleet_id),
+      Keyfleet.PubSub,
+      Keyfleet.Keys.topic(pairing.fleet_id),
       {:keys_changed, pairing.fleet_id, [pairing.token_id]}
     )
 

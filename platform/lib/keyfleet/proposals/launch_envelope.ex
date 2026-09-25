@@ -1,4 +1,4 @@
-defmodule KeyFleet.Proposals.LaunchEnvelope do
+defmodule Keyfleet.Proposals.LaunchEnvelope do
   @moduledoc """
   The launch a recorded Autolaunch proposal approves, read from the vote
   contract's `launchEnvelope` at the proposal's own block, and kept only when
@@ -10,7 +10,7 @@ defmodule KeyFleet.Proposals.LaunchEnvelope do
   when it was made, so its arrival reads as a change to the proposal.
   """
   use Ash.Resource,
-    domain: KeyFleet.Proposals,
+    domain: Keyfleet.Proposals,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.Proposals.LaunchEnvelope do
 
   postgres do
     table "proposal_launch_envelopes"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -68,7 +68,7 @@ defmodule KeyFleet.Proposals.LaunchEnvelope do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
-      change {KeyFleet.Chain.Changes.RecordOnce, identity: [:proposal_id], number: :proposal_seq}
+      change {Keyfleet.Chain.Changes.RecordOnce, identity: [:proposal_id], number: :proposal_seq}
     end
   end
 
@@ -78,7 +78,7 @@ defmodule KeyFleet.Proposals.LaunchEnvelope do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -108,13 +108,13 @@ defmodule KeyFleet.Proposals.LaunchEnvelope do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true
     end
 
-    belongs_to :proposal, KeyFleet.Proposals.Proposal do
+    belongs_to :proposal, Keyfleet.Proposals.Proposal do
       allow_nil? false
       public? true
     end

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Proposals.Proposal do
+defmodule Keyfleet.Proposals.Proposal do
   @moduledoc """
   One proposal of a fleet's vote, from its `ProposalCreated` log and, for a
   launch or a payment, the payload log beside it. Only the chain reader
@@ -10,7 +10,7 @@ defmodule KeyFleet.Proposals.Proposal do
   fleet's count of proposal records when it was made.
   """
   use Ash.Resource,
-    domain: KeyFleet.Proposals,
+    domain: Keyfleet.Proposals,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.Proposals.Proposal do
 
   postgres do
     table "proposals"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -155,7 +155,7 @@ defmodule KeyFleet.Proposals.Proposal do
       upsert_condition expr(false)
       return_skipped_upsert? true
 
-      change {KeyFleet.Chain.Changes.RecordOnce,
+      change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index],
               number: :proposal_seq,
               block: :block_number}
@@ -204,7 +204,7 @@ defmodule KeyFleet.Proposals.Proposal do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -286,19 +286,19 @@ defmodule KeyFleet.Proposals.Proposal do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true
     end
 
-    has_many :votes, KeyFleet.Proposals.Vote, public?: true
-    has_one :execution, KeyFleet.Proposals.Execution, public?: true
-    has_one :launch_envelope, KeyFleet.Proposals.LaunchEnvelope, public?: true
+    has_many :votes, Keyfleet.Proposals.Vote, public?: true
+    has_one :execution, Keyfleet.Proposals.Execution, public?: true
+    has_one :launch_envelope, Keyfleet.Proposals.LaunchEnvelope, public?: true
 
     # The launches carried out in the fleet: one at most, since the fleet
     # contract launches once.
-    has_many :fleet_launches, KeyFleet.Proposals.Execution do
+    has_many :fleet_launches, Keyfleet.Proposals.Execution do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       filter expr(proposal.kind == :autolaunch)

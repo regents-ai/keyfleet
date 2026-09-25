@@ -1,17 +1,17 @@
-defmodule KeyFleetWeb.Live.KeyProfileTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.KeyProfileTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  import KeyFleet.ProposalHelpers, only: [wallet: 1]
+  import Keyfleet.ProposalHelpers, only: [wallet: 1]
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors
-  alias KeyFleet.Chain.RewardsWaiting
-  alias KeyFleet.Chain.StubClient
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Rooms
-  alias KeyFleet.Traits
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.Chain.RewardsWaiting
+  alias Keyfleet.Chain.StubClient
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Rooms
+  alias Keyfleet.Traits
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -347,7 +347,7 @@ defmodule KeyFleetWeb.Live.KeyProfileTest do
   defp keys_changed(token_ids),
     do:
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Keys.topic(@fleet),
         {:keys_changed, @fleet, token_ids}
       )

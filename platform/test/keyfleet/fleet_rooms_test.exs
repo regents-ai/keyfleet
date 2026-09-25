@@ -1,16 +1,16 @@
-defmodule KeyFleet.FleetRoomsTest do
+defmodule Keyfleet.FleetRoomsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Errors.CreatedRoomLimitError
-  alias KeyFleet.Rooms.Errors.RenameTooSoonError
-  alias KeyFleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Rooms.Errors.RoomUnknownError
 
   # Syndicate keys other suites commit outside the sandbox would count as
   # held, so these rooms are read on the Cascade fleet.
@@ -72,7 +72,7 @@ defmodule KeyFleet.FleetRoomsTest do
   describe "naming an open room" do
     test "a member names it, the room says so, and it keeps who named it and when" do
       record(@fleet, [1, 3])
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Rooms.fleet_topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
       before = DateTime.utc_now()
 
       assert {:ok, named} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: owner(1))
@@ -379,7 +379,7 @@ defmodule KeyFleet.FleetRoomsTest do
     test "an agent creates a room the whole fleet posts in" do
       record(@fleet, [1, 3, 231])
       runner = paired_agent("c", 3)
-      Phoenix.PubSub.subscribe(KeyFleet.PubSub, Rooms.fleet_topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
 
       room = create!(runner, "hull-survey", "Hull survey")
 
@@ -550,7 +550,7 @@ defmodule KeyFleet.FleetRoomsTest do
 
   defp paired_agent(character, token_id, fleet \\ @fleet) do
     runner = agent(character)
-    KeyFleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
+    Keyfleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
     request = Keys.request_pairing!(fleet, token_id, %{}, actor: runner)
     Keys.approve_pairing!(request, %{}, actor: owner(token_id))
     runner

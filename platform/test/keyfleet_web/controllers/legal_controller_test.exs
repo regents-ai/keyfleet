@@ -1,11 +1,11 @@
-defmodule KeyFleetWeb.LegalControllerTest do
-  use KeyFleetWeb.ConnCase, async: true
+defmodule KeyfleetWeb.LegalControllerTest do
+  use KeyfleetWeb.ConnCase, async: true
 
   test "PRIVACY: the policy is on /privacy and does not carry draft placeholders" do
     conn = get(build_conn(), "/privacy")
     body = html_response(conn, 200)
 
-    assert body =~ "KeyFleet Privacy Policy"
+    assert body =~ "Keyfleet Privacy Policy"
     assert body =~ "privacy@example.com"
     assert body =~ "mailto:privacy@example.com"
     refute body =~ "INSERT"
@@ -15,7 +15,7 @@ defmodule KeyFleetWeb.LegalControllerTest do
     conn = get(build_conn(), "/terms")
     body = html_response(conn, 200)
 
-    assert body =~ "KeyFleet Terms of Use"
+    assert body =~ "Keyfleet Terms of Use"
     assert body =~ "legal@example.com"
     assert body =~ "mailto:legal@example.com"
     refute body =~ "INSERT"

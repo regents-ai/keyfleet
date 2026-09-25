@@ -1,4 +1,4 @@
-defmodule KeyFleet.MixProject do
+defmodule Keyfleet.MixProject do
   use Mix.Project
 
   def project do
@@ -20,7 +20,7 @@ defmodule KeyFleet.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {KeyFleet.Application, []},
+      mod: {Keyfleet.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -126,7 +126,7 @@ defmodule KeyFleet.MixProject do
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
-        "key_fleet.route_handoff --check"
+        "keyfleet.route_handoff --check"
       ]
     ]
   end

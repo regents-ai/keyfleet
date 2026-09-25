@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Showcase.Catalog do
+defmodule KeyfleetWeb.Showcase.Catalog do
   @moduledoc "The showcase's explicit visual coverage and executable API inventory."
 
   @components [
@@ -6,9 +6,9 @@ defmodule KeyFleetWeb.Showcase.Catalog do
     {Regent.Structure,
      [:frame, :row, :section_bar, :panel, :technical_figure, :capability_card, :ratio_card]},
     {Regent.ThemeToggle, [:button]},
-    {KeyFleetWeb.Components.Shell, [:shell, :account_control, :theme_toggle]},
-    {KeyFleetWeb.Components.VerifiedConnections, [:verified_connections]},
-    {KeyFleetWeb.Layouts, [:app, :root]}
+    {KeyfleetWeb.Components.Shell, [:shell, :account_control, :theme_toggle]},
+    {KeyfleetWeb.Components.VerifiedConnections, [:verified_connections]},
+    {KeyfleetWeb.Layouts, [:app, :root]}
   ]
   def registry, do: @components
 
@@ -59,7 +59,7 @@ defmodule KeyFleetWeb.Showcase.Catalog do
 
     product =
       for module <- Application.spec(:keyfleet, :modules) || [],
-          String.starts_with?(inspect(module), "KeyFleet.DatabaseConfig"),
+          String.starts_with?(inspect(module), "Keyfleet.DatabaseConfig"),
           do: {module, "Product-owned"}
 
     (shared ++ product)
@@ -92,8 +92,8 @@ defmodule KeyFleetWeb.Showcase.Catalog do
     }
 end
 
-defmodule KeyFleetWeb.Showcase.CatalogController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.Showcase.CatalogController do
+  use KeyfleetWeb, :controller
 
   # The path is the fixed priv stylesheet; no request value reaches send_file.
   # sobelow_skip ["Traversal.SendFile"]
@@ -103,5 +103,5 @@ defmodule KeyFleetWeb.Showcase.CatalogController do
       |> put_resp_content_type("text/css")
       |> send_file(200, Application.app_dir(:keyfleet, "priv/showcase.css"))
 
-  def show(conn, _params), do: json(conn, KeyFleetWeb.Showcase.Catalog.snapshot())
+  def show(conn, _params), do: json(conn, KeyfleetWeb.Showcase.Catalog.snapshot())
 end

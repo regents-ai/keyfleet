@@ -1,7 +1,7 @@
 [project]
 name = "keyfleet-graph"
 version = "0.1.0"
-description = "The private per-fleet ActiveGraph host that KeyFleet's writers drive over a port."
+description = "The private per-fleet ActiveGraph host that Keyfleet's writers drive over a port."
 requires-python = ">=3.11"
 dependencies = [
   "activegraph==1.10.0",

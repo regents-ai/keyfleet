@@ -1,7 +1,7 @@
-defmodule KeyFleet.DatabaseConfigTest do
+defmodule Keyfleet.DatabaseConfigTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleet.DatabaseConfig
+  alias Keyfleet.DatabaseConfig
 
   @pooled "postgresql://pooled_user:pooled-secret@pool.example.test:5432/keyfleet"
   @direct "postgresql://direct_user:direct-secret@direct.example.test:5432/keyfleet"
@@ -265,7 +265,7 @@ defmodule KeyFleet.DatabaseConfigTest do
 
   test "Fly MPG runtime options override the compiled sentinel port when URLs omit it" do
     compiled_config = Config.Reader.read!("config/config.exs", env: :prod, target: :host)
-    assert get_in(compiled_config, [:keyfleet, KeyFleet.Repo])[:port] == 1
+    assert get_in(compiled_config, [:keyfleet, Keyfleet.Repo])[:port] == 1
 
     configs = [
       DatabaseConfig.runtime_config!(
@@ -290,11 +290,11 @@ defmodule KeyFleet.DatabaseConfigTest do
       merged =
         Config.Reader.merge(
           compiled_config,
-          keyfleet: [{KeyFleet.Repo, config}]
+          keyfleet: [{Keyfleet.Repo, config}]
         )
 
       assert config[:port] == 5432
-      merged_repo = get_in(merged, [:keyfleet, KeyFleet.Repo])
+      merged_repo = get_in(merged, [:keyfleet, Keyfleet.Repo])
       assert merged_repo[:port] == 5432
       assert effective_repo_config(merged_repo)[:port] == 5432
     end

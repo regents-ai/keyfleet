@@ -1,21 +1,21 @@
-defmodule KeyFleet.Graph.Checks.KeyActorTest do
+defmodule Keyfleet.Graph.Checks.KeyActorTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph.Checks.KeyActor
-  alias KeyFleet.Graph.Errors.CheckExpiredError
-  alias KeyFleet.Graph.Errors.NotKeyHolderError
-  alias KeyFleet.Keys
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Graph.Errors.CheckExpiredError
+  alias Keyfleet.Graph.Errors.NotKeyHolderError
+  alias Keyfleet.Keys
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   # Syndicate keys other suites commit outside the sandbox would count as
   # sold, so the levels are read on the Cascade fleet.
   @levelled "fibonacci_cascade"
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(KeyFleet.Repo)
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Keyfleet.Repo)
     Fleets.bootstrap_catalog!()
 
     for {fleet, n} <- Enum.with_index(Fleets.catalog_ids(), 1) do
@@ -45,8 +45,8 @@ defmodule KeyFleet.Graph.Checks.KeyActorTest do
     transfer(@levelled, 9)
     transfer(@levelled, 4)
 
-    assert KeyFleet.Chain.minted(@levelled) == {:ok, 9}
-    assert KeyFleet.Chain.progress(@levelled).total_minted == 9
+    assert Keyfleet.Chain.minted(@levelled) == {:ok, 9}
+    assert Keyfleet.Chain.progress(@levelled).total_minted == 9
     assert scopes(@levelled, 1) == ["fleet", "level:1", "level:2"]
   end
 
@@ -186,9 +186,9 @@ defmodule KeyFleet.Graph.Checks.KeyActorTest do
 
     rows
     |> Enum.chunk_every(5_000)
-    |> Enum.each(&KeyFleet.Repo.insert_all("key_attachments", &1))
+    |> Enum.each(&Keyfleet.Repo.insert_all("key_attachments", &1))
 
-    KeyFleet.Repo.query!(
+    Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.chain_cursors SET ownership_seq = $2 WHERE fleet_id = $1",
       [fleet, length(rows)]
     )

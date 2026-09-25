@@ -1,30 +1,30 @@
-defmodule KeyFleetWeb.ShellLive do
+defmodule KeyfleetWeb.ShellLive do
   @moduledoc """
   One LiveView holds the header, sidebar and account control across every in-app
   route and patches between them, so the frame never remounts on navigation.
   """
 
-  use KeyFleetWeb, :live_view
+  use KeyfleetWeb, :live_view
 
-  import KeyFleetWeb.Components.Shell
+  import KeyfleetWeb.Components.Shell
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Accounts.LinkedIdentity.Providers
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.RewardsWaiting
-  alias KeyFleet.Fleets
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Keys
-  alias KeyFleet.Keys.Profile
-  alias KeyFleet.Proposals
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Checks.RoomPoster
-  alias KeyFleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.LinkedIdentity.Providers
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.RewardsWaiting
+  alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Keys
+  alias Keyfleet.Keys.Profile
+  alias Keyfleet.Proposals
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Checks.RoomPoster
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
 
-  alias KeyFleetWeb.{
+  alias KeyfleetWeb.{
     AccountLive,
     FleetLive,
     KeyLinks,
@@ -38,7 +38,7 @@ defmodule KeyFleetWeb.ShellLive do
     WorkspacePage
   }
 
-  alias KeyFleetWeb.RouteCatalog
+  alias KeyfleetWeb.RouteCatalog
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   @refused "That didn’t go through."
@@ -917,12 +917,12 @@ defmodule KeyFleetWeb.ShellLive do
   # A key open over its fleet's page keeps listening to the fleet's rooms.
   defp load_room(socket, _route_spec, _params) do
     socket
-    |> listen_to(open_key_fleet(socket))
+    |> listen_to(fleet_of_open_key(socket))
     |> assign(room: nil, room_notice: nil, send_key: nil)
   end
 
-  defp open_key_fleet(%{assigns: %{key_profile: %{fleet_id: fleet_id}}}), do: fleet_id
-  defp open_key_fleet(_socket), do: nil
+  defp fleet_of_open_key(%{assigns: %{key_profile: %{fleet_id: fleet_id}}}), do: fleet_id
+  defp fleet_of_open_key(_socket), do: nil
 
   # The fleet's rooms, and what the page shows of the one it is on.
   defp show_rooms(%{slug: slug} = shown, rooms) do
@@ -965,10 +965,10 @@ defmodule KeyFleetWeb.ShellLive do
   end
 
   defp stop_listening(nil), do: :ok
-  defp stop_listening(topic), do: Phoenix.PubSub.unsubscribe(KeyFleet.PubSub, topic)
+  defp stop_listening(topic), do: Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, topic)
 
   defp start_listening(nil), do: :ok
-  defp start_listening(topic), do: Phoenix.PubSub.subscribe(KeyFleet.PubSub, topic)
+  defp start_listening(topic), do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
 
   # Places in a room's order run unbroken, so the newest hundred posts start one
   # hundred places back from where the room has got to.
@@ -1167,7 +1167,7 @@ defmodule KeyFleetWeb.ShellLive do
   # A key open over its fleet's page keeps hearing about the fleet's votes.
   defp load_proposals(socket, _route_spec, _params) do
     socket
-    |> follow_proposals(open_key_fleet(socket))
+    |> follow_proposals(fleet_of_open_key(socket))
     |> assign(proposals: nil, proposals_params: nil, proposals_check: nil)
   end
 

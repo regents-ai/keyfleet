@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.FixedOpenAndCreatedRooms do
+defmodule Keyfleet.Repo.Migrations.FixedOpenAndCreatedRooms do
   @moduledoc """
   Replaces level rooms with each fleet's fixed, open and created rooms: drops
   the level column and its checks, adds an open room's topic with who named it

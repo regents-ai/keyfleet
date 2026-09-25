@@ -1,7 +1,7 @@
-defmodule KeyFleet.Chain.BudgetLog do
+defmodule Keyfleet.Chain.BudgetLog do
   @moduledoc """
   Reads the budget logs of a fleet contract into the fields
-  `KeyFleet.Treasury` records.
+  `Keyfleet.Treasury` records.
 
   `CapitalDeposited` is an asset paid in as budget, and `SurplusRecognized`
   an asset that arrived by bare transfer and became budget before the launch
@@ -11,7 +11,7 @@ defmodule KeyFleet.Chain.BudgetLog do
   budget. Amounts are in the asset's own units, any uint256.
   """
 
-  alias KeyFleet.Chain.Abi
+  alias Keyfleet.Chain.Abi
 
   # cast keccak "CapitalDeposited(address,address,uint256,uint256)"
   @capital_deposited "0xf49206ff502b068fb456947e73acf6d2a86e0e30706185ec236c24a954654564"

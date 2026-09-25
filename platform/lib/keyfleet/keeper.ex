@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper do
+defmodule Keyfleet.Keeper do
   @moduledoc """
   The record of what the keeper sent and of its rounds. Only the keeper,
   acting as the system, reads or writes it.
@@ -7,11 +7,11 @@ defmodule KeyFleet.Keeper do
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Keeper.Transaction
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Keeper.Transaction
 
   resources do
-    resource KeyFleet.Keeper.Transaction do
+    resource Keyfleet.Keeper.Transaction do
       define :record_sent_tx, action: :record_sent
       define :list_outstanding_txs, action: :outstanding, args: [:chain_id, :from_address]
       define :list_latest_txs, action: :latest, args: [:chain_id, :from_address]
@@ -26,7 +26,7 @@ defmodule KeyFleet.Keeper do
         not_found_error?: false
     end
 
-    resource KeyFleet.Keeper.Run do
+    resource Keyfleet.Keeper.Run do
       define :record_run, action: :record
       define :last_run, action: :last, args: [:job], not_found_error?: false
       define :stop_state, action: :stop_state, not_found_error?: false

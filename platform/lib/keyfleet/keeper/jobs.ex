@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keeper.Jobs do
+defmodule Keyfleet.Keeper.Jobs do
   @moduledoc """
   What the keeper's reveal and income jobs share: the fleets they work on,
   and how the answer to one send steers the rest of a round.
@@ -6,7 +6,7 @@ defmodule KeyFleet.Keeper.Jobs do
 
   require Logger
 
-  alias KeyFleet.Keeper.{Calls, Sender}
+  alias Keyfleet.Keeper.{Calls, Sender}
 
   @doc "The deployed fleets on the chain the sender's node serves, by id."
   def fleets(%Sender{fleets: fleets, chain_id: chain_id}) do
@@ -18,7 +18,7 @@ defmodule KeyFleet.Keeper.Jobs do
 
   @doc """
   Sends `fun` to `target` with `arg` for `job` on behalf of `fleet`, through
-  `KeyFleet.Keeper.Sender.send/2`, and says how the round goes on:
+  `Keyfleet.Keeper.Sender.send/2`, and says how the round goes on:
 
     * `{:sent, tx, sender}` once it is included, whether it succeeded or
       reverted, with its record;

@@ -1,12 +1,12 @@
-defmodule KeyFleet.Chain.Logs do
+defmodule Keyfleet.Chain.Logs do
   @moduledoc """
   Turns the raw logs of one stretch of a fleet's blocks into the records the
   reader makes, in the order the chain made them.
 
   Each log is sent, by its contract and topic0, to
-  `KeyFleet.Chain.OwnershipLog`, `KeyFleet.Chain.RevealLog` or
-  `KeyFleet.Chain.BudgetLog`, for the fleet contract, or
-  `KeyFleet.Chain.VotesLog`, and carries its fleet and its place on the
+  `Keyfleet.Chain.OwnershipLog`, `Keyfleet.Chain.RevealLog` or
+  `Keyfleet.Chain.BudgetLog`, for the fleet contract, or
+  `Keyfleet.Chain.VotesLog`, and carries its fleet and its place on the
   chain. A launch or payment proposal is joined with the payload log that
   follows it in the same transaction. A log the node lists twice is read once.
   One log that cannot be read, two different logs in one place, or a proposal
@@ -14,11 +14,11 @@ defmodule KeyFleet.Chain.Logs do
   names the log.
   """
 
-  alias KeyFleet.Chain.Abi
-  alias KeyFleet.Chain.BudgetLog
-  alias KeyFleet.Chain.OwnershipLog
-  alias KeyFleet.Chain.RevealLog
-  alias KeyFleet.Chain.VotesLog
+  alias Keyfleet.Chain.Abi
+  alias Keyfleet.Chain.BudgetLog
+  alias Keyfleet.Chain.OwnershipLog
+  alias Keyfleet.Chain.RevealLog
+  alias Keyfleet.Chain.VotesLog
 
   @doc "The topic0 of every event the reader asks for."
   def topics,

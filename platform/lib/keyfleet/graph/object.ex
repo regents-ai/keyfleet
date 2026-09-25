@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Object do
+defmodule Keyfleet.Graph.Object do
   @moduledoc """
   One workspace object as the fleet's graph log last left it: its member
   fields (`data`), its server-owned fields (`sys`) and its version.
@@ -11,7 +11,7 @@ defmodule KeyFleet.Graph.Object do
   Only the projector writes here; anyone may read.
   """
   use Ash.Resource,
-    domain: KeyFleet.Graph,
+    domain: Keyfleet.Graph,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -19,7 +19,7 @@ defmodule KeyFleet.Graph.Object do
 
   postgres do
     table "graph_objects"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     # The workspace lists a fleet's objects, or one type of them, most
     # recently changed first.
@@ -104,7 +104,7 @@ defmodule KeyFleet.Graph.Object do
     end
 
     policy action(:project) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -122,7 +122,7 @@ defmodule KeyFleet.Graph.Object do
     attribute :sys, :map, allow_nil?: false, public?: true
     attribute :version, :integer, allow_nil?: false, public?: true, constraints: [min: 1]
 
-    attribute :changed_seq, KeyFleet.Graph.Seq, allow_nil?: false, public?: true
+    attribute :changed_seq, Keyfleet.Graph.Seq, allow_nil?: false, public?: true
 
     attribute :changed_at, :string, allow_nil?: false, public?: true, constraints: @text
   end
@@ -184,7 +184,7 @@ defmodule KeyFleet.Graph.Object do
   end
 
   relationships do
-    belongs_to :cursor, KeyFleet.Graph.Cursor do
+    belongs_to :cursor, Keyfleet.Graph.Cursor do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       define_attribute? false

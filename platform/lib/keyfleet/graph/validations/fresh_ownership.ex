@@ -1,11 +1,11 @@
-defmodule KeyFleet.Graph.Validations.FreshOwnership do
+defmodule Keyfleet.Graph.Validations.FreshOwnership do
   @moduledoc """
   The fleet's key ownership is fresh enough to act on, so a write refused for
   want of it says so rather than calling its author a stranger.
   """
   use Ash.Resource.Validation
 
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   @impl true
   def supports(_opts), do: [Ash.ActionInput]
@@ -14,7 +14,7 @@ defmodule KeyFleet.Graph.Validations.FreshOwnership do
   def validate(input, _opts, _context) do
     fleet_id = Ash.ActionInput.get_argument(input, :fleet_id)
 
-    if KeyFleet.Chain.fresh?(fleet_id),
+    if Keyfleet.Chain.fresh?(fleet_id),
       do: :ok,
       else: {:error, OwnershipRefreshingError.exception(fleet_id: fleet_id)}
   end

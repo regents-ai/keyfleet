@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeeperSettleAuction do
+defmodule Keyfleet.Repo.Migrations.KeeperSettleAuction do
   @moduledoc """
   Lets the keeper record a strategy's `migrate(auction)`, which settles a
   fleet's auction once it has ended. Generated with `mix ash.codegen`.

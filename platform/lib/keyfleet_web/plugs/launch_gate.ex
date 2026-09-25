@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Plugs.LaunchGate do
+defmodule KeyfleetWeb.Plugs.LaunchGate do
   @moduledoc """
   Closes every non-marketing surface while the launch gate is closed.
 
@@ -10,7 +10,7 @@ defmodule KeyFleetWeb.Plugs.LaunchGate do
   import Phoenix.Controller, only: [get_format: 1, json: 2, put_secure_browser_headers: 1]
   import Plug.Conn
 
-  alias KeyFleetWeb.HoldingController
+  alias KeyfleetWeb.HoldingController
 
   @doc "True while the product surfaces are open."
   def app_surfaces_enabled?, do: Application.get_env(:keyfleet, :app_surfaces, true)

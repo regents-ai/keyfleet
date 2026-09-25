@@ -1,9 +1,9 @@
-defmodule KeyFleet.Keeper.RecordsTest do
+defmodule Keyfleet.Keeper.RecordsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper, Repo}
-  alias KeyFleet.Keeper.{Run, Transaction}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Fleets, Keeper, Repo}
+  alias Keyfleet.Keeper.{Run, Transaction}
 
   @fleet "fibonacci_syndicate"
   @target "0x5fbdb2315678afecb367f032d93f642f64180aa3"
@@ -264,7 +264,7 @@ defmodule KeyFleet.Keeper.RecordsTest do
     tx = sent!()
     run = run!()
 
-    for actor <- [nil, %KeyFleet.Actors.Human{human_account_id: Ash.UUID.generate()}] do
+    for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: Ash.UUID.generate()}] do
       assert {:error, %Ash.Error.Forbidden{}} = Keeper.record_sent_tx(tx_attrs(), actor: actor)
       assert {:error, %Ash.Error.Forbidden{}} = Keeper.record_run(run_attrs(), actor: actor)
       assert {:error, %Ash.Error.Forbidden{}} = Ash.read(Transaction, actor: actor)
@@ -356,7 +356,7 @@ defmodule KeyFleet.Keeper.RecordsTest do
 
     :telemetry.attach(
       handler,
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and
              not String.starts_with?(meta.query, ["SELECT", "begin", "commit"]),

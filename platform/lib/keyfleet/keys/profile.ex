@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Profile do
+defmodule Keyfleet.Keys.Profile do
   @moduledoc """
   Everything one key's profile shows, as a plain map: the key itself, the
   wallet holding it, its thread and what it has said in the fleet's rooms.
@@ -13,15 +13,15 @@ defmodule KeyFleet.Keys.Profile do
 
   require Ash.Query
 
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Chain
-  alias KeyFleet.Fleets.Presets
-  alias KeyFleet.Keys
-  alias KeyFleet.Keys.KeyAttachment
-  alias KeyFleet.Proposals.Vote
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Message
-  alias KeyFleet.Traits
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Chain
+  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Keys
+  alias Keyfleet.Keys.KeyAttachment
+  alias Keyfleet.Proposals.Vote
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Message
+  alias Keyfleet.Traits
 
   # A holder's keys in the fleet are listed this many at a time.
   @listed 100

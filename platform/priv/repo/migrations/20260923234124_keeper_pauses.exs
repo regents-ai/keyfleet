@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeeperPauses do
+defmodule Keyfleet.Repo.Migrations.KeeperPauses do
   @moduledoc """
   Lets a keeper run record which pause ended, and the fleet a VRF balance
   pause is for. Generated with `mix ash.codegen`.

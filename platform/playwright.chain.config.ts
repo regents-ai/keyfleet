@@ -4,7 +4,7 @@ import {defineConfig, devices} from "@playwright/test"
 // The specs here sell, move and pair keys on the server while a page watches.
 // A key's profile is checked in Chromium, Firefox and WebKit; the map in
 // Chromium.
-// They call `KeyFleet.BrowserChain` on the server over Erlang distribution, so
+// They call `Keyfleet.BrowserChain` on the server over Erlang distribution, so
 // the server runs as a named node on the loopback address, with a secret
 // cookie and a fixed distribution port instead of epmd.
 //
@@ -41,8 +41,8 @@ export default defineConfig({
   webServer: {
     command: [
       `${env} mix ecto.create --quiet`,
-      `${env} mix run -e 'KeyFleet.LocalDatabaseFixture.ensure_human_accounts!()'`,
-      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'KeyFleet.BrowserChain.hold_database!()'`,
+      `${env} mix run -e 'Keyfleet.LocalDatabaseFixture.ensure_human_accounts!()'`,
+      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!()'`,
     ].join(" && "),
     url: `${baseURL}/`,
     reuseExistingServer: false,

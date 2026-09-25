@@ -1,8 +1,8 @@
-defmodule KeyFleet.AccessContextTest do
+defmodule Keyfleet.AccessContextTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleet.AccessContext
-  alias KeyFleet.AccessContext.AccountControl
+  alias Keyfleet.AccessContext
+  alias Keyfleet.AccessContext.AccountControl
 
   @wallet "0x1111111111111111111111111111111111111111"
 

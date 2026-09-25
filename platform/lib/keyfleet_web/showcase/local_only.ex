@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Showcase.LocalOnly do
+defmodule KeyfleetWeb.Showcase.LocalOnly do
   @moduledoc false
   @behaviour Plug
   import Plug.Conn

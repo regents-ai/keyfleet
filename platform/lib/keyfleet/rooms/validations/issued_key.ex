@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Validations.IssuedKey do
+defmodule Keyfleet.Rooms.Validations.IssuedKey do
   @moduledoc """
   The request names a key its fleet has issued, as far as the fleet's key
   history has been read. Keys are numbered from 1 in the order they are sold
@@ -7,7 +7,7 @@ defmodule KeyFleet.Rooms.Validations.IssuedKey do
   """
   use Ash.Resource.Validation
 
-  alias KeyFleet.Rooms.Errors.KeyUnknownError
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
 
   @impl true
   def supports(_opts), do: [Ash.Changeset, Ash.Query]
@@ -16,7 +16,7 @@ defmodule KeyFleet.Rooms.Validations.IssuedKey do
   def validate(%input_type{} = input, _opts, _context) do
     fleet_id = input_type.get_argument(input, :fleet_id)
     token_id = input_type.get_argument(input, :token_id)
-    {:ok, minted} = KeyFleet.Chain.minted(fleet_id)
+    {:ok, minted} = Keyfleet.Chain.minted(fleet_id)
 
     if token_id <= minted,
       do: :ok,

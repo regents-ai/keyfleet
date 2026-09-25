@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.NormalizeName do
+defmodule Keyfleet.Rooms.Changes.NormalizeName do
   @moduledoc """
   Puts a room's name or topic in Unicode NFKC form before it is checked and
   stored. Setting the attribute again trims it, as every string attribute is

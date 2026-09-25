@@ -1,4 +1,4 @@
-defmodule KeyFleet.Traits do
+defmodule Keyfleet.Traits do
   @moduledoc """
   Every revealed key's traits, drawn from its seed and the trait table by the
   rule in `contracts/README.md`.
@@ -6,7 +6,7 @@ defmodule KeyFleet.Traits do
   A fleet's table is the JSON file named by its trait table hash, lowercase,
   in the release's `priv/trait_tables`, such as
   `priv/trait_tables/0x1249…8610.json`; the tests keep theirs elsewhere with
-  `config :keyfleet, KeyFleet.Traits, directory: ...`. It is an object whose
+  `config :keyfleet, Keyfleet.Traits, directory: ...`. It is an object whose
   `traits` lists each trait in the order the draw takes them, with its `name`
   and its `values`, each a `name` and a whole-number `weight`:
 

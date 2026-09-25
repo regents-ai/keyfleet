@@ -1,7 +1,7 @@
-defmodule KeyFleet.Fleets.PresetsTest do
+defmodule Keyfleet.Fleets.PresetsTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleet.Fleets.Presets
+  alias Keyfleet.Fleets.Presets
 
   # Pinned to contracts/test/KeyfleetPresets.t.sol: the site's ladder must round
   # exactly where the contract's does.
@@ -67,7 +67,7 @@ defmodule KeyFleet.Fleets.PresetsTest do
   end
 
   test "only the two Fibonacci fleets have levels" do
-    assert Enum.filter(KeyFleet.Fleets.catalog_ids(), &Presets.levelled?/1) ==
+    assert Enum.filter(Keyfleet.Fleets.catalog_ids(), &Presets.levelled?/1) ==
              ["fibonacci_syndicate", "fibonacci_cascade"]
   end
 

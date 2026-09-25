@@ -1,23 +1,23 @@
-defmodule KeyFleet.Keeper.Runner do
+defmodule Keyfleet.Keeper.Runner do
   @moduledoc """
   The keeper's one process, and the only one on the site that sends
   transactions. It reads its key once, as it starts, and keeps it inside
-  its `KeyFleet.Keeper.Sender`; its status shows the wallet's address and
+  its `Keyfleet.Keeper.Sender`; its status shows the wallet's address and
   never the key.
 
   It first learns the node's chain, whether it is stopped, which pauses
   are still in force, and settles whatever it left waiting before, retrying
   every 30 seconds while the node or the database cannot answer. Then, unless it is stopped, it runs the
-  reveal job (`KeyFleet.Keeper.Reveals`) 30 seconds after each round ends,
-  and the income job (`KeyFleet.Keeper.Income`) five minutes after it
+  reveal job (`Keyfleet.Keeper.Reveals`) 30 seconds after each round ends,
+  and the income job (`Keyfleet.Keeper.Income`) five minutes after it
   starts and an hour after each round ends. A round that leaves the keeper
-  stopped schedules nothing more. `KeyFleet.Keeper.Supervisor` starts it.
+  stopped schedules nothing more. `Keyfleet.Keeper.Supervisor` starts it.
   """
   use GenServer
 
   require Logger
 
-  alias KeyFleet.Keeper.{Income, Node, Reveals, Sender, Wallet}
+  alias Keyfleet.Keeper.{Income, Node, Reveals, Sender, Wallet}
 
   @retry_after 30_000
   @reveal_every 30_000
@@ -29,7 +29,7 @@ defmodule KeyFleet.Keeper.Runner do
   @impl true
   def init(_opts) do
     # The runtime configuration refuses a malformed key before anything starts.
-    {:ok, wallet} = Wallet.new(Application.fetch_env!(:keyfleet, KeyFleet.Keeper)[:private_key])
+    {:ok, wallet} = Wallet.new(Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:private_key])
 
     {:ok,
      %{

@@ -1,13 +1,13 @@
-defmodule KeyFleetWeb.AgentRoomJourneyTest do
+defmodule KeyfleetWeb.AgentRoomJourneyTest do
   use ExUnit.Case, async: false
   import Plug.Conn
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.ProposalHelpers
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Rooms
 
   @join_path "/api/v1/agent/join/status"
   @pairing_path "/api/v1/agent/keys/fibonacci_syndicate/1/pairing"
@@ -27,7 +27,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
     # inside the sandbox only when its transaction is at that level already.
     owner =
-      Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo,
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
         shared: true,
         isolation: "REPEATABLE READ"
       )
@@ -100,7 +100,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
       end)
 
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
-    app = server(:product, &KeyFleetWeb.Endpoint.call(&1, KeyFleetWeb.Endpoint.init(&2)))
+    app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
 
@@ -132,7 +132,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
                end
              )
 
-    assert KeyFleet.ContractSchema.errors(listed.body, "RoomList") == []
+    assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
     assert send_signed(c, "POST", @read_general).body["messages"] == []
 
@@ -231,7 +231,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
              "has_more" => false
            } = first.body["proposals"]
 
-    assert KeyFleet.ContractSchema.errors(first.body, "FleetSync") == []
+    assert Keyfleet.ContractSchema.errors(first.body, "FleetSync") == []
 
     read = send_signed(c, "POST", @read_proposal, ~s({"number":1,"votes_after_seq":0}))
     assert read.status == 200
@@ -242,7 +242,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
              read.body["votes"]
 
     assert {read.body["votes_next_cursor"], read.body["votes_has_more"]} == {2, false}
-    assert KeyFleet.ContractSchema.errors(read.body, "ProposalRead") == []
+    assert Keyfleet.ContractSchema.errors(read.body, "ProposalRead") == []
 
     missing = send_signed(c, "POST", @read_proposal, ~s({"number":2,"votes_after_seq":0}))
     assert {missing.status, missing.body} == {404, %{"error" => "proposal_unknown"}}
@@ -255,7 +255,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
              "watermark" => 0
            }
 
-    assert KeyFleet.ContractSchema.errors(first.body["graph"], "WorkspaceChanges") == []
+    assert Keyfleet.ContractSchema.errors(first.body["graph"], "WorkspaceChanges") == []
 
     assert [coding, general] = first.body["rooms"]
     assert %{"slug" => "general", "kind" => "fixed", "head_seq" => 3, "cursor" => 3} = general
@@ -379,7 +379,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
     assert documented(empty, @key_read) == []
 
-    {:ok, minted} = KeyFleet.Chain.minted("fibonacci_syndicate")
+    {:ok, minted} = Keyfleet.Chain.minted("fibonacci_syndicate")
     unsold = minted + 1
 
     for {fleet, token_id, action, body, error} <- [
@@ -550,7 +550,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
                   }
                 }}
 
-      assert KeyFleet.ContractSchema.errors(created.body["room"], "Room") == []
+      assert Keyfleet.ContractSchema.errors(created.body["room"], "Room") == []
 
       for {body, status, error} <- [
             {%{slug: "hull-survey", name: "Again"}, 409, "room_taken"},
@@ -613,7 +613,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
       named = name_room(c, "open-2", "Hull survey")
       assert named.status == 200
-      assert KeyFleet.ContractSchema.errors(named.body["room"], "Room") == []
+      assert Keyfleet.ContractSchema.errors(named.body["room"], "Room") == []
 
       assert %{
                "slug" => "open-2",
@@ -628,7 +628,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
       assert {:ok, _at, 0} = DateTime.from_iso8601(set_at)
 
       read = send_signed(c, "POST", cascade_room("open-2", "read"))
-      assert KeyFleet.ContractSchema.errors(read.body, "RoomMessages") == []
+      assert Keyfleet.ContractSchema.errors(read.body, "RoomMessages") == []
 
       assert [%{"kind" => "room_named", "body" => "Hull survey", "author_wallet" => ^signer}] =
                read.body["messages"]
@@ -704,7 +704,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     test "a room the database refuses for a reason of its own is answered, not a crash", c do
       pair(c, @cascade, 3)
 
-      KeyFleet.Repo.query!(
+      Keyfleet.Repo.query!(
         "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT refuse_hull CHECK (slug <> 'hull') NOT VALID"
       )
 
@@ -801,7 +801,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
 
   # Moves the room's last naming back a minute, so it may be renamed.
   defp a_minute_passes(slug) do
-    KeyFleet.Repo.query!(
+    Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.rooms SET topic_set_at = topic_set_at - interval '61 seconds' " <>
         "WHERE fleet_id = $1 AND slug = $2",
       [@cascade, slug]
@@ -859,7 +859,7 @@ defmodule KeyFleetWeb.AgentRoomJourneyTest do
     do: send_signed(c, "POST", "/api/v1/agent/keys/#{fleet}/#{token_id}/messages/#{action}", body)
 
   defp documented(response, template),
-    do: KeyFleet.ContractSchema.response_errors(response.body, "POST", template, response.status)
+    do: Keyfleet.ContractSchema.response_errors(response.body, "POST", template, response.status)
 
   defp room_path(slug, action),
     do: "/api/v1/agent/fleets/fibonacci_syndicate/rooms/#{slug}/messages/#{action}"

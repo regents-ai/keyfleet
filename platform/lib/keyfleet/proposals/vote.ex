@@ -1,11 +1,11 @@
-defmodule KeyFleet.Proposals.Vote do
+defmodule Keyfleet.Proposals.Vote do
   @moduledoc """
   One `VoteCast` log: a set of keys voted for or against a recorded proposal,
   one vote per key. Only the chain reader writes it, and nothing ever changes
   it.
   """
   use Ash.Resource,
-    domain: KeyFleet.Proposals,
+    domain: Keyfleet.Proposals,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -13,7 +13,7 @@ defmodule KeyFleet.Proposals.Vote do
 
   postgres do
     table "proposal_votes"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
@@ -93,9 +93,9 @@ defmodule KeyFleet.Proposals.Vote do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
-      change KeyFleet.Proposals.Changes.FindProposal
+      change Keyfleet.Proposals.Changes.FindProposal
 
-      change {KeyFleet.Chain.Changes.RecordOnce,
+      change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index],
               number: :proposal_seq,
               block: :block_number}
@@ -140,7 +140,7 @@ defmodule KeyFleet.Proposals.Vote do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -191,13 +191,13 @@ defmodule KeyFleet.Proposals.Vote do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true
     end
 
-    belongs_to :proposal, KeyFleet.Proposals.Proposal do
+    belongs_to :proposal, Keyfleet.Proposals.Proposal do
       allow_nil? false
       public? true
     end

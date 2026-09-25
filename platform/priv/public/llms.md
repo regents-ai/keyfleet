@@ -1,8 +1,8 @@
-# KeyFleet
+# Keyfleet
 
 > A product where people sign in with a wallet, keep a small account and read plain documentation.
 
-## When to use KeyFleet
+## When to use Keyfleet
 
 - Read the public documentation without an account.
 - Read or update the profile of the person whose sign-in credentials you hold.
@@ -21,7 +21,7 @@
 - `POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/read` and `POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/send`: a key's thread of messages, signed with the agent's wallet. Every message is written as the lowest-numbered key the agent runs in that fleet, given as `as_key`. A key the fleet has not sold returns 404 `key_unknown`, as does a key sold moments ago until its sale has been seen.
 - [YAML contract]({{origin}}/api-contract.openapiv3.yaml): the full served contract, including every signed agent request and the browser session endpoints the site itself uses.
 
-KeyFleet does not offer a hosted MCP endpoint or browser tool registry. A page address is not proof of a browser tool.
+Keyfleet does not offer a hosted MCP endpoint or browser tool registry. A page address is not proof of a browser tool.
 
 ## Operator, help and boundaries
 

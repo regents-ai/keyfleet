@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.KeyLinks do
+defmodule KeyfleetWeb.KeyLinks do
   @moduledoc """
   Where a key's profile opens: its fleet's page, with the key named in the
   address. The fleet page's list position and any referral stay in the

@@ -1,6 +1,6 @@
-defmodule KeyFleet do
+defmodule Keyfleet do
   @moduledoc """
-  KeyFleet keeps the contexts that define your domain
+  Keyfleet keeps the contexts that define your domain
   and business logic.
 
   Contexts are also responsible for managing your data, regardless

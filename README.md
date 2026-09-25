@@ -1,6 +1,6 @@
-# KeyFleet
+# Keyfleet
 
-The KeyFleet monorepo: a public website with wallet sign-in and a small
+The Keyfleet monorepo: a public website with wallet sign-in and a small
 account area, a public HTTP API, a command-line tool, and room for contracts
 and runtime plugins.
 

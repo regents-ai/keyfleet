@@ -1,11 +1,11 @@
-defmodule KeyFleetWeb.AgentPairingJourneyTest do
+defmodule KeyfleetWeb.AgentPairingJourneyTest do
   use ExUnit.Case, async: false
   import Plug.Conn
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
 
   @join_path "/api/v1/agent/join/status"
   @pairings_path "/api/v1/agent/pairings"
@@ -14,7 +14,7 @@ defmodule KeyFleetWeb.AgentPairingJourneyTest do
   @owner "0x" <> String.duplicate("a", 40)
 
   setup do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(KeyFleet.Repo, shared: true)
+    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
@@ -82,7 +82,7 @@ defmodule KeyFleetWeb.AgentPairingJourneyTest do
       end)
 
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
-    app = server(:product, &KeyFleetWeb.Endpoint.call(&1, KeyFleetWeb.Endpoint.init(&2)))
+    app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
 

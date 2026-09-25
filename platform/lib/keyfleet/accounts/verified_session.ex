@@ -1,12 +1,12 @@
-defmodule KeyFleet.Accounts.VerifiedSession do
+defmodule Keyfleet.Accounts.VerifiedSession do
   @moduledoc "Exchanges verified Privy evidence for the canonical human account."
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors.System
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors.System
 
   @social_providers [:x, :github, :farcaster]
 
-  def establish(%KeyFleet.VerifiedPrivyIdentity{privy_user_id: did} = verified)
+  def establish(%Keyfleet.VerifiedPrivyIdentity{privy_user_id: did} = verified)
       when is_binary(did) and did != "" do
     actor = %System{}
 

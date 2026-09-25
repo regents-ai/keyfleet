@@ -1,11 +1,11 @@
-defmodule KeyFleet.Keeper.RpcNodeTest do
+defmodule Keyfleet.Keeper.RpcNodeTest do
   # Points the whole app's node address at a local server for each test.
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
   import Plug.Conn
 
-  alias KeyFleet.Keeper.RpcNode
+  alias Keyfleet.Keeper.RpcNode
 
   @keeper "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
   @fleet "0x5fbdb2315678afecb367f032d93f642f64180aa3"
@@ -13,8 +13,8 @@ defmodule KeyFleet.Keeper.RpcNodeTest do
   @selector <<0x1B, 0x6D, 0xAB, 0x6E>>
 
   setup do
-    config = Application.fetch_env!(:keyfleet, KeyFleet.Chain)
-    on_exit(fn -> Application.put_env(:keyfleet, KeyFleet.Chain, config) end)
+    config = Application.fetch_env!(:keyfleet, Keyfleet.Chain)
+    on_exit(fn -> Application.put_env(:keyfleet, Keyfleet.Chain, config) end)
     %{config: config}
   end
 
@@ -62,7 +62,7 @@ defmodule KeyFleet.Keeper.RpcNodeTest do
   } do
     plug = fn conn, _opts -> send_resp(conn, 502, "bad gateway") end
     url = serve!(plug)
-    Application.put_env(:keyfleet, KeyFleet.Chain, Keyword.put(config, :rpc_url, url))
+    Application.put_env(:keyfleet, Keyfleet.Chain, Keyword.put(config, :rpc_url, url))
 
     log = capture_log(fn -> assert RpcNode.chain_id() == {:error, :chain_unavailable} end)
     assert log =~ "eth_chainId"
@@ -218,7 +218,7 @@ defmodule KeyFleet.Keeper.RpcNodeTest do
       |> send_resp(200, Jason.encode!(answer.(request)))
     end
 
-    Application.put_env(:keyfleet, KeyFleet.Chain, Keyword.put(config, :rpc_url, serve!(plug)))
+    Application.put_env(:keyfleet, Keyfleet.Chain, Keyword.put(config, :rpc_url, serve!(plug)))
   end
 
   defp serve!(plug) do

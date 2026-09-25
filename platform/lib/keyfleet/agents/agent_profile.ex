@@ -1,13 +1,13 @@
-defmodule KeyFleet.Agents.AgentProfile do
+defmodule Keyfleet.Agents.AgentProfile do
   @moduledoc "A stable product identity for one verified SIWA wallet."
   use Ash.Resource,
-    domain: KeyFleet.Agents,
+    domain: Keyfleet.Agents,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "agent_profiles"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
   end
 
   actions do
@@ -54,7 +54,7 @@ defmodule KeyFleet.Agents.AgentProfile do
         :current_status
       ]
 
-      change KeyFleet.Agents.Changes.TrackProfileActivity
+      change Keyfleet.Agents.Changes.TrackProfileActivity
     end
   end
 
@@ -64,7 +64,7 @@ defmodule KeyFleet.Agents.AgentProfile do
     end
 
     policy action([:ensure_profile, :get_my_profile, :edit_my_profile]) do
-      authorize_if KeyFleet.Checks.AgentActor
+      authorize_if Keyfleet.Checks.AgentActor
     end
 
     policy action_type([:read, :update]) do

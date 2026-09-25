@@ -4,18 +4,18 @@ port = String.to_integer(System.get_env("PORT", "4002"))
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :keyfleet, KeyFleetWeb.Endpoint,
+config :keyfleet, KeyfleetWeb.Endpoint,
   url: [host: "127.0.0.1", port: port],
   http: [ip: {127, 0, 0, 1}, port: port],
   check_origin: ["http://127.0.0.1:#{port}"],
   secret_key_base: "ylCJZnscmD6l7Ykq52GK0o6GrbPmb8374FAcei9yvkWU1ww5Nv+S2v/Z7ihcqZd2",
   server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 
-config :keyfleet, :privy_verifier, KeyFleet.TestPrivyVerifier
-config :keyfleet, KeyFleet.Chain, client: KeyFleet.Chain.StubClient
-config :keyfleet, KeyFleet.Keeper, node: KeyFleet.Keeper.StubNode, receipt_poll_ms: 0
+config :keyfleet, :privy_verifier, Keyfleet.TestPrivyVerifier
+config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
+config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.StubNode, receipt_poll_ms: 0
 
-config :keyfleet, KeyFleet.Traits,
+config :keyfleet, Keyfleet.Traits,
   directory: Path.expand("../test/support/fixtures/trait_tables", __DIR__)
 
 config :keyfleet, :database_startup_enabled, true
@@ -26,7 +26,7 @@ config :keyfleet, :database_startup_enabled, true
 # controller tests restore the release 30/300 themselves.
 config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
 
-config :keyfleet, KeyFleet.Repo,
+config :keyfleet, Keyfleet.Repo,
   username: System.get_env("USER"),
   password: nil,
   hostname: "127.0.0.1",

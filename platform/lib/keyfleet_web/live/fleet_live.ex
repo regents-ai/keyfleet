@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.FleetLive do
+defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page: its map of keys filling the page under a slim bar with the
   fleet's name, how far it has sold, a way to buy the next key, and links to
@@ -10,11 +10,11 @@ defmodule KeyFleetWeb.FleetLive do
   recorded. Keys are listed a hundred at a time.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  alias KeyFleetWeb.KeyLinks
-  alias KeyFleetWeb.KeyProfileLive
-  alias KeyFleetWeb.RoomsLive
+  alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.KeyProfileLive
+  alias KeyfleetWeb.RoomsLive
 
   # How each fleet prices its keys and where a buyer's payment goes.
   @how_it_works %{
@@ -62,7 +62,7 @@ defmodule KeyFleetWeb.FleetLive do
     ~H"""
     <article id="fleet-page" class="fleet-page">
       <section :if={is_nil(@fleet.name)} class="fleet-panel">
-        <h1 tabindex="-1">KeyFleet</h1>
+        <h1 tabindex="-1">Keyfleet</h1>
         <h2>This fleet doesn’t exist.</h2>
       </section>
 

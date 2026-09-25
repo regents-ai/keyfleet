@@ -1,4 +1,4 @@
-defmodule KeyFleet.DatabaseConfig do
+defmodule Keyfleet.DatabaseConfig do
   @moduledoc false
 
   @cluster_id "dzx6qo6xqzvojpv5"

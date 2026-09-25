@@ -1,14 +1,14 @@
-defmodule KeyFleet.Accounts.SessionAuthorityTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule Keyfleet.Accounts.SessionAuthorityTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   import Ecto.Query
 
   require Ash.Query
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Accounts.SessionAuthority
-  alias KeyFleet.Actors.{Human, System}
-  alias KeyFleet.Repo
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.SessionAuthority
+  alias Keyfleet.Actors.{Human, System}
+  alias Keyfleet.Repo
 
   @maximum_generation 9_223_372_036_854_775_807
   @wallet "0x1111111111111111111111111111111111111111"

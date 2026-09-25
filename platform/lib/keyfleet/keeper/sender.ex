@@ -1,9 +1,9 @@
-defmodule KeyFleet.Keeper.Sender do
+defmodule Keyfleet.Keeper.Sender do
   @moduledoc """
   The one way a keeper transaction reaches the chain.
 
   A sender holds the keeper's wallet and sends only `%Call{}`s from
-  `KeyFleet.Keeper.Calls`, each to the one contract its function belongs
+  `Keyfleet.Keeper.Calls`, each to the one contract its function belongs
   to, with only the argument that contract is there for:
 
     * `requestReveal`, `sendProtocolShare`, `recognizeSurplus` and
@@ -40,10 +40,10 @@ defmodule KeyFleet.Keeper.Sender do
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper}
-  alias KeyFleet.Keeper.{Calls, Transaction, Wallet}
-  alias KeyFleet.Keeper.Calls.Call
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Fleets, Keeper}
+  alias Keyfleet.Keeper.{Calls, Transaction, Wallet}
+  alias Keyfleet.Keeper.Calls.Call
 
   @gwei 1_000_000_000
   @max_fee 2 * @gwei
@@ -95,7 +95,7 @@ defmodule KeyFleet.Keeper.Sender do
     %__MODULE__{
       wallet: wallet,
       node: node,
-      receipt_poll_ms: Application.fetch_env!(:keyfleet, KeyFleet.Keeper)[:receipt_poll_ms]
+      receipt_poll_ms: Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:receipt_poll_ms]
     }
   end
 
@@ -404,7 +404,7 @@ defmodule KeyFleet.Keeper.Sender do
   end
 
   @doc """
-  Reads a view of `KeyFleet.Keeper.Calls` from the contract at `to`, as the
+  Reads a view of `Keyfleet.Keeper.Calls` from the contract at `to`, as the
   keeper, at the latest block: `{:ok, value}`, or `{:error, reason}`, which
   is `{:revert, selector, args}` when the contract refuses.
   """

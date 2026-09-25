@@ -1,4 +1,4 @@
-defmodule KeyFleet.ChainHelpers do
+defmodule Keyfleet.ChainHelpers do
   @moduledoc """
   Puts a fleet's chain reading into a known state, fresh unless told otherwise.
 
@@ -7,8 +7,8 @@ defmodule KeyFleet.ChainHelpers do
   through here first.
   """
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
 
   @head_hash "0x" <> String.duplicate("c", 64)
 

@@ -1,16 +1,16 @@
-defmodule KeyFleet.Keeper.BootTest do
+defmodule Keyfleet.Keeper.BootTest do
   # Changes the app's keeper configuration and log level, and starts the one
   # named keeper process.
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
   import ExUnit.CaptureLog
-  import KeyFleet.KeeperHelpers, only: [answering: 1, deploy!: 3, sent: 0, view!: 1, view!: 2]
+  import Keyfleet.KeeperHelpers, only: [answering: 1, deploy!: 3, sent: 0, view!: 1, view!: 2]
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{ChainHelpers, Fleets, Keeper, Release, Repo}
-  alias KeyFleet.Keeper.{Runner, StubNode}
-  alias KeyFleet.Keeper.Supervisor, as: KeeperSupervisor
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{ChainHelpers, Fleets, Keeper, Release, Repo}
+  alias Keyfleet.Keeper.{Runner, StubNode}
+  alias Keyfleet.Keeper.Supervisor, as: KeeperSupervisor
 
   # Anvil's first public test account. Never a real key.
   @anvil_key "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -23,12 +23,12 @@ defmodule KeyFleet.Keeper.BootTest do
     Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
     Fleets.bootstrap_catalog!()
 
-    config = Application.fetch_env!(:keyfleet, KeyFleet.Keeper)
+    config = Application.fetch_env!(:keyfleet, Keyfleet.Keeper)
     level = Logger.level()
     Logger.configure(level: :info)
 
     on_exit(fn ->
-      Application.put_env(:keyfleet, KeyFleet.Keeper, config)
+      Application.put_env(:keyfleet, Keyfleet.Keeper, config)
       Logger.configure(level: level)
     end)
 
@@ -37,7 +37,7 @@ defmodule KeyFleet.Keeper.BootTest do
 
   describe "without a key" do
     test "no keeper starts, and the log says so once" do
-      log = capture_log(fn -> assert KeyFleet.Application.keeper_child() == nil end)
+      log = capture_log(fn -> assert Keyfleet.Application.keeper_child() == nil end)
 
       assert [_line] =
                Regex.scan(
@@ -56,7 +56,7 @@ defmodule KeyFleet.Keeper.BootTest do
     setup %{config: config} do
       Application.put_env(
         :keyfleet,
-        KeyFleet.Keeper,
+        Keyfleet.Keeper,
         Keyword.put(config, :private_key, @anvil_key)
       )
 
@@ -66,7 +66,7 @@ defmodule KeyFleet.Keeper.BootTest do
 
     test "a key starts the keeper under its own supervisor, which the site does not restart" do
       assert %{id: KeeperSupervisor, start: {KeeperSupervisor, :start_link, [[]]}} =
-               spec = KeyFleet.Application.keeper_child()
+               spec = Keyfleet.Application.keeper_child()
 
       assert spec.restart == :temporary
     end
@@ -74,7 +74,7 @@ defmodule KeyFleet.Keeper.BootTest do
     test "the keeper is started again when it crashes, until its supervisor gives up" do
       {supervisor, log} =
         with_log(fn ->
-          supervisor = start_supervised!(KeyFleet.Application.keeper_child())
+          supervisor = start_supervised!(Keyfleet.Application.keeper_child())
           down = Process.monitor(supervisor)
 
           # Three restarts within a minute are allowed; the fourth crash is one too many.
@@ -92,13 +92,13 @@ defmodule KeyFleet.Keeper.BootTest do
 
       refute Process.alive?(supervisor)
       assert Process.whereis(Runner) == nil
-      assert Process.alive?(Process.whereis(KeyFleet.Supervisor))
+      assert Process.alive?(Process.whereis(Keyfleet.Supervisor))
 
       # Each crash is logged as an error, and never shows the key.
       assert [_, _, _, _] = Regex.scan(~r/Keeper on:/, log)
 
       assert [_, _, _, _] =
-               Regex.scan(~r/\[error\] GenServer KeyFleet.Keeper.Runner terminating/, log)
+               Regex.scan(~r/\[error\] GenServer Keyfleet.Keeper.Runner terminating/, log)
 
       assert log =~ @keeper
       refute log =~ key_digits()
@@ -295,7 +295,7 @@ defmodule KeyFleet.Keeper.BootTest do
       path = "rel/overlays/bin/#{launcher}"
       script = File.read!(path)
 
-      assert script =~ "KeyFleet.Release.#{command}()"
+      assert script =~ "Keyfleet.Release.#{command}()"
       assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
       refute script =~ "KEYFLEET_KEEPER_PRIVATE_KEY"
       refute script =~ "echo"

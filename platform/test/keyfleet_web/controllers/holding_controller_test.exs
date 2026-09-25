@@ -1,5 +1,5 @@
-defmodule KeyFleetWeb.HoldingControllerTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.HoldingControllerTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   setup do
     Application.put_env(:keyfleet, :app_surfaces, false)

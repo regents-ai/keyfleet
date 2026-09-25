@@ -1,4 +1,4 @@
-defmodule KeyFleet.Fleets.Presets do
+defmodule Keyfleet.Fleets.Presets do
   @moduledoc """
   The supply and price arithmetic of the four fleet presets, mirrored from
   `contracts/src/KeyfleetPresets.sol`.

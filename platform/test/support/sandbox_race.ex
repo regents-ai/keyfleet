@@ -1,4 +1,4 @@
-defmodule KeyFleet.SandboxRace do
+defmodule Keyfleet.SandboxRace do
   @moduledoc """
   Sends several callers at one row at the same moment.
 

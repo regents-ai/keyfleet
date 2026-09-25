@@ -1,6 +1,6 @@
 <!DOCTYPE html> <% home? = @conn.request_path == "/" %>
 <% theme = if home?, do: "dark", else: @theme %>
-<% metadata = KeyFleetWeb.PublicDocuments.metadata(@conn.request_path) %>
+<% metadata = KeyfleetWeb.PublicDocuments.metadata(@conn.request_path) %>
 <html
   lang="en"
   data-brand="platform"
@@ -13,18 +13,18 @@
       title={metadata.title}
       description={metadata.description}
       canonical={metadata.canonical}
-      site_name="KeyFleet"
+      site_name="Keyfleet"
       site_type="business"
       image={metadata.image}
       image_width={1024}
       image_height={512}
-      image_alt="KeyFleet mark"
+      image_alt="Keyfleet mark"
       twitter_site="@example"
       markdown={metadata.markdown?}
       agent_guide={~p"/llms.txt"}
       sitemap={~p"/sitemap.xml"}
       service_description={~p"/openapi.json"}
-      structured_data={KeyFleetWeb.PublicDocuments.structured_data()}
+      structured_data={KeyfleetWeb.PublicDocuments.structured_data()}
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content={theme} />
@@ -33,9 +33,9 @@
     <meta name="privy-app-id" content={Application.get_env(:keyfleet, :privy, [])[:app_id]} />
     <meta
       name="privy-bridge-src"
-      content={KeyFleetWeb.Endpoint.static_path("/assets/js/privy_bridge.js")}
+      content={KeyfleetWeb.Endpoint.static_path("/assets/js/privy_bridge.js")}
     />
-    <.live_title default={metadata.title} suffix={if home?, do: "", else: " · KeyFleet"}>
+    <.live_title default={metadata.title} suffix={if home?, do: "", else: " · Keyfleet"}>
       {assigns[:page_title]}
     </.live_title>
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href={~p"/favicon.ico"} />

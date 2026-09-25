@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.ProposalsChainReader do
+defmodule Keyfleet.Repo.Migrations.ProposalsChainReader do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

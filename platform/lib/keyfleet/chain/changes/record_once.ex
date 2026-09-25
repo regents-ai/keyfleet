@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.Changes.RecordOnce do
+defmodule Keyfleet.Chain.Changes.RecordOnce do
   @moduledoc """
   Makes a record from one chain event exactly once, for an action that
   upserts on the event's identity and returns the stored row when it skips.
@@ -13,7 +13,7 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
 
   With `:number`, `:proposal_seq`, `:reveal_seq` or `:ownership_seq`, a
   record read again keeps the number it has and a new one takes the fleet's
-  next number in the same transaction, from `KeyFleet.Chain`.
+  next number in the same transaction, from `Keyfleet.Chain`.
   """
   use Ash.Resource.Change
 
@@ -30,7 +30,7 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
     identity =
       Enum.map(Keyword.fetch!(opts, :identity), &{&1, Ash.Changeset.get_attribute(changeset, &1)})
 
-    KeyFleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    Keyfleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
       Jason.encode!([inspect(changeset.resource) | Keyword.values(identity)])
     ])
 
@@ -50,16 +50,16 @@ defmodule KeyFleet.Chain.Changes.RecordOnce do
   # Read straight from the table, since a resource may offer no unscoped read.
   defp number(changeset, identity, sequence) do
     recorded =
-      KeyFleet.Repo.one(
+      Keyfleet.Repo.one(
         from(record in changeset.resource, where: ^identity, select: record.record_seq)
       )
 
     recorded || take(sequence, Ash.Changeset.get_attribute(changeset, :fleet_id))
   end
 
-  defp take(:proposal_seq, fleet_id), do: KeyFleet.Chain.take_proposal_seq!(fleet_id)
-  defp take(:reveal_seq, fleet_id), do: KeyFleet.Chain.take_reveal_seq!(fleet_id)
-  defp take(:ownership_seq, fleet_id), do: KeyFleet.Chain.take_ownership_seq!(fleet_id)
+  defp take(:proposal_seq, fleet_id), do: Keyfleet.Chain.take_proposal_seq!(fleet_id)
+  defp take(:reveal_seq, fleet_id), do: Keyfleet.Chain.take_reveal_seq!(fleet_id)
+  defp take(:ownership_seq, fleet_id), do: Keyfleet.Chain.take_ownership_seq!(fleet_id)
 
   defp same_as_recorded(changeset, row, opts) do
     fields =

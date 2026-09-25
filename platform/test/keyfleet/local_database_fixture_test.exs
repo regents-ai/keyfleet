@@ -1,7 +1,7 @@
-defmodule KeyFleet.LocalDatabaseFixtureTest do
+defmodule Keyfleet.LocalDatabaseFixtureTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleet.LocalDatabaseFixture
+  alias Keyfleet.LocalDatabaseFixture
 
   test "accepts only loopback dev and test database targets" do
     assert :ok =

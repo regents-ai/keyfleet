@@ -1,7 +1,7 @@
-defmodule KeyFleet.PrivyTest do
+defmodule Keyfleet.PrivyTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Privy
+  alias Keyfleet.Privy
 
   @wallet "0x1111111111111111111111111111111111111111"
   @social %{
@@ -141,7 +141,7 @@ defmodule KeyFleet.PrivyTest do
 
   test "SIGNED_EVIDENCE_ONLY: a matching pair yields the identity token's evidence" do
     assert {:ok,
-            %KeyFleet.VerifiedPrivyIdentity{
+            %Keyfleet.VerifiedPrivyIdentity{
               privy_user_id: "did:privy:test",
               session_id: "session",
               wallet_address: @wallet,
@@ -152,7 +152,7 @@ defmodule KeyFleet.PrivyTest do
 
   test "SIGNED_EVIDENCE_ONLY: identity evidence with no wallets still reaches the boundary" do
     assert {:ok,
-            %KeyFleet.VerifiedPrivyIdentity{
+            %Keyfleet.VerifiedPrivyIdentity{
               privy_user_id: "did:privy:test",
               session_id: "session",
               wallet_address: nil,
@@ -185,7 +185,7 @@ defmodule KeyFleet.PrivyTest do
   end
 
   test "INDEPENDENT_VERIFICATION_AND_BINDING: an identity token may repeat only the authenticated session" do
-    assert {:ok, %KeyFleet.VerifiedPrivyIdentity{session_id: "session"}} =
+    assert {:ok, %Keyfleet.VerifiedPrivyIdentity{session_id: "session"}} =
              pair("access", "identity-with-session")
 
     assert pair("access", "identity-other-session") ==

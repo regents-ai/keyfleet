@@ -1,16 +1,16 @@
-defmodule KeyFleetWeb.Showcase.Domain do
+defmodule KeyfleetWeb.Showcase.Domain do
   @moduledoc false
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource KeyFleetWeb.Showcase.Sample
+    resource KeyfleetWeb.Showcase.Sample
   end
 end
 
-defmodule KeyFleetWeb.Showcase.Sample do
+defmodule KeyfleetWeb.Showcase.Sample do
   @moduledoc "Local, data-layer-less resource. Its records never reach Postgres."
   use Ash.Resource,
-    domain: KeyFleetWeb.Showcase.Domain,
+    domain: KeyfleetWeb.Showcase.Domain,
     data_layer: Ash.DataLayer.Simple,
     authorizers: [Ash.Policy.Authorizer]
 

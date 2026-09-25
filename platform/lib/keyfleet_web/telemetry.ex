@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Telemetry do
+defmodule KeyfleetWeb.Telemetry do
   use Supervisor
   import Telemetry.Metrics
 
@@ -82,7 +82,7 @@ defmodule KeyFleetWeb.Telemetry do
     [
       # A module, function and arguments to be invoked periodically.
       # This function must call :telemetry.execute/3 and a metric must be added above.
-      # {KeyFleetWeb, :count_users, []}
+      # {KeyfleetWeb, :count_users, []}
     ]
   end
 end

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Chain.Scanner do
+defmodule Keyfleet.Chain.Scanner do
   @moduledoc """
   One pass over a deployed fleet's history: who holds each key, each key's
   reveal, and what its budget took in and paid out, from the fleet contract,
@@ -46,22 +46,22 @@ defmodule KeyFleet.Chain.Scanner do
 
   A pass that reaches the head also notes the head's time, which is how far
   votes are known to be counted. A pass that made a new proposal or budget
-  record says so on `KeyFleet.Proposals.topic/1`. One that recorded keys
+  record says so on `Keyfleet.Proposals.topic/1`. One that recorded keys
   revealed, sold or changing hands names them all in one notice on
-  `KeyFleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
+  `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
   even if the pass then failed or stopped the fleet, and each is only a hint
   to read again.
   """
 
   require Logger
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.Logs
-  alias KeyFleet.Fleets.Fleet
-  alias KeyFleet.Keys
-  alias KeyFleet.Proposals
-  alias KeyFleet.Treasury
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.Logs
+  alias Keyfleet.Fleets.Fleet
+  alias Keyfleet.Keys
+  alias Keyfleet.Proposals
+  alias Keyfleet.Treasury
 
   @rescan_blocks 30
   @max_range 10_000
@@ -185,7 +185,7 @@ defmodule KeyFleet.Chain.Scanner do
   # the fleet has been stopped. A record the database refuses ends the
   # transaction there and comes back as its changeset.
   defp write_piece(fleet, records, cursor, to_cursor) do
-    KeyFleet.Repo.transact(fn ->
+    Keyfleet.Repo.transact(fn ->
       case record(fleet, records) do
         :ok -> write_cursor(cursor, to_cursor)
         failure -> {:error, failure}
@@ -293,7 +293,7 @@ defmodule KeyFleet.Chain.Scanner do
 
     if now.proposal_seq > before.proposal_seq do
       Phoenix.PubSub.broadcast(
-        KeyFleet.PubSub,
+        Keyfleet.PubSub,
         Proposals.topic(fleet_id),
         {:proposals_changed, fleet_id}
       )
@@ -315,7 +315,7 @@ defmodule KeyFleet.Chain.Scanner do
 
       records ->
         Phoenix.PubSub.broadcast(
-          KeyFleet.PubSub,
+          Keyfleet.PubSub,
           Keys.topic(fleet_id),
           {:keys_changed, fleet_id, Enum.map(records, & &1.token_id)}
         )

@@ -1,10 +1,10 @@
-defmodule KeyFleet.Chain.Client do
+defmodule Keyfleet.Chain.Client do
   @moduledoc """
   The chain reads the fleet reader needs, answered by a JSON-RPC node in
   production and by a stand-in in tests.
 
   Logs come back exactly as `eth_getLogs` returns them; decoding them is
-  `KeyFleet.Chain.Logs`'s job. Contract reads come back as the bytes the
+  `Keyfleet.Chain.Logs`'s job. Contract reads come back as the bytes the
   contract returned. One call asks for every contract and event the
   reader follows, so a stretch of blocks is always read whole.
   """
@@ -31,5 +31,5 @@ defmodule KeyFleet.Chain.Client do
               {:ok, binary()} | {:error, term()}
 
   @doc "The client this application is configured with."
-  def configured, do: Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:client]
+  def configured, do: Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:client]
 end

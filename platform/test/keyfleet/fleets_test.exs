@@ -1,8 +1,8 @@
-defmodule KeyFleet.FleetsTest do
+defmodule Keyfleet.FleetsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.{Fleets, Repo}
-  alias KeyFleet.Fleets.Fleet
+  alias Keyfleet.{Fleets, Repo}
+  alias Keyfleet.Fleets.Fleet
 
   @catalog %{
     "fibonacci_syndicate" => "Keyfleet Syndicate",
@@ -18,7 +18,7 @@ defmodule KeyFleet.FleetsTest do
   test "bootstrap converges a partial catalog and reruns preserve exactly four stable identities" do
     Ash.create!(Fleet, %{id: "fibonacci_syndicate", name: "Stale name"},
       action: :bootstrap,
-      actor: %KeyFleet.Actors.System{}
+      actor: %Keyfleet.Actors.System{}
     )
 
     Fleets.bootstrap_catalog!()
@@ -32,7 +32,7 @@ defmodule KeyFleet.FleetsTest do
   test "ordinary callers cannot change the catalog through the bootstrap action" do
     Fleets.bootstrap_catalog!()
 
-    for actor <- [nil, %KeyFleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
+    for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
       assert {:error, %Ash.Error.Forbidden{}} =
                Ash.create(Fleet, %{id: "fibonacci_syndicate", name: "Changed"},
                  action: :bootstrap,

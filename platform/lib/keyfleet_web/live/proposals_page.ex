@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.ProposalsPage do
+defmodule KeyfleetWeb.ProposalsPage do
   @moduledoc """
   What a fleet's proposal pages show, read from the proposals, votes and
   launches the chain reader recorded.
@@ -16,11 +16,11 @@ defmodule KeyFleetWeb.ProposalsPage do
   page that doesn't exist.
   """
 
-  alias KeyFleet.Chain
-  alias KeyFleet.Fleets
-  alias KeyFleet.Proposals
-  alias KeyFleet.Treasury
-  alias KeyFleetWeb.NotFoundError
+  alias Keyfleet.Chain
+  alias Keyfleet.Fleets
+  alias Keyfleet.Proposals
+  alias Keyfleet.Treasury
+  alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50

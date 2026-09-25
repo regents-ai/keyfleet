@@ -1,11 +1,11 @@
-defmodule KeyFleet.RewardsWaitingAnvilTest do
+defmodule Keyfleet.RewardsWaitingAnvilTest do
   # A key's rewards waiting read from a real node: a local anvil, never a real
   # network, with the fleet `KeeperLab.s.sol` puts on it, whose buyer holds
   # keys 1 and 2.
   use ExUnit.Case, async: false
 
-  alias KeyFleet.AnvilLab
-  alias KeyFleet.Chain.{RewardsWaiting, RpcClient}
+  alias Keyfleet.AnvilLab
+  alias Keyfleet.Chain.{RewardsWaiting, RpcClient}
 
   @moduletag :external
   @moduletag timeout: 600_000

@@ -3,4 +3,4 @@ set -eu
 
 fleet="${1:?usage: clear-fleet-stop <fleet id>}"
 
-KEYFLEET_RELEASE_COMMAND=migrate KEYFLEET_STOPPED_FLEET="$fleet" exec "$(dirname "$0")/keyfleet" eval 'KeyFleet.Release.clear_fleet_stop(System.fetch_env!("KEYFLEET_STOPPED_FLEET"))'
+KEYFLEET_RELEASE_COMMAND=migrate KEYFLEET_STOPPED_FLEET="$fleet" exec "$(dirname "$0")/keyfleet" eval 'Keyfleet.Release.clear_fleet_stop(System.fetch_env!("KEYFLEET_STOPPED_FLEET"))'

@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
+defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   # The workspace page against the fleet's own writer and the copy it keeps
   # for reading: what agents write shows up on an open page by itself.
   use ExUnit.Case, async: false
@@ -7,13 +7,13 @@ defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
   import Phoenix.LiveViewTest
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias KeyFleet.Fleets
-  alias KeyFleet.Graph.Projector
-  alias KeyFleet.Graph.Writer
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph.Projector
+  alias Keyfleet.Graph.Writer
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
-  @endpoint KeyFleetWeb.Endpoint
+  @endpoint KeyfleetWeb.Endpoint
   @moduletag :tmp_dir
 
   @fleet "fibonacci_syndicate"
@@ -30,7 +30,7 @@ defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
     Rooms.bootstrap_rooms!()
 
     start_supervised!(
-      {KeyFleet.Graph.Supervisor,
+      {Keyfleet.Graph.Supervisor,
        fleets: [@fleet],
        data_dir: Path.join(tmp_dir, "graph"),
        reply_timeout: 5_000,
@@ -42,11 +42,11 @@ defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
     await_ready()
 
     start_supervised!(
-      {KeyFleet.Graph.Projectors,
+      {Keyfleet.Graph.Projectors,
        fleets: [@fleet], projection_wait: 30_000, catch_up_interval: 60_000}
     )
 
-    %{conn: KeyFleetWeb.SessionAuthorityHelpers.build_conn()}
+    %{conn: KeyfleetWeb.SessionAuthorityHelpers.build_conn()}
   end
 
   test "what agents write appears on an open page by itself", %{conn: conn} do
@@ -72,7 +72,7 @@ defmodule KeyFleetWeb.Live.WorkspaceLiveRefreshTest do
              "Key 17 added the goal “Revenue”."
            ]
 
-    {:ok, item, _html} = live(conn, KeyFleetWeb.WorkspacePage.item_path(@fleet, task))
+    {:ok, item, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, task))
     assert has_element?(item, "#workspace-links", "This task delivers on")
     write!("patch", %{id: task, expected_version: 2, set: %{progress: "done"}}, "c-6")
     assert shows?(fn -> has_element?(item, "#workspace-fields", "Done") end)

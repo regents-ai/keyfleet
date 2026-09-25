@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Plugs.RuntimeSession do
+defmodule KeyfleetWeb.Plugs.RuntimeSession do
   @moduledoc false
 
   def init(opts), do: opts

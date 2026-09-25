@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Workspace.Read do
+defmodule Keyfleet.Graph.Workspace.Read do
   @moduledoc """
   Answers a workspace read from the fleet's read tables, never from its
   writer, so a read never waits behind a write.
@@ -16,9 +16,9 @@ defmodule KeyFleet.Graph.Workspace.Read do
   """
   use Ash.Resource.Actions.Implementation
 
-  alias KeyFleet.Graph
-  alias KeyFleet.Graph.Errors.RefusedError
-  alias KeyFleet.Graph.Event
+  alias Keyfleet.Graph
+  alias Keyfleet.Graph.Errors.RefusedError
+  alias Keyfleet.Graph.Event
 
   @relation_page 200
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
@@ -33,7 +33,7 @@ defmodule KeyFleet.Graph.Workspace.Read do
   # query, so everything read after this setting comes from one moment.
   defp in_snapshot(read) do
     Ash.transact(@tables, fn ->
-      KeyFleet.Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+      Keyfleet.Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
       read.()
     end)
   end

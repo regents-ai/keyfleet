@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddChainProjection do
+defmodule Keyfleet.Repo.Migrations.AddChainProjection do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

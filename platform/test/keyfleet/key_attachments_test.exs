@@ -1,13 +1,13 @@
-defmodule KeyFleet.KeyAttachmentsTest do
+defmodule Keyfleet.KeyAttachmentsTest do
   use ExUnit.Case, async: false
   require Ash.Query
 
-  alias KeyFleet.{ChainHelpers, Fleets, Keys, Repo}
-  alias KeyFleet.Keys.KeyAttachment
+  alias Keyfleet.{ChainHelpers, Fleets, Keys, Repo}
+  alias Keyfleet.Keys.KeyAttachment
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
-  @system %KeyFleet.Actors.System{}
+  @system %Keyfleet.Actors.System{}
 
   setup context do
     if context[:independent_connections] do
@@ -130,8 +130,8 @@ defmodule KeyFleet.KeyAttachmentsTest do
   test "only the exact system actor writes and callers cannot supply generated fields" do
     for actor <- [
           nil,
-          %KeyFleet.Actors.Human{human_account_id: 1},
-          %KeyFleet.Actors.Agent{
+          %Keyfleet.Actors.Human{human_account_id: 1},
+          %Keyfleet.Actors.Agent{
             wallet_address: wallet("a"),
             chain_id: 8453,
             audience: "keyfleet"

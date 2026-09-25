@@ -1,5 +1,5 @@
-defmodule KeyFleetWeb.MetricsControllerTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.MetricsControllerTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   test "exposes the bounded Privy browser failure counter", %{conn: conn} do
     :telemetry.execute([:keyfleet, :privy, :browser_failure], %{count: 1}, %{

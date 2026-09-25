@@ -1,4 +1,4 @@
-defmodule KeyFleet.RuntimeConfigTest do
+defmodule Keyfleet.RuntimeConfigTest do
   use ExUnit.Case, async: false
 
   @runtime_config Path.expand("../../config/runtime.exs", __DIR__)
@@ -71,7 +71,7 @@ defmodule KeyFleet.RuntimeConfigTest do
     test_repo =
       "config/test.exs"
       |> Config.Reader.read!(env: :test, target: :host)
-      |> get_in([:keyfleet, KeyFleet.Repo])
+      |> get_in([:keyfleet, Keyfleet.Repo])
 
     assert Keyword.take(test_repo, [:hostname, :port, :database]) == [
              hostname: "127.0.0.1",
@@ -100,7 +100,7 @@ defmodule KeyFleet.RuntimeConfigTest do
 
     assert get_in(config, [:keyfleet, :database_startup_enabled])
 
-    assert get_in(config, [:keyfleet, KeyFleet.Repo]) == [
+    assert get_in(config, [:keyfleet, Keyfleet.Repo]) == [
              ssl: [
                verify: :verify_peer,
                cacerts: :public_key.cacerts_get(),
@@ -114,7 +114,7 @@ defmodule KeyFleet.RuntimeConfigTest do
              socket_options: [:inet6]
            ]
 
-    endpoint = get_in(config, [:keyfleet, KeyFleetWeb.Endpoint])
+    endpoint = get_in(config, [:keyfleet, KeyfleetWeb.Endpoint])
 
     assert endpoint[:server]
     assert endpoint[:secret_key_base] == String.duplicate("s", 64)
@@ -137,7 +137,7 @@ defmodule KeyFleet.RuntimeConfigTest do
 
     config = read_runtime_config(:prod)
 
-    assert get_in(config, [:keyfleet, KeyFleetWeb.Endpoint])[:url][:host] ==
+    assert get_in(config, [:keyfleet, KeyfleetWeb.Endpoint])[:url][:host] ==
              "shadow.example.test"
   end
 
@@ -280,7 +280,7 @@ defmodule KeyFleet.RuntimeConfigTest do
 
     config = read_runtime_config(:prod)
 
-    assert get_in(config, [:keyfleet, KeyFleet.Repo]) == [
+    assert get_in(config, [:keyfleet, Keyfleet.Repo]) == [
              ssl: [
                verify: :verify_peer,
                cacerts: :public_key.cacerts_get(),
@@ -294,7 +294,7 @@ defmodule KeyFleet.RuntimeConfigTest do
              socket_options: [:inet6]
            ]
 
-    assert get_in(config, [:keyfleet, KeyFleetWeb.Endpoint]) == nil
+    assert get_in(config, [:keyfleet, KeyfleetWeb.Endpoint]) == nil
   end
 
   describe "the keeper key" do
@@ -312,18 +312,18 @@ defmodule KeyFleet.RuntimeConfigTest do
 
     test "leaves the keeper off when it is unset or blank" do
       System.put_env("KEYFLEET_RPC_URL", @node)
-      assert production_config(KeyFleet.Keeper) == [private_key: nil]
+      assert production_config(Keyfleet.Keeper) == [private_key: nil]
 
       System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", "  \n")
-      assert production_config(KeyFleet.Keeper) == [private_key: nil]
+      assert production_config(Keyfleet.Keeper) == [private_key: nil]
     end
 
     test "is configured with the node it sends through" do
       System.put_env("KEYFLEET_RPC_URL", @node)
       System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", @key)
 
-      assert production_config(KeyFleet.Keeper) == [private_key: @key]
-      assert production_config(KeyFleet.Chain) == [rpc_url: @node]
+      assert production_config(Keyfleet.Keeper) == [private_key: @key]
+      assert production_config(Keyfleet.Chain) == [rpc_url: @node]
     end
 
     test "stops the boot when it is malformed, without printing it" do
@@ -339,7 +339,7 @@ defmodule KeyFleet.RuntimeConfigTest do
           ] do
         System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", key)
 
-        error = assert_raise RuntimeError, fn -> production_config(KeyFleet.Keeper) end
+        error = assert_raise RuntimeError, fn -> production_config(Keyfleet.Keeper) end
         assert Exception.message(error) == "KEYFLEET_KEEPER_PRIVATE_KEY is malformed"
       end
     end
@@ -350,7 +350,7 @@ defmodule KeyFleet.RuntimeConfigTest do
       for node <- [nil, ""] do
         restore_env("KEYFLEET_RPC_URL", node)
 
-        error = assert_raise RuntimeError, fn -> production_config(KeyFleet.Keeper) end
+        error = assert_raise RuntimeError, fn -> production_config(Keyfleet.Keeper) end
 
         assert Exception.message(error) ==
                  "KEYFLEET_KEEPER_PRIVATE_KEY is set but KEYFLEET_RPC_URL is not"
@@ -362,7 +362,7 @@ defmodule KeyFleet.RuntimeConfigTest do
 
       for key <- [@key, "malformed"], env <- [:dev, :test] do
         System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", key)
-        assert env |> read_runtime_config() |> get_in([:keyfleet, KeyFleet.Keeper]) == nil
+        assert env |> read_runtime_config() |> get_in([:keyfleet, Keyfleet.Keeper]) == nil
       end
     end
   end
@@ -403,7 +403,7 @@ defmodule KeyFleet.RuntimeConfigTest do
   end
 
   defp runtime_repo_config(environment),
-    do: get_in(read_runtime_config(environment), [:keyfleet, KeyFleet.Repo])
+    do: get_in(read_runtime_config(environment), [:keyfleet, Keyfleet.Repo])
 
   defp restore_env(name, nil), do: System.delete_env(name)
   defp restore_env(name, value), do: System.put_env(name, value)

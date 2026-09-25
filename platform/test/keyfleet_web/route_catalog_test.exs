@@ -1,8 +1,8 @@
-defmodule KeyFleetWeb.RouteCatalogTest do
+defmodule KeyfleetWeb.RouteCatalogTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleetWeb.{RouteCatalog, Router}
-  alias KeyFleetWeb.RouteCatalog.RouteTarget
+  alias KeyfleetWeb.{RouteCatalog, Router}
+  alias KeyfleetWeb.RouteCatalog.RouteTarget
 
   @paths [
     "/",
@@ -50,7 +50,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     assert home.destination == "/"
     assert home.app_id == nil
     assert home.app_display_label == nil
-    assert home.page_display_label == "KeyFleet"
+    assert home.page_display_label == "Keyfleet"
     assert home.canonical_root == "/"
     assert home.header_controls == []
     assert home.background_slot == :home
@@ -76,7 +76,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
           %{"fleet_id" => "fibonacci_syndicate", "token_id" => String.duplicate("9", 19)},
           %{"fleet_id" => "fibonacci_syndicate"}
         ] do
-      assert_raise KeyFleetWeb.NotFoundError, fn -> RouteCatalog.fetch!(:keys, params) end
+      assert_raise KeyfleetWeb.NotFoundError, fn -> RouteCatalog.fetch!(:keys, params) end
     end
   end
 
@@ -106,7 +106,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
           "task/1",
           "rel_1"
         ] do
-      assert_raise KeyFleetWeb.NotFoundError, fn ->
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
         RouteCatalog.fetch!(:workspace_item, %{
           "fleet_id" => "fibonacci_syndicate",
           "object_id" => object_id
@@ -128,7 +128,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
              "/app/fleets/fibonacci_syndicate/proposals"
 
     for number <- ["0", "03", "-1", "1.5", "one", String.duplicate("9", 19)] do
-      assert_raise KeyFleetWeb.NotFoundError, fn ->
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
         RouteCatalog.fetch!(:proposal, %{"fleet_id" => "fibonacci_syndicate", "number" => number})
       end
     end
@@ -140,7 +140,7 @@ defmodule KeyFleetWeb.RouteCatalogTest do
     assert account.route_id == :account
     assert account.destination == "/account"
     assert account.app_id == :product
-    assert account.app_display_label == "KeyFleet"
+    assert account.app_display_label == "Keyfleet"
     assert account.page_display_label == "Account"
     assert account.canonical_root == "/"
     assert account.header_controls == [:profile_actions]

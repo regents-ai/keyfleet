@@ -1,5 +1,5 @@
-defmodule KeyFleetWeb.HealthController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.HealthController do
+  use KeyfleetWeb, :controller
 
   def show(conn, _params) do
     conn

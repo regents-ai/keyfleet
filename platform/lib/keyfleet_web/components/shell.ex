@@ -1,13 +1,13 @@
-defmodule KeyFleetWeb.Components.Shell do
+defmodule KeyfleetWeb.Components.Shell do
   @moduledoc "Semantic presentation seam for Ash-owned shell behavior."
 
   use Phoenix.Component
 
-  alias KeyFleetWeb.Components.RegentLinks
-  alias KeyFleetWeb.RouteCatalog.{RouteTarget, SidebarHeading}
+  alias KeyfleetWeb.Components.RegentLinks
+  alias KeyfleetWeb.RouteCatalog.{RouteTarget, SidebarHeading}
 
   attr(:route_spec, :map, required: true)
-  attr(:account_control, KeyFleet.AccessContext.AccountControl, required: true)
+  attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
   attr(:shell_instance, :integer, required: true)
   attr(:theme, :string, required: true)
   slot(:content, required: true)
@@ -41,7 +41,7 @@ defmodule KeyFleetWeb.Components.Shell do
               alt=""
             />
           </span>
-          <span class="shell-brand__name">KeyFleet</span>
+          <span class="shell-brand__name">Keyfleet</span>
         </.link>
 
         <Regent.Primitives.button
@@ -103,7 +103,7 @@ defmodule KeyFleetWeb.Components.Shell do
     """
   end
 
-  attr :account_control, KeyFleet.AccessContext.AccountControl, required: true
+  attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
   attr :enabled, :boolean, default: true
 
   @doc """

@@ -1,8 +1,8 @@
-defmodule KeyFleetWeb.RouteCatalog do
+defmodule KeyfleetWeb.RouteCatalog do
   @moduledoc "Canonical behavior metadata for the route allowlist."
 
-  alias KeyFleet.Fleets
-  alias KeyFleetWeb.NotFoundError
+  alias Keyfleet.Fleets
+  alias KeyfleetWeb.NotFoundError
 
   alias __MODULE__.{
     Entry,
@@ -88,25 +88,25 @@ defmodule KeyFleetWeb.RouteCatalog do
   ]
 
   @specs %{
-    home: {:home, nil, nil, "KeyFleet", "/", [], :home, :landing, %{}},
+    home: {:home, nil, nil, "Keyfleet", "/", [], :home, :landing, %{}},
     account:
-      {:account, :product, "KeyFleet", "Account", "/", [:profile_actions], :product, :detail, %{}},
+      {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, :detail, %{}},
     fleet:
-      {:fleet, :product, "KeyFleet", "Fleet", "/", [:profile_actions], :product, :detail, %{}},
-    keys: {:keys, :product, "KeyFleet", "Key", "/", [:profile_actions], :product, :detail, %{}},
+      {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, :detail, %{}},
+    keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, :detail, %{}},
     rooms:
-      {:rooms, :product, "KeyFleet", "Rooms", "/", [:profile_actions], :product, :detail, %{}},
+      {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, :detail, %{}},
     workspace:
-      {:workspace, :product, "KeyFleet", "Workspace", "/", [:profile_actions], :product, :detail,
+      {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, :detail,
        %{}},
     workspace_item:
-      {:workspace_item, :product, "KeyFleet", "Workspace", "/", [:profile_actions], :product,
+      {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product,
        :detail, %{}},
     proposals:
-      {:proposals, :product, "KeyFleet", "Proposals", "/", [:profile_actions], :product, :detail,
+      {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, :detail,
        %{}},
     proposal:
-      {:proposal, :product, "KeyFleet", "Proposals", "/", [:profile_actions], :product, :detail,
+      {:proposal, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, :detail,
        %{}}
   }
 

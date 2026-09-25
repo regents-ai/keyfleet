@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.KeyFleet.SeedDeployment do
+defmodule Mix.Tasks.Keyfleet.SeedDeployment do
   @shortdoc "Binds the four fleets to a recorded deployment"
 
   @moduledoc """
@@ -8,7 +8,7 @@ defmodule Mix.Tasks.KeyFleet.SeedDeployment do
   A release runs the same step as
   `bin/seed-deployment`.
 
-      mix key_fleet.seed_deployment ../contracts/deployments/base.deployed.json
+      mix keyfleet.seed_deployment ../contracts/deployments/base.deployed.json
 
   Running it again with the same manifest changes nothing. A manifest naming
   different contracts for a fleet that is already bound is refused.
@@ -19,8 +19,8 @@ defmodule Mix.Tasks.KeyFleet.SeedDeployment do
   @requirements ["app.start"]
 
   @impl Mix.Task
-  def run([path]), do: KeyFleet.Release.seed_deployment!(path)
+  def run([path]), do: Keyfleet.Release.seed_deployment!(path)
 
   def run(_args),
-    do: Mix.raise("Usage: mix key_fleet.seed_deployment <path to deployed manifest>")
+    do: Mix.raise("Usage: mix keyfleet.seed_deployment <path to deployed manifest>")
 end

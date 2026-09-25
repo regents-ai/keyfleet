@@ -1,8 +1,8 @@
-defmodule KeyFleet.AccountsPolicyTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule Keyfleet.AccountsPolicyTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors.{Human, System}
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors.{Human, System}
 
   @did "did:privy:policy-matrix"
 

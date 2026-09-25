@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Showcase.Utilities do
+defmodule KeyfleetWeb.Showcase.Utilities do
   @moduledoc false
 
   def privy(scenario) when scenario in [:valid, :expired, :audience] do
@@ -30,12 +30,12 @@ defmodule KeyFleetWeb.Showcase.Utilities do
   end
 
   def database do
-    config = KeyFleet.Repo.config()
+    config = Keyfleet.Repo.config()
     database = config[:database] || ""
 
     if is_nil(config[:url]) and config[:hostname] in ["127.0.0.1", "localhost"] and
          Regex.match?(~r/\Akeyfleet_[0-9a-f]{12}_test\z/, database) do
-      case Ecto.Adapters.SQL.query(KeyFleet.Repo, "SELECT current_database(), 1", [],
+      case Ecto.Adapters.SQL.query(Keyfleet.Repo, "SELECT current_database(), 1", [],
              timeout: 2_000
            ) do
         {:ok, %{rows: [[name, 1]]}} -> %{database: name, result: "SELECT 1 passed", writes: 0}

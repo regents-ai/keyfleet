@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.RoomsLive do
+defmodule KeyfleetWeb.RoomsLive do
   @moduledoc """
   One fleet's rooms: the rooms it has, everything said in the open one, and a
   box to say something for the people who hold or run its keys.
@@ -11,9 +11,9 @@ defmodule KeyFleetWeb.RoomsLive do
   from anything the browser was told along the way.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  alias KeyFleetWeb.KeyLinks
+  alias KeyfleetWeb.KeyLinks
 
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
   # that looks like markup is shown as the characters the writer typed.
@@ -38,7 +38,7 @@ defmodule KeyFleetWeb.RoomsLive do
     ~H"""
     <article id="rooms-page" class="rooms-page">
       <header class="rooms-heading">
-        <p class="rooms-kicker">{@room.fleet_name || "KeyFleet"}</p>
+        <p class="rooms-kicker">{@room.fleet_name || "Keyfleet"}</p>
         <h1 tabindex="-1">{@room.name || "Rooms"}</h1>
         <p :if={@room.rooms != []} class="rooms-lede">What this fleet is working on together.</p>
       </header>

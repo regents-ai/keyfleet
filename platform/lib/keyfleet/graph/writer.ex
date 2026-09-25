@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Writer do
+defmodule Keyfleet.Graph.Writer do
   @moduledoc """
   The single writer for one fleet's work graph.
 
@@ -23,7 +23,7 @@ defmodule KeyFleet.Graph.Writer do
 
   require Logger
 
-  alias KeyFleet.Graph.Registry, as: GraphRegistry
+  alias Keyfleet.Graph.Registry, as: GraphRegistry
 
   @read_ops ~w(hello changes)
   @write_ops ~w(create patch link unlink archive)
@@ -64,7 +64,7 @@ defmodule KeyFleet.Graph.Writer do
   Sends a read of the log itself (`hello` or `changes`) to the fleet's graph.
 
   Only the projector reads the log this way, to copy it into the read tables
-  every workspace read is answered from; see `KeyFleet.Graph.Projection`.
+  every workspace read is answered from; see `Keyfleet.Graph.Projection`.
   """
   @spec request(String.t(), String.t(), map()) :: reply()
   def request(fleet_id, op, body) when op in @read_ops do

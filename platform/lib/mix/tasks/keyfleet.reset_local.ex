@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.KeyFleet.ResetLocal do
+defmodule Mix.Tasks.Keyfleet.ResetLocal do
   use Mix.Task
 
   @shortdoc "Removes one guarded disposable local acceptance database"
@@ -36,7 +36,7 @@ defmodule Mix.Tasks.KeyFleet.ResetLocal do
       Keyword.get(
         opts,
         :database_exists,
-        &KeyFleet.LocalDatabaseFixture.acceptance_database_exists!/2
+        &Keyfleet.LocalDatabaseFixture.acceptance_database_exists!/2
       )
 
     cleanup_files = Keyword.get(opts, :cleanup_files, &cleanup_generated_files!/0)
@@ -68,13 +68,13 @@ defmodule Mix.Tasks.KeyFleet.ResetLocal do
     adapter = Application.get_env(:keyfleet, :local_acceptance_database_adapter)
 
     preflight =
-      Keyword.get(opts, :preflight, &Mix.Tasks.KeyFleet.ResetBrowserIdentity.preflight!/1)
+      Keyword.get(opts, :preflight, &Mix.Tasks.Keyfleet.ResetBrowserIdentity.preflight!/1)
 
     identity_cleanup =
-      Keyword.get(opts, :identity_cleanup, &Mix.Tasks.KeyFleet.ResetBrowserIdentity.reset!/1)
+      Keyword.get(opts, :identity_cleanup, &Mix.Tasks.Keyfleet.ResetBrowserIdentity.reset!/1)
 
     database_reset =
-      Keyword.get(opts, :database_reset, &KeyFleet.LocalDatabaseFixture.reset_local!/2)
+      Keyword.get(opts, :database_reset, &Keyfleet.LocalDatabaseFixture.reset_local!/2)
 
     stop_application = Keyword.get(opts, :stop_application, fn -> :ok end)
 

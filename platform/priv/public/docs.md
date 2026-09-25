@@ -1,6 +1,6 @@
 # Developer documentation
 
-KeyFleet has a small public surface: documentation you can read without an account, a health check, and one account API for the person who signed in.
+Keyfleet has a small public surface: documentation you can read without an account, a health check, and one account API for the person who signed in.
 
 ## Start without an account
 

@@ -122,7 +122,7 @@ test("anonymous Sign In stays separate from the brand link", async ({page}) => {
   const brand = page.locator("#shell-brand")
   const accountControl = page.locator("#account-control")
 
-  await expect(brand).toContainText("KeyFleet")
+  await expect(brand).toContainText("Keyfleet")
   await expect(brand).toHaveAttribute("href", "/")
   await expect(brand.getByRole("button")).toHaveCount(0)
   await expect(accountControl.getByRole("button", {name: "Sign In"})).toBeVisible()

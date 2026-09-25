@@ -1,10 +1,10 @@
 import {execFileSync} from "node:child_process"
 
-// Runs `KeyFleet.BrowserChain` on the browser test server, which
+// Runs `Keyfleet.BrowserChain` on the browser test server, which
 // playwright.chain.config.ts starts as a named node. Each call boots a small
 // node that listens for nobody, calls in, prints the answer and stops.
 function call(fun: string, args: (string | number)[]): string {
-  const target = `KeyFleet.BrowserChain, :${fun}, [${args.map(arg => JSON.stringify(arg)).join(", ")}]`
+  const target = `Keyfleet.BrowserChain, :${fun}, [${args.map(arg => JSON.stringify(arg)).join(", ")}]`
   const script = `
     case :rpc.call(:"keyfleet_browser@127.0.0.1", ${target}) do
       {:badrpc, reason} -> raise "the browser test server refused: " <> inspect(reason)

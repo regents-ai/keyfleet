@@ -1,10 +1,10 @@
-defmodule KeyFleetWeb.AgentProposalController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.AgentProposalController do
+  use KeyfleetWeb, :controller
 
-  alias KeyFleet.Chain
-  alias KeyFleet.Fleets
-  alias KeyFleet.Proposals
-  alias KeyFleetWeb.ProposalJSON
+  alias Keyfleet.Chain
+  alias Keyfleet.Fleets
+  alias Keyfleet.Proposals
+  alias KeyfleetWeb.ProposalJSON
 
   @votes_page 20
 

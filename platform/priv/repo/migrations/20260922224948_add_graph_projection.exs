@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddGraphProjection do
+defmodule Keyfleet.Repo.Migrations.AddGraphProjection do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

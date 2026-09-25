@@ -1,12 +1,12 @@
-defmodule KeyFleetWeb.Live.ProposalsPageTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.Live.ProposalsPageTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.ProposalHelpers
-  alias KeyFleet.Proposals
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Proposals
 
   @fleet "fibonacci_syndicate"
   @list "/app/fleets/fibonacci_syndicate/proposals"
@@ -15,7 +15,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
   @holder ProposalHelpers.wallet("1")
   @votes "0x" <> String.duplicate("9", 40)
   @fleet_contract "0x" <> String.duplicate("7", 40)
-  @rule KeyFleetWeb.ProposalsLive.pass_rule()
+  @rule KeyfleetWeb.ProposalsLive.pass_rule()
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -460,7 +460,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
           "#{@list}?before=x",
           "#{@list}/1?votes_after=-1"
         ] do
-      assert_raise KeyFleetWeb.NotFoundError, fn -> live(conn, path) end
+      assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
     end
   end
 
@@ -492,7 +492,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     assert has_element?(view, "#proposal-yes", "0 keys")
 
     Phoenix.PubSub.broadcast(
-      KeyFleet.PubSub,
+      Keyfleet.PubSub,
       Proposals.topic(@fleet),
       {:proposals_changed, @fleet}
     )
@@ -512,7 +512,7 @@ defmodule KeyFleetWeb.Live.ProposalsPageTest do
     assert has_element?(view, "#proposals-budget-pending")
 
     Phoenix.PubSub.broadcast(
-      KeyFleet.PubSub,
+      Keyfleet.PubSub,
       Proposals.topic(@fleet),
       {:balances_changed, @fleet}
     )

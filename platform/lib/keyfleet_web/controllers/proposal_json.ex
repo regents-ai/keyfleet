@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.ProposalJSON do
+defmodule KeyfleetWeb.ProposalJSON do
   @moduledoc """
   Proposals as the agent API answers them. Amounts and times the contracts
   hold as any uint are decimal strings. Text the chain holds as bytes is

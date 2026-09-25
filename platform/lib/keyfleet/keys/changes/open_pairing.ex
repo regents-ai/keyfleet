@@ -1,4 +1,4 @@
-defmodule KeyFleet.Keys.Changes.OpenPairing do
+defmodule Keyfleet.Keys.Changes.OpenPairing do
   @moduledoc """
   Opens one agent's attachment to a key under the owner the key has right now.
 
@@ -8,12 +8,12 @@ defmodule KeyFleet.Keys.Changes.OpenPairing do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Keys.Errors.AlreadyOperatingError
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
-  alias KeyFleet.Keys.Errors.ProfileRequiredError
-  alias KeyFleet.Keys.Errors.UnknownKeyError
-  alias KeyFleet.Keys.PairingLedger
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Keys.Errors.AlreadyOperatingError
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Keys.Errors.ProfileRequiredError
+  alias Keyfleet.Keys.Errors.UnknownKeyError
+  alias Keyfleet.Keys.PairingLedger
 
   @impl true
   def change(changeset, _opts, %{actor: %Agent{wallet_address: wallet} = actor}) do
@@ -22,9 +22,9 @@ defmodule KeyFleet.Keys.Changes.OpenPairing do
       token_id = Ash.Changeset.get_argument(changeset, :token_id)
       PairingLedger.lock_key!(fleet_id, token_id)
 
-      case {KeyFleet.Chain.fresh?(fleet_id),
-            KeyFleet.Keys.current_key!(fleet_id, token_id, actor: actor),
-            KeyFleet.Agents.get_my_profile!(actor: actor)} do
+      case {Keyfleet.Chain.fresh?(fleet_id),
+            Keyfleet.Keys.current_key!(fleet_id, token_id, actor: actor),
+            Keyfleet.Agents.get_my_profile!(actor: actor)} do
         {false, _epoch, _profile} ->
           Ash.Changeset.add_error(
             changeset,
@@ -65,7 +65,7 @@ defmodule KeyFleet.Keys.Changes.OpenPairing do
   # An agent already running the key has nothing to ask for, and a second row
   # would only end the one it is running under.
   defp operating?(epoch, profile, actor) do
-    case KeyFleet.Keys.current_operator!(epoch.fleet_id, epoch.token_id, actor: actor) do
+    case Keyfleet.Keys.current_operator!(epoch.fleet_id, epoch.token_id, actor: actor) do
       nil -> false
       operator -> operator.agent_profile_id == profile.id
     end

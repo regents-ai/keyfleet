@@ -1,4 +1,4 @@
-defmodule KeyFleet.TestPrivyVerifier do
+defmodule Keyfleet.TestPrivyVerifier do
   @moduledoc false
 
   @identity_suffix "-identity"
@@ -19,7 +19,7 @@ defmodule KeyFleet.TestPrivyVerifier do
   Only an access token names a session and only its own partner is that
   session's signed evidence, so a swapped, reused or unpaired token is no pair
   at all and never reaches the session boundary. Refusals carry the same tagged
-  classification `KeyFleet.Privy` returns.
+  classification `Keyfleet.Privy` returns.
   """
   def verify_session_pair(%{access: access, identity: identity})
       when is_binary(access) and is_binary(identity) do
@@ -32,7 +32,7 @@ defmodule KeyFleet.TestPrivyVerifier do
 
   def verify_access_token("valid") do
     {:ok,
-     %KeyFleet.VerifiedPrivyIdentity{
+     %Keyfleet.VerifiedPrivyIdentity{
        session_id: "browser-session",
        privy_user_id: "did:privy:verified",
        wallet_address: "0x1111111111111111111111111111111111111111",
@@ -42,7 +42,7 @@ defmodule KeyFleet.TestPrivyVerifier do
 
   def verify_access_token("no-wallet") do
     {:ok,
-     %KeyFleet.VerifiedPrivyIdentity{
+     %Keyfleet.VerifiedPrivyIdentity{
        session_id: "browser-session",
        privy_user_id: "did:privy:verified",
        wallet_address: nil,
@@ -52,7 +52,7 @@ defmodule KeyFleet.TestPrivyVerifier do
 
   def verify_access_token("changed-wallet") do
     {:ok,
-     %KeyFleet.VerifiedPrivyIdentity{
+     %Keyfleet.VerifiedPrivyIdentity{
        session_id: "browser-session",
        privy_user_id: "did:privy:verified",
        wallet_address: "0x2222222222222222222222222222222222222222",
@@ -62,7 +62,7 @@ defmodule KeyFleet.TestPrivyVerifier do
 
   def verify_access_token("other-account") do
     {:ok,
-     %KeyFleet.VerifiedPrivyIdentity{
+     %Keyfleet.VerifiedPrivyIdentity{
        session_id: "other-browser-session",
        privy_user_id: "did:privy:other",
        wallet_address: "0x3333333333333333333333333333333333333333",
@@ -72,7 +72,7 @@ defmodule KeyFleet.TestPrivyVerifier do
 
   def verify_access_token("conflicting-social") do
     {:ok,
-     %KeyFleet.VerifiedPrivyIdentity{
+     %Keyfleet.VerifiedPrivyIdentity{
        session_id: "conflicting-social-session",
        privy_user_id: "did:privy:conflicting-social",
        wallet_address: "0x5555555555555555555555555555555555555555",

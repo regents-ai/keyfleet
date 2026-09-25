@@ -1,19 +1,19 @@
-defmodule KeyFleet.ProposalsTest do
+defmodule Keyfleet.ProposalsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Chain
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.ContractSchema
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.ProposalHelpers
-  alias KeyFleet.Proposals
-  alias KeyFleet.Proposals.{Execution, Proposal}
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
-  alias KeyFleet.Treasury
-  alias KeyFleetWeb.ProposalJSON
+  alias Keyfleet.Actors
+  alias Keyfleet.Chain
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.{Execution, Proposal}
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.Treasury
+  alias KeyfleetWeb.ProposalJSON
 
   @fleet "fibonacci_syndicate"
   @owner ProposalHelpers.wallet("a")
@@ -160,7 +160,7 @@ defmodule KeyFleet.ProposalsTest do
       # has missed, and touches no proposal of its own.
       :telemetry.attach(
         "saved-while-reading-changes",
-        [:key_fleet, :repo, :query],
+        [:keyfleet, :repo, :query],
         fn _event, _measurements, meta, _config ->
           if self() == test_pid and meta.source == "proposals" and
                :atomics.compare_exchange(saved, 1, 0, 1) == :ok do

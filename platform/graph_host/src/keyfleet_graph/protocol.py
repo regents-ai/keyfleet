@@ -133,7 +133,7 @@ class Command(_Shape):
     id: Id
     principal: str
     # Resolved by the gateway from the acting key and the fleet's sales, never
-    # by the member; see `KeyFleet.Graph.Checks.KeyActor`.
+    # by the member; see `Keyfleet.Graph.Checks.KeyActor`.
     writable_scopes: Annotated[list[Scope], Field(max_length=MAX_WRITABLE_SCOPES)]
     auth: Auth
 

@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.SessionAuthorityHelpers do
+defmodule KeyfleetWeb.SessionAuthorityHelpers do
   @moduledoc """
   Mints the durable session authority every test connection carries.
 
@@ -8,7 +8,7 @@ defmodule KeyFleetWeb.SessionAuthorityHelpers do
   otherwise have to accept on trust.
   """
 
-  alias KeyFleet.Accounts.SessionAuthority
+  alias Keyfleet.Accounts.SessionAuthority
 
   @doc "A test connection that reaches a connected mount the way a browser does."
   def build_conn, do: connects_with_own_cookie(Phoenix.ConnTest.build_conn())

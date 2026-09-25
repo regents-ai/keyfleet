@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeyReveals do
+defmodule Keyfleet.Repo.Migrations.KeyReveals do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

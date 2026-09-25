@@ -1,20 +1,20 @@
-defmodule KeyFleet.Keys.PairingLedger do
+defmodule Keyfleet.Keys.PairingLedger do
   @moduledoc """
   The writes that keep one key's pairings consistent with each other.
 
-  Each caller is an action on `KeyFleet.Keys.KeyPairing` whose own policy has
+  Each caller is an action on `Keyfleet.Keys.KeyPairing` whose own policy has
   already admitted the owner or the operator, so the consequences it draws on
   the key's other pairings run as the system.
   """
 
   require Ash.Query
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Keys.KeyPairing
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Keys.KeyPairing
 
   @doc "Holds every pairing decision for one key in line until the transaction commits."
   def lock_key!(fleet_id, token_id) do
-    KeyFleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    Keyfleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
       Jason.encode!(["key_pairing", fleet_id, token_id])
     ])
   end

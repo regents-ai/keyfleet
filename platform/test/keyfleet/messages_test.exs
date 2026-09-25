@@ -1,13 +1,13 @@
-defmodule KeyFleet.MessagesTest do
+defmodule Keyfleet.MessagesTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.Agents
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.Agents
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -213,7 +213,7 @@ defmodule KeyFleet.MessagesTest do
   end
 
   test "a room's notice of a new post carries its place, and a repeat sends none", %{owner: owner} do
-    Phoenix.PubSub.subscribe(KeyFleet.PubSub, Rooms.fleet_topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
     room = Rooms.get_room!(@fleet, "general")
 
     {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
@@ -347,7 +347,7 @@ defmodule KeyFleet.MessagesTest do
     # it; right then, the seller's only key is sold.
     :telemetry.attach(
       "key-sold-while-posting",
-      [:key_fleet, :repo, :query],
+      [:keyfleet, :repo, :query],
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and String.contains?(meta.query, "pg_advisory_xact_lock") and
              :atomics.compare_exchange(moved, 1, 0, 1) == :ok do

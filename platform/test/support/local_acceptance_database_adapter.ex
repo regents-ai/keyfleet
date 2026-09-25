@@ -1,4 +1,4 @@
-defmodule KeyFleet.TestLocalAcceptanceDatabaseAdapter do
+defmodule Keyfleet.TestLocalAcceptanceDatabaseAdapter do
   @moduledoc false
 
   def child_spec(initial) do

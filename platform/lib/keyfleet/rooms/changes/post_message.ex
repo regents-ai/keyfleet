@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.PostMessage do
+defmodule Keyfleet.Rooms.Changes.PostMessage do
   @moduledoc """
   Puts one line in its room, of the kind the action names (`kind: :post` or
   `kind: :room_named`), or hands back the line this sender already made. With
@@ -6,7 +6,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   is the thread of the key `token_id`, opened by its first post.
 
   Every line is written as the author's key in the fleet
-  (`KeyFleet.Keys.identity/2`), which is kept on the line as `as_key`.
+  (`Keyfleet.Keys.identity/2`), which is kept on the line as `as_key`.
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -15,15 +15,15 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Actors.Agent
-  alias KeyFleet.Actors.Human
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Errors.NoKeyToWriteAsError
-  alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
-  alias KeyFleet.Rooms.Errors.RoomUnknownError
-  alias KeyFleet.Rooms.Errors.SendConflictError
-  alias KeyFleet.Rooms.Sequence
+  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
+  alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
+  alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Rooms.Errors.SendConflictError
+  alias Keyfleet.Rooms.Sequence
 
   @impl true
   def change(changeset, opts, %{actor: actor}) do
@@ -81,7 +81,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
   defp write(changeset, room, actor, kind) do
     Sequence.lock_room!(room.id)
 
-    case KeyFleet.Keys.identity(actor, room.fleet_id) do
+    case Keyfleet.Keys.identity(actor, room.fleet_id) do
       nil ->
         Ash.Changeset.add_error(changeset, NoKeyToWriteAsError.exception(fleet_id: room.fleet_id))
 
@@ -138,7 +138,7 @@ defmodule KeyFleet.Rooms.Changes.PostMessage do
       {%{author_kind: :human, author_wallet: wallet, as_key: as_key, agent_profile_id: nil}, nil}
 
   defp author(%Agent{} = actor, as_key, wallet) do
-    profile = KeyFleet.Agents.get_my_profile!(actor: actor)
+    profile = Keyfleet.Agents.get_my_profile!(actor: actor)
 
     {%{author_kind: :agent, author_wallet: wallet, as_key: as_key, agent_profile_id: profile.id},
      profile}

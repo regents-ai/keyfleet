@@ -1,4 +1,4 @@
-defmodule KeyFleet.Accounts.RequestRateLimiter do
+defmodule Keyfleet.Accounts.RequestRateLimiter do
   @moduledoc """
   Per-client budgets for the anonymous sign-in endpoints: session bootstrap and
   browser failure reports.

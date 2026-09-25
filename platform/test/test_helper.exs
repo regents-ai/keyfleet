@@ -1,3 +1,3 @@
 ExUnit.start(exclude: [external: true])
-KeyFleet.LocalDatabaseFixture.ensure_human_accounts!()
-Ecto.Adapters.SQL.Sandbox.mode(KeyFleet.Repo, :manual)
+Keyfleet.LocalDatabaseFixture.ensure_human_accounts!()
+Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual)

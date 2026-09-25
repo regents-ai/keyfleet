@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.KeeperStopState do
+defmodule Keyfleet.Repo.Migrations.KeeperStopState do
   @moduledoc """
   Lets a keeper run record why the keeper stopped, and a later run that
   resumes it: a stop, and only a stop, names one of the known reasons.

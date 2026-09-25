@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.ShowcaseLive do
+defmodule KeyfleetWeb.ShowcaseLive do
   @moduledoc "Loopback-only component workshop. Demo state lives in this LiveView."
-  use KeyFleetWeb, :live_view
-  alias KeyFleetWeb.Showcase.{Catalog, Sample, Utilities}
+  use KeyfleetWeb, :live_view
+  alias KeyfleetWeb.Showcase.{Catalog, Sample, Utilities}
   alias Regent.Primitives, as: P
   alias Regent.Structure, as: S
 
@@ -25,8 +25,8 @@ defmodule KeyFleetWeb.ShowcaseLive do
        result: nil,
        identities: [],
        connection_notice: nil,
-       route_spec: KeyFleetWeb.RouteCatalog.fetch!(:account),
-       account: %KeyFleet.AccessContext.AccountControl{
+       route_spec: KeyfleetWeb.RouteCatalog.fetch!(:account),
+       account: %Keyfleet.AccessContext.AccountControl{
          kind: :preview,
          label: "Fixture"
        }
@@ -35,11 +35,11 @@ defmodule KeyFleetWeb.ShowcaseLive do
 
   def render(%{live_action: :preview} = assigns) do
     ~H"""
-    <KeyFleetWeb.Layouts.app
+    <KeyfleetWeb.Layouts.app
       flash={%{"info" => "Layout flash · local preview"}}
       inner_content={nil}
     />
-    <KeyFleetWeb.Components.Shell.shell
+    <KeyfleetWeb.Components.Shell.shell
       route_spec={@route_spec}
       account_control={@account}
       shell_instance={0}
@@ -53,7 +53,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
           >Back to showcase</a>
         </div>
       </:content>
-    </KeyFleetWeb.Components.Shell.shell>
+    </KeyfleetWeb.Components.Shell.shell>
     """
   end
 
@@ -522,7 +522,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
               id="connections-detail"
               summary="Verified connections · local fixture"
             >
-              <KeyFleetWeb.Components.VerifiedConnections.verified_connections
+              <KeyfleetWeb.Components.VerifiedConnections.verified_connections
                 id="showcase-connections"
                 identities={@identities}
                 authenticated
@@ -844,7 +844,7 @@ defmodule KeyFleetWeb.ShowcaseLive do
     config = Application.get_env(:keyfleet, :privy, [])
 
     cond do
-      Application.get_env(:keyfleet, :privy_verifier, KeyFleet.Privy) != KeyFleet.Privy ->
+      Application.get_env(:keyfleet, :privy_verifier, Keyfleet.Privy) != Keyfleet.Privy ->
         :fixture
 
       Enum.all?([:app_id, :verification_key], fn key ->

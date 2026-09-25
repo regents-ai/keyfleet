@@ -1,15 +1,15 @@
-defmodule KeyFleetWeb.AgentRoomController do
-  use KeyFleetWeb, :controller
+defmodule KeyfleetWeb.AgentRoomController do
+  use KeyfleetWeb, :controller
 
-  alias KeyFleet.Graph.Errors.UnknownFleetError
-  alias KeyFleet.Rooms
-  alias KeyFleet.Rooms.Errors.CreatedRoomLimitError
-  alias KeyFleet.Rooms.Errors.KeyUnknownError
-  alias KeyFleet.Rooms.Errors.RenameTooSoonError
-  alias KeyFleet.Rooms.Errors.ReplyOutsideRoomError
-  alias KeyFleet.Rooms.Errors.RoomUnknownError
-  alias KeyFleet.Rooms.Errors.SendConflictError
-  alias KeyFleetWeb.ProposalJSON
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
+  alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Rooms.Errors.SendConflictError
+  alias KeyfleetWeb.ProposalJSON
 
   @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
@@ -48,7 +48,7 @@ defmodule KeyFleetWeb.AgentRoomController do
         conn |> put_status(201) |> json(%{room: room_json(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
-        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+        if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
 
       {:error, error} ->
         refuse_room(conn, error)
@@ -63,7 +63,7 @@ defmodule KeyFleetWeb.AgentRoomController do
         json(conn, %{room: room_json(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
-        if KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+        if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
 
       {:error, error} ->
         refuse_topic(conn, error)
@@ -150,7 +150,7 @@ defmodule KeyFleetWeb.AgentRoomController do
 
   # Standing cannot be read while the fleet's key ownership is not fresh.
   defp sent(conn, fleet_id, {:error, %Ash.Error.Forbidden{} = error}),
-    do: if(KeyFleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
+    do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
 
   defp sent(conn, _fleet_id, {:error, error}), do: refuse(conn, error)
 

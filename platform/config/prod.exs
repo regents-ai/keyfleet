@@ -1,6 +1,6 @@
 import Config
 
-config :keyfleet, KeyFleetWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
+config :keyfleet, KeyfleetWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
 # The graph files sit on the machine's volume; the image carries the host.
 config :keyfleet, :graph,

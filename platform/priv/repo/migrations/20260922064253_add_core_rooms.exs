@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddCoreRooms do
+defmodule Keyfleet.Repo.Migrations.AddCoreRooms do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

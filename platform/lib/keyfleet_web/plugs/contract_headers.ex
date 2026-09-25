@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Plugs.ContractHeaders do
+defmodule KeyfleetWeb.Plugs.ContractHeaders do
   @moduledoc """
   The product CLI reads two response headers from the served HTTP contract
   before it changes anything, and compares them with the values it was built

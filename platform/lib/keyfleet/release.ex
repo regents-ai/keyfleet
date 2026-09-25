@@ -1,4 +1,4 @@
-defmodule KeyFleet.Release do
+defmodule Keyfleet.Release do
   @moduledoc false
 
   @app :keyfleet
@@ -9,14 +9,14 @@ defmodule KeyFleet.Release do
   @missing_migration_table_error "no schema_migrations table: run bootstrap-staging first"
 
   def migration_config!(getenv \\ &System.get_env/1) do
-    KeyFleet.DatabaseConfig.release_config!(getenv)
+    Keyfleet.DatabaseConfig.release_config!(getenv)
   end
 
   def migrate do
     load_app()
-    Application.put_env(@app, KeyFleet.Repo, migration_config!())
+    Application.put_env(@app, Keyfleet.Repo, migration_config!())
 
-    Ecto.Migrator.with_repo(KeyFleet.Repo, fn repo -> repo.migrate!(migrations_path()) end)
+    Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo -> repo.migrate!(migrations_path()) end)
   end
 
   @doc """
@@ -36,8 +36,8 @@ defmodule KeyFleet.Release do
   # The path is the operator's own argument on the machine they are signed in to.
   # sobelow_skip ["Traversal.FileModule"]
   def seed_deployment!(path) do
-    fleets = path |> File.read!() |> Jason.decode!() |> KeyFleet.Fleets.record_deployments!()
-    KeyFleet.Rooms.bootstrap_rooms!()
+    fleets = path |> File.read!() |> Jason.decode!() |> Keyfleet.Fleets.record_deployments!()
+    Keyfleet.Rooms.bootstrap_rooms!()
 
     for fleet <- fleets do
       IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
@@ -55,7 +55,7 @@ defmodule KeyFleet.Release do
 
   @doc "Clears the stop through an already running repository, as `clear_fleet_stop/1` does."
   def clear_fleet_stop!(fleet_id) do
-    KeyFleet.Chain.clear_divergence!(fleet_id)
+    Keyfleet.Chain.clear_divergence!(fleet_id)
     IO.puts("#{fleet_id} will be read again.")
   end
 
@@ -69,17 +69,17 @@ defmodule KeyFleet.Release do
 
   @doc "Prints the keeper's status through an already running repository, as `keeper_status/0` does."
   def keeper_status! do
-    case Application.fetch_env!(@app, KeyFleet.Keeper)[:private_key] do
+    case Application.fetch_env!(@app, Keyfleet.Keeper)[:private_key] do
       nil ->
         IO.puts("Keeper off: KEYFLEET_KEEPER_PRIVATE_KEY is not set.")
 
       key ->
-        {:ok, wallet} = KeyFleet.Keeper.Wallet.new(key)
+        {:ok, wallet} = Keyfleet.Keeper.Wallet.new(key)
         IO.puts("Keeper wallet #{wallet.address}")
         print_keeper_stop()
         print_keeper_runs()
         {:ok, _started} = Application.ensure_all_started(:req)
-        print_keeper_chain(KeyFleet.Keeper.Node.configured(), wallet.address)
+        print_keeper_chain(Keyfleet.Keeper.Node.configured(), wallet.address)
     end
   end
 
@@ -92,7 +92,7 @@ defmodule KeyFleet.Release do
 
   @doc "Clears the keeper's stop through an already running repository, as `keeper_resume/0` does."
   def keeper_resume! do
-    case KeyFleet.Keeper.resume() do
+    case Keyfleet.Keeper.resume() do
       {:ok, nil} ->
         IO.puts("The keeper is not stopped.")
 
@@ -105,7 +105,7 @@ defmodule KeyFleet.Release do
   end
 
   defp print_keeper_stop do
-    case KeyFleet.Keeper.stopped() do
+    case Keyfleet.Keeper.stopped() do
       {:ok, nil} ->
         IO.puts("Not stopped")
 
@@ -120,7 +120,7 @@ defmodule KeyFleet.Release do
 
   defp print_keeper_runs do
     for job <- [:reveal, :income] do
-      case KeyFleet.Keeper.last_run!(job, actor: %KeyFleet.Actors.System{}) do
+      case Keyfleet.Keeper.last_run!(job, actor: %Keyfleet.Actors.System{}) do
         nil ->
           IO.puts("#{job}: no round recorded")
 
@@ -137,14 +137,14 @@ defmodule KeyFleet.Release do
   defp print_keeper_chain(node, address) do
     with {:ok, chain_id} <- node.chain_id(),
          {:ok, balance} <- node.balance(address) do
-      {:ok, %{settled: settled, waiting: waiting}} = KeyFleet.Keeper.spend(chain_id, address)
+      {:ok, %{settled: settled, waiting: waiting}} = Keyfleet.Keeper.spend(chain_id, address)
       waiting = Enum.sum(Map.values(waiting))
 
-      IO.puts("Chain #{chain_id}, balance #{KeyFleet.Keeper.eth(balance)} ETH")
+      IO.puts("Chain #{chain_id}, balance #{Keyfleet.Keeper.eth(balance)} ETH")
 
       IO.puts(
-        "Spent in the last 24 hours: #{KeyFleet.Keeper.eth(settled)} ETH, and up to " <>
-          "#{KeyFleet.Keeper.eth(waiting)} ETH more waiting (limit 0.01 ETH)"
+        "Spent in the last 24 hours: #{Keyfleet.Keeper.eth(settled)} ETH, and up to " <>
+          "#{Keyfleet.Keeper.eth(waiting)} ETH more waiting (limit 0.01 ETH)"
       )
 
       print_keeper_txs(chain_id, address)
@@ -157,7 +157,7 @@ defmodule KeyFleet.Release do
     IO.puts("Last 20 transactions:")
 
     for tx <-
-          KeyFleet.Keeper.list_latest_txs!(chain_id, address, actor: %KeyFleet.Actors.System{}) do
+          Keyfleet.Keeper.list_latest_txs!(chain_id, address, actor: %Keyfleet.Actors.System{}) do
       [
         tx.sent_at,
         tx.job,
@@ -179,9 +179,9 @@ defmodule KeyFleet.Release do
 
   defp with_release_repo(fun) do
     load_app()
-    Application.put_env(@app, KeyFleet.Repo, migration_config!())
+    Application.put_env(@app, Keyfleet.Repo, migration_config!())
 
-    {:ok, result, _started} = Ecto.Migrator.with_repo(KeyFleet.Repo, fn _repo -> fun.() end)
+    {:ok, result, _started} = Ecto.Migrator.with_repo(Keyfleet.Repo, fn _repo -> fun.() end)
     result
   end
 
@@ -213,16 +213,16 @@ defmodule KeyFleet.Release do
     end
 
     load_app()
-    Application.put_env(@app, KeyFleet.Repo, configuration!(opts, getenv))
+    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
     path = migrations_directory(opts)
 
-    Ecto.Migrator.with_repo(KeyFleet.Repo, fn repo ->
+    Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
       refuse_existing_state!(repo)
 
       # The fixture is the only definition of these tables' shape in the
       # repository, and the whole test suite runs on it. Calling it keeps
       # staging identical to that proven shape instead of copying it.
-      KeyFleet.LocalDatabaseFixture.create_shared_tables!()
+      Keyfleet.LocalDatabaseFixture.create_shared_tables!()
 
       repo.migrate!(path)
     end)
@@ -244,11 +244,11 @@ defmodule KeyFleet.Release do
   def pending_migrations_for_test(opts) when is_list(opts) do
     getenv = Keyword.get(opts, :getenv, &System.get_env/1)
     load_app()
-    Application.put_env(@app, KeyFleet.Repo, configuration!(opts, getenv))
+    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
     path = migrations_directory(opts)
 
     {:ok, {pending, applied_without_file}, _started} =
-      Ecto.Migrator.with_repo(KeyFleet.Repo, fn repo ->
+      Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
         collect_disagreements(repo, path)
       end)
 

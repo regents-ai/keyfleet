@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Supervisor do
+defmodule Keyfleet.Graph.Supervisor do
   @moduledoc """
   Runs one graph writer per catalog fleet beside the registry that names them.
 
@@ -26,7 +26,7 @@ defmodule KeyFleet.Graph.Supervisor do
   """
   use Supervisor
 
-  alias KeyFleet.Graph.Writer
+  alias Keyfleet.Graph.Writer
 
   @writer_opts [
     :data_dir,
@@ -49,12 +49,12 @@ defmodule KeyFleet.Graph.Supervisor do
 
     writers =
       opts
-      |> Keyword.get_lazy(:fleets, &KeyFleet.Fleets.catalog_ids/0)
+      |> Keyword.get_lazy(:fleets, &Keyfleet.Fleets.catalog_ids/0)
       |> Enum.map(&{Writer, [{:fleet_id, &1} | writer_opts]})
 
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: KeyFleet.Graph.Registry},
+        {Registry, keys: :unique, name: Keyfleet.Graph.Registry},
         %{
           id: :writers,
           type: :supervisor,

@@ -1,4 +1,4 @@
-defmodule KeyFleet.LocalAcceptanceScriptsTest do
+defmodule Keyfleet.LocalAcceptanceScriptsTest do
   use ExUnit.Case, async: true
 
   @setup_script Path.expand("bin/setup-local-acceptance")

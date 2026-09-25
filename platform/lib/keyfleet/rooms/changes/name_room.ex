@@ -1,4 +1,4 @@
-defmodule KeyFleet.Rooms.Changes.NameRoom do
+defmodule Keyfleet.Rooms.Changes.NameRoom do
   @moduledoc """
   Names an open room and says so in the room.
 
@@ -9,7 +9,7 @@ defmodule KeyFleet.Rooms.Changes.NameRoom do
   """
   use Ash.Resource.Change
 
-  alias KeyFleet.Rooms
+  alias Keyfleet.Rooms
 
   @impl true
   def change(changeset, _opts, %{actor: actor}) do
@@ -55,7 +55,7 @@ defmodule KeyFleet.Rooms.Changes.NameRoom do
   # Best effort: anyone reading the room reads it from the room itself.
   defp announce(changeset, {:ok, room} = result) do
     Phoenix.PubSub.broadcast(
-      KeyFleet.PubSub,
+      Keyfleet.PubSub,
       Rooms.fleet_topic(room.fleet_id),
       {:room_head, room.id, changeset.context.naming_line.seq}
     )

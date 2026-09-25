@@ -1,17 +1,17 @@
-defmodule KeyFleet.Fleets.Fleet do
+defmodule Keyfleet.Fleets.Fleet do
   @moduledoc """
   A fixed fleet with a stable machine identity and display name, and once it is
   deployed, the chain and contracts it lives at, the USDC its keys are paid in
   and the hash of the trait table its keys' traits are drawn from.
   """
   use Ash.Resource,
-    domain: KeyFleet.Fleets,
+    domain: Keyfleet.Fleets,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "fleets"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:id, "fleets_fixed_catalog",
@@ -85,7 +85,7 @@ defmodule KeyFleet.Fleets.Fleet do
         :trait_table_hash
       ]
 
-      validate KeyFleet.Fleets.Validations.SameDeployment
+      validate Keyfleet.Fleets.Validations.SameDeployment
     end
   end
 
@@ -95,7 +95,7 @@ defmodule KeyFleet.Fleets.Fleet do
     end
 
     policy action([:bootstrap, :record_deployment]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 

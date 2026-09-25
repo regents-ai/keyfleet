@@ -1,7 +1,7 @@
-defmodule KeyFleet.Chain.LaunchEnvelopes do
+defmodule Keyfleet.Chain.LaunchEnvelopes do
   @moduledoc """
   Reads the launch each recorded Autolaunch proposal approves.
-  `KeyFleet.Chain.Repeat` runs it every few seconds, apart from the reading
+  `Keyfleet.Chain.Repeat` runs it every few seconds, apart from the reading
   of the fleet's history, so a slow node never holds that up.
 
   The `AutolaunchProposed` log carries only the envelope's hash, so the vote
@@ -10,16 +10,16 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
   proposal's envelope hash, so it is the launch the proposal fixed, byte for
   byte, whichever block it is read at. A read that fails keeps nothing, and
   the proposals not read are answered as `{:error, {:launches_not_read,
-  [{number, reason}]}}`, so `KeyFleet.Chain.Repeat` logs them once and waits
+  [{number, reason}]}}`, so `Keyfleet.Chain.Repeat` logs them once and waits
   longer before trying again. A stopped fleet's record is waiting for an
   operator, so nothing is added to it. A launch kept is announced where the
   fleet's proposal pages listen.
   """
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Chain.Abi
-  alias KeyFleet.Proposals
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.Abi
+  alias Keyfleet.Proposals
 
   # cast sig "launchEnvelope(uint256)"
   @launch_envelope <<0xB3, 0xBC, 0xEA, 0xDB>>
@@ -50,7 +50,7 @@ defmodule KeyFleet.Chain.LaunchEnvelopes do
 
       if kept != [] do
         Phoenix.PubSub.broadcast(
-          KeyFleet.PubSub,
+          Keyfleet.PubSub,
           Proposals.topic(fleet.id),
           {:proposals_changed, fleet.id}
         )

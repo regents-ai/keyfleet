@@ -1,14 +1,14 @@
-defmodule KeyFleet.ProposalHelpers do
+defmodule Keyfleet.ProposalHelpers do
   @moduledoc """
   Records proposals, votes, executions, launches, budget receipts, launch
   income, budget payments, balance readings and asset details as the chain
   reader would, without a chain. Each record gets a chain event of its own. The
-  fleet needs a cursor first, as `KeyFleet.ChainHelpers.seed_cursor!/2` makes.
+  fleet needs a cursor first, as `Keyfleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Proposals
-  alias KeyFleet.Treasury
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Proposals
+  alias Keyfleet.Treasury
 
   @system %System{}
   @block_hash "0x" <> String.duplicate("b", 64)

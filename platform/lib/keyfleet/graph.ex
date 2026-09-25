@@ -1,10 +1,10 @@
-defmodule KeyFleet.Graph do
+defmodule Keyfleet.Graph do
   @moduledoc """
   Each fleet's shared workspace, kept in the fleet's own graph.
 
   Every call names its fleet. Writes go to the fleet's graph; a write names the
   key it acts as, `as_key`, and its own command id; see
-  `KeyFleet.Graph.Workspace`. Reads are open to anyone and are answered from
+  `Keyfleet.Graph.Workspace`. Reads are open to anyone and are answered from
   read tables the projector keeps copied from the graph's log, so a read never
   waits on a write. Each read says how far along the log it reflects, its
   `watermark`.
@@ -12,7 +12,7 @@ defmodule KeyFleet.Graph do
   use Ash.Domain
 
   resources do
-    resource KeyFleet.Graph.Workspace do
+    resource Keyfleet.Graph.Workspace do
       define :get_object, action: :get, args: [:fleet_id, :id]
       define :list_changes, action: :changes, args: [:fleet_id]
       define :create_object, action: :create, args: [:fleet_id]
@@ -22,21 +22,21 @@ defmodule KeyFleet.Graph do
       define :archive_object, action: :archive, args: [:fleet_id]
     end
 
-    resource KeyFleet.Graph.Cursor do
+    resource Keyfleet.Graph.Cursor do
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
       define :start_cursor, action: :start
       define :advance_cursor, action: :advance
       define :forget_cursor, action: :forget
     end
 
-    resource KeyFleet.Graph.Event do
+    resource Keyfleet.Graph.Event do
       define :read_events, action: :page, args: [:fleet_id, :after_seq, :limit]
       define :latest_activity, action: :activity, args: [:fleet_id]
       define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
     end
 
-    resource KeyFleet.Graph.Object do
+    resource Keyfleet.Graph.Object do
       define :read_object, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :read_objects, action: :with_ids, args: [:fleet_id, :ids]
       define :workspace_cards, action: :cards, args: [:fleet_id]
@@ -44,7 +44,7 @@ defmodule KeyFleet.Graph do
       define :project_objects, action: :project
     end
 
-    resource KeyFleet.Graph.Relation do
+    resource Keyfleet.Graph.Relation do
       define :read_relations_touching, action: :touching, args: [:fleet_id, :object_id, :limit]
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :project_relations, action: :project

@@ -1,4 +1,4 @@
-defmodule KeyFleet.Accounts.Changes.RefreshWalletEvidence do
+defmodule Keyfleet.Accounts.Changes.RefreshWalletEvidence do
   use Ash.Resource.Change
 
   @impl true

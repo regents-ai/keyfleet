@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Workspace.Relay do
+defmodule Keyfleet.Graph.Workspace.Relay do
   @moduledoc """
   Hands a workspace write to its fleet's writer as one graph operation.
 
@@ -11,7 +11,7 @@ defmodule KeyFleet.Graph.Workspace.Relay do
 
   An applied write is answered once the fleet's read tables have reached its
   place in the log, `head_seq`, or once the projector's wait has run out;
-  see `KeyFleet.Graph.Projector.await/3`. The answer's `watermark` says how
+  see `Keyfleet.Graph.Projector.await/3`. The answer's `watermark` says how
   far along the write's log the tables were known to be: at or past
   `head_seq`, a read made now includes the write.
   """
@@ -19,14 +19,14 @@ defmodule KeyFleet.Graph.Workspace.Relay do
 
   require Logger
 
-  alias KeyFleet.Graph.Checks.KeyActor
-  alias KeyFleet.Graph.Errors.IndeterminateError
-  alias KeyFleet.Graph.Errors.NotKeyHolderError
-  alias KeyFleet.Graph.Errors.RefusedError
-  alias KeyFleet.Graph.Errors.UnavailableError
-  alias KeyFleet.Graph.Projector
-  alias KeyFleet.Graph.Writer
-  alias KeyFleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Graph.Errors.IndeterminateError
+  alias Keyfleet.Graph.Errors.NotKeyHolderError
+  alias Keyfleet.Graph.Errors.RefusedError
+  alias Keyfleet.Graph.Errors.UnavailableError
+  alias Keyfleet.Graph.Projector
+  alias Keyfleet.Graph.Writer
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   @impl true
   def run(input, opts, context) do

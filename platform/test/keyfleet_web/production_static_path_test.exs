@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.ProductionStaticPathTest do
+defmodule KeyfleetWeb.ProductionStaticPathTest do
   use ExUnit.Case, async: true
 
   test "production loads Phoenix's digested static manifest" do
@@ -7,7 +7,7 @@ defmodule KeyFleetWeb.ProductionStaticPathTest do
     endpoint =
       config
       |> Keyword.fetch!(:keyfleet)
-      |> Keyword.fetch!(KeyFleetWeb.Endpoint)
+      |> Keyword.fetch!(KeyfleetWeb.Endpoint)
 
     assert endpoint[:cache_static_manifest] == "priv/static/cache_manifest.json"
   end
@@ -33,7 +33,7 @@ defmodule KeyFleetWeb.ProductionStaticPathTest do
       conn =
         :get
         |> Plug.Test.conn("/#{digested}?vsn=d")
-        |> KeyFleetWeb.Endpoint.call(KeyFleetWeb.Endpoint.init([]))
+        |> KeyfleetWeb.Endpoint.call(KeyfleetWeb.Endpoint.init([]))
 
       assert conn.status == 200
       assert conn.resp_body == File.read!(Path.join(static_dir, icon))

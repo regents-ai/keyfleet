@@ -1,4 +1,4 @@
-defmodule KeyFleet.Graph.Relation do
+defmodule Keyfleet.Graph.Relation do
   @moduledoc """
   One live link between two workspace objects, as the fleet's graph log last
   left it. A removed link has no row.
@@ -6,7 +6,7 @@ defmodule KeyFleet.Graph.Relation do
   Only the projector writes here; anyone may read.
   """
   use Ash.Resource,
-    domain: KeyFleet.Graph,
+    domain: Keyfleet.Graph,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
@@ -14,7 +14,7 @@ defmodule KeyFleet.Graph.Relation do
 
   postgres do
     table "graph_relations"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     references do
       reference(:cursor, on_delete: :delete)
@@ -85,7 +85,7 @@ defmodule KeyFleet.Graph.Relation do
     end
 
     policy action([:project, :remove]) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -104,11 +104,11 @@ defmodule KeyFleet.Graph.Relation do
     attribute :data, :map, allow_nil?: false, public?: true
 
     # The place in the log where the link was made.
-    attribute :created_seq, KeyFleet.Graph.Seq, allow_nil?: false, public?: true
+    attribute :created_seq, Keyfleet.Graph.Seq, allow_nil?: false, public?: true
   end
 
   relationships do
-    belongs_to :cursor, KeyFleet.Graph.Cursor do
+    belongs_to :cursor, Keyfleet.Graph.Cursor do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       define_attribute? false

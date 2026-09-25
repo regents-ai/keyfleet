@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Live.LaunchGateHook do
+defmodule KeyfleetWeb.Live.LaunchGateHook do
   @moduledoc """
   Keeps product LiveViews closed while the launch gate is closed. It covers
   mounts that reach the socket without a fresh request: reconnects and live
@@ -9,11 +9,11 @@ defmodule KeyFleetWeb.Live.LaunchGateHook do
   LiveView instead of asking for a new page, so every navigation is checked too.
   """
 
-  use KeyFleetWeb, :verified_routes
+  use KeyfleetWeb, :verified_routes
 
   import Phoenix.LiveView, only: [attach_hook: 4, redirect: 2]
 
-  alias KeyFleetWeb.Plugs.LaunchGate
+  alias KeyfleetWeb.Plugs.LaunchGate
 
   def on_mount(:default, _params, _session, socket) do
     with {:cont, socket} <- app_gate(socket) do

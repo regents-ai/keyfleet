@@ -1,4 +1,4 @@
-# KeyFleet CLI
+# Keyfleet CLI
 
 The command-line workspace for this product. It is a pnpm workspace with one
 package, `@keyfleet/cli`, which publishes the `keyfleet` command.

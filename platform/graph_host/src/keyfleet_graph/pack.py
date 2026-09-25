@@ -178,7 +178,7 @@ RELATION_ENDPOINTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 PACK = Pack(
     name=PACK_NAME,
     version=PACK_VERSION,
-    description="KeyFleet shared work graph.",
+    description="Keyfleet shared work graph.",
     object_types=[ObjectType(name, model) for name, model in RECORD_MODELS.items()],
     relation_types=[
         RelationType(name, source_types=sources, target_types=targets)

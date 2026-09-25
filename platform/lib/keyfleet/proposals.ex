@@ -1,4 +1,4 @@
-defmodule KeyFleet.Proposals do
+defmodule Keyfleet.Proposals do
   @moduledoc """
   A fleet's proposals, the votes cast on them, their executions and the
   launches they approve, recorded from its vote contract by the chain reader
@@ -9,10 +9,10 @@ defmodule KeyFleet.Proposals do
 
   require Ash.Query
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.Chain
-  alias KeyFleet.Proposals.{Execution, LaunchEnvelope, Proposal, Vote}
-  alias KeyFleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.Chain
+  alias Keyfleet.Proposals.{Execution, LaunchEnvelope, Proposal, Vote}
+  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
 
   @page 20
   @changes_page 50
@@ -21,7 +21,7 @@ defmodule KeyFleet.Proposals do
   @summary [:yes_keys, :no_keys, :execution, :launch_envelope, :fleet_launched?]
 
   resources do
-    resource KeyFleet.Proposals.Proposal do
+    resource Keyfleet.Proposals.Proposal do
       define :record_proposal, action: :record
       define :get_proposal, action: :read, get_by: [:fleet_id, :number], not_found_error?: false
 
@@ -37,11 +37,11 @@ defmodule KeyFleet.Proposals do
       define :launches_without_envelope, action: :launches_without_envelope, args: [:fleet_id]
     end
 
-    resource KeyFleet.Proposals.LaunchEnvelope do
+    resource Keyfleet.Proposals.LaunchEnvelope do
       define :record_launch_envelope, action: :record
     end
 
-    resource KeyFleet.Proposals.Vote do
+    resource Keyfleet.Proposals.Vote do
       define :record_vote, action: :record
 
       define :votes_recorded_in_blocks,
@@ -49,7 +49,7 @@ defmodule KeyFleet.Proposals do
         args: [:fleet_id, :from_block, :to_block]
     end
 
-    resource KeyFleet.Proposals.Execution do
+    resource Keyfleet.Proposals.Execution do
       define :record_execution, action: :record
 
       define :executions_recorded_in_blocks,

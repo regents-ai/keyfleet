@@ -30,7 +30,7 @@ Review the files, then load them and start the app:
 
 ```sh
 direnv allow
-mix key_fleet.setup_local_auth
+mix keyfleet.setup_local_auth
 mix phx.server
 ```
 

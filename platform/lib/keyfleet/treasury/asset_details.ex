@@ -1,7 +1,7 @@
-defmodule KeyFleet.Treasury.AssetDetails do
+defmodule Keyfleet.Treasury.AssetDetails do
   @moduledoc """
   The symbol and decimals a token of a fleet's budget or payment proposals
-  reports, read by `KeyFleet.Chain.TreasuryReader`. Either is nil when the
+  reports, read by `Keyfleet.Chain.TreasuryReader`. Either is nil when the
   token does not answer it, or answers a symbol that is not short plain text,
   and its amounts are then shown in whole atomic units. Once both are known
   they never change; a budget token with either unknown is read again, and
@@ -9,13 +9,13 @@ defmodule KeyFleet.Treasury.AssetDetails do
   is shown without its address.
   """
   use Ash.Resource,
-    domain: KeyFleet.Treasury,
+    domain: Keyfleet.Treasury,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   postgres do
     table "treasury_asset_details"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:asset, "treasury_asset_details_asset_shape",
@@ -56,7 +56,7 @@ defmodule KeyFleet.Treasury.AssetDetails do
     end
 
     policy action(:record) do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 
@@ -73,7 +73,7 @@ defmodule KeyFleet.Treasury.AssetDetails do
   end
 
   relationships do
-    belongs_to :fleet, KeyFleet.Fleets.Fleet do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
       allow_nil? false
       public? true

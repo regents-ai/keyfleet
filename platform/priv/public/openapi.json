@@ -1,10 +1,10 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "KeyFleet public API",
+    "title": "Keyfleet public API",
     "version": "1.0.0",
     "description": "Service health and the signed-in person's own profile. Does not describe browser session changes.",
-    "contact": {"name": "KeyFleet"}
+    "contact": {"name": "Keyfleet"}
   },
   "security": [],
   "paths": {

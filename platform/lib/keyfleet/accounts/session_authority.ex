@@ -1,4 +1,4 @@
-defmodule KeyFleet.Accounts.SessionAuthority do
+defmodule Keyfleet.Accounts.SessionAuthority do
   @moduledoc """
   The durable authority behind one browser session lineage.
 
@@ -21,16 +21,16 @@ defmodule KeyFleet.Accounts.SessionAuthority do
   """
 
   use Ash.Resource,
-    domain: KeyFleet.Accounts,
+    domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   require Ash.Query
 
-  alias KeyFleet.Accounts
-  alias KeyFleet.Accounts.VerifiedSession
-  alias KeyFleet.Actors.{Human, System}
-  alias KeyFleet.Repo
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.VerifiedSession
+  alias Keyfleet.Actors.{Human, System}
+  alias Keyfleet.Repo
 
   @actor %System{}
   @lineage_bytes 32
@@ -44,7 +44,7 @@ defmodule KeyFleet.Accounts.SessionAuthority do
 
   postgres do
     table "session_authorities"
-    repo(KeyFleet.Repo)
+    repo(Keyfleet.Repo)
 
     check_constraints do
       check_constraint(:generation, "session_authorities_generation_nonnegative",
@@ -67,7 +67,7 @@ defmodule KeyFleet.Accounts.SessionAuthority do
   end
 
   relationships do
-    belongs_to :human_account, KeyFleet.Accounts.HumanAccount do
+    belongs_to :human_account, Keyfleet.Accounts.HumanAccount do
       attribute_type :integer
     end
   end
@@ -117,7 +117,7 @@ defmodule KeyFleet.Accounts.SessionAuthority do
 
   policies do
     policy always() do
-      authorize_if KeyFleet.Checks.SystemActor
+      authorize_if Keyfleet.Checks.SystemActor
     end
   end
 

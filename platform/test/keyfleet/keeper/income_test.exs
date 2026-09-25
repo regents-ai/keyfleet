@@ -1,12 +1,12 @@
-defmodule KeyFleet.Keeper.IncomeTest do
+defmodule Keyfleet.Keeper.IncomeTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
-  import KeyFleet.KeeperHelpers
+  import Keyfleet.KeeperHelpers
 
-  alias KeyFleet.Actors.System
-  alias KeyFleet.{Fleets, Keeper, KeeperHelpers, Repo}
-  alias KeyFleet.Keeper.{Income, StubNode}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Fleets, Keeper, KeeperHelpers, Repo}
+  alias Keyfleet.Keeper.{Income, StubNode}
 
   @fleet_id "fibonacci_syndicate"
   @fleet KeeperHelpers.address(:fleet)

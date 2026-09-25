@@ -1,11 +1,11 @@
-defmodule KeyFleet.Rooms do
+defmodule Keyfleet.Rooms do
   @moduledoc "Fleet-scoped rooms for native chat, and a public thread for every key."
   use Ash.Domain
 
   require Ash.Query
 
-  alias KeyFleet.Rooms.Errors.RoomUnknownError
-  alias KeyFleet.Rooms.Room
+  alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Rooms.Room
 
   # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
   # hundred created ones.
@@ -16,7 +16,7 @@ defmodule KeyFleet.Rooms do
   @max_seq 9_223_372_036_854_775_807
 
   resources do
-    resource KeyFleet.Rooms.Room do
+    resource Keyfleet.Rooms.Room do
       define :list_rooms, action: :for_fleet, args: [:fleet_id]
       define :get_room, action: :in_fleet, args: [:fleet_id, :slug], not_found_error?: false
       define :create_room, action: :create
@@ -30,7 +30,7 @@ defmodule KeyFleet.Rooms do
       define :open_key_thread, action: :open_key_thread, args: [:fleet_id, :token_id]
     end
 
-    resource KeyFleet.Rooms.Message do
+    resource Keyfleet.Rooms.Message do
       define :send_message, action: :send_message
       define :note_room_named, action: :note_room_named
       define :read_messages, action: :read_messages, args: [:fleet_id, :slug]
@@ -61,13 +61,13 @@ defmodule KeyFleet.Rooms do
 
   `graph_after_seq` says how far the caller has read the workspace's log. The
   workspace answers with at most 100 of its changes after that point, as
-  `KeyFleet.Graph.list_changes/3` does, with `next_cursor` to send next time and
+  `Keyfleet.Graph.list_changes/3` does, with `next_cursor` to send next time and
   `run_id`: a different `run_id` from the one the caller last saw means the log
   started over, and the caller reads it again from 0.
 
   `proposals_after_seq` says how far the caller has read the fleet's proposal
   records. Proposals answer with the ones changed after that point, as
-  `KeyFleet.Proposals.changes/3` does.
+  `Keyfleet.Proposals.changes/3` does.
 
   `next_poll_seconds` is when to ask again: at once while anything has more
   waiting, otherwise between 15 and 30 seconds, spread so callers do not all
@@ -80,13 +80,13 @@ defmodule KeyFleet.Rooms do
          :ok <- in_log(graph_after_seq),
          :ok <- in_log(proposals_after_seq),
          {:ok, graph} <-
-           KeyFleet.Graph.list_changes(
+           Keyfleet.Graph.list_changes(
              fleet_id,
              %{after_seq: graph_after_seq, limit: @graph_sync_page},
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
-      proposals = KeyFleet.Proposals.changes(fleet_id, proposals_after_seq, DateTime.utc_now())
+      proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq, DateTime.utc_now())
 
       {:ok,
        %{
@@ -203,7 +203,7 @@ defmodule KeyFleet.Rooms do
 
   @doc "Tells everyone watching the fleet's rooms that its list of rooms has changed."
   def rooms_changed(fleet_id) do
-    Phoenix.PubSub.broadcast(KeyFleet.PubSub, fleet_topic(fleet_id), {:rooms_changed, fleet_id})
+    Phoenix.PubSub.broadcast(Keyfleet.PubSub, fleet_topic(fleet_id), {:rooms_changed, fleet_id})
   end
 
   @doc """
@@ -215,7 +215,7 @@ defmodule KeyFleet.Rooms do
   internal entry point must never be exposed as a user action.
   """
   def bootstrap_rooms! do
-    fleets = KeyFleet.Fleets.list_fleets!() |> Enum.sort_by(& &1.id)
+    fleets = Keyfleet.Fleets.list_fleets!() |> Enum.sort_by(& &1.id)
 
     if not match?([_, _, _, _], fleets) do
       raise "Room bootstrap requires the complete fixed fleet catalog"
@@ -228,7 +228,7 @@ defmodule KeyFleet.Rooms do
 
     %Ash.BulkResult{records: rooms} =
       Ash.bulk_create!(inputs, Room, :bootstrap,
-        actor: %KeyFleet.Actors.System{},
+        actor: %Keyfleet.Actors.System{},
         return_records?: true,
         return_errors?: true,
         stop_on_error?: true,

@@ -1,8 +1,8 @@
-defmodule KeyFleetWeb.HomeLiveTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.HomeLiveTest do
+  use KeyfleetWeb.ConnCase, async: false
 
-  alias KeyFleet.{Actors, ChainHelpers, Fleets, Keys}
-  alias KeyFleetWeb.HomeLive
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys}
+  alias KeyfleetWeb.HomeLive
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell

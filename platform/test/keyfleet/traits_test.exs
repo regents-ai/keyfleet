@@ -1,7 +1,7 @@
-defmodule KeyFleet.TraitsTest do
+defmodule Keyfleet.TraitsTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Traits
+  alias Keyfleet.Traits
 
   # keccak256 of the fixture table, byte for byte, and so its file name in
   # test/support/fixtures/trait_tables.

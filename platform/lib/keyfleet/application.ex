@@ -1,4 +1,4 @@
-defmodule KeyFleet.Application do
+defmodule Keyfleet.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -11,40 +11,40 @@ defmodule KeyFleet.Application do
   def start(_type, _args) do
     children =
       [
-        KeyFleetWeb.Telemetry,
-        {KeyFleet.Accounts.RequestRateLimiter, []},
+        KeyfleetWeb.Telemetry,
+        {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
-        {Phoenix.PubSub, name: KeyFleet.PubSub},
+        {Phoenix.PubSub, name: Keyfleet.PubSub},
         # A key's profile reads its rewards wherever the site runs, so their
         # table stands apart from the fleets' readers below.
-        KeyFleet.Chain.RewardsWaiting,
+        Keyfleet.Chain.RewardsWaiting,
         chain_child(),
         keeper_child(),
         graph_children(),
-        # Start a worker by calling: KeyFleet.Worker.start_link(arg)
-        # {KeyFleet.Worker, arg},
+        # Start a worker by calling: Keyfleet.Worker.start_link(arg)
+        # {Keyfleet.Worker, arg},
         # Start to serve requests, typically the last entry
-        KeyFleetWeb.Endpoint
+        KeyfleetWeb.Endpoint
       ]
       |> List.flatten()
       |> Enum.reject(&is_nil/1)
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: KeyFleet.Supervisor]
+    opts = [strategy: :one_for_one, name: Keyfleet.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
-      do: KeyFleet.Repo
+      do: Keyfleet.Repo
   end
 
   # Fleets are read from the chain only where a node is configured, which the
   # test build never is.
   defp chain_child do
-    if Application.fetch_env!(:keyfleet, KeyFleet.Chain)[:rpc_url],
-      do: KeyFleet.Chain.Supervisor
+    if Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:rpc_url],
+      do: Keyfleet.Chain.Supervisor
   end
 
   # The keeper signs only with its key, which only production reads, and
@@ -54,7 +54,7 @@ defmodule KeyFleet.Application do
   @doc false
   def keeper_child do
     cond do
-      is_nil(Application.fetch_env!(:keyfleet, KeyFleet.Keeper)[:private_key]) ->
+      is_nil(Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:private_key]) ->
         Logger.info(
           "Keeper off: no KEYFLEET_KEEPER_PRIVATE_KEY in production; nothing on this site sends transactions."
         )
@@ -62,7 +62,7 @@ defmodule KeyFleet.Application do
         nil
 
       Application.get_env(:keyfleet, :database_startup_enabled, false) ->
-        Supervisor.child_spec(KeyFleet.Keeper.Supervisor, restart: :temporary)
+        Supervisor.child_spec(Keyfleet.Keeper.Supervisor, restart: :temporary)
 
       true ->
         Logger.info(
@@ -77,14 +77,14 @@ defmodule KeyFleet.Application do
   # after the writers.
   defp graph_children do
     if Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :enabled),
-      do: [KeyFleet.Graph.Supervisor, KeyFleet.Graph.Projectors]
+      do: [Keyfleet.Graph.Supervisor, Keyfleet.Graph.Projectors]
   end
 
   # Tell Phoenix to update the endpoint configuration
   # whenever the application is updated.
   @impl true
   def config_change(changed, _new, removed) do
-    KeyFleetWeb.Endpoint.config_change(changed, removed)
+    KeyfleetWeb.Endpoint.config_change(changed, removed)
     :ok
   end
 end

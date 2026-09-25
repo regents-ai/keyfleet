@@ -1,10 +1,10 @@
-defmodule KeyFleetWeb.LaunchGateTest do
-  use KeyFleetWeb.ConnCase, async: false
+defmodule KeyfleetWeb.LaunchGateTest do
+  use KeyfleetWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
 
-  alias KeyFleetWeb.Live.LaunchGateHook
-  alias KeyFleetWeb.Plugs.LaunchGate
+  alias KeyfleetWeb.Live.LaunchGateHook
+  alias KeyfleetWeb.Plugs.LaunchGate
 
   @gated_shell_paths ~w(/account /app/fleets/fibonacci_syndicate)
   @closed_message "This part of the site isn't open yet."
@@ -108,7 +108,7 @@ defmodule KeyFleetWeb.LaunchGateTest do
       |> String.trim()
 
     assert home.status == 200
-    assert title == "KeyFleet"
+    assert title == "Keyfleet"
     refute home.resp_body =~ "Not open yet"
 
     assert get(build_conn(), "/healthz").status == 200

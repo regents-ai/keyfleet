@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.PayProposalsOneVotePerKey do
+defmodule Keyfleet.Repo.Migrations.PayProposalsOneVotePerKey do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

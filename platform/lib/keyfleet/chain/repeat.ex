@@ -1,7 +1,7 @@
-defmodule KeyFleet.Chain.Repeat do
+defmodule Keyfleet.Chain.Repeat do
   @moduledoc """
   Runs one chain read for one deployed fleet again and again, apart from the
-  `KeyFleet.Chain.Poller`, so a slow read never holds up the reading of the
+  `Keyfleet.Chain.Poller`, so a slow read never holds up the reading of the
   fleet's history: `module.read(fleet, client)` now and then every `every`
   milliseconds.
 
@@ -16,7 +16,7 @@ defmodule KeyFleet.Chain.Repeat do
 
   require Logger
 
-  alias KeyFleet.Chain.Client
+  alias Keyfleet.Chain.Client
 
   @longest_wait 5 * 60 * 1_000
 

@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.KeyMapShowcaseLive do
+defmodule KeyfleetWeb.KeyMapShowcaseLive do
   @moduledoc """
   Local reference for the key map, with made-up sales, owners and agents, so
   the map can be tried at its largest size without a chain or a database.
@@ -6,9 +6,9 @@ defmodule KeyFleetWeb.KeyMapShowcaseLive do
   level 19 a few rows in: the map draws all of it, with levels 1 to 18 sold
   out, 19 on sale and 20 next.
   """
-  use KeyFleetWeb, :live_view
+  use KeyfleetWeb, :live_view
 
-  alias KeyFleetWeb.KeyMap
+  alias KeyfleetWeb.KeyMap
 
   @fleets [
     %{layout: "fibonacci", name: "Fibonacci", max_supply: 46_365, minted: 17_768},

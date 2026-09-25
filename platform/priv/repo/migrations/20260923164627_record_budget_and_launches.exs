@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.RecordBudgetAndLaunches do
+defmodule Keyfleet.Repo.Migrations.RecordBudgetAndLaunches do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 

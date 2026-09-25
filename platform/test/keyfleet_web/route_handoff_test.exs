@@ -1,7 +1,7 @@
-defmodule KeyFleetWeb.RouteHandoffTest do
+defmodule KeyfleetWeb.RouteHandoffTest do
   use ExUnit.Case, async: true
 
-  alias KeyFleetWeb.RouteCatalog
+  alias KeyfleetWeb.RouteCatalog
 
   @json_path "priv/handoff/founder-shell-route-catalog.json"
   @digest_path "priv/handoff/founder-shell-route-catalog.sha256"

@@ -1,12 +1,12 @@
-defmodule KeyFleet.KeyThreadRaceTest do
+defmodule Keyfleet.KeyThreadRaceTest do
   use ExUnit.Case, async: false
 
-  alias KeyFleet.Actors
-  alias KeyFleet.ChainHelpers
-  alias KeyFleet.Fleets
-  alias KeyFleet.Keys
-  alias KeyFleet.Repo
-  alias KeyFleet.Rooms
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   # Each post runs on a connection of its own and commits. The thread, its
   # posts, the keys and the fleet's key reading are all removed when the test

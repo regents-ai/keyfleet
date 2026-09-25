@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.Components.Loading do
+defmodule KeyfleetWeb.Components.Loading do
   @moduledoc "Layout-preserving placeholders for independently loaded page regions."
   use Phoenix.Component
 

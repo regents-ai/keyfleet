@@ -1,4 +1,4 @@
-defmodule KeyFleetWeb.KeyProfileLive do
+defmodule KeyfleetWeb.KeyProfileLive do
   @moduledoc """
   One key's profile, open over its fleet's page while the address names the
   key: its card, what is known about it and the wallet holding it, the
@@ -11,11 +11,11 @@ defmodule KeyFleetWeb.KeyProfileLive do
   number, level and price, and a way to buy it.
   """
 
-  use KeyFleetWeb, :html
+  use KeyfleetWeb, :html
 
-  alias KeyFleetWeb.FleetLive
-  alias KeyFleetWeb.KeyLinks
-  alias KeyFleetWeb.RoomsLive
+  alias KeyfleetWeb.FleetLive
+  alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.RoomsLive
 
   attr :profile, :map, required: true
   attr :fleet, :map, required: true

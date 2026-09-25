@@ -1,4 +1,4 @@
-defmodule KeyFleet.Repo.Migrations.AddFleetCatalog do
+defmodule Keyfleet.Repo.Migrations.AddFleetCatalog do
   @moduledoc """
   Updates resources based on their most recent snapshots.
 
