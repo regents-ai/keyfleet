@@ -3,9 +3,9 @@ defmodule Keyfleet.Graph.Cursor do
   How far one fleet's graph log has been copied into the read tables, and
   from which run of that log.
 
-  The read tables hang off this row: removing it removes every event, object
-  and relation copied for the fleet, and the copy then starts again from the
-  beginning of the log. Only the projector writes here; anyone may read.
+  The read tables hang off this row: removing it removes every event, object,
+  relation and launch plan revision copied for the fleet, and the copy then
+  starts again from the beginning of the log. Only the projector writes here; anyone may read.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,

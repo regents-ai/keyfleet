@@ -6,6 +6,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
+  alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Graph.Projection
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
@@ -19,7 +20,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
   @system %Actors.System{}
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
-  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
+  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation, Graph.LaunchPlanRevision]
   @page_bytes 512 * 1024
 
   setup %{tmp_dir: tmp_dir} = context do
@@ -52,6 +53,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert length(copied[Graph.Relation]) == 2
     assert [%{run_id: ^run_id, applied_seq: ^head}] = copied[Graph.Cursor]
 
+    assert copied[Graph.LaunchPlanRevision]
+           |> Enum.map(&{&1.object_id, &1.version})
+           |> Enum.sort() ==
+             [{ids.plan, 1}, {ids.plan, 2}]
+
     # Each object last changed at its creation or its latest patch.
     last_changes =
       for %{type: type} = event <- Enum.sort_by(copied[Graph.Event], & &1.seq),
@@ -59,7 +65,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
           into: %{},
           do: {event.payload["id"] || event.payload["target"], event}
 
-    assert map_size(last_changes) == 4
+    assert map_size(last_changes) == 5
 
     for {id, event} <- last_changes do
       assert {objects[id].changed_seq, objects[id].changed_at} == {event.seq, event.timestamp}
@@ -253,6 +259,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     [event | _] = copied[Graph.Event]
     [object | _] = copied[Graph.Object]
     [relation | _] = copied[Graph.Relation]
+    [revision | _] = copied[Graph.LaunchPlanRevision]
 
     relations =
       Ash.Query.for_read(Graph.Relation, :with_ids, %{fleet_id: @fleet, ids: [relation.id]})
@@ -269,6 +276,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
             fn -> Graph.record_events!([Map.drop(event, [:byte_size])], opts) end,
             fn -> Graph.project_objects!([object], opts) end,
             fn -> Graph.project_relations!([relation], opts) end,
+            fn -> Graph.project_launch_plan_revisions!([revision], opts) end,
             fn -> Graph.remove_relations!(relations, opts) end,
             fn ->
               Graph.start_cursor!(%{fleet_id: @other_fleet, run_id: "log_x"}, actor: actor)
@@ -446,6 +454,74 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert read.changed_seq > unlinked
   end
 
+  test "each version of a launch plan is kept under its own digest, the one a read of it answers" do
+    start_projector(catch_up_interval: 60_000)
+    run_id = log_id()
+
+    {:ok, %{"head_seq" => created, "result" => %{"id" => plan}}} =
+      command(
+        "create",
+        %{
+          type: "launch_card",
+          scope: "fleet",
+          data: %{title: "Research fund", discussion: [%{room: "voting", seq: 1}]}
+        },
+        "c-1"
+      )
+
+    assert Projector.await(@fleet, run_id, created) == created
+
+    # Each patch on a page of its own, so it folds over the version the
+    # tables hold.
+    for {set, version} <- [
+          {%{what_we_sell: "A weekly brief."}, 1},
+          {%{name: "Research Fund", symbol: "RSF"}, 2}
+        ] do
+      head = write!("patch", %{id: plan, expected_version: version, set: set}, "c-#{version + 1}")
+      assert Projector.await(@fleet, run_id, head) == head
+    end
+
+    revisions =
+      @fleet
+      |> Graph.current_launch_plan_revisions!(
+        for(version <- 1..3, do: %{object_id: plan, version: version}),
+        actor: nil
+      )
+      |> Enum.sort_by(& &1.version)
+
+    assert Enum.map(revisions, & &1.version) == [1, 2, 3]
+    assert revisions |> Enum.map(& &1.digest) |> Enum.uniq() |> length() == 3
+
+    # Version 2 as the graph stores it: every field of the plan, the empty
+    # ones as null, and not where it was discussed.
+    blank =
+      Map.new(
+        ~w(title who_we_serve what_we_sell what_works why_raise commitments narrative name symbol
+           description website image required_regent_raised),
+        &{&1, nil}
+      )
+
+    second_plan = %{blank | "title" => "Research fund", "what_we_sell" => "A weekly brief."}
+    [_first, second, third] = revisions
+    assert second.data == second_plan
+    assert second.digest == LaunchPlanDigest.digest(@fleet, plan, 2, second_plan)
+
+    # A reader of the plan gets the digest of the version it reads, and can
+    # compute it from what it read.
+    {:ok, read} = Graph.get_object(@fleet, plan, actor: nil)
+    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+    assert read.launch_digest == third.digest
+
+    assert read.launch_digest ==
+             LaunchPlanDigest.digest(@fleet, plan, read.object.version, read.object.data)
+
+    # A proposal's digest finds the version it names, and only that one.
+    unknown = "0x" <> String.duplicate("0", 64)
+
+    assert [%{object_id: ^plan, version: 2}] =
+             Graph.launch_plan_revisions!(@fleet, [second.digest, unknown], actor: nil)
+  end
+
   # The place and time of the latest creation or patch of the object.
   defp last_change(id) do
     tables()[Graph.Event]
@@ -457,8 +533,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
     |> then(&{&1.seq, &1.timestamp})
   end
 
-  # Four objects, three links (one removed again), a patch and an archive.
-  # Answers the log's head and the goal's and task's ids.
+  # Five objects, three links (one removed again), two patches and an
+  # archive. Answers the log's head and the goal's, task's and launch plan's
+  # ids.
   defp build_workspace do
     goal = created!("goal", %{title: "Revenue", outcome: "One paying customer."}, "g-1")
 
@@ -479,6 +556,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
     evidence =
       created!("evidence", %{title: "Interview", source_uri: "https://example.com/i"}, "e-1")
 
+    plan = created!("launch_card", %{title: "Research fund launch"}, "c-1")
+    write!("patch", %{id: plan, expected_version: 1, set: %{symbol: "RSF"}}, "c-2")
+
     write!("link", %{source: task, target: goal, type: "implements"}, "l-1")
     write!("link", %{source: evidence, target: service, type: "supports"}, "l-2")
 
@@ -488,7 +568,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     write!("unlink", %{relation_id: removed}, "u-1")
     write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "p-1")
     head = write!("archive", %{id: goal, expected_version: 1}, "a-1")
-    {head, %{goal: goal, task: task}}
+    {head, %{goal: goal, task: task, plan: plan}}
   end
 
   # Copies a workspace, replaces the log file with a fresh one, writes to it
@@ -515,6 +595,8 @@ defmodule Keyfleet.Graph.ProjectionTest do
     titles = for object <- tables()[Graph.Object], do: object.data["title"]
     assert titles != [] and Enum.all?(titles, &String.starts_with?(&1, "Fresh"))
     assert tables()[Graph.Relation] == []
+    # The old log's launch plan versions are gone with it.
+    assert tables()[Graph.LaunchPlanRevision] == []
     assert [%{run_id: ^new_run, applied_seq: ^new_head}] = tables()[Graph.Cursor]
 
     {:ok, changes} = Graph.list_changes(@fleet, %{after_seq: 0, limit: 500}, actor: nil)

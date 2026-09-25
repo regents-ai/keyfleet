@@ -1253,14 +1253,44 @@ components:
     WorkspaceObjectView:
       type: object
       additionalProperties: false
-      required: [object, relations, relations_has_more, watermark]
+      required: [object, relations, relations_has_more, launch_digest, watermark]
       properties:
         object: {$ref: "#/components/schemas/WorkspaceObject"}
         relations:
           type: array
           items: {$ref: "#/components/schemas/WorkspaceRelation"}
         relations_has_more: {type: boolean}
+        launch_digest: {$ref: "#/components/schemas/LaunchPlanDigest"}
         watermark: {$ref: "#/components/schemas/WorkspaceWatermark"}
+    LaunchPlanDigest:
+      type: [string, "null"]
+      pattern: '^0x[0-9a-f]{64}$'
+      description: |-
+        For a launch_card, the digest of the version answered; null for every other type. A launch
+        proposal that puts this value in its LaunchEnvelope.narrativeDigest points to exactly this
+        version of this plan, and the proposal records it as its digest.
+
+        digest = "0x" + lowercase hex of SHA-256 over the UTF-8 bytes of
+        "keyfleet-launch-plan-v1\n" followed by canonical_json({"fleet": fleet_id, "item": object.id,
+        "version": object.version, "plan": plan}).
+
+        plan is object.data with exactly these thirteen fields, each a string or null, all always
+        present: title, who_we_serve, what_we_sell, what_works, why_raise, commitments, narrative,
+        name, symbol, description, website, image, required_regent_raised. discussion and sys are
+        left out.
+
+        canonical_json is RFC 8785 (JSON Canonicalization Scheme): keys sorted, no whitespace,
+        integers in decimal, strings as UTF-8 with only the quote and backslash escaped, \b \f \n
+        \r \t in short form and other characters below U+0020 as \u00xx in lowercase hex. In
+        Python: json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode().
+
+        Example: fleet_id "fibonacci_cascade", id "launch_card#4", version 2 and plan
+        {"title": "Cascade Research \"v1\"", "who_we_serve": "Funds that read filings",
+        "what_we_sell": "A weekly brief\n\tin plain words", "what_works": null, "why_raise": null,
+        "commitments": null, "narrative": "Café ☕ — naïve 🚀 back\\slash", "name": "Cascade Research",
+        "symbol": "CSR", "description": null, "website": "https://example.test/a/b", "image": null,
+        "required_regent_raised": "250000.5"} give
+        0xb03009c6a6684970069520afd2e49bc7004e23ed5c6a73b4f0b9d26872985738.
     WorkspaceObject:
       type: object
       additionalProperties: false

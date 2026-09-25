@@ -7,10 +7,12 @@ defmodule Keyfleet.ProposalsChainTest do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.{LaunchEnvelopes, Logs, Scanner, StubClient}
   alias Keyfleet.Fleets
+  alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Treasury
+  alias Keyfleet.WorkspaceFixtures
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -916,6 +918,38 @@ defmodule Keyfleet.ProposalsChainTest do
   end
 
   describe "reading launches" do
+    # The contract records a launch's narrativeDigest as its proposal's
+    # digest, so a launch plan version's digest leads from the proposal back
+    # to the exact version its keys read.
+    test "a launch that carries a launch plan's digest points to that plan version",
+         %{fleet: fleet} do
+      WorkspaceFixtures.open_log(@fleet)
+      plan = WorkspaceFixtures.create(@fleet, "launch_card", %{"title" => "Research fund"})
+      WorkspaceFixtures.edit(@fleet, plan, %{"name" => "Research Fund", "symbol" => "RSF"})
+      WorkspaceFixtures.edit(@fleet, plan, %{"symbol" => "RSFD"})
+
+      [%{digest: digest}] =
+        Graph.current_launch_plan_revisions!(@fleet, [%{object_id: plan, version: 2}], actor: nil)
+
+      texts = ["Research Fund", "RSF", "A fleet's research", "https://example.test", "ipfs://r"]
+      returned = encoded_envelope(texts, 250_000, bytes(digest))
+
+      StubClient.put_chain(
+        head(@deployed + 10),
+        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned), digest: digest),
+        calls: fn _to, _data, _block_hash -> {:ok, returned} end
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
+
+      proposal = Proposals.get_proposal!(@fleet, 1)
+      assert proposal.digest == digest
+
+      assert [%{object_id: ^plan, version: 2, data: %{"symbol" => "RSF"}}] =
+               Graph.launch_plan_revisions!(@fleet, [proposal.digest], actor: nil)
+    end
+
     # The launch is read apart from the pass, at the head, and kept byte for
     # byte, text that is not valid text included, and only once.
     test "a launch proposal's launch is read at the head and kept exactly", %{fleet: fleet} do
@@ -1298,11 +1332,14 @@ defmodule Keyfleet.ProposalsChainTest do
   defp payload_for(payload, number),
     do: %{payload | "topics" => List.replace_at(payload["topics"], 1, hex(<<number::256>>))}
 
+  # A launch proposal; its digest is the envelope hash unless `:digest` names
+  # the narrativeDigest it carries.
   defp autolaunch(number, block, log_index, opts \\ []) do
     envelope = opts |> Keyword.get(:envelope_hash, "0x" <> String.duplicate("a1", 32)) |> bytes()
+    digest = opts |> Keyword.get(:digest, hex(envelope)) |> bytes()
 
     [
-      created(number, 1, block, log_index, "", envelope),
+      created(number, 1, block, log_index, "", digest),
       log(
         @votes,
         [@autolaunch, <<number::256>>],
@@ -1413,9 +1450,9 @@ defmodule Keyfleet.ProposalsChainTest do
     )
   end
 
-  # What `launchEnvelope` returns for a launch of these five texts and raise:
-  # the struct's offset, then the struct.
-  defp encoded_envelope(texts, raise) do
+  # What `launchEnvelope` returns for a launch of these five texts, raise and
+  # narrative digest (none unless given): the struct's offset, then the struct.
+  defp encoded_envelope(texts, raise, narrative_digest \\ <<0::256>>) do
     tails =
       Enum.map(texts, fn text ->
         padded = 32 * div(byte_size(text) + 31, 32)
@@ -1426,7 +1463,8 @@ defmodule Keyfleet.ProposalsChainTest do
 
     <<32::256>> <>
       Enum.join(offsets) <>
-      <<raise::256, 0::256, 18_446_744_073_709_551_615::256>> <> Enum.join(tails)
+      <<raise::256>> <>
+      narrative_digest <> <<18_446_744_073_709_551_615::256>> <> Enum.join(tails)
   end
 
   defp keccak(bytes), do: hex(ExKeccak.hash_256(bytes))

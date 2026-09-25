@@ -4,12 +4,14 @@ defmodule Keyfleet.Graph.Projection do
   its cursor stands.
 
   Each page is one database transaction: its events, the objects and links
-  they change, and the cursor moved past the page commit together, so a copy
-  that stops part way resumes at the first page it had not finished. The
-  cursor moves on only from where the page found it, so when two copies run
-  at once, the page of the one that is behind rolls back instead of moving the
-  cursor backwards. The cursor moves past every event it reads, including the
-  runtime's own bookkeeping, which is not copied.
+  they change, a revision for each version of a launch plan it makes (see
+  `Keyfleet.Graph.LaunchPlanRevision`), and the cursor moved past the page
+  commit together, so a copy that stops part way resumes at the first page
+  it had not finished. The cursor moves on only from where the page found
+  it, so when two copies run at once, the page of the one that is behind
+  rolls back instead of moving the cursor backwards. The cursor moves past
+  every event it reads, including the runtime's own bookkeeping, which is
+  not copied.
 
   The log names itself with `run_id`, minted when its file was created. A
   cursor from another log, or one past the log's head, was copied from a log
@@ -19,11 +21,12 @@ defmodule Keyfleet.Graph.Projection do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Graph
+  alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Graph.Writer
 
   @system %System{}
   @page 500
-  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
+  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation, Graph.LaunchPlanRevision]
 
   # What a reader of the workspace sees: every change to its objects and
   # links, what each write asks members to look at, and the command record
@@ -144,12 +147,19 @@ defmodule Keyfleet.Graph.Projection do
     folded =
       Enum.reduce(
         events,
-        %{objects: known, touched: MapSet.new(), links: %{}, unlinked: MapSet.new()},
+        %{
+          objects: known,
+          touched: MapSet.new(),
+          links: %{},
+          unlinked: MapSet.new(),
+          revisions: []
+        },
         &fold/2
       )
 
     write_objects(fleet_id, folded)
     write_links(fleet_id, folded)
+    write_revisions(fleet_id, folded)
   end
 
   defp fold(%{"type" => "object.created", "payload" => %{"object" => object}} = event, state) do
@@ -206,9 +216,17 @@ defmodule Keyfleet.Graph.Projection do
     %{
       state
       | objects: Map.put(state.objects, id, changed),
-        touched: MapSet.put(state.touched, id)
+        touched: MapSet.put(state.touched, id),
+        revisions: revise(state.revisions, id, changed)
     }
   end
+
+  # Every version of a launch plan is kept, not only its latest: a launch
+  # proposal points to the version its keys read.
+  defp revise(revisions, id, %{type: "launch_card"} = plan),
+    do: [Map.put(plan, :id, id) | revisions]
+
+  defp revise(revisions, _id, _object), do: revisions
 
   defp write_objects(fleet_id, %{objects: objects, touched: touched}) do
     rows =
@@ -247,6 +265,24 @@ defmodule Keyfleet.Graph.Projection do
       )
       |> Graph.remove_relations!(actor: @system)
     end
+  end
+
+  defp write_revisions(_fleet_id, %{revisions: []}), do: :ok
+
+  defp write_revisions(fleet_id, %{revisions: revisions}) do
+    revisions
+    |> Enum.reverse()
+    |> Enum.map(fn %{id: id, version: version, data: data, changed_seq: seq} ->
+      %{
+        fleet_id: fleet_id,
+        digest: LaunchPlanDigest.digest(fleet_id, id, version, data),
+        object_id: id,
+        version: version,
+        seq: seq,
+        data: LaunchPlanDigest.plan(data)
+      }
+    end)
+    |> Graph.project_launch_plan_revisions!(actor: @system)
   end
 
   # Answers `{:ok, value}` with what `fun` returned; a `fun` that answers

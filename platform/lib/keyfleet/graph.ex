@@ -50,6 +50,14 @@ defmodule Keyfleet.Graph do
       define :project_relations, action: :project
       define :remove_relations, action: :remove
     end
+
+    resource Keyfleet.Graph.LaunchPlanRevision do
+      define :launch_plan_revisions, action: :for_digests, args: [:fleet_id, :digests]
+
+      define :current_launch_plan_revisions, action: :current_for, args: [:fleet_id, :plans]
+
+      define :project_launch_plan_revisions, action: :project
+    end
   end
 
   @doc """

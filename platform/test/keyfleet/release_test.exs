@@ -208,6 +208,7 @@ defmodule Keyfleet.ReleaseTest do
              "fleets",
              "graph_cursors",
              "graph_events",
+             "graph_launch_plan_revisions",
              "graph_objects",
              "graph_relations",
              "keeper_runs",
