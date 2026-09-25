@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
+  alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.WorkspacePage
@@ -758,6 +759,26 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/rooms/general"]))
       assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/workspace"]))
       assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/proposals"]))
+    end
+
+    test "a payment carried out shows what it paid and to whom", %{conn: conn} do
+      recipient = "0x12ab" <> String.duplicate("0", 32) <> "cd34"
+      ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+
+      ProposalHelpers.proposal!(@fleet, 1,
+        kind: :pay,
+        asset: @usdc,
+        amount: 12_500_000,
+        recipient: recipient
+      )
+
+      ProposalHelpers.execution!(@fleet, 1, @owner)
+
+      {:ok, view, _html} = live(conn, @path)
+
+      line = ~s(#fleet-now-list li[data-kind="executed"])
+      assert has_element?(view, ~s(#{line} a[data-proposal="1"]))
+      assert text(view, "#{line} .activity-line__text") =~ "12.5 USDC to 0x12ab…cd34"
     end
 
     # The panels share one place beside the map: each button opens its own

@@ -12,7 +12,10 @@ defmodule KeyfleetWeb.ActivityLines do
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
     * `{:quote, text}`: words a member wrote, or a launch's name;
-    * `{:proposal, number}`: a proposal.
+    * `{:proposal, number}`: a proposal;
+    * `{:amount, text, token}`: an amount paid, as
+      `KeyfleetWeb.ProposalsPage.amount/3` words it, with its token's
+      address, or nil for the fleet's own USDC.
 
   Every member's words in the parts have been through
   `KeyfleetWeb.DirectoryMD.visible/1`, so none can hide or reverse the
@@ -20,15 +23,17 @@ defmodule KeyfleetWeb.ActivityLines do
   the one way every page writes them, "Key 1,234".
 
   `text/1` joins the parts for a web page, which escapes them itself.
-  `markdown/1` joins them for Markdown, passing every member's words through
-  `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
-  either.
+  `markdown/1` joins them for Markdown, passing every member's words, and
+  every amount in a token other than the fleet's USDC, whose symbol the
+  token chose, through `KeyfleetWeb.DirectoryMD.inline/2`, so none of them
+  can act as Markdown either.
   """
 
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.FleetLive
+  alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
   @created %{
@@ -41,8 +46,10 @@ defmodule KeyfleetWeb.ActivityLines do
     "note" => " wrote a note: "
   }
 
-  # How long a member's words may run in Markdown, by what they are.
-  @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160}
+  # How long words the site didn't write may run in Markdown, by what they
+  # are. An amount fits whole: any uint256 at up to 255 decimals, and its
+  # token's symbol.
+  @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160, amount: 400}
 
   @doc "The item as one sentence for a web page."
   def text(item), do: item |> parts() |> Enum.map_join(&shown/1) |> capitalized()
@@ -153,7 +160,7 @@ defmodule KeyfleetWeb.ActivityLines do
     do: [proposal(f), " was recorded as decided."]
 
   def parts(%{kind: :executed, facts: %{kind: :pay} = f}),
-    do: ["The fleet paid #{FleetLive.short_wallet(f.payment.recipient)} (", proposal(f), ")."]
+    do: ["The fleet paid " | paid(f.payment)] ++ [" (", proposal(f), ")."]
 
   def parts(%{kind: :executed, facts: %{kind: :autolaunch, launch: %{} = launch} = f}),
     do: ["The fleet launched ", launch(launch), " (", proposal(f), ")."]
@@ -295,8 +302,21 @@ defmodule KeyfleetWeb.ActivityLines do
   defp proposal_gist(%{kind: :autolaunch, launch: %{} = launch}),
     do: [" to launch ", launch(launch), "."]
 
-  defp proposal_gist(%{gist: gist}) when is_binary(gist), do: [": ", words(gist)]
-  defp proposal_gist(_facts), do: ["."]
+  defp proposal_gist(%{kind: :pay, payment: payment} = facts),
+    do: [" to pay " | paid(payment)] ++ gist(facts)
+
+  defp proposal_gist(facts), do: gist(facts)
+
+  defp gist(%{gist: gist}) when is_binary(gist), do: [": ", words(gist)]
+  defp gist(_facts), do: ["."]
+
+  # "12.5 USDC to 0x12ab…cd34".
+  defp paid(payment) do
+    %{text: text, token: token} =
+      ProposalsPage.amount(payment.amount, payment.asset, payment.assets)
+
+    [{:amount, text, token}, " to #{FleetLive.short_wallet(payment.recipient)}"]
+  end
 
   defp launch(%{name: name, symbol: symbol}), do: words("#{name} (#{symbol})")
 
@@ -327,6 +347,10 @@ defmodule KeyfleetWeb.ActivityLines do
   @doc ~S|How a proposal is named on a page: "Proposal 12".|
   def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
 
+  @doc ~S|How an amount is named on a page: "12.5 USDC", or "3 FOO 0xabcd…ef01" in any token but the fleet's USDC.|
+  def amount_name(text, nil), do: text
+  def amount_name(text, token), do: "#{text} #{FleetLive.short_wallet(token)}"
+
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
   defp shown({:item, _id, nil}), do: "an item"
@@ -335,6 +359,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:agent, name}), do: name
   defp shown({:quote, text}), do: "“#{text}”"
   defp shown({:proposal, number}), do: proposal_name(number)
+  defp shown({:amount, text, token}), do: amount_name(text, token)
 
   defp marked(text) when is_binary(text), do: text
   defp marked({:key, token_id, nil}), do: key_name(token_id, nil)
@@ -348,6 +373,10 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:agent, name}), do: said(name, :agent)
   defp marked({:quote, text}), do: said(text, :quote)
   defp marked({:proposal, number}), do: proposal_name(number)
+  defp marked({:amount, text, nil}), do: text
+
+  defp marked({:amount, text, token}),
+    do: said(text, :amount) <> " " <> FleetLive.short_wallet(token)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
 

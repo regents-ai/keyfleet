@@ -136,11 +136,15 @@ defmodule KeyfleetWeb.ProposalsPage do
   @doc "What a kind of proposal is called."
   def kind_name(kind), do: Map.fetch!(@kinds, kind)
 
-  # An amount of an asset, grouped: in its own units with its symbol when the
-  # token has reported both, and otherwise as the whole number the chain
-  # holds. Every asset but the fleet's own USDC, known by its address, comes
-  # with its address, so a token calling itself USDC is never taken for it.
-  defp amount(atoms, asset, %{usdc: usdc, details: details}) do
+  @doc """
+  An amount of an asset as every page shows it, `%{text: text, token: address
+  | nil}`, grouped: in its own units with its symbol when the token has
+  reported both, and otherwise as the whole number the chain holds. Every
+  asset but the fleet's own USDC, known by its address, comes with its
+  address as `token`, so a token calling itself USDC is never taken for it.
+  `assets` is as `Keyfleet.Treasury.assets/1` reads them.
+  """
+  def amount(atoms, asset, %{usdc: usdc, details: details}) do
     text =
       case {details[asset], asset == usdc} do
         {{symbol, decimals}, _usdc?} when is_binary(symbol) and is_integer(decimals) ->
@@ -191,7 +195,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   # What the forms for new proposals start from: each asset the budget
   # holds and a launch that can be carried out for 30 days.
   defp propose(fleet, balances, now) do
-    known = assets(fleet)
+    known = Treasury.assets(fleet)
 
     %{
       assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known)),
@@ -306,7 +310,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp pay(%{kind: :pay} = proposal, fleet),
     do: %{
-      amount: amount(Decimal.to_integer(proposal.amount), proposal.asset, assets(fleet)),
+      amount: amount(Decimal.to_integer(proposal.amount), proposal.asset, Treasury.assets(fleet)),
       recipient: proposal.recipient
     }
 
@@ -403,19 +407,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
   end
 
-  # The fleet's USDC, and each asset's symbol and decimals as its token
-  # reported them.
-  defp assets(fleet) do
-    %{
-      usdc: fleet.usdc_address,
-      details:
-        fleet.id
-        |> Treasury.asset_details!()
-        |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
-    }
-  end
-
-  defp treasury(fleet, balances), do: treasury(fleet, balances, assets(fleet))
+  defp treasury(fleet, balances), do: treasury(fleet, balances, Treasury.assets(fleet))
 
   defp treasury(fleet, nil, assets),
     do: Map.merge(history(fleet.id, assets), %{read?: false, nothing_owed?: false})

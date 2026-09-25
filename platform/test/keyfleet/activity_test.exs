@@ -2,7 +2,7 @@ defmodule Keyfleet.ActivityTest do
   use ExUnit.Case, async: false
 
   import Keyfleet.ProposalHelpers,
-    only: [proposal!: 3, vote!: 5, execution!: 3, launch_envelope!: 1]
+    only: [proposal!: 3, vote!: 5, execution!: 3, launch_envelope!: 1, asset_details!: 4]
 
   alias Keyfleet.Activity
   alias Keyfleet.Actors
@@ -429,6 +429,66 @@ defmodule Keyfleet.ActivityTest do
              {"Orbit runner", 1, :detached,
               %{fleet_id: @other_fleet, fleet_name: "Keyfleet Cascade", token_id: 3}}
            ]
+  end
+
+  test "a payment carries its token's details, read once however many payments a page holds" do
+    token = wallet("c")
+    asset_details!(@fleet, token, "FOO", 2)
+    asset_details!(@fleet, wallet("d"), "BAR", 0)
+    proposal!(@fleet, 1, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
+    execution!(@fleet, 1, wallet("f"))
+    {one, _page} = queries(fn -> Activity.page(@fleet, nil) end)
+
+    for number <- 2..5 do
+      proposal!(@fleet, number, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
+      execution!(@fleet, number, wallet("f"))
+    end
+
+    {five, %{items: items}} = queries(fn -> Activity.page(@fleet, nil) end)
+
+    assert five == one
+
+    payments =
+      for %{kind: kind, facts: facts} <- items, kind in [:proposed, :executed], do: facts.payment
+
+    assert length(payments) == 10
+
+    assert Enum.uniq(payments) == [
+             %{
+               asset: token,
+               amount: 1250,
+               recipient: wallet("b"),
+               assets: %{usdc: nil, details: %{token => {"FOO", 2}}}
+             }
+           ]
+  end
+
+  # How many database queries `read` makes, and what it answers.
+  defp queries(read) do
+    test = self()
+    handler = "activity-queries-#{inspect(test)}"
+
+    :telemetry.attach(
+      handler,
+      [:keyfleet, :repo, :query],
+      fn _, _, _, _ -> send(test, :query) end,
+      nil
+    )
+
+    try do
+      answer = read.()
+      {count_queries(0), answer}
+    after
+      :telemetry.detach(handler)
+    end
+  end
+
+  defp count_queries(count) do
+    receive do
+      :query -> count_queries(count + 1)
+    after
+      0 -> count
+    end
   end
 
   # Every page from the newest, `limit` items each, joined.

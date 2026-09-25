@@ -499,6 +499,11 @@ defmodule KeyfleetWeb.FleetLive do
 )}</.link>|
   end
 
+  defp activity_part(%{part: {:amount, text, token}} = assigns) do
+    assigns = assign(assigns, text: text, token: token)
+    ~H"{ActivityLines.amount_name(@text, @token)}"
+  end
+
   defp activity_part(assigns), do: ~H"{@part}"
 
   attr :fleet, :map, required: true

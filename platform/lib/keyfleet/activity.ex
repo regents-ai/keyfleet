@@ -56,8 +56,9 @@ defmodule Keyfleet.Activity do
       `proposer` (`%{wallet: wallet, token_id: n | nil}`, the lowest key the
       wallet holds today), `gist` (the first 160 characters of its text, or
       nil for a launch), `launch` (`%{name: name, symbol: symbol}` or nil) and
-      `payment` (`%{asset: address, amount: atomic units, recipient: address}`
-      or nil).
+      `payment` (`%{asset: address, amount: atomic units, recipient: address,
+      assets: assets}` or nil, where `assets` is the fleet's USDC and the
+      asset's symbol and decimals, as `Keyfleet.Treasury.assets/1` has them).
     * `:votes`: consecutive votes on one proposal: `number`, and `yes` and
       `no`, each `%{count: keys, token_ids: up to three, lowest first}`.
     * `:executed`: `number`, `kind`, `payment` and `launch` as for `:proposed`.
@@ -118,6 +119,7 @@ defmodule Keyfleet.Activity do
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.Treasury
 
   @type position :: nil | integer() | {DateTime.t(), term()}
   @type cursor :: %{
@@ -602,7 +604,12 @@ defmodule Keyfleet.Activity do
   # What a payment pays or a launch launches.
   defp offer(%{kind: :pay} = proposal) do
     %{
-      payment: %{asset: proposal.asset, amount: proposal.amount, recipient: proposal.recipient},
+      payment: %{
+        asset: proposal.asset,
+        amount: Decimal.to_integer(proposal.amount),
+        recipient: proposal.recipient,
+        assets: {:assets, proposal.asset}
+      },
       launch: nil
     }
   end
@@ -694,9 +701,9 @@ defmodule Keyfleet.Activity do
   defp agent(profile), do: %{id: profile.id, name: profile.name}
 
   # Naming: the facts hold references (`{:actor, token_id, wallet}`,
-  # `{:runner, token_id}`, `{:holder, wallet}`, `{:item, id}` and
-  # `{:elsewhere, agent_profile_id, ended_at}`), looked up together for the
-  # whole page, a batch per kind of reference.
+  # `{:runner, token_id}`, `{:holder, wallet}`, `{:item, id}`,
+  # `{:elsewhere, agent_profile_id, ended_at}` and `{:assets, asset}`), looked
+  # up together for the whole page, a batch per kind of reference.
   defp name([], _fleet_id), do: []
 
   defp name(entries, fleet_id) do
@@ -714,7 +721,8 @@ defmodule Keyfleet.Activity do
   defp refs(values) when is_list(values), do: Enum.flat_map(values, &refs/1)
 
   defp refs(ref)
-       when is_tuple(ref) and elem(ref, 0) in [:actor, :runner, :holder, :item, :elsewhere],
+       when is_tuple(ref) and
+              elem(ref, 0) in [:actor, :runner, :holder, :item, :elsewhere, :assets],
        do: [ref]
 
   defp refs(_value), do: []
@@ -725,7 +733,8 @@ defmodule Keyfleet.Activity do
       runner: runners(fleet_id, refs[:runner]),
       holder: holders(fleet_id, refs[:holder]),
       item: items(fleet_id, refs[:item]),
-      elsewhere: elsewhere(fleet_id, refs[:elsewhere])
+      elsewhere: elsewhere(fleet_id, refs[:elsewhere]),
+      assets: assets(fleet_id, refs[:assets])
     }
   end
 
@@ -790,6 +799,10 @@ defmodule Keyfleet.Activity do
     end)
   end
 
+  # The fleet's assets are read once for every payment on the page.
+  defp assets(_fleet_id, nil), do: nil
+  defp assets(fleet_id, _refs), do: fleet_id |> Fleets.get_fleet!() |> Treasury.assets()
+
   defp resolve(facts, names) when is_map(facts) and not is_struct(facts),
     do: Map.new(facts, fn {key, value} -> {key, resolve(value, names)} end)
 
@@ -822,6 +835,9 @@ defmodule Keyfleet.Activity do
         nil
     end
   end
+
+  defp resolve({:assets, asset}, %{assets: assets}),
+    do: %{assets | details: Map.take(assets.details, [asset])}
 
   defp resolve(value, _names), do: value
 

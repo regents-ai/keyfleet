@@ -84,6 +84,19 @@ defmodule Keyfleet.Treasury do
     Enum.uniq([fleet.usdc_address | reward_assets] ++ recorded)
   end
 
+  @doc """
+  What an amount of the fleet's assets is shown with: `%{usdc: address,
+  details: %{asset => {symbol, decimals}}}`, the fleet's USDC and each
+  asset's symbol and decimals as its token reported them, either nil when
+  the token has not said.
+  """
+  def assets(fleet) do
+    %{
+      usdc: fleet.usdc_address,
+      details: fleet.id |> asset_details!() |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+    }
+  end
+
   defp assets_of(query, fleet_id) do
     query
     |> Ash.Query.filter(fleet_id == ^fleet_id)

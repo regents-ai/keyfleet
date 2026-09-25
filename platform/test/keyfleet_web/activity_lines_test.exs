@@ -10,6 +10,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - an item whose title has nothing to see still has words to link
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
+  # - a payment names its amount as the proposal pages do, and whom it paid;
+  #   a symbol a token chose is escaped in Markdown, and its address named
 
   @post %{
     id: "post:1",
@@ -75,5 +77,60 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert {:proposal, 12} in ActivityLines.parts(votes)
     assert ActivityLines.text(votes) == "Key 1,234 voted yes on Proposal 12."
     assert ActivityLines.markdown(votes) == "Key 1,234 voted yes on Proposal 12."
+  end
+
+  @usdc "0x" <> String.duplicate("e", 40)
+  @token "0x" <> String.duplicate("c", 40)
+  @recipient "0x12ab" <> String.duplicate("0", 32) <> "cd34"
+
+  test "a payment carried out names its amount and whom it paid" do
+    in_usdc = paid(@usdc, {"USDC", 6}, 12_500_000)
+    assert ActivityLines.text(in_usdc) == "The fleet paid 12.5 USDC to 0x12ab…cd34 (Proposal 3)."
+    assert ActivityLines.markdown(in_usdc) == ActivityLines.text(in_usdc)
+
+    in_token = paid(@token, {"*X*", 2}, 1250)
+
+    assert ActivityLines.text(in_token) ==
+             "The fleet paid 12.5 *X* 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+
+    assert ActivityLines.markdown(in_token) ==
+             ~S"The fleet paid “12.5 \*X\*” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+  end
+
+  test "a payment put to a vote names its amount and whom it would pay" do
+    proposed = %{
+      id: "proposal:1",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :proposed,
+      facts: %{
+        number: 3,
+        kind: :pay,
+        proposer: %{wallet: @recipient, token_id: 4},
+        gist: "Pay the designer",
+        launch: nil,
+        payment: payment(@usdc, {"USDC", 6}, 12_500_000)
+      }
+    }
+
+    assert ActivityLines.text(proposed) ==
+             "The holder of key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab…cd34: “Pay the designer”"
+  end
+
+  defp paid(asset, details, amount) do
+    %{
+      id: "executed:1",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :executed,
+      facts: %{number: 3, kind: :pay, launch: nil, payment: payment(asset, details, amount)}
+    }
+  end
+
+  defp payment(asset, details, amount) do
+    %{
+      asset: asset,
+      amount: amount,
+      recipient: @recipient,
+      assets: %{usdc: @usdc, details: %{asset => details}}
+    }
   end
 end
