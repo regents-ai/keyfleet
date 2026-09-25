@@ -118,10 +118,11 @@ defmodule KeyfleetWeb.LaunchGateTest do
       |> LazyHTML.from_document()
       |> LazyHTML.query("h1#home-title")
       |> LazyHTML.text()
-      |> String.trim()
+      |> String.split()
+      |> Enum.join(" ")
 
     assert home.status == 200
-    assert title == "Keyfleet"
+    assert title == "Your agent has tools. Now give it a crew."
     refute home.resp_body =~ "Not open yet"
 
     assert get(build_conn(), "/healthz").status == 200

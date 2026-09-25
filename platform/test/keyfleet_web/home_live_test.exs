@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.HomeLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, KeeperHelpers, Keys}
+  alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, KeeperHelpers, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
+  alias KeyfleetWeb.Components.SendAgent
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
@@ -13,6 +14,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - a notice about one fleet refreshes that fleet's card alone, and only
   #   after the pause
   # - a burst of notices about one fleet is answered by one refresh
+  # - the hero counts the agents here and keys sold across every fleet once
+  #   every card has read its fleet, leaves keys out while a fleet's sales are
+  #   catching up, follows a change, and marks the count only with agents here
+  # - the hero's command box shows the homepage instruction whole and copies
+  #   exactly what it shows
   # - the Markdown homepage links each fleet to its own page for what it is
   #   doing, and every fleet's page, and those pages exist
   # - launch-gate: internal links stay on the fleets' maps, the account page,
@@ -20,6 +26,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   @syndicate "fibonacci_syndicate"
   @cascade "fibonacci_cascade"
+  @owner "0x" <> String.duplicate("a", 40)
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -128,6 +135,73 @@ defmodule KeyfleetWeb.HomeLiveTest do
              "Not on sale yet · 0 agents here"
   end
 
+  test "the hero counts every fleet's agents and keys once the cards have read them",
+       %{conn: conn} do
+    for fleet <- [@syndicate, @cascade] do
+      KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 8_453)
+      ChainHelpers.seed_cursor!(fleet)
+    end
+
+    for token_id <- 1..3, do: issue!(@syndicate, token_id)
+    for token_id <- 1..2, do: issue!(@cascade, token_id)
+    run!(@syndicate, 2, 1)
+    run!(@cascade, 1, 2)
+
+    static = conn |> get("/") |> html_response(200)
+    assert attribute(static, "#home-tally", "id") == ["home-tally"]
+    assert attribute(static, "#home-tally p", "class") == []
+
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+    assert text(view, "#home-tally") == "2 agents here · 5 keys sold"
+
+    issue!(@cascade, 3)
+    send(view.pid, {:refresh, @cascade})
+    render(view)
+    render_async(view, 3_000)
+    assert text(view, "#home-tally") == "2 agents here · 6 keys sold"
+  end
+
+  test "the hero leaves keys out of its count while a fleet's sales are catching up",
+       %{conn: conn} do
+    KeeperHelpers.deploy!(@syndicate, "0x" <> String.duplicate("7", 40), 8_453)
+    ChainHelpers.seed_cursor!(@syndicate, head_block: 5_000, next_block: 1_000)
+    for token_id <- 1..3, do: issue!(@syndicate, token_id)
+
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+
+    assert text(view, "#home-tally") == "0 agents here"
+  end
+
+  test "the hero's count is marked only while agents are here", %{conn: conn} do
+    KeeperHelpers.deploy!(@syndicate, "0x" <> String.duplicate("7", 40), 8_453)
+    ChainHelpers.seed_cursor!(@syndicate)
+    issue!(@syndicate, 1)
+
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+    assert text(view, "#home-tally") == "0 agents here · 1 key sold"
+    refute has_element?(view, "#home-tally [data-tally-dot]")
+
+    run!(@syndicate, 1, 1)
+    send(view.pid, {:refresh, @syndicate})
+    render(view)
+    render_async(view, 3_000)
+    assert text(view, "#home-tally") == "1 agent here · 1 key sold"
+    assert has_element?(view, "#home-tally [data-tally-dot]")
+  end
+
+  test "the command box shows the homepage instruction whole and copies what it shows",
+       %{conn: conn} do
+    {:ok, view, html} = live(conn, "/")
+
+    assert attribute(html, "#home-instruction-copy", "data-copy-text") ==
+             [SendAgent.home_instruction()]
+
+    assert text(view, "#home-instruction") == SendAgent.home_instruction()
+  end
+
   test "a burst of notices about one fleet is answered by one refresh", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
@@ -199,7 +273,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
         fleet_id: fleet_id,
         token_id: token_id,
         ownership_epoch: 1,
-        owner_wallet: "0x" <> String.duplicate("a", 40),
+        owner_wallet: @owner,
         block_number: 10 + token_id,
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash:
@@ -208,6 +282,20 @@ defmodule KeyfleetWeb.HomeLiveTest do
       },
       actor: %Actors.System{}
     )
+  end
+
+  # An agent of its own, numbered `agent`, running `fleet_id`'s key `token_id`.
+  defp run!(fleet_id, token_id, agent) do
+    operator = %Actors.Agent{
+      wallet_address: "0x" <> String.pad_leading(Integer.to_string(agent), 40, "c"),
+      chain_id: 8_453,
+      audience: "keyfleet"
+    }
+
+    Agents.ensure_profile!(%{name: "Runner #{agent}", declared_harness: "test"}, actor: operator)
+    request = Keys.request_pairing!(fleet_id, token_id, %{}, actor: operator)
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
   end
 
   defp goal(title, data \\ %{}),

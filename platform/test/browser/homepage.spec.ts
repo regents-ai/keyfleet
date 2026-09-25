@@ -1,8 +1,9 @@
 import {expect, test, type Page} from "@playwright/test"
 
-// The homepage leads with the fleets: a short hero over the crown, then one card per
-// fleet, each with a still picture of its map, what the fleet is doing once the page is
-// live, and a link into the map; then what a fleet can take on.
+// The homepage leads with a centred hero over the crown: how many agents are here, the
+// headline, the instruction a person gives their agent, and "See the fleets", with lines
+// down to one card per fleet. Each card has a still picture of its map, what the fleet is
+// doing once the page is live, and a link into the map; then what a fleet can take on.
 
 const fleets = [
   ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci"],
@@ -21,6 +22,7 @@ const viewports = [
   {name: "mobile-320", width: 320, height: 720},
   {name: "short-landscape", width: 844, height: 390},
   {name: "zoom-200", width: 640, height: 900},
+  {name: "wide-1920", width: 1920, height: 1080},
 ]
 
 const waitForHomepage = async (page: Page) => {
@@ -50,15 +52,14 @@ const boxOf = (page: Page, selector: string) =>
     return {top, bottom, left, right, height}
   })
 
-test("the homepage reads without scripts: what Keyfleet is, then every fleet and its map", async ({browser}) => {
+test("the homepage reads without scripts: the headline, the instruction, then every fleet and its map", async ({browser}) => {
   const context = await browser.newContext({javaScriptEnabled: false})
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
-  await expect(page.locator(".rl-hero-description")).toContainText("form lasting groups")
+  await expect(page.getByRole("heading", {name: "Your agent has tools. Now give it a crew.", level: 1})).toBeVisible()
+  await expect(page.locator("#home-instruction")).toContainText("Visit keyfleet.ai and read its joining guide.")
   await expect(page.getByRole("heading", {name: "The fleets, right now", level: 2})).toBeVisible()
-  await expect(page.locator("#home-send-agent").getByRole("button", {name: "Send your agent"})).toBeVisible()
   await expect(page.locator("#home-agents-start").getByRole("link", {name: "keyfleet.ai/skill.md"}))
     .toHaveAttribute("href", "/skill.md")
 
@@ -113,6 +114,101 @@ test("See the fleets brings the fleets into view", async ({page}) => {
       }),
     )
     .toBe(true)
+})
+
+// The copy button puts the instruction on the clipboard exactly as the box shows it, and
+// says so to screen readers.
+test("Copy puts the instruction shown on the clipboard", async ({browser}) => {
+  const context = await browser.newContext({permissions: ["clipboard-read", "clipboard-write"]})
+  const page = await context.newPage()
+  await page.goto("/")
+  await waitForHomepage(page)
+
+  const shown = await page.locator("#home-instruction").evaluate(element => element.textContent!.replace(/\s+/g, " ").trim())
+  await page.getByRole("button", {name: "Copy the instruction"}).click()
+
+  await expect(page.locator("#home-instruction-copied")).toHaveText("Copied")
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown)
+  await context.close()
+})
+
+// The count of agents and keys arrives once the page is live, into room kept for it.
+test("the count fills in without moving the headline", async ({browser}) => {
+  const titleTop = async (javaScriptEnabled: boolean) => {
+    const context = await browser.newContext({javaScriptEnabled, viewport: {width: 1440, height: 900}})
+    const page = await context.newPage()
+    await page.goto("/")
+    await waitForHomepage(page)
+    if (javaScriptEnabled) await expect(page.locator("#home-tally p")).toContainText("agents here")
+    else await expect(page.locator("#home-tally p")).toHaveCount(0)
+    const {top} = await boxOf(page, "#home-title")
+    await context.close()
+    return top
+  }
+
+  expect(await titleTop(true)).toBe(await titleTop(false))
+})
+
+// The lines from "See the fleets" end on the top edge of the cards, one per card in the
+// first row, and never run through the words of the heading above the cards. A single
+// column of cards takes no lines.
+test("the lines to the fleets land on the cards and never cross the heading", async ({page}) => {
+  for (const [width, lines] of [[1440, 4], [1024, 2], [375, 0]] as const) {
+    await test.step(`${width} wide`, async () => {
+      await page.setViewportSize({width, height: 900})
+      await page.goto("/")
+      await waitForHomepage(page)
+
+      const drawn = await page.locator(".rl-fleets-fan path").evaluateAll(paths =>
+        paths
+          .filter(path => (path as SVGPathElement).getClientRects().length > 0)
+          .map(element => {
+            const path = element as SVGPathElement
+            const matrix = path.getScreenCTM()!
+            const length = path.getTotalLength()
+            return Array.from({length: 101}, (_, step) => {
+              const point = path.getPointAtLength((length * step) / 100).matrixTransform(matrix)
+              return {x: point.x, y: point.y}
+            })
+          }),
+      )
+      expect(drawn).toHaveLength(lines)
+      if (lines === 0) return
+
+      const words = await page.locator("#fleets-title").evaluate(heading => {
+        const range = document.createRange()
+        range.selectNodeContents(heading)
+        return [...range.getClientRects()].map(({left, right, top, bottom}) => ({left, right, top, bottom}))
+      })
+      for (const points of drawn) {
+        for (const {x, y} of points) {
+          for (const box of words) {
+            expect(x >= box.left && x <= box.right && y >= box.top && y <= box.bottom, "a line crosses the heading").toBe(false)
+          }
+        }
+      }
+
+      const button = await boxOf(page, ".rl-hero-pill")
+      const cards = await page.locator(".rl-fleet-card__link").evaluateAll(elements =>
+        elements.map(element => {
+          const {left, right, top} = element.getBoundingClientRect()
+          return {left, right, top}
+        }),
+      )
+      const firstRow = cards.filter(card => Math.abs(card.top - cards[0].top) < 1)
+      expect(firstRow).toHaveLength(lines)
+      for (const [index, points] of drawn.entries()) {
+        const start = points[0]
+        const end = points[points.length - 1]
+        const card = firstRow[index]
+        expect(Math.abs(start.y - button.bottom)).toBeLessThanOrEqual(1)
+        expect(Math.abs(start.x - (button.left + button.right) / 2)).toBeLessThanOrEqual(1)
+        expect(Math.abs(end.y - card.top)).toBeLessThanOrEqual(1)
+        expect(end.x).toBeGreaterThan(card.left + (card.right - card.left) / 4)
+        expect(end.x).toBeLessThan(card.right - (card.right - card.left) / 4)
+      }
+    })
+  }
 })
 
 test("a fleet's card opens that fleet's map", async ({page}) => {
@@ -317,7 +413,7 @@ test("the fleet cards fit every viewport in catalog order", async ({page}) => {
   }
 })
 
-test("on a phone the words come first, then the crown, then the fleets", async ({page}) => {
+test("on a phone the hero reads top to bottom, then the fleets", async ({page}) => {
   for (const width of [390, 320]) {
     await test.step(`${width} wide`, async () => {
       await page.setViewportSize({width, height: 844})
@@ -325,14 +421,11 @@ test("on a phone the words come first, then the crown, then the fleets", async (
       await waitForHomepage(page)
       await assertNoOverflow(page)
 
-      const title = await boxOf(page, "#home-title")
-      const intro = await boxOf(page, ".rl-hero-description")
-      const crown = await boxOf(page, "#home-prism")
-      const cards = await boxOf(page, "#fleets")
-
-      expect(title.bottom).toBeLessThanOrEqual(intro.top)
-      expect(intro.bottom).toBeLessThanOrEqual(crown.top)
-      expect(crown.bottom).toBeLessThanOrEqual(cards.top)
+      const order = ["#home-tally", "#home-title", "#home-instruction", ".rl-hero-mark", ".rl-hero-pill", "#fleets-title"]
+      const boxes = await Promise.all(order.map(selector => boxOf(page, selector)))
+      for (const [index, box] of boxes.entries()) {
+        if (index > 0) expect(boxes[index - 1].bottom, order[index]).toBeLessThanOrEqual(box.top)
+      }
     })
   }
 })
@@ -366,9 +459,9 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
     expect(Number(result.opacity), result.name).toBeGreaterThan(0)
   }
   expect([...reached]).toEqual([
-    "See the fleets",
-    "Send your agent",
+    "Copy",
     "keyfleet.ai/skill.md",
+    "See the fleets",
     ...fleets.map(([, name]) => name),
     ...opportunities,
     "Read the full briefing",

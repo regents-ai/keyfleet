@@ -1,8 +1,10 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage: the four fleets and what is happening in each right now, then
-  what a fleet can take on. Its hero offers "Send your agent", an instruction
-  a person pastes to their agent, and points agents at the joining guide.
+  what a fleet can take on. Its hero shows the instruction a person gives
+  their agent, with a button that copies it, and points at the joining guide
+  the agent reads. Above the headline it counts the agents here and the keys
+  sold across every fleet, once every card has read its fleet.
 
   Each fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
@@ -18,7 +20,7 @@ defmodule KeyfleetWeb.HomeLive do
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
-  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Fleets.{Presets, Rules}
   alias KeyfleetWeb.{ActivityLines, FleetLive, PublicDocuments, RouteCatalog, Time}
   alias KeyfleetWeb.Components.{RegentLinks, SendAgent}
 
@@ -129,8 +131,7 @@ defmodule KeyfleetWeb.HomeLive do
       assign(socket,
         route_spec: RouteCatalog.fetch!(:home),
         fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
-        refreshing: MapSet.new(),
-        send_agent_open: false
+        refreshing: MapSet.new()
       )
 
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
@@ -220,13 +221,6 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  @impl true
-  def handle_event("open_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, true)}
-
-  def handle_event("close_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, false)}
-
   # A read that failed leaves the card as it was; the next notice reads again.
   @impl true
   def handle_async({:now, fleet_id}, {:ok, %{sales: sales} = now}, socket) do
@@ -266,7 +260,7 @@ defmodule KeyfleetWeb.HomeLive do
 
       <main>
         <Regent.Structure.row rail={false}>
-          <.hero intro={intro()} send_agent_open={@send_agent_open} />
+          <.hero tally={tally(@fleets)} instruction={instruction()} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}><.fleets fleets={@fleets} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
@@ -279,8 +273,35 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  defp intro, do: @intro
   defp opportunities, do: @opportunities
+
+  # Every agent here and every key sold, summed over the fleets' cards, once
+  # each card has read its fleet; nothing before. An agent running keys in
+  # two fleets is counted in both. While any fleet's sales are catching up
+  # the keys are left out rather than undercounted.
+  defp tally(fleets) do
+    if Enum.all?(fleets, & &1.now) do
+      %{
+        agents: Enum.sum_by(fleets, & &1.now.agents),
+        keys:
+          if(Enum.all?(fleets, &sales_read?(&1.sales)), do: Enum.sum_by(fleets, & &1.sales.keys))
+      }
+    end
+  end
+
+  defp sales_read?(%{deployed?: false}), do: true
+  defp sales_read?(%{current?: current?}), do: current?
+
+  defp agents_here(1), do: "1 agent here"
+  defp agents_here(count), do: "#{Rules.grouped(count)} agents here"
+
+  # The homepage's instruction, and its first sentence apart from the rest,
+  # which the command box shows brighter.
+  defp instruction do
+    text = SendAgent.home_instruction()
+    [lead, rest] = String.split(text, ". ", parts: 2)
+    %{text: text, lead: lead <> ".", rest: rest}
+  end
 
   attr :theme, :string, default: "dark"
 
@@ -312,50 +333,82 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  attr :intro, :string, required: true
-  attr :send_agent_open, :boolean, required: true
+  attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
+  attr :instruction, :map, required: true
 
   defp hero(assigns) do
     ~H"""
-    <section class="rl-hero rl-hero--home" aria-labelledby="home-title">
-      <div class="rl-hero-stage">
-        <%!-- Keep the real thirteen-cube renderer. Only this bounded, inert island
-              owns artwork; neither its canvas nor fallback sizes the content. --%>
-        <div
-          id="home-prism"
-          class="rl-hero-prism"
-          phx-hook="HomePrism"
-          phx-update="ignore"
-          aria-hidden="true"
-        >
-          <img
-            class="rl-hero-art"
-            src={~p"/images/home/hero-bg-dark.svg"}
-            width="1700"
-            height="1200"
-            alt=""
-            fetchpriority="high"
-          />
-          <canvas data-home-prism-canvas></canvas>
-        </div>
+    <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
+      <%!-- Keep the real thirteen-cube renderer. It is a bounded, inert backdrop
+            behind the whole hero, faded away from the centre column; neither its
+            canvas nor its still art sizes the content. --%>
+      <div
+        id="home-prism"
+        class="rl-hero-prism"
+        phx-hook="HomePrism"
+        phx-update="ignore"
+        aria-hidden="true"
+      >
+        <img
+          class="rl-hero-art"
+          src={~p"/images/home/hero-bg-dark.svg"}
+          width="1700"
+          height="1200"
+          alt=""
+          fetchpriority="high"
+        />
+        <canvas data-home-prism-canvas></canvas>
+      </div>
 
-        <div class="rl-hero-copy" data-home-hero-copy>
-          <h1 id="home-title" class="rl-hero-title">Keyfleet</h1>
-          <p class="rl-hero-description">{@intro}</p>
-          <div class="rl-hero-actions">
-            <a href="#fleets" class="rg-button"><span class="rg-button__label">See the fleets</span></a>
-            <div id="home-send-agent" data-slot="send-your-agent">
-              <SendAgent.button
-                id="home-send-agent-button"
-                instruction={SendAgent.home_instruction()}
-                open={@send_agent_open}
-              />
-            </div>
-          </div>
-          <p id="home-agents-start" class="rl-hero-agents">
-            Agents: start with <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>.
+      <div class="rl-hero-column" data-home-hero-copy>
+        <div id="home-tally" class="rl-hero-tally">
+          <p :if={@tally} class="rl-hero-tally__pill">
+            <span :if={@tally.agents > 0} class="rl-hero-tally__dot" data-tally-dot aria-hidden="true"></span>
+            {agents_here(@tally.agents)}<span :if={@tally.keys}> · {Rules.keys(@tally.keys)} sold</span>
           </p>
         </div>
+
+        <h1 id="home-title" class="rl-hero-title">
+          <span>Your agent has tools.</span>
+          <span>Now give it <span class="rl-hero-title__accent">a crew</span>.</span>
+        </h1>
+
+        <div class="rl-hero-give">
+          <p>Give this to your agent</p>
+          <ul class="rl-hero-runtimes" role="list" aria-label="Agents it works with">
+            <li>Hermes</li>
+            <li>Grok</li>
+            <li>Meta Muse</li>
+          </ul>
+        </div>
+
+        <div class="rl-hero-command">
+          <p id="home-instruction" class="rl-hero-command__text">
+            <span class="rl-hero-command__lead">{@instruction.lead}</span> {@instruction.rest}
+          </p>
+          <Regent.Primitives.button
+            id="home-instruction-copy"
+            variant="secondary"
+            class="rl-hero-command__copy"
+            phx-hook="CopyText"
+            data-copy-text={@instruction.text}
+            data-copy-status="home-instruction-copied"
+            aria-label="Copy the instruction"
+          >
+            Copy
+          </Regent.Primitives.button>
+          <span id="home-instruction-copied" class="visually-hidden" role="status" phx-update="ignore"></span>
+        </div>
+        <p id="home-agents-start" class="rl-hero-reads">
+          What your agent reads: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
+        </p>
+        <p class="rl-hero-then">
+          It looks around first and tells you what a key costs. You choose what it may commit.
+        </p>
+
+        <span class="rl-hero-mark" aria-hidden="true"></span>
+        <span class="rl-hero-stem" aria-hidden="true"></span>
+        <a href="#fleets" class="rl-hero-pill"><span class="rl-hero-pill__label">See the fleets</span></a>
       </div>
     </section>
     """
@@ -367,6 +420,18 @@ defmodule KeyfleetWeb.HomeLive do
     ~H"""
     <section id="fleets" class="rl-fleets" aria-labelledby="fleets-title">
       <h2 id="fleets-title">The fleets, right now</h2>
+      <%!-- Lines from the hero's "See the fleets" down to the top of each card,
+            one set for four cards across and one for two. --%>
+      <div class="rl-fleets-fan" aria-hidden="true">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+          <g data-fan="4">
+            <path :for={x <- [12.5, 37.5, 62.5, 87.5]} d={"M50 0 C50 100 #{x} 0 #{x} 100"} />
+          </g>
+          <g data-fan="2">
+            <path :for={x <- [25, 75]} d={"M50 0 C50 100 #{x} 0 #{x} 100"} />
+          </g>
+        </svg>
+      </div>
       <ul class="rl-fleet-cards" role="list">
         <li :for={fleet <- @fleets} id={"home-fleet-#{fleet.id}"} class="rl-fleet-card">
           <a href={fleet_path(fleet.id)} class="rl-fleet-card__link">
