@@ -1,8 +1,8 @@
 import {expect, test, type Page} from "@playwright/test"
 
-// The homepage chooses a fleet: a short hero over the crown, then one card per fleet,
-// each with a still picture of its map, a sentence on how its keys sell, its sales
-// so far, and a link into the map.
+// The homepage leads with the fleets: a short hero over the crown, then one card per
+// fleet, each with a still picture of its map, what the fleet is doing once the page is
+// live, and a link into the map; then what a fleet can take on.
 
 const fleets = [
   ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci"],
@@ -10,6 +10,8 @@ const fleets = [
   ["fleet_tech_classic", "Keyfleet Classic", "classic"],
   ["fleet_tech_accelerant", "Keyfleet Accelerant", "accelerant"],
 ] as const
+
+const opportunities = ["Autolaunch", "Revstake", "Memestake", "Techtree", "Your own goal"]
 
 const viewports = [
   {name: "desktop", width: 1440, height: 900},
@@ -48,14 +50,15 @@ const boxOf = (page: Page, selector: string) =>
     return {top, bottom, left, right, height}
   })
 
-test("the homepage reads without scripts: what a fleet is, then every fleet and its map", async ({browser}) => {
+test("the homepage reads without scripts: what Keyfleet is, then every fleet and its map", async ({browser}) => {
   const context = await browser.newContext({javaScriptEnabled: false})
   const page = await context.newPage()
   await page.goto("/")
 
   await expect(page.getByRole("heading", {name: "Keyfleet", level: 1})).toBeVisible()
-  await expect(page.locator(".rl-hero-description")).toContainText("each hold a numbered key")
-  await expect(page.getByRole("heading", {name: "The fleets", level: 2})).toBeVisible()
+  await expect(page.locator(".rl-hero-description")).toContainText("form lasting groups")
+  await expect(page.getByRole("heading", {name: "The fleets, right now", level: 2})).toBeVisible()
+  await expect(page.locator("#home-send-agent")).toBeEmpty()
 
   const cards = page.locator(".rl-fleet-card")
   expect(await cards.evaluateAll(elements => elements.map(element => element.id))).toEqual(
@@ -68,10 +71,10 @@ test("the homepage reads without scripts: what a fleet is, then every fleet and 
     await expect(card.locator("a.rl-fleet-card__link")).not.toHaveAttribute("target", /.+/)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
-    await expect(card.locator("[data-fleet-progress]")).not.toBeEmpty()
+    await expect(card).not.toContainText("USDC")
   }
 
-  await expect(page.locator("#home-fleet-fleet_tech_classic p").first()).toHaveText("144 keys, every one at 10 USDC.")
+  await expect(page.getByRole("heading", {name: "What a fleet can take on", level: 2})).toBeVisible()
   await context.close()
 })
 
@@ -93,12 +96,12 @@ test("each card draws its fleet's map, with the next key on sale marked", async 
   await expect(page.locator("#home-fleet-preview-fleet_tech_classic polygon[data-tone]")).toHaveCount(0)
 })
 
-test("Choose a fleet brings the fleets into view", async ({page}) => {
+test("See the fleets brings the fleets into view", async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900})
   await page.goto("/")
   await waitForHomepage(page)
 
-  await page.getByRole("link", {name: "Choose a fleet"}).click()
+  await page.getByRole("link", {name: "See the fleets"}).click()
   await expect(page).toHaveURL(/#fleets$/)
   await expect
     .poll(() =>
@@ -224,7 +227,7 @@ test("the crown never blocks the hero's words or links", async ({page}) => {
     expect(await prism.evaluate(element => getComputedStyle(element).pointerEvents)).toBe("none")
     await expectOneHeroLayer()
     await expect(page.locator("#home-title")).toBeVisible()
-    await page.getByRole("link", {name: "Choose a fleet"}).click({trial: true})
+    await page.getByRole("link", {name: "See the fleets"}).click({trial: true})
     await page.emulateMedia({reducedMotion: "reduce"})
     await expectOneHeroLayer()
     await page.emulateMedia({reducedMotion: "no-preference"})
@@ -345,7 +348,7 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
     await page.keyboard.press("Tab")
     const result = await page.evaluate(() => {
       const element = document.activeElement as HTMLElement
-      if (!element?.closest(".rl-hero, .rl-fleets") || !element.matches(":focus-visible")) return null
+      if (!element?.closest(".rl-hero, .rl-fleets, .rl-opportunities") || !element.matches(":focus-visible")) return null
       const style = getComputedStyle(element)
       return {
         name: element.querySelector("h3")?.textContent?.trim() ?? element.textContent?.trim() ?? "",
@@ -360,7 +363,12 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
     expect(result.outline, result.name).toBe("solid")
     expect(Number(result.opacity), result.name).toBeGreaterThan(0)
   }
-  expect([...reached]).toEqual(["Choose a fleet", ...fleets.map(([, name]) => name)])
+  expect([...reached]).toEqual([
+    "See the fleets",
+    ...fleets.map(([, name]) => name),
+    ...opportunities,
+    "Read the full briefing",
+  ])
 })
 
 test("the homepage captures its phone, tablet and zoomed states", async ({browser}, testInfo) => {
