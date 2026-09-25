@@ -6,9 +6,13 @@
 [![Ash 3.33](https://img.shields.io/badge/ash-3.33-lightgrey)](https://ash-hq.org)
 
 The Phoenix/Ash web application of Keyfleet. It serves the public home
-page, where a visitor chooses a fleet, each fleet's page (`/app/fleets/<fleet>`),
-Privy wallet sign-in, the Account page (`/account`), the public pages, health and
-metrics, and the public HTTP API.
+page, where a visitor chooses one of the four fleets, and each fleet's page
+(`/app/fleets/<fleet>`), which is its map of keys. From a fleet's page, key
+holders reach its rooms, its shared workspace and its proposals. A signed-in
+person's keys are on the Account page (`/account`). The site also serves Privy
+wallet sign-in, the public pages, the agent API, health and metrics. Inside it,
+the chain reader follows the fleets on Base and the keeper sends their routine
+transactions (see [the keeper guide](../docs/keeper.md)).
 
 ## Shared dependencies
 
@@ -62,7 +66,7 @@ production.
 | Variable | Required | What it is for |
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
-| `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret. |
+| `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
 | `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the signed-in pages. Anything else keeps them closed, so a typo closes rather than opens. Boot fails in production if unset. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
@@ -110,34 +114,50 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/api/v1/profile`, `/api/v1/profile/sync` | GET, PATCH, POST | The signed-in person's shared profile, served by the `regent_identity` package with paired Privy proofs. |
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
+| `/api/v1/agent/...` | GET, POST, DELETE | The agent API: pairing an agent with a key, rooms and messages, proposals and the fleet's shared workspace. |
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. Open while the launch gate is closed. |
 | `/`, `/docs`, `/about`, `/contact`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. |
-| `/app/fleets/<fleet>`, `/account` | GET | The signed-in shell. |
+| `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
 
 ## Repository layout
 
 ```text
-lib/keyfleet/       Ash domains: accounts, sign-in, legal documents
-lib/keyfleet_web/   Endpoint, router, live pages, controllers, components
-lib/mix/tasks/          Local setup, reset, contract sync and route-handoff checks
+lib/keyfleet/           Ash domains: accounts, fleets, keys, rooms, proposals,
+                        treasury, the workspace graph, agents, the chain
+                        reader and the keeper
+lib/keyfleet_web/       Endpoint, router, live pages, controllers, components
+lib/mix/tasks/          Local setup, contract sync and route-handoff checks
 contracts/              The OpenAPI contract
 config/                 Compile-time and runtime configuration
 assets/                 TypeScript and CSS, built with esbuild
 priv/                   Migrations, public and legal Markdown, static assets
 test/                   ExUnit suites, including browser and budget tests
 docs/                   Local setup guides
-bin/, scripts/          Local acceptance and release helpers
+scripts/                Release helpers
 rel/                    Release overlays, including the migrate command
 ```
 
 ## Checks
 
+From the monorepo root, `make check-platform` runs this component's gate and
+`make check` runs every component's:
+
 ```sh
 mix precommit
 npm run typecheck
 npm test
-npx playwright test
 ```
+
+These need `MIX_TEST_PARTITION` set, even to an empty value, and
+`REGENT_DEPS_ROOT` when the shared dependencies live outside the sibling layout
+(see [Shared dependencies](#shared-dependencies)). For example, with the test
+database `keyfleet_test`:
+
+```sh
+MIX_TEST_PARTITION= REGENT_DEPS_ROOT=<workspace> make check
+```
+
+The browser suite runs separately with `npm run test:browser`.
 
 `mix precommit` compiles with warnings as errors, checks unused dependency
 locks and formatting, runs Credo in strict mode and Sobelow, holds the
@@ -148,14 +168,14 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | --- | --- |
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
-| `npx playwright test` | Runs the browser suite against a test server. |
+| `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
 | `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs one Docker build-context test that needs tools outside the hermetic suite. |
 
 The test database name carries whatever `MIX_TEST_PARTITION` holds, just
-before its `_test` ending. Set it whenever more than one test run can happen on
-a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
+before its `_test` ending. Give each test run its own value whenever more than
+one can happen on a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
 `MIX_ENV=test mix ecto.create` once for a new value; the suite builds the
 schema itself on its first run.
 
