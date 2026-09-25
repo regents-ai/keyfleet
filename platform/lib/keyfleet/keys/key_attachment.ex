@@ -158,7 +158,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
 
     # The fleet's epochs recorded before its epoch number `before_seq` (from
     # the newest when nil), newest first, `limit` at most: each key sold (its
-    # epoch 0) and each time one changed hands.
+    # epoch 1, the mint) and each time one changed hands.
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: 9_223_372_036_854_775_807]

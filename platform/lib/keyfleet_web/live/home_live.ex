@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
   alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{ActivityLines, PublicDocuments, RoomsLive, RouteCatalog}
+  alias KeyfleetWeb.{ActivityLines, PublicDocuments, RouteCatalog, Time}
   alias KeyfleetWeb.Components.RegentLinks
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -397,7 +397,7 @@ defmodule KeyfleetWeb.HomeLive do
       </p>
       <p :if={@latest} class="rl-fleet-card__latest" data-fleet-latest data-kind={@latest.kind}>
         <span>Latest: {ActivityLines.text(@latest)}</span>
-        <time datetime={DateTime.to_iso8601(@latest.at)}>{RoomsLive.stamp(@latest.at)}</time>
+        <time datetime={DateTime.to_iso8601(@latest.at)}>{Time.moment(@latest.at, DateTime.utc_now())}</time>
       </p>
     </div>
     """

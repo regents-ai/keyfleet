@@ -198,7 +198,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       %{
         fleet_id: fleet_id,
         token_id: token_id,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: "0x" <> String.duplicate("a", 40),
         block_number: 10 + token_id,
         block_hash: "0x" <> String.duplicate("a", 64),

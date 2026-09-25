@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       %{
         fleet_id: @fleet,
         token_id: 1,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: @owner,
         block_number: 10,
         block_hash: "0x" <> String.duplicate("a", 64),

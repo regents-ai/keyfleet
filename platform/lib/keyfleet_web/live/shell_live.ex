@@ -101,7 +101,7 @@ defmodule KeyfleetWeb.ShellLive do
        fleet_params: nil,
        keys_topic: nil,
        activity: nil,
-       activity_refresh?: false,
+       activity_refresh: nil,
        key_profile: nil,
        key: nil,
        key_notice: nil,
@@ -425,16 +425,15 @@ defmodule KeyfleetWeb.ShellLive do
     do: {:noreply, assign(socket, :check_ins_timer, nil)}
 
   # "What's happening" is read again from the top, as many pages as are
-  # shown, once for the burst of notices that asked for it. A page that has
-  # left the fleet, or has already read, reads nothing.
+  # shown, once for the burst of notices about the fleet on show that asked
+  # for it. A wait begun for a fleet the page has since left reads nothing.
   def handle_info(
-        :refresh_activity,
-        %{assigns: %{activity: %{}, activity_refresh?: true}} = socket
+        {:refresh_activity, fleet_id},
+        %{assigns: %{activity: %{fleet_id: fleet_id}}} = socket
       ),
-      do: {:noreply, socket |> assign(:activity_refresh?, false) |> reread_activity()}
+      do: {:noreply, socket |> assign(:activity_refresh, nil) |> reread_activity()}
 
-  def handle_info(:refresh_activity, socket),
-    do: {:noreply, assign(socket, :activity_refresh?, false)}
+  def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
 
   # Only the check the page last set reads; one a later read replaced is dropped.
   def handle_info({:check_proposals, ref}, %{assigns: %{proposals_check: ref}} = socket),
@@ -529,7 +528,7 @@ defmodule KeyfleetWeb.ShellLive do
     do:
       socket
       |> follow_keys(nil)
-      |> assign(fleet: nil, fleet_params: nil, activity: nil)
+      |> assign(fleet: nil, fleet_params: nil, activity: nil, activity_refresh: nil)
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
@@ -539,7 +538,12 @@ defmodule KeyfleetWeb.ShellLive do
     case Fleets.get_fleet!(fleet_id, actor: actor) do
       nil ->
         socket
-        |> assign(fleet: %{fleet_id: fleet_id, name: nil}, fleet_params: params, activity: nil)
+        |> assign(
+          fleet: %{fleet_id: fleet_id, name: nil},
+          fleet_params: params,
+          activity: nil,
+          activity_refresh: nil
+        )
         |> stream(:fleet_keys, [], reset: true)
         |> stream(:activity, [], reset: true)
 
@@ -588,7 +592,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp read_activity(socket, fleet_id) do
     socket
-    |> assign(:activity, %{fleet_id: fleet_id, cursor: nil, pages: 1})
+    |> assign(activity: %{fleet_id: fleet_id, cursor: nil, pages: 1}, activity_refresh: nil)
     |> reread_activity()
   end
 
@@ -609,13 +613,14 @@ defmodule KeyfleetWeb.ShellLive do
       else: {read |> Enum.reverse() |> Enum.concat(), next, length(read)}
   end
 
-  # One read for a burst of notices about the fleet on show.
+  # One read for a burst of notices about the fleet on show; the wait names
+  # the fleet it was begun for.
   defp refresh_activity_soon(
-         %{assigns: %{activity: %{fleet_id: fleet_id}, activity_refresh?: false}} = socket,
+         %{assigns: %{activity: %{fleet_id: fleet_id}, activity_refresh: nil}} = socket,
          fleet_id
        ) do
-    Process.send_after(self(), :refresh_activity, @activity_refresh_after)
-    assign(socket, :activity_refresh?, true)
+    Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
+    assign(socket, :activity_refresh, fleet_id)
   end
 
   defp refresh_activity_soon(socket, _fleet_id), do: socket

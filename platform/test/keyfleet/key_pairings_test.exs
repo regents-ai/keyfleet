@@ -56,7 +56,7 @@ defmodule Keyfleet.KeyPairingsTest do
     assert requested.approved_at == nil
     assert requested.operator_wallet == operator.wallet_address
     assert requested.owner_wallet == owner.wallet_address
-    assert requested.ownership_epoch == 0
+    assert requested.ownership_epoch == 1
     assert Keys.current_operator!(@fleet, 1) == nil
 
     attached = Keys.request_pairing!(@fleet, 1, %{}, actor: owner)
@@ -106,7 +106,7 @@ defmodule Keyfleet.KeyPairingsTest do
     assert run_keys() == [1]
     assert held_keys([owner.wallet_address, wallet("e")]) == [1, 2]
 
-    epoch!(ownership_epoch: 1, owner_wallet: wallet("e"), block_number: 20)
+    epoch!(ownership_epoch: 2, owner_wallet: wallet("e"), block_number: 20)
 
     assert run_keys() == []
     assert held_keys([owner.wallet_address]) == []
@@ -195,7 +195,7 @@ defmodule Keyfleet.KeyPairingsTest do
     request = request!(agent("c"), "Hopeful operator")
     new_owner = agent("1")
 
-    epoch!(ownership_epoch: 1, owner_wallet: new_owner.wallet_address, log_index: 1)
+    epoch!(ownership_epoch: 2, owner_wallet: new_owner.wallet_address, log_index: 1)
 
     assert Keys.current_operator!(@fleet, 1) == nil
     assert Keys.list_pairing_requests!(@fleet, 1) == []
@@ -210,7 +210,7 @@ defmodule Keyfleet.KeyPairingsTest do
              [{attached.id, :active, false}, {request.id, :requested, false}]
 
     renewed = Keys.request_pairing!(@fleet, 1, %{}, actor: new_owner_with_profile(new_owner))
-    assert renewed.ownership_epoch == 1
+    assert renewed.ownership_epoch == 2
     assert Keys.current_operator!(@fleet, 1).id == renewed.id
 
     approved =
@@ -418,7 +418,7 @@ defmodule Keyfleet.KeyPairingsTest do
     assert Map.take(Keys.current_operator!(@fleet, 1), @limits) == Map.take(attached, @limits)
 
     new_owner = agent("1")
-    epoch!(ownership_epoch: 1, owner_wallet: new_owner.wallet_address, log_index: 1)
+    epoch!(ownership_epoch: 2, owner_wallet: new_owner.wallet_address, log_index: 1)
 
     assert {:error, %Ash.Error.Forbidden{}} =
              Keys.set_limits(attached, @edited, actor: human(owner))
@@ -496,7 +496,7 @@ defmodule Keyfleet.KeyPairingsTest do
           id: Ecto.UUID.dump!(Ash.UUID.generate()),
           fleet_id: "fibonacci_cascade",
           token_id: 2,
-          ownership_epoch: 1,
+          ownership_epoch: 2,
           owner_wallet: wallet("3"),
           operator_wallet: wallet("3"),
           agent_profile_id: Ecto.UUID.dump!(Ash.UUID.generate()),
@@ -566,7 +566,7 @@ defmodule Keyfleet.KeyPairingsTest do
     %{
       fleet_id: @fleet,
       token_id: 1,
-      ownership_epoch: 0,
+      ownership_epoch: 1,
       owner_wallet: wallet("a"),
       block_number: 10,
       block_hash: "0x" <> String.duplicate("a", 64),

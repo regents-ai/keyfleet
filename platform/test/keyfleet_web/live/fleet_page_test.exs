@@ -643,14 +643,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
           %{
             fleet_id: @fleet,
             slug: "general",
-            body: "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey",
+            body: "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey\u2066 done",
             idempotency_key: Ash.UUID.generate()
           },
           actor: owner()
         )
 
-      # The notice of the post came first; the refresh stands in for the wait.
-      send(view.pid, :refresh_activity)
+      # The notice of the post came first; the message stands in for the wait.
+      send(view.pid, {:refresh_activity, @fleet})
 
       line = "#fleet-now-posts-#{post.id}[data-kind=\"post\"]"
       assert has_element?(view, ~s(#{line} a[data-key="1"]))
@@ -658,25 +658,51 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#fleet-now-list b")
       refute has_element?(view, "#fleet-now-list script")
       assert text(view, line) =~ "<b>Hull</b> <script>alert(1)</script>"
+
+      # No character that can't be seen, or that reverses the text around it.
+      html = view |> element("#fleet-now-list") |> render()
+      refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
     end
 
-    test "Show earlier adds older items below, and the first stay put", %{conn: conn} do
+    test "a new item lands on top after a read, with the earlier ones below it", %{conn: conn} do
       now = DateTime.utc_now()
-      # Posts turn about between two rooms, so each is an item of its own.
-      for n <- 1..70, do: line!(if(rem(n, 2) == 0, do: "general", else: "coding"), n, now)
-
+      line!("general", 1, now)
       {:ok, view, _html} = live(conn, @path)
-      first = now_items(view)
+      before = now_items(view)
 
-      view |> element("#fleet-now-earlier") |> render_click()
-      both = now_items(view)
+      line!("coding", 0, now)
+      send(view.pid, {:refresh_activity, @fleet})
 
-      assert Enum.take(both, length(first)) == first
-      assert length(both) > length(first)
-      assert length(both) == length(Enum.uniq(both))
+      assert [_new | ^before] = now_items(view)
     end
 
-    test "a notice from another fleet reads nothing; one from this fleet does", %{conn: conn} do
+    test "a burst of notices is read once, after a pause", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      line!("general", 0, DateTime.utc_now())
+
+      {one_read, _} =
+        lines_read_during(fn ->
+          send(view.pid, {:refresh_activity, @fleet})
+          render(view)
+        end)
+
+      assert one_read > 0
+      line!("coding", 0, DateTime.utc_now())
+
+      {burst, _} =
+        lines_read_during(fn ->
+          send(view.pid, {:proposals_changed, @fleet})
+          send(view.pid, {:graph_head, @fleet, "log", 9})
+          send(view.pid, {:keys_changed, @fleet, [7]})
+          render(view)
+          Process.sleep(2_200)
+          render(view)
+        end)
+
+      assert burst == one_read
+    end
+
+    test "notices from another fleet read nothing", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
       # Written without a notice, so only a read the page makes shows it; and
       # written now, after the keys were sold, so it tops the first page.
@@ -686,16 +712,55 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       send(view.pid, {:proposals_changed, other})
       send(view.pid, {:graph_head, other, "log", 9})
       send(view.pid, {:keys_changed, other, [7]})
-      send(view.pid, :refresh_activity)
+      Process.sleep(2_200)
       refute has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
+    end
+
+    test "a wait begun in one fleet reads nothing once the page shows another", %{conn: conn} do
+      other = "fibonacci_syndicate"
+      ChainHelpers.open_cursor!(other)
+      {:ok, view, _html} = live(conn, @path)
 
       send(view.pid, {:proposals_changed, @fleet})
-      send(view.pid, :refresh_activity)
+      render_patch(view, "/app/fleets/#{other}")
+      line!("general", 0, DateTime.utc_now(), other)
+      send(view.pid, {:refresh_activity, @fleet})
+      refute has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
+
+      # The other fleet's own notice still starts its own wait.
+      send(view.pid, {:proposals_changed, other})
+      Process.sleep(2_200)
       assert has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
     end
 
+    test "Show earlier adds older items below, up to five pages, then points elsewhere",
+         %{conn: conn} do
+      now = DateTime.utc_now()
+      # Posts turn about between two rooms, so each is an item of its own.
+      for n <- 1..200, do: line!(if(rem(n, 2) == 0, do: "general", else: "coding"), n, now)
+
+      {:ok, view, _html} = live(conn, @path)
+      first = now_items(view)
+      refute has_element?(view, "#fleet-now-elsewhere")
+
+      view |> element("#fleet-now-earlier") |> render_click()
+      both = now_items(view)
+
+      assert Enum.take(both, length(first)) == first
+      assert length(both) > length(first)
+      assert length(both) == length(Enum.uniq(both))
+
+      for _ <- 1..3, do: view |> element("#fleet-now-earlier") |> render_click()
+
+      refute has_element?(view, "#fleet-now-earlier")
+      assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/rooms/general"]))
+      assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/workspace"]))
+      assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/proposals"]))
+    end
+
     # The panels share one place beside the map: each button opens its own
-    # panel and closes the other two, so none ever covers another.
+    # panel, closes the other two, so none ever covers another, and takes the
+    # reader to its heading.
     test "the panels beside the map open one at a time, What's happening first", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
 
@@ -709,6 +774,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       for panel <- panels do
         commands = click_commands(view, "##{panel}-toggle")
         assert ["toggle_attr", %{"attr" => ["hidden", "hidden"], "to" => "##{panel}"}] in commands
+        assert ["focus", %{"to" => "##{panel}-title"}] in commands
+        assert has_element?(view, ~s(##{panel}-title[tabindex="-1"]))
 
         for other <- panels -- [panel] do
           assert ["set_attr", %{"attr" => ["hidden", "hidden"], "to" => "##{other}"}] in commands
@@ -739,7 +806,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       %{
         fleet_id: fleet_id,
         token_id: token_id,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: owner,
         block_number: 10 + token_id,
         block_hash: "0x" <> String.duplicate("a", 64),
@@ -757,12 +824,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       %{
         fleet_id: @fleet,
         token_id: token_id,
-        ownership_epoch: 1,
+        ownership_epoch: 2,
         owner_wallet: owner,
         block_number: 500 + token_id,
         block_hash: "0x" <> String.duplicate("b", 64),
         transaction_hash:
-          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/1"), case: :lower),
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/2"), case: :lower),
         log_index: 0
       },
       actor: %Actors.System{}
@@ -893,8 +960,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   # A post written as key 1 `seconds` before `now`, with no notice to anyone.
-  defp line!(slug, seconds, now) do
-    room = Rooms.get_room!(@fleet, slug)
+  defp line!(slug, seconds, now, fleet_id \\ @fleet) do
+    room = Rooms.get_room!(fleet_id, slug)
     body = "Line #{seconds}"
 
     Keyfleet.Repo.insert_all(
@@ -903,9 +970,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         %{
           id: Ecto.UUID.dump!(Ash.UUID.generate()),
           seq: System.unique_integer([:positive]),
-          fleet_id: @fleet,
+          fleet_id: fleet_id,
           room_id: Ecto.UUID.dump!(room.id),
           kind: "post",
+          in_key_thread: false,
           author_kind: "human",
           author_wallet: @owner,
           as_key: 1,
@@ -917,6 +985,37 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ],
       prefix: "keyfleet_app"
     )
+  end
+
+  # How many of the fleet's lines the page reads while `fun` runs.
+  defp lines_read_during(fun) do
+    test_pid = self()
+
+    :telemetry.attach(
+      "fleet-page-lines",
+      [:keyfleet, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if meta.source == "messages", do: send(test_pid, :lines_read)
+      end,
+      nil
+    )
+
+    result =
+      try do
+        fun.()
+      after
+        :telemetry.detach("fleet-page-lines")
+      end
+
+    {count_reads(0), result}
+  end
+
+  defp count_reads(count) do
+    receive do
+      :lines_read -> count_reads(count + 1)
+    after
+      0 -> count
+    end
   end
 
   # The ids of the lines "What's happening" shows, top to bottom.

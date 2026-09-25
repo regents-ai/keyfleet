@@ -506,9 +506,9 @@ defmodule Keyfleet.Activity do
   # Keys: consecutive first sales are one item, fifty at most.
   defp group_epochs([]), do: []
 
-  defp group_epochs([%{ownership_epoch: 0} = first | _] = epochs) do
+  defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs) do
     {sold, rest} =
-      epochs |> Enum.take(@group_cap) |> Enum.split_while(&(&1.ownership_epoch == 0))
+      epochs |> Enum.take(@group_cap) |> Enum.split_while(&(&1.ownership_epoch == 1))
 
     rest = rest ++ Enum.drop(epochs, @group_cap)
     last = List.last(sold)

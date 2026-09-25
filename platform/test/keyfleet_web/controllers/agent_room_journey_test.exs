@@ -41,7 +41,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       %{
         fleet_id: "fibonacci_syndicate",
         token_id: 1,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: @owner,
         block_number: 10,
         block_hash: "0x" <> String.duplicate("a", 64),
@@ -830,7 +830,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         %{
           fleet_id: fleet,
           token_id: token_id,
-          ownership_epoch: 0,
+          ownership_epoch: 1,
           owner_wallet: @owner,
           block_number: 10,
           block_hash: "0x" <> String.duplicate("a", 64),

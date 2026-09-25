@@ -38,15 +38,15 @@ defmodule Keyfleet.ActivityTest do
     Workspace.open_log(@fleet)
     # Chain records are stamped with the time the reader saw them: in a test,
     # the time its transaction began, the same for every one.
-    %{seen_at: epoch!(1, 0, "a").observed_at}
+    %{seen_at: epoch!(1, 1, "a").observed_at}
   end
 
   describe "paging" do
     test "walking the pages gives every item of every source once, in one read's order",
          %{seen_at: seen_at} do
       owner = human("a")
-      Enum.each(2..4, &epoch!(&1, 0, "a"))
-      epoch!(2, 1, "b")
+      Enum.each(2..4, &epoch!(&1, 1, "a"))
+      epoch!(2, 2, "b")
 
       proposal!(@fleet, 1, closes_at: DateTime.add(seen_at, -60))
       vote!(@fleet, 1, wallet("a"), true, [1, 3])
@@ -114,7 +114,7 @@ defmodule Keyfleet.ActivityTest do
         )
       end
 
-      Enum.each(2..120, &epoch!(&1, 0, "a"))
+      Enum.each(2..120, &epoch!(&1, 1, "a"))
       # More votes than are read at once, all newer than both proposals.
       proposal!(@fleet, 1, %{})
       proposal!(@fleet, 2, %{})
@@ -162,7 +162,7 @@ defmodule Keyfleet.ActivityTest do
     test "what happens after the first page is read stays out of the pages after it",
          %{seen_at: seen_at} do
       owner = human("a")
-      Enum.each(2..3, &epoch!(&1, 0, "a"))
+      Enum.each(2..3, &epoch!(&1, 1, "a"))
       post!(owner, "general", "Morning")
       post!(owner, "coding", "Pushed the survey script")
       Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
@@ -188,8 +188,8 @@ defmodule Keyfleet.ActivityTest do
       Workspace.create(@fleet, "note", %{"title" => "Plates"})
       post!(owner, "general", "Survey done")
       Keys.detach_operator!(pairing, %{}, actor: owner)
-      epoch!(4, 0, "a")
-      epoch!(2, 1, "b")
+      epoch!(4, 1, "a")
+      epoch!(2, 2, "b")
       proposal!(@fleet, 2, %{})
       vote!(@fleet, 2, wallet("a"), true, [1])
       stayed = agent("d")
@@ -287,6 +287,16 @@ defmodule Keyfleet.ActivityTest do
                  {:post, "coding", 1},
                  {:posts, "general", 5}
                ]
+  end
+
+  # A key's mint is its first ownership epoch, 1, and each transfer adds one.
+  test "a key bought and then passed on is one sale and one change of hands" do
+    epoch!(1, 2, "b")
+
+    %{items: items} = Activity.page(@fleet, nil)
+
+    assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
+             [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
   end
 
   describe "headline" do
@@ -389,12 +399,12 @@ defmodule Keyfleet.ActivityTest do
   test "an agent that stopped and runs a key in another fleet is shown running it" do
     owner = human("a")
     ChainHelpers.seed_cursor!(@other_fleet)
-    epoch!(3, 0, "a", @other_fleet)
+    epoch!(3, 1, "a", @other_fleet)
     moved = agent("c")
     stayed = agent("d")
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: moved)
     Agents.ensure_profile!(%{name: "Dock hand", declared_harness: "test"}, actor: stayed)
-    epoch!(2, 0, "a")
+    epoch!(2, 1, "a")
 
     for {runner, token_id} <- [{moved, 1}, {stayed, 2}] do
       pairing = Keys.request_pairing!(@fleet, token_id, %{}, actor: runner)

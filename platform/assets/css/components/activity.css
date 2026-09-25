@@ -1,6 +1,6 @@
 /* Lines of what has happened in a fleet: one sentence each, with when it
-   happened below it. A problem raised with an item is marked in the warm
-   accent. */
+   happened below it. A run of posts shows its newest words on a line of
+   their own. A problem raised with an item is marked in the warm accent. */
 
 .activity-lines {
   display: grid;
@@ -36,6 +36,10 @@
 
 .activity-line__quote {
   color: var(--ash-muted);
+}
+
+.activity-line[data-kind="posts"] .activity-line__quote {
+  display: block;
 }
 
 .activity-line__time {

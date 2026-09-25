@@ -109,7 +109,7 @@ defmodule Keyfleet.MessagesTest do
     assert posted.author_wallet == wallet("c")
     assert posted.agent_profile_id == request.agent_profile_id
 
-    epoch!(ownership_epoch: 1, owner_wallet: wallet("d"), log_index: 1)
+    epoch!(ownership_epoch: 2, owner_wallet: wallet("d"), log_index: 1)
 
     assert {:error, %Ash.Error.Forbidden{}} = send_as(agent, "general", "Still here", "k-3")
     assert Enum.map(read("general"), & &1.id) == [posted.id]
@@ -302,7 +302,7 @@ defmodule Keyfleet.MessagesTest do
     assert {first.as_key, first.author_wallet} == {7, wallet("b")}
 
     # Selling key 7 makes key 30 their highest-ranked key.
-    epoch!(token_id: 7, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+    epoch!(token_id: 7, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 1)
 
     second = post!(person, "general", "Still here")
     assert {second.as_key, second.author_wallet} == {30, wallet("c")}
@@ -324,14 +324,14 @@ defmodule Keyfleet.MessagesTest do
     assert {first.as_key, first.author_wallet, first.author_kind} == {12, wallet("f"), :agent}
 
     # Key 12 changes hands, which ends the agent running it.
-    epoch!(token_id: 12, ownership_epoch: 1, owner_wallet: wallet("e"), log_index: 1)
+    epoch!(token_id: 12, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 1)
 
     assert post!(agent, "general", "Still surveying").as_key == 40
   end
 
   test "a repeated send key answers with the key the post was first written as", %{owner: owner} do
     {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
-    epoch!(token_id: 1, ownership_epoch: 1, owner_wallet: wallet("b"), log_index: 1)
+    epoch!(token_id: 1, ownership_epoch: 2, owner_wallet: wallet("b"), log_index: 1)
     epoch!(token_id: 2, owner_wallet: wallet("a"))
 
     {:ok, again} = send_as(owner, "general", "Hull survey started", "k-1")
@@ -347,11 +347,11 @@ defmodule Keyfleet.MessagesTest do
     assert {sent.as_key, sent.author_wallet} == {7, wallet("b")}
 
     # Key 7 moves to the person's other wallet, then leaves them altogether.
-    epoch!(token_id: 7, ownership_epoch: 1, owner_wallet: wallet("c"), log_index: 1)
+    epoch!(token_id: 7, ownership_epoch: 2, owner_wallet: wallet("c"), log_index: 1)
     {:ok, again} = send_as(person, "general", "Hull survey started", "k-1")
     assert {again.id, again.seq} == {sent.id, 1}
 
-    epoch!(token_id: 7, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 2)
+    epoch!(token_id: 7, ownership_epoch: 3, owner_wallet: wallet("e"), log_index: 2)
     {:ok, still} = send_as(person, "general", "Hull survey started", "k-1")
     assert still.id == sent.id
 
@@ -365,7 +365,7 @@ defmodule Keyfleet.MessagesTest do
   test "a key that changes hands while its post is being written leaves nothing written" do
     # A wallet of its own, so the key it sells is the only key it holds.
     seller_wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
-    epoch!(ownership_epoch: 1, owner_wallet: seller_wallet, log_index: 1)
+    epoch!(ownership_epoch: 2, owner_wallet: seller_wallet, log_index: 1)
     seller = %Actors.Human{human_account_id: 1, wallet_addresses: [seller_wallet]}
     test_pid = self()
     moved = :atomics.new(1, [])
@@ -378,7 +378,7 @@ defmodule Keyfleet.MessagesTest do
       fn _event, _measurements, meta, _config ->
         if self() == test_pid and String.contains?(meta.query, "pg_advisory_xact_lock") and
              :atomics.compare_exchange(moved, 1, 0, 1) == :ok do
-          epoch!(ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 2)
+          epoch!(ownership_epoch: 3, owner_wallet: wallet("e"), log_index: 2)
         end
       end,
       nil
@@ -433,7 +433,7 @@ defmodule Keyfleet.MessagesTest do
     %{
       fleet_id: @fleet,
       token_id: 1,
-      ownership_epoch: 0,
+      ownership_epoch: 1,
       owner_wallet: wallet("a"),
       block_number: 10,
       block_hash: "0x" <> String.duplicate("a", 64),

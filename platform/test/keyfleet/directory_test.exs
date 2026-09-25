@@ -24,7 +24,7 @@ defmodule Keyfleet.DirectoryTest do
     Rooms.bootstrap_rooms!()
     KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 8_453)
     ChainHelpers.seed_cursor!(@fleet)
-    for token_id <- 1..6, do: epoch!(token_id, 0, @owner)
+    for token_id <- 1..6, do: epoch!(token_id, 1, @owner)
     :ok
   end
 
@@ -39,7 +39,7 @@ defmodule Keyfleet.DirectoryTest do
     request!(agent("d", "Waiting"), 4)
     Keys.detach_operator!(attach!(agent("e", "Removed"), 5), %{}, actor: owner())
     attach!(agent("f", "Former"), 6)
-    epoch!(6, 1, "0x" <> String.duplicate("9", 40))
+    epoch!(6, 2, "0x" <> String.duplicate("9", 40))
 
     {:ok, fleet} = Directory.fleet(@fleet)
 

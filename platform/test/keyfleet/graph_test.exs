@@ -47,7 +47,7 @@ defmodule Keyfleet.GraphTest do
       %{
         fleet_id: @fleet,
         token_id: 1,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: @owner,
         block_number: 10,
         block_hash: "0x" <> String.duplicate("a", 64),
@@ -82,7 +82,7 @@ defmodule Keyfleet.GraphTest do
 
     assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
     [command] = for %{type: "keyfleet.command"} = event <- events, do: event
-    assert command.payload["principal"] == "member:8453:#{@contract}:1@0/human:#{@owner}"
+    assert command.payload["principal"] == "member:8453:#{@contract}:1@1/human:#{@owner}"
 
     {:ok, %{"result" => %{"events" => logged}}} =
       Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})

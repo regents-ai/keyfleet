@@ -46,7 +46,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
     input = event()
     Keys.record_epoch!(input, actor: @system)
 
-    for {field, value} <- [fleet_id: @other_fleet, token_id: 2, ownership_epoch: 1] do
+    for {field, value} <- [fleet_id: @other_fleet, token_id: 2, ownership_epoch: 2] do
       assert {:error, %Ash.Error.Invalid{}} =
                Keys.record_epoch(Map.put(input, field, value), actor: @system)
     end
@@ -60,12 +60,12 @@ defmodule Keyfleet.KeyAttachmentsTest do
     first = Keys.record_epoch!(event(), actor: @system)
 
     third =
-      Keys.record_epoch!(event(ownership_epoch: 2, owner_wallet: wallet("b"), log_index: 2),
+      Keys.record_epoch!(event(ownership_epoch: 3, owner_wallet: wallet("b"), log_index: 2),
         actor: @system
       )
 
     second =
-      Keys.record_epoch!(event(ownership_epoch: 1, owner_wallet: wallet("b"), log_index: 1),
+      Keys.record_epoch!(event(ownership_epoch: 2, owner_wallet: wallet("b"), log_index: 1),
         actor: @system
       )
 
@@ -209,7 +209,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
           id: Ecto.UUID.dump!(Ash.UUID.generate()),
           fleet_id: @other_fleet,
           token_id: 2,
-          ownership_epoch: 1,
+          ownership_epoch: 2,
           owner_wallet: wallet("b"),
           block_number: 11,
           block_hash: hash("b"),
@@ -383,7 +383,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
       %{
         fleet_id: @fleet,
         token_id: 1,
-        ownership_epoch: 0,
+        ownership_epoch: 1,
         owner_wallet: wallet("a"),
         block_number: 10,
         block_hash: hash("a"),

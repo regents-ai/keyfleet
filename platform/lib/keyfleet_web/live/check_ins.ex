@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.CheckIns do
     ~H"""
     <aside id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title" hidden>
       <div class="who-is-here__heading">
-        <h2 id="fleet-who-title">Who’s here</h2>
+        <h2 id="fleet-who-title" tabindex="-1">Who’s here</h2>
         <Regent.Primitives.button
           id="fleet-who-close"
           class="who-is-here__close"

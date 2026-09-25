@@ -578,7 +578,7 @@ defmodule Keyfleet.FleetRoomsTest do
         %{
           fleet_id: fleet,
           token_id: token_id,
-          ownership_epoch: 0,
+          ownership_epoch: 1,
           owner_wallet: wallet(token_id),
           block_number: 10,
           block_hash: "0x" <> String.duplicate("a", 64),

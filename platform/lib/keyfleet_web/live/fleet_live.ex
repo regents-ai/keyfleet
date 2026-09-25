@@ -222,12 +222,15 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # The panels beside the map open one at a time, in the same place: opening
-  # one closes the others without moving the reader's focus.
+  # one closes the others and takes the reader to its heading. Closed again
+  # from its button, the heading can't take focus, so it stays on the button.
   defp toggle_panel(panel) do
-    Enum.reduce(@panels, %JS{}, fn
+    @panels
+    |> Enum.reduce(%JS{}, fn
       {^panel, button}, js -> toggle(js, panel, button)
       {other, button}, js -> close_quietly(js, other, button)
     end)
+    |> JS.focus(to: panel <> "-title")
   end
 
   defp close(panel, button),
@@ -259,7 +262,7 @@ defmodule KeyfleetWeb.FleetLive do
       data-wide-only
     >
       <div class="fleet-now__heading">
-        <h2 id="fleet-now-title">What’s happening</h2>
+        <h2 id="fleet-now-title" tabindex="-1">What’s happening</h2>
         <Regent.Primitives.button
           id="fleet-now-close"
           class="fleet-now__close"
@@ -348,7 +351,7 @@ defmodule KeyfleetWeb.FleetLive do
     assigns = assign(assigns, token_id: token_id, agent: agent)
 
     ~H"""
-    <.link patch={KeyLinks.key_path(@fleet_id, @token_id, @params)} data-key={@token_id}>{key_name(
+    <.link patch={KeyLinks.key_path(@fleet_id, @token_id, @params)} data-key={@token_id}>{ActivityLines.key_name(
       @token_id,
       @agent
     )}</.link>
@@ -380,10 +383,15 @@ defmodule KeyfleetWeb.FleetLive do
     ~H|<q class="activity-line__quote">{@text}</q>|
   end
 
-  defp activity_part(assigns), do: ~H"{@part}"
+  defp activity_part(%{part: {:proposal, number}} = assigns) do
+    assigns = assign(assigns, :number, number)
 
-  defp key_name(token_id, nil), do: "Key #{grouped(token_id)}"
-  defp key_name(token_id, agent), do: "#{agent} (key #{grouped(token_id)})"
+    ~H|<.link navigate={ProposalsPage.detail_path(@fleet_id, @number)} data-proposal={@number}>{ActivityLines.proposal_name(
+  @number
+)}</.link>|
+  end
+
+  defp activity_part(assigns), do: ~H"{@part}"
 
   attr :fleet, :map, required: true
 
@@ -398,7 +406,7 @@ defmodule KeyfleetWeb.FleetLive do
       hidden
     >
       <div class="fleet-about__heading">
-        <h2 id="fleet-about-title">How this fleet works</h2>
+        <h2 id="fleet-about-title" tabindex="-1">How this fleet works</h2>
         <Regent.Primitives.button
           id="fleet-about-close"
           class="fleet-about__close"

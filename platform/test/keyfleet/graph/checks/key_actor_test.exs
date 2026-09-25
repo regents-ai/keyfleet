@@ -129,7 +129,7 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
         %{
           fleet_id: fleet,
           token_id: token_id,
-          ownership_epoch: 0,
+          ownership_epoch: 1,
           owner_wallet: wallet(token_id),
           block_number: 10,
           block_hash: "0x" <> String.duplicate("a", 64),
@@ -147,12 +147,12 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
       %{
         fleet_id: fleet,
         token_id: token_id,
-        ownership_epoch: 1,
+        ownership_epoch: 2,
         owner_wallet: "0x" <> String.duplicate("7", 40),
         block_number: 11,
         block_hash: "0x" <> String.duplicate("b", 64),
         transaction_hash:
-          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}/1"), case: :lower),
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}/2"), case: :lower),
         log_index: 0
       },
       actor: %Actors.System{}
@@ -165,7 +165,7 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
   defp sell_all!(fleet) do
     epochs =
       for token_id <- 1..46_365,
-          epoch <- if(rem(token_id, 10) == 0, do: [0, 1], else: [0]),
+          epoch <- if(rem(token_id, 10) == 0, do: [1, 2], else: [1]),
           do: {token_id, epoch}
 
     rows =

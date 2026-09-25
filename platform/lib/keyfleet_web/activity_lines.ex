@@ -11,16 +11,21 @@ defmodule KeyfleetWeb.ActivityLines do
       no longer there;
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
-    * `{:quote, text}`: words a member wrote, or a launch's name.
+    * `{:quote, text}`: words a member wrote, or a launch's name;
+    * `{:proposal, number}`: a proposal.
 
-  `text/1` joins the parts for a web page, which escapes them itself, with
-  every member's words through `KeyfleetWeb.DirectoryMD.visible/1`, so none
-  can hide or reverse the sentence around them. `markdown/1` joins them for
-  Markdown, passing every member's words through
+  Every member's words in the parts have been through
+  `KeyfleetWeb.DirectoryMD.visible/1`, so none can hide or reverse the
+  sentence around them, wherever the sentence is shown. Numbers are written
+  the one way every page writes them, "Key 1,234".
+
+  `text/1` joins the parts for a web page, which escapes them itself.
+  `markdown/1` joins them for Markdown, passing every member's words through
   `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
   either.
   """
 
+  alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.FleetLive
 
@@ -52,15 +57,15 @@ defmodule KeyfleetWeb.ActivityLines do
 
   @doc "The item as a list of parts; see the module documentation."
   def parts(%{kind: :post, facts: f}),
-    do: [key(f.by), " in ", room(f.room), ": ", {:quote, f.excerpt}]
+    do: [key(f.by), " in ", room(f.room), ": ", words(f.excerpt)]
 
   def parts(%{kind: :posts, facts: f}) do
-    ["#{f.count} posts in ", room(f.room), " from "] ++
-      listing(Enum.map(f.keys, &key/1), f.others) ++ [": ", {:quote, f.excerpt}]
+    ["#{Rules.grouped(f.count)} posts in ", room(f.room), " from "] ++
+      listing(Enum.map(f.keys, &key/1), f.others) ++ [": ", words(f.excerpt)]
   end
 
   def parts(%{kind: :room_named, facts: f}),
-    do: [key(f.by), " named a room ", {:quote, f.topic}, "."]
+    do: [key(f.by), " named a room ", words(f.topic), "."]
 
   def parts(%{kind: :created, facts: %{by: by, item: item}}) do
     case Map.fetch(@created, item.type) do
@@ -101,41 +106,43 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :linked, facts: %{relation: "produces"} = f}),
     do: [item(f.source), " produced ", item(f.target), "."]
 
-  def parts(%{kind: :sale, facts: %{token_ids: [token_id]}}), do: ["Key #{token_id} was bought."]
+  def parts(%{kind: :sale, facts: %{token_ids: [token_id]}}),
+    do: ["Key #{Rules.grouped(token_id)} was bought."]
 
   def parts(%{kind: :sale, facts: %{token_ids: [first | _] = token_ids}}) do
     last = List.last(token_ids)
 
     if token_ids == Enum.to_list(first..last),
-      do: ["Keys #{first}–#{last} were bought."],
-      else: ["#{length(token_ids)} keys were bought."]
+      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)} were bought."],
+      else: ["#{Rules.keys(length(token_ids))} were bought."]
   end
 
-  def parts(%{kind: :transfer, facts: f}), do: ["Key #{f.token_id} changed hands."]
+  def parts(%{kind: :transfer, facts: f}),
+    do: ["Key #{Rules.grouped(f.token_id)} changed hands."]
 
   def parts(%{kind: :agent_started, facts: f}),
-    do: [{:agent, f.agent.name}, " started running key #{f.token_id}."]
+    do: [agent(f.agent), " started running key #{Rules.grouped(f.token_id)}."]
 
   def parts(%{kind: :agent_stopped, facts: f}) do
     stopped =
       if f.ended_reason == :stepped_down,
-        do: " stepped down from key #{f.token_id}",
-        else: " stopped running key #{f.token_id}"
+        do: " stepped down from key #{Rules.grouped(f.token_id)}",
+        else: " stopped running key #{Rules.grouped(f.token_id)}"
 
     moved_on =
       case f.now_runs do
         %{token_id: token_id, fleet_name: fleet_name} ->
-          ", and now runs key #{token_id} in #{fleet_name}."
+          ", and now runs key #{Rules.grouped(token_id)} in #{fleet_name}."
 
         nil ->
           "."
       end
 
-    [{:agent, f.agent.name}, stopped, moved_on]
+    [agent(f.agent), stopped, moved_on]
   end
 
   def parts(%{kind: :proposed, facts: f}),
-    do: [holder(f.proposer), " put Proposal #{f.number} to a vote" | proposal_gist(f)]
+    do: [holder(f.proposer), " put ", proposal(f), " to a vote" | proposal_gist(f)]
 
   def parts(%{kind: :votes, facts: f}) do
     votes =
@@ -144,44 +151,58 @@ defmodule KeyfleetWeb.ActivityLines do
       |> Enum.intersperse([" and "])
       |> List.flatten()
 
-    votes ++ [" on Proposal #{f.number}."]
+    votes ++ [" on ", proposal(f), "."]
   end
 
   def parts(%{kind: :executed, facts: %{kind: :decision} = f}),
-    do: ["Proposal #{f.number} was recorded as decided."]
+    do: [proposal(f), " was recorded as decided."]
 
   def parts(%{kind: :executed, facts: %{kind: :pay} = f}),
-    do: ["The fleet paid #{FleetLive.short_wallet(f.payment.recipient)} (Proposal #{f.number})."]
+    do: ["The fleet paid #{FleetLive.short_wallet(f.payment.recipient)} (", proposal(f), ")."]
 
   def parts(%{kind: :executed, facts: %{kind: :autolaunch, launch: %{} = launch} = f}),
-    do: ["The fleet launched ", launch(launch), " (Proposal #{f.number})."]
+    do: ["The fleet launched ", launch(launch), " (", proposal(f), ")."]
 
   def parts(%{kind: :executed, facts: %{kind: :autolaunch} = f}),
-    do: ["The fleet launched its token (Proposal #{f.number})."]
+    do: ["The fleet launched its token (", proposal(f), ")."]
 
   def parts(%{kind: :outcome, facts: f}) do
-    tally = "#{f.yes} yes, #{f.no} no, of #{f.eligible} keys"
+    tally =
+      "#{Rules.grouped(f.yes)} yes, #{Rules.grouped(f.no)} no, of #{Rules.keys(f.eligible)}"
 
-    case f.status do
-      status when status in [:passed, :executed] -> ["Proposal #{f.number} passed: #{tally}."]
-      :failed -> ["Proposal #{f.number} didn’t pass: #{tally}."]
-      :expired -> ["Proposal #{f.number} passed (#{tally}) but wasn’t carried out in time."]
-      :closed -> ["Proposal #{f.number} passed (#{tally}), but another launch went ahead."]
-    end
+    outcome =
+      case f.status do
+        status when status in [:passed, :executed] -> " passed: #{tally}."
+        :failed -> " didn’t pass: #{tally}."
+        :expired -> " passed (#{tally}) but wasn’t carried out in time."
+        :closed -> " passed (#{tally}), but another launch went ahead."
+      end
+
+    [proposal(f), outcome]
   end
 
   def parts(%{kind: :open_question, facts: f}),
-    do: ["For ", item(f.goal), ": ", {:quote, f.question}]
+    do: ["For ", item(f.goal), ": ", words(f.question)]
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"
   defp who(by), do: key(by)
 
-  defp key(%{token_id: token_id, agent: agent}), do: {:key, token_id, agent}
+  defp key(%{token_id: token_id, agent: nil}), do: {:key, token_id, nil}
+  defp key(%{token_id: token_id, agent: agent}), do: {:key, token_id, visible(agent)}
 
-  defp item(%{id: id, title: title}), do: {:item, id, title}
+  defp item(%{id: id, title: nil}), do: {:item, id, nil}
+  defp item(%{id: id, title: title}), do: {:item, id, visible(title)}
 
-  defp room(room), do: {:room, room.slug, room.topic || room.name}
+  defp room(room), do: {:room, room.slug, visible(room.topic || room.name)}
+
+  defp agent(%{name: name}), do: {:agent, visible(name)}
+
+  defp words(text), do: {:quote, visible(text)}
+
+  defp proposal(%{number: number}), do: {:proposal, number}
+
+  defp visible(text), do: DirectoryMD.visible(text)
 
   defp confidence(%{type: "finding", confidence: confidence}) when is_binary(confidence),
     do: [" (#{confidence} confidence)"]
@@ -189,22 +210,22 @@ defmodule KeyfleetWeb.ActivityLines do
   defp confidence(_item), do: []
 
   defp holder(%{token_id: token_id}) when is_integer(token_id),
-    do: "The holder of key #{token_id}"
+    do: "The holder of key #{Rules.grouped(token_id)}"
 
   defp holder(%{wallet: wallet}), do: FleetLive.short_wallet(wallet)
 
   defp proposal_gist(%{kind: :autolaunch, launch: %{} = launch}),
     do: [" to launch ", launch(launch), "."]
 
-  defp proposal_gist(%{gist: gist}) when is_binary(gist), do: [": ", {:quote, gist}]
+  defp proposal_gist(%{gist: gist}) when is_binary(gist), do: [": ", words(gist)]
   defp proposal_gist(_facts), do: ["."]
 
-  defp launch(%{name: name, symbol: symbol}), do: {:quote, "#{name} (#{symbol})"}
+  defp launch(%{name: name, symbol: symbol}), do: words("#{name} (#{symbol})")
 
   defp voted(%{count: 0}, _word), do: nil
 
   defp voted(%{count: count, token_ids: token_ids}, word) do
-    named = Enum.map(token_ids, &"#{&1}")
+    named = Enum.map(token_ids, &Rules.grouped/1)
     lead = if count == 1, do: "Key ", else: "Keys "
     [lead | listing(named, count - length(token_ids))] ++ [" voted #{word}"]
   end
@@ -212,7 +233,7 @@ defmodule KeyfleetWeb.ActivityLines do
   # "A", "A and B", "A, B and C", "A, B, C and 2 others".
   defp listing(parts, 0), do: joined(parts)
   defp listing(parts, 1), do: joined(parts ++ ["1 other"])
-  defp listing(parts, others), do: joined(parts ++ ["#{others} others"])
+  defp listing(parts, others), do: joined(parts ++ ["#{Rules.grouped(others)} others"])
 
   defp joined([only]), do: [only]
 
@@ -221,25 +242,34 @@ defmodule KeyfleetWeb.ActivityLines do
     Enum.intersperse(rest, ", ") ++ [" and ", last]
   end
 
-  defp shown(text) when is_binary(text), do: text
-  defp shown({:key, token_id, nil}), do: "Key #{token_id}"
-  defp shown({:key, token_id, agent}), do: "#{seen(agent)} (key #{token_id})"
-  defp shown({:item, _id, nil}), do: "an item"
-  defp shown({:item, _id, title}), do: "“#{seen(title)}”"
-  defp shown({:room, _slug, name}), do: seen(name)
-  defp shown({:agent, name}), do: seen(name)
-  defp shown({:quote, text}), do: "“#{seen(text)}”"
+  @doc ~S|How a key is named on a page: "Key 1,234", or "Ada (key 1,234)" when an agent runs it.|
+  def key_name(token_id, nil), do: "Key #{Rules.grouped(token_id)}"
+  def key_name(token_id, agent), do: "#{agent} (key #{Rules.grouped(token_id)})"
 
-  defp seen(text), do: DirectoryMD.visible(text)
+  @doc ~S|How a proposal is named on a page: "Proposal 12".|
+  def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
+
+  defp shown(text) when is_binary(text), do: text
+  defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
+  defp shown({:item, _id, nil}), do: "an item"
+  defp shown({:item, _id, title}), do: "“#{title}”"
+  defp shown({:room, _slug, name}), do: name
+  defp shown({:agent, name}), do: name
+  defp shown({:quote, text}), do: "“#{text}”"
+  defp shown({:proposal, number}), do: proposal_name(number)
 
   defp marked(text) when is_binary(text), do: text
-  defp marked({:key, token_id, nil}), do: "Key #{token_id}"
-  defp marked({:key, token_id, agent}), do: said(agent, :key) <> " (key #{token_id})"
+  defp marked({:key, token_id, nil}), do: key_name(token_id, nil)
+
+  defp marked({:key, token_id, agent}),
+    do: said(agent, :key) <> " (key #{Rules.grouped(token_id)})"
+
   defp marked({:item, _id, nil}), do: "an item"
   defp marked({:item, _id, title}), do: said(title, :item)
   defp marked({:room, _slug, name}), do: said(name, :room)
   defp marked({:agent, name}), do: said(name, :agent)
   defp marked({:quote, text}), do: said(text, :quote)
+  defp marked({:proposal, number}), do: proposal_name(number)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
 

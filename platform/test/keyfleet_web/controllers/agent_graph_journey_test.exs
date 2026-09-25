@@ -44,7 +44,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!()
     deploy(@fleet, @contract)
-    for {token_id, wallet} <- @owners, do: record_owner(token_id, 0, wallet)
+    for {token_id, wallet} <- @owners, do: record_owner(token_id, 1, wallet)
 
     secret = :crypto.strong_rand_bytes(32)
     old = Application.get_env(:keyfleet, :siwa_broker_url)
@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     [first | _] = commands
 
     assert first["payload"] == %{
-             "principal" => "member:8453:#{@contract}:1@0/agent:#{ann.address}",
+             "principal" => "member:8453:#{@contract}:1@1/agent:#{ann.address}",
              "op" => "create",
              "result" => %{"id" => goal["id"], "version" => 1},
              "events" => first["payload"]["events"]
@@ -183,7 +183,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     assert %{
              "key" => %{"chain_id" => 8453, "contract" => @contract, "token_id" => 1},
-             "ownership_epoch" => 0,
+             "ownership_epoch" => 1,
              "kind" => "agent",
              "operator_wallet" => operator,
              "pairing_id" => pairing_id,
@@ -333,7 +333,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       end)
 
     await(fn -> Process.info(writer, :message_queue_len) == {:message_queue_len, 1} end)
-    record_owner(1, 1, "0x" <> String.duplicate("c", 40))
+    record_owner(1, 2, "0x" <> String.duplicate("c", 40))
     :sys.resume(writer)
 
     refused = Task.await(waiting, 15_000)
@@ -344,7 +344,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert object["version"] == 1
     assert object["data"]["status"] == "open"
 
-    assert %{"key" => %{"token_id" => 1}, "ownership_epoch" => 0, "wallet" => wallet} =
+    assert %{"key" => %{"token_id" => 1}, "ownership_epoch" => 1, "wallet" => wallet} =
              object["sys"]["created_by"]
 
     assert wallet == ann.address
@@ -359,7 +359,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     for {field, value} <- [
           actor: "system",
-          principal: "member:8453:#{@contract}:2@0/human:#{@owners[2]}",
+          principal: "member:8453:#{@contract}:2@1/human:#{@owners[2]}",
           auth: %{kind: "human"},
           writable_scopes: ["fleet", "level:1"],
           sys: %{archived: true}
@@ -514,7 +514,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for {fleet, n} <- Enum.with_index(unlevelled, 1) do
       ChainHelpers.seed_cursor!(fleet)
       deploy(fleet, "0x" <> String.duplicate("#{n}", 40))
-      record_owner(1, 0, owner_wallet(1), fleet)
+      record_owner(1, 1, owner_wallet(1), fleet)
     end
 
     start_graph(c, fleets: [@fleet | unlevelled])
@@ -782,20 +782,20 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     start_graph(c)
     [_ann, _bea] = pair_agents(c)
     new_owner = "0x" <> String.duplicate("c", 40)
-    record_owner(1, 1, new_owner)
+    record_owner(1, 2, new_owner)
     cal = join(c, "Cal")
     pair(c, cal, 1, new_owner)
 
     goal = write!(c, cal, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
-    assert %{"ownership_epoch" => 1, "wallet" => wallet} =
+    assert %{"ownership_epoch" => 2, "wallet" => wallet} =
              graph(c, cal, "get", %{id: goal["id"]}).body["object"]["sys"]["created_by"]
 
     assert wallet == cal.address
     assert [command] = commands(c, cal)
-    assert command["payload"]["principal"] == "member:8453:#{@contract}:1@1/agent:#{cal.address}"
+    assert command["payload"]["principal"] == "member:8453:#{@contract}:1@2/agent:#{cal.address}"
     assert [stamp] = logged_commands()
-    assert stamp["payload"]["auth"]["ownership_epoch"] == 1
+    assert stamp["payload"]["auth"]["ownership_epoch"] == 2
   end
 
   test "a long note fits in one write, and a body past the write limit is refused as too large",
@@ -999,7 +999,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       deploy(@levelled, "0x" <> String.duplicate("6", 40))
     end
 
-    for token_id <- token_ids, do: record_owner(token_id, 0, owner_wallet(token_id), @levelled)
+    for token_id <- token_ids, do: record_owner(token_id, 1, owner_wallet(token_id), @levelled)
   end
 
   # One agent for each named Cascade key, paired by the key's owner.
