@@ -184,7 +184,8 @@ defmodule Keyfleet.DirectoryTest do
   defp request!(actor, token_id), do: Keys.request_pairing!(@fleet, token_id, %{}, actor: actor)
 
   defp attach!(actor, token_id),
-    do: actor |> request!(token_id) |> Keys.approve_pairing!(%{}, actor: owner())
+    do:
+      actor |> request!(token_id) |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
 
   defp post!(slug, body) do
     Rooms.send_message!(

@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     @fleet
     |> Keys.request_pairing!(1, %{}, actor: agent)
-    |> Keys.approve_pairing!(%{}, actor: owner())
+    |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
 
     body = conn |> get("/fleets/#{@fleet}.md") |> response(200)
     lines = String.split(body, "\n")
