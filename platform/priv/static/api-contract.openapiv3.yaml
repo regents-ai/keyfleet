@@ -1377,7 +1377,7 @@ components:
                   properties:
                     chain_id: {type: integer, minimum: 1}
                     contract: {type: string, pattern: '^0x[0-9a-f]{40}$'}
-                    token_id: {type: integer, minimum: 0}
+                    token_id: {type: integer, minimum: 1}
                 ownership_epoch: {type: integer, minimum: 1}
                 kind: {type: string, enum: [human, agent]}
                 wallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
