@@ -74,15 +74,14 @@
      on a phone, the prompt mark and Copy sit on a row above it. */
   .rl-hero-command {
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "prompt text copy";
-    align-items: start; gap: var(--space-2);
-    width: min(100%, 60rem); margin-block-start: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    align-items: center; gap: var(--space-2);
+    width: min(100%, 44rem); margin-block-start: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
     border: 1px solid var(--ash-line-strong); background: var(--rl-panel); text-align: start;
   }
   .rl-hero-command__prompt, .rl-hero-command__text { font-family: var(--font-family-mono); font-size: .9375rem; line-height: 1.6; }
   .rl-hero-command__prompt { grid-area: prompt; color: var(--ash-accent-warm); }
-  .rl-hero-command__text { grid-area: text; color: var(--rl-muted); overflow-wrap: anywhere; }
+  .rl-hero-command__text { grid-area: text; color: var(--rl-ink); overflow-wrap: anywhere; }
   .rl-hero-command__copy { grid-area: copy; }
-  .rl-hero-command__lead { color: var(--rl-ink); }
   .rl-hero-column > .rl-hero-reads { margin-block-start: .75rem; color: var(--rl-muted); font-size: .8125rem; }
   .rl-hero-column > .rl-hero-then { margin-block-start: var(--space-3); max-width: 60ch; font-size: clamp(1rem, .9rem + .3vw, 1.125rem); line-height: 1.45; text-wrap: balance; }
 
@@ -196,9 +195,8 @@
     .rl-hero-copy { padding: 0; }
     .rl-hero-copy h1 { font-size: clamp(2.5rem, 10vw, 4.5rem); }
     .rl-hero-prism { inset-inline: var(--rg-panel-padding); block-size: 12rem; opacity: .6; }
-    .rl-hero-command { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prompt copy" "text text"; align-items: center; row-gap: .75rem; padding: var(--space-2); }
+    .rl-hero-command { padding: var(--space-2); }
     .rl-hero-command__prompt, .rl-hero-command__text { font-size: .8125rem; line-height: 1.5; }
-    .rl-hero-command__copy { justify-self: end; }
     .rl-brand { font-size: .875rem; }
   }
   @media (max-width: 24rem) {

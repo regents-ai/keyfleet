@@ -424,7 +424,6 @@ test("on a phone the hero reads top to bottom, then the fleets", async ({page}) 
       const order = [
         "#home-tally",
         "#home-title",
-        "#home-instruction-copy",
         "#home-instruction",
         ".rl-hero-mark",
         ".rl-hero-pill",
@@ -438,7 +437,7 @@ test("on a phone the hero reads top to bottom, then the fleets", async ({page}) 
   }
 })
 
-// On a phone, Copy sits above the instruction, on the first screen.
+// On a phone, Copy sits beside the instruction, on the first screen.
 test("on a phone Copy is on the first screen", async ({page}) => {
   for (const viewport of [{width: 375, height: 812}, {width: 320, height: 720}]) {
     await test.step(`${viewport.width} wide`, async () => {

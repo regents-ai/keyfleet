@@ -218,7 +218,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert has_element?(view, "#home-tally [data-tally-dot]")
   end
 
-  test "the command box shows the homepage instruction whole and copies what it shows",
+  test "the command box shows the homepage instruction and copies what it shows",
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
