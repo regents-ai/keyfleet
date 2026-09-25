@@ -30,6 +30,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     %{conn: signed_in(conn)}
   end
 
+  # A change reaches the page as a message already waiting for it. The page
+  # answers a render only after the messages before it, so once the render
+  # returns, whatever the page pushed for the change is already here.
+  defmacrop assert_pushed(view, event, payload) do
+    quote do
+      render(unquote(view))
+      assert_push_event(unquote(view), unquote(event), unquote(payload), 0)
+    end
+  end
+
   # However many keys a fleet has issued, the page reads one page of them; the
   # count it shows comes from counting, not from reading every key.
   test "keys are listed a hundred at a time while the count covers them all", %{conn: conn} do
@@ -438,7 +448,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ])
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert_push_event(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
+      assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
       assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
       assert text(view, "#fleet-sales") =~ "2 of 2,000 keys sold"
 
@@ -449,7 +459,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ])
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert_push_event(view, "keymap:patch", %{minted: 2, keys: [[1, 0]]})
+      assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 0]]})
     end
 
     test "an agent starting or stopping on a key reaches the map as a change", %{conn: conn} do
@@ -458,16 +468,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @path)
 
       pairing = pair!(7)
-      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
+      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
 
       Keys.detach_operator!(pairing, %{}, actor: owner())
-      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
+      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
 
       pairing = pair!(7)
-      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
+      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
 
       Keys.step_down!(pairing, %{}, actor: operator())
-      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
+      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
     end
 
     test "more than 2,000 keys changed at once tells the map to load again", %{conn: conn} do
@@ -476,11 +486,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @path)
 
       send(view.pid, {:keys_changed, @fleet, Enum.to_list(1..2_000)})
-      assert_push_event(view, "keymap:patch", %{keys: keys})
+      assert_pushed(view, "keymap:patch", %{keys: keys})
       assert length(keys) == 2_000
 
       send(view.pid, {:keys_changed, @fleet, Enum.to_list(1..2_001)})
-      assert_push_event(view, "keymap:reset", %{})
+      assert_pushed(view, "keymap:reset", %{})
     end
 
     test "a change in another fleet leaves the page as it is", %{conn: conn} do
@@ -491,9 +501,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       send(view.pid, {:keys_changed, "fibonacci_syndicate", [7, 151]})
 
-      refute_push_event(view, "keymap:patch", _patch)
-      refute_push_event(view, "keymap:reset", _reset)
+      # Rendered first, so the page has handled the change by the time its
+      # pushes are checked.
       assert render(view) == shown
+      refute_push_event(view, "keymap:patch", _patch, 0)
+      refute_push_event(view, "keymap:reset", _reset, 0)
     end
 
     # The key list reads its page again only when a changed key is on it, and
@@ -508,11 +520,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       move!(7, @stranger)
       send(view.pid, {:keys_changed, @fleet, [120]})
-      assert_push_event(view, "keymap:patch", %{keys: [[120, 1]]})
+      assert_pushed(view, "keymap:patch", %{keys: [[120, 1]]})
       assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa…aaaa"
 
       send(view.pid, {:keys_changed, @fleet, [7]})
-      assert_push_event(view, "keymap:patch", %{keys: [[7, 0]]})
+      assert_pushed(view, "keymap:patch", %{keys: [[7, 0]]})
       assert text(view, "#fleet-key-7") =~ "Held by 0xbbbb…bbbb"
       assert shown_keys(view) == Enum.to_list(1..100)
 
@@ -522,7 +534,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       issue!(@fleet, 151, @stranger)
       send(view.pid, {:keys_changed, @fleet, [151]})
-      assert_push_event(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
+      assert_pushed(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
       assert shown_keys(view) == Enum.to_list(101..151)
       assert text(view, "#buy-key-number") == "152"
     end
@@ -607,7 +619,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
     assert Scanner.step(fleet, StubClient) == :ok
 
-    assert_push_event(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
+    assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
     assert text(view, "#buy-key-number") == "2"
     assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 1 of 2,000"
     assert shown_keys(view) == [1]

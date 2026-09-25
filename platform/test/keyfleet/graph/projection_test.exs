@@ -364,8 +364,13 @@ defmodule Keyfleet.Graph.ProjectionTest do
              links |> Enum.map(&elem(&1, 1)) |> Enum.take(199)
   end
 
+  # The projector's own round asks the writer where its log stands, so it is
+  # set well past the test's time limit: only a poll could reach the held
+  # writer. The polls take most of a minute on a busy machine, so the test is
+  # given two minutes, the longest the sandbox lends it a connection.
+  @tag timeout: 120_000
   test "a thousand polls while the writer is held are all answered without reaching it" do
-    start_projector(catch_up_interval: 60_000)
+    start_projector(catch_up_interval: :timer.hours(1))
     {head, ids} = build_workspace()
     assert Projector.await(@fleet, log_id(), head) == head
     writer = writer()

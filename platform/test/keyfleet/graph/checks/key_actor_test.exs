@@ -66,16 +66,18 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
 
   # Checking a person with three million wallets takes longer than the whole
   # budget, which is spent by the time the check would count the keys sold.
+  # The check that runs out comes last: a read that runs out of time takes the
+  # test's sandboxed database connection with it.
   @tag :capture_log
   test "a budget spent before the keys sold are counted stops the check there" do
     sell(@levelled, 1..2)
     others = List.duplicate("0x" <> String.duplicate("7", 40), 3_000_000)
     slow = %Actors.Human{human_account_id: 1, wallet_addresses: others ++ [wallet(1)]}
 
-    assert {:error, _ran_out} = KeyActor.command(slow, @levelled, 1, "c-1", 5)
-
     assert {:ok, %{writable_scopes: ["fleet", "level:1"]}} =
-             KeyActor.command(slow, @levelled, 1, "c-2", 1_000)
+             KeyActor.command(slow, @levelled, 1, "c-1", 1_000)
+
+    assert {:error, _ran_out} = KeyActor.command(slow, @levelled, 1, "c-2", 5)
   end
 
   # Each read gets what is left of the budget as the database's own time
