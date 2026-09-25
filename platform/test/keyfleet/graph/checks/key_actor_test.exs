@@ -82,12 +82,16 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
 
   # Each read gets what is left of the budget as the database's own time
   # limit, and none starts once it is spent, so a millisecond runs out at one
-  # or the other; either way the write is answered as unavailable.
+  # or the other; either way the write is answered as unavailable. Checking a
+  # person with three million wallets alone takes longer than the millisecond,
+  # so the check can never finish in time.
   @tag :capture_log
   test "a one millisecond check of a sold-out fleet runs out rather than answering late" do
     sell_all!(@levelled)
+    others = List.duplicate("0x" <> String.duplicate("7", 40), 3_000_000)
+    slow = %Actors.Human{human_account_id: 1, wallet_addresses: others ++ [wallet(1)]}
 
-    assert {:error, _ran_out} = KeyActor.command(owner(1), @levelled, 1, "c-1", 1)
+    assert {:error, _ran_out} = KeyActor.command(slow, @levelled, 1, "c-1", 1)
   end
 
   test "a key number past the fleet's supply writes nothing" do

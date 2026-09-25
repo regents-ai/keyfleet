@@ -162,11 +162,22 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   end
 
   # What is left of the check's budget, as the database's time limit for the
-  # next read, in whole milliseconds rounded up. A spent budget reads nothing.
+  # next read, in whole milliseconds. The database starts counting a limit
+  # from the beginning of the millisecond the read is asked in, not from the
+  # moment itself, so the limit is counted from there too and rounded up. A
+  # limit counted from the moment could end up to a millisecond before the
+  # budget does; counted this way it never ends before the budget, so a read
+  # the database cuts off always means the budget is spent. A spent budget
+  # reads nothing.
   defp within(deadline, fleet_id) do
-    case deadline - System.monotonic_time(:microsecond) do
-      left when left > 0 -> {:ok, [context: %{data_layer: %{timeout: div(left + 999, 1_000)}}]}
-      _spent -> {:error, CheckExpiredError.exception(fleet_id: fleet_id)}
+    now = System.monotonic_time(:microsecond)
+
+    if now < deadline do
+      this_millisecond = Integer.floor_div(now, 1_000) * 1_000
+      left = deadline - this_millisecond
+      {:ok, [context: %{data_layer: %{timeout: div(left + 999, 1_000)}}]}
+    else
+      {:error, CheckExpiredError.exception(fleet_id: fleet_id)}
     end
   end
 
