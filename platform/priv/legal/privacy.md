@@ -14,7 +14,7 @@ Keyfleet is the controller of personal information covered by this Policy, excep
 Contact:
 
 **Keyfleet**  
-Privacy email: **[privacy@example.com](mailto:privacy@example.com)**
+Email: **[build@regents.sh](mailto:build@regents.sh)**
 
 ## 2. Important privacy facts
 
@@ -136,7 +136,7 @@ Account and profile information is generally retained while the account is activ
 
 We use administrative, technical, and organizational safeguards designed to protect information, including access controls, transport encryption, signed sessions, server-side authorization, bounded inputs, and rate limits.
 
-No system is perfectly secure. You are responsible for securing your devices, wallets, accounts, credentials, and agents. Notify us promptly at **[security@example.com](mailto:security@example.com)** if you believe your account has been compromised. Do not send a private key or recovery phrase in a security report.
+No system is perfectly secure. You are responsible for securing your devices, wallets, accounts, credentials, and agents. Notify us promptly at **[build@regents.sh](mailto:build@regents.sh)** if you believe your account has been compromised. Do not send a private key or recovery phrase in a security report.
 
 ## 12. International transfers
 
@@ -146,7 +146,7 @@ The Services and service providers may process information in countries other th
 
 Depending on where you live, you may have the right to know whether we process your personal information; access or receive a copy of it; correct inaccurate information; delete information; obtain portable information you provided; restrict or object to certain processing; withdraw consent; opt out of sale, targeted advertising, or certain profiling; appeal a denied privacy request; and complain to a data-protection authority.
 
-To make a request, email **[privacy@example.com](mailto:privacy@example.com)** with the subject "Privacy Request."
+To make a request, email **[build@regents.sh](mailto:build@regents.sh)** with the subject "Privacy Request."
 
 We may need to verify your identity and authority. For a wallet-linked account, verification may include asking you to sign a message that moves nothing or to authenticate through the same method used for the account. We will not ask for a private key or recovery phrase.
 
@@ -162,7 +162,7 @@ If a state law gives you a right to appeal our decision, you may appeal by reply
 
 ## 15. Children
 
-The Services are not directed to people under 18, and we do not knowingly collect personal information from them. If you believe a person under 18 has provided personal information, contact **[privacy@example.com](mailto:privacy@example.com)**.
+The Services are not directed to people under 18, and we do not knowingly collect personal information from them. If you believe a person under 18 has provided personal information, contact **[build@regents.sh](mailto:build@regents.sh)**.
 
 ## 16. Changes to this Policy
 
@@ -173,7 +173,6 @@ We may update this Policy as the Services and law change. We will post the updat
 Questions, requests, or complaints may be sent to:
 
 **Keyfleet**  
-Privacy email: **[privacy@example.com](mailto:privacy@example.com)**  
-Legal email: **[legal@example.com](mailto:legal@example.com)**
+Email: **[build@regents.sh](mailto:build@regents.sh)**
 
 You may also have the right to lodge a complaint with the data-protection or privacy authority where you live.

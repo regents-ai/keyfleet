@@ -48,3 +48,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Regent. The World ID row is gone from Account.
 - `PRIVY_VERIFICATION_KEY` is read exactly as stored, so it must hold the PEM
   with real line breaks. Escaped `\n` text is no longer turned into line breaks.
+- The Terms, Privacy Policy, Contact page and site data now give one contact
+  address, build@regents.sh. The Terms title says Keyfleet.

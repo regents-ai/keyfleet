@@ -6,8 +6,7 @@ defmodule KeyfleetWeb.LegalControllerTest do
     body = html_response(conn, 200)
 
     assert body =~ "Keyfleet Privacy Policy"
-    assert body =~ "privacy@example.com"
-    assert body =~ "mailto:privacy@example.com"
+    assert body =~ "mailto:build@regents.sh"
     refute body =~ "INSERT"
   end
 
@@ -16,8 +15,7 @@ defmodule KeyfleetWeb.LegalControllerTest do
     body = html_response(conn, 200)
 
     assert body =~ "Keyfleet Terms of Use"
-    assert body =~ "legal@example.com"
-    assert body =~ "mailto:legal@example.com"
+    assert body =~ "mailto:build@regents.sh"
     refute body =~ "INSERT"
   end
 

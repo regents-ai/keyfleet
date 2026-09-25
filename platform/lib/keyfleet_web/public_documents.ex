@@ -100,9 +100,9 @@ defmodule KeyfleetWeb.PublicDocuments do
             %{
               "@type" => "ContactPoint",
               "contactType" => "privacy",
-              "email" => "privacy@example.com"
+              "email" => "build@regents.sh"
             },
-            %{"@type" => "ContactPoint", "contactType" => "legal", "email" => "legal@example.com"}
+            %{"@type" => "ContactPoint", "contactType" => "legal", "email" => "build@regents.sh"}
           ]
         },
         %{
