@@ -151,7 +151,7 @@ defmodule KeyfleetWeb.ShellLive do
     do: {:noreply, decide(socket, id, &Keys.decline_pairing/3, "Request turned down.")}
 
   def handle_event("detach_operator", %{"id" => id}, socket),
-    do: {:noreply, decide(socket, id, &Keys.detach_operator/3, "Operator detached.")}
+    do: {:noreply, decide(socket, id, &Keys.detach_operator/3, "Agent removed.")}
 
   def handle_event("send_message", %{"post" => %{"body" => body}}, socket) do
     {:noreply, post(socket, body)}

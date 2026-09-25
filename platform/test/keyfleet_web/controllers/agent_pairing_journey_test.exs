@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
   @join_path "/api/v1/agent/join/status"
   @pairings_path "/api/v1/agent/pairings"
   @pairing_path "/api/v1/agent/keys/fibonacci_syndicate/1/pairing"
+  @step_down_path "/api/v1/agent/keys/fibonacci_syndicate/1/step-down"
   @join_body ~s({ "name": "Wallet agent", "declared_harness": "local" })
   @owner "0x" <> String.duplicate("a", 40)
 
@@ -119,6 +120,44 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
     assert repeated.status == 404
     assert repeated.body == %{"error" => "pairing_not_found"}
     assert send_signed(c, "GET", @pairings_path).body["pairings"] == [withdrawn.body["pairing"]]
+  end
+
+  test "a signed agent steps down from the key it runs, once", c do
+    assert send_signed(c, "POST", @join_path, @join_body).status == 200
+    assert send_signed(c, "POST", @step_down_path).body == %{"error" => "pairing_not_found"}
+
+    requested = send_signed(c, "POST", @pairing_path).body["pairing"]
+    assert send_signed(c, "POST", @step_down_path).status == 404
+
+    [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1)
+
+    Keys.approve_pairing!(request, %{},
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    )
+
+    stepped_down = send_signed(c, "POST", @step_down_path)
+    assert stepped_down.status == 200
+
+    assert %{
+             "status" => "ended",
+             "ended_reason" => "stepped_down",
+             "effective?" => false,
+             "ended_at" => ended_at
+           } = stepped_down.body["pairing"]
+
+    assert stepped_down.body["pairing"]["id"] == requested["id"]
+    assert is_binary(ended_at)
+    assert Keys.current_operator!("fibonacci_syndicate", 1) == nil
+
+    repeated = send_signed(c, "POST", @step_down_path)
+    assert repeated.status == 404
+    assert repeated.body == %{"error" => "pairing_not_found"}
+
+    nowhere = send_signed(c, "POST", "/api/v1/agent/keys/hull_survey/1/step-down")
+    assert nowhere.body == %{"error" => "fleet_unknown"}
+
+    for body <- [~s({"token_id":1}), ~s({"reason":"done"})],
+        do: assert(send_signed(c, "POST", @step_down_path, body).status == 401)
   end
 
   test "only the canonical signed key path and empty body reach the pairing actions", c do

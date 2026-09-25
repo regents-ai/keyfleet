@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.FleetLive do
               Key {key.token_id}
             </.link>
             <span>Held by {short_wallet(key.owner_wallet)}</span>
-            <span>{key.operator_name || "No operator"}</span>
+            <span>{key.operator_name || "No agent"}</span>
           </li>
         </ol>
 

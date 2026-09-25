@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @token ~S"[1-9][0-9]{0,17}"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
+  @step_down_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/step-down\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
@@ -228,6 +229,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     Enum.any?(
       [
         @pairing_path,
+        @step_down_path,
         @create_room_path,
         @topic_path,
         @read_path,
@@ -270,6 +272,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_body(path, params) do
     cond do
       Regex.match?(@pairing_path, path) -> admit(params == %{})
+      Regex.match?(@step_down_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
       op = graph_op(path) -> check_graph_body(op, params)

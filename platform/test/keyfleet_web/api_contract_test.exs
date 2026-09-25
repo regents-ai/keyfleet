@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing",
+             "/api/v1/agent/keys/{fleet_id}/{token_id}/step-down",
              "/api/v1/agent/pairings",
              "/api/v1/agent/profile/update",
              "/api/v1/profile",

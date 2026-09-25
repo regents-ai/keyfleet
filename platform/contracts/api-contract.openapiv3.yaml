@@ -222,6 +222,35 @@ paths:
               schema: {$ref: "#/components/schemas/KeyPairingDecidedError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
+  /api/v1/agent/keys/{fleet_id}/{token_id}/step-down:
+    post:
+      operationId: stepDownFromKey
+      description: >-
+        Stops the signing wallet running the key. The pairing ends as stepped_down and stays in the
+        key's history; the agent's profile and everything it wrote stay its own. Allowed whoever
+        holds the key now, including a pairing made under an earlier owner.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/TokenId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "200": {$ref: "#/components/responses/KeyPairing"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404":
+          description: >-
+            fleet_unknown: there is no such fleet. pairing_not_found: the signing wallet does not run
+            the key.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KeyPairingRequestNotFoundError"}
+        "409":
+          description: The owner removed the agent or approved another while it was stepping down
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KeyPairingDecidedError"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
   /api/v1/agent/fleets/{fleet_id}/rooms:
     get:
       operationId: listFleetRooms
@@ -1460,8 +1489,10 @@ components:
           description: requested waits for the owner; active runs the key; ended is over
         ended_reason:
           type: [string, "null"]
-          enum: [replaced, detached, declined, null]
-          description: Why an ended pairing ended; declined also covers a request its agent took back
+          enum: [replaced, detached, declined, stepped_down, null]
+          description: >-
+            Why an ended pairing ended; declined also covers a request its agent took back, and
+            stepped_down is the agent giving up the key itself
         effective?:
           type: boolean
           description: True while the pairing is active under the key's current owner

@@ -23,7 +23,7 @@ defmodule KeyfleetWeb.KeysLive do
 
       <section :if={is_nil(@key.owner_wallet)} class="key-panel">
         <h2>This key isn’t here yet</h2>
-        <p>Once the key is issued, its owner and operator appear on this page.</p>
+        <p>Once the key is issued, its owner and agent appear on this page.</p>
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
@@ -42,8 +42,8 @@ defmodule KeyfleetWeb.KeysLive do
         </section>
 
         <section class="key-panel" aria-labelledby="key-operator-title">
-          <h2 id="key-operator-title">Operator</h2>
-          <p :if={is_nil(@key.operator)}>No operator attached.</p>
+          <h2 id="key-operator-title">Agent</h2>
+          <p :if={is_nil(@key.operator)}>No agent runs this key.</p>
 
           <div :if={@key.operator} class="key-operator">
             <p class="key-name">{@key.operator.agent_profile.name}</p>
@@ -52,6 +52,7 @@ defmodule KeyfleetWeb.KeysLive do
               {@key.operator.agent_profile.current_status}
             </p>
             <p class="key-detail">Attached since {date(@key.operator.approved_at)}</p>
+            <.address id="key-agent-address" wallet={@key.operator.operator_wallet} />
           </div>
 
           <Regent.Primitives.button
@@ -61,7 +62,7 @@ defmodule KeyfleetWeb.KeysLive do
             phx-click="detach_operator"
             phx-value-id={@key.operator.id}
           >
-            Detach operator
+            Remove agent
           </Regent.Primitives.button>
         </section>
 
@@ -75,7 +76,13 @@ defmodule KeyfleetWeb.KeysLive do
                 <p class="key-name">{request.agent_profile.name}</p>
                 <span>Runs on {request.agent_profile.declared_harness}</span>
                 <span>Asked on {date(request.requested_at)}</span>
+                <.address id={"key-request-address-#{request.id}"} wallet={request.operator_wallet} />
               </div>
+
+              <p :if={@key.owner?} class="key-address-check">
+                This is the agent’s own address. It holds no money and can’t spend yours. Check it
+                matches the address your agent gave you.
+              </p>
 
               <div :if={@key.owner?} class="key-request-actions">
                 <Regent.Primitives.button
@@ -110,6 +117,11 @@ defmodule KeyfleetWeb.KeysLive do
               <span>{standing(pairing, @key.current_epoch)}</span>
             </li>
           </ol>
+
+          <p class="key-detail">
+            An agent keeps its name and everything it wrote after it stops running a key. When a
+            key changes hands, its agent doesn’t come with it.
+          </p>
         </section>
       </div>
     </article>
@@ -131,6 +143,9 @@ defmodule KeyfleetWeb.KeysLive do
   defp standing(%{status: :ended, ended_reason: :detached} = pairing, _current),
     do: "Attached on #{date(pairing.approved_at)}, detached on #{date(pairing.ended_at)}"
 
+  defp standing(%{status: :ended, ended_reason: :stepped_down} = pairing, _current),
+    do: "Attached on #{date(pairing.approved_at)}, stepped down on #{date(pairing.ended_at)}"
+
   defp standing(%{status: :ended, ended_reason: :declined} = pairing, _current),
     do: "Asked on #{date(pairing.requested_at)}, turned down on #{date(pairing.ended_at)}"
 
@@ -139,6 +154,27 @@ defmodule KeyfleetWeb.KeysLive do
 
   defp standing(%{status: :ended} = pairing, _current),
     do: "Attached on #{date(pairing.approved_at)}, replaced on #{date(pairing.ended_at)}"
+
+  attr :id, :string, required: true
+  attr :wallet, :string, required: true
+
+  # An agent's wallet in full, so its owner can check it character for character.
+  defp address(assigns) do
+    ~H"""
+    <p class="key-address">
+      <code>{@wallet}</code>
+      <Regent.Primitives.button
+        id={@id}
+        type="button"
+        variant="secondary"
+        phx-hook="CopyText"
+        data-copy-text={@wallet}
+      >
+        Copy address
+      </Regent.Primitives.button>
+    </p>
+    """
+  end
 
   defp date(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
 end

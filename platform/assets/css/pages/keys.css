@@ -130,14 +130,43 @@
   justify-items: start;
 }
 
+/* A request reads top to bottom: who asked, their address, then the owner's
+   check and buttons. */
+.key-request-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  justify-items: start;
+}
+
 .key-request-list li > div:first-child {
   display: grid;
   gap: 0.25rem;
 }
 
-.key-request-list span,
+/* Only the row's own lines are muted, never the words on its buttons. */
+.key-request-list li > span,
+.key-request-list li > div > span,
 .key-history span {
   color: var(--ash-muted);
+}
+
+.key-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  max-width: 100%;
+}
+
+.key-address code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.key-address-check {
+  max-width: 56ch;
+  line-height: 1.5;
 }
 
 .key-request-actions {
@@ -148,13 +177,6 @@
 
 .key-history {
   grid-column: 1 / -1;
-}
-
-@media (max-width: 30rem) {
-  .key-request-list li {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 
 }

@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @update "/api/v1/agent/profile/update"
   @pairings "/api/v1/agent/pairings"
   @pairing "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing"
+  @step_down "/api/v1/agent/keys/{fleet_id}/{token_id}/step-down"
   @rooms "/api/v1/agent/fleets/{fleet_id}/rooms"
   @create "/api/v1/agent/fleets/{fleet_id}/rooms/create"
   @topic "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic"
@@ -56,6 +57,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"GET", @pairings, [], %{}},
     {"POST", @pairing, [], %{}},
     {"DELETE", @pairing, [], %{}},
+    {"POST", @step_down, [], %{}},
     {"GET", @rooms, [], %{}},
     {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
     {"POST", @topic, [], %{"topic" => "Probe"}},
@@ -132,8 +134,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              )
 
   # Nothing can make these happen on demand: the owner deciding a request in
-  # the moment between it being found and being taken back.
-  @unforced [{"DELETE", @pairing, 409}]
+  # the moment between it being found and being taken back, or removing an
+  # agent in the moment between it being found and stepping down.
+  @unforced [{"DELETE", @pairing, 409}, {"POST", @step_down, 409}]
 
   setup do
     # Syncs read the workspace in a repeatable-read snapshot, which Postgres
@@ -283,6 +286,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @pairing, Map.put(@address, "token_id", "99"), %{}, 404)
     assert answer(c, c.signer, "POST", @pairing, own, %{}, 200).body["pairing"]["effective?"]
     answer(c, c.signer, "POST", @pairing, own, %{}, 409)
+
+    # Stepping down from a key: one the agent does not run, and one it does.
+    answer(c, c.signer, "POST", @step_down, one, %{}, 404)
+
+    assert answer(c, c.signer, "POST", @step_down, own, %{}, 200).body["pairing"]["ended_reason"] ==
+             "stepped_down"
+
+    answer(c, c.signer, "POST", @step_down, own, %{}, 404)
+    assert answer(c, c.signer, "POST", @pairing, own, %{}, 200).body["pairing"]["effective?"]
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
@@ -548,6 +560,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"GET", @pairings},
       {"POST", @pairing},
       {"DELETE", @pairing},
+      {"POST", @step_down},
       {"GET", @rooms},
       {"POST", @create},
       {"POST", @topic},

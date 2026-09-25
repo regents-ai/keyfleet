@@ -90,6 +90,7 @@ defmodule KeyfleetWeb.Router do
     get "/pairings", AgentPairingController, :index
     post "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :create
     delete "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :delete
+    post "/keys/:fleet_id/:token_id/step-down", AgentPairingController, :step_down
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms

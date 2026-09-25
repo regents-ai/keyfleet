@@ -51,10 +51,25 @@ defmodule KeyfleetWeb.AgentPairingController do
     end
   end
 
+  def step_down(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
+    actor = conn.assigns.agent_actor
+    token_id = String.to_integer(token_id)
+
+    with {:ok, pairing} when not is_nil(pairing) <-
+           Keys.my_active_pairing(fleet_id, token_id, actor: actor),
+         {:ok, ended} <- Keys.step_down(pairing, %{}, actor: actor) do
+      json(conn, %{pairing: pairing_json(ended, actor)})
+    else
+      {:ok, nil} -> conn |> put_status(404) |> json(%{error: "pairing_not_found"})
+      {:error, error} -> refuse(conn, error)
+    end
+  end
+
   defp pairing_json(pairing), do: Map.take(pairing, @fields)
 
-  # A pairing the agent has just opened or taken back is answered with the
-  # standing the list endpoint would give it, which the key itself decides.
+  # A pairing the agent has just opened, taken back or stepped down from is
+  # answered with the standing the list endpoint would give it, which the key
+  # itself decides.
   defp pairing_json(pairing, actor),
     do: pairing |> Ash.load!(:effective?, action: :my_pairings, actor: actor) |> pairing_json()
 

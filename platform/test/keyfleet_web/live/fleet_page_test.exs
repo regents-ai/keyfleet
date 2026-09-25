@@ -458,6 +458,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       Keys.detach_operator!(pairing, %{}, actor: owner())
       assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
+
+      pairing = pair!(7)
+      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
+
+      Keys.step_down!(pairing, %{}, actor: operator())
+      assert_push_event(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
     end
 
     test "more than 2,000 keys changed at once tells the map to load again", %{conn: conn} do
@@ -657,11 +663,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   # An agent asks to run key `token_id` of Cascade, and its owner approves.
   defp pair!(token_id) do
-    agent = %Actors.Agent{wallet_address: @operator, chain_id: 8_453, audience: "keyfleet"}
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
-    request = Keys.request_pairing!(@fleet, token_id, %{}, actor: agent)
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: operator())
+    request = Keys.request_pairing!(@fleet, token_id, %{}, actor: operator())
     Keys.approve_pairing!(request, %{}, actor: owner())
   end
+
+  defp operator,
+    do: %Actors.Agent{wallet_address: @operator, chain_id: 8_453, audience: "keyfleet"}
 
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 

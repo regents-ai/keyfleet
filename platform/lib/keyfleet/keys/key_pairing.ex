@@ -153,6 +153,18 @@ defmodule Keyfleet.Keys.KeyPairing do
       change Keyfleet.Keys.Changes.AnnounceOperator
     end
 
+    # The running agent stops running the key. Giving up the key is always
+    # allowed, whoever holds it now and however fresh ownership is.
+    update :step_down do
+      accept []
+      require_atomic? false
+      change {Keyfleet.Keys.Changes.DecideOnce, from: :active}
+      change set_attribute(:status, :ended)
+      change set_attribute(:ended_reason, :stepped_down)
+      change set_attribute(:ended_at, &DateTime.utc_now/0)
+      change Keyfleet.Keys.Changes.AnnounceOperator
+    end
+
     # Reached only through `Keyfleet.Keys.PairingLedger`, on behalf of an owner
     # or operator the calling action has already admitted.
     update :end_pairing do
@@ -273,6 +285,20 @@ defmodule Keyfleet.Keys.KeyPairing do
 
       get? true
     end
+
+    # The key this agent runs, under whichever owner approved it.
+    read :my_active_pairing do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      validate Keyfleet.Graph.Validations.KnownFleet
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and
+                 status == :active and operator_wallet == ^actor(:wallet_address)
+             )
+
+      get? true
+    end
   end
 
   policies do
@@ -280,7 +306,7 @@ defmodule Keyfleet.Keys.KeyPairing do
       authorize_if always()
     end
 
-    policy action([:my_pairings, :my_open_request, :my_identity_in_fleet]) do
+    policy action([:my_pairings, :my_open_request, :my_active_pairing, :my_identity_in_fleet]) do
       authorize_if Keyfleet.Checks.AgentActor
     end
 
@@ -288,7 +314,7 @@ defmodule Keyfleet.Keys.KeyPairing do
       authorize_if Keyfleet.Checks.AgentActor
     end
 
-    policy action(:withdraw_pairing_request) do
+    policy action([:withdraw_pairing_request, :step_down]) do
       forbid_unless Keyfleet.Checks.AgentActor
       authorize_if expr(operator_wallet == ^actor(:wallet_address))
     end
@@ -333,7 +359,7 @@ defmodule Keyfleet.Keys.KeyPairing do
     attribute :ended_reason, :atom,
       public?: true,
       writable?: false,
-      constraints: [one_of: [:replaced, :detached, :declined]]
+      constraints: [one_of: [:replaced, :detached, :declined, :stepped_down]]
 
     attribute :requested_at, :utc_datetime_usec,
       allow_nil?: false,

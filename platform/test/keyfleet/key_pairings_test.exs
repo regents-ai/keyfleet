@@ -7,10 +7,21 @@ defmodule Keyfleet.KeyPairingsTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Repo
+  alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
   @decision [:id, :status, :ended_reason, :approved_at, :ended_at]
+  @identity [
+    :id,
+    :fleet_id,
+    :token_id,
+    :ownership_epoch,
+    :owner_wallet,
+    :operator_wallet,
+    :agent_profile_id,
+    :requested_at
+  ]
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -212,6 +223,98 @@ defmodule Keyfleet.KeyPairingsTest do
     withdrawn = Keys.withdraw_pairing_request!(request, %{}, actor: operator)
     assert {withdrawn.status, withdrawn.ended_reason} == {:ended, :declined}
     assert Keys.list_pairing_requests!(@fleet, 1) == []
+  end
+
+  test "the running agent steps down: the pairing ends and keeps who it was", %{owner: owner} do
+    runner = agent("b")
+    attached = attach!(runner, "Runner")
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
+
+    assert Keys.my_active_pairing!(@fleet, 1, actor: runner).id == attached.id
+    stepped_down = Keys.step_down!(attached, %{}, actor: runner)
+    assert_received {:keys_changed, @fleet, [1]}
+
+    assert {stepped_down.status, stepped_down.ended_reason} == {:ended, :stepped_down}
+    assert %DateTime{} = stepped_down.ended_at
+    assert Keys.current_operator!(@fleet, 1) == nil
+    assert Keys.my_active_pairing!(@fleet, 1, actor: runner) == nil
+
+    assert [stored] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(stored, @identity) == Map.take(attached, @identity)
+    assert stored.owner_wallet == owner.wallet_address
+    assert {stored.status, stored.ended_reason} == {:ended, :stepped_down}
+  end
+
+  test "only the agent running the key may step down from it", %{owner: owner} do
+    attached = attach!(agent("b"), "Runner")
+    intruder = agent("2")
+    profile!(intruder, "Intruder")
+
+    for actor <- [intruder, human(owner), @system, nil] do
+      assert {:error, %Ash.Error.Forbidden{}} = Keys.step_down(attached, %{}, actor: actor)
+    end
+
+    assert Keys.my_active_pairing!(@fleet, 1, actor: intruder) == nil
+    assert [unchanged] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(unchanged, @decision) == Map.take(attached, @decision)
+    assert Keys.current_operator!(@fleet, 1).id == attached.id
+  end
+
+  test "stepping down a second time finds the pairing already ended" do
+    runner = agent("b")
+    attached = attach!(runner, "Runner")
+    stepped_down = Keys.step_down!(attached, %{}, actor: runner)
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+             Keys.step_down(attached, %{}, actor: runner)
+
+    assert [unchanged] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(unchanged, @decision) == Map.take(stepped_down, @decision)
+  end
+
+  # Giving a key up never waits on ownership: the agent may leave a key that
+  # changed hands, or while ownership is being refreshed.
+  test "an agent steps down from a pairing made under an earlier owner" do
+    runner = agent("b")
+    attached = attach!(runner, "Runner")
+
+    ChainHelpers.seed_cursor!(@fleet,
+      observed_at: DateTime.add(DateTime.utc_now(), -121, :second)
+    )
+
+    stepped_down = Keys.step_down!(attached, %{}, actor: runner)
+    assert {stepped_down.status, stepped_down.ended_reason} == {:ended, :stepped_down}
+  end
+
+  test "after stepping down the agent can no longer post as the key, and keeps what it wrote" do
+    Rooms.bootstrap_rooms!()
+    runner = agent("b")
+    attached = attach!(runner, "Runner")
+    post = &%{fleet_id: @fleet, slug: "general", body: "Hello", idempotency_key: &1}
+
+    sent = Rooms.send_message!(post.("k-1"), actor: runner)
+    Keys.step_down!(attached, %{}, actor: runner)
+
+    assert {:error, %Ash.Error.Forbidden{}} = Rooms.send_message(post.("k-2"), actor: runner)
+
+    assert [kept] = Rooms.read_messages!(@fleet, "general")
+    assert {kept.id, kept.agent_profile_id} == {sent.id, attached.agent_profile_id}
+  end
+
+  test "an agent that stepped down may ask for the key again, leaving the old row in history",
+       %{owner: owner} do
+    runner = agent("b")
+    attached = attach!(runner, "Runner")
+    Keys.step_down!(attached, %{}, actor: runner)
+
+    again = Keys.request_pairing!(@fleet, 1, %{}, actor: runner)
+    assert again.id != attached.id
+    assert again.status == :requested
+
+    Keys.approve_pairing!(again, %{}, actor: human(owner))
+
+    assert Enum.map(Keys.pairing_history!(@fleet, 1), &{&1.id, &1.status, &1.ended_reason}) ==
+             [{attached.id, :ended, :stepped_down}, {again.id, :active, nil}]
   end
 
   test "a decision already taken cannot be retaken from a stale record", %{owner: owner} do

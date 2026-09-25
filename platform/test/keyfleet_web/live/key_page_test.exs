@@ -50,9 +50,19 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     assert html =~ "Key 1"
     assert html =~ "You own this key."
-    assert html =~ "No operator attached."
+    assert html =~ "No agent runs this key."
     assert html =~ "Orbit runner"
     assert html =~ "Runs on claude-code"
+
+    # The owner compares the agent's whole address before approving it.
+    assert view |> element("#key-request-address-#{request.id}") |> render() =~
+             ~s(data-copy-text="#{@operator}")
+
+    assert view |> element(".key-request-list code") |> render() =~ @operator
+
+    assert words(view, ".key-address-check") =~
+             "Check it matches the address your agent gave you."
+
     assert has_element?(view, @approve)
     assert has_element?(view, @decline)
     refute has_element?(view, @detach)
@@ -66,9 +76,10 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert has_element?(view, @detach)
     assert Keys.current_operator!(@fleet, 1).id == request.id
 
-    assert view |> element(@detach) |> render_click() =~ "Operator detached."
+    assert view |> element("#key-agent-address") |> render() =~ ~s(data-copy-text="#{@operator}")
+    assert view |> element(@detach) |> render_click() =~ "Agent removed."
     assert Keys.current_operator!(@fleet, 1) == nil
-    assert render(view) =~ "No operator attached."
+    assert render(view) =~ "No agent runs this key."
     assert render(view) =~ "detached on"
   end
 
@@ -80,7 +91,9 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     assert html =~ "Orbit runner"
     assert html =~ "Waiting for the owner"
+    assert html =~ @operator
     refute html =~ "You own this key."
+    refute has_element?(view, ".key-address-check")
 
     for selector <- [@approve, @decline, @detach] do
       refute has_element?(view, selector)
@@ -106,6 +119,22 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert Keys.current_operator!(@fleet, 1) == nil
   end
 
+  test "an agent that stepped down is remembered in the key's history", %{
+    conn: conn,
+    agent: agent,
+    request: request
+  } do
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    approved = Keys.approve_pairing!(request, %{}, actor: owner)
+    Keys.step_down!(approved, %{}, actor: agent)
+
+    {:ok, _view, html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+    assert html =~ "No agent runs this key."
+    assert html =~ "Orbit runner"
+    assert html =~ "stepped down on"
+  end
+
   test "a key nobody has been issued shows nothing but says so", %{conn: conn} do
     {:ok, _view, html} = conn |> signed_in_as(@owner) |> live("/app/keys/fibonacci_cascade/9")
 
@@ -122,6 +151,9 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     assert view |> element("#fleet-key-1") |> render() =~ "Held by 0xaaaa…aaaa"
   end
+
+  defp words(view, selector),
+    do: view |> element(selector) |> render() |> String.split() |> Enum.join(" ")
 
   defp signed_in_as(conn, wallet) do
     account =

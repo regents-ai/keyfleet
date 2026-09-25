@@ -41,6 +41,7 @@ defmodule Keyfleet.Keys do
       define :decline_pairing, action: :decline_pairing
       define :detach_operator, action: :detach_operator
       define :withdraw_pairing_request, action: :withdraw_pairing_request
+      define :step_down, action: :step_down
 
       define :current_operator,
         action: :current_operator,
@@ -61,6 +62,11 @@ defmodule Keyfleet.Keys do
 
       define :my_open_request,
         action: :my_open_request,
+        args: [:fleet_id, :token_id],
+        not_found_error?: false
+
+      define :my_active_pairing,
+        action: :my_active_pairing,
         args: [:fleet_id, :token_id],
         not_found_error?: false
     end
