@@ -3,32 +3,32 @@ defmodule Keyfleet.Repo.Migrations.Keylines do
   Marks every line in a key's thread as one, so the fleet's room lines are
   indexed and read without their rooms.
 
-  Generated with `mix ash.codegen keylines`, then edited: lines already
-  written are marked from their room's kind before the mark is required. Lines
-  are never edited, so their guard is lifted for the one update.
+  Generated with `mix ash.codegen keylines`, then edited: the mark arrives
+  false on every line already written, and only the lines in keys' threads are
+  then marked, before the default goes. Lines are never edited, so their guard
+  is lifted for that one update. Every line in a key's thread names its key, so
+  the update never meets a line the key rule was added without checking.
   """
 
   use Ecto.Migration
 
   def up do
     alter table(:messages) do
-      add(:in_key_thread, :boolean)
+      add(:in_key_thread, :boolean, null: false, default: false)
     end
 
     execute("ALTER TABLE keyfleet_app.messages DISABLE TRIGGER immutable_messages")
 
     execute("""
     UPDATE keyfleet_app.messages AS line
-    SET in_key_thread = (room.kind = 'key')
+    SET in_key_thread = true
     FROM keyfleet_app.rooms AS room
-    WHERE room.id = line.room_id
+    WHERE room.id = line.room_id AND room.kind = 'key'
     """)
 
     execute("ALTER TABLE keyfleet_app.messages ENABLE TRIGGER immutable_messages")
 
-    alter table(:messages) do
-      modify(:in_key_thread, :boolean, null: false)
-    end
+    execute("ALTER TABLE keyfleet_app.messages ALTER COLUMN in_key_thread DROP DEFAULT")
 
     drop_if_exists(
       index(:messages, ["fleet_id", "as_key", "inserted_at DESC"],

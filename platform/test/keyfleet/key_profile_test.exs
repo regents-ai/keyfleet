@@ -32,16 +32,18 @@ defmodule Keyfleet.KeyProfileTest do
     :ok
   end
 
-  # Key 12 is sold to a, passes to b, who posts three times as it, and then
-  # to the holder e, who holds keys 3 and 20 here and key 1 of another fleet.
+  # Key 12 is sold to a, passes to b, who posts three times as it in a room
+  # and once in key 3's thread, and then to the holder e, who holds keys 3 and
+  # 20 here and key 1 of another fleet.
   describe "a key bought, passed on twice, voted with and posted as" do
     setup do
       holder = wallet("e")
       epoch!(@fleet, 12, 1, wallet("a"))
       epoch!(@fleet, 12, 2, wallet("b"))
-      for body <- ["One", "Two", "Three"], do: post!(human("b"), "general", body)
-      received = epoch!(@fleet, 12, 3, holder)
       epoch!(@fleet, 3, 1, holder)
+      for body <- ["One", "Two", "Three"], do: post!(human("b"), "general", body)
+      to_key!(human("b"), 3, "Hello, three")
+      received = epoch!(@fleet, 12, 3, holder)
       epoch!(@fleet, 20, 1, holder)
       epoch!(@elsewhere, 1, 1, holder)
 
