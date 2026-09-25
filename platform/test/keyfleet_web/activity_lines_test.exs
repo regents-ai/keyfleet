@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - a page shows members' words as they wrote them; Markdown escapes every
   #   one of them, so none can act as a link or formatting
   # - neither shows a character that can't be seen or reverses the text
+  # - an item whose title has nothing to see still has words to link
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
 
@@ -39,6 +40,20 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
     assert ActivityLines.text(post) == "Ada (key 7) in Hull: “Ship it now[31m”"
     assert ActivityLines.markdown(post) == ~S"“Ada” (key 7) in “Hull”: “Ship it now\[31m”"
+  end
+
+  test "an item whose title has nothing to see still has words to link" do
+    goal = %{
+      id: "created:1",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :created,
+      facts: %{by: nil, item: %{id: "goal-1", type: "goal", title: "\u200B\u2066"}}
+    }
+
+    assert [{:item, "goal-1", title}] =
+             for({:item, _, _} = item <- ActivityLines.parts(goal), do: item)
+
+    assert title != ""
   end
 
   test "key numbers are grouped, and a proposal is a part a page can link" do

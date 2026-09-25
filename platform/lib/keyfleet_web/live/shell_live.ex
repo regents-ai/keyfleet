@@ -617,13 +617,17 @@ defmodule KeyfleetWeb.ShellLive do
     now = Graph.trying_now(fleet_id)
     tasks = Enum.flat_map(now.goals, & &1.tasks) ++ now.taken
     token_ids = for %{assignee_key: token_id} <- tasks, token_id, uniq: true, do: token_id
+    ActivityLines.trying_now(now, agents(fleet_id, token_ids))
+  end
 
-    agents =
-      fleet_id
-      |> Keys.fleet_operators!(token_ids)
-      |> Map.new(&{&1.token_id, &1.agent_profile.name})
+  # The agent running each of these keys, by number; none to look up when no
+  # key is shown.
+  defp agents(_fleet_id, []), do: %{}
 
-    ActivityLines.trying_now(now, agents)
+  defp agents(fleet_id, token_ids) do
+    fleet_id
+    |> Keys.fleet_operators!(token_ids)
+    |> Map.new(&{&1.token_id, &1.agent_profile.name})
   end
 
   defp activity_pages(fleet_id, cursor, wanted, read) do

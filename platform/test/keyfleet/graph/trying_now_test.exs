@@ -66,16 +66,13 @@ defmodule Keyfleet.Graph.TryingNowTest do
     assert by_goal[quiet] == [quiet_task]
   end
 
-  test "who's on what lists the tasks in progress, with the key on each if any" do
+  test "who's on what lists the tasks in progress that a key has taken, with that key" do
     taken = task("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
-    unclaimed = task("Marked doing, nobody on it", %{"progress" => "doing"})
+    task("Marked doing, nobody on it", %{"progress" => "doing"})
     task("Claimed, not started", %{"assignee_key" => 9})
     task("Finished", %{"progress" => "done", "assignee_key" => 3})
 
-    assert [
-             %{task: %{id: ^unclaimed}, assignee_key: nil},
-             %{task: %{id: ^taken}, assignee_key: 12}
-           ] = Graph.trying_now(@fleet).taken
+    assert [%{task: %{id: ^taken}, assignee_key: 12}] = Graph.trying_now(@fleet).taken
   end
 
   test "the three newest findings are listed, newest first" do

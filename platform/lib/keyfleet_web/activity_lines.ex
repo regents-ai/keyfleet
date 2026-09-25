@@ -31,13 +31,6 @@ defmodule KeyfleetWeb.ActivityLines do
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.WorkspacePage
 
-  @progress %{
-    "todo" => "to do",
-    "doing" => "in progress",
-    "blocked" => "blocked",
-    "done" => "done"
-  }
-
   @created %{
     "goal" => " set a goal: ",
     "task" => " added a task: ",
@@ -88,7 +81,7 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
 
   def parts(%{kind: :progress, facts: f}),
-    do: [who(f.by), " marked ", item(f.item), " " <> Map.fetch!(@progress, f.progress) <> "."]
+    do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress) <> "."]
 
   def parts(%{kind: :status, facts: %{status: "open"} = f}),
     do: [who(f.by), " reopened ", item(f.item), "."]
@@ -192,10 +185,13 @@ defmodule KeyfleetWeb.ActivityLines do
   its number. Items and keys are parts, as `parts/1` gives them:
 
     * `goals`: `%{id: id, goal: item, tally: text, tasks: [task]}`, where
-      `tally` counts the tasks listed and those done, as "3 tasks · 1 done";
-    * `taken`: `[task]`, the tasks in progress;
-    * `problems`: `%{id: link_id, parts: parts}`, "A problem with {target}:
-      {source}", which holds for as long as the link is there;
+      `tally` counts the tasks listed and those done, as "3 tasks · 1 done",
+      or says "5 newest tasks" alone when the goal may have more than those
+      listed;
+    * `taken`: `[task]`, the tasks in progress that a key has taken;
+    * `problems`: `%{id: link_id, target: item, source: item}`, the item a
+      problem was raised with and the one raising it, for as long as the
+      link is there;
     * `findings`: `%{id: id, finding: item, confidence: text}`;
     * `question`: the parts "Open question: {question}", or nil.
 
@@ -208,12 +204,12 @@ defmodule KeyfleetWeb.ActivityLines do
       taken: Enum.map(now.taken, &task(&1, agents)),
       problems:
         for %{relation: link, source: source, target: target} <- now.problems do
-          %{id: link.id, parts: ["A problem with ", item(target), ": ", item(source)]}
+          %{id: link.id, target: item(target), source: item(source)}
         end,
       findings:
         for finding <- now.findings do
           confidence = WorkspacePage.choice("confidence", finding.card["confidence"])
-          %{id: finding.id, finding: item(finding), confidence: confidence <> " confidence"}
+          %{id: finding.id, finding: item(finding), confidence: "#{confidence} confidence"}
         end,
       question: now.question && ["Open question: ", words(now.question)]
     }
@@ -228,7 +224,7 @@ defmodule KeyfleetWeb.ActivityLines do
     }
   end
 
-  # A task, even one in progress, may be one no key has taken.
+  # A goal's task may be one no key has taken.
   defp task(%{task: task, assignee_key: token_id}, agents) do
     %{
       id: task.id,
@@ -238,21 +234,22 @@ defmodule KeyfleetWeb.ActivityLines do
     }
   end
 
+  # A goal listing as many tasks as are ever listed may have more, so how
+  # many of all its tasks are done isn't known: none is counted.
   defp tally([]), do: "No tasks yet"
 
   defp tally(tasks) do
     done = Enum.count(tasks, &(&1.task.card["progress"] == "done"))
 
-    listed =
-      case length(tasks) do
-        1 ->
-          "1 task"
+    case length(tasks) do
+      1 ->
+        "1 task · #{done} done"
 
-        count ->
-          if count == Graph.tasks_per_goal(), do: "#{count} newest tasks", else: "#{count} tasks"
-      end
-
-    "#{listed} · #{done} done"
+      count ->
+        if count == Graph.tasks_per_goal(),
+          do: "#{count} newest tasks",
+          else: "#{count} tasks · #{done} done"
+    end
   end
 
   # A change the workspace itself made names no key.
@@ -262,8 +259,15 @@ defmodule KeyfleetWeb.ActivityLines do
   defp key(%{token_id: token_id, agent: nil}), do: {:key, token_id, nil}
   defp key(%{token_id: token_id, agent: agent}), do: {:key, token_id, visible(agent)}
 
+  # A title with nothing left to see once cleaned still names its item.
   defp item(%{id: id, title: nil}), do: {:item, id, nil}
-  defp item(%{id: id, title: title}), do: {:item, id, visible(title)}
+
+  defp item(%{id: id, title: title}) do
+    case visible(title) do
+      "" -> {:item, id, "An item"}
+      title -> {:item, id, title}
+    end
+  end
 
   defp room(room), do: {:room, room.slug, visible(room.topic || room.name)}
 
@@ -275,8 +279,11 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp visible(text), do: DirectoryMD.visible(text)
 
+  # A choice in the words the workspace page gives it, within a sentence.
+  defp choice(field, value), do: field |> WorkspacePage.choice(value) |> String.downcase()
+
   defp confidence(%{type: "finding", confidence: confidence}) when is_binary(confidence),
-    do: [" (#{confidence} confidence)"]
+    do: [" (#{choice("confidence", confidence)} confidence)"]
 
   defp confidence(_item), do: []
 

@@ -355,7 +355,7 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <section :if={@trying.problems != []} aria-labelledby="fleet-trying-problems-title">
-        <h4 id="fleet-trying-problems-title">Open problems</h4>
+        <h4 id="fleet-trying-problems-title">Problems raised</h4>
         <ul id="fleet-trying-problems" class="trying-now__list">
           <li
             :for={problem <- @trying.problems}
@@ -363,13 +363,8 @@ defmodule KeyfleetWeb.FleetLive do
             data-problem={problem.id}
             data-tone="disagreement"
           >
-            <.activity_part
-              :for={{part, index} <- Enum.with_index(problem.parts)}
-              part={part}
-              first?={index == 0}
-              fleet_id={@fleet_id}
-              params={@params}
-            />
+            A problem with <.trying_item part={problem.target} fleet_id={@fleet_id} />:
+            <.trying_item part={problem.source} fleet_id={@fleet_id} />
           </li>
         </ul>
       </section>

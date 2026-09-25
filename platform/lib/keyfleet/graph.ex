@@ -81,8 +81,8 @@ defmodule Keyfleet.Graph do
 
   @doc """
   How many objects of one kind of open work the fleet's workspace holds:
-  `:goals_open`, `:tasks_doing` or `:tasks_untaken`, as the `:open_work` read
-  of `Keyfleet.Graph.Object` defines them.
+  `:goals_open`, `:tasks_doing`, `:tasks_taken` or `:tasks_untaken`, as the
+  `:open_work` read of `Keyfleet.Graph.Object` defines them.
   """
   def count_open_work!(fleet_id, kind) do
     Keyfleet.Graph.Object
@@ -112,9 +112,8 @@ defmodule Keyfleet.Graph do
       `implements`, the newest link first: `%{goal: goal, tasks: [%{task:
       task, assignee_key: key | nil, progress: progress}]}`. Archived tasks
       aren't listed.
-    * `taken`: who's on what: up to #{@taken_shown} tasks in progress
-      (`:tasks_doing`), `%{task: task, assignee_key: key | nil}`; the key is
-      nil for a task marked doing that no key has taken.
+    * `taken`: who's on what: up to #{@taken_shown} tasks in progress that
+      a key has taken (`:tasks_taken`), `%{task: task, assignee_key: key}`.
     * `findings`: the #{@findings_shown} most recently changed findings.
     * `problems`: the #{@problems_shown} newest `contradicts` links still in
       place, `%{relation: link, source: object, target: object}`. Unlinking
@@ -126,8 +125,9 @@ defmodule Keyfleet.Graph do
 
   Never call it inside a transaction: its snapshot has to be its
   transaction's first statement. Inside an ordinary transaction that fails
-  loudly; inside a repeatable-read one it doesn't fail, but quietly makes the
-  rest of the outer transaction read-only.
+  loudly; inside a repeatable-read one it doesn't fail, but reads that
+  transaction's snapshot, taken at its first query, rather than one of its
+  own. The outer transaction can write again once it returns.
   """
   def trying_now(fleet_id) do
     {:ok, now} = in_snapshot(fn -> read_trying_now(fleet_id) end)
@@ -149,7 +149,7 @@ defmodule Keyfleet.Graph do
       |> then(&object_titles!(fleet_id, &1, load: [:card]))
       |> Map.new(&{&1.id, &1})
 
-    taken = open_work!(fleet_id, :tasks_doing, query: [limit: @taken_shown])
+    taken = open_work!(fleet_id, :tasks_taken, query: [limit: @taken_shown])
     findings = workspace_cards!(fleet_id, %{type: "finding"}, page: [limit: @findings_shown])
 
     %{
@@ -205,8 +205,10 @@ defmodule Keyfleet.Graph do
   transaction's first query, so everything `read` reads comes from one
   moment. Never call it inside a transaction: the setting has to be the
   transaction's first statement. Inside an ordinary transaction that fails
-  loudly; inside a repeatable-read one it doesn't fail, but quietly makes the
-  rest of the outer transaction read-only.
+  loudly; inside a repeatable-read one it doesn't fail, but `read` sees that
+  transaction's snapshot, taken at its first query, rather than one of its
+  own. The read-only setting ends with `read`: the outer transaction can
+  write again once it returns.
   """
   def in_snapshot(read) do
     Ash.transact(@tables, fn ->

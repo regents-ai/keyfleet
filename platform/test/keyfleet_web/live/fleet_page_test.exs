@@ -799,6 +799,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       goal = goal!("Sell the first audit")
       task = task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
       Workspace.link(@fleet, task, goal, "implements")
+      unclaimed = task!("Find a buyer", %{"progress" => "doing"})
 
       {:ok, view, _html} = live(conn, @path)
 
@@ -814,6 +815,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, ~s(#{task_row} a[data-key="12"]), "Orbit runner")
       assert has_element?(view, ~s(#fleet-trying-taken li[data-task="#{task}"] a[data-key="12"]))
+      refute has_element?(view, ~s(#fleet-trying-taken li[data-task="#{unclaimed}"]))
       refute has_element?(view, "#fleet-trying-empty")
     end
 
@@ -867,6 +869,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       html = view |> element("#fleet-trying") |> render()
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
+    end
+
+    test "an item whose title has nothing to see still has a link to it", %{conn: conn} do
+      goal = goal!("\u200B\u2066")
+
+      {:ok, view, _html} = live(conn, @path)
+
+      assert text(view, ~s(#fleet-trying a[data-item-link="#{goal}"])) != ""
     end
   end
 

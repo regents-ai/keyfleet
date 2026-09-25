@@ -8,6 +8,8 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
       `dropped`.
     * `:tasks_doing`: tasks whose `progress` is `doing`, whether or not a
       key has taken them.
+    * `:tasks_taken`: the tasks of `:tasks_doing` that a key has taken: an
+      `assignee_key` is set.
     * `:tasks_untaken`: tasks nobody has taken yet: `progress` is `todo` and
       no `assignee_key` is set.
 
@@ -34,6 +36,12 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
 
   defp open(query, :tasks_doing),
     do: Ash.Query.filter(query, type == "task" and fragment("(? ->> 'progress') = 'doing'", data))
+
+  defp open(query, :tasks_taken),
+    do:
+      query
+      |> open(:tasks_doing)
+      |> Ash.Query.filter(fragment("(? ->> 'assignee_key') IS NOT NULL", data))
 
   defp open(query, :tasks_untaken),
     do:

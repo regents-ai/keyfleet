@@ -80,7 +80,7 @@ defmodule Keyfleet.Graph.Object do
 
       argument :kind, :atom,
         allow_nil?: false,
-        constraints: [one_of: [:goals_open, :tasks_doing, :tasks_untaken]]
+        constraints: [one_of: [:goals_open, :tasks_doing, :tasks_taken, :tasks_untaken]]
 
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare Keyfleet.Graph.Preparations.OpenWork
