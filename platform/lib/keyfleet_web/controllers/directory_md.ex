@@ -11,9 +11,12 @@ defmodule KeyfleetWeb.DirectoryMD do
   """
 
   alias Keyfleet.Fleets.Rules
-  alias KeyfleetWeb.{DirectoryJSON, FleetLive, PublicDocuments}
+  alias KeyfleetWeb.{DirectoryJSON, PublicDocuments}
 
   @special ~r/[\\`*_\[\]()#<>|!~]/
+  # Control and format characters: escape codes, zero-width characters, byte
+  # order marks and the overrides that reverse the direction of text.
+  @invisible ~r/[\p{Cc}\p{Cf}]/u
   @name_length 120
   @title_length 200
   @gist_length 240
@@ -93,14 +96,18 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   @doc """
   Member-written `text` made safe to place inside a line of Markdown: every
-  run of whitespace, line breaks included, becomes one space, the text is
-  cut to `limit` characters, every character Markdown or HTML could act on
-  is escaped with a backslash, and the whole is wrapped in quotation marks.
+  run of whitespace, line breaks included, becomes one space, characters
+  that can't be seen are removed, curly quotation marks become straight ones
+  so the text can't seem to close its own quotes, the text is cut to `limit`
+  characters, every character Markdown or HTML could act on is escaped with
+  a backslash, and the whole is wrapped in curly quotation marks.
   """
   def inline(text, limit) do
     text =
       ~r/\s+/u
       |> Regex.replace(text, " ")
+      |> String.replace(@invisible, "")
+      |> String.replace(["“", "”"], "\"")
       |> String.trim()
       |> String.codepoints()
       |> Enum.take(limit)
@@ -113,12 +120,12 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp sales(%{sales: %{current: false}}), do: "Sales figures are catching up."
 
   defp sales(%{sales: %{next_key: nil, keys_total: total}}),
-    do: "All #{FleetLive.grouped(total)} keys sold."
+    do: "All #{Rules.grouped(total)} keys sold."
 
   defp sales(%{id: id, sales: %{next_key: next} = sales}) do
-    "#{FleetLive.grouped(sales.keys_sold)} of #{FleetLive.grouped(sales.keys_total)} keys sold · " <>
-      "#{FleetLive.grouped(sales.keys_left)} left · " <>
-      "next key: Key #{FleetLive.grouped(next.token_id)} for #{next.price}. " <>
+    "#{Rules.grouped(sales.keys_sold)} of #{Rules.grouped(sales.keys_total)} keys sold · " <>
+      "#{Rules.grouped(sales.keys_left)} left · " <>
+      "next key: Key #{Rules.grouped(next.token_id)} for #{next.price}. " <>
       (Rules.holding_limit_sentence(id, next.token_id) || "No limit on keys per wallet.")
   end
 
@@ -151,10 +158,10 @@ defmodule KeyfleetWeb.DirectoryMD do
       else: lines
   end
 
-  defp keys_run(%{first_key: key, keys_run: 1}), do: "Key #{FleetLive.grouped(key)}"
+  defp keys_run(%{first_key: key, keys_run: 1}), do: "Key #{Rules.grouped(key)}"
 
   defp keys_run(%{first_key: key, keys_run: run}),
-    do: "Key #{FleetLive.grouped(key)} and #{FleetLive.grouped(run - 1)} more"
+    do: "Key #{Rules.grouped(key)} and #{Rules.grouped(run - 1)} more"
 
   defp work([], empty), do: empty
 
@@ -189,7 +196,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp posts(posts) do
     Enum.map_join(posts, "\n\n", fn post ->
-      "> Key #{FleetLive.grouped(post.as_key)} · #{author(post.author)} · " <>
+      "> Key #{Rules.grouped(post.as_key)} · #{author(post.author)} · " <>
         "#{inline(post.room_name, @name_length)} · #{time(post.at)} — " <>
         inline(post.excerpt, @excerpt_length)
     end)
@@ -206,5 +213,5 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp time(at), do: Calendar.strftime(at, "%-d %b %Y %H:%M UTC")
 
   defp count(1, noun), do: "1 #{noun}"
-  defp count(count, noun), do: "#{FleetLive.grouped(count)} #{noun}s"
+  defp count(count, noun), do: "#{Rules.grouped(count)} #{noun}s"
 end

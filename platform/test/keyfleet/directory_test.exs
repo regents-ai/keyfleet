@@ -121,6 +121,20 @@ defmodule Keyfleet.DirectoryTest do
     assert summary.last_post_at == fleet.last_post_at
   end
 
+  test "a room's posts leave out the lines that record its namings" do
+    "open-1"
+    |> then(&Rooms.get_room!(@fleet, &1))
+    |> Rooms.set_room_topic!("Dry dock", actor: owner())
+
+    post!("open-1", "First")
+    post!("open-1", "Second")
+
+    {:ok, fleet} = Directory.fleet(@fleet)
+
+    assert %{name: "Dry dock", posts: 2} = Enum.find(fleet.rooms, &(&1.slug == "open-1"))
+    assert %{posts: 0} = Enum.find(fleet.rooms, &(&1.slug == "general"))
+  end
+
   test "a fleet whose sales are still being read shows no price" do
     assert {:ok, %{sales: sales}} = Directory.fleet(@fleet)
 

@@ -361,6 +361,29 @@
       "unique": false,
       "using": null,
       "where": "kind IN ('post', 'room_named')"
+    },
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "room_id"
+      ],
+      "fields": [
+        {
+          "type": "string",
+          "value": "room_id"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": "messages_room_namings_index",
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": "kind = 'room_named'"
     }
   ],
   "custom_statements": [

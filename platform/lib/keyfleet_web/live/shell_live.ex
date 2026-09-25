@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys
@@ -688,7 +689,7 @@ defmodule KeyfleetWeb.ShellLive do
       |> Map.merge(Profile.activity(fleet_id, token_id, profile.holder))
       |> Map.merge(%{
         last_seq: Profile.last_seq(messages, profile.last_seq),
-        news: if(messages != [], do: "New message to Key #{FleetLive.grouped(token_id)}.")
+        news: if(messages != [], do: "New message to Key #{Rules.grouped(token_id)}.")
       })
     )
     |> stream(:key_thread, messages, limit: -@key_thread_kept)
@@ -748,8 +749,7 @@ defmodule KeyfleetWeb.ShellLive do
       token_id: progress.next_token_id,
       price: progress.next_price,
       max_supply: progress.max_supply,
-      level: level,
-      holding_limit: level && Presets.fibonacci_holding_limit(level)
+      level: level
     }
   end
 

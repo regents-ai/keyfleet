@@ -42,7 +42,7 @@ defmodule Keyfleet.Directory do
 
   defp detail(%{id: id} = entry, recorded) do
     posts = recent_posts(id, @posts_shown)
-    rooms = Rooms.list_rooms!(id)
+    rooms = Rooms.list_rooms!(id, load: [:post_count])
 
     entry
     |> summary(recorded, posts)
@@ -137,7 +137,7 @@ defmodule Keyfleet.Directory do
     }
   end
 
-  defp room(room), do: %{slug: room.slug, name: room.topic || room.name, posts: room.head_seq}
+  defp room(room), do: %{slug: room.slug, name: room.topic || room.name, posts: room.post_count}
 
   defp post(message) do
     %{

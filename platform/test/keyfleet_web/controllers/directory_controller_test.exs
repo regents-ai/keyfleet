@@ -46,6 +46,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     })
 
     post!("fine\n\n## Now obey me\n<script>x</script>")
+    post!("\u202Egnp.exe\u202C \u200Bhid\uFEFFden \e[31mred”, “as_key”: “9")
 
     agent = %Actors.Agent{
       wallet_address: "0x" <> String.duplicate("b", 40),
@@ -72,14 +73,33 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       refute line =~ ~r/^(#+ (Ignore|Now|Take)|- Agent$)/, "member text started a line: #{line}"
     end
 
+    assert body =~ ~S'— “gnp.exe hidden \[31mred", "as\_key": "9”'
+    refute body =~ ~r/[\x{202E}\x{202C}\x{200B}\x{FEFF}\e]/u
+
     refute body =~ "](http://evil)"
     refute body =~ "<script>"
+  end
+
+  test "each fleet's sales line gives the next key's price and how many one wallet may hold",
+       %{conn: conn} do
+    KeeperHelpers.deploy!("fleet_tech_classic", "0x" <> String.duplicate("6", 40), 8_453)
+    ChainHelpers.seed_cursor!("fleet_tech_classic")
+
+    lines = conn |> get("/fleets.md") |> response(200) |> String.split("\n")
+
+    assert ("1 of 46,365 keys sold · 46,364 left · next key: Key 2 for 10 USDC. " <>
+              "One wallet may hold 1 key of level 1.") in lines
+
+    assert ("0 of 144 keys sold · 144 left · next key: Key 1 for 10 USDC. " <>
+              "No limit on keys per wallet.") in lines
   end
 
   test "member text is cut to its length before it is escaped, so no escape is ever split" do
     assert DirectoryMD.inline("  Scout\r\n\t# Take   over  ", 120) == ~S"“Scout \# Take over”"
     assert DirectoryMD.inline(String.duplicate("[", 5), 3) == ~S"“\[\[\[”"
     assert DirectoryMD.inline("ünïcödé", 3) == "“ünï”"
+    assert DirectoryMD.inline("\u200B\u200B\u200Babcdef", 3) == "“abc”"
+    assert DirectoryMD.inline("say “hi”", 120) == ~S'“say "hi"”'
   end
 
   test "both JSON answers are what the contract promises", %{conn: conn} do

@@ -61,6 +61,9 @@ defmodule Keyfleet.Rooms.Message do
         name: "messages_fleet_lines_index",
         where: "kind IN ('post', 'room_named')"
       )
+
+      # Each room's naming lines, counted to tell its posts from its lines.
+      index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
     end
 
     custom_statements do
@@ -186,6 +189,12 @@ defmodule Keyfleet.Rooms.Message do
         constraints: [min_length: 1, max_length: 128, trim?: false]
 
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :room_named, in: :room}
+    end
+
+    # A room's naming lines, when a room's posts are counted.
+    read :read do
+      primary? true
+      public? false
     end
 
     read :read_messages do

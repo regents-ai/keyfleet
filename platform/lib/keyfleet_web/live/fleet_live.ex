@@ -12,6 +12,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   use KeyfleetWeb, :html
 
+  import Keyfleet.Fleets.Rules, only: [grouped: 1]
+
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
@@ -234,7 +236,7 @@ defmodule KeyfleetWeb.FleetLive do
       <section :if={@fleet.buy && @fleet.buy.price} aria-labelledby="fleet-buying-title">
         <h3 id="fleet-buying-title">Buying a key</h3>
         <p :if={@fleet.buy.level} class="fleet-detail">
-          One wallet may hold {keys(@fleet.buy.holding_limit)} of level {@fleet.buy.level}.
+          {Rules.holding_limit_sentence(@fleet.fleet_id, @fleet.buy.token_id)}
         </p>
         <p class="fleet-detail">
           Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
@@ -436,9 +438,6 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  defp keys(1), do: "1 key"
-  defp keys(count), do: "#{grouped(count)} keys"
-
   @doc "A wallet shortened to its first six and last four characters."
   def short_wallet(wallet),
     do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
@@ -456,16 +455,5 @@ defmodule KeyfleetWeb.FleetLive do
       "" -> "#{grouped(div(atoms, 1_000_000))} USDC"
       fraction -> "#{grouped(div(atoms, 1_000_000))}.#{fraction} USDC"
     end
-  end
-
-  @doc "A whole number with its thousands separated by commas."
-  def grouped(number) do
-    number
-    |> Integer.to_string()
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
   end
 end

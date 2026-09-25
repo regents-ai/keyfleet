@@ -19,9 +19,16 @@ defmodule Keyfleet.Repo.Migrations.AddDirectoryReads do
              name: "messages_fleet_lines_index",
              where: "kind IN ('post', 'room_named')"
            )
+
+    create index(:messages, ["room_id"],
+             name: "messages_room_namings_index",
+             where: "kind = 'room_named'"
+           )
   end
 
   def down do
+    drop_if_exists(index(:messages, ["room_id"], name: "messages_room_namings_index"))
+
     drop_if_exists(
       index(:messages, ["fleet_id", "inserted_at DESC", "id"], name: "messages_fleet_lines_index")
     )

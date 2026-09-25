@@ -296,8 +296,9 @@ defmodule Keyfleet.Rooms.Room do
 
     attribute :topic_set_at, :utc_datetime_usec, public?: true, writable?: false
 
-    # How many posts this room has taken, which is also the place the newest one
-    # holds. Only `Keyfleet.Rooms.Sequence` moves it.
+    # How many lines this room has taken, posts and the lines that record its
+    # namings, which is also the place the newest one holds. Only
+    # `Keyfleet.Rooms.Sequence` moves it.
     attribute :head_seq, :integer,
       allow_nil?: false,
       public?: true,
@@ -312,9 +313,22 @@ defmodule Keyfleet.Rooms.Room do
       allow_nil? false
       public? true
     end
+
+    # The lines that record each time members named this room.
+    has_many :naming_lines, Keyfleet.Rooms.Message do
+      filter expr(kind == :room_named)
+      public? false
+    end
+  end
+
+  aggregates do
+    count :namings, :naming_lines, public?: false
   end
 
   calculations do
+    # How many posts the room holds: every line it has taken but its namings.
+    calculate :post_count, :integer, expr(head_seq - namings), public?: true
+
     # The fixed rooms in their own order, then the open rooms, then the
     # created ones.
     calculate :position,

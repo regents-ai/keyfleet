@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   use KeyfleetWeb, :html
 
+  alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.RoomsLive
@@ -42,7 +43,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <div class="key-profile__body" data-modal-scroll>
         <header class="key-profile__header">
           <h2 id="key-profile-title" tabindex="-1" data-modal-title>
-            Key {FleetLive.grouped(@profile.token_id)}
+            Key {Rules.grouped(@profile.token_id)}
           </h2>
           <form method="dialog">
             <Regent.Primitives.button id="key-profile-close" type="submit" variant="secondary">
@@ -86,9 +87,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <svg viewBox="0 0 100 88" focusable="false">
             <polygon points="50,3 97,85 3,85" />
           </svg>
-          <span>{FleetLive.grouped(@profile.token_id)}</span>
+          <span>{Rules.grouped(@profile.token_id)}</span>
         </div>
-        <p class="key-profile-card__name">Key {FleetLive.grouped(@profile.token_id)}</p>
+        <p class="key-profile-card__name">Key {Rules.grouped(@profile.token_id)}</p>
         <p class="key-profile-card__trait">{face_note(@profile)}</p>
       </div>
     </Regent.HolographicCard.card>
@@ -132,7 +133,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </dl>
       <form method="dialog">
         <Regent.Primitives.button id="key-profile-buy" type="submit" value="buy-key-button">
-          Buy key {FleetLive.grouped(@profile.token_id)}
+          Buy key {Rules.grouped(@profile.token_id)}
         </Regent.Primitives.button>
       </form>
     </section>
@@ -172,15 +173,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Votes cast</dt>
-          <dd id="key-profile-votes">{FleetLive.grouped(@profile.votes_cast)}</dd>
+          <dd id="key-profile-votes">{Rules.grouped(@profile.votes_cast)}</dd>
         </div>
         <div>
           <dt>Posts</dt>
-          <dd id="key-profile-posts">{FleetLive.grouped(@profile.posts)}</dd>
+          <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
           <dt>Messages</dt>
-          <dd id="key-profile-messages">{FleetLive.grouped(@profile.messages)}</dd>
+          <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
         <div>
           <dt>Run by</dt>
@@ -216,11 +217,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <dl class="key-profile-facts">
         <div>
           <dt>Keys in this fleet</dt>
-          <dd id="key-profile-holder-keys">{FleetLive.grouped(@profile.holder_key_count)}</dd>
+          <dd id="key-profile-holder-keys">{Rules.grouped(@profile.holder_key_count)}</dd>
         </div>
         <div>
           <dt>Keys in all fleets</dt>
-          <dd>{FleetLive.grouped(@profile.holder_keys_everywhere)}</dd>
+          <dd>{Rules.grouped(@profile.holder_keys_everywhere)}</dd>
         </div>
         <div>
           <dt>Votes</dt>
@@ -230,7 +231,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Posts in this fleet</dt>
-          <dd id="key-profile-holder-posts">{FleetLive.grouped(@profile.holder_posts)}</dd>
+          <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
       <ul class="key-profile-keys" aria-label="Keys in this fleet">
@@ -241,12 +242,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
             replace
             aria-current={token_id == @profile.token_id && "true"}
           >
-            Key {FleetLive.grouped(token_id)}
+            Key {Rules.grouped(token_id)}
           </.link>
         </li>
       </ul>
       <p :if={@profile.holder_key_count > length(@profile.holder_keys)} class="key-profile-muted">
-        and {FleetLive.grouped(@profile.holder_key_count - length(@profile.holder_keys))} more
+        and {Rules.grouped(@profile.holder_key_count - length(@profile.holder_keys))} more
       </p>
     </section>
     """
@@ -260,7 +261,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Messages to Key {FleetLive.grouped(@profile.token_id)}</h3>
+      <h3 id="key-profile-thread-title">Messages to Key {Rules.grouped(@profile.token_id)}</h3>
       <p :if={@profile.messages == 0} class="key-profile-muted">
         Nobody has written to this key yet.
       </p>
@@ -286,7 +287,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-submit="post_to_key"
       >
         <label for="key-profile-composer-body">
-          Write to Key {FleetLive.grouped(@profile.token_id)}
+          Write to Key {Rules.grouped(@profile.token_id)}
         </label>
         <textarea
           id="key-profile-composer-body"
@@ -299,7 +300,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </.form>
 
       <div :if={@profile.composer == :sign_in} class="key-profile__signed-out">
-        <p>Everyone can read. Sign in to write to Key {FleetLive.grouped(@profile.token_id)}.</p>
+        <p>Everyone can read. Sign in to write to Key {Rules.grouped(@profile.token_id)}.</p>
         <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-in">
           Sign in
         </Regent.Primitives.button>
@@ -323,7 +324,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts by Key {FleetLive.grouped(@profile.token_id)}
+        Recent posts by Key {Rules.grouped(@profile.token_id)}
       </h3>
       <p :if={@profile.recent_posts == []} class="key-profile-muted">
         This key hasn’t posted in the fleet’s rooms yet.
@@ -353,7 +354,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp author(assigns) do
     ~H"""
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key, @params)} replace>
-      Key {FleetLive.grouped(@message.as_key)} · {RoomsLive.writer(@message)}
+      Key {Rules.grouped(@message.as_key)} · {RoomsLive.writer(@message)}
     </.link>
     """
   end
@@ -372,10 +373,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   defp times(0), do: "Never"
   defp times(1), do: "Once"
-  defp times(count), do: "#{FleetLive.grouped(count)} times"
+  defp times(count), do: "#{Rules.grouped(count)} times"
 
   defp count(1, noun), do: "1 #{noun}"
-  defp count(count, noun), do: "#{FleetLive.grouped(count)} #{noun}s"
+  defp count(count, noun), do: "#{Rules.grouped(count)} #{noun}s"
 
   defp day(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
 

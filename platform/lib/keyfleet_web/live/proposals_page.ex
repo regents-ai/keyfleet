@@ -18,6 +18,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Rules
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
   alias KeyfleetWeb.FleetLive
@@ -423,18 +424,8 @@ defmodule KeyfleetWeb.ProposalsPage do
       |> String.trim_trailing("0")
 
     case fraction do
-      "" -> grouped(div(atoms, scale))
-      fraction -> "#{grouped(div(atoms, scale))}.#{fraction}"
+      "" -> Rules.grouped(div(atoms, scale))
+      fraction -> "#{Rules.grouped(div(atoms, scale))}.#{fraction}"
     end
-  end
-
-  defp grouped(number) do
-    number
-    |> Integer.to_string()
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
   end
 end

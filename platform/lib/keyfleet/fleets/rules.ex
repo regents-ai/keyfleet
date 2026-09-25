@@ -1,7 +1,8 @@
 defmodule Keyfleet.Fleets.Rules do
   @moduledoc """
   Each fleet's rules in plain words: how it prices its keys, how many keys one
-  wallet may hold, and the terms every member joins under.
+  wallet may hold, and the terms every member joins under, with the numbers
+  in them written the one way every page writes them.
 
   The fleet page, the homepage and the open fleet directory all say these the
   same way, so they are written once, here.
@@ -51,12 +52,18 @@ defmodule Keyfleet.Fleets.Rules do
   @doc "The terms every member of every fleet joins under, one sentence each."
   def membership_terms, do: @membership_terms
 
-  defp keys(1), do: "1 key"
-  defp keys(count), do: "#{grouped(count)} keys"
+  @doc "A number of keys in words, such as `1 key` or `1,771 keys`."
+  def keys(1), do: "1 key"
+  def keys(count), do: "#{grouped(count)} keys"
 
-  defp grouped(count) when count < 1_000, do: Integer.to_string(count)
-
-  defp grouped(count),
-    do:
-      "#{grouped(div(count, 1_000))},#{count |> rem(1_000) |> Integer.to_string() |> String.pad_leading(3, "0")}"
+  @doc "A whole number with its thousands separated by commas."
+  def grouped(number) do
+    number
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.graphemes()
+    |> Enum.chunk_every(3)
+    |> Enum.map_join(",", &Enum.join/1)
+    |> String.reverse()
+  end
 end
