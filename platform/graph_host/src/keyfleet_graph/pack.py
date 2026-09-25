@@ -11,7 +11,7 @@ from typing import Annotated, Literal, Optional
 from activegraph.packs import ObjectType, Pack, RelationType
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model
 
-from keyfleet_graph.protocol import MAX_INT, Address, Count, Scope, multi_line, single_line
+from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
 PACK_VERSION = "0.1.0"
@@ -132,7 +132,7 @@ class KeyCoordinate(_Model):
 
 class CreatedBy(_Model):
     key: KeyCoordinate
-    ownership_epoch: Count
+    ownership_epoch: Epoch
     kind: Literal["human", "agent"]
     wallet: Address
 

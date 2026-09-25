@@ -99,6 +99,7 @@ multi_line = _refuse(_CONTROL_EXCEPT_LINES, "must not contain control characters
 
 Count = Annotated[int, Field(ge=0, le=MAX_INT)]
 Version = Annotated[int, Field(ge=1, le=MAX_INT)]
+Epoch = Annotated[int, Field(ge=1, le=MAX_INT)]
 Address = Annotated[str, StringConstraints(pattern=r"^0x[0-9a-f]{40}$")]
 # The whole fleet, or one of a Fibonacci fleet's twenty levels.
 Scope = Annotated[str, StringConstraints(pattern=r"^(fleet|level:([1-9]|1[0-9]|20))$")]
@@ -120,7 +121,7 @@ class KeyRef(_Shape):
 
 class Auth(_Shape):
     key: KeyRef
-    ownership_epoch: Count
+    ownership_epoch: Epoch
     kind: Literal["human", "agent"]
     operator_wallet: Address
     pairing_id: Optional[Uuid]

@@ -39,8 +39,8 @@ defmodule Keyfleet.Keys.KeyPairing do
     check_constraints do
       check_constraint(:token_id, "key_pairings_positive_token", check: "token_id > 0")
 
-      check_constraint(:ownership_epoch, "key_pairings_nonnegative_epoch",
-        check: "ownership_epoch >= 0"
+      check_constraint(:ownership_epoch, "key_pairings_positive_epoch",
+        check: "ownership_epoch >= 1"
       )
 
       for field <- [:owner_wallet, :operator_wallet] do
@@ -485,7 +485,7 @@ defmodule Keyfleet.Keys.KeyPairing do
     attribute :ownership_epoch, :integer,
       allow_nil?: false,
       public?: true,
-      constraints: [min: 0, max: @bigint]
+      constraints: [min: 1, max: @bigint]
 
     for field <- [:owner_wallet, :operator_wallet] do
       attribute field, :string,

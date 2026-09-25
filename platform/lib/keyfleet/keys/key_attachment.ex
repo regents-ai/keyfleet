@@ -18,8 +18,8 @@ defmodule Keyfleet.Keys.KeyAttachment do
     check_constraints do
       check_constraint(:token_id, "key_attachments_positive_token", check: "token_id > 0")
 
-      check_constraint(:ownership_epoch, "key_attachments_nonnegative_epoch",
-        check: "ownership_epoch >= 0"
+      check_constraint(:ownership_epoch, "key_attachments_positive_epoch",
+        check: "ownership_epoch >= 1"
       )
 
       check_constraint(:block_number, "key_attachments_nonnegative_block",
@@ -347,7 +347,12 @@ defmodule Keyfleet.Keys.KeyAttachment do
       public?: true,
       constraints: [min: 1, max: 9_223_372_036_854_775_807]
 
-    for field <- [:ownership_epoch, :block_number, :log_index] do
+    attribute :ownership_epoch, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: 9_223_372_036_854_775_807]
+
+    for field <- [:block_number, :log_index] do
       attribute field, :integer,
         allow_nil?: false,
         public?: true,

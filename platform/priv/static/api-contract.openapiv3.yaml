@@ -1378,7 +1378,7 @@ components:
                     chain_id: {type: integer, minimum: 1}
                     contract: {type: string, pattern: '^0x[0-9a-f]{40}$'}
                     token_id: {type: integer, minimum: 0}
-                ownership_epoch: {type: integer, minimum: 0}
+                ownership_epoch: {type: integer, minimum: 1}
                 kind: {type: string, enum: [human, agent]}
                 wallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
     WorkspaceRelation:
@@ -1566,7 +1566,7 @@ components:
         token_id: {type: integer, minimum: 1, maximum: 9223372036854775807}
         ownership_epoch:
           type: integer
-          minimum: 0
+          minimum: 1
           maximum: 9223372036854775807
           description: Which owner of the key the pairing was made under; it goes up each time the key changes hands
         owner_wallet: {$ref: "#/components/schemas/AgentWallet"}
