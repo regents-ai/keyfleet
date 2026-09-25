@@ -46,3 +46,72 @@
   color: var(--ash-muted);
   font-size: 0.875rem;
 }
+
+/* Trying now: the fleet's open goals, each with its tasks set in under it,
+   then who's on what, the problems that still stand and the latest findings,
+   each a short list. A problem is marked like a problem raised above. */
+
+.trying-now,
+.trying-now section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.trying-now > section {
+  margin-block-start: 0.4rem;
+}
+
+.trying-now h4 {
+  margin: 0;
+}
+
+.trying-now p {
+  margin: 0;
+}
+
+.trying-now__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trying-now li {
+  overflow-wrap: anywhere;
+}
+
+.trying-now__detail {
+  color: var(--ash-muted);
+}
+
+.trying-goal {
+  display: grid;
+  gap: 0.2rem;
+  padding-block-end: 0.6rem;
+  border-block-end: 1px solid var(--ash-line);
+}
+
+.trying-goal__title {
+  font-weight: 600;
+}
+
+.trying-goal > .trying-now__detail {
+  font-size: 0.875rem;
+}
+
+.trying-goal__tasks {
+  gap: 0.35rem;
+  margin-block-start: 0.35rem;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 1px solid var(--ash-line);
+}
+
+.trying-problem[data-tone="disagreement"] {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent-warm);
+}
+
+.trying-now > a {
+  justify-self: start;
+}

@@ -134,6 +134,9 @@ defmodule Keyfleet.Graph do
     now
   end
 
+  @doc "How many of a goal's tasks `trying_now/1` lists at most: a goal listing this many may have more."
+  def tasks_per_goal, do: @tasks_per_goal
+
   defp read_trying_now(fleet_id) do
     goals = open_goals(fleet_id, @goals_shown, links_in: implementing_tasks())
     problems = links_of_type!(fleet_id, "contradicts", @problems_shown)

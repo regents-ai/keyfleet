@@ -26,8 +26,10 @@ defmodule KeyfleetWeb.ActivityLines do
   """
 
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Graph
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.FleetLive
+  alias KeyfleetWeb.WorkspacePage
 
   @progress %{
     "todo" => "to do",
@@ -183,6 +185,75 @@ defmodule KeyfleetWeb.ActivityLines do
 
   def parts(%{kind: :open_question, facts: f}),
     do: ["For ", item(f.goal), ": ", words(f.question)]
+
+  @doc """
+  What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
+  reads it, ready for a page; `agents` names the agent running each key, by
+  its number. Items and keys are parts, as `parts/1` gives them:
+
+    * `goals`: `%{id: id, goal: item, tally: text, tasks: [task]}`, where
+      `tally` counts the tasks listed and those done, as "3 tasks · 1 done";
+    * `taken`: `[task]`, the tasks in progress;
+    * `problems`: `%{id: link_id, parts: parts}`, "A problem with {target}:
+      {source}", which holds for as long as the link is there;
+    * `findings`: `%{id: id, finding: item, confidence: text}`;
+    * `question`: the parts "Open question: {question}", or nil.
+
+  A task is `%{id: id, task: item, key: key | nil, progress: text}`, with
+  its progress in words, as "In progress".
+  """
+  def trying_now(now, agents) do
+    %{
+      goals: Enum.map(now.goals, &goal(&1, agents)),
+      taken: Enum.map(now.taken, &task(&1, agents)),
+      problems:
+        for %{relation: link, source: source, target: target} <- now.problems do
+          %{id: link.id, parts: ["A problem with ", item(target), ": ", item(source)]}
+        end,
+      findings:
+        for finding <- now.findings do
+          confidence = WorkspacePage.choice("confidence", finding.card["confidence"])
+          %{id: finding.id, finding: item(finding), confidence: confidence <> " confidence"}
+        end,
+      question: now.question && ["Open question: ", words(now.question)]
+    }
+  end
+
+  defp goal(%{goal: goal, tasks: tasks}, agents) do
+    %{
+      id: goal.id,
+      goal: item(goal),
+      tally: tally(tasks),
+      tasks: Enum.map(tasks, &task(&1, agents))
+    }
+  end
+
+  # A task, even one in progress, may be one no key has taken.
+  defp task(%{task: task, assignee_key: token_id}, agents) do
+    %{
+      id: task.id,
+      task: item(task),
+      key: token_id && key(%{token_id: token_id, agent: agents[token_id]}),
+      progress: WorkspacePage.choice("progress", task.card["progress"])
+    }
+  end
+
+  defp tally([]), do: "No tasks yet"
+
+  defp tally(tasks) do
+    done = Enum.count(tasks, &(&1.task.card["progress"] == "done"))
+
+    listed =
+      case length(tasks) do
+        1 ->
+          "1 task"
+
+        count ->
+          if count == Graph.tasks_per_goal(), do: "#{count} newest tasks", else: "#{count} tasks"
+      end
+
+    "#{listed} · #{done} done"
+  end
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"

@@ -50,7 +50,13 @@ defmodule Keyfleet.BrowserChain do
     caller = self()
 
     spawn(fn ->
-      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, ownership_timeout: :infinity)
+      # At repeatable read, so the fleet page's one-snapshot reads can run in it.
+      :ok =
+        Ecto.Adapters.SQL.Sandbox.checkout(Repo,
+          ownership_timeout: :infinity,
+          isolation: "REPEATABLE READ"
+        )
+
       Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
       send(caller, :held)
       Process.sleep(:infinity)

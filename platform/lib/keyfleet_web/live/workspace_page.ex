@@ -472,7 +472,8 @@ defmodule KeyfleetWeb.WorkspacePage do
       not String.match?(value, ~r/[\s\x00-\x1f\x7f]/u)
   end
 
-  defp choice(field, value), do: @choices |> Map.fetch!(field) |> Map.fetch!(value)
+  @doc ~S|What a page calls one of a field's choices: `choice("progress", "doing")` is "In progress".|
+  def choice(field, value), do: @choices |> Map.fetch!(field) |> Map.fetch!(value)
 
   defp key_or(token_id, _none) when is_integer(token_id), do: {:key, token_id}
   defp key_or(nil, none), do: none

@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias KeyfleetWeb.{
     AccountLive,
+    ActivityLines,
     FleetLive,
     KeyLinks,
     KeyMap,
@@ -600,8 +601,29 @@ defmodule KeyfleetWeb.ShellLive do
     {items, cursor, read} = activity_pages(fleet_id, nil, pages, [])
 
     socket
-    |> assign(:activity, %{fleet_id: fleet_id, cursor: cursor, pages: read, empty?: items == []})
+    |> assign(:activity, %{
+      fleet_id: fleet_id,
+      cursor: cursor,
+      pages: read,
+      empty?: items == [],
+      trying: trying_now(fleet_id)
+    })
     |> stream(:activity, items, reset: true)
+  end
+
+  # "Trying now", at the top of "What's happening": the fleet's open goals and
+  # the work on them, with the agent running each key on a task named.
+  defp trying_now(fleet_id) do
+    now = Graph.trying_now(fleet_id)
+    tasks = Enum.flat_map(now.goals, & &1.tasks) ++ now.taken
+    token_ids = for %{assignee_key: token_id} <- tasks, token_id, uniq: true, do: token_id
+
+    agents =
+      fleet_id
+      |> Keys.fleet_operators!(token_ids)
+      |> Map.new(&{&1.token_id, &1.agent_profile.name})
+
+    ActivityLines.trying_now(now, agents)
   end
 
   defp activity_pages(fleet_id, cursor, wanted, read) do
@@ -626,11 +648,11 @@ defmodule KeyfleetWeb.ShellLive do
   defp refresh_activity_soon(socket, _fleet_id), do: socket
 
   # What the panel needs to know of the pages read, and never the cursor:
-  # whether anything is there, and whether earlier items are a press of
-  # "Show earlier" away or past the pages it shows.
+  # whether anything is there, whether earlier items are a press of "Show
+  # earlier" away or past the pages it shows, and what the fleet is trying.
   defp now_shown(nil), do: nil
 
-  defp now_shown(%{cursor: cursor, pages: pages, empty?: empty?}) do
+  defp now_shown(%{cursor: cursor, pages: pages, empty?: empty?, trying: trying}) do
     earlier =
       cond do
         cursor == nil -> nil
@@ -638,7 +660,7 @@ defmodule KeyfleetWeb.ShellLive do
         true -> :elsewhere
       end
 
-    %{empty?: empty?, earlier: earlier}
+    %{empty?: empty?, earlier: earlier, trying: trying}
   end
 
   defp activity_dom_id(%{id: id}), do: "fleet-now-" <> String.replace(id, ":", "-")

@@ -375,6 +375,10 @@
   font-size: 1.05rem;
 }
 
+.fleet-now h4 {
+  font-size: 0.95rem;
+}
+
 .fleet-now__latest {
   display: grid;
   gap: 0.75rem;

@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :now, :map,
     required: true,
     doc:
-      ~s(what "What's happening" shows beyond its items: `empty?`, and `earlier`, `:more`, `:elsewhere` or nil)
+      ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
 
   def page(assigns) do
     ~H"""
@@ -273,6 +273,8 @@ defmodule KeyfleetWeb.FleetLive do
         </Regent.Primitives.button>
       </div>
 
+      <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} params={@params} />
+
       <section class="fleet-now__latest" aria-labelledby="fleet-now-latest-title">
         <h3 id="fleet-now-latest-title">Latest</h3>
         <p :if={@now.empty?} id="fleet-now-empty" class="fleet-detail">
@@ -303,6 +305,117 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
     </aside>
     """
+  end
+
+  attr :trying, :map, required: true, doc: "as `KeyfleetWeb.ActivityLines.trying_now/2` gives it"
+  attr :fleet_id, :string, required: true
+  attr :params, :map, required: true
+
+  # What the fleet's agents are working toward now: its open goals with their
+  # tasks, who's on what, the problems raised that still stand, the latest
+  # findings, and the question the newest goal most needs answered.
+  defp trying_now(assigns) do
+    ~H"""
+    <section id="fleet-trying" class="trying-now" aria-labelledby="fleet-trying-title">
+      <h3 id="fleet-trying-title">Trying now</h3>
+      <p :if={@trying.goals == []} id="fleet-trying-empty" class="fleet-detail">
+        No goals yet. Agents here set goals in the workspace; they show up here.
+      </p>
+      <ul :if={@trying.goals != []} id="fleet-trying-goals" class="trying-now__list">
+        <li :for={goal <- @trying.goals} class="trying-goal" data-goal={goal.id}>
+          <p class="trying-goal__title">
+            <.trying_item part={goal.goal} fleet_id={@fleet_id} />
+          </p>
+          <p class="trying-now__detail">{goal.tally}</p>
+          <ul :if={goal.tasks != []} class="trying-now__list trying-goal__tasks">
+            <.trying_task :for={task <- goal.tasks} task={task} fleet_id={@fleet_id} params={@params} />
+          </ul>
+        </li>
+      </ul>
+      <p :if={@trying.question} id="fleet-trying-question">
+        <.activity_part
+          :for={{part, index} <- Enum.with_index(@trying.question)}
+          part={part}
+          first?={index == 0}
+          fleet_id={@fleet_id}
+          params={@params}
+        />
+      </p>
+
+      <section :if={@trying.taken != []} aria-labelledby="fleet-trying-taken-title">
+        <h4 id="fleet-trying-taken-title">Who’s on what</h4>
+        <ul id="fleet-trying-taken" class="trying-now__list">
+          <.trying_task
+            :for={task <- @trying.taken}
+            task={task}
+            fleet_id={@fleet_id}
+            params={@params}
+          />
+        </ul>
+      </section>
+
+      <section :if={@trying.problems != []} aria-labelledby="fleet-trying-problems-title">
+        <h4 id="fleet-trying-problems-title">Open problems</h4>
+        <ul id="fleet-trying-problems" class="trying-now__list">
+          <li
+            :for={problem <- @trying.problems}
+            class="trying-problem"
+            data-problem={problem.id}
+            data-tone="disagreement"
+          >
+            <.activity_part
+              :for={{part, index} <- Enum.with_index(problem.parts)}
+              part={part}
+              first?={index == 0}
+              fleet_id={@fleet_id}
+              params={@params}
+            />
+          </li>
+        </ul>
+      </section>
+
+      <section :if={@trying.findings != []} aria-labelledby="fleet-trying-findings-title">
+        <h4 id="fleet-trying-findings-title">Latest findings</h4>
+        <ul id="fleet-trying-findings" class="trying-now__list">
+          <li :for={finding <- @trying.findings} data-finding={finding.id}>
+            <.trying_item part={finding.finding} fleet_id={@fleet_id} />
+            <span class="trying-now__detail">· {finding.confidence}</span>
+          </li>
+        </ul>
+      </section>
+
+      <.link id="fleet-trying-workspace" navigate={"/app/fleets/#{@fleet_id}/workspace"}>
+        Open the workspace
+      </.link>
+    </section>
+    """
+  end
+
+  attr :task, :map, required: true
+  attr :fleet_id, :string, required: true
+  attr :params, :map, required: true
+
+  # "{Task} · {Key} · In progress", without the key when no key has taken it.
+  defp trying_task(assigns) do
+    ~H"""
+    <li class="trying-task" data-task={@task.id}>
+      <.trying_item part={@task.task} fleet_id={@fleet_id} />
+      <span :if={@task.key} class="trying-now__detail">
+        · <.activity_part part={@task.key} first?={false} fleet_id={@fleet_id} params={@params} />
+      </span>
+      <span class="trying-now__detail">· {@task.progress}</span>
+    </li>
+    """
+  end
+
+  attr :part, :any, required: true, doc: "an `{:item, id, title}` part"
+  attr :fleet_id, :string, required: true
+
+  # An item by its title, opening its own page.
+  defp trying_item(%{part: {:item, id, title}} = assigns) do
+    assigns = assign(assigns, id: id, title: title)
+
+    ~H|<.link navigate={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
   end
 
   attr :id, :string, required: true
