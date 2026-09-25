@@ -106,7 +106,8 @@
 }
 
 .fleet-menu__list[hidden],
-.fleet-about[hidden] {
+.fleet-about[hidden],
+.fleet-now[hidden] {
   display: none;
 }
 
@@ -326,6 +327,61 @@
 
 .fleet-facts dd {
   margin: 0;
+}
+
+/* What's happening: in the same place as how the fleet works, and open to
+   start on a wide screen. On a narrower one it stays out of sight until the
+   page's script has closed it, so it never shows for a moment first. */
+
+.fleet-now {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  width: min(26rem, 100%);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--rg-panel-padding);
+  border-inline-start: 1px solid var(--ash-line-strong);
+  background: var(--ash-panel);
+}
+
+@media (width < 64rem) {
+  .fleet-now[data-wide-only] {
+    display: none;
+  }
+}
+
+.fleet-now__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.fleet-now__close {
+  flex: none;
+}
+
+.fleet-now h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.fleet-now h3 {
+  font-size: 1.05rem;
+}
+
+.fleet-now__latest {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.fleet-now__latest > .rg-button {
+  justify-self: start;
 }
 
 /* The list of keys, and a missing fleet */

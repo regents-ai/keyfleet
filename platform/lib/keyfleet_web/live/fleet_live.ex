@@ -2,10 +2,11 @@ defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page: its map of keys filling the page under a slim bar with the
   fleet's name, how far it has sold, a way to buy the next key, and links to
-  its rooms, workspace and proposals. "How this fleet works" opens beside the
-  map with its pricing, sales figures and contract, "Who's here" opens there
-  with the agents running its keys, and every key it has issued is listed
-  below the map.
+  its rooms, workspace and proposals. Three panels open beside the map, one
+  at a time: "What's happening", the fleet's latest activity, open to start
+  on a wide screen; "How this fleet works", with its pricing, sales figures
+  and contract; and "Who's here", with the agents running its keys. Every
+  key it has issued is listed below the map.
 
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
@@ -16,10 +17,21 @@ defmodule KeyfleetWeb.FleetLive do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
+  alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.Time
+  alias KeyfleetWeb.WorkspacePage
+
+  # The panels beside the map, each with the button that opens it.
+  @panels [
+    {"#fleet-now", "#fleet-now-toggle"},
+    {"#fleet-about", "#fleet-about-toggle"},
+    {"#fleet-who", "#fleet-who-toggle"}
+  ]
 
   attr :fleet, :map, required: true
 
@@ -45,6 +57,12 @@ defmodule KeyfleetWeb.FleetLive do
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
+  attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
+
+  attr :now, :map,
+    required: true,
+    doc:
+      ~s(what "What's happening" shows beyond its items: `empty?`, and `earlier`, `:more`, `:elsewhere` or nil)
 
   def page(assigns) do
     ~H"""
@@ -102,14 +120,20 @@ defmodule KeyfleetWeb.FleetLive do
               Proposals
             </.link>
             <Regent.Primitives.button
+              id="fleet-now-toggle"
+              variant="secondary"
+              aria-expanded="true"
+              aria-controls="fleet-now"
+              phx-click={toggle_panel("#fleet-now")}
+            >
+              What’s happening
+            </Regent.Primitives.button>
+            <Regent.Primitives.button
               id="fleet-about-toggle"
               variant="secondary"
               aria-expanded="false"
               aria-controls="fleet-about"
-              phx-click={
-                toggle("#fleet-about", "#fleet-about-toggle")
-                |> close_quietly("#fleet-who", "#fleet-who-toggle")
-              }
+              phx-click={toggle_panel("#fleet-about")}
             >
               How this fleet works
             </Regent.Primitives.button>
@@ -118,10 +142,7 @@ defmodule KeyfleetWeb.FleetLive do
               variant="secondary"
               aria-expanded="false"
               aria-controls="fleet-who"
-              phx-click={
-                toggle("#fleet-who", "#fleet-who-toggle")
-                |> close_quietly("#fleet-about", "#fleet-about-toggle")
-              }
+              phx-click={toggle_panel("#fleet-who")}
             >
               Who’s here
             </Regent.Primitives.button>
@@ -132,6 +153,7 @@ defmodule KeyfleetWeb.FleetLive do
         <div class="fleet-stage">
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
           <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
+          <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
           <.about fleet={@fleet} />
           <CheckIns.who_is_here
             agents={@fleet.agents}
@@ -193,21 +215,175 @@ defmodule KeyfleetWeb.FleetLive do
 
   # Opens or closes a menu or panel and says so on the button that controls
   # it. Both stay as the reader left them while the page updates.
-  defp toggle(panel, button) do
-    JS.toggle_attribute({"hidden", "hidden"}, to: panel)
+  defp toggle(js \\ %JS{}, panel, button) do
+    js
+    |> JS.toggle_attribute({"hidden", "hidden"}, to: panel)
     |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: button)
+  end
+
+  # The panels beside the map open one at a time, in the same place: opening
+  # one closes the others without moving the reader's focus.
+  defp toggle_panel(panel) do
+    Enum.reduce(@panels, %JS{}, fn
+      {^panel, button}, js -> toggle(js, panel, button)
+      {other, button}, js -> close_quietly(js, other, button)
+    end)
   end
 
   defp close(panel, button),
     do: %JS{} |> close_quietly(panel, button) |> JS.focus(to: button)
 
-  # The panels beside the map open one at a time: opening one closes the
-  # other without moving the reader's focus.
   defp close_quietly(js, panel, button) do
     js
     |> JS.set_attribute({"hidden", "hidden"}, to: panel)
     |> JS.set_attribute({"aria-expanded", "false"}, to: button)
   end
+
+  attr :fleet, :map, required: true
+  attr :params, :map, required: true
+  attr :activity, :any, required: true
+  attr :now, :map, required: true
+
+  # Opens beside the map: what has been happening in the fleet, newest first,
+  # kept current while the page is open. It starts open on a wide screen and
+  # closed on a narrow one, where its styles keep it out of sight until the
+  # page's script has closed it.
+  defp now_panel(assigns) do
+    ~H"""
+    <aside
+      id="fleet-now"
+      class="fleet-now"
+      aria-labelledby="fleet-now-title"
+      phx-hook="OpenWhenWide"
+      data-toggle="fleet-now-toggle"
+      data-wide-only
+    >
+      <div class="fleet-now__heading">
+        <h2 id="fleet-now-title">What’s happening</h2>
+        <Regent.Primitives.button
+          id="fleet-now-close"
+          class="fleet-now__close"
+          variant="secondary"
+          phx-click={close("#fleet-now", "#fleet-now-toggle")}
+        >
+          Close
+        </Regent.Primitives.button>
+      </div>
+
+      <section class="fleet-now__latest" aria-labelledby="fleet-now-latest-title">
+        <h3 id="fleet-now-latest-title">Latest</h3>
+        <p :if={@now.empty?} id="fleet-now-empty" class="fleet-detail">
+          Nothing yet. When the agents here start talking or planning, it shows up here.
+        </p>
+        <ol id="fleet-now-list" class="activity-lines" phx-update="stream">
+          <.activity_line
+            :for={{dom_id, item} <- @activity}
+            id={dom_id}
+            item={item}
+            fleet={@fleet}
+            params={@params}
+          />
+        </ol>
+        <Regent.Primitives.button
+          :if={@now.earlier == :more}
+          id="fleet-now-earlier"
+          variant="secondary"
+          phx-click="activity_earlier"
+        >
+          Show earlier
+        </Regent.Primitives.button>
+        <p :if={@now.earlier == :elsewhere} id="fleet-now-elsewhere" class="fleet-detail">
+          See everything in the <.link navigate={"/app/fleets/#{@fleet.fleet_id}/rooms/general"}>rooms</.link>,
+          <.link navigate={"/app/fleets/#{@fleet.fleet_id}/workspace"}>workspace</.link>
+          and <.link navigate={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
+        </p>
+      </section>
+    </aside>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :item, :map, required: true, doc: "an item of `Keyfleet.Activity`"
+  attr :fleet, :map, required: true
+  attr :params, :map, required: true
+
+  # One thing that happened, told as `KeyfleetWeb.ActivityLines` tells it,
+  # with when it happened. A problem raised with an item stands out.
+  defp activity_line(assigns) do
+    assigns =
+      assign(assigns,
+        parts: assigns.item |> ActivityLines.parts() |> Enum.with_index(),
+        tone: tone(assigns.item)
+      )
+
+    ~H"""
+    <li id={@id} class="activity-line" data-kind={@item.kind} data-tone={@tone}>
+      <p class="activity-line__text">
+        <.activity_part
+          :for={{part, index} <- @parts}
+          part={part}
+          first?={index == 0}
+          fleet_id={@fleet.fleet_id}
+          params={@params}
+        />
+      </p>
+      <p class="activity-line__time">
+        <time datetime={DateTime.to_iso8601(@item.at)}>{Time.moment(@item.at, DateTime.utc_now())}</time>
+      </p>
+    </li>
+    """
+  end
+
+  defp tone(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "disagreement"
+  defp tone(_item), do: nil
+
+  attr :part, :any, required: true
+  attr :first?, :boolean, required: true
+  attr :fleet_id, :string, required: true
+  attr :params, :map, required: true
+
+  # A key opens its profile over this page, and an item or a room its own
+  # page. Everything a member wrote is text, never markup.
+  defp activity_part(%{part: {:key, token_id, agent}} = assigns) do
+    assigns = assign(assigns, token_id: token_id, agent: agent)
+
+    ~H"""
+    <.link patch={KeyLinks.key_path(@fleet_id, @token_id, @params)} data-key={@token_id}>{key_name(
+      @token_id,
+      @agent
+    )}</.link>
+    """
+  end
+
+  defp activity_part(%{part: {:item, id, title}} = assigns) when is_binary(title) do
+    assigns = assign(assigns, id: id, title: title)
+
+    ~H|“<.link navigate={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>”|
+  end
+
+  defp activity_part(%{part: {:item, _id, nil}, first?: true} = assigns), do: ~H"An item"
+  defp activity_part(%{part: {:item, _id, nil}} = assigns), do: ~H"an item"
+
+  defp activity_part(%{part: {:room, slug, name}} = assigns) do
+    assigns = assign(assigns, slug: slug, name: name)
+
+    ~H|<.link navigate={"/app/fleets/#{@fleet_id}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
+  end
+
+  defp activity_part(%{part: {:agent, name}} = assigns) do
+    assigns = assign(assigns, :name, name)
+    ~H|<span class="activity-line__agent">{@name}</span>|
+  end
+
+  defp activity_part(%{part: {:quote, text}} = assigns) do
+    assigns = assign(assigns, :text, text)
+    ~H|<q class="activity-line__quote">{@text}</q>|
+  end
+
+  defp activity_part(assigns), do: ~H"{@part}"
+
+  defp key_name(token_id, nil), do: "Key #{grouped(token_id)}"
+  defp key_name(token_id, agent), do: "#{agent} (key #{grouped(token_id)})"
 
   attr :fleet, :map, required: true
 

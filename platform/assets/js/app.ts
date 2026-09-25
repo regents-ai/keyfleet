@@ -29,6 +29,7 @@ import {ShellMotion} from "./hooks/motion"
 import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog} from "./hooks/modal_dialog"
+import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
 
 type ShellHook = Hook & {
@@ -332,6 +333,7 @@ const hooks = {
   KeyMap,
   LaunchPlanPicker,
   ModalDialog,
+  OpenWhenWide,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),
   VerifiedConnections,
 }

@@ -1,0 +1,44 @@
+/* Lines of what has happened in a fleet: one sentence each, with when it
+   happened below it. A problem raised with an item is marked in the warm
+   accent. */
+
+.activity-lines {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-line {
+  display: grid;
+  gap: 0.2rem;
+  padding-block: 0.75rem;
+  border-block-end: 1px solid var(--ash-line);
+}
+
+.activity-line:first-child {
+  padding-block-start: 0;
+}
+
+.activity-line[data-tone="disagreement"] {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent-warm);
+}
+
+.activity-line p {
+  margin: 0;
+}
+
+.activity-line__text {
+  overflow-wrap: anywhere;
+}
+
+.activity-line__quote {
+  color: var(--ash-muted);
+}
+
+.activity-line__time {
+  color: var(--ash-muted);
+  font-size: 0.875rem;
+}

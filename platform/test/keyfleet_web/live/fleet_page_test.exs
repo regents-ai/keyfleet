@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
+  alias Keyfleet.Rooms
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -625,6 +626,97 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert shown_keys(view) == [1]
   end
 
+  describe "what's happening" do
+    setup do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      Rooms.bootstrap_rooms!()
+      :ok
+    end
+
+    test "a post appears once the page reads the fleet again, its words as text", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      refute has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
+
+      post =
+        Rooms.send_message!(
+          %{
+            fleet_id: @fleet,
+            slug: "general",
+            body: "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey",
+            idempotency_key: Ash.UUID.generate()
+          },
+          actor: owner()
+        )
+
+      # The notice of the post came first; the refresh stands in for the wait.
+      send(view.pid, :refresh_activity)
+
+      line = "#fleet-now-posts-#{post.id}[data-kind=\"post\"]"
+      assert has_element?(view, ~s(#{line} a[data-key="1"]))
+      assert has_element?(view, ~s(#{line} a[data-room="general"][href="#{@path}/rooms/general"]))
+      refute has_element?(view, "#fleet-now-list b")
+      refute has_element?(view, "#fleet-now-list script")
+      assert text(view, line) =~ "<b>Hull</b> <script>alert(1)</script>"
+    end
+
+    test "Show earlier adds older items below, and the first stay put", %{conn: conn} do
+      now = DateTime.utc_now()
+      # Posts turn about between two rooms, so each is an item of its own.
+      for n <- 1..70, do: line!(if(rem(n, 2) == 0, do: "general", else: "coding"), n, now)
+
+      {:ok, view, _html} = live(conn, @path)
+      first = now_items(view)
+
+      view |> element("#fleet-now-earlier") |> render_click()
+      both = now_items(view)
+
+      assert Enum.take(both, length(first)) == first
+      assert length(both) > length(first)
+      assert length(both) == length(Enum.uniq(both))
+    end
+
+    test "a notice from another fleet reads nothing; one from this fleet does", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      # Written without a notice, so only a read the page makes shows it; and
+      # written now, after the keys were sold, so it tops the first page.
+      line!("general", 0, DateTime.utc_now())
+
+      other = "fibonacci_syndicate"
+      send(view.pid, {:proposals_changed, other})
+      send(view.pid, {:graph_head, other, "log", 9})
+      send(view.pid, {:keys_changed, other, [7]})
+      send(view.pid, :refresh_activity)
+      refute has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
+
+      send(view.pid, {:proposals_changed, @fleet})
+      send(view.pid, :refresh_activity)
+      assert has_element?(view, ~s(#fleet-now-list li[data-kind="post"]))
+    end
+
+    # The panels share one place beside the map: each button opens its own
+    # panel and closes the other two, so none ever covers another.
+    test "the panels beside the map open one at a time, What's happening first", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+
+      assert has_element?(view, ~s{#fleet-now:not([hidden])[phx-hook="OpenWhenWide"]})
+      assert has_element?(view, ~s(#fleet-now-toggle[aria-expanded="true"]))
+      assert has_element?(view, "#fleet-about[hidden]")
+      assert has_element?(view, "#fleet-who[hidden]")
+
+      panels = ["fleet-now", "fleet-about", "fleet-who"]
+
+      for panel <- panels do
+        commands = click_commands(view, "##{panel}-toggle")
+        assert ["toggle_attr", %{"attr" => ["hidden", "hidden"], "to" => "##{panel}"}] in commands
+
+        for other <- panels -- [panel] do
+          assert ["set_attr", %{"attr" => ["hidden", "hidden"], "to" => "##{other}"}] in commands
+        end
+      end
+    end
+  end
+
   defp deploy!(fleet_id \\ @fleet, deployed_block \\ 1) do
     fleet_id
     |> Fleets.get_fleet!()
@@ -798,6 +890,54 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     after
       0 -> rows
     end
+  end
+
+  # A post written as key 1 `seconds` before `now`, with no notice to anyone.
+  defp line!(slug, seconds, now) do
+    room = Rooms.get_room!(@fleet, slug)
+    body = "Line #{seconds}"
+
+    Keyfleet.Repo.insert_all(
+      "messages",
+      [
+        %{
+          id: Ecto.UUID.dump!(Ash.UUID.generate()),
+          seq: System.unique_integer([:positive]),
+          fleet_id: @fleet,
+          room_id: Ecto.UUID.dump!(room.id),
+          kind: "post",
+          author_kind: "human",
+          author_wallet: @owner,
+          as_key: 1,
+          body: body,
+          body_digest: Base.encode16(:crypto.hash(:sha256, body), case: :lower),
+          idempotency_key: Ash.UUID.generate(),
+          inserted_at: now |> DateTime.add(-seconds) |> DateTime.to_naive()
+        }
+      ],
+      prefix: "keyfleet_app"
+    )
+  end
+
+  # The ids of the lines "What's happening" shows, top to bottom.
+  defp now_items(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#fleet-now-list > li")
+    |> LazyHTML.attribute("id")
+  end
+
+  # The page commands a button runs when pressed.
+  defp click_commands(view, selector) do
+    [commands] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(selector)
+      |> LazyHTML.attribute("phx-click")
+
+    Jason.decode!(commands)
   end
 
   defp signed_in(conn) do
