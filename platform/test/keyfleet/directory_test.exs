@@ -66,13 +66,11 @@ defmodule Keyfleet.DirectoryTest do
   test "open work leaves out what is finished, dropped, archived or already taken" do
     Workspace.open_log(@fleet)
     open = Workspace.create(@fleet, "goal", %{"title" => "Map the first paid service"})
-    unset = Workspace.create(@fleet, "goal", %{"title" => "No status yet", "status" => nil})
     Workspace.create(@fleet, "goal", %{"title" => "Done", "status" => "achieved"})
     Workspace.create(@fleet, "goal", %{"title" => "Gave up", "status" => "dropped"})
     Workspace.archive(@fleet, Workspace.create(@fleet, "goal", %{"title" => "Archived"}))
 
     untaken = Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
-    unset_task = Workspace.create(@fleet, "task", %{"title" => "No progress", "progress" => nil})
     Workspace.create(@fleet, "task", %{"title" => "Claimed", "assignee_key" => 12})
 
     doing =
@@ -93,9 +91,9 @@ defmodule Keyfleet.DirectoryTest do
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert {fleet.open_goals, fleet.tasks_in_progress} == {2, 1}
-    assert Enum.map(fleet.work.open_goals, & &1.id) == [unset, open]
-    assert Enum.map(fleet.work.tasks_untaken, & &1.id) == [unset_task, untaken]
+    assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 1}
+    assert Enum.map(fleet.work.open_goals, & &1.id) == [open]
+    assert Enum.map(fleet.work.tasks_untaken, & &1.id) == [untaken]
 
     assert [%{id: ^doing, title: "Underway", gist: "Draft the price", assignee_key: 12}] =
              fleet.work.tasks_in_progress

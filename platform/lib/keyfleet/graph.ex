@@ -11,6 +11,19 @@ defmodule Keyfleet.Graph do
   """
   use Ash.Domain
 
+  @goals_shown 3
+  @tasks_per_goal 5
+  @taken_shown 8
+  @findings_shown 3
+  @problems_shown 3
+  @tables [
+    Keyfleet.Graph.Cursor,
+    Keyfleet.Graph.Event,
+    Keyfleet.Graph.Object,
+    Keyfleet.Graph.Relation,
+    Keyfleet.Graph.LaunchPlanRevision
+  ]
+
   resources do
     resource Keyfleet.Graph.Workspace do
       define :get_object, action: :get, args: [:fleet_id, :id]
@@ -48,6 +61,7 @@ defmodule Keyfleet.Graph do
 
     resource Keyfleet.Graph.Relation do
       define :read_relations_touching, action: :touching, args: [:fleet_id, :object_id, :limit]
+      define :links_of_type, action: :of_type, args: [:fleet_id, :type, :limit]
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
@@ -71,6 +85,120 @@ defmodule Keyfleet.Graph do
     Keyfleet.Graph.Object
     |> Ash.Query.for_read(:open_work, %{fleet_id: fleet_id, kind: kind})
     |> Ash.count!()
+  end
+
+  @doc """
+  The first open question of the fleet's newest open goal, with that goal:
+  `%{goal: goal, question: question}`, or nil when the fleet has no open goal
+  or its newest one has no open question. The newest open goal is the one
+  changed most recently among the `:goals_open` of the `:open_work` read. The
+  goal comes with its `title` and `card`.
+
+  This is the one place the rule lives; `trying_now/1` answers the same
+  question from the goals it reads.
+  """
+  def open_question(fleet_id), do: fleet_id |> open_goals(1) |> question_of()
+
+  @doc """
+  What the fleet's agents are trying to do right now, read from one snapshot
+  (`in_snapshot/1`) in six bounded queries, with no text beyond each card's
+  `gist`:
+
+    * `goals`: up to #{@goals_shown} open goals, most recently changed first,
+      each with up to #{@tasks_per_goal} of the tasks linked to it by
+      `implements`, the newest link first: `%{goal: goal, tasks: [%{task:
+      task, assignee_key: key | nil, progress: progress}]}`. Archived tasks
+      aren't listed.
+    * `taken`: who's on what: up to #{@taken_shown} tasks a key has taken
+      and is working on (`:tasks_doing`), `%{task: task, assignee_key: key}`.
+    * `findings`: the #{@findings_shown} most recently changed findings.
+    * `problems`: the #{@problems_shown} newest `contradicts` links still in
+      place, `%{relation: link, source: object, target: object}`. Unlinking
+      removes a link, so an unlinked problem is gone; a link from or to an
+      archived object isn't listed.
+    * `question`: the question `open_question/1` gives, or nil.
+
+  Every object comes with its `title` and `card`.
+  """
+  def trying_now(fleet_id) do
+    {:ok, now} = in_snapshot(fn -> read_trying_now(fleet_id) end)
+    now
+  end
+
+  defp read_trying_now(fleet_id) do
+    goals = open_goals(fleet_id, @goals_shown, links_in: implementing_tasks())
+    problems = links_of_type!(fleet_id, "contradicts", @problems_shown)
+
+    objects =
+      goals
+      |> Enum.flat_map(fn goal -> Enum.map(goal.links_in, & &1.source) end)
+      |> Enum.concat(Enum.flat_map(problems, &[&1.source, &1.target]))
+      |> Enum.uniq()
+      |> then(&object_titles!(fleet_id, &1, load: [:card]))
+      |> Map.new(&{&1.id, &1})
+
+    taken = open_work!(fleet_id, :tasks_doing, query: [limit: @taken_shown])
+    findings = workspace_cards!(fleet_id, %{type: "finding"}, page: [limit: @findings_shown])
+
+    %{
+      goals: Enum.map(goals, &%{goal: &1, tasks: tasks(&1, objects)}),
+      taken: Enum.map(taken, &%{task: &1, assignee_key: &1.card["assignee_key"]}),
+      findings: findings.results,
+      problems: problems(problems, objects),
+      question: goals |> question_of() |> then(&(&1 && &1.question))
+    }
+  end
+
+  defp open_goals(fleet_id, limit, load \\ []) do
+    open_work!(fleet_id, :goals_open,
+      query: [limit: limit],
+      load: [:first_open_question | load]
+    )
+  end
+
+  defp question_of([%{first_open_question: question} = goal | _]) when is_binary(question),
+    do: %{goal: goal, question: question}
+
+  defp question_of(_goals), do: nil
+
+  # Each goal's newest links from tasks that implement it, at most
+  # @tasks_per_goal of them per goal, in one query for all the goals read.
+  defp implementing_tasks do
+    Keyfleet.Graph.Relation
+    |> Ash.Query.for_read(:into, %{type: "implements", source_type: "task"})
+    |> Ash.Query.limit(@tasks_per_goal)
+  end
+
+  # Every link read names objects in the same snapshot, so each is there.
+  defp tasks(goal, objects) do
+    for %{source: id} <- goal.links_in do
+      task = Map.fetch!(objects, id)
+      %{task: task, assignee_key: task.card["assignee_key"], progress: task.card["progress"]}
+    end
+  end
+
+  defp problems(links, objects) do
+    for link <- links do
+      %{
+        relation: link,
+        source: Map.fetch!(objects, link.source),
+        target: Map.fetch!(objects, link.target)
+      }
+    end
+  end
+
+  @doc """
+  Runs `read` in one read-only snapshot of the workspace's read tables and
+  answers `{:ok, result}`: Postgres fixes a repeatable-read snapshot at the
+  transaction's first query, so everything `read` reads comes from one
+  moment. It must be the transaction's first statement, so it can't run
+  inside another transaction.
+  """
+  def in_snapshot(read) do
+    Ash.transact(@tables, fn ->
+      Keyfleet.Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+      read.()
+    end)
   end
 
   @doc """

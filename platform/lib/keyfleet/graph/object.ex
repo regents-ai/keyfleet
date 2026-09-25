@@ -132,6 +132,11 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # What a link's relationships to its two ends read through.
+    read :link_end do
+      public? false
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -178,6 +183,12 @@ defmodule Keyfleet.Graph.Object do
 
   calculations do
     calculate :title, :string, expr(fragment("left(? ->> 'title', 200)", data)), public?: true
+
+    # A goal's first open question, the one it most needs answered.
+    calculate :first_open_question,
+              :string,
+              expr(fragment("left(? #>> '{open_questions,0}', 500)", data)),
+              public?: true
 
     # The few short fields a card shows, and the start of the object's main
     # text, cut in the database so a page of cards never loads whole texts.
@@ -237,6 +248,15 @@ defmodule Keyfleet.Graph.Object do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       define_attribute? false
+    end
+
+    # The links of one type that point at this object, read with the
+    # relation's `:into` read.
+    has_many :links_in, Keyfleet.Graph.Relation do
+      source_attribute :id
+      destination_attribute :target
+      read_action :into
+      filter expr(fleet_id == parent(fleet_id))
     end
   end
 end

@@ -24,21 +24,11 @@ defmodule Keyfleet.Graph.Workspace.Read do
   alias Keyfleet.Graph.Event
 
   @relation_page 200
-  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation, Graph.LaunchPlanRevision]
 
   @impl true
   def run(input, opts, context) do
     kind = Keyword.fetch!(opts, :read)
-    in_snapshot(fn -> read(kind, input.arguments, actor: context.actor) end)
-  end
-
-  # Postgres fixes a repeatable-read snapshot at the transaction's first
-  # query, so everything read after this setting comes from one moment.
-  defp in_snapshot(read) do
-    Ash.transact(@tables, fn ->
-      Keyfleet.Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-      read.()
-    end)
+    Graph.in_snapshot(fn -> read(kind, input.arguments, actor: context.actor) end)
   end
 
   defp read(:get, %{fleet_id: fleet_id, id: id}, opts) do
