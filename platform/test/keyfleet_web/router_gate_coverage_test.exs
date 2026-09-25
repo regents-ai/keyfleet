@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/docs"},
              {:get, "/about"},
              {:get, "/contact"},
+             {:get, "/opportunities"},
              {:get, "/"},
              {:get, "/privacy"},
              {:get, "/terms"},

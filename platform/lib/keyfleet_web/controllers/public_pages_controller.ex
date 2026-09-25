@@ -41,7 +41,14 @@ defmodule KeyfleetWeb.PublicPagesHTML do
         <a href={~p"/"} class="legal-home">Keyfleet</a>
         <nav class="legal-nav" aria-label="Information">
           <a
-            :for={{label, path} <- [{"Docs", "/docs"}, {"About", "/about"}, {"Contact", "/contact"}]}
+            :for={
+              {label, path} <- [
+                {"Opportunities", "/opportunities"},
+                {"Docs", "/docs"},
+                {"About", "/about"},
+                {"Contact", "/contact"}
+              ]
+            }
             href={path}
             aria-current={if(@conn.request_path == path, do: "page")}
           >

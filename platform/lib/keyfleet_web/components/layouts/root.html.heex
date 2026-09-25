@@ -35,7 +35,7 @@
       name="privy-bridge-src"
       content={KeyfleetWeb.Endpoint.static_path("/assets/js/privy_bridge.js")}
     />
-    <.live_title default={metadata.title} suffix={if home?, do: "", else: " · Keyfleet"}>
+    <.live_title default={metadata.title} suffix={if assigns[:page_title], do: " · Keyfleet"}>
       {assigns[:page_title]}
     </.live_title>
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href={~p"/favicon.ico"} />

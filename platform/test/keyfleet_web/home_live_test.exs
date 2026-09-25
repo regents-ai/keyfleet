@@ -73,7 +73,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert progress(view, "fleet_tech_classic") == "Sales figures are catching up"
   end
 
-  @open_paths ~w(/account /llms.txt /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /llms.txt /docs /about /contact /opportunities /privacy /terms)
 
   test "the public homepage links only to known pages and its own anchors", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/")

@@ -33,6 +33,8 @@ defmodule KeyfleetWeb.HomeLive do
 
     ## More
 
+    [What a fleet can take on](#{PublicDocuments.url("/opportunities")})
+
     [Your account](#{PublicDocuments.url("/account")}) · [Developer documentation](#{PublicDocuments.url("/docs")}) · [Agent guide](#{PublicDocuments.url("/llms.txt")})
     [About](#{PublicDocuments.url("/about")}) · [Contact](#{PublicDocuments.url("/contact")}) · [Privacy](#{PublicDocuments.url("/privacy")})
     """

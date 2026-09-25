@@ -76,6 +76,7 @@ defmodule KeyfleetWeb.Router do
     get "/docs", PublicPagesController, :show
     get "/about", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
+    get "/opportunities", PublicPagesController, :show
   end
 
   scope "/api/v1" do

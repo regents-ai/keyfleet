@@ -8,6 +8,10 @@
   flex-wrap: wrap;
 }
 
+.public-document .legal-nav {
+  row-gap: 0;
+}
+
 .public-document .legal-nav a {
   display: inline-flex;
   align-items: center;

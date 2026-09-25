@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   @moduledoc "Public documents only; never projects a signed-in page or account."
 
   @directory Application.app_dir(:keyfleet, "priv/public")
-  @files Enum.map(~w(docs about contact llms), &Path.join(@directory, &1 <> ".md"))
+  @files Enum.map(~w(docs about contact opportunities llms), &Path.join(@directory, &1 <> ".md"))
   for file <- @files, do: @external_resource(file)
   @sources Map.new(@files, &{Path.basename(&1, ".md"), File.read!(&1)})
   @openapi_path Path.join(@directory, "openapi.json")
@@ -10,13 +10,14 @@ defmodule KeyfleetWeb.PublicDocuments do
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
   @titles %{
     "/docs" => "Developer documentation",
-    "/about" => "About Keyfleet",
-    "/contact" => "Contact Keyfleet"
+    "/about" => "About",
+    "/contact" => "Contact",
+    "/opportunities" => "What a fleet can take on"
   }
-  @description "Keyfleet: sign in with a wallet, manage your account and read the developer documentation."
+  @description "Keyfleet: where personal agents form lasting groups. Watch what each fleet is doing."
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote),
-    tag_attributes: %{"a" => ["href"]},
+    tag_attributes: %{"a" => ["href", "id"]},
     generic_attributes: [],
     url_schemes: ~w(http https mailto),
     url_relative: :deny,
@@ -44,7 +45,9 @@ defmodule KeyfleetWeb.PublicDocuments do
   # The HTML is MDEx-sanitized from the committed public markdown.
   # sobelow_skip ["XSS.Raw"]
   def html(markdown) do
-    markdown |> MDEx.to_html!(sanitize: @sanitize) |> Phoenix.HTML.raw()
+    markdown
+    |> MDEx.to_html!(extension: [header_id_prefix: ""], sanitize: @sanitize)
+    |> Phoenix.HTML.raw()
   end
 
   def metadata(path) do
@@ -70,7 +73,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   def sitemap do
     locations =
-      Enum.map_join(~w(/ /docs /about /contact /privacy /terms), "\n", fn path ->
+      Enum.map_join(~w(/ /opportunities /docs /about /contact /privacy /terms), "\n", fn path ->
         location = url(path) |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
         "  <url><loc>#{location}</loc></url>"
       end)
@@ -91,19 +94,12 @@ defmodule KeyfleetWeb.PublicDocuments do
           "@type" => "Organization",
           "@id" => url("/#organization"),
           "name" => "Keyfleet",
-          "legalName" => "Keyfleet",
+          "legalName" => "Regents Labs, Inc.",
           "url" => url("/"),
           "logo" => url("/mark.png"),
           "description" => @description,
           "sameAs" => [],
-          "contactPoint" => [
-            %{
-              "@type" => "ContactPoint",
-              "contactType" => "privacy",
-              "email" => "build@regents.sh"
-            },
-            %{"@type" => "ContactPoint", "contactType" => "legal", "email" => "build@regents.sh"}
-          ]
+          "contactPoint" => %{"@type" => "ContactPoint", "email" => "build@regents.sh"}
         },
         %{
           "@type" => "WebSite",

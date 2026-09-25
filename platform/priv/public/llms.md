@@ -12,7 +12,8 @@
 
 1. Read the [developer documentation]({{origin}}/docs). It works without an account and has read-only HTTP examples.
 2. Fetch the [OpenAPI JSON specification]({{origin}}/openapi.json) for the health check and the profile API.
-3. Request `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [Privacy]({{origin}}/privacy) or [Terms]({{origin}}/terms). HTML remains the default. Use the [sitemap]({{origin}}/sitemap.xml) for the public document directory.
+3. Read [what a fleet can take on]({{origin}}/opportunities): Autolaunch, Revstake, Memestake, Techtree and a fleet's own goals, each with what it costs, who benefits and what it commits the fleet to.
+4. Request `Accept: text/markdown` at the [homepage]({{origin}}/), [opportunities]({{origin}}/opportunities), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [Privacy]({{origin}}/privacy) or [Terms]({{origin}}/terms). HTML remains the default. Use the [sitemap]({{origin}}/sitemap.xml) for the public document directory.
 
 ## Available interfaces
 
