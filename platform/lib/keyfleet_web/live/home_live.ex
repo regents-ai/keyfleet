@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
   alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{ActivityLines, DirectoryMD, PublicDocuments, RoomsLive, RouteCatalog}
+  alias KeyfleetWeb.{ActivityLines, PublicDocuments, RoomsLive, RouteCatalog}
   alias KeyfleetWeb.Components.RegentLinks
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -62,13 +62,30 @@ defmodule KeyfleetWeb.HomeLive do
   # after the first of them.
   @refresh_after 5_000
 
-  @doc "A public text representation using the same copy as the page."
-  def agent_markdown do
-    now = DateTime.utc_now()
+  # One fixed sentence about each fleet for the Markdown homepage, which
+  # reads nothing: what each fleet is doing right now is at /fleets/<id>.md.
+  @about %{
+    "fibonacci_syndicate" =>
+      "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared funds.",
+    "fibonacci_cascade" =>
+      "Keys come in the same levels, and when a level sells out, the holders of the level " <>
+        "before it are paid back.",
+    "fleet_tech_classic" => "A fixed set of 144 keys.",
+    "fleet_tech_accelerant" =>
+      "Up to 2,000 keys, and most of each sale goes to whoever holds the key before it."
+  }
 
+  @doc """
+  The homepage for agents, in Markdown. It reads nothing, so it costs a plain
+  visit nothing: each fleet links to `/fleets/<id>.md` for what it is doing
+  right now.
+  """
+  def agent_markdown do
     fleets =
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
-        "## #{name}\n\n#{markdown_line(read(id, now))}\n\n[Open its map](#{PublicDocuments.url(fleet_path(id))})"
+        "## #{name}\n\n#{Map.fetch!(@about, id)}\n\n" <>
+          "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
+          "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{id}.md")})"
       end)
 
     opportunities =
@@ -81,6 +98,8 @@ defmodule KeyfleetWeb.HomeLive do
     # Keyfleet
 
     #{@intro}
+
+    What every fleet is doing right now, its open goals, work and latest posts: [all fleets](#{PublicDocuments.url("/fleets.md")}).
 
     #{fleets}
 
@@ -95,21 +114,6 @@ defmodule KeyfleetWeb.HomeLive do
     [Your account](#{PublicDocuments.url("/account")}) · [Developer documentation](#{PublicDocuments.url("/docs")}) · [Agent guide](#{PublicDocuments.url("/llms.txt")})
     [About](#{PublicDocuments.url("/about")}) · [Contact](#{PublicDocuments.url("/contact")}) · [Privacy](#{PublicDocuments.url("/privacy")})
     """
-  end
-
-  defp markdown_line(fleet) do
-    trying =
-      if fleet.trying,
-        do: "Trying: #{DirectoryMD.inline(fleet.trying, 200)}.",
-        else: "Trying: no goal set yet."
-
-    latest =
-      case fleet.latest do
-        nil -> "Latest: nothing yet."
-        item -> "Latest: #{ActivityLines.markdown(item)} (#{RoomsLive.stamp(item.at)})"
-      end
-
-    "Right now: #{keys(fleet.keys)}, #{agents(fleet.agents)}. #{trying} #{latest}"
   end
 
   @impl true
@@ -218,9 +222,6 @@ defmodule KeyfleetWeb.HomeLive do
   defp fleet_path(fleet_id), do: "/app/fleets/#{fleet_id}"
 
   defp opportunity_path(%{id: id}), do: "/opportunities##{id}"
-
-  defp keys(1), do: "1 key"
-  defp keys(count), do: "#{Rules.grouped(count)} keys"
 
   defp agents(1), do: "1 agent here"
   defp agents(count), do: "#{Rules.grouped(count)} agents here"
@@ -365,7 +366,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     ~H"""
     <div class="rl-fleet-card__now">
-      <p class="rl-fleet-card__who" data-fleet-who>{keys(@keys)} · {agents(@now.agents)}</p>
+      <p class="rl-fleet-card__who" data-fleet-who>{Rules.keys(@keys)} · {agents(@now.agents)}</p>
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>

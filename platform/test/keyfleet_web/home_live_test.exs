@@ -11,7 +11,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   and the first render reads neither
   # - a notice about one fleet refreshes that fleet's card alone, and only
   #   after the pause
-  # - the Markdown homepage carries each fleet's goal, its members' words escaped
+  # - the Markdown homepage links each fleet to its own page for what it is
+  #   doing, and every fleet's page, and those pages exist
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
 
@@ -97,22 +98,20 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
   end
 
-  test "the Markdown homepage carries each fleet's goal, with its members' words escaped",
+  test "the Markdown homepage sends agents to each fleet's own page for what it is doing",
        %{conn: conn} do
-    goal("Ship *v2* [now](https://example.com)")
-
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    sections = markdown |> String.split("\n## ") |> tl()
-
-    for %{name: name} <- Fleets.catalog() do
-      assert [section] = Enum.filter(sections, &String.starts_with?(&1, name <> "\n"))
-      assert section =~ "Trying: "
+    for %{id: id, name: name} <- Fleets.catalog() do
+      [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
+      [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
+      assert path == "/fleets/#{id}.md"
+      assert build_conn() |> get(path) |> response(200) =~ name
     end
 
-    assert markdown =~ ~S"Trying: “Ship \*v2\* \[now\]\(https://example.com\)”."
-    refute markdown =~ "[now]("
+    [_, all] = Regex.run(~r{\[all fleets\]\(https?://[^/]+(/[^)]+)\)}, markdown)
+    assert build_conn() |> get(all) |> response(200) =~ "Keyfleet Syndicate"
   end
 
   @open_paths ~w(/account /llms.txt /docs /about /contact /opportunities /privacy /terms)
