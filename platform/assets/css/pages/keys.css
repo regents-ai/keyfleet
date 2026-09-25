@@ -116,10 +116,6 @@
 
 .key-request-list li,
 .key-history li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
   padding: 0.75rem;
   border: 1px solid var(--ash-line);
 }

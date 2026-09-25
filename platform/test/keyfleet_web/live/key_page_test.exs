@@ -61,7 +61,10 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert view |> element(".key-request-list code") |> render() =~ @operator
 
     assert words(view, ".key-address-check") =~
-             "Check it matches the address your agent gave you."
+             "Check this is your agent’s address. Approving it lets it post and work for this key; it can’t spend your money."
+
+    assert view |> element("#key-request-address-#{request.id}") |> render() =~
+             ~s(aria-label="Copy Orbit runner’s address")
 
     assert has_element?(view, @approve)
     assert has_element?(view, @decline)
@@ -80,7 +83,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert view |> element(@detach) |> render_click() =~ "Agent removed."
     assert Keys.current_operator!(@fleet, 1) == nil
     assert render(view) =~ "No agent runs this key."
-    assert render(view) =~ "detached on"
+    assert render(view) =~ "removed on"
   end
 
   test "someone who does not own the key is offered nothing and refused anyway", %{
@@ -117,6 +120,23 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert html =~ "This request was already answered."
     assert html =~ "No one has asked to run this key."
     assert Keys.current_operator!(@fleet, 1) == nil
+  end
+
+  test "removing an agent that already stepped down shows the key as it is now", %{
+    conn: conn,
+    agent: agent,
+    request: request
+  } do
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    approved = Keys.approve_pairing!(request, %{}, actor: owner)
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    Keys.step_down!(approved, %{}, actor: agent)
+
+    html = view |> element(@detach) |> render_click()
+
+    assert html =~ "This key has already changed; here it is now."
+    assert html =~ "No agent runs this key."
+    assert html =~ "stepped down on"
   end
 
   test "an agent that stepped down is remembered in the key's history", %{

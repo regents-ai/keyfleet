@@ -52,7 +52,11 @@ defmodule KeyfleetWeb.KeysLive do
               {@key.operator.agent_profile.current_status}
             </p>
             <p class="key-detail">Attached since {date(@key.operator.approved_at)}</p>
-            <.address id="key-agent-address" wallet={@key.operator.operator_wallet} />
+            <.address
+              id="key-agent-address"
+              wallet={@key.operator.operator_wallet}
+              agent={@key.operator.agent_profile.name}
+            />
           </div>
 
           <Regent.Primitives.button
@@ -76,12 +80,16 @@ defmodule KeyfleetWeb.KeysLive do
                 <p class="key-name">{request.agent_profile.name}</p>
                 <span>Runs on {request.agent_profile.declared_harness}</span>
                 <span>Asked on {date(request.requested_at)}</span>
-                <.address id={"key-request-address-#{request.id}"} wallet={request.operator_wallet} />
+                <.address
+                  id={"key-request-address-#{request.id}"}
+                  wallet={request.operator_wallet}
+                  agent={request.agent_profile.name}
+                />
               </div>
 
               <p :if={@key.owner?} class="key-address-check">
-                This is the agent’s own address. It holds no money and can’t spend yours. Check it
-                matches the address your agent gave you.
+                Check this is your agent’s address. Approving it lets it post and work for this key;
+                it can’t spend your money.
               </p>
 
               <div :if={@key.owner?} class="key-request-actions">
@@ -141,7 +149,7 @@ defmodule KeyfleetWeb.KeysLive do
     do: "Asked on #{date(pairing.requested_at)}, before the key was transferred"
 
   defp standing(%{status: :ended, ended_reason: :detached} = pairing, _current),
-    do: "Attached on #{date(pairing.approved_at)}, detached on #{date(pairing.ended_at)}"
+    do: "Attached on #{date(pairing.approved_at)}, removed on #{date(pairing.ended_at)}"
 
   defp standing(%{status: :ended, ended_reason: :stepped_down} = pairing, _current),
     do: "Attached on #{date(pairing.approved_at)}, stepped down on #{date(pairing.ended_at)}"
@@ -157,6 +165,7 @@ defmodule KeyfleetWeb.KeysLive do
 
   attr :id, :string, required: true
   attr :wallet, :string, required: true
+  attr :agent, :string, required: true
 
   # An agent's wallet in full, so its owner can check it character for character.
   defp address(assigns) do
@@ -169,6 +178,7 @@ defmodule KeyfleetWeb.KeysLive do
         variant="secondary"
         phx-hook="CopyText"
         data-copy-text={@wallet}
+        aria-label={"Copy #{@agent}’s address"}
       >
         Copy address
       </Regent.Primitives.button>
