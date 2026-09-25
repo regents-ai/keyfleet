@@ -20,6 +20,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Fleets
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
+  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
@@ -191,20 +192,18 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp pay_asset(asset, _fleet, %{details: details}) do
     case details[asset] do
       {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-        name = "#{symbol} #{short(asset)}"
+        name = "#{symbol} #{FleetLive.short_wallet(asset)}"
         %{address: asset, decimals: decimals, name: name, unit: name}
 
       _unknown ->
         %{
           address: asset,
           decimals: 0,
-          name: "Token #{short(asset)}, in its smallest units",
-          unit: "smallest units of token #{short(asset)}"
+          name: "Token #{FleetLive.short_wallet(asset)}, in its smallest units",
+          unit: "smallest units of token #{FleetLive.short_wallet(asset)}"
         }
     end
   end
-
-  defp short(address), do: String.slice(address, 0, 6) <> "…" <> String.slice(address, -4, 4)
 
   defp summary(proposal, cursor, now) do
     status = Proposals.status(proposal, cursor, now)

@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     "finding" => {"finding", "Findings"},
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
-    "launch_card" => {"launch card", "Launch cards"},
+    "launch_card" => {"launch plan", "Launch plans"},
     "note" => {"note", "Notes"}
   }
 
@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"source_uri", "Source"},
       {"excerpt", "Excerpt"},
       {"how_obtained", "How it was found"},
-      {"digest", "Content fingerprint"}
+      {"digest", "Document code"}
     ],
     "service" => [
       {"customer", "Customer"},
@@ -75,12 +75,12 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"description", "Description"},
       {"website", "Website"},
       {"image", "Image"},
-      {"who_we_serve", "Who we serve"},
-      {"what_we_sell", "What we sell"},
-      {"what_works", "What works"},
-      {"why_raise", "Why raise"},
-      {"commitments", "Commitments"},
-      {"narrative", "Story"},
+      {"who_we_serve", "Who it’s for"},
+      {"what_we_sell", "What we offer"},
+      {"what_works", "What already works"},
+      {"why_raise", "What the money is for"},
+      {"commitments", "Who does what afterwards"},
+      {"narrative", "The story"},
       {"required_regent_raised", "REGENT to raise"}
     ],
     "note" => [{"body", "Note"}]
@@ -94,7 +94,12 @@ defmodule KeyfleetWeb.WorkspacePage do
       "done" => "Done"
     },
     "status" => %{"open" => "Open", "achieved" => "Achieved", "dropped" => "Dropped"},
-    "confidence" => %{"low" => "Low", "medium" => "Medium", "high" => "High"}
+    "confidence" => %{"low" => "Low", "medium" => "Medium", "high" => "High"},
+    "payment_asset" => %{
+      "USDC" => "USDC",
+      "REGENT" => "REGENT",
+      "FLEET_TOKEN" => "the fleet’s own token"
+    }
   }
 
   # What one item is to another, read from the link's source to its target.
@@ -368,6 +373,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       case {card["price_proposal"], card["payment_asset"]} do
         {nil, _asset} -> nil
         {price, nil} -> price
+        {price, "FLEET_TOKEN"} -> "#{price} in the fleet’s own token"
         {price, asset} -> "#{price} #{asset}"
       end
 

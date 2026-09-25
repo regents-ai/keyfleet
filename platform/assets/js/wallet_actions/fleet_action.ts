@@ -180,7 +180,7 @@ export function readAction(
     case "execute":
       return {kind: "execute", proposal: number(data.proposal)}
     case "propose_decision":
-      return {kind: "propose_decision", key: proposingKey(field("key")), text: field("text"), digest: fingerprint(field("digest"))}
+      return {kind: "propose_decision", key: proposingKey(field("key")), text: field("text"), digest: documentCode(field("digest"))}
     case "propose_pay": {
       const asset = address(field("asset"), "The token to pay")
       const {decimals, unit} = assetOf(data.assets, asset)
@@ -193,7 +193,7 @@ export function readAction(
         amountWords: `${units(paid, decimals)} ${unit}`,
         recipient: address(field("recipient"), "The wallet to pay"),
         text: field("text"),
-        digest: fingerprint(field("digest")),
+        digest: documentCode(field("digest")),
       }
     }
     case "propose_launch": {
@@ -208,7 +208,7 @@ export function readAction(
           website: field("website"),
           image: field("image"),
           requiredRegentRaised: raise,
-          narrativeDigest: fingerprint(field("digest")),
+          narrativeDigest: documentCode(field("digest")),
           executionExpiry: lastSecond(field("until")),
         },
         raiseWords: `${units(raise, regentDecimals)} REGENT`,
@@ -579,12 +579,12 @@ function units(amount: bigint, decimals: number): string {
   return fraction === undefined ? grouped : `${grouped}.${fraction}`
 }
 
-function fingerprint(text: string): Hex {
+function documentCode(text: string): Hex {
   const entry = text.trim().toLowerCase()
   if (entry === "") return zeroHash
   const match = /^(?:0x)?([0-9a-f]{64})$/.exec(entry)
   if (!match) {
-    throw new Unreadable("A fingerprint is 64 letters and numbers, 0 to 9 and a to f. Leave it empty if there is none.")
+    throw new Unreadable("A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one.")
   }
   return `0x${match[1]}`
 }

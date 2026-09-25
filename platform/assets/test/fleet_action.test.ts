@@ -285,7 +285,7 @@ group("what each button asks the contract", () => {
     ["propose_pay", {...forms.propose_pay, amount: "1.2345678"}, "This token has at most 6 decimal places."],
     ["propose_pay", {...forms.propose_pay, amount: "twelve"}, "Write the amount as a number, like 12.5."],
     ["propose_pay", {...forms.propose_pay, recipient: "0x12"}, "The wallet to pay isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."],
-    ["propose_pay", {...forms.propose_pay, digest: "0x12"}, "A fingerprint is 64 letters and numbers, 0 to 9 and a to f. Leave it empty if there is none."],
+    ["propose_pay", {...forms.propose_pay, digest: "0x12"}, "A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one."],
     ["propose_launch", {...forms.propose_launch, until: ""}, "Choose the last day and time, in UTC, the launch can be carried out."],
     ["propose_launch", {...forms.propose_launch, raise: `${2n ** 128n}`}, "That amount is too large."],
     ["propose_launch", {...forms.propose_launch, until: "2026-02-30T18:30"}, "That day or time doesn’t exist. Choose the last day and time, in UTC, the launch can be carried out."],

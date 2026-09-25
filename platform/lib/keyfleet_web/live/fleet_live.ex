@@ -259,11 +259,19 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <section aria-labelledby="fleet-contract-title">
-        <h3 id="fleet-contract-title">Contract</h3>
+        <h3 id="fleet-contract-title">On Base</h3>
         <p :if={@fleet.contract_address} class="fleet-wallet">
-          <code>{@fleet.contract_address}</code>
+          <a
+            id="fleet-contract-link"
+            href={"https://basescan.org/address/#{@fleet.contract_address}"}
+            title={@fleet.contract_address}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <code>{short_wallet(@fleet.contract_address)}</code>
+          </a>
         </p>
-        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not yet deployed</p>
+        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
       </section>
     </aside>
     """

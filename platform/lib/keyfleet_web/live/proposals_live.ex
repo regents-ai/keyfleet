@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.ProposalsPage
 
   @status_words %{
@@ -177,8 +178,8 @@ defmodule KeyfleetWeb.ProposalsLive do
           </dl>
           <p class="proposals-detail">{closing(@page.proposal)}</p>
           <.pass_rule />
-          <p :if={@page.proposal.executor} class="proposals-detail">
-            Carried out by <code>{@page.proposal.executor}</code>
+          <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
+            Carried out by <.wallet address={@page.proposal.executor} />
           </p>
         </section>
 
@@ -191,8 +192,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
           <h2 id="proposal-content-title">{ProposalsPage.kind_name(@page.proposal.kind)}</h2>
-          <p class="proposals-detail">
-            Proposed by <code>{@page.proposal.proposer}</code>
+          <p id="proposal-proposer" class="proposals-detail">
+            Proposed by <.wallet address={@page.proposal.proposer} />
           </p>
 
           <dl :if={@page.proposal.pay} id="proposal-payment" class="proposals-fields">
@@ -226,7 +227,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{if vote.support, do: "Yes", else: "No"}</span>
-              <span>{short_wallet(vote.voter)}, with {key_list(vote.keys)}</span>
+              <span>{FleetLive.short_wallet(vote.voter)}, with {key_list(vote.keys)}</span>
             </li>
           </ol>
           <nav
@@ -359,9 +360,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             <Regent.Primitives.field :let={field} id="propose-decision-text" label="What to decide">
               <textarea id={field.id} name="text" rows="4" aria-describedby={field.described_by}></textarea>
             </Regent.Primitives.field>
-            <.fingerprint_field id="propose-decision-digest">
-              Fingerprint of the document or work the decision is about, if there is one.
-            </.fingerprint_field>
+            <.document_code_field id="propose-decision-digest">
+              The SHA-256 of the exact document this is about: 64 characters, 0–9 and a–f. Leave empty if there isn’t one.
+            </.document_code_field>
           </div>
         </:fields>
         <:buttons>
@@ -412,9 +413,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             <Regent.Primitives.field :let={field} id="propose-payment-text" label="Why">
               <textarea id={field.id} name="text" rows="3" aria-describedby={field.described_by}></textarea>
             </Regent.Primitives.field>
-            <.fingerprint_field id="propose-payment-digest">
-              Fingerprint of the invoice or the work paid for, if there is one.
-            </.fingerprint_field>
+            <.document_code_field id="propose-payment-digest">
+              The SHA-256 of the exact invoice or work this pays for: 64 characters, 0–9 and a–f. Leave empty if there isn’t one.
+            </.document_code_field>
           </div>
         </:fields>
         <:buttons>
@@ -436,7 +437,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-launch" class="proposals-panel" aria-labelledby="propose-launch-title">
       <h2 id="propose-launch-title">Propose a launch</h2>
       <p class="proposals-detail">
-        Launches this fleet’s token if more than half of the keys vote yes. A fleet launches once.
+        Launches this fleet’s token if more than half of the keys vote yes. A fleet can launch only once.
       </p>
       <.action id="propose-launch-action" to={@wallet.votes} wallet={@wallet}>
         <:fields>
@@ -478,9 +479,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               />
               <:hint>It has to come after voting on it closes.</:hint>
             </Regent.Primitives.field>
-            <.fingerprint_field id="propose-launch-digest">
-              Fingerprint of the write-up key holders read before they vote, if there is one.
-            </.fingerprint_field>
+            <.text_field id="propose-launch-digest" name="digest" label="Document code (optional)" />
           </div>
         </:fields>
         <:buttons>
@@ -630,9 +629,9 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :id, :string, required: true
   slot :inner_block, required: true
 
-  defp fingerprint_field(assigns) do
+  defp document_code_field(assigns) do
     ~H"""
-    <.text_field id={@id} name="digest" label="Fingerprint (optional)">
+    <.text_field id={@id} name="digest" label="Document code (optional)">
       {render_slot(@inner_block)}
     </.text_field>
     """
@@ -758,7 +757,14 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :address, :string, required: true
 
   defp token(assigns),
-    do: ~H|<code class="proposals-token" title={@address}>{short_wallet(@address)}</code>|
+    do:
+      ~H|<code class="proposals-token" title={@address}>{FleetLive.short_wallet(@address)}</code>|
+
+  attr :address, :string, required: true
+
+  # A wallet shortened, in full on hover.
+  defp wallet(assigns),
+    do: ~H|<code title={@address}>{FleetLive.short_wallet(@address)}</code>|
 
   attr :page, :map, required: true
 
@@ -870,9 +876,6 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp key_list([token_id]), do: "key #{token_id}"
   defp key_list(token_ids), do: "keys #{Enum.join(token_ids, ", ")}"
-
-  defp short_wallet(wallet),
-    do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
 end

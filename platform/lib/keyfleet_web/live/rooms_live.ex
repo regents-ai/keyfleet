@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
 
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
@@ -74,7 +75,7 @@ defmodule KeyfleetWeb.RoomsLive do
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
-            Named by {short_wallet(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
+            Named by {FleetLive.short_wallet(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
           </p>
 
           <.form
@@ -181,10 +182,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
 
-  def writer(%{author_wallet: wallet}), do: short_wallet(wallet)
-
-  defp short_wallet(wallet),
-    do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
+  def writer(%{author_wallet: wallet}), do: FleetLive.short_wallet(wallet)
 
   @doc """
   A post's words as the page shows them. They are the writer's own, escaped

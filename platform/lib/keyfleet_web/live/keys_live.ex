@@ -51,7 +51,7 @@ defmodule KeyfleetWeb.KeysLive do
             <p :if={@key.operator.agent_profile.current_status != ""} class="key-detail">
               {@key.operator.agent_profile.current_status}
             </p>
-            <p class="key-detail">Attached since {date(@key.operator.approved_at)}</p>
+            <p class="key-detail">Running this key since {date(@key.operator.approved_at)}</p>
             <.address
               id="key-agent-address"
               wallet={@key.operator.operator_wallet}
@@ -137,22 +137,24 @@ defmodule KeyfleetWeb.KeysLive do
   end
 
   defp standing(%{status: :active, effective?: true} = pairing, _current),
-    do: "Attached since #{date(pairing.approved_at)}"
+    do: "Running this key since #{date(pairing.approved_at)}"
 
   defp standing(%{status: :active} = pairing, _current),
-    do: "Attached on #{date(pairing.approved_at)}, until the key was transferred"
+    do: "Ran this key from #{date(pairing.approved_at)} until the key changed hands"
 
   defp standing(%{status: :requested, ownership_epoch: current} = pairing, current),
     do: "Asked on #{date(pairing.requested_at)}, waiting for the owner"
 
   defp standing(%{status: :requested} = pairing, _current),
-    do: "Asked on #{date(pairing.requested_at)}, before the key was transferred"
+    do: "Asked on #{date(pairing.requested_at)}, before the key changed hands"
 
   defp standing(%{status: :ended, ended_reason: :detached} = pairing, _current),
-    do: "Attached on #{date(pairing.approved_at)}, removed on #{date(pairing.ended_at)}"
+    do:
+      "Ran this key from #{date(pairing.approved_at)} until it was removed on #{date(pairing.ended_at)}"
 
   defp standing(%{status: :ended, ended_reason: :stepped_down} = pairing, _current),
-    do: "Attached on #{date(pairing.approved_at)}, stepped down on #{date(pairing.ended_at)}"
+    do:
+      "Ran this key from #{date(pairing.approved_at)} until it stepped down on #{date(pairing.ended_at)}"
 
   defp standing(%{status: :ended, ended_reason: :declined} = pairing, _current),
     do: "Asked on #{date(pairing.requested_at)}, turned down on #{date(pairing.ended_at)}"
@@ -161,7 +163,8 @@ defmodule KeyfleetWeb.KeysLive do
     do: "Asked on #{date(pairing.requested_at)}, replaced by a later request"
 
   defp standing(%{status: :ended} = pairing, _current),
-    do: "Attached on #{date(pairing.approved_at)}, replaced on #{date(pairing.ended_at)}"
+    do:
+      "Ran this key from #{date(pairing.approved_at)} to #{date(pairing.ended_at)}, when another agent took over"
 
   attr :id, :string, required: true
   attr :wallet, :string, required: true

@@ -73,7 +73,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     html = view |> element(@approve) |> render_click()
 
     assert html =~ "That agent now runs this key."
-    assert html =~ "Attached since"
+    assert html =~ "Running this key since"
     assert html =~ "No one has asked to run this key."
     refute has_element?(view, @approve)
     assert has_element?(view, @detach)

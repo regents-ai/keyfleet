@@ -96,7 +96,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#fleet-about") =~
              "When a level sells out, the holders of the level before it are paid back"
 
-    assert text(view, "#fleet-about") =~ @contract
+    assert has_element?(
+             view,
+             ~s(#fleet-about a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
+           )
+
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
     assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
     assert has_element?(view, ~s(.fleet-bar__nav a[href="#fleet-keys"]), "List of keys")
@@ -114,7 +118,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, @path)
 
-    assert html =~ "Not yet deployed"
+    assert html =~ "Not on Base yet"
     assert text(view, "#fleet-sales") == "Not on sale yet"
     refute has_element?(view, "#fleet-progress-title")
     refute html =~ "Next key"

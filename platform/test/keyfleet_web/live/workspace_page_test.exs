@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert facts(view, service) == [{"Customer", "Funds"}, {"Proposed price", "250 USDC"}]
-      assert card_text(view, launch) =~ "Launch card"
+      assert card_text(view, launch) =~ "Launch plan"
       assert facts(view, launch) == [{"Name", "Brief Co"}, {"Symbol", "BRIEF"}]
       assert card_text(view, note) =~ "Ship it."
 
@@ -118,6 +118,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                ~s(#{card(task)} h3 a[href="#{@board}/task%23#{id_number(task)}"]),
                "Draft the brief"
              )
+
+      edit(@fleet, service, %{"payment_asset" => "FLEET_TOKEN"})
+      {:ok, view, _html} = live(conn, @board)
+
+      assert {"Proposed price", "250 in the fleet’s own token"} in facts(view, service)
     end
 
     test "a card shows when it last changed, and changing it brings it to the top", %{conn: conn} do
@@ -193,7 +198,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "#workspace-empty", "No goals yet.")
 
       view |> element(~s([data-type-filter="launch_card"])) |> render_click()
-      assert has_element?(view, "#workspace-empty", "No launch cards yet.")
+      assert has_element?(view, "#workspace-empty", "No launch plans yet.")
 
       view |> element(~s([data-type-filter="all"])) |> render_click()
       assert length(cards(view)) == 3
