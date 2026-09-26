@@ -268,7 +268,7 @@ defmodule Keyfleet.Graph.WriterTest do
     assert writer(fleet) == writer
   end
 
-  test "a check whose database read exits is answered unavailable, sends nothing and leaves the writer running",
+  test "a check whose database read exits is answered unavailable, is logged, sends nothing and leaves the writer running",
        ctx do
     [fleet] = Enum.take(@fleets, 1)
     start_graph(ctx, [fleet])
@@ -277,7 +277,15 @@ defmodule Keyfleet.Graph.WriterTest do
 
     pool_down = fn _within -> exit({:noproc, {DBConnection.Holder, :checkout, []}}) end
 
-    assert Writer.command(fleet, "create", @note, pool_down) == {:error, :unavailable}
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert Writer.command(fleet, "create", @note, pool_down) == {:error, :unavailable}
+      end)
+
+    assert log =~
+             "graph write for #{fleet} not sent: its ownership check exited: " <>
+               "exited in: DBConnection.Holder.checkout()"
+
     assert writer(fleet) == writer
 
     assert {:ok, %{"result" => %{"events" => events}}} =
