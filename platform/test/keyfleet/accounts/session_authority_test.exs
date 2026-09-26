@@ -8,6 +8,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Human, System}
+  alias Keyfleet.CommittedAccount
   alias Keyfleet.Repo
 
   @maximum_generation 9_223_372_036_854_775_807
@@ -551,10 +552,14 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   end
 
   # A forced ordering needs an account its own visible connections can see, so it
-  # reuses one committed row per name instead of committing a new one every run.
+  # is committed, and removed with every session row bound to it when the test
+  # ends.
   defp shared_account!(suffix) do
+    privy_did = "did:privy:regent-6eb-12:#{suffix}"
+    on_exit(fn -> unboxed(fn -> CommittedAccount.remove!(privy_did) end) end)
+
     unboxed(fn ->
-      "did:privy:regent-6eb-12:#{suffix}"
+      privy_did
       |> Accounts.register_verified!(@wallet, [@wallet], actor: %System{})
       |> provider_evidence!(@wallet, [@wallet])
     end)

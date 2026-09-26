@@ -12,6 +12,16 @@ defmodule Keyfleet.CreatedRoomRaceTest do
   setup do
     added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
 
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = $1 AND kind = 'created'", [
+          @fleet
+        ])
+
+        CommittedCatalog.remove!(added_fleets)
+      end)
+    end)
+
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       # The first 98 created rooms, written straight to the table: only the
       # last two creations are under test.
@@ -29,15 +39,7 @@ defmodule Keyfleet.CreatedRoomRaceTest do
       )
     end)
 
-    on_exit(fn ->
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-        Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = $1 AND kind = 'created'", [
-          @fleet
-        ])
-
-        CommittedCatalog.remove!(added_fleets)
-      end)
-    end)
+    :ok
   end
 
   test "agents creating the last free rooms at the same moment get exactly those rooms" do

@@ -184,6 +184,9 @@ before its `_test` ending. Give each test run its own value whenever more than
 one can happen on a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
 `MIX_ENV=test mix ecto.create` once for a new value; the suite builds the
 schema itself on its first run.
+Never run the ExUnit suite and `npm run test:browser` on the same partition at
+the same time: tests that need real concurrency commit catalog fleets and remove
+them when they end, which can take away fleets the browser server relies on.
 
 ## Deployment
 

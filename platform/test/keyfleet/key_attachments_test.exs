@@ -19,10 +19,11 @@ defmodule Keyfleet.KeyAttachmentsTest do
         end)
       end)
 
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &open_fleets!/0)
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &open_cursors!/0)
     else
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-      open_fleets!()
+      Fleets.bootstrap_catalog!()
+      open_cursors!()
     end
 
     :ok
@@ -283,8 +284,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
   end
 
   # The chain reader keeps a fleet's cursor before it records any key.
-  defp open_fleets! do
-    Fleets.bootstrap_catalog!()
+  defp open_cursors! do
     for fleet <- [@fleet, @other_fleet], do: ChainHelpers.open_cursor!(fleet)
   end
 

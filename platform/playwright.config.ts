@@ -20,16 +20,22 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   reporter: "line",
+  globalTeardown: "./test/browser/support/remove_browser_account.ts",
   use: {
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  // The fleet pages need the four fleets in the catalog, so they are put there
-  // before the server starts; they are never deployed, so nothing is on sale.
+  // The database is created and brought up to date first, as the chain config
+  // does, then the four fleets are put in the catalog for the fleet pages. They
+  // are never deployed, so nothing is on sale. This runs without
+  // KEYFLEET_BROWSER_TEST, which would open the port before the server is ready.
   webServer: {
-    command:
-      "MIX_ENV=test mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()' && MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
+    command: [
+      "MIX_ENV=test mix ecto.create --quiet",
+      "MIX_ENV=test mix run -e 'Keyfleet.LocalDatabaseFixture.ensure_human_accounts!(); Keyfleet.Fleets.bootstrap_catalog!()'",
+      "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
+    ].join(" && "),
     url: `${baseURL}/`,
     reuseExistingServer: false,
     timeout: 120_000,

@@ -19,6 +19,13 @@ defmodule Keyfleet.KeyThreadRaceTest do
 
     added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
 
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        clean_up(token_ids)
+        CommittedCatalog.remove!(added_fleets)
+      end)
+    end)
+
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       ChainHelpers.seed_cursor!(@fleet)
 
@@ -37,13 +44,6 @@ defmodule Keyfleet.KeyThreadRaceTest do
           actor: %Actors.System{}
         )
       end
-    end)
-
-    on_exit(fn ->
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-        clean_up(token_ids)
-        CommittedCatalog.remove!(added_fleets)
-      end)
     end)
 
     %{

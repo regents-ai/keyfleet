@@ -21,6 +21,13 @@ defmodule Keyfleet.RenameRaceTest do
 
     added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
 
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        clean_up(token_ids)
+        CommittedCatalog.remove!(added_fleets)
+      end)
+    end)
+
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       ChainHelpers.seed_cursor!(@fleet)
 
@@ -49,13 +56,6 @@ defmodule Keyfleet.RenameRaceTest do
           actor: %Actors.System{}
         )
       end
-    end)
-
-    on_exit(fn ->
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-        clean_up(token_ids)
-        CommittedCatalog.remove!(added_fleets)
-      end)
     end)
 
     %{owners: Enum.map(owners, &%Actors.Human{human_account_id: 1, wallet_addresses: [&1]})}
