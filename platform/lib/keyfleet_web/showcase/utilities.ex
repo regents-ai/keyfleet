@@ -29,12 +29,14 @@ defmodule KeyfleetWeb.Showcase.Utilities do
     end
   end
 
+  # Only this worktree's own test database: the one its test partition names,
+  # as config/test.exs builds it. The shared unpartitioned one is refused.
   def database do
     config = Keyfleet.Repo.config()
-    database = config[:database] || ""
+    partition = System.get_env("MIX_TEST_PARTITION", "")
 
     if is_nil(config[:url]) and config[:hostname] in ["127.0.0.1", "localhost"] and
-         Regex.match?(~r/\Akeyfleet_[0-9a-f]{12}_test\z/, database) do
+         partition != "" and config[:database] == "keyfleet#{partition}_test" do
       case Ecto.Adapters.SQL.query(Keyfleet.Repo, "SELECT current_database(), 1", [],
              timeout: 2_000
            ) do
