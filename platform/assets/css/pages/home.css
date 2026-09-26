@@ -171,7 +171,7 @@
   /* A coming-soon fleet: its map faded, and the tag under its name. */
   .rl-fleet-card[data-coming-soon] .key-map-preview { opacity: .4; }
   .rl-fleet-card .rl-fleet-card__soon {
-    justify-self: start; padding: .125rem .5rem; border: 1px solid var(--rl-line); color: var(--rl-muted);
+    justify-self: start; align-self: start; padding: .125rem .5rem; border: 1px solid var(--rl-line); color: var(--rl-muted);
     font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase;
   }
 
