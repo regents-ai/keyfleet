@@ -377,9 +377,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     end
 
     test "a fleet without rooms says it does not exist", %{conn: conn} do
-      Keyfleet.Repo.query!(
-        "DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_classic'"
-      )
+      Keyfleet.Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_classic'")
 
       {:ok, _view, html} =
         conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/general")
