@@ -177,7 +177,9 @@ Do not run it, or deploy the contracts, as part of this launch.
 Each fleet is deployed and recorded on its own, when the founder says so;
 [deployment.md](deployment.md) has the contract steps: the shared asset
 registry once, before the first fleet, then each fleet with `KEYFLEET_FLEET`
-set to that one fleet. Recording its deployed manifest with
+set to that one fleet. **Commit the registry's address into the manifest before
+anything else**: the registry step run again before that commit deploys a
+second registry. Recording its deployed manifest with
 `/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
 [chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
 puts its keys on sale, all at once: if the fleet cannot be opened, nothing is

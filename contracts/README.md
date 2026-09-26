@@ -730,10 +730,13 @@ script deploys it, because the fleets now go on chain one at a time; the
 contract and its tests are kept.
 
 The shared asset registry is deployed once per chain, before any fleet, by
-`script/DeployKeyfleetAssetRegistry.s.sol`, which reads only `KEYFLEET_MANIFEST`,
-binds the registry to the manifest's Safe and USDC, and prints its address to
-write into the manifest's `assetRegistry`. It refuses a manifest that already
-names a registry, so a second one cannot reach the chain by running it twice.
+`script/DeployKeyfleetAssetRegistry.s.sol`, which reads only
+`KEYFLEET_MANIFEST`, binds the registry to the manifest's Safe and USDC, and
+prints its address. **Write the printed address into the manifest's
+`assetRegistry` and commit it before doing anything else.** The registry step
+refuses only a manifest that already names a registry, so running it again
+before that commit deploys a second, wasted registry; the fleet steps would
+refuse a fleet aimed at the wrong one, but nothing takes the wasted one back.
 
 Each fleet is then deployed and recorded on its own, in two steps, named by
 `KEYFLEET_FLEET` (`syndicate`, `cascade`, `classic` or `accelerant`) beside

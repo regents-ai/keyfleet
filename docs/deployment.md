@@ -4,10 +4,14 @@ Each fleet is deployed and recorded on its own: Keyfleet Classic first, and each
 of the others later, one at a time, when the founder opens it.
 
 Once per chain, before the first fleet, `DeployKeyfleetAssetRegistry` deploys
-the asset registry every fleet on that chain shares, and its address is written
-into the manifest's `assetRegistry` and committed. It refuses a manifest that
-already names a registry, so a second registry cannot be deployed by mistake,
-and applies the deployment step's chain and USDC refusals.
+the asset registry every fleet on that chain shares. It applies the deployment
+step's chain and USDC refusals.
+
+**Write the address it prints into the manifest's `assetRegistry` and commit it
+before doing anything else.** The registry step refuses only a manifest that
+already names a registry, so running it again before that commit deploys a
+second, wasted registry; the fleet steps would refuse a fleet aimed at the wrong
+one, but nothing takes the wasted one back.
 
 After that, a fleet is deployed in two steps.
 
@@ -156,8 +160,13 @@ KEYFLEET_MANIFEST=anvil \
   --rpc-url "$RPC_URL" --broadcast --unlocked --sender <lab account>
 ```
 
-It prints the registry's address. Write it into the manifest's `assetRegistry`
-and commit it before deploying any fleet.
+It prints the registry's address.
+
+**Write the printed address into the manifest's `assetRegistry` and commit it
+before doing anything else.** The registry step refuses only a manifest that
+already names a registry, so running it again before that commit deploys a
+second, wasted registry; the fleet steps would refuse a fleet aimed at the wrong
+one, but nothing takes the wasted one back.
 
 The two fleet steps take the same
 `KEYFLEET_MANIFEST`, the same `KEYFLEET_FLEET` (`syndicate`, `cascade`,
