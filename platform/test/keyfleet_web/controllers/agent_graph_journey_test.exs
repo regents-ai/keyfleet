@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.AgentGraphJourneyTest do
   use ExUnit.Case, async: false
+  import ExUnit.CaptureLog
   import Plug.Conn
 
   alias Keyfleet.Actors
@@ -728,12 +729,18 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     await(fn -> Process.info(writer, :message_queue_len) == {:message_queue_len, 1} end)
 
     # Only the sandbox's owner may reach the database now, so the writer's
-    # ownership reads fail when the write's turn comes.
+    # ownership reads fail when the write's turn comes, and the site notes why.
     Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual)
-    :sys.resume(writer)
-    refused = Task.await(waiting, 15_000)
+
+    {refused, log} =
+      with_log(fn ->
+        :sys.resume(writer)
+        Task.await(waiting, 15_000)
+      end)
+
     Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, {:shared, c.sandbox})
 
+    assert log =~ "graph write for #{@fleet} not sent: its ownership check failed"
     assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
     assert refused.body["message"] =~ "nothing was written"
 
