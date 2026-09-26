@@ -28,7 +28,12 @@ COPY --from=assets /usr/local/bin/node /usr/local/bin/node
 COPY --from=assets /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
-RUN mix local.hex --force && mix local.rebar --force
+# Hex and rebar3 at fixed versions; rebar3 is the build Mix itself would pick
+# for this Elixir and OTP, checked against its published SHA-512.
+RUN mix local.hex 2.5.1 --force && \
+  mix local.rebar rebar3 https://builds.hex.pm/installs/1.18.4/rebar3-3.25.1-otp-28 \
+    --sha512 992fd755b7926fae455e5e07d9d195f4d3e7f181609eed1b9cabfe548624df10d148cd4b59bda40bebb185d3d68f9a9fd68a70b294101c8ad9cf0fadcc683d24 \
+    --force
 COPY platform/mix.exs platform/mix.lock ./
 COPY elixir-utils/privy /workspace/elixir-utils/privy
 COPY elixir-utils/agent_access /workspace/elixir-utils/agent_access

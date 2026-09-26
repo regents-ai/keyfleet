@@ -1,9 +1,6 @@
 app = "keyfleet"
 primary_region = "iad"
 
-[build]
-  dockerfile = "Dockerfile"
-
 [deploy]
   release_command = "/app/bin/migrate"
 

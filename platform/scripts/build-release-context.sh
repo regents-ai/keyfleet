@@ -6,7 +6,7 @@
 #     platform/                    this platform at its checked-out commit
 #     elixir-utils/privy/          the shared libraries mix.exs resolves by path,
 #     elixir-utils/agent_access/   each taken from its repository at the commit
-#     elixir-utils/siwa/siwa-elixir/apps/siwa/   pinned below
+#     elixir-utils/siwa/siwa-elixir/apps/siwa/   shared-libs.lock pins
 #     regents/identity/
 #     design-system/regent_ui/
 #     uv-cache/                    the graph host's locked packages, as a uv cache
@@ -14,7 +14,8 @@
 #     BUILD-INPUTS.txt             the commits and supply the context was made from
 #
 # Every source tree is exported from a commit with git archive, never copied
-# from a working tree, so the same pins always give the same context. Mix and
+# from a working tree, so the same pins always give the same context. This
+# platform is exported at its last commit: uncommitted changes are left out. Mix and
 # npm packages are not in the context: the image build fetches them from
 # mix.lock and package-lock.json, which hold every package's checksum. The graph
 # host's Python supply is sealed ahead of time by seal-graph-host-supply.sh and
@@ -30,13 +31,6 @@ set -euo pipefail
 readonly DEFAULT_SUPPLY_ROOT="/Users/sean/Documents/regent/archive/release-supply"
 readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20260926"
 readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20260926"
-
-# The shared libraries the release is built with. mix.lock cannot pin a path
-# dependency, so these commits are the pin. The elixir-utils commit is the one
-# priv/agent/clients.lock serves the agent client from.
-readonly ELIXIR_UTILS_REVISION="3e782153c94f1bd07a0941149ddbe5517d05e603"
-readonly REGENTS_REVISION="81dcfeded12c944589d31adf9763712737b894a9"
-readonly DESIGN_SYSTEM_REVISION="a64ec86721a171faea39ae525a9478daa1f66847"
 
 usage() {
   printf 'usage: %s <destination> <arch> [supply-root]\n' "${0##*/}" >&2
@@ -76,14 +70,22 @@ graph_host_addendum="$graph_host_supply/SUPPLY-ADDENDUM.txt"
 
 platform_revision="$(git -C "$repo_root" rev-parse HEAD)"
 
-# Each repository must hold its pinned commit; any checkout or worktree of it
-# will do, whatever it has checked out.
-for pin in "elixir-utils $ELIXIR_UTILS_REVISION" "regents $REGENTS_REVISION" \
-  "design-system $DESIGN_SYSTEM_REVISION"; do
-  read -r repository revision <<<"$pin"
+if [ -n "$(git -C "$repo_root" status --porcelain -- .)" ]; then
+  printf 'warning: uncommitted changes are left out; the context is built from %s\n' \
+    "$platform_revision" >&2
+fi
+
+# mix.lock cannot pin a path dependency, so the shared libraries' commits are
+# pinned in shared-libs.lock, read here as committed. Each repository must hold
+# its pinned commit; any checkout or worktree of it will do, whatever it has
+# checked out.
+pins="$(git -C "$repo_root" show "$platform_revision:./shared-libs.lock" | grep -v '^#')" ||
+  die "shared-libs.lock is not committed at $platform_revision"
+
+while read -r repository revision _folders; do
   git -C "$siblings/$repository" cat-file -e "$revision^{commit}" 2>/dev/null ||
     die "$siblings/$repository does not hold commit $revision"
-done
+done <<<"$pins"
 
 sha256_of() {
   shasum -a 256 "$1" | cut -d' ' -f1
@@ -157,10 +159,13 @@ export_tree() {
 }
 
 export_tree "$repo_root" "$platform_revision" "$staging/platform" .
-export_tree "$siblings/elixir-utils" "$ELIXIR_UTILS_REVISION" "$staging/elixir-utils" \
-  privy agent_access siwa/siwa-elixir/apps/siwa
-export_tree "$siblings/regents" "$REGENTS_REVISION" "$staging/regents" identity
-export_tree "$siblings/design-system" "$DESIGN_SYSTEM_REVISION" "$staging/design-system" regent_ui
+build_inputs="keyfleet=$platform_revision"
+
+while read -r repository revision folders; do
+  read -ra paths <<<"$folders"
+  export_tree "$siblings/$repository" "$revision" "$staging/$repository" "${paths[@]}"
+  build_inputs+=$'\n'"$repository=$revision"
+done <<<"$pins"
 
 # These archives carry the uv-cache/ and python-cache/ prefixes.
 tar -xf "$graph_host_supply/UV-CACHE.tar" -C "$staging"
@@ -174,10 +179,7 @@ install -m 0644 "$staging/platform/Dockerfile.dockerignore" "$staging/Dockerfile
 
 cat >"$staging/BUILD-INPUTS.txt" <<EOF
 arch=$arch
-keyfleet=$platform_revision
-elixir-utils=$ELIXIR_UTILS_REVISION
-regents=$REGENTS_REVISION
-design-system=$DESIGN_SYSTEM_REVISION
+$build_inputs
 graph-host-supply=$graph_host_supply_dir
 EOF
 
@@ -199,3 +201,8 @@ cat "$destination/BUILD-INPUTS.txt"
 printf 'build with:\n'
 printf '  docker build --platform linux/%s \\\n' "$arch"
 printf '    -f %s/Dockerfile -t <tag> %s\n' "$destination" "$destination"
+printf 'or deploy with Fly'"'"'s remote builder (amd64 only; fly.staging.toml for staging):\n'
+printf '  fly deploy %s --config %s/platform/fly.toml \\\n' "$destination" "$destination"
+printf '    --dockerfile %s/Dockerfile --ignorefile %s/Dockerfile.dockerignore \\\n' \
+  "$destination" "$destination"
+printf '    --remote-only --ha=false\n'

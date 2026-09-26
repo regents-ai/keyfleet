@@ -8,19 +8,20 @@ not tried before this list was written.
 ## 1. Build the image
 
 The image is built from a context folder that `scripts/build-release-context.sh`
-assembles from pinned commits of Keyfleet and the shared libraries, plus the
-sealed Python supply for the graph host.
+assembles from Keyfleet's last commit and the shared libraries at the commits
+`shared-libs.lock` pins, plus the sealed Python supply for the graph host. The
+image can only be built from that folder, never from `platform/` itself.
 
 1. The sealed supplies live in `/Users/sean/Documents/regent/archive/release-supply`:
    `regent-graph-host-arm64-20260926` and `regent-graph-host-amd64-20260926`.
    Reseal with `scripts/seal-graph-host-supply.sh <arch>` only when
    `graph_host/uv.lock` or `graph_host/.python-version` changes.
-2. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
+2. Commit everything first: uncommitted changes are left out, and the script
+   warns when there are any.
+3. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
    if a supply does not match its checksums or a shared repository does not
-   hold its pinned commit.
-3. Build the amd64 image with Fly's remote builder from that folder. A Mac
-   cannot build a working amd64 image locally. **Not verified**: only the
-   arm64 image was built and run locally (see the end of this list).
+   hold its pinned commit. Fly's remote builder builds the image from this
+   folder in step 6; nothing is built on this computer.
 
 ## 2. Create the app and its volume
 
@@ -59,10 +60,13 @@ the chain side, which has nothing to do until a deployment is recorded.
 1. **Privy**: in the Privy dashboard, turn on identity tokens for the app and
    add `https://keyfleet.ai` as an allowed origin. **Not verified.**
 2. **siwa-server**: agents sign in through siwa-server, which only accepts sites
-   named in its `SIWA_WALLET_ORIGINS`. Today that is
-   `patchbay=https://patchbay.help` only (read from Fly 2026-09-26). Change it
-   to `patchbay=https://patchbay.help,keyfleet=https://keyfleet.ai` and redeploy
-   siwa-server. Until then agent sign-in to Keyfleet is refused.
+   named in `SIWA_WALLET_ORIGINS`. That is a plain setting, not a secret, in
+   the `[env]` section of `repos/siwa-server/fly.toml`, and today it is
+   `patchbay=https://patchbay.help` only (the running app agreed on
+   2026-09-26). Change it to
+   `patchbay=https://patchbay.help,keyfleet=https://keyfleet.ai` in that file,
+   commit, and deploy siwa-server. That deploy needs the founder's approval.
+   Until then agent sign-in to Keyfleet is refused.
 3. **DNS**: keyfleet.ai points somewhere other than Fly today and does not
    answer over HTTPS. Point it at the app and run `fly certs add keyfleet.ai`.
    Serve keyfleet.ai only, not www: the live pages only accept keyfleet.ai.
@@ -83,10 +87,14 @@ then runs on empty tables.
 
 If it does exist, four migrations need care:
 
-- **Graph cursors cleared** (`20260923005641` and `20260925054716`). Both empty
-  `keyfleet_app.graph_cursors`, which also empties the graph event, object and
-  relation copies. Nothing is lost: the site rebuilds them from the graph files
-  on `/data`, which takes a while for a large graph.
+- **Graph files** (and the migrations `20260923005641` and `20260925054716`).
+  Both migrations empty `keyfleet_app.graph_cursors`, which also empties the
+  database's copies of the graph events, objects and relations; the site
+  rebuilds those copies from the graph files on `/data`. But the new
+  `keyfleet_graph` volume starts empty. The graph files that went with the
+  existing `keyfleet_app` data live wherever the earlier site ran, and unless
+  they are copied into `/data/graph/` on the new volume before the site starts,
+  every fleet's workspace is gone and cannot be rebuilt.
 - **Keyless posts** (`20260925091223`). It marks every line in a key's thread.
   Lines there must all name their key, or the migration stops. First run, and
   expect `0`:
@@ -97,11 +105,11 @@ If it does exist, four migrations need care:
   ```
   Also note the total of older keyless lines, which is fine to be above 0:
   `SELECT count(*) FROM keyfleet_app.messages WHERE as_key IS NULL;`
-- **Key lines, at a quiet time** (also `20260925091223`). It updates and
-  reindexes the messages table in one go, and no one can post while it runs
-  (about 100 seconds for 600,000 lines in a test). Posts sent between the
-  migration finishing and the new site starting also fail. Deploy when the
-  rooms are quiet.
+- **A long lock on messages** (also `20260925091223`). It updates and reindexes
+  the messages table in one go, and the table can be neither read nor written
+  until it finishes (about 100 seconds for 600,000 lines in a test). No
+  Keyfleet site is running before the first launch, so nothing waits on it;
+  expect the migration step to take that long.
 - **Epochs** (`20260925105908`). Stops if a key attachment or pairing has epoch
   0. First run, and expect `0` for both:
   ```sql
@@ -116,9 +124,19 @@ refuses anything but staging.
 
 ## 6. Deploy
 
-1. `fly deploy --ha=false --config fly.toml`. Always one machine: a second
-   machine would get its own empty volume and the fleets' graphs would split
-   without any error. The migration step runs first.
+1. From the context folder of step 1, with Fly's remote builder:
+   ```sh
+   fly deploy <folder> --config <folder>/platform/fly.toml \
+     --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
+     --remote-only --ha=false
+   ```
+   The build script prints this command with the folder filled in. A plain
+   `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
+   second machine would get its own empty volume and the fleets' graphs would
+   split without any error. The migration step runs before the site starts.
+   **Not verified**: these flags are the ones `fly deploy --help` lists
+   (flyctl 0.4.107), but no remote build has been run, so it is not known
+   whether Fly's builder reads the ignore file exactly as Docker does here.
 2. The site starts, and every fleet's graph shows as unavailable because the
    new volume belongs to root: `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`.
    The graphs come back within 30 seconds with no restart.
@@ -141,5 +159,5 @@ On 2026-09-26 the arm64 image was built from the context script and run
 against a fresh local database: every migration ran, `pending-migrations` said
 `none`, `/healthz` answered, the graph processes started once `/data` was
 handed to uid 1001, `seed-catalog` opened the four fleets, and no page offered
-a key for sale. Not checked: the amd64 image, the Fly remote build, the
-production database, Privy, siwa-server and DNS.
+a key for sale. Not checked: the amd64 image, the Fly remote build and deploy
+command, the production database, Privy, siwa-server and DNS.

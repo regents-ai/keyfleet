@@ -28,10 +28,15 @@ git clone https://github.com/regents-ai/regents.git
 The expected layout is `<workspace>/<product>/platform`,
 `<workspace>/design-system/regent_ui`, `<workspace>/elixir-utils/` and
 `<workspace>/regents/identity`. `REGENT_DEPS_ROOT` may point at `<workspace>`
-when it is elsewhere; `REGENT_UI_PATH`, `REGENT_PRIVY_PATH` and
-`REGENT_IDENTITY_PATH` override one package each. Record the shared
-repository commit IDs with check results, and pin isolated worktrees to
-immutable revisions rather than updating sibling checkouts during verification.
+when it is elsewhere.
+
+Develop against the commits in `shared-libs.lock`, the same ones the release
+image is built from: elixir-utils `3e78215`, regents `81dcfed` and
+design-system `a64ec86`. Any checkout or worktree will do as long as the
+folders Keyfleet uses match those commits; `scripts/check-shared-libs.sh`
+checks this, and `mix precommit` runs it first. To move to newer shared
+libraries, change the commits in `shared-libs.lock`, then run
+`mix keyfleet.sync_agent_clients` and the checks.
 
 ## Quickstart
 
@@ -95,8 +100,8 @@ with `fly.toml` (production, app `keyfleet`) and then with `fly.staging.toml`
 at `/data` and name `iad` as the primary region.
 
 1. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`
-2. `fly deploy --ha=false --config fly.toml`. The site starts, and every fleet's
-   graph answers as unavailable.
+2. Deploy from the assembled build context, as the Deployment section below
+   describes. The site starts, and every fleet's graph answers as unavailable.
 3. `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`
 4. Every fleet's graph answers again within 30 seconds, with no restart.
 
@@ -191,12 +196,25 @@ hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
 image disagree about, without applying anything.
 
 The image is built from `Dockerfile`; `scripts/build-release-context.sh`
-assembles its build context from pinned commits of this repository and the
-shared libraries, plus the graph host's sealed Python supply, which it checks
+assembles its build context from this repository's last commit and the
+shared libraries at the commits `shared-libs.lock` pins, plus the graph host's sealed Python supply, which it checks
 against its checksums. The build fetches Mix and npm packages from `mix.lock`
 and `package-lock.json`. The Fly configuration lives in `fly.toml` and
 `fly.staging.toml`, and [the deploy checklist](../docs/deploy-checklist.md)
 lists the launch steps in order.
+
+The image can only be built from that context folder, so every deploy names
+it, with Fly's remote builder (the context script prints this with the folder
+filled in; use `fly.staging.toml` for staging):
+
+```sh
+fly deploy <folder> --config <folder>/platform/fly.toml \
+  --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
+  --remote-only --ha=false
+```
+
+The context is built from this repository's last commit; the script warns
+when there are uncommitted changes, which it leaves out.
 
 `/app/bin/seed-catalog` opens the four fleets and their rooms without binding
 any of them to contracts, so the site shows every fleet with key sales off.

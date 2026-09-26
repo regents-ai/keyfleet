@@ -1,0 +1,8 @@
+# The shared Regent libraries this site is built, tested and shipped with.
+# Each line: repository, commit, then the folders mix.exs uses from it.
+# scripts/build-release-context.sh builds the image from these commits,
+# scripts/check-shared-libs.sh checks the local copies match them, and
+# mix keyfleet.sync_agent_clients serves the agent client from elixir-utils' commit.
+elixir-utils 3e782153c94f1bd07a0941149ddbe5517d05e603 privy agent_access siwa/siwa-elixir/apps/siwa
+regents 81dcfeded12c944589d31adf9763712737b894a9 identity
+design-system a64ec86721a171faea39ae525a9478daa1f66847 regent_ui

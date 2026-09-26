@@ -49,19 +49,11 @@ defmodule Keyfleet.MixProject do
       {:ash_postgres, "~> 2.13.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
-      {:regent_privy,
-       path: System.get_env("REGENT_PRIVY_PATH", Path.join(shared, "elixir-utils/privy"))},
-      {:regent_identity,
-       path: System.get_env("REGENT_IDENTITY_PATH", Path.join(shared, "regents/identity"))},
-      {:regent_ui,
-       path: System.get_env("REGENT_UI_PATH", Path.join(shared, "design-system/regent_ui"))},
+      {:regent_privy, path: Path.join(shared, "elixir-utils/privy")},
+      {:regent_identity, path: Path.join(shared, "regents/identity")},
+      {:regent_ui, path: Path.join(shared, "design-system/regent_ui")},
       {:regent_agent_access, path: Path.join(shared, "elixir-utils/agent_access")},
-      {:siwa,
-       path:
-         System.get_env(
-           "REGENT_SIWA_PATH",
-           Path.join(shared, "elixir-utils/siwa/siwa-elixir/apps/siwa")
-         )},
+      {:siwa, path: Path.join(shared, "elixir-utils/siwa/siwa-elixir/apps/siwa")},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
@@ -114,6 +106,7 @@ defmodule Keyfleet.MixProject do
       ],
       "test.external": ["test --only external"],
       precommit: [
+        "cmd scripts/check-shared-libs.sh",
         "compile --warnings-as-errors",
         "deps.unlock --check-unused",
         "format --check-formatted",
