@@ -234,17 +234,15 @@ defmodule Keyfleet.Keeper.RevealsTest do
       assert sent() == []
     end
 
-    test "on another chain is passed over" do
-      deploy!(@other_id, @other, 1)
-      Enum.each([@fleet_id, @other_id], &ChainHelpers.seed_cursor!/1)
-      put_chain(minted: 1)
+    test "on another chain than the keeper's is passed over" do
+      ChainHelpers.seed_cursor!(@fleet_id)
+      put_chain(minted: 1, chain_id: 1)
 
       log = capture_log(fn -> run(started!()) end)
 
       # Its contract is not even read.
-      refute log =~ @other_id
-      assert requested() == [1]
-      assert Enum.uniq(Enum.map(sent(), & &1.to)) == [@fleet]
+      refute log =~ @fleet_id
+      assert sent() == []
     end
 
     test "that is not a consumer of its subscription is passed over, alerted once" do

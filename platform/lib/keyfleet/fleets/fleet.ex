@@ -67,7 +67,9 @@ defmodule Keyfleet.Fleets.Fleet do
     end
 
     # Binds the fleet to its deployment once. Recording the same deployment
-    # again changes nothing; a different one is refused.
+    # again changes nothing; a different one is refused, and so is one whose
+    # chain, USDC, asset registry or trait table differs from another bound
+    # fleet's.
     update :record_deployment do
       public? false
       require_atomic? false
@@ -95,6 +97,7 @@ defmodule Keyfleet.Fleets.Fleet do
       ]
 
       validate Keyfleet.Fleets.Validations.SameDeployment
+      validate Keyfleet.Fleets.Validations.SharedWiring, before_action?: true
     end
   end
 

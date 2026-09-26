@@ -18,11 +18,12 @@ defmodule Keyfleet.Release do
   release command, so a deploy that takes a fleet's coming-soon mark away also
   opens that fleet's rooms. It never binds a fleet to a deployment.
   """
-  def migrate do
-    with_release_repo(fn ->
-      Keyfleet.Repo.migrate!(migrations_path())
-      seed_catalog!()
-    end)
+  def migrate, do: with_release_repo(&migrate!/0)
+
+  @doc "Migrates and seeds through an already running repository, as `migrate/0` does."
+  def migrate! do
+    Keyfleet.Repo.migrate!(migrations_path())
+    seed_catalog!()
   end
 
   @doc """
@@ -47,12 +48,15 @@ defmodule Keyfleet.Release do
   def seed_deployment!(path) do
     manifest = path |> File.read!() |> Jason.decode!()
 
-    {:ok, fleet} =
-      Ash.transact([Keyfleet.Fleets.Fleet, Keyfleet.Rooms.Room], fn ->
-        fleet = Keyfleet.Fleets.record_manifest!(manifest)
-        Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
-        fleet
-      end)
+    fleet =
+      case Ash.transact([Keyfleet.Fleets.Fleet, Keyfleet.Rooms.Room], fn ->
+             fleet = Keyfleet.Fleets.record_manifest!(manifest)
+             Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
+             fleet
+           end) do
+        {:ok, fleet} -> fleet
+        {:error, error} -> raise error
+      end
 
     IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
 

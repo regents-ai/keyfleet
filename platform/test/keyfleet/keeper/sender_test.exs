@@ -37,7 +37,6 @@ defmodule Keyfleet.Keeper.SenderTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
     deploy!(@fleet_id, @fleet, 8_453)
-    deploy!("fibonacci_cascade", "0x" <> String.duplicate("c1", 20), 1)
 
     test = self()
 
@@ -251,14 +250,9 @@ defmodule Keyfleet.Keeper.SenderTest do
                  call: call!(:request_reveal, @fleet, 1)
                })
 
-      cascade = "0x" <> String.duplicate("c1", 20)
+      StubNode.put_chain(chain_id: 1, calls: answering(launch()))
 
-      assert {:error, :wrong_chain, _sender} =
-               Sender.send(sender, %{
-                 job: :reveal,
-                 fleet_id: "fibonacci_cascade",
-                 call: call!(:request_reveal, cascade, 1)
-               })
+      assert {:error, :wrong_chain, _sender} = Sender.send(start!(), reveal(1))
 
       assert StubNode.sent() == []
     end

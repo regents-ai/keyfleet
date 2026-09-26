@@ -354,9 +354,8 @@ defmodule Keyfleet.ChainTest do
           ] do
         File.write!(path, Jason.encode!(manifest("cascade", "1", %{key => value})))
 
-        assert_raise RuntimeError,
-                     "fibonacci_cascade cannot be recorded: its #{field} differs from fleet_tech_classic's",
-                     fn -> Release.seed_deployment!(path) end
+        error = assert_raise Ash.Error.Invalid, fn -> Release.seed_deployment!(path) end
+        assert Exception.message(error) =~ "#{field}: differs from fleet_tech_classic's"
       end
 
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
@@ -364,12 +363,54 @@ defmodule Keyfleet.ChainTest do
     end
   end
 
+  # A room made for the fleet before it was marked coming soon can already go
+  # by the name one of its own rooms needs, so its rooms cannot open.
+  @tag :tmp_dir
+  test "a fleet whose rooms cannot open is not recorded either", %{tmp_dir: dir} do
+    {_slug, name, _kind} = hd(Rooms.Room.own_rooms())
+
+    Ash.Seed.seed!(Rooms.Room, %{
+      fleet_id: "fibonacci_cascade",
+      slug: "hull",
+      name: name,
+      kind: :created
+    })
+
+    path = Path.join(dir, "deployed.json")
+    File.write!(path, Jason.encode!(manifest("cascade", "1")))
+
+    catch_error(capture_io(fn -> Release.seed_deployment!(path) end))
+
+    assert Fleets.get_fleet!("fibonacci_cascade").contract_address == nil
+    assert slugs("fibonacci_cascade") == ["hull"]
+  end
+
+  # Run one after the other: the row lock the rule takes is what keeps two
+  # recordings at the same moment in this order too.
+  test "a second fleet naming another asset registry is refused however it is recorded" do
+    deploy!("fleet_tech_classic", "0x" <> String.duplicate("c", 40))
+
+    other =
+      Map.put(
+        deployment("0x" <> String.duplicate("b", 40)),
+        :asset_registry_address,
+        "0x" <> String.duplicate("5", 40)
+      )
+
+    assert {:error, %Ash.Error.Invalid{} = error} =
+             "fibonacci_cascade"
+             |> Fleets.get_fleet!()
+             |> Fleets.record_deployment(other, actor: %System{})
+
+    assert Exception.message(error) =~ "asset_registry_address: differs from fleet_tech_classic's"
+    assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
+  end
+
   describe "opening the fleets without a deployment" do
     @tag :tmp_dir
-    test "the catalog opens rooms only for open fleets and never unbinds a bound one", %{
-      tmp_dir: dir
-    } do
-      assert capture_io(fn -> Release.seed_catalog!() end) ==
+    test "each deploy's migration step opens rooms only for open fleets and never unbinds a bound one",
+         %{tmp_dir: dir} do
+      assert capture_io(fn -> Release.migrate!() end) ==
                """
                fleet_tech_classic: open
                fibonacci_syndicate: coming soon
@@ -387,7 +428,7 @@ defmodule Keyfleet.ChainTest do
       capture_io(fn -> Release.seed_deployment!(path) end)
       bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
-      assert capture_io(fn -> Release.seed_catalog!() end) =~ "fibonacci_syndicate: open"
+      assert capture_io(fn -> Release.migrate!() end) =~ "fibonacci_syndicate: open"
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
     end
   end
@@ -397,19 +438,20 @@ defmodule Keyfleet.ChainTest do
   defp deploy!(fleet, contract) do
     fleet
     |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8_453,
-        contract_address: contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        asset_registry_address: "0x" <> String.duplicate("4", 40),
-        deployed_block: @deployed,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %System{}
-    )
+    |> Fleets.record_deployment!(deployment(contract), actor: %System{})
+  end
+
+  defp deployment(contract) do
+    %{
+      chain_id: 8_453,
+      contract_address: contract,
+      rewards_address: "0x" <> String.duplicate("8", 40),
+      votes_address: "0x" <> String.duplicate("9", 40),
+      usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      asset_registry_address: "0x" <> String.duplicate("4", 40),
+      deployed_block: @deployed,
+      trait_table_hash: "0x" <> String.duplicate("a", 64)
+    }
   end
 
   # The manifest `RecordKeyfleets` writes for the fleet in `slot`, on the

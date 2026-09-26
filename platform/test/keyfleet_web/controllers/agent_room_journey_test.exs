@@ -195,6 +195,15 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
            )
   end
 
+  test "an agent reaches Keyfleet Classic's rooms before its deployment is recorded", c do
+    assert Fleets.get_fleet!("fleet_tech_classic").contract_address == nil
+
+    answer = send_signed(c, "GET", "/api/v1/agent/fleets/fleet_tech_classic/rooms", "{}")
+
+    assert answer.status == 200
+    assert "general" in Enum.map(answer.body["rooms"], & &1["slug"])
+  end
+
   test "a paired agent posts once however often it sends the same post", c do
     pair(c)
 
