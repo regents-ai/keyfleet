@@ -191,14 +191,22 @@ hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
 image disagree about, without applying anything.
 
 The image is built from `Dockerfile`; `scripts/build-release-context.sh`
-assembles its offline build context from sealed supplies, checking each against
-its checksums, and the build itself never reaches the network. The Fly
-configuration lives in `fly.toml` and `fly.staging.toml`.
+assembles its build context from pinned commits of this repository and the
+shared libraries, plus the graph host's sealed Python supply, which it checks
+against its checksums. The build fetches Mix and npm packages from `mix.lock`
+and `package-lock.json`. The Fly configuration lives in `fly.toml` and
+`fly.staging.toml`, and [the deploy checklist](../docs/deploy-checklist.md)
+lists the launch steps in order.
+
+`/app/bin/seed-catalog` opens the four fleets and their rooms without binding
+any of them to contracts, so the site shows every fleet with key sales off.
+`/app/bin/seed-deployment` binds them to deployed contracts, which turns key
+sales on.
 
 The graph host's Python supply is sealed by
 `scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for
 `amd64`, whenever `graph_host/uv.lock` or `graph_host/.python-version` changes.
-Sealing is the one step that uses the network. It installs the graph host from
+Sealing installs the graph host from
 the lockfile in a container of the target architecture, repeats the install
 from the sealed files alone with the network off, and writes
 `regent-graph-host-<arch>-<yyyymmdd>` into the supply root: the uv package
