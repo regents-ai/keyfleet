@@ -40,6 +40,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   test "BROWSER_FAILURE_DIAGNOSTIC: emits one bounded telemetry event after admission", %{
     conn: conn
   } do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
     handler = "privy-browser-failure-#{Elixir.System.unique_integer([:positive])}"
     parent = self()
 
@@ -54,13 +56,16 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     on_exit(fn -> :telemetry.detach(handler) end)
 
-    response =
-      conn
-      |> init_test_session(%{})
-      |> put_valid_csrf()
-      |> post("/auth/privy/failure", %{"reason" => "provider_error", "raw" => "secret"})
+    {response, log} =
+      with_log(fn ->
+        conn
+        |> init_test_session(%{})
+        |> put_valid_csrf()
+        |> post("/auth/privy/failure", %{"reason" => "provider_error", "raw" => "secret"})
+      end)
 
     assert response.status == 204
+    assert failures(log, "provider_error") == 1
 
     assert_receive {:browser_failure, @browser_failure_event, %{count: 1},
                     %{reason: "provider_error"}}
@@ -152,6 +157,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "SESSION_FAILURE_DIAGNOSTIC: the rejecting endpoint emits exactly once before responding" do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
     handler = "privy-session-failure-#{Elixir.System.unique_integer([:positive])}"
     parent = self()
 
@@ -166,12 +173,15 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     on_exit(fn -> :telemetry.detach(handler) end)
 
-    response =
-      browser()
-      |> put_privy_pair("unverifiable")
-      |> post("/auth/privy/session", %{})
+    {response, log} =
+      with_log(fn ->
+        browser()
+        |> put_privy_pair("unverifiable")
+        |> post("/auth/privy/session", %{})
+      end)
 
     assert json_response(response, 401) == %{"error" => "unauthorized"}
+    assert failures(log, "session_exchange") == 1
 
     assert_receive {:session_failure, @browser_failure_event, %{count: 1},
                     %{reason: "session_exchange"}}
@@ -198,9 +208,11 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     replay = browser() |> put_privy_pair("unverifiable")
 
-    responses = for _attempt <- 1..21, do: post(replay, "/auth/privy/session", %{})
+    {responses, log} =
+      with_log(fn -> for _attempt <- 1..21, do: post(replay, "/auth/privy/session", %{}) end)
 
     assert Enum.all?(responses, &(&1.status == 401))
+    assert failures(log, "session_exchange") == 20
     for _event <- 1..20, do: assert_receive(:bounded_session_failure)
     refute_receive :bounded_session_failure
   end
@@ -662,6 +674,9 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   test "COMPLETE_PAIR_REQUIRED: a half, blank, duplicated or unverifiable pair is refused before a write",
        %{conn: conn} do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
+
     assert {:ok, before_attempts} =
              Accounts.get_by_privy_did("did:privy:verified", actor: %System{})
 
@@ -694,17 +709,22 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       ]
     ]
 
-    for pair <- headers do
-      refused =
-        conn
-        |> init_test_session(%{})
-        |> put_valid_csrf()
-        |> put_headers(pair)
-        |> post("/auth/privy/session", %{})
+    log =
+      capture_log(fn ->
+        for pair <- headers do
+          refused =
+            conn
+            |> init_test_session(%{})
+            |> put_valid_csrf()
+            |> put_headers(pair)
+            |> post("/auth/privy/session", %{})
 
-      assert json_response(refused, 401) == %{"error" => "unauthorized"}
-      assert_no_token_disclosure(refused)
-    end
+          assert json_response(refused, 401) == %{"error" => "unauthorized"}
+          assert_no_token_disclosure(refused)
+        end
+      end)
+
+    assert failures(log, "session_exchange") == length(headers)
 
     assert {:ok, after_attempts} =
              Accounts.get_by_privy_did("did:privy:verified", actor: %System{})
@@ -725,8 +745,6 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "REDACTED_CLASSIFICATION: the controller names the two stages it owns itself" do
-    debug_logging()
-
     assert classification(put_headers(browser(), [{"privy-id-token", @identity}])) ==
              "Privy session rejected stage=request_pair reason=missing_access_token"
 
@@ -740,8 +758,6 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "REDACTED_CLASSIFICATION: the two access-verification reasons keep their own names" do
-    debug_logging()
-
     assert classification(put_privy_pair(browser(), "stale-access")) ==
              "Privy session rejected stage=access_verification reason=token_verification_failed"
 
@@ -750,8 +766,13 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "ONE_MARKED_REFUSAL: only an unverifiable access token invites a fresh provider login" do
-    marked =
-      browser() |> put_privy_pair("stale-access") |> post("/auth/privy/session", %{})
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
+
+    {marked, marked_log} =
+      with_log(fn ->
+        browser() |> put_privy_pair("stale-access") |> post("/auth/privy/session", %{})
+      end)
 
     assert get_resp_header(marked, "x-ash-provider-relogin") == ["allowed"]
 
@@ -767,16 +788,23 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       put_privy_pair(browser(), "no-wallet")
     ]
 
-    for refused <- unmarked do
-      refused = post(refused, "/auth/privy/session", %{})
+    log =
+      capture_log(fn ->
+        for refused <- unmarked do
+          refused = post(refused, "/auth/privy/session", %{})
 
-      assert get_resp_header(refused, "x-ash-provider-relogin") == []
-      assert json_response(refused, 401) == json_response(marked, 401)
-      assert refused.private[:plug_session_info] == marked.private[:plug_session_info]
-    end
+          assert get_resp_header(refused, "x-ash-provider-relogin") == []
+          assert json_response(refused, 401) == json_response(marked, 401)
+          assert refused.private[:plug_session_info] == marked.private[:plug_session_info]
+        end
+      end)
+
+    assert failures(marked_log <> log, "session_exchange") == 1 + length(unmarked)
   end
 
   test "ONE_MARKED_REFUSAL: the marked refusal still revokes, drops and disconnects" do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
     {browser, signed_in} = signed_in_browser()
     {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
@@ -784,15 +812,18 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     {browser, csrf} = refreshed_csrf(browser)
     flush_test_messages()
 
-    marked =
-      browser
-      |> enforce_csrf()
-      |> put_privy_pair("stale-access")
-      |> put_req_header("x-csrf-token", csrf)
-      |> post("/auth/privy/session", %{})
+    {marked, log} =
+      with_log(fn ->
+        browser
+        |> enforce_csrf()
+        |> put_privy_pair("stale-access")
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("/auth/privy/session", %{})
+      end)
 
     assert_response_sent_then_disconnect(topic)
     assert json_response(marked, 401) == %{"error" => "unauthorized"}
+    assert failures(log, "session_exchange") == 1
     assert get_resp_header(marked, "x-ash-provider-relogin") == ["allowed"]
     assert marked.private[:plug_session_info] == :drop
     assert_no_token_disclosure(marked)
@@ -802,7 +833,6 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "REDACTED_CLASSIFICATION: the classification repeats neither token" do
-    debug_logging()
     log = refusal_log(put_privy_pair(browser(), "unverifiable"))
 
     assert Regex.run(@classification, log) ==
@@ -811,28 +841,36 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     refute log =~ "unverifiable"
   end
 
-  # Raises the primary Logger level for one case, because this repository logs at
-  # warning under test and the diagnostic is deliberately debug-level. Every case
-  # in this synchronous file runs alone, so nothing else observes the change.
-  defp debug_logging do
-    level = Logger.level()
-    Logger.configure(level: :debug)
-    on_exit(fn -> Logger.configure(level: level) end)
-  end
-
   defp classification(browser) do
     assert [classification] = Regex.run(@classification, refusal_log(browser))
     classification
   end
 
+  # Raises the primary Logger level for the one refused request, because this
+  # repository logs at warning under test and the diagnostic is deliberately
+  # debug-level. Every case in this synchronous file runs alone, so nothing else
+  # observes the change, and everything logged meanwhile is captured.
   defp refusal_log(browser) do
-    capture_log(fn ->
-      assert browser |> post("/auth/privy/session", %{}) |> json_response(401) ==
-               %{"error" => "unauthorized"}
-    end)
+    level = Logger.level()
+    Logger.configure(level: :debug)
+
+    try do
+      capture_log(fn ->
+        assert browser |> post("/auth/privy/session", %{}) |> json_response(401) ==
+                 %{"error" => "unauthorized"}
+      end)
+    after
+      Logger.configure(level: level)
+    end
   end
 
   defp browser, do: build_conn() |> init_test_session(%{}) |> put_valid_csrf()
+
+  defp failures(log, reason) do
+    ~r/Privy browser reported sign-in failure reason=#{reason}$/m
+    |> Regex.scan(log)
+    |> length()
+  end
 
   defp put_privy_pair(conn, access_token) do
     conn
@@ -938,6 +976,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "STALE_LOGOUT_REVOKES: an unverifiable bearer revokes the bound lineage it was offered for" do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
     {browser, signed_in} = signed_in_browser()
     {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
@@ -945,15 +985,18 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     {browser, csrf} = refreshed_csrf(browser)
     flush_test_messages()
 
-    rejected =
-      browser
-      |> enforce_csrf()
-      |> put_privy_pair("invalid")
-      |> put_req_header("x-csrf-token", csrf)
-      |> post("/auth/privy/session", %{})
+    {rejected, log} =
+      with_log(fn ->
+        browser
+        |> enforce_csrf()
+        |> put_privy_pair("invalid")
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("/auth/privy/session", %{})
+      end)
 
     assert_response_sent_then_disconnect(topic)
     assert %{"error" => "unauthorized"} = json_response(rejected, 401)
+    assert failures(log, "session_exchange") == 1
     assert rejected.private[:plug_session_info] == :drop
 
     # The lineage the bearer was offered for is terminally revoked, so the
@@ -971,17 +1014,22 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "STALE_LOGOUT_REVOKES: lapsed wallet evidence fails closed on the same rule" do
+    RequestRateLimiter.reset()
+    on_exit(&RequestRateLimiter.reset/0)
     {browser, signed_in} = signed_in_browser()
     {browser, csrf} = refreshed_csrf(browser)
 
-    rejected =
-      browser
-      |> enforce_csrf()
-      |> put_privy_pair("no-wallet")
-      |> put_req_header("x-csrf-token", csrf)
-      |> post("/auth/privy/session", %{})
+    {rejected, log} =
+      with_log(fn ->
+        browser
+        |> enforce_csrf()
+        |> put_privy_pair("no-wallet")
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("/auth/privy/session", %{})
+      end)
 
     assert %{"error" => "unauthorized"} = json_response(rejected, 401)
+    assert failures(log, "session_exchange") == 1
     assert rejected.private[:plug_session_info] == :drop
 
     assert {:ok, invalidated} = Accounts.get_by_privy_did("did:privy:verified", actor: %System{})

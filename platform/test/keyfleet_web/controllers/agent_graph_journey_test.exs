@@ -705,12 +705,19 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     host_pid = host_os_pid()
     {_, 0} = System.cmd("/bin/sh", ["-c", ~s(kill -STOP "$0"), host_pid])
 
-    lost = graph(c, ann, "create", create)
+    {lost, log} =
+      with_log(fn ->
+        lost = graph(c, ann, "create", create)
+        await(fn -> match?({:ok, _}, Writer.request(@fleet, "hello", %{})) end)
+        lost
+      end)
+
     assert lost.status == 503
     assert lost.body["error"] == "indeterminate"
     assert lost.body["details"] == %{"retry_same_command_id" => true}
 
-    await(fn -> match?({:ok, _}, Writer.request(@fleet, "hello", %{})) end)
+    assert Regex.scan(~r/graph host for \S+ stopped: .+$/m, log) ==
+             [["graph host for #{@fleet} stopped: :reply_timeout"]]
 
     retried = graph(c, ann, "create", create)
     assert retried.status == 200

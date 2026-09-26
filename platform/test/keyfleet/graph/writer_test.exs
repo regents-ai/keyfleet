@@ -17,51 +17,65 @@ defmodule Keyfleet.Graph.WriterTest do
 
   test "a host killed mid-command leaves it indeterminate; the writer replaces the host and the retry replays",
        ctx do
-    start_graph(ctx, @fleets, python: hooked_python(ctx.tmp_dir))
     [fleet | others] = @fleets
-    writer = writer(fleet)
-    await_ready(fleet)
 
-    pending =
-      Task.async(fn -> Writer.command(fleet, "create", @note, authorized("hang-after-1")) end)
+    log =
+      capture_host_failures(fn ->
+        start_graph(ctx, @fleets, python: hooked_python(ctx.tmp_dir))
+        writer = writer(fleet)
+        await_ready(fleet)
 
-    shell_kill(await_marker(ctx.marker))
+        pending =
+          Task.async(fn ->
+            Writer.command(fleet, "create", @note, authorized("hang-after-1"))
+          end)
 
-    assert Task.await(pending, 15_000) == {:error, :indeterminate}
-    await_ready(fleet)
-    assert writer(fleet) == writer
+        shell_kill(await_marker(ctx.marker))
 
-    assert {:ok, %{"replayed" => true, "result" => %{"id" => "note#1", "version" => 1}}} =
-             Writer.command(fleet, "create", @note, authorized("hang-after-1"))
+        assert Task.await(pending, 15_000) == {:error, :indeterminate}
+        await_ready(fleet)
+        assert writer(fleet) == writer
 
-    for other <- others do
-      assert {:ok, _hello} = Writer.request(other, "hello", %{})
-    end
+        assert {:ok, %{"replayed" => true, "result" => %{"id" => "note#1", "version" => 1}}} =
+                 Writer.command(fleet, "create", @note, authorized("hang-after-1"))
+
+        for other <- others do
+          assert {:ok, _hello} = Writer.request(other, "hello", %{})
+        end
+      end)
+
+    assert host_stops(log) == ["graph host for #{fleet} stopped: {:host_exited, 137}"]
   end
 
   test "a host that stops answering inside its commit is killed at the deadline and the retry applies once",
        ctx do
     [fleet] = Enum.take(@fleets, 1)
-    start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir), reply_timeout: 2_000)
-    await_ready(fleet)
 
-    assert Writer.command(fleet, "create", @note, authorized("hang-in-1")) ==
-             {:error, :indeterminate}
+    log =
+      capture_host_failures(fn ->
+        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir), reply_timeout: 2_000)
+        await_ready(fleet)
 
-    refute ctx.marker |> File.read!() |> host_alive?()
+        assert Writer.command(fleet, "create", @note, authorized("hang-in-1")) ==
+                 {:error, :indeterminate}
 
-    await_ready(fleet)
+        refute ctx.marker |> File.read!() |> host_alive?()
 
-    assert {:ok, %{"replayed" => false, "result" => %{"id" => "note#1", "version" => 1}}} =
-             Writer.command(fleet, "create", @note, authorized("hang-in-1"))
+        await_ready(fleet)
 
-    assert {:ok, %{"replayed" => true}} =
-             Writer.command(fleet, "create", @note, authorized("hang-in-1"))
+        assert {:ok, %{"replayed" => false, "result" => %{"id" => "note#1", "version" => 1}}} =
+                 Writer.command(fleet, "create", @note, authorized("hang-in-1"))
 
-    assert {:ok, %{"result" => %{"events" => events}}} =
-             Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+        assert {:ok, %{"replayed" => true}} =
+                 Writer.command(fleet, "create", @note, authorized("hang-in-1"))
 
-    assert Enum.count(events, &(&1["type"] == "object.created")) == 1
+        assert {:ok, %{"result" => %{"events" => events}}} =
+                 Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
+
+        assert Enum.count(events, &(&1["type"] == "object.created")) == 1
+      end)
+
+    assert host_stops(log) == ["graph host for #{fleet} stopped: :reply_timeout"]
   end
 
   test "a host starts isolated, from a fixed directory, with none of the application's environment",
@@ -130,46 +144,67 @@ defmodule Keyfleet.Graph.WriterTest do
        ctx do
     [crashing, healthy] = Enum.take(@fleets, 2)
     python = hooked_python(ctx.tmp_dir, crash_fleet: crashing)
-    graph = start_graph(ctx, [crashing, healthy], python: python)
-    await_ready(healthy)
-    before = {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)}
 
-    await(fn -> Enum.count(launches(ctx.tmp_dir), &(&1["fleet"] == crashing)) >= 8 end)
+    log =
+      capture_host_failures(fn ->
+        graph = start_graph(ctx, [crashing, healthy], python: python)
+        await_ready(healthy)
+        before = {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)}
 
-    assert Process.alive?(graph)
-    assert {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)} == before
-    assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
+        await(fn -> Enum.count(launches(ctx.tmp_dir), &(&1["fleet"] == crashing)) >= 8 end)
 
-    assert {:ok, _hello} = Writer.request(healthy, "hello", %{})
+        assert Process.alive?(graph)
+
+        assert {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)} ==
+                 before
+
+        assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
+
+        assert {:ok, _hello} = Writer.request(healthy, "hello", %{})
+      end)
+
+    assert host_stops(log) == ["graph host for #{crashing} stopped: {:host_exited, 3}"]
   end
 
   test "a host that exits while idle turns the next request into an error result and is replaced",
        ctx do
     [fleet] = Enum.take(@fleets, 1)
-    start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
-    await_ready(fleet)
-    [%{"pid" => os_pid}] = launches(ctx.tmp_dir)
 
-    shell_kill(Integer.to_string(os_pid))
+    log =
+      capture_host_failures(fn ->
+        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
+        await_ready(fleet)
+        [%{"pid" => os_pid}] = launches(ctx.tmp_dir)
 
-    assert Writer.request(fleet, "hello", %{}) in [
-             {:error, :indeterminate},
-             {:error, :unavailable}
-           ]
+        shell_kill(Integer.to_string(os_pid))
 
-    await_ready(fleet)
+        assert Writer.request(fleet, "hello", %{}) in [
+                 {:error, :indeterminate},
+                 {:error, :unavailable}
+               ]
+
+        await_ready(fleet)
+      end)
+
+    assert host_stops(log) == ["graph host for #{fleet} stopped: {:host_exited, 137}"]
   end
 
   describe "a writer whose host cannot start answers unavailable and recovers once the cause is gone" do
     test "when the interpreter is missing", ctx do
       python = Path.join(ctx.tmp_dir, "python")
       [fleet] = Enum.take(@fleets, 1)
-      start_graph(ctx, [fleet], python: python)
 
-      assert_unavailable_for_a_while(fleet)
-      File.write!(python, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
-      File.chmod!(python, 0o755)
-      await_ready(fleet)
+      log =
+        capture_host_failures(fn ->
+          start_graph(ctx, [fleet], python: python)
+
+          assert_unavailable_for_a_while(fleet)
+          File.write!(python, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
+          File.chmod!(python, 0o755)
+          await_ready(fleet)
+        end)
+
+      assert host_stops(log) == ["graph host for #{fleet} stopped: {:start_failed, :enoent}"]
     end
 
     test "when the data directory cannot be created", ctx do
@@ -178,45 +213,70 @@ defmodule Keyfleet.Graph.WriterTest do
       File.chmod!(parent, 0o500)
       on_exit(fn -> File.chmod(parent, 0o700) end)
       [fleet] = Enum.take(@fleets, 1)
-      start_graph(ctx, [fleet], data_dir: Path.join(parent, "graph"))
 
-      assert_unavailable_for_a_while(fleet)
-      File.chmod!(parent, 0o700)
-      await_ready(fleet)
+      log =
+        capture_host_failures(fn ->
+          start_graph(ctx, [fleet], data_dir: Path.join(parent, "graph"))
+
+          assert_unavailable_for_a_while(fleet)
+          File.chmod!(parent, 0o700)
+          await_ready(fleet)
+        end)
+
+      assert host_stops(log) == ["graph host for #{fleet} stopped: {:start_failed, :eacces}"]
     end
 
     test "when another host holds the fleet's lock", ctx do
       [fleet] = Enum.take(@fleets, 1)
       File.mkdir_p!(ctx.data_dir)
       holder = hold_lock(Path.join(ctx.data_dir, "#{fleet}.sqlite.lock"))
-      start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
 
-      assert_unavailable_for_a_while(fleet)
-      assert length(launches(ctx.tmp_dir)) >= 2
-      Port.close(holder)
-      await_ready(fleet)
+      log =
+        capture_host_failures(fn ->
+          start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
+
+          assert_unavailable_for_a_while(fleet)
+          assert length(launches(ctx.tmp_dir)) >= 2
+          Port.close(holder)
+          await_ready(fleet)
+        end)
+
+      assert host_stops(log) == ["graph host for #{fleet} stopped: {:host_exited, 75}"]
     end
   end
 
   test "a burst of writer crashes past every restart limit inside the graph never leaves it down",
        ctx do
     [fleet, other] = Enum.take(@fleets, 2)
-    top = start_as_application(ctx, [fleet, other])
-    await_ready(fleet)
-    await_ready(other)
-    graph = Process.whereis(Keyfleet.Graph.Supervisor)
 
-    Enum.reduce(1..40, nil, fn _, killed ->
-      await(fn -> current_writer(fleet) not in [nil, killed] end)
-      pid = current_writer(fleet)
-      Process.exit(pid, :kill)
-      pid
-    end)
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        top = start_as_application(ctx, [fleet, other])
+        await_ready(fleet)
+        await_ready(other)
+        graph = Process.whereis(Keyfleet.Graph.Supervisor)
 
-    await_ready(fleet)
-    await_ready(other)
-    assert Process.alive?(top)
-    refute Process.whereis(Keyfleet.Graph.Supervisor) in [nil, graph]
+        Enum.reduce(1..40, nil, fn _, killed ->
+          await(fn -> current_writer(fleet) not in [nil, killed] end)
+          pid = current_writer(fleet)
+          Process.exit(pid, :kill)
+          pid
+        end)
+
+        await_ready(fleet)
+        await_ready(other)
+        assert Process.alive?(top)
+        refute Process.whereis(Keyfleet.Graph.Supervisor) in [nil, graph]
+        stop_supervised!(:application)
+      end)
+
+    # A replacement host can start before the killed writer's host has let go
+    # of its fleet's lock; it then exits and is started again.
+    assert host_stops(log) --
+             [
+               "graph host for #{fleet} stopped: {:host_exited, 75}",
+               "graph host for #{other} stopped: {:host_exited, 75}"
+             ] == []
   end
 
   test "a write's authority is asked at its turn, and a refusal then sends nothing to the host",
@@ -372,6 +432,20 @@ defmodule Keyfleet.Graph.WriterTest do
 
     assert Writer.command("fleet_without_graph", "create", @note, authorized("c1")) ==
              {:error, :unavailable}
+  end
+
+  # Runs a case whose hosts fail on purpose, stopping its graph before the
+  # capture ends so every stop a host logs is in the returned log.
+  defp capture_host_failures(fun) do
+    ExUnit.CaptureLog.capture_log(fn ->
+      fun.()
+      stop_supervised!(Keyfleet.Graph.Supervisor)
+    end)
+  end
+
+  # Each different "graph host ... stopped" line in the log, once.
+  defp host_stops(log) do
+    ~r/graph host for \S+ stopped: .+$/m |> Regex.scan(log) |> List.flatten() |> Enum.uniq()
   end
 
   defp start_graph(ctx, fleets, opts \\ []) do
