@@ -2,7 +2,6 @@
 !platform/assets/**
 !platform/config/**
 !platform/contracts/**
-!platform/deps/**
 !platform/lib/**
 !platform/priv/**
 !platform/rel/**
@@ -31,22 +30,10 @@
 !elixir-utils/privy/**
 !elixir-utils/agent_access/mix.exs
 !elixir-utils/agent_access/lib/**
-!mix-cache/**
-!npm-cache/**
-!rustler-precompiled/**
-!esbuild-linux-arm64
-!esbuild-linux-x64
+!elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs
+!elixir-utils/siwa/siwa-elixir/apps/siwa/lib/**
 !uv-cache/**
 !python-cache/**
-
-# Dependencies enter as source. A dependency's priv carries compiler output,
-# including extensionless host binaries. Two subtrees under it are shipped
-# source rather than output: priv/static holds the JavaScript clients the
-# asset build resolves through package main entries, and priv/templates is
-# where Phoenix copies its generator templates during its own compile.
-platform/deps/**/priv/**
-!platform/deps/**/priv/static/**
-!platform/deps/**/priv/templates/**
 
 # Bytecode is output, not source.
 **/__pycache__
@@ -56,8 +43,6 @@ platform/deps/**/priv/**
 **/.env.*
 **/.envrc
 
-!regents/
-!regents/identity/
 !regents/identity/**
 regents/identity/**/.env*
 regents/identity/**/_build/

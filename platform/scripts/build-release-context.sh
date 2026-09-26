@@ -3,43 +3,40 @@
 # Assemble the parent build context that Dockerfile.dockerignore describes.
 #
 #   <context>/
-#     platform/            this checkout
-#     design-system/regent_ui/ the sibling source mix.exs resolves by path
-#     elixir-utils/privy/      the sibling source mix.exs resolves by path
-#     elixir-utils/agent_access/ the sibling source mix.exs resolves by path
-#     regents/identity/        the sibling source mix.exs resolves by path
-#     mix-cache/               Mix, Hex and rebar3, extracted from the sealed archive
-#     npm-cache/_cacache/      the npm content cache
-#     rustler-precompiled/     the precompiled native artifact for the target
-#     esbuild-linux-arm64      the bundler executable for the target, under the
-#       or esbuild-linux-x64   architecture-specific name Mix looks it up by
-#     uv-cache/                the graph host's locked packages, as a uv cache
-#     python-cache/            the standalone CPython archive uv installs from
+#     platform/                    this platform at its checked-out commit
+#     elixir-utils/privy/          the shared libraries mix.exs resolves by path,
+#     elixir-utils/agent_access/   each taken from its repository at the commit
+#     elixir-utils/siwa/siwa-elixir/apps/siwa/   pinned below
+#     regents/identity/
+#     design-system/regent_ui/
+#     uv-cache/                    the graph host's locked packages, as a uv cache
+#     python-cache/                the standalone CPython archive uv installs from
+#     BUILD-INPUTS.txt             the commits and supply the context was made from
 #
-# Every input comes from the sealed supply and is checked against its manifest
-# first. The script refuses rather than assemble a context it cannot vouch for,
-# and it never reaches the network. Re-running it against the same destination
-# is safe: the destination is rebuilt from scratch each time.
+# Every source tree is exported from a commit with git archive, never copied
+# from a working tree, so the same pins always give the same context. Mix and
+# npm packages are not in the context: the image build fetches them from
+# mix.lock and package-lock.json, which hold every package's checksum. The graph
+# host's Python supply is sealed ahead of time by seal-graph-host-supply.sh and
+# is checked against its manifest here before anything is assembled.
 #
-# The bundler executable and the precompiled native artifact are
-# architecture-specific, so the context is built for one target architecture:
-# arm64 or amd64. Each comes from the sealed supply that carries it, and each is
-# checked to be for that architecture and not merely present. The assembled
-# context is what binds the build to an architecture; the Dockerfile reads
-# whichever bundler it finds.
+# The graph host supply is architecture-specific, so the context is built for
+# one target architecture: arm64 or amd64. Fly runs amd64.
 #
 # Usage: scripts/build-release-context.sh <destination> <arch> [supply-root]
 
 set -euo pipefail
 
 readonly DEFAULT_SUPPLY_ROOT="/Users/sean/Documents/regent/archive/release-supply"
-readonly BASE_SUPPLY="regent-ece.2-20260812"
-readonly ARM64_ESBUILD_SUPPLY="regent-ece.2-esbuild-linux-arm64-0.25.4-20260812"
-readonly AMD64_SUPPLY="regent-49a-amd64-slim-20260812"
-readonly AMD64_NATIVE_SUPPLY="regent-49a-mdex-native-x86-64-0.2.5-20260812"
-readonly MIX_SUPPLY="regent-ece.2-mix-hex-rebar-20260812"
-readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20260922"
-readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20260922"
+readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20260926"
+readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20260926"
+
+# The shared libraries the release is built with. mix.lock cannot pin a path
+# dependency, so these commits are the pin. The elixir-utils commit is the one
+# priv/agent/clients.lock serves the agent client from.
+readonly ELIXIR_UTILS_REVISION="3e782153c94f1bd07a0941149ddbe5517d05e603"
+readonly REGENTS_REVISION="81dcfeded12c944589d31adf9763712737b894a9"
+readonly DESIGN_SYSTEM_REVISION="a64ec86721a171faea39ae525a9478daa1f66847"
 
 usage() {
   printf 'usage: %s <destination> <arch> [supply-root]\n' "${0##*/}" >&2
@@ -59,52 +56,33 @@ arch="$2"
 supply_root="${3:-$DEFAULT_SUPPLY_ROOT}"
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 siblings="${REGENT_DEPS_ROOT:-$(cd -- "$repo_root/../.." && pwd)}"
-privy_source="${REGENT_PRIVY_PATH:-$siblings/elixir-utils/privy}"
-identity_source="${REGENT_IDENTITY_PATH:-$siblings/regents/identity}"
-regent_ui_source="${REGENT_UI_PATH:-$siblings/design-system/regent_ui}"
-agent_access_source="$siblings/elixir-utils/agent_access"
 
-# The arm64 native artifact is part of the base supply; the amd64 one arrived
-# in its own sealed directory. Both declare it under the same manifest keys.
-# The triple and the machine name are what the manifests are held to, so a
-# supply that names the wrong architecture is refused rather than staged.
 case "$arch" in
   arm64)
-    esbuild_supply_dir="$ARM64_ESBUILD_SUPPLY"
-    esbuild_binary="esbuild-linux-arm64"
-    esbuild_machine="ARM aarch64"
-    native_supply_dir="$BASE_SUPPLY"
-    native_manifest_name="SUPPLY-MANIFEST.txt"
     native_triple="aarch64-unknown-linux-gnu"
     graph_host_supply_dir="$ARM64_GRAPH_HOST_SUPPLY"
     ;;
   amd64)
-    esbuild_supply_dir="$AMD64_SUPPLY"
-    esbuild_binary="esbuild-linux-x64"
-    esbuild_machine="x86-64"
-    native_supply_dir="$AMD64_NATIVE_SUPPLY"
-    native_manifest_name="SUPPLY-ADDENDUM.txt"
     native_triple="x86_64-unknown-linux-gnu"
     graph_host_supply_dir="$AMD64_GRAPH_HOST_SUPPLY"
     ;;
   *) usage ;;
 esac
 
-base_supply="$supply_root/$BASE_SUPPLY"
-esbuild_supply="$supply_root/$esbuild_supply_dir"
-native_supply="$supply_root/$native_supply_dir"
-mix_supply="$supply_root/$MIX_SUPPLY"
 graph_host_supply="$supply_root/$graph_host_supply_dir"
-manifest="$base_supply/SUPPLY-MANIFEST.txt"
-mix_addendum="$mix_supply/SUPPLY-ADDENDUM.txt"
-esbuild_addendum="$esbuild_supply/SUPPLY-ADDENDUM.txt"
-native_manifest="$native_supply/$native_manifest_name"
 graph_host_addendum="$graph_host_supply/SUPPLY-ADDENDUM.txt"
 
-for required in "$manifest" "$mix_addendum" "$esbuild_addendum" "$native_manifest" \
-  "$graph_host_addendum" \
-  "$privy_source" "$identity_source" "$regent_ui_source" "$agent_access_source"; do
-  [ -e "$required" ] || die "missing supply input: $required"
+[ -e "$graph_host_addendum" ] || die "missing supply input: $graph_host_addendum"
+
+platform_revision="$(git -C "$repo_root" rev-parse HEAD)"
+
+# Each repository must hold its pinned commit; any checkout or worktree of it
+# will do, whatever it has checked out.
+for pin in "elixir-utils $ELIXIR_UTILS_REVISION" "regents $REGENTS_REVISION" \
+  "design-system $DESIGN_SYSTEM_REVISION"; do
+  read -r repository revision <<<"$pin"
+  git -C "$siblings/$repository" cat-file -e "$revision^{commit}" 2>/dev/null ||
+    die "$siblings/$repository does not hold commit $revision"
 done
 
 sha256_of() {
@@ -143,35 +121,16 @@ expect_sha256() {
   printf '  verified %s\n' "$label"
 }
 
-printf 'verifying sealed supply\n'
-
-# The npm cache is keyed to one exact lockfile. A drifted lockfile means the
-# cache cannot satisfy an offline install, so stop before assembling anything.
-read_manifest_value package_lock_sha256 "$manifest" package_lock_sha256
-expect_sha256 "package-lock.json against the npm cache" \
-  "$repo_root/package-lock.json" "$package_lock_sha256"
-
-read_manifest_value mix_lock_sha256 "$mix_addendum" mix_lock_sha256
-expect_sha256 "mix.lock against the Mix cache" "$repo_root/mix.lock" "$mix_lock_sha256"
-
-read_manifest_value mix_cache_sha256 "$mix_addendum" archive_sha256
-expect_sha256 "MIX-CACHE.tar" "$mix_supply/MIX-CACHE.tar" "$mix_cache_sha256"
-
-read_manifest_value esbuild_sha256 "$esbuild_addendum" "$esbuild_binary.sha256"
-read_manifest_value esbuild_file "$esbuild_addendum" "$esbuild_binary.file"
-expect_contains "$esbuild_binary is built for $arch" "$esbuild_file" "$esbuild_machine"
-expect_sha256 "$esbuild_binary" "$esbuild_supply/$esbuild_binary" "$esbuild_sha256"
-
-read_manifest_value native_artifact "$native_manifest" mdex_native_file
-read_manifest_value native_sha256 "$native_manifest" mdex_native_sha256
-expect_contains "$native_artifact is built for $arch" "$native_artifact" "$native_triple"
-expect_sha256 "$native_artifact" "$native_supply/$native_artifact" "$native_sha256"
+printf 'verifying the graph host supply\n'
 
 # The graph host's packages are the ones its lockfile pins, and its interpreter
 # is the standalone CPython build for this architecture.
 read_manifest_value uv_lock_sha256 "$graph_host_addendum" uv_lock_sha256
-expect_sha256 "graph_host/uv.lock against the uv cache" \
-  "$repo_root/graph_host/uv.lock" "$uv_lock_sha256"
+committed_uv_lock_sha256="$(git -C "$repo_root" show "$platform_revision:./graph_host/uv.lock" |
+  shasum -a 256 | cut -d' ' -f1)" || die "graph_host/uv.lock is not committed at $platform_revision"
+[ "$committed_uv_lock_sha256" = "$uv_lock_sha256" ] ||
+  die "graph_host/uv.lock at $platform_revision is not the one $graph_host_supply_dir was sealed from"
+printf '  verified graph_host/uv.lock against the uv cache\n'
 
 read_manifest_value uv_cache_sha256 "$graph_host_addendum" uv_cache_sha256
 expect_sha256 "UV-CACHE.tar" "$graph_host_supply/UV-CACHE.tar" "$uv_cache_sha256"
@@ -187,48 +146,21 @@ mkdir -p "$(dirname -- "$destination")"
 staging="$(mktemp -d "${destination%/}.staging.XXXXXX")"
 trap 'chmod -R u+w "$staging" 2>/dev/null || true; rm -rf -- "$staging"' EXIT
 
-mkdir -p "$staging/regents/identity" "$staging/platform" "$staging/elixir-utils/privy" \
-  "$staging/design-system/regent_ui" "$staging/$(dirname -- "$native_artifact")" \
-  "$staging/npm-cache"
+# Exports <paths> of <repository> at <commit> into <directory>. Anything shaped
+# like a secrets file is left out, at any depth and in any case.
+export_tree() {
+  local repository="$1" revision="$2" directory="$3"
+  shift 3
+  mkdir -p "$directory"
+  git -C "$repository" archive --format=tar "$revision" -- "$@" \
+    ':(exclude,glob,icase)**/.env*' | tar -x -C "$directory"
+}
 
-# The checkouts enter whole, minus their own build output and anything shaped
-# like a secrets file. This script excludes those itself, so the assembled
-# context on disk never carries one; Dockerfile.dockerignore additionally
-# narrows what a local build sees, and a proof test holds it to that.
-# The pattern has no slash, so it matches at every depth, and it takes a
-# directory named .envs/ with it: deliberate, and none exists today.
-# rsync offers no portable case-insensitive filter, so an oddly cased name like
-# .ENV survives the copy; the guard below is case-insensitive and catches it.
-env_filters=(--exclude '.env*')
-
-rsync -a "${env_filters[@]}" --exclude '.git' --exclude '_build/' \
-  --exclude 'node_modules/' --exclude '.venv/' --exclude '__pycache__/' \
-  "$repo_root/" "$staging/platform/"
-rsync -a "${env_filters[@]}" --exclude '.git' \
-  "$privy_source/" "$staging/elixir-utils/privy/"
-rsync -a "${env_filters[@]}" --exclude '.git' --exclude '_build/' \
-  --exclude 'deps/' --exclude 'node_modules/' \
-  "$regent_ui_source/" "$staging/design-system/regent_ui/"
-
-rsync -a "${env_filters[@]}" --exclude '.git' --exclude '_build/' \
-  --exclude 'deps/' --exclude 'node_modules/' \
-  "$identity_source/" "$staging/regents/identity/"
-
-mkdir -p "$staging/elixir-utils/agent_access"
-rsync -a --no-links "${env_filters[@]}" --exclude '.git' --exclude '_build/' --exclude 'deps/' \
-  "$agent_access_source/" "$staging/elixir-utils/agent_access/"
-
-# The sealed npm directory is the cache payload itself, so it lands one level
-# down: npm resolves its content under <cache>/_cacache.
-rsync -a --chmod=u+rwX "$base_supply/npm-cache/" "$staging/npm-cache/_cacache/"
-
-# Only the artifact just verified enters, never whatever else its directory holds.
-install -m 0644 "$native_supply/$native_artifact" "$staging/$native_artifact"
-install -m 0755 "$esbuild_supply/$esbuild_binary" "$staging/$esbuild_binary"
-
-# The archive already carries the mix-cache/ prefix.
-tar -xf "$mix_supply/MIX-CACHE.tar" -C "$staging"
-[ -d "$staging/mix-cache" ] || die "MIX-CACHE.tar did not yield mix-cache/"
+export_tree "$repo_root" "$platform_revision" "$staging/platform" .
+export_tree "$siblings/elixir-utils" "$ELIXIR_UTILS_REVISION" "$staging/elixir-utils" \
+  privy agent_access siwa/siwa-elixir/apps/siwa
+export_tree "$siblings/regents" "$REGENTS_REVISION" "$staging/regents" identity
+export_tree "$siblings/design-system" "$DESIGN_SYSTEM_REVISION" "$staging/design-system" regent_ui
 
 # These archives carry the uv-cache/ and python-cache/ prefixes.
 tar -xf "$graph_host_supply/UV-CACHE.tar" -C "$staging"
@@ -237,13 +169,21 @@ tar -xf "$graph_host_supply/PYTHON-CACHE.tar" -C "$staging"
 [ -f "$staging/python-cache/$python_archive" ] ||
   die "PYTHON-CACHE.tar did not yield python-cache/$python_archive"
 
-install -m 0644 "$repo_root/Dockerfile" "$staging/Dockerfile"
-install -m 0644 "$repo_root/Dockerfile.dockerignore" "$staging/Dockerfile.dockerignore"
+install -m 0644 "$staging/platform/Dockerfile" "$staging/Dockerfile"
+install -m 0644 "$staging/platform/Dockerfile.dockerignore" "$staging/Dockerfile.dockerignore"
+
+cat >"$staging/BUILD-INPUTS.txt" <<EOF
+arch=$arch
+keyfleet=$platform_revision
+elixir-utils=$ELIXIR_UTILS_REVISION
+regents=$REGENTS_REVISION
+design-system=$DESIGN_SYSTEM_REVISION
+graph-host-supply=$graph_host_supply_dir
+EOF
 
 # Last look before anything is published, covering the sealed payloads the
-# filters above never see and any casing they cannot match. It runs while the
-# previous destination is still intact, so a refusal leaves that one in place.
-# Paths only, never contents.
+# export filter never sees. It runs while the previous destination is still
+# intact, so a refusal leaves that one in place. Paths only, never contents.
 offender="$(find "$staging" -iname '.env*' -print -quit)" || die "context scan failed"
 [ -z "$offender" ] || die "context contains a secrets-shaped file: $offender"
 
@@ -255,10 +195,7 @@ mv "$staging" "$destination"
 trap - EXIT
 
 printf 'context ready: %s\n' "$destination"
+cat "$destination/BUILD-INPUTS.txt"
 printf 'build with:\n'
-# docker build, not a buildx builder: it uses the daemon's own image store, so
-# --pull=false resolves the pinned base images already held there and the build
-# stays offline. A container-driver builder keeps a separate store and would
-# have nothing to resolve against.
-printf '  docker build --network=none --pull=false --platform linux/%s \\\n' "$arch"
+printf '  docker build --platform linux/%s \\\n' "$arch"
 printf '    -f %s/Dockerfile -t <tag> %s\n' "$destination" "$destination"

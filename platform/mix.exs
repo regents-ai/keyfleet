@@ -74,7 +74,7 @@ defmodule Keyfleet.MixProject do
       {:yaml_elixir, "~> 2.12"},
       {:ex_secp256k1, "~> 0.8.0"},
       {:ex_keccak, "~> 0.7.8"},
-      {:req, "== 0.6.2"},
+      {:req, "== 0.7.4"},
       {:bandit, "~> 1.12.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},

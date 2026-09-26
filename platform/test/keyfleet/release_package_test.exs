@@ -38,13 +38,11 @@ defmodule Keyfleet.ReleasePackageTest do
     output = temporary_directory("release-context-out")
 
     # A miniature stand-in for the real parent context, holding one file for
-    # every rule: package sources, the sibling Privy source, the narrow slice of
-    # the RegentUI source the build compiles, styles and bundles from, the sealed
-    # offline inputs, and the things that must never enter -- host build
-    # artifacts under a dependency's priv, a sibling's tests, lockfile, tooling
-    # files and digested output, environment files, and everything outside the
-    # declared allowlist. A real context carries one
-    # bundler executable; the rules admit either architecture's name.
+    # every rule: package sources, the shared libraries' sources, the narrow
+    # slice of the RegentUI source the build compiles, styles and bundles from,
+    # the sealed Python supply, and the things that must never enter -- a
+    # sibling's tests, lockfile, tooling files and digested output, environment
+    # files, host build output, and everything outside the declared allowlist.
     write_files(context, [
       {"platform/lib/app.ex", "defmodule App do\nend\n"},
       {"platform/config/config.exs", "import Config\n"},
@@ -65,10 +63,7 @@ defmodule Keyfleet.ReleasePackageTest do
       {"platform/graph_host/tests/test_host.py", "def test(): pass\n"},
       {"platform/graph_host/.venv/bin/python", "local interpreter\n"},
       {"platform/deps/dependency/lib/dependency.ex", "defmodule Dependency do\nend\n"},
-      {"platform/deps/dependency/priv/static/dependency.js", "export const dep = 1\n"},
-      {"platform/deps/dependency/priv/templates/generator.eex", "<%= @thing %>\n"},
-      {"platform/deps/dependency/priv/host_listener", "host build output\n"},
-      {"platform/deps/dependency/priv/nif.so", "host build output\n"},
+      {"platform/_build/prod/lib/app.beam", "host build output\n"},
       {"platform/test/app_test.exs", "defmodule AppTest do\nend\n"},
       {"platform/docs/guide.md", "# guide\n"},
       {"platform/README.md", "# readme\n"},
@@ -78,7 +73,18 @@ defmodule Keyfleet.ReleasePackageTest do
       {"platform/.envrc", "export SECRET=nope\n"},
       {"platform/config/.env", "SECRET=nope\n"},
       {"elixir-utils/privy/lib/privy.ex", "defmodule Privy do\nend\n"},
+      {"elixir-utils/agent_access/mix.exs", "defmodule AgentAccess.MixProject do\nend\n"},
+      {"elixir-utils/agent_access/lib/agent_access.ex", "defmodule AgentAccess do\nend\n"},
+      {"elixir-utils/agent_access/test/agent_access_test.exs", "defmodule T do\nend\n"},
+      {"elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs", "defmodule Siwa.MixProject do\nend\n"},
+      {"elixir-utils/siwa/siwa-elixir/apps/siwa/lib/siwa.ex", "defmodule Siwa do\nend\n"},
+      {"elixir-utils/siwa/siwa-elixir/apps/siwa/test/siwa_test.exs", "defmodule T do\nend\n"},
+      {"elixir-utils/siwa/siwa-elixir/apps/siwa_keyring/lib/keyring.ex", "defmodule K do\nend\n"},
       {"elixir-utils/unrelated/lib/unrelated.ex", "defmodule Unrelated do\nend\n"},
+      {"regents/identity/lib/identity.ex", "defmodule Identity do\nend\n"},
+      {"regents/identity/.env", "SECRET=nope\n"},
+      {"regents/identity/_build/prod/lib/identity.beam", "host build output\n"},
+      {"regents/cli/lib/cli.ex", "defmodule Cli do\nend\n"},
       {"design-system/regent_ui/mix.exs", "defmodule RegentUi.MixProject do\nend\n"},
       {"design-system/regent_ui/lib/regent_ui.ex", "defmodule RegentUi do\nend\n"},
       {"design-system/regent_ui/assets/css/regent.css", ":root{}\n"},
@@ -90,13 +96,9 @@ defmodule Keyfleet.ReleasePackageTest do
       {"design-system/regent_ui/mix.lock", "%{}\n"},
       {"design-system/regent_ui/.formatter.exs", "[]\n"},
       {"design-system/unrelated/lib/unrelated.ex", "defmodule Unrelated do\nend\n"},
-      {"mix-cache/archives/hex", "hex archive\n"},
-      {"npm-cache/_cacache/content", "cache payload\n"},
-      {"rustler-precompiled/nif.tar.gz", "precompiled artifact\n"},
-      {"esbuild-linux-arm64", "bundler\n"},
-      {"esbuild-linux-x64", "bundler\n"},
       {"uv-cache/archive-v0/pydantic", "cache payload\n"},
       {"python-cache/cpython.tar.gz", "interpreter archive\n"},
+      {"BUILD-INPUTS.txt", "arch=arm64\n"},
       {"stray.txt", "outside the allowlist\n"}
     ])
 
@@ -128,17 +130,14 @@ defmodule Keyfleet.ReleasePackageTest do
              "design-system/regent_ui/assets/js/regent.ts",
              "design-system/regent_ui/lib/regent_ui.ex",
              "design-system/regent_ui/mix.exs",
+             "elixir-utils/agent_access/lib/agent_access.ex",
+             "elixir-utils/agent_access/mix.exs",
              "elixir-utils/privy/lib/privy.ex",
-             "esbuild-linux-arm64",
-             "esbuild-linux-x64",
-             "mix-cache/archives/hex",
-             "npm-cache/_cacache/content",
+             "elixir-utils/siwa/siwa-elixir/apps/siwa/lib/siwa.ex",
+             "elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs",
              "platform/assets/js/app.ts",
              "platform/config/config.exs",
              "platform/contracts/base-mainnet.json",
-             "platform/deps/dependency/lib/dependency.ex",
-             "platform/deps/dependency/priv/static/dependency.js",
-             "platform/deps/dependency/priv/templates/generator.eex",
              "platform/graph_host/.python-version",
              "platform/graph_host/pyproject.toml",
              "platform/graph_host/src/keyfleet_graph/host.py",
@@ -152,86 +151,15 @@ defmodule Keyfleet.ReleasePackageTest do
              "platform/priv/static/app.css",
              "platform/rel/overlays/bin/migrate",
              "python-cache/cpython.tar.gz",
-             "rustler-precompiled/nif.tar.gz",
+             "regents/identity/lib/identity.ex",
              "uv-cache/archive-v0/pydantic"
            ]
   end
 
-  # The three CTX-ENV cases below execute the exact filter list and the exact
-  # guard the context script defines, lifted from its own source rather than
-  # transcribed. What they do not prove is that a full run of the script
-  # publishes a clean context: the script verifies its sealed supply before it
-  # assembles anything, and this machine cannot satisfy those checks, so nothing
-  # here runs the script end to end.
-
-  test "CTX-ENV the script's env filters keep every env-shaped file out of a copy" do
-    filters = env_filters()
-
-    assert filters != [],
-           "an empty filter list would expand to nothing and copy the env files"
-
-    source = temporary_directory("context-filter-source")
-    destination = temporary_directory("context-filter-destination")
-
-    write_files(source, [
-      {".env", "SECRET=nope\n"},
-      {".env.local", "SECRET=nope\n"},
-      {".env.production", "SECRET=nope\n"},
-      {".env.example", "SECRET=\n"},
-      {".envrc", "export SECRET=nope\n"},
-      {".envrc.local", "export SECRET=nope\n"},
-      {"config/.env", "SECRET=nope\n"},
-      {"a/b/.env", "SECRET=nope\n"},
-      {"lib/app.ex", "defmodule App do\nend\n"},
-      {"config/config.exs", "import Config\n"},
-      {"a/b/keep.txt", "keep me\n"},
-      {"environment.md", "# not a secrets file\n"}
-    ])
-
-    File.mkdir_p!(destination)
-
-    {out, status} =
-      System.cmd("rsync", ["-a"] ++ filters ++ ["#{source}/", "#{destination}/"],
-        stderr_to_stdout: true
-      )
-
-    assert status == 0, out
-
-    assert admitted_files(destination) == [
-             "a/b/keep.txt",
-             "config/config.exs",
-             "environment.md",
-             "lib/app.ex"
-           ]
-  end
-
-  test "CTX-ENV every source-tree copy takes the env filters and only the cache skips them" do
-    lines = script_lines()
-
-    assert Enum.count(lines, &String.starts_with?(&1, "env_filters=(")) == 1,
-           "the filter list must be defined exactly once"
-
-    rsync_calls =
-      lines
-      |> join_continuations()
-      |> Enum.filter(&String.starts_with?(&1, "rsync "))
-
-    {filtered, unfiltered} =
-      Enum.split_with(rsync_calls, &String.contains?(&1, ~s("${env_filters[@]}")))
-
-    for source <- [
-          ~s("$repo_root/"),
-          ~s("$privy_source/"),
-          ~s("$identity_source/"),
-          ~s("$regent_ui_source/")
-        ] do
-      assert Enum.count(filtered, &String.contains?(&1, source)) == 1,
-             "the copy of #{source} must take the env filters"
-    end
-
-    assert [npm_cache_copy] = unfiltered
-    assert String.contains?(npm_cache_copy, "npm-cache")
-  end
+  # The script exports every source tree from a commit and leaves env-shaped
+  # names out of the export; the guard below is the last look before a context
+  # is published, and the only one that sees the sealed Python supply. It is
+  # lifted from the script's own source rather than transcribed.
 
   test "CTX-ENV the script's guard refuses a staging tree carrying an env-shaped file" do
     {scan, refusal} = context_guard()
@@ -240,17 +168,15 @@ defmodule Keyfleet.ReleasePackageTest do
 
     write_files(dirty, [
       {"platform/lib/app.ex", "defmodule App do\nend\n"},
-      {"mix-cache/x/.envrc.local", "export SECRET=nope\n"}
+      {"uv-cache/x/.envrc.local", "export SECRET=nope\n"}
     ])
 
     {out, status} = run_guard(scan, refusal, dirty)
 
     assert status == 1
-    assert out =~ "mix-cache/x/.envrc.local"
+    assert out =~ "uv-cache/x/.envrc.local"
 
-    # The copy filters are case-sensitive and rsync offers no portable way to
-    # change that, so an oddly cased name reaches the staging tree; the guard is
-    # the only thing standing between it and an upload.
+    # An oddly cased name is refused too.
     odd_case = temporary_directory("context-guard-odd-case")
 
     write_files(odd_case, [
@@ -268,7 +194,7 @@ defmodule Keyfleet.ReleasePackageTest do
     write_files(clean, [
       {"platform/lib/app.ex", "defmodule App do\nend\n"},
       {"platform/environment.md", "# not a secrets file\n"},
-      {"mix-cache/archives/hex", "hex archive\n"}
+      {"uv-cache/archive-v0/pydantic", "cache payload\n"}
     ])
 
     assert run_guard(scan, refusal, clean) == {"", 0}
@@ -278,30 +204,6 @@ defmodule Keyfleet.ReleasePackageTest do
     @context_script
     |> File.read!()
     |> String.split("\n")
-  end
-
-  defp join_continuations(lines) do
-    lines
-    |> Enum.join("\n")
-    |> String.replace(~r/\\\n\s*/, " ")
-    |> String.split("\n")
-  end
-
-  # Runs the script's own `env_filters=(...)` line and reports the arguments it
-  # produces, so the copy under test receives exactly what the script passes.
-  defp env_filters do
-    [definition] = Enum.filter(script_lines(), &String.starts_with?(&1, "env_filters=("))
-
-    {out, status} =
-      System.cmd(
-        "bash",
-        ["-c", "set -u\n" <> definition <> "\nprintf '%s\\0' \"${env_filters[@]}\""],
-        stderr_to_stdout: true
-      )
-
-    assert status == 0, out
-
-    String.split(out, <<0>>, trim: true)
   end
 
   # The guard is the `offender=` scan and the refusal on the line right after it.
