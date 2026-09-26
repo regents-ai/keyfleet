@@ -168,7 +168,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, html} = live(conn, @path)
 
       assert has_element?(view, "#fleet-soon h1", "Keyfleet Cascade")
-      assert text(view, "#fleet-sales") == "Coming soon"
       assert has_element?(view, "#fleet-soon-title", "Coming soon")
       assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
 
@@ -192,7 +191,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "opens once its deployment is recorded", %{conn: conn} do
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-sales") == "Coming soon"
+      assert has_element?(view, "#fleet-soon-title", "Coming soon")
 
       deploy!()
 

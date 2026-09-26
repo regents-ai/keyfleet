@@ -275,7 +275,6 @@ defmodule KeyfleetWeb.FleetLive do
       <header class="fleet-bar">
         <div class="fleet-bar__title">
           <h1 tabindex="-1">{@fleet.name}</h1>
-          <p id="fleet-sales" class="fleet-bar__sales">Coming soon</p>
         </div>
       </header>
 

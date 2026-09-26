@@ -299,7 +299,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
 
       [section | _] = String.split(section, "\n## ", parts: 2)
-      assert section =~ "\n\nComing soon. It has no keys for sale and can’t be joined yet.\n"
+      assert section == "\nComing soon. It has no keys for sale and can’t be joined yet.\n"
       refute section =~ "What it’s doing right now"
     end
 

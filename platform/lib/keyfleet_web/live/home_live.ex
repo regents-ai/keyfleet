@@ -95,11 +95,12 @@ defmodule KeyfleetWeb.HomeLive do
 
     fleets =
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
-        "## #{name}\n\n#{Map.fetch!(@about, id)}\n\n" <>
+        "## #{name}\n\n" <>
           if Fleets.coming_soon?(id, recorded[id]),
             do: "Coming soon. It has no keys for sale and can’t be joined yet.",
             else:
-              "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
+              "#{Map.fetch!(@about, id)}\n\n" <>
+                "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
                 "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{id}.md")})"
       end)
 
