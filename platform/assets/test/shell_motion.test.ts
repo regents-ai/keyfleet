@@ -14,18 +14,27 @@ import {
   type MotionDriver,
 } from "../js/hooks/shell_motion"
 
-// Inline styles as the browser keeps them: a removed property reads as "".
+// Inline styles as the browser keeps them: a removed property reads as "", and
+// the length counts only the properties still set.
 const inlineStyle = () => {
   const style: Record<string, unknown> = {
     removeProperty: (name: string) => {
       style[name] = ""
     },
   }
+  Object.defineProperty(style, "length", {
+    get: () => Object.values(style).filter((value) => typeof value === "string" && value !== "").length,
+  })
   return style
 }
 
 const element = (left = 0) =>
-  ({style: inlineStyle(), dataset: {}, getBoundingClientRect: () => ({left, width: 20})}) as unknown as HTMLElement
+  ({
+    style: inlineStyle(),
+    dataset: {},
+    removeAttribute: vi.fn(),
+    getBoundingClientRect: () => ({left, width: 20}),
+  }) as unknown as HTMLElement
 
 const harness = () => {
   const animations: Array<MotionAnimation & {options: Record<string, unknown>}> = []
@@ -40,18 +49,17 @@ const harness = () => {
       return animation
     }),
   }
-  const scope = {revert: vi.fn()}
   const root = element()
   Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-  return {animations, driver, root, scope}
+  return {animations, driver, root}
 }
 
 describe("shell motion", () => {
   it("renders a direct load immediately without fabricating travel", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const incoming = element()
     const background = element()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     controller.transition({kind: "direct", incoming: [incoming], incomingBackground: background})
 
@@ -61,11 +69,11 @@ describe("shell motion", () => {
   })
 
   it("cancels an interrupted app switch and lets the latest intent win from current styles", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const oldRegion = element(0)
     const firstRegion = element(90)
     const latestRegion = element(10)
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     const first = controller.transition({kind: "app", outgoing: [oldRegion], incoming: [firstRegion]})!
     first.seek(120)
@@ -80,12 +88,12 @@ describe("shell motion", () => {
   })
 
   it("uses bounded full-scene choreography with edge-first entry and background crossfade", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const edge = element(0)
     const center = element(40)
     const oldBackground = element()
     const newBackground = element()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     controller.transition({
       kind: "app",
@@ -121,9 +129,9 @@ describe("shell motion", () => {
   })
 
   it.each(["keyboard" as const, "reduced" as const])("makes %s navigation immediate and travel-free", (mode) => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const incoming = element()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     controller.transition({
       kind: "app",
@@ -137,8 +145,8 @@ describe("shell motion", () => {
   })
 
   it("keeps intra-app changes short and content-only", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
+    const {animations, driver, root} = harness()
+    const controller = createMotionController(root, driver)
 
     controller.transition({kind: "content", outgoing: [element()], incoming: [element()]})
 
@@ -151,7 +159,7 @@ describe("shell motion", () => {
   })
 
   it("accelerates marked surfaces away and decelerates staggered entries into place", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const outgoing = element()
     outgoing.dataset.motionSurface = "list-item"
     const first = element()
@@ -161,7 +169,7 @@ describe("shell motion", () => {
     const detail = element()
     detail.dataset.motionSurface = "detail"
     const settled = vi.fn()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     controller.transition({
       kind: "content",
@@ -196,7 +204,7 @@ describe("shell motion", () => {
   })
 
   it("runs marked surface entrances through the controller on mount", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const listItem = element()
     listItem.dataset.motionSurface = "list-item"
     const detail = element()
@@ -206,7 +214,7 @@ describe("shell motion", () => {
     ) as unknown as typeof root.querySelectorAll
     const state = {
       el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
+      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver),
     }
 
     ShellMotion.mounted.call(state)
@@ -218,29 +226,28 @@ describe("shell motion", () => {
   })
 
   it("settles an empty patch without retaining a phantom active handle", () => {
-    const {driver, root, scope} = harness()
+    const {driver, root} = harness()
     const settled = vi.fn()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
 
     expect(controller.transition({kind: "content", incoming: [], onSettled: settled})).toBeNull()
     expect(controller.active).toBeNull()
     expect(settled).toHaveBeenCalledOnce()
   })
 
-  it("cancels active work and reverts its scope on teardown", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
+  it("cancels active work on teardown", () => {
+    const {animations, driver, root} = harness()
+    const controller = createMotionController(root, driver)
     controller.transition({kind: "content", incoming: [element()]})
 
     controller.destroy()
 
     expect(animations[0].cancel).toHaveBeenCalledOnce()
-    expect(scope.revert).toHaveBeenCalledOnce()
   })
 
-  it("does not retain repeated transition animations in the lifecycle scope", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
+  it("cancels every earlier transition when transitions repeat", () => {
+    const {animations, driver, root} = harness()
+    const controller = createMotionController(root, driver)
 
     for (let index = 0; index < 20; index += 1) {
       controller.transition({kind: "content", incoming: [element()]})
@@ -248,14 +255,13 @@ describe("shell motion", () => {
 
     expect(animations).toHaveLength(20)
     expect(animations.slice(0, -1).every((animation) => vi.mocked(animation.cancel).mock.calls.length === 1)).toBe(true)
-    expect(Object.keys(scope)).toEqual(["revert"])
   })
 
   it("settles the latest page back to its own styles and clears the current handle only for the latest completion", () => {
-    const {animations, driver, root, scope} = harness()
+    const {animations, driver, root} = harness()
     const stale = element()
     const latest = element()
-    const controller = createMotionController(root, driver, () => scope)
+    const controller = createMotionController(root, driver)
     controller.transition({kind: "content", incoming: [stale]})
     controller.transition({kind: "content", outgoing: [stale], incoming: [latest]})
 
@@ -267,6 +273,8 @@ describe("shell motion", () => {
     expect(controller.active).toBeNull()
     expect(stale.style).toMatchObject({opacity: "0", transform: "none"})
     expect(latest.style).toMatchObject({opacity: "", transform: ""})
+    expect(latest.removeAttribute).toHaveBeenCalledWith("style")
+    expect(stale.removeAttribute).not.toHaveBeenCalled()
   })
 
   it("drives mount, patch classification, rapid cancellation, copy cleanup, and teardown by hook composition", () => {
@@ -298,10 +306,10 @@ describe("shell motion", () => {
     root.querySelector = ((selector: string) => root.querySelectorAll(selector)[0] ?? null) as typeof root.querySelector
     root.append = ((...targets: HTMLElement[]) => appended.push(...targets)) as typeof root.append
     Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-    const {animations, driver, scope} = harness()
+    const {animations, driver} = harness()
     const state = {
       el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
+      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver),
     }
 
     ShellMotion.mounted.call(state)
@@ -328,7 +336,6 @@ describe("shell motion", () => {
 
     ShellMotion.destroyed.call(state)
     expect(removed.length).toBe(4)
-    expect(scope.revert).toHaveBeenCalledOnce()
   })
 
   it("settles same-app hook updates and removes every outgoing copy", () => {
@@ -358,10 +365,10 @@ describe("shell motion", () => {
     root.querySelector = ((selector: string) => root.querySelectorAll(selector)[0] ?? null) as typeof root.querySelector
     root.append = vi.fn() as typeof root.append
     Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-    const {animations, driver, scope} = harness()
+    const {animations, driver} = harness()
     const state = {
       el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
+      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver),
     }
 
     ShellMotion.mounted.call(state)

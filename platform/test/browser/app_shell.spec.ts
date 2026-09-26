@@ -287,10 +287,7 @@ test("rapid page switches settle only the latest scene and remove motion copies"
   await expect(page.locator("[data-motion-copy]"), "outgoing copies are disposable").toHaveCount(0)
   await expect(page.locator("#route-content")).toHaveCSS("opacity", "1")
   for (const region of ["#route-content", "#shell-sidebar"]) {
-    await expect(page.locator(region), `${region} is left to the stylesheet`).not.toHaveAttribute(
-      "style",
-      /opacity|transform/,
-    )
+    await expect(page.locator(region), `${region} is left to the stylesheet`).not.toHaveAttribute("style")
   }
 })
 

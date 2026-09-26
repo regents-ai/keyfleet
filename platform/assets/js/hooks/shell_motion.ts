@@ -1,4 +1,4 @@
-import {animate, createScope, type AnimationParams} from "animejs"
+import {animate, type AnimationParams} from "animejs"
 
 export const APP_ENTRY_DURATION = 270
 export const APP_EXIT_DURATION = 180
@@ -21,12 +21,6 @@ export type MotionAnimation = {
 export type MotionDriver = {
   animate(target: HTMLElement | HTMLElement[], options: Record<string, unknown>): MotionAnimation
 }
-
-type MotionScope = {
-  revert(): unknown
-}
-
-type MotionScopeFactory = (root: HTMLElement) => MotionScope
 
 export type MotionIntent = {
   kind: "direct" | "app" | "content"
@@ -51,13 +45,12 @@ const animeDriver: MotionDriver = {
   animate: (target, options) => animate(target, options as AnimationParams),
 }
 
-const animeScope: MotionScopeFactory = (root) => createScope({root})
-
 // A settled element is back to exactly what the page's own styles say.
 const show = (target: HTMLElement | undefined) => {
   if (!target) return
   target.style.removeProperty("opacity")
   target.style.removeProperty("transform")
+  if (target.style.length === 0) target.removeAttribute("style")
 }
 
 const hide = (target: HTMLElement | undefined) => {
@@ -111,9 +104,7 @@ const surfaceDelay = (target: HTMLElement, index: number) =>
 export const createMotionController = (
   root: HTMLElement,
   driver: MotionDriver = animeDriver,
-  scopeFactory: MotionScopeFactory = animeScope,
 ): MotionController => {
-  const scope = scopeFactory(root)
   let active: MotionAnimation | null = null
   let generation = 0
 
@@ -262,7 +253,6 @@ export const createMotionController = (
     },
     destroy() {
       cancelActive()
-      scope.revert()
     },
   }
 }
