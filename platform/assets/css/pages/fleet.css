@@ -115,11 +115,16 @@
   display: none;
 }
 
-.fleet-menu__list a {
+.fleet-menu__list a,
+.fleet-menu__empty {
   display: flex;
   align-items: center;
   min-height: 2.75rem;
   padding: 0 0.5rem;
+}
+
+.fleet-menu__empty {
+  color: var(--ash-muted);
 }
 
 /* Buying a key, in "How this fleet works" */

@@ -156,6 +156,7 @@ defmodule KeyfleetWeb.FleetLive do
                     {RoomsLive.room_label(room)}
                   </.link>
                 </li>
+                <li :if={@fleet.rooms == []} class="fleet-menu__empty">No rooms yet.</li>
               </ul>
             </div>
             <.link

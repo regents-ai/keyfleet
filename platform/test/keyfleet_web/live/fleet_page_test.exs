@@ -86,6 +86,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute render(view) =~ "Open room 1"
   end
 
+  # An open fleet's rooms are opened by the deploy that opens it; until then
+  # its rooms menu says it has none.
+  test "a fleet with no rooms yet says so in its rooms menu", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
+
+    assert text(view, "#fleet-rooms") == "No rooms yet."
+    refute has_element?(view, "#fleet-rooms a")
+  end
+
   test "the bar opens the rooms and how the fleet works, both closed to start", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
