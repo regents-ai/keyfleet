@@ -713,22 +713,6 @@ again as soon as their fleet is added. The three Chainlink files the fleet uses
 are copied unchanged into `src/vendor/chainlink`, with their source, commit and
 checksums in the README beside them.
 
-`KeyfleetDirectory` names the four fleets of one release and does nothing else.
-It deploys nothing: `Keyfleet` initcode is 41,304 bytes and its runtime 21,865, so a contract carrying
-a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
-deploying all four would exceed the 49,152-byte initcode limit. It is given four
-fleets already deployed, and its constructor is its only check: each slot must hold the preset that belongs to it — Syndicate,
-Cascade, Classic, Accelerant, in that order — and all four must share the same
-treasury, asset registry, staking contract, Autolaunch factory, voting
-window, randomness coordinator, subscription, gas lane and trait table hash, or
-it reverts with the slot that did not fit. USDC needs no
-comparison of its own: a fleet refuses any USDC but its registry's, and the
-registry is compared. `fleets()` and `isFleet(address)` are the whole of its
-surface. It has no owner, no setter and no upgrade path, holds no authority over
-any fleet, and a different set of fleets means a different directory. No
-script deploys it, because the fleets now go on chain one at a time; the
-contract and its tests are kept.
-
 The shared asset registry is deployed once per chain, before any fleet, by
 `script/DeployKeyfleetAssetRegistry.s.sol`, which reads only
 `KEYFLEET_MANIFEST`, binds the registry to the manifest's Safe and USDC, and
@@ -792,7 +776,7 @@ keeper's external test in `platform/`, which runs it; `docs/keeper.md` says how.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the focused authorization, admission, preset-arithmetic, reward-ledger,
-fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, post-launch budget, key-reveal, fleet-directory and
+fleet-purchase, deposit-and-surplus, protocol-share, voting, Autolaunch, post-launch budget, key-reveal and
 deployment tests. Foundry must be installed; the compiler may be downloaded on
 first use. Tests require no RPC, apart from the two in `test/fork`, which skip
 themselves unless their environment is set.

@@ -380,10 +380,6 @@ values are published, and it is what the app is seeded from, one fleet at a
 time. Each fleet answers for its own ledger, controller, preset and wiring, so
 nothing downstream has to keep a pasted list of addresses in step.
 
-`KeyfleetDirectory` stays in `contracts/src` with its tests, but the scripts no
-longer deploy it: it names all four fleets at once, and the fleets now go on
-chain one at a time.
-
 ## What the Safe does next
 
 Neither step sets an allowlist flag, because admission is the Safe's alone.
