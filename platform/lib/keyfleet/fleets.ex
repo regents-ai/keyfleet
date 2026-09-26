@@ -86,38 +86,59 @@ defmodule Keyfleet.Fleets do
   @doc "The fleet in a deployment's `slot`, such as `syndicate`, or `nil` for no such slot."
   def slot_fleet_id(slot), do: Map.get(@manifest_slots, slot)
 
+  # What every deployed fleet shares with every other: they sell on one chain,
+  # for one USDC, admit deposits through one asset registry and draw traits
+  # from one trait table.
+  @shared_wiring [:chain_id, :usdc_address, :asset_registry_address, :trait_table_hash]
+
   @doc """
   Binds one fleet to the deployment a deployed manifest describes, the JSON
   `contracts/script/RecordKeyfleets.s.sol` writes for one fleet, from trusted
   operator code, and returns the fleet.
 
   Recording the same manifest again changes nothing; a manifest naming other
-  contracts for a bound fleet is refused. Every other fleet is left as it is.
+  contracts for a bound fleet is refused, and so is one whose chain, USDC,
+  asset registry or trait table differs from a fleet already bound. Every
+  other fleet is left as it is.
   """
   def record_manifest!(%{
         "chainId" => chain_id,
         "deploymentBlock" => block,
         "usdc" => usdc,
+        "assetRegistry" => asset_registry,
         "traitTableHash" => trait_table_hash,
         "fleet" => %{"slot" => slot, "address" => address, "rewards" => rewards, "votes" => votes}
       })
       when is_integer(chain_id) and is_integer(block) do
     bootstrap_catalog!()
+    fleet_id = Map.fetch!(@manifest_slots, slot)
 
-    @manifest_slots
-    |> Map.fetch!(slot)
+    deployment = %{
+      chain_id: chain_id,
+      contract_address: String.downcase(address),
+      rewards_address: String.downcase(rewards),
+      votes_address: String.downcase(votes),
+      usdc_address: String.downcase(usdc),
+      asset_registry_address: String.downcase(asset_registry),
+      deployed_block: block,
+      trait_table_hash: String.downcase(trait_table_hash)
+    }
+
+    require_shared_wiring!(fleet_id, Map.take(deployment, @shared_wiring))
+
+    fleet_id
     |> get_fleet!()
-    |> record_deployment!(
-      %{
-        chain_id: chain_id,
-        contract_address: String.downcase(address),
-        rewards_address: String.downcase(rewards),
-        votes_address: String.downcase(votes),
-        usdc_address: String.downcase(usdc),
-        deployed_block: block,
-        trait_table_hash: String.downcase(trait_table_hash)
-      },
-      actor: %Keyfleet.Actors.System{}
-    )
+    |> record_deployment!(deployment, actor: %Keyfleet.Actors.System{})
+  end
+
+  defp require_shared_wiring!(fleet_id, wiring) do
+    for bound <- list_deployed_fleets!(),
+        bound.id != fleet_id,
+        field <- @shared_wiring,
+        Map.fetch!(bound, field) != Map.fetch!(wiring, field) do
+      raise "#{fleet_id} cannot be recorded: its #{field} differs from #{bound.id}'s"
+    end
+
+    :ok
   end
 end

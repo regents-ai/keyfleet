@@ -1036,6 +1036,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: @usdc,
+        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: deployed_block,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

@@ -1,8 +1,9 @@
 defmodule Keyfleet.Fleets.Fleet do
   @moduledoc """
   A fixed fleet with a stable machine identity and display name, and once it is
-  deployed, the chain and contracts it lives at, the USDC its keys are paid in
-  and the hash of the trait table its keys' traits are drawn from.
+  deployed, the chain and contracts it lives at, the USDC its keys are paid in,
+  the asset registry it shares with every fleet on its chain and the hash of the
+  trait table its keys' traits are drawn from.
   """
   use Ash.Resource,
     domain: Keyfleet.Fleets,
@@ -23,11 +24,17 @@ defmodule Keyfleet.Fleets.Fleet do
       # A deployment is recorded whole or not at all.
       check_constraint(:contract_address, "fleets_deployment_whole",
         check:
-          "num_nulls(chain_id, contract_address, rewards_address, votes_address, usdc_address, deployed_block, trait_table_hash) IN (0, 7)",
+          "num_nulls(chain_id, contract_address, rewards_address, votes_address, usdc_address, asset_registry_address, deployed_block, trait_table_hash) IN (0, 8)",
         message: "must record the whole deployment"
       )
 
-      for field <- [:contract_address, :rewards_address, :votes_address, :usdc_address] do
+      for field <- [
+            :contract_address,
+            :rewards_address,
+            :votes_address,
+            :usdc_address,
+            :asset_registry_address
+          ] do
         check_constraint(field, "fleets_#{field}_shape", check: "#{field} ~ '^0x[0-9a-f]{40}$'")
       end
 
@@ -71,6 +78,7 @@ defmodule Keyfleet.Fleets.Fleet do
         :rewards_address,
         :votes_address,
         :usdc_address,
+        :asset_registry_address,
         :deployed_block,
         :trait_table_hash
       ]
@@ -81,6 +89,7 @@ defmodule Keyfleet.Fleets.Fleet do
         :rewards_address,
         :votes_address,
         :usdc_address,
+        :asset_registry_address,
         :deployed_block,
         :trait_table_hash
       ]
@@ -106,7 +115,13 @@ defmodule Keyfleet.Fleets.Fleet do
 
     attribute :chain_id, :integer, public?: true, constraints: [min: 1]
 
-    for field <- [:contract_address, :rewards_address, :votes_address, :usdc_address] do
+    for field <- [
+          :contract_address,
+          :rewards_address,
+          :votes_address,
+          :usdc_address,
+          :asset_registry_address
+        ] do
       attribute field, :string,
         public?: true,
         constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]

@@ -1530,6 +1530,7 @@ defmodule Keyfleet.ProposalsChainTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: @deployed,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
@@ -1732,7 +1733,8 @@ defmodule Keyfleet.ProposalsChainTest do
       Repo.query!(
         "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
           "rewards_address = NULL, votes_address = NULL, usdc_address = NULL, " <>
-          "deployed_block = NULL, trait_table_hash = NULL WHERE id = $1",
+          "asset_registry_address = NULL, deployed_block = NULL, trait_table_hash = NULL " <>
+          "WHERE id = $1",
         [@fleet]
       )
     end)

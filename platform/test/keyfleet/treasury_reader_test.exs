@@ -50,6 +50,7 @@ defmodule Keyfleet.TreasuryReaderTest do
           rewards_address: @rewards,
           votes_address: "0x" <> String.duplicate("9", 40),
           usdc_address: @usdc,
+          asset_registry_address: "0x" <> String.duplicate("4", 40),
           deployed_block: 1,
           trait_table_hash: "0x" <> String.duplicate("a", 64)
         },
