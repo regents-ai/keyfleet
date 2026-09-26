@@ -1,4 +1,5 @@
 import type {Hook} from "../hook_composition"
+import {deny} from "./motion/press"
 import {activeEthereumWallet, type SelectedWallet} from "../wallet_actions/connected_wallet"
 import {
   describe,
@@ -59,12 +60,14 @@ export function fleetActionHook(
         } catch (error) {
           entry.textContent = error instanceof Unreadable ? error.message : outOfDateWords
           entry.dataset.tone = "error"
+          deny(entry)
           return
         }
 
         const show = (update: ActionUpdate) => {
           entry.textContent = describe(update, action)
           entry.dataset.tone = update.kind === "failed" ? "error" : "info"
+          if (update.kind === "failed") deny(entry)
         }
 
         const wallet = currentWallet()

@@ -23,9 +23,9 @@ defmodule KeyfleetWeb.HomeLive do
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
-  alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{ActivityLines, FleetLive, PublicDocuments, RouteCatalog, Time}
-  alias KeyfleetWeb.Components.{RegentLinks, SendAgent}
+  alias Keyfleet.Fleets.Presets
+  alias KeyfleetWeb.{ActivityLines, FleetLive, Motion, PublicDocuments, RouteCatalog, Time}
+  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent}
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
            "what it’s trying, and what it has actually done."
@@ -379,9 +379,17 @@ defmodule KeyfleetWeb.HomeLive do
         <div id="home-tally" class="rl-hero-tally">
           <p :if={@tally} class="rl-hero-tally__pill">
             <span :if={@tally.agents > 0} class="rl-hero-tally__dot" data-tally-dot aria-hidden="true"></span>
-            <span class="rl-hero-tally__text">{FleetLive.agents_here(@tally.agents)}<span :if={
-              @tally.keys
-            }> · {Rules.keys(@tally.keys)} sold</span></span>
+            <span class="rl-hero-tally__text">
+              <Count.count
+                id="home-tally-agents"
+                value={@tally.agents}
+                one="agent here"
+                many="agents here"
+              />
+              <span :if={@tally.keys}>
+                · <Count.count id="home-tally-keys" value={@tally.keys} one="key" many="keys" /> sold
+              </span>
+            </span>
           </p>
         </div>
 
@@ -448,8 +456,19 @@ defmodule KeyfleetWeb.HomeLive do
           </g>
         </svg>
       </div>
-      <ul class="rl-fleet-cards" role="list">
-        <li :for={fleet <- @fleets} id={"home-fleet-#{fleet.id}"} class="rl-fleet-card">
+      <ul
+        id="home-fleet-cards"
+        class="rl-fleet-cards"
+        role="list"
+        phx-hook="Cascade"
+        data-variant={Motion.standard("grid")}
+      >
+        <li
+          :for={fleet <- @fleets}
+          id={"home-fleet-#{fleet.id}"}
+          class="rl-fleet-card"
+          phx-mounted={JS.ignore_attributes(["style"])}
+        >
           <a href={fleet_path(fleet.id)} class="rl-fleet-card__link">
             <div
               id={"home-fleet-preview-#{fleet.id}"}
@@ -462,7 +481,12 @@ defmodule KeyfleetWeb.HomeLive do
             >
             </div>
             <h3>{fleet.name}</h3>
-            <.right_now :if={fleet.now} sales={fleet.sales} now={fleet.now} />
+            <.right_now
+              :if={fleet.now}
+              id={"home-fleet-#{fleet.id}"}
+              sales={fleet.sales}
+              now={fleet.now}
+            />
           </a>
         </li>
       </ul>
@@ -470,6 +494,7 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
+  attr :id, :string, required: true
   attr :sales, :map, required: true
   attr :now, :map, required: true
 
@@ -478,7 +503,9 @@ defmodule KeyfleetWeb.HomeLive do
 
     ~H"""
     <div class="rl-fleet-card__now">
-      <p class="rl-fleet-card__who" data-fleet-who>{FleetLive.headcount(@sales, @now.agents)}</p>
+      <p class="rl-fleet-card__who" data-fleet-who>
+        <FleetLive.headcount id={"#{@id}-count"} sales={@sales} agents={@now.agents} />
+      </p>
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>
@@ -506,8 +533,18 @@ defmodule KeyfleetWeb.HomeLive do
     ~H"""
     <section id="opportunities" class="rl-opportunities" aria-labelledby="opportunities-title">
       <h2 id="opportunities-title">What a fleet can take on</h2>
-      <ul class="rl-opportunity-tiles" role="list">
-        <li :for={opportunity <- @opportunities} id={"home-opportunity-#{opportunity.id}"}>
+      <ul
+        id="home-opportunity-tiles"
+        class="rl-opportunity-tiles"
+        role="list"
+        phx-hook="Cascade"
+        data-variant={Motion.standard("grid")}
+      >
+        <li
+          :for={opportunity <- @opportunities}
+          id={"home-opportunity-#{opportunity.id}"}
+          phx-mounted={JS.ignore_attributes(["style"])}
+        >
           <a href={opportunity_path(opportunity)} class="rl-opportunity">
             <p :if={opportunity.featured?} class="rl-overline">Featured</p>
             <h3>{opportunity.name}</h3>

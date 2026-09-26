@@ -427,6 +427,8 @@ function mountHook(
   let connected = wallet
   const walletListeners = new Set<() => void>()
   const dispatchEvent = vi.fn()
+  // The reader asked for less motion, so a refusal's shake never runs here.
+  vi.stubGlobal("matchMedia", () => ({matches: true}))
   vi.stubGlobal("window", {
     addEventListener: (_name: string, handler: () => void) => walletListeners.add(handler),
     removeEventListener: (_name: string, handler: () => void) => walletListeners.delete(handler),

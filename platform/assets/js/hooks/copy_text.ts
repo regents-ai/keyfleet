@@ -1,4 +1,5 @@
 import type {Hook} from "../hook_composition"
+import {deny} from "./motion/press"
 
 type CopyTextHook = Hook & {
   el: HTMLElement
@@ -28,6 +29,7 @@ export const CopyText: Hook = {
       try {
         await navigator.clipboard.writeText(text)
       } catch {
+        deny(button)
         return
       }
       button.textContent = "Copied"

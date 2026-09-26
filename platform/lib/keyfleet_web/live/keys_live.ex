@@ -33,7 +33,13 @@ defmodule KeyfleetWeb.KeysLive do
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
-        <p :if={@notice} class={["key-notice", @notice.tone == :error && "key-notice--error"]}>
+        <p
+          :if={@notice}
+          id="key-notice"
+          class={["key-notice", @notice.tone == :error && "key-notice--error"]}
+          phx-hook="Refusal"
+          data-refused={@notice.tone == :error}
+        >
           {@notice.message}
         </p>
 

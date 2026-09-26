@@ -2,8 +2,8 @@ import {randomBytes} from "node:crypto"
 import {defineConfig, devices} from "@playwright/test"
 
 // The specs here sell, move and pair keys on the server while a page watches.
-// A key's profile is checked in Chromium, Firefox and WebKit; the map in
-// Chromium.
+// A key's profile is checked in Chromium, Firefox and WebKit; the map and the
+// fleet page's motion in Chromium.
 // They call `Keyfleet.BrowserChain` on the server over Erlang distribution, so
 // the server runs as a named node on the loopback address, with a secret
 // cookie and a fixed distribution port instead of epmd.
@@ -27,7 +27,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

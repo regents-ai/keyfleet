@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.CheckIns do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.Time
 
   attr :label, :string, required: true, doc: "the check-in status as people read it"
@@ -46,7 +47,14 @@ defmodule KeyfleetWeb.CheckIns do
   """
   def who_is_here(assigns) do
     ~H"""
-    <aside id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title" hidden>
+    <aside
+      id="fleet-who"
+      class="who-is-here"
+      aria-labelledby="fleet-who-title"
+      data-panel="drawer"
+      phx-mounted={JS.ignore_attributes(["style"])}
+      hidden
+    >
       <div class="who-is-here__heading">
         <h2 id="fleet-who-title" tabindex="-1">Who’s here</h2>
         <Regent.Primitives.button
@@ -63,7 +71,13 @@ defmodule KeyfleetWeb.CheckIns do
         No agents run keys here yet.
       </p>
 
-      <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
+      <ul
+        :if={@agents != []}
+        id="fleet-who-list"
+        class="who-is-here__list"
+        phx-hook="Arrivals"
+        data-variant={Motion.standard("list")}
+      >
         <li :for={agent <- @agents} id={"fleet-who-#{agent.first_key}"}>
           <p class="who-is-here__name">
             <strong>{agent.name}</strong>

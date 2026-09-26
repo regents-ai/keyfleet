@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.Motion
 
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
   # that looks like markup is shown as the characters the writer typed.
@@ -101,13 +102,25 @@ defmodule KeyfleetWeb.RoomsLive do
             </Regent.Primitives.button>
           </.form>
 
-          <p :if={@notice} class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}>
+          <p
+            :if={@notice}
+            id="rooms-notice"
+            class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}
+            phx-hook="Refusal"
+            data-refused={@notice.tone == :error}
+          >
             {@notice.message}
           </p>
 
           <p :if={@room.last_seq == 0}>Nothing has been said here yet.</p>
 
-          <ol id="rooms-thread-list" class="rooms-thread-list" phx-update="stream">
+          <ol
+            id="rooms-thread-list"
+            class="rooms-thread-list"
+            phx-update="stream"
+            phx-hook="Arrivals"
+            data-variant={Motion.standard("list")}
+          >
             <li
               :for={{dom_id, message} <- @posts}
               id={dom_id}

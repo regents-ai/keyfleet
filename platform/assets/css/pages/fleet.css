@@ -106,6 +106,7 @@
   padding: 0.5rem;
   border: 1px solid var(--ash-line-strong);
   background: var(--ash-panel);
+  transform-origin: 1.5rem 0;
 }
 
 .fleet-menu__list[hidden],

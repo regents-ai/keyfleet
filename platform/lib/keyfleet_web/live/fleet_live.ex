@@ -20,9 +20,11 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyProfileLive
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.Time
@@ -35,24 +37,37 @@ defmodule KeyfleetWeb.FleetLive do
     {"#fleet-who", "#fleet-who-toggle"}
   ]
 
+  attr :id, :string, required: true, doc: "the start of each number's id"
+
+  attr :sales, :map,
+    required: true,
+    doc:
+      "whether the fleet is `deployed?`, whether its figures are `current?`, and how many `keys` it has sold"
+
+  attr :agents, :integer, required: true
+
   @doc """
   How many keys a fleet has sold and how many agents run them, in one line,
-  as the homepage's card and the fleet's own bar both say it. `sales` says
-  whether the fleet is `deployed?`, whether its figures are `current?`, and
-  how many `keys` it has sold: a fleet not yet deployed, or one whose sales
-  are still being read, shows no key count.
+  as the homepage's card and the fleet's own bar both say it. A fleet not yet
+  deployed, or one whose sales are still being read, shows no key count.
   """
-  def headcount(sales, agents), do: "#{sold(sales)} · #{agents_here(agents)}"
+  def headcount(assigns) do
+    ~H"""
+    <.sold id={"#{@id}-keys"} sales={@sales} /> ·
+    <Count.count id={"#{@id}-agents"} value={@agents} one="agent here" many="agents here" />
+    """
+  end
 
-  defp sold(%{deployed?: false}), do: "Not on sale yet"
-  defp sold(%{current?: false}), do: "Sales figures are catching up"
-  defp sold(%{keys: keys}), do: "#{Rules.keys(keys)} sold"
+  defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
+  defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
 
-  @doc "How many agents are here, in words."
-  def agents_here(1), do: "1 agent here"
-  def agents_here(count), do: "#{grouped(count)} agents here"
+  defp sold(assigns) do
+    ~H"""
+    <Count.count id={@id} value={@sales.keys} one="key" many="keys" /> sold
+    """
+  end
 
-  # The fleet's sales as `headcount/2` reads them.
+  # The fleet's sales as `headcount/1` reads them.
   defp sold_so_far(%{deployed?: false}), do: %{deployed?: false}
 
   defp sold_so_far(fleet),
@@ -79,12 +94,19 @@ defmodule KeyfleetWeb.FleetLive do
         <h2>This fleet doesn’t exist.</h2>
       </section>
 
-      <div :if={@fleet.name} class="fleet-view">
+      <div
+        :if={@fleet.name}
+        id="fleet-view"
+        class="fleet-view"
+        phx-hook="Slides"
+        data-drawer={Motion.standard("drawer")}
+        data-menu={Motion.standard("menu")}
+      >
         <header class="fleet-bar">
           <div class="fleet-bar__title">
             <h1 tabindex="-1">{@fleet.name}</h1>
             <p id="fleet-sales" class="fleet-bar__sales">
-              {headcount(sold_so_far(@fleet), @fleet.agents_here)}
+              <.headcount id="fleet-sales" sales={sold_so_far(@fleet)} agents={@fleet.agents_here} />
             </p>
           </div>
 
@@ -116,7 +138,13 @@ defmodule KeyfleetWeb.FleetLive do
               >
                 Rooms
               </Regent.Primitives.button>
-              <ul id="fleet-rooms" class="fleet-room-list fleet-menu__list" hidden>
+              <ul
+                id="fleet-rooms"
+                class="fleet-room-list fleet-menu__list"
+                data-panel="menu"
+                phx-mounted={JS.ignore_attributes(["style"])}
+                hidden
+              >
                 <li :for={room <- @fleet.rooms}>
                   <.link navigate={"/app/fleets/#{@fleet.fleet_id}/rooms/#{room.slug}"}>
                     {RoomsLive.room_label(room)}
@@ -293,7 +321,9 @@ defmodule KeyfleetWeb.FleetLive do
       class="fleet-now"
       aria-labelledby="fleet-now-title"
       phx-hook="OpenWhenWide"
+      phx-mounted={JS.ignore_attributes(["style"])}
       data-toggle="fleet-now-toggle"
+      data-panel="drawer"
       data-wide-only
     >
       <div class="fleet-now__heading">
@@ -315,7 +345,13 @@ defmodule KeyfleetWeb.FleetLive do
         <p :if={@now.empty?} id="fleet-now-empty" class="fleet-detail">
           Nothing yet. When the agents here start talking or planning, it shows up here.
         </p>
-        <ol id="fleet-now-list" class="activity-lines" phx-update="stream">
+        <ol
+          id="fleet-now-list"
+          class="activity-lines"
+          phx-update="stream"
+          phx-hook="Arrivals"
+          data-variant={Motion.standard("list")}
+        >
           <.activity_line
             :for={{dom_id, item} <- @activity}
             id={dom_id}
@@ -551,6 +587,8 @@ defmodule KeyfleetWeb.FleetLive do
       id="fleet-about"
       class="fleet-about"
       aria-labelledby="fleet-about-title"
+      data-panel="drawer"
+      phx-mounted={JS.ignore_attributes(["style"])}
       hidden
     >
       <div class="fleet-about__heading">
@@ -746,11 +784,15 @@ defmodule KeyfleetWeb.FleetLive do
           <dl class="fleet-buy-facts">
             <div>
               <dt>Key</dt>
-              <dd id="buy-key-number">{grouped(@buy.token_id)}</dd>
+              <dd id="buy-key-number" phx-hook="Counter" data-variant={Motion.standard("count")}>
+                {grouped(@buy.token_id)}
+              </dd>
             </div>
             <div>
               <dt>Price</dt>
-              <dd id="buy-key-price">{usdc(@buy.price)}</dd>
+              <dd id="buy-key-price" phx-hook="Counter" data-variant={Motion.standard("count")}>
+                {usdc(@buy.price)}
+              </dd>
             </div>
             <div :if={@buy.level}>
               <dt>Level</dt>

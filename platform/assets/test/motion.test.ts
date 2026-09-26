@@ -1,369 +1,144 @@
-import {describe, expect, it, vi} from "vitest"
+import {afterEach, beforeEach, expect, it, vi} from "vitest"
 
-import {
-  APP_ENTRY_DURATION,
-  APP_EXIT_DURATION,
-  CONTENT_ENTRY_DURATION,
-  CONTENT_EXIT_DURATION,
-  SURFACE_ENTRY_DURATION,
-  SURFACE_EXIT_DURATION,
-  SURFACE_STAGGER_DELAY,
-  ShellMotion,
-  createMotionController,
-  type MotionAnimation,
-  type MotionDriver,
-} from "../js/hooks/motion"
+// The moves themselves are Anime.js's; these tests hold the rules around them:
+// who gets to move, and that a press is never held up by its motion.
+const moved = vi.hoisted(() => ({squish: [] as unknown[], nope: [] as unknown[], animate: [] as unknown[][]}))
 
-const element = (left = 0) =>
-  ({style: {}, dataset: {}, getBoundingClientRect: () => ({left, width: 20})}) as unknown as HTMLElement
+vi.mock("../js/hooks/motion/press", () => ({
+  squish: (el: unknown) => moved.squish.push(el),
+  nope: (el: unknown) => moved.nope.push(el),
+}))
 
-const harness = () => {
-  const animations: Array<MotionAnimation & {options: Record<string, unknown>}> = []
-  const driver: MotionDriver = {
-    animate: vi.fn((_target, options) => {
-      const animation = {
-        options,
-        cancel: vi.fn(),
-        seek: vi.fn(),
-      }
-      animations.push(animation)
-      return animation
-    }),
+vi.mock("animejs", async original => ({
+  ...(await original<typeof import("animejs")>()),
+  animate: (targets: unknown[]) => moved.animate.push(targets),
+  createScope: () => ({
+    methods: {} as Record<string, (...args: unknown[]) => unknown>,
+    add(this: {methods: Record<string, unknown>}, build: (self: unknown) => void) {
+      build({add: (name: string, fn: unknown) => (this.methods[name] = fn)})
+      return this
+    },
+    revert: () => {},
+  }),
+}))
+
+import {press} from "../js/motion"
+import {forgetPress, notePress, takePointerPress} from "../js/hooks/motion/shared"
+import {Arrivals} from "../js/hooks/motion/moments"
+
+let lessMotion = false
+
+beforeEach(() => {
+  lessMotion = false
+  vi.stubGlobal("matchMedia", () => ({matches: lessMotion}))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  moved.squish.length = moved.nope.length = moved.animate.length = 0
+  forgetPress()
+})
+
+function control({disabled = false, own = false} = {}) {
+  const el = {
+    closest: () => el,
+    matches: (selector: string) => own && selector === ".rg-theme-toggle",
+    getAttribute: (name: string) => (name === "aria-disabled" && disabled ? "true" : null),
   }
-  const scope = {revert: vi.fn()}
-  const root = element()
-  Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-  return {animations, driver, root, scope}
+  return el
 }
 
-describe("shell motion", () => {
-  it("renders a direct load immediately without fabricating travel", () => {
-    const {animations, driver, root, scope} = harness()
-    const incoming = element()
-    const background = element()
-    const controller = createMotionController(root, driver, () => scope)
+// A click from a pointer reports how many presses made it; Enter and Space report none.
+function click(target: unknown, detail: number) {
+  return {target, detail, preventDefault: vi.fn(), stopPropagation: vi.fn()} as unknown as MouseEvent & {
+    preventDefault: ReturnType<typeof vi.fn>
+    stopPropagation: ReturnType<typeof vi.fn>
+  }
+}
 
-    controller.transition({kind: "direct", incoming: [incoming], incomingBackground: background})
+it("a pointer press squishes the control it pressed", () => {
+  const button = control()
+  press(click(button, 1))
+  expect(moved.squish).toEqual([button])
+})
 
-    expect(animations).toHaveLength(0)
-    expect(incoming.style.opacity).toBe("1")
-    expect(incoming.style.transform).toBe("none")
-    expect(background.style.opacity).toBe("1")
-  })
+it("a keyboard press answers at once, without a squish", () => {
+  press(click(control(), 0))
+  expect(moved.squish).toEqual([])
+})
 
-  it("cancels an interrupted app switch and lets the latest intent win from current styles", () => {
-    const {animations, driver, root, scope} = harness()
-    const oldRegion = element(0)
-    const firstRegion = element(90)
-    const latestRegion = element(10)
-    const controller = createMotionController(root, driver, () => scope)
+it("a reader who asked for less motion gets no squish", () => {
+  lessMotion = true
+  press(click(control(), 1))
+  expect(moved.squish).toEqual([])
+})
 
-    const first = controller.transition({kind: "app", outgoing: [oldRegion], incoming: [firstRegion]})!
-    first.seek(120)
-    firstRegion.style.opacity = "0.4"
-    firstRegion.style.transform = "translateX(4px)"
-    controller.transition({kind: "app", outgoing: [firstRegion], incoming: [latestRegion]})
+it("a control that says it can't be used yet shakes instead", () => {
+  const button = control({disabled: true})
+  press(click(button, 1))
+  expect(moved.nope).toEqual([button])
+  expect(moved.squish).toEqual([])
+})
 
-    expect(animations.slice(0, 2).every((animation) => vi.mocked(animation.cancel).mock.calls.length === 1)).toBe(true)
-    expect(animations.slice(0, 2).every((animation) => vi.mocked(animation.seek).mock.calls[0][0] === 120)).toBe(true)
-    expect(firstRegion.style.opacity).toBe("0.4")
-    expect(firstRegion.style.transform).toBe("translateX(4px)")
-  })
+it("the theme switch keeps its own motion", () => {
+  press(click(control({own: true}), 1))
+  expect(moved.squish).toEqual([])
+})
 
-  it("uses bounded full-scene choreography with edge-first entry and background crossfade", () => {
-    const {animations, driver, root, scope} = harness()
-    const edge = element(0)
-    const center = element(40)
-    const oldBackground = element()
-    const newBackground = element()
-    const controller = createMotionController(root, driver, () => scope)
+it("the press goes through untouched and nothing waits on the motion", () => {
+  const event = click(control(), 2)
+  expect(press(event)).toBeUndefined()
+  expect(event.preventDefault).not.toHaveBeenCalled()
+  expect(event.stopPropagation).not.toHaveBeenCalled()
+})
 
-    controller.transition({
-      kind: "app",
-      outgoing: [element()],
-      incoming: [edge, center],
-      outgoingBackground: oldBackground,
-      incomingBackground: newBackground,
-    })
+it("what a press opens asks once whether a pointer made it", () => {
+  notePress(click(control(), 1))
+  expect(takePointerPress()).toBe(true)
+  expect(takePointerPress()).toBe(false)
+})
 
-    const edgeOptions = animations[1].options
-    const centerOptions = animations[2].options
-    expect(animations[0].options).toMatchObject({
-      duration: APP_EXIT_DURATION,
-      ease: "inQuart",
-    })
-    expect(Number(edgeOptions.delay) + Number(edgeOptions.duration)).toBe(APP_ENTRY_DURATION)
-    expect(Number(edgeOptions.delay)).toBeLessThan(Number(centerOptions.delay))
-    expect(Number(centerOptions.delay) + Number(centerOptions.duration)).toBeLessThanOrEqual(
-      APP_ENTRY_DURATION,
-    )
-    expect(edge.style.transform).toBe("translateX(-12px)")
-    expect(animations.at(-2)?.options).toMatchObject({
-      opacity: 0,
-      duration: APP_EXIT_DURATION,
-      ease: "inQuart",
-    })
-    expect(animations.at(-1)?.options).toMatchObject({
-      opacity: 1,
-      duration: APP_ENTRY_DURATION,
-      ease: "outQuart",
-    })
-    expect([edgeOptions.ease, centerOptions.ease]).toEqual(["outQuart", "outQuart"])
-  })
+it("a key pressed after a pointer press means the next opening came from the keyboard", () => {
+  notePress(click(control(), 1))
+  forgetPress()
+  expect(takePointerPress()).toBe(false)
+})
 
-  it.each(["keyboard" as const, "reduced" as const])("makes %s navigation immediate and travel-free", (mode) => {
-    const {animations, driver, root, scope} = harness()
-    const incoming = element()
-    const controller = createMotionController(root, driver, () => scope)
+type Item = {id: string}
 
-    controller.transition({
-      kind: "app",
-      source: mode === "keyboard" ? "keyboard" : "pointer",
-      reducedMotion: mode === "reduced",
-      incoming: [incoming],
-    })
+function list(ids: string[]) {
+  const el = {dataset: {variant: "bounce"}, children: ids.map(id => ({id}))}
+  const hook = {el}
+  Arrivals.mounted!.call(hook)
+  const change = (next: string[]) => {
+    el.children = next.map(id => ({id}))
+    Arrivals.updated!.call(hook)
+  }
+  const arrivedIds = () => moved.animate.map(targets => (targets as Item[]).map(item => item.id))
+  return {change, arrivedIds}
+}
 
-    expect(animations).toHaveLength(0)
-    expect(incoming.style.transform).toBe("none")
-  })
+it("only the items that arrive in a list move", () => {
+  const {change, arrivedIds} = list(["a", "b"])
+  change(["c", "a", "b"])
+  expect(arrivedIds()).toEqual([["c"]])
+})
 
-  it("keeps intra-app changes short and content-only", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
+it("a list whose one line is replaced by a newer one still shows it arriving", () => {
+  const {change, arrivedIds} = list(["sale-6"])
+  change(["sale-7"])
+  expect(arrivedIds()).toEqual([["sale-7"]])
+})
 
-    controller.transition({kind: "content", outgoing: [element()], incoming: [element()]})
+it("a list swapped for another one simply shows", () => {
+  const {change, arrivedIds} = list(["a", "b"])
+  change(["x", "y", "z"])
+  expect(arrivedIds()).toEqual([])
+})
 
-    expect(animations).toHaveLength(2)
-    expect(animations.map(({options}) => [options.duration, options.ease])).toEqual([
-      [CONTENT_EXIT_DURATION, "inQuad"],
-      [CONTENT_ENTRY_DURATION, "outQuad"],
-    ])
-    expect(animations.every(({options}) => !("translateX" in options) && !("translateY" in options))).toBe(true)
-  })
-
-  it("accelerates marked surfaces away and decelerates staggered entries into place", () => {
-    const {animations, driver, root, scope} = harness()
-    const outgoing = element()
-    outgoing.dataset.motionSurface = "list-item"
-    const first = element()
-    first.dataset.motionSurface = "list-item"
-    const second = element()
-    second.dataset.motionSurface = "list-item"
-    const detail = element()
-    detail.dataset.motionSurface = "detail"
-    const settled = vi.fn()
-    const controller = createMotionController(root, driver, () => scope)
-
-    controller.transition({
-      kind: "content",
-      incoming: [],
-      outgoingSurfaces: [outgoing],
-      incomingSurfaces: [first, second, detail],
-      onSettled: settled,
-    })
-
-    expect(animations.map(({options}) => [options.duration, options.ease])).toEqual([
-      [SURFACE_EXIT_DURATION, "inQuart"],
-      [SURFACE_ENTRY_DURATION, "outQuart"],
-      [SURFACE_ENTRY_DURATION, "outQuart"],
-      [SURFACE_ENTRY_DURATION, "outQuart"],
-    ])
-    expect(animations.map(({options}) => options.delay)).toEqual([
-      undefined,
-      0,
-      SURFACE_STAGGER_DELAY,
-      0,
-    ])
-    expect(animations[0].options.translateY).toBe(6)
-    expect(first.style.transform).toBe("translateY(6px)")
-    expect(detail.style.transform).toBe("translateY(10px)")
-
-    animations.slice(0, -1).forEach(({options}) => (options.onComplete as () => void)())
-    expect(settled).not.toHaveBeenCalled()
-    ;(animations.at(-1)?.options.onComplete as () => void)()
-    expect(settled).toHaveBeenCalledOnce()
-    expect(first.style).toMatchObject({opacity: "1", transform: "none"})
-    expect(detail.style).toMatchObject({opacity: "1", transform: "none"})
-  })
-
-  it("runs marked surface entrances through the controller on mount", () => {
-    const {animations, driver, root, scope} = harness()
-    const listItem = element()
-    listItem.dataset.motionSurface = "list-item"
-    const detail = element()
-    detail.dataset.motionSurface = "detail"
-    root.querySelectorAll = vi.fn((selector: string) =>
-      selector.includes("motion-surface") ? [listItem, detail] : [],
-    ) as unknown as typeof root.querySelectorAll
-    const state = {
-      el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
-    }
-
-    ShellMotion.mounted.call(state)
-
-    expect(animations).toHaveLength(2)
-    expect(animations.every(({options}) => options.ease === "outQuart")).toBe(true)
-    ShellMotion.destroyed.call(state)
-    expect(animations.every(({cancel}) => vi.mocked(cancel).mock.calls.length === 1)).toBe(true)
-  })
-
-  it("settles an empty patch without retaining a phantom active handle", () => {
-    const {driver, root, scope} = harness()
-    const settled = vi.fn()
-    const controller = createMotionController(root, driver, () => scope)
-
-    expect(controller.transition({kind: "content", incoming: [], onSettled: settled})).toBeNull()
-    expect(controller.active).toBeNull()
-    expect(settled).toHaveBeenCalledOnce()
-  })
-
-  it("cancels active work and reverts its scope on teardown", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
-    controller.transition({kind: "content", incoming: [element()]})
-
-    controller.destroy()
-
-    expect(animations[0].cancel).toHaveBeenCalledOnce()
-    expect(scope.revert).toHaveBeenCalledOnce()
-  })
-
-  it("does not retain repeated transition animations in the lifecycle scope", () => {
-    const {animations, driver, root, scope} = harness()
-    const controller = createMotionController(root, driver, () => scope)
-
-    for (let index = 0; index < 20; index += 1) {
-      controller.transition({kind: "content", incoming: [element()]})
-    }
-
-    expect(animations).toHaveLength(20)
-    expect(animations.slice(0, -1).every((animation) => vi.mocked(animation.cancel).mock.calls.length === 1)).toBe(true)
-    expect(Object.keys(scope)).toEqual(["revert"])
-  })
-
-  it("settles exact destination styles and clears the current handle only for the latest completion", () => {
-    const {animations, driver, root, scope} = harness()
-    const stale = element()
-    const latest = element()
-    const controller = createMotionController(root, driver, () => scope)
-    controller.transition({kind: "content", incoming: [stale]})
-    controller.transition({kind: "content", outgoing: [stale], incoming: [latest]})
-
-    ;(animations[0].options.onComplete as () => void)()
-    expect(controller.active).not.toBeNull()
-    ;(animations[1].options.onComplete as () => void)()
-    ;(animations[2].options.onComplete as () => void)()
-
-    expect(controller.active).toBeNull()
-    expect(stale.style).toMatchObject({opacity: "0", transform: "none"})
-    expect(latest.style).toMatchObject({opacity: "1", transform: "none"})
-  })
-
-  it("drives mount, patch classification, rapid cancellation, copy cleanup, and teardown by hook composition", () => {
-    const removed: HTMLElement[] = []
-    const node = (kind: "region" | "background", left = 0): HTMLElement => {
-      const target = element(left) as HTMLElement & {kind: string}
-      target.kind = kind
-      target.cloneNode = () => {
-        const copy = node(kind, left)
-        copy.removeAttribute = vi.fn()
-        copy.querySelectorAll = vi.fn(() => []) as unknown as typeof copy.querySelectorAll
-        copy.setAttribute = vi.fn()
-        copy.remove = () => removed.push(copy)
-        return copy
-      }
-      return target
-    }
-    let current = [node("region", 10), node("background")]
-    const appended: HTMLElement[] = []
-    const root = element() as HTMLElement & {current: HTMLElement[]}
-    root.current = current
-    root.dataset.motionApp = "product"
-    root.dataset.destination = "/account"
-    root.querySelectorAll = ((selector: string) => {
-      if (selector.includes("surface")) return []
-      const kind = selector.includes("background") ? "background" : "region"
-      return root.current.filter((target) => (target as HTMLElement & {kind: string}).kind === kind)
-    }) as unknown as typeof root.querySelectorAll
-    root.querySelector = ((selector: string) => root.querySelectorAll(selector)[0] ?? null) as typeof root.querySelector
-    root.append = ((...targets: HTMLElement[]) => appended.push(...targets)) as typeof root.append
-    Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-    const {animations, driver, scope} = harness()
-    const state = {
-      el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
-    }
-
-    ShellMotion.mounted.call(state)
-    expect(animations).toHaveLength(0)
-    ShellMotion.beforeUpdate.call(state)
-    current = [node("region", 80), node("background")]
-    root.current = current
-    root.dataset.motionApp = "product"
-    root.dataset.destination = "/app/fleets/fibonacci_syndicate"
-    ShellMotion.updated.call(state)
-    const firstCount = animations.length
-    expect(firstCount).toBeGreaterThan(0)
-    expect(appended.length).toBe(2)
-    expect(appended.every((copy) => copy.inert && copy.dataset.motionCopy === "true")).toBe(true)
-    expect(appended.every((copy) => vi.mocked(copy.setAttribute).mock.calls[0][0] === "aria-hidden")).toBe(true)
-
-    ShellMotion.beforeUpdate.call(state)
-    root.current = [node("region", 20), node("background")]
-    root.dataset.motionApp = "product"
-    root.dataset.destination = "/account"
-    ShellMotion.updated.call(state)
-    expect(animations.slice(0, firstCount).every((animation) => vi.mocked(animation.cancel).mock.calls.length === 1)).toBe(true)
-    expect(removed.length).toBe(2)
-
-    ShellMotion.destroyed.call(state)
-    expect(removed.length).toBe(4)
-    expect(scope.revert).toHaveBeenCalledOnce()
-  })
-
-  it("settles same-app hook updates and removes every outgoing copy", () => {
-    const removed: HTMLElement[] = []
-    const node = (kind: "region" | "background"): HTMLElement => {
-      const target = element() as HTMLElement & {kind: string}
-      target.kind = kind
-      target.cloneNode = () => {
-        const copy = node(kind)
-        copy.removeAttribute = vi.fn()
-        copy.querySelectorAll = vi.fn(() => []) as unknown as typeof copy.querySelectorAll
-        copy.setAttribute = vi.fn()
-        copy.remove = () => removed.push(copy)
-        return copy
-      }
-      return target
-    }
-    const root = element() as HTMLElement & {current: HTMLElement[]}
-    root.current = [node("region"), node("background")]
-    root.dataset.motionApp = "product"
-    root.dataset.destination = "/account"
-    root.querySelectorAll = ((selector: string) => {
-      if (selector.includes("surface")) return []
-      const kind = selector.includes("background") ? "background" : "region"
-      return root.current.filter((target) => (target as HTMLElement & {kind: string}).kind === kind)
-    }) as unknown as typeof root.querySelectorAll
-    root.querySelector = ((selector: string) => root.querySelectorAll(selector)[0] ?? null) as typeof root.querySelector
-    root.append = vi.fn() as typeof root.append
-    Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
-    const {animations, driver, scope} = harness()
-    const state = {
-      el: root,
-      motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver, () => scope),
-    }
-
-    ShellMotion.mounted.call(state)
-    ShellMotion.beforeUpdate.call(state)
-    root.current = [node("region"), node("background")]
-    ShellMotion.updated.call(state)
-    expect(animations).toHaveLength(0)
-    expect(root.append).not.toHaveBeenCalled()
-
-    expect((state as typeof state & {motion?: ReturnType<typeof createMotionController>}).motion?.active).toBeNull()
-    expect(removed).toHaveLength(0)
-    ShellMotion.destroyed.call(state)
-  })
+it("a reader who asked for less motion sees new items without movement", () => {
+  const {change, arrivedIds} = list(["a"])
+  lessMotion = true
+  change(["b", "a"])
+  expect(arrivedIds()).toEqual([])
 })

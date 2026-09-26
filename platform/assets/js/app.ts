@@ -25,12 +25,16 @@ import {FleetAction} from "./hooks/fleet_action"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
-import {ShellMotion} from "./hooks/motion"
+import {ShellMotion} from "./hooks/shell_motion"
 import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog} from "./hooks/modal_dialog"
+import {Arrivals, Counter, Refusal} from "./hooks/motion/moments"
+import {Cascade} from "./hooks/motion/reveals"
+import {Sheet, Slides} from "./hooks/motion/slides"
 import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
+import {mountMotion} from "./motion"
 
 type ShellHook = Hook & {
   el: HTMLElement
@@ -324,17 +328,22 @@ const showcaseHooks = window.location.pathname.startsWith("/showcase")
 const hooks = {
   ...showcaseHooks,
   ...colocatedHooks,
+  Arrivals,
   BuyKey,
+  Cascade,
   CopyText,
+  Counter,
   FleetAction,
   FleetPreview,
   HolographicCard,
   HomePrism,
   KeyMap,
   LaunchPlanPicker,
-  ModalDialog,
+  ModalDialog: composeHooks(ModalDialog, Sheet),
   OpenWhenWide,
+  Refusal,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),
+  Slides,
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
@@ -358,3 +367,4 @@ liveSocket.connect()
 installAccountAuthLazyLoader()
 installCrossTabCsrf()
 window.liveSocket = liveSocket
+mountMotion()

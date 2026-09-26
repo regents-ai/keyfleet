@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.Components.SendAgent do
   """
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.Motion
+
   # The joining guide says everything else the agent should do.
   @lead "Visit keyfleet.ai and read its joining guide."
 
@@ -41,7 +43,8 @@ defmodule KeyfleetWeb.Components.SendAgent do
       id={"#{@id}-dialog"}
       class="send-agent"
       phx-hook="ModalDialog"
-      phx-mounted={JS.ignore_attributes(["open"])}
+      phx-mounted={JS.ignore_attributes(["open", "style"])}
+      data-variant={Motion.standard("sheet")}
       data-close-event="close_send_agent"
       aria-labelledby={"#{@id}-title"}
     >

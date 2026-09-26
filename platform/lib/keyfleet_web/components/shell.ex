@@ -4,7 +4,9 @@ defmodule KeyfleetWeb.Components.Shell do
   use Phoenix.Component
 
   alias KeyfleetWeb.Components.RegentLinks
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.RouteCatalog.{RouteTarget, SidebarHeading}
+  alias Phoenix.LiveView.JS
 
   attr(:route_spec, :map, required: true)
   attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
@@ -113,7 +115,12 @@ defmodule KeyfleetWeb.Components.Shell do
   """
   def account_control(assigns) do
     ~H"""
-    <div id="account-control" class="account-control">
+    <div
+      id="account-control"
+      class="account-control"
+      phx-hook="Slides"
+      data-menu={Motion.standard("menu")}
+    >
       <Regent.Primitives.button
         :if={@account_control.kind == :sign_in}
         type="button"
@@ -136,7 +143,11 @@ defmodule KeyfleetWeb.Components.Shell do
           <span data-account-target="profile">{@account_control.label}</span>
           <span class="shell-chevron" aria-hidden="true">⌄</span>
         </summary>
-        <div class="account-menu__content shell-popover">
+        <div
+          class="account-menu__content shell-popover"
+          data-panel="menu"
+          phx-mounted={JS.ignore_attributes(["style"])}
+        >
           <.link
             patch="/account"
             class="account-menu__row account-menu__row--account"

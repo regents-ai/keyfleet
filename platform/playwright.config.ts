@@ -13,6 +13,7 @@ export default defineConfig({
     "key_map_performance.spec.ts",
     "fleet_map.spec.ts",
     "key_profile.spec.ts",
+    "fleet_motion.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

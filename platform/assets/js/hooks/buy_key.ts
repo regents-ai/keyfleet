@@ -1,4 +1,5 @@
 import type {Hook} from "../hook_composition"
+import {deny} from "./motion/press"
 import {activeEthereumWallet, type SelectedWallet} from "../wallet_actions/connected_wallet"
 import {
   buyKey,
@@ -49,11 +50,13 @@ export function buyKeyHook(
         } catch {
           entry.textContent = outOfDateWords
           entry.dataset.tone = "error"
+          deny(entry)
           return
         }
         const show = (update: BuyUpdate) => {
           entry.textContent = describe(update, order)
           entry.dataset.tone = update.kind === "failed" ? "error" : "info"
+          if (update.kind === "failed") deny(entry)
         }
 
         const wallet = currentWallet()

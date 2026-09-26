@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.RoomsLive
 
   attr :profile, :map, required: true
@@ -30,7 +31,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
       id="key-profile"
       class="key-profile"
       phx-hook="ModalDialog"
-      phx-mounted={JS.ignore_attributes(["open"])}
+      phx-mounted={JS.ignore_attributes(["open", "style"])}
+      data-variant={Motion.standard("sheet")}
       data-close={@profile.close}
       data-close-event="close_key"
       data-shown={@profile.token_id}
@@ -274,7 +276,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <p :if={@profile.messages == 0} class="key-profile-muted">
         Nobody has written to this key yet.
       </p>
-      <ol id="key-profile-thread" class="rooms-thread-list" phx-update="stream">
+      <ol
+        id="key-profile-thread"
+        class="rooms-thread-list"
+        phx-update="stream"
+        phx-hook="Arrivals"
+        data-variant={Motion.standard("list")}
+      >
         <li :for={{dom_id, message} <- @thread} id={dom_id}>
           <p class="rooms-author">
             <.author fleet_id={@profile.fleet_id} message={message} params={@params} />
@@ -285,7 +293,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </ol>
       <p id="key-profile-news" class="key-profile-news" role="status">{@profile.news}</p>
 
-      <p :if={@profile.notice} class="rooms-notice rooms-notice--error">{@profile.notice}</p>
+      <p
+        :if={@profile.notice}
+        id="key-profile-notice"
+        class="rooms-notice rooms-notice--error"
+        phx-hook="Refusal"
+        data-refused
+      >
+        {@profile.notice}
+      </p>
 
       <.form
         :if={@profile.composer == :write}
