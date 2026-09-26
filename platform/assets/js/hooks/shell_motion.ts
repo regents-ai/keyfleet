@@ -53,10 +53,11 @@ const animeDriver: MotionDriver = {
 
 const animeScope: MotionScopeFactory = (root) => createScope({root})
 
+// A settled element is back to exactly what the page's own styles say.
 const show = (target: HTMLElement | undefined) => {
   if (!target) return
-  target.style.opacity = "1"
-  target.style.transform = "none"
+  target.style.removeProperty("opacity")
+  target.style.removeProperty("transform")
 }
 
 const hide = (target: HTMLElement | undefined) => {

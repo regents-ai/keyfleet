@@ -14,8 +14,18 @@ import {
   type MotionDriver,
 } from "../js/hooks/shell_motion"
 
+// Inline styles as the browser keeps them: a removed property reads as "".
+const inlineStyle = () => {
+  const style: Record<string, unknown> = {
+    removeProperty: (name: string) => {
+      style[name] = ""
+    },
+  }
+  return style
+}
+
 const element = (left = 0) =>
-  ({style: {}, dataset: {}, getBoundingClientRect: () => ({left, width: 20})}) as unknown as HTMLElement
+  ({style: inlineStyle(), dataset: {}, getBoundingClientRect: () => ({left, width: 20})}) as unknown as HTMLElement
 
 const harness = () => {
   const animations: Array<MotionAnimation & {options: Record<string, unknown>}> = []
@@ -46,9 +56,8 @@ describe("shell motion", () => {
     controller.transition({kind: "direct", incoming: [incoming], incomingBackground: background})
 
     expect(animations).toHaveLength(0)
-    expect(incoming.style.opacity).toBe("1")
-    expect(incoming.style.transform).toBe("none")
-    expect(background.style.opacity).toBe("1")
+    expect(incoming.style).toMatchObject({opacity: "", transform: ""})
+    expect(background.style).toMatchObject({opacity: "", transform: ""})
   })
 
   it("cancels an interrupted app switch and lets the latest intent win from current styles", () => {
@@ -124,7 +133,7 @@ describe("shell motion", () => {
     })
 
     expect(animations).toHaveLength(0)
-    expect(incoming.style.transform).toBe("none")
+    expect(incoming.style).toMatchObject({opacity: "", transform: ""})
   })
 
   it("keeps intra-app changes short and content-only", () => {
@@ -182,8 +191,8 @@ describe("shell motion", () => {
     expect(settled).not.toHaveBeenCalled()
     ;(animations.at(-1)?.options.onComplete as () => void)()
     expect(settled).toHaveBeenCalledOnce()
-    expect(first.style).toMatchObject({opacity: "1", transform: "none"})
-    expect(detail.style).toMatchObject({opacity: "1", transform: "none"})
+    expect(first.style).toMatchObject({opacity: "", transform: ""})
+    expect(detail.style).toMatchObject({opacity: "", transform: ""})
   })
 
   it("runs marked surface entrances through the controller on mount", () => {
@@ -242,7 +251,7 @@ describe("shell motion", () => {
     expect(Object.keys(scope)).toEqual(["revert"])
   })
 
-  it("settles exact destination styles and clears the current handle only for the latest completion", () => {
+  it("settles the latest page back to its own styles and clears the current handle only for the latest completion", () => {
     const {animations, driver, root, scope} = harness()
     const stale = element()
     const latest = element()
@@ -257,7 +266,7 @@ describe("shell motion", () => {
 
     expect(controller.active).toBeNull()
     expect(stale.style).toMatchObject({opacity: "0", transform: "none"})
-    expect(latest.style).toMatchObject({opacity: "1", transform: "none"})
+    expect(latest.style).toMatchObject({opacity: "", transform: ""})
   })
 
   it("drives mount, patch classification, rapid cancellation, copy cleanup, and teardown by hook composition", () => {
