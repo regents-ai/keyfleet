@@ -13,7 +13,7 @@ import {
   type MotionAnimation,
   type MotionDriver,
 } from "../js/hooks/shell_motion"
-import {forgetPress, notePress} from "../js/hooks/motion/shared"
+import {forgetPress, notePress, takePointerPress} from "../js/hooks/motion/shared"
 
 // Inline styles as the browser keeps them: a removed property reads as "", and
 // the length counts only the properties still set.
@@ -325,6 +325,8 @@ describe("shell motion", () => {
     ShellMotion.mounted.call(state)
     expect(animations).toHaveLength(0)
     ShellMotion.beforeUpdate.call(state)
+    // A dialog the same press opens mounts during the update and uses the press up.
+    takePointerPress()
     current = [node("region", 80), node("background")]
     root.current = current
     root.dataset.motionApp = "product"
@@ -336,6 +338,7 @@ describe("shell motion", () => {
     expect(appended.every((copy) => copy.inert && copy.dataset.motionCopy === "true")).toBe(true)
     expect(appended.every((copy) => vi.mocked(copy.setAttribute).mock.calls[0][0] === "aria-hidden")).toBe(true)
 
+    pointerPress()
     ShellMotion.beforeUpdate.call(state)
     root.current = [node("region", 20), node("background")]
     root.dataset.motionApp = "product"

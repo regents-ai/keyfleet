@@ -5,7 +5,7 @@
  * it. Closing is instant, as the page already hid the panel.
  */
 import {spring, type AnimationParams} from "animejs"
-import {play, SLOW, still, stop, takePointerPress} from "./shared"
+import {play, rest, SLOW, still, stop, takePointerPress} from "./shared"
 import type {Hook} from "../../hook_composition"
 
 // Each panel moves from where it waits while closed to where the stylesheet
@@ -33,7 +33,8 @@ type SlidesHook = {el: HTMLElement; watch?: MutationObserver}
  * moving as `data-drawer` or `data-menu` on the island says. A panel opens
  * when its `hidden` goes, or when the disclosure around it opens. The page
  * puts both back after every update, so a panel that is open before and after
- * an update is left alone. A panel closed mid-move is put back at rest.
+ * an update is left alone. A panel closed mid-move is put back at rest; what
+ * moves inside it carries on and ends on its own.
  */
 export const Slides: Hook = {
   mounted(this: SlidesHook) {
@@ -55,7 +56,7 @@ export const Slides: Hook = {
           opened.push(el)
         } else {
           open.delete(el)
-          stop(el)
+          rest(el)
         }
       }
       if (opened.length > 0 && takePointerPress() && !still()) opened.forEach(slide)

@@ -1,3 +1,5 @@
+import {execFileSync} from "node:child_process"
+import {readdirSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {forget, leftovers, moved, pageChangeMoved, pressRapidly, watchMotion} from "./support/motion"
@@ -36,6 +38,49 @@ async function patchTo(page: Page, path: string, by: "pointer" | "keyboard" = "p
   else await page.locator("#patch-probe").press("Enter")
   await expect(page).toHaveURL(new RegExp(`${path}$`))
 }
+
+// The motion kit on its own, built with the esbuild the asset build installs,
+// so a blank page can play moves on elements it makes.
+function motionKit() {
+  const esbuild = readdirSync("_build").find(name => name.startsWith("esbuild-"))!
+  return execFileSync(`_build/${esbuild}`, [
+    "assets/js/hooks/motion/shared.ts",
+    "--bundle",
+    "--format=iife",
+    "--global-name=motionKit",
+  ]).toString()
+}
+
+test("a move played again and again over its own half-way frame ends at rest", async ({page}) => {
+  await page.addScriptTag({content: motionKit()})
+
+  const ends = await page.evaluate(async () => {
+    const {play} = (window as unknown as {motionKit: typeof import("../../assets/js/hooks/motion/shared")}).motionKit
+    const wait = (ms: number) => new Promise(done => setTimeout(done, ms))
+    const moves = {
+      "from and to": {y: [-6, 0], scale: [0.9, 1], opacity: [0, 1], duration: 280},
+      "from only": {y: {from: 16}, opacity: {from: 0}, duration: 280},
+    }
+    const ends: Record<string, {midway: string | null; end: string | null}> = {}
+    for (const [name, move] of Object.entries(moves)) {
+      const el = document.body.appendChild(document.createElement("div"))
+      let midway: string | null = null
+      for (let press = 0; press < 5; press++) {
+        play(el, move)
+        await wait(70)
+        midway ??= el.getAttribute("style")
+      }
+      await wait(1_000)
+      ends[name] = {midway, end: el.getAttribute("style")}
+    }
+    return ends
+  })
+
+  for (const [name, {midway, end}] of Object.entries(ends)) {
+    expect(midway, `${name} was moving`).toMatch(/transform|opacity/)
+    expect(end, `${name} at rest`).toBeNull()
+  }
+})
 
 test("a panel button pressed again and again mid-move leaves the button and its panel at rest", async ({page}) => {
   await openFleet(page)

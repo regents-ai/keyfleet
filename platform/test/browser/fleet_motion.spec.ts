@@ -46,6 +46,10 @@ test("a keyboard press opens panels and dialogs at once, with no squish", async 
   await page.locator("#fleet-who-toggle").focus()
   await page.keyboard.press("Enter")
   await expect(page.locator("#fleet-who")).toBeVisible()
+  // Opening a panel takes the reader to its heading, and again two frames later.
+  await page.evaluate(
+    () => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))),
+  )
   await page.locator("#fleet-send-agent").focus()
   await page.keyboard.press("Enter")
   await expect(page.locator("dialog.send-agent")).toBeVisible()
@@ -85,6 +89,29 @@ test("a sale rolls the count and bounces only its new line in, ending as plain t
   await expect.poll(() => moved(page, `#fleet-now-sale-${sold + 1}`)).toBe(true)
   expect(await movedCount(page, "#fleet-now-list > li")).toBe(1)
   await expect.poll(() => leftovers(page)).toEqual([])
+})
+
+test("a panel closed while its key number rolls shows the new number whole", async ({page}) => {
+  await openFleet(page)
+  await page.locator("#fleet-about-toggle").click()
+  await expect(page.locator("#buy-key-number")).toBeVisible()
+  const next = String(Number(await plainNumber(page, "buy-key-number")) + 1)
+
+  // The moment the number splits to roll, the reader closes the panel.
+  await page.evaluate(() => {
+    const number = document.querySelector("#buy-key-number") as HTMLElement
+    const closeMidRoll = new MutationObserver(() => {
+      if (number.children.length === 0) return
+      closeMidRoll.disconnect()
+      ;(document.querySelector("#fleet-about-close") as HTMLElement).click()
+    })
+    closeMidRoll.observe(number, {childList: true})
+  })
+  sellKey(fleet, buyer)
+
+  await expect(page.locator("#fleet-about")).toBeHidden({timeout: 10_000})
+  expect(await rolled(page, "buy-key-number")).toBe(true)
+  await expect.poll(() => plainNumber(page, "buy-key-number")).toBe(next)
 })
 
 test("a reader who asked for less motion sees presses, panels and a sale without movement", async ({browser}) => {

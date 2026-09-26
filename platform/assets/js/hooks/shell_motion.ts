@@ -268,6 +268,9 @@ type ShellMotionHookState = {
 }
 
 type MotionSnapshot = {
+  // How the press that changed the page was made, asked before the update
+  // mounts anything that could use the press up, such as a dialog it opens.
+  source: "pointer" | "keyboard"
   app?: string
   destination?: string
   regions: HTMLElement[]
@@ -306,6 +309,7 @@ const capture = (root: HTMLElement): MotionSnapshot => {
   const background = current<HTMLElement>(root, MOTION_SELECTORS.background)[0]
 
   return {
+    source: lastPressByPointer() ? "pointer" : "keyboard",
     app: root.dataset.motionApp,
     destination: root.dataset.destination,
     regions,
@@ -369,7 +373,7 @@ export const ShellMotion = {
     const nextApp = this.el.dataset.motionApp
     this.motion.transition({
       kind: snapshot.app && nextApp && snapshot.app !== nextApp ? "app" : "content",
-      source: lastPressByPointer() ? "pointer" : "keyboard",
+      source: snapshot.source,
       reducedMotion: still(),
       outgoing: snapshot.regions,
       incoming,

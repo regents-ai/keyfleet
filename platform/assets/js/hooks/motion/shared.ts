@@ -75,11 +75,14 @@ export function play(targets: Element | Element[], params: AnimationParams) {
   return animation
 }
 
+// Puts one element back at rest, if a move is still running on it.
+export function rest(el: Element) {
+  playing.get(el)?.revert()
+  playing.delete(el)
+}
+
 // An island's moves stop when it goes: whatever still moves inside its
 // element is put back at rest.
 export function stop(root: Element) {
-  for (const el of [root, ...root.querySelectorAll("*")]) {
-    playing.get(el)?.revert()
-    playing.delete(el)
-  }
+  for (const el of [root, ...root.querySelectorAll("*")]) rest(el)
 }
