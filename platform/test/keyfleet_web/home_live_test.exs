@@ -7,7 +7,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
-  # - the four fleets in catalog order, each opening its own map
+  # - the four fleets in catalog order, Classic first, each opening its own map
+  # - a fleet coming soon is a card with its name and that it is coming soon,
+  #   and nothing it has sold or is doing
   # - a card shows its fleet's newest open goal and featured item once connected,
   #   and the first render reads neither
   # - a card counts sold keys only once its fleet is on sale and read up to now
@@ -21,11 +23,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   change, and marks the count only with agents here
   # - the hero's command box shows the homepage instruction whole and copies
   #   exactly what it shows
-  # - the Markdown homepage links each fleet to its own page for what it is
-  #   doing, and every fleet's page, and those pages exist
+  # - the Markdown homepage links each open fleet to its own page for what it
+  #   is doing, says the others are coming soon, and links every fleet's page,
+  #   and those pages exist
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
 
+  @classic "fleet_tech_classic"
   @syndicate "fibonacci_syndicate"
   @cascade "fibonacci_cascade"
   @owner "0x" <> String.duplicate("a", 40)
@@ -43,7 +47,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#app-shell")
   end
 
-  test "the four fleets are cards, in catalog order, each opening its map", %{conn: conn} do
+  test "the four fleets are cards, Classic first, each opening its map", %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
     ids = Fleets.catalog_ids()
@@ -54,13 +58,33 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
 
     assert attribute(html, ".key-map-preview", "data-layout") ==
-             ~w(fibonacci fibonacci classic accelerant)
+             ~w(classic fibonacci fibonacci accelerant)
+  end
+
+  test "a fleet coming soon is a card with its name and that it is coming soon, and nothing more",
+       %{conn: conn} do
+    Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
+
+    {:ok, view, html} = live(conn, "/")
+    render_async(view, 3_000)
+
+    assert attribute(html, "[data-coming-soon]", "id") ==
+             ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
+                home-fleet-fleet_tech_accelerant)
+
+    assert has_element?(view, "#home-fleet-#{@cascade} h3", "Keyfleet Cascade")
+    assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"
+    assert attribute(html, "#home-fleet-preview-#{@cascade}", "data-minted") == ["0"]
+    refute has_element?(view, "#home-fleet-#{@cascade} .rl-fleet-card__now")
+    refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-soon]")
+    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
   end
 
   test "a card shows its fleet's newest open goal and what it features, once connected",
        %{conn: conn} do
+    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 8_453)
     goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
-    Workspace.edit(@syndicate, goal("Ship the site"), %{"status" => "dropped"})
+    Workspace.edit(@classic, goal("Ship the site"), %{"status" => "dropped"})
 
     static = conn |> get("/") |> html_response(200)
     assert attribute(static, "[data-fleet-trying]", "class") == []
@@ -68,42 +92,43 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
-    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") ==
+    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") ==
              "Trying: Sell the first audit"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
 
     assert has_element?(
              view,
-             ~s(#home-fleet-#{@syndicate} [data-fleet-featured][data-kind="open_question"]),
+             ~s(#home-fleet-#{@classic} [data-fleet-featured][data-kind="open_question"]),
              "Who pays for it?"
            )
 
     assert has_element?(
              view,
-             ~s(#home-fleet-#{@syndicate} [data-fleet-latest][data-kind="status"]),
+             ~s(#home-fleet-#{@classic} [data-fleet-latest][data-kind="status"]),
              "Ship the site"
            )
   end
 
   test "a notice about one fleet refreshes that fleet's card alone, after a pause",
        %{conn: conn} do
+    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 8_453)
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
     goal("Sell the first audit")
     Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
 
-    send(view.pid, {:graph_head, @syndicate, "log_fixture", 2})
+    send(view.pid, {:graph_head, @classic, "log_fixture", 2})
     render(view)
     render_async(view, 3_000)
-    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") == "No goal set yet"
+    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") == "No goal set yet"
 
-    send(view.pid, {:refresh, @syndicate})
+    send(view.pid, {:refresh, @classic})
     render(view)
     render_async(view, 3_000)
 
-    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-trying]") ==
+    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") ==
              "Trying: Sell the first audit"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
@@ -230,6 +255,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "a burst of notices is answered by one refresh of each fleet and one count of agents",
        %{conn: conn} do
+    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 8_453)
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
@@ -238,37 +264,43 @@ defmodule KeyfleetWeb.HomeLiveTest do
     :erlang.trace(view.pid, true, [:call])
     on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
 
-    send(view.pid, {:graph_head, @syndicate, "log_fixture", 2})
-    send(view.pid, {:graph_head, @syndicate, "log_fixture", 3})
-    send(view.pid, {:proposals_changed, @syndicate})
+    send(view.pid, {:graph_head, @classic, "log_fixture", 2})
+    send(view.pid, {:graph_head, @classic, "log_fixture", 3})
+    send(view.pid, {:proposals_changed, @classic})
     send(view.pid, {:rooms_changed, @cascade})
     render(view)
 
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @syndicate}]}}
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, :agents}]}}
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @cascade}]}}
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
 
     # Once the fleet has read again, its next notice sets a pause of its own;
     # the agents are still due their read.
-    send(view.pid, {:refresh, @syndicate})
-    send(view.pid, {:graph_head, @syndicate, "log_fixture", 4})
+    send(view.pid, {:refresh, @classic})
+    send(view.pid, {:graph_head, @classic, "log_fixture", 4})
     render(view)
 
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @syndicate}]}}
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
   end
 
-  test "the Markdown homepage sends agents to each fleet's own page for what it is doing",
+  test "the Markdown homepage sends agents to each open fleet's own page for what it is doing",
        %{conn: conn} do
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    for %{id: id, name: name} <- Fleets.catalog() do
+    [_, section] = String.split(markdown, "\n## Keyfleet Classic\n", parts: 2)
+    [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
+    assert path == "/fleets/fleet_tech_classic.md"
+    assert build_conn() |> get(path) |> response(200) =~ "Keyfleet Classic"
+
+    for name <- ["Keyfleet Syndicate", "Keyfleet Cascade", "Keyfleet Accelerant"] do
       [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
-      [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
-      assert path == "/fleets/#{id}.md"
-      assert build_conn() |> get(path) |> response(200) =~ name
+
+      [section | _] = String.split(section, "\n## ", parts: 2)
+      assert section =~ "\n\nComing soon. It has no keys for sale and can’t be joined yet.\n"
+      refute section =~ "What it’s doing right now"
     end
 
     [_, all] = Regex.run(~r{\[Every fleet\]\(https?://[^/]+(/[^)]+)\)}, markdown)
@@ -328,8 +360,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   defp goal(title, data \\ %{}),
-    do:
-      Workspace.create(@syndicate, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
+    do: Workspace.create(@classic, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
 
   defp text(view, selector) do
     view

@@ -21,7 +21,7 @@ defmodule Keyfleet.DirectoryTest do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 8_453)
     ChainHelpers.seed_cursor!(@fleet)
     for token_id <- 1..6, do: epoch!(token_id, 1, @owner)
@@ -98,7 +98,7 @@ defmodule Keyfleet.DirectoryTest do
            ]
 
     assert fleet.agents_checked_in_last_day == 1
-    assert hd(Directory.list()).agents_checked_in_last_day == 1
+    assert listed(@fleet).agents_checked_in_last_day == 1
   end
 
   test "open work leaves out what is finished, dropped, archived or already taken" do
@@ -158,8 +158,7 @@ defmodule Keyfleet.DirectoryTest do
     assert hd(fleet.recent_posts).author == %{kind: :human, wallet: @owner}
     assert fleet.last_post_at == hd(fleet.recent_posts).at
 
-    [summary | _] = Directory.list()
-    assert summary.last_post_at == fleet.last_post_at
+    assert listed(@fleet).last_post_at == fleet.last_post_at
   end
 
   test "a room's posts leave out the lines that record its namings" do
@@ -196,6 +195,23 @@ defmodule Keyfleet.DirectoryTest do
     assert Directory.fleet("fleet_unknown") == :unknown
   end
 
+  # Classic is open from the start; the others open once their deployment is
+  # recorded, as this fleet's was in the setup.
+  test "a fleet coming soon gives its name and nothing else, until its deployment is recorded" do
+    soon = %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon: true}
+
+    assert Directory.fleet("fibonacci_cascade") == {:ok, soon}
+
+    assert Enum.map(Directory.list(), &{&1.id, &1.coming_soon}) == [
+             {"fleet_tech_classic", false},
+             {@fleet, false},
+             {"fibonacci_cascade", true},
+             {"fleet_tech_accelerant", true}
+           ]
+
+    assert listed("fibonacci_cascade") == soon
+  end
+
   defp epoch!(token_id, epoch, owner_wallet) do
     Keys.record_epoch!(
       %{
@@ -211,6 +227,8 @@ defmodule Keyfleet.DirectoryTest do
       actor: @system
     )
   end
+
+  defp listed(fleet_id), do: Enum.find(Directory.list(), &(&1.id == fleet_id))
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)
 

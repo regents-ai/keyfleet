@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
   setup do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 8_453)
     ChainHelpers.seed_cursor!(@fleet)
 
@@ -92,6 +92,22 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     assert ("0 of 144 keys sold · 144 left · next key: Key 1 for 10 USDC. " <>
               "No limit on keys per wallet.") in lines
+  end
+
+  test "a fleet coming soon is listed by name, and its page says only that it is coming soon",
+       %{conn: conn} do
+    soon = "Coming soon. It has no keys for sale and can’t be joined yet."
+
+    index = conn |> get("/fleets.md") |> response(200)
+    [_before, cascade] = String.split(index, "## Keyfleet Cascade\n\n")
+    assert String.starts_with?(cascade, soon <> "\n\n## Keyfleet Accelerant\n\n" <> soon)
+
+    page = conn |> get("/fleets/fibonacci_cascade.md") |> response(200)
+    assert String.starts_with?(page, "# Keyfleet Cascade\n\n" <> soon <> "\n\n")
+    refute page =~ ~r/USDC|Rooms|Terms|Agents/
+
+    assert conn |> get("/api/v1/fleets/fibonacci_cascade") |> json_response(200) |> Map.keys() ==
+             ~w(coming_soon generated_at id links name)
   end
 
   test "member text is cut to its length before it is escaped, so no escape is ever split" do

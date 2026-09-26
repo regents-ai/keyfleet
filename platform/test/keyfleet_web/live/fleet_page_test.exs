@@ -69,7 +69,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   test "rooms are listed by the names they go by", %{conn: conn} do
-    Keyfleet.Rooms.bootstrap_rooms!()
+    deploy!()
+    Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
@@ -121,14 +122,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
     conn: conn
   } do
+    deploy!()
     assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @path <> "?after=nonsense") end
   end
 
-  # A fleet with no contract has sold nothing and has no price to show.
+  # An open fleet with no contract has sold nothing and has no price to show.
   test "a fleet not yet deployed shows no sales figures or price", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
+    ChainHelpers.seed_cursor!("fleet_tech_classic")
 
-    {:ok, view, html} = live(conn, @path)
+    {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
     assert html =~ "Not on Base yet"
     assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
@@ -138,7 +140,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # In place of the map, a still picture of it as it will open.
     assert has_element?(
              view,
-             ~s(#fleet-preview-#{@fleet}[phx-hook="FleetPreview"][data-layout="fibonacci"][data-minted="0"])
+             ~s(#fleet-preview-fleet_tech_classic[phx-hook="FleetPreview"][data-layout="classic"][data-minted="0"])
            )
   end
 
@@ -154,6 +156,51 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#fleet-sales") == "Sales figures are catching up · 0 agents here"
     refute html =~ "Keys issued"
     assert shown_keys(view) == Enum.to_list(1..100)
+  end
+
+  describe "a fleet coming soon" do
+    # Keys issued and rooms opened make no difference: until its deployment
+    # is recorded, the page offers nothing to buy and nothing to join.
+    test "shows its name and that it opens later, and nothing to buy or join", %{conn: conn} do
+      Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+      ChainHelpers.seed_cursor!(@fleet)
+
+      {:ok, view, html} = live(conn, @path)
+
+      assert has_element?(view, "#fleet-soon h1", "Keyfleet Cascade")
+      assert text(view, "#fleet-sales") == "Coming soon"
+      assert has_element?(view, "#fleet-soon-title", "Coming soon")
+      assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
+
+      for id <- ~w(fleet-get-key fleet-send-agent fleet-rooms fleet-keys fleet-workspace-link
+                   fleet-proposals-link fleet-progress-title fleet-now-list) do
+        refute has_element?(view, "##{id}")
+      end
+
+      refute html =~ "keys sold"
+      refute html =~ "USDC"
+    end
+
+    test "its rooms, workspace and proposals lead back to its page", %{conn: conn} do
+      Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+
+      for page <- ~w(/rooms/general /workspace /workspace/task%231 /proposals /proposals/1) do
+        assert {:error, {:live_redirect, %{to: @path}}} = live(conn, @path <> page)
+      end
+    end
+
+    test "opens once its deployment is recorded", %{conn: conn} do
+      ChainHelpers.seed_cursor!(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      assert text(view, "#fleet-sales") == "Coming soon"
+
+      deploy!()
+
+      {:ok, view, _html} = live(conn, @path)
+      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+      assert has_element?(view, "#fleet-get-key")
+      refute has_element?(view, "#fleet-soon")
+    end
   end
 
   describe "buying the next key" do
@@ -603,6 +650,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "Send your agent gives an instruction naming this fleet", %{
     conn: conn
   } do
+    deploy!()
     {:ok, view, _html} = live(conn, @path)
     refute has_element?(view, "#fleet-send-agent-dialog")
 
@@ -699,7 +747,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     setup do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
-      Rooms.bootstrap_rooms!()
+      Rooms.bootstrap_rooms!(Fleets.catalog_ids())
       :ok
     end
 
@@ -777,7 +825,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       # written now, after the keys were sold, so it tops the first page.
       line!("general", 0, DateTime.utc_now())
 
-      other = "fibonacci_syndicate"
+      other = "fleet_tech_classic"
       send(view.pid, {:proposals_changed, other})
       send(view.pid, {:graph_head, other, "log", 9})
       send(view.pid, {:keys_changed, other, [7]})
@@ -786,7 +834,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     test "a wait begun in one fleet reads nothing once the page shows another", %{conn: conn} do
-      other = "fibonacci_syndicate"
+      other = "fleet_tech_classic"
       ChainHelpers.open_cursor!(other)
       {:ok, view, _html} = live(conn, @path)
 

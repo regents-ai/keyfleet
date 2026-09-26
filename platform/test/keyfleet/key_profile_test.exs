@@ -26,7 +26,7 @@ defmodule Keyfleet.KeyProfileTest do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
     ChainHelpers.seed_cursor!(@elsewhere)

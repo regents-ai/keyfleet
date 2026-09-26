@@ -22,7 +22,7 @@ defmodule Keyfleet.MessagesTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     owner = human("a")
     epoch!(owner_wallet: wallet("a"))
     %{owner: owner}

@@ -149,12 +149,17 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.local_state == %{}
   end
 
-  test "the product sidebar lists the four fleets and Account on every product route" do
+  test "the product sidebar lists the four fleets, Classic first, and Account on every product route" do
     for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
       assert RouteCatalog.fetch!(entry.live_action, sample_params(entry)).sidebar_model ==
                %RouteCatalog.SidebarModel{
                  id: :product,
                  targets: [
+                   %RouteTarget{
+                     route_id: :fleet,
+                     label: "Keyfleet Classic",
+                     path: "/app/fleets/fleet_tech_classic"
+                   },
                    %RouteTarget{
                      route_id: :fleet,
                      label: "Keyfleet Syndicate",
@@ -164,11 +169,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                      route_id: :fleet,
                      label: "Keyfleet Cascade",
                      path: "/app/fleets/fibonacci_cascade"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Keyfleet Classic",
-                     path: "/app/fleets/fleet_tech_classic"
                    },
                    %RouteTarget{
                      route_id: :fleet,

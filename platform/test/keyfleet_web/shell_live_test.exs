@@ -255,12 +255,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
            |> LazyHTML.from_document()
            |> LazyHTML.query("#account-keys h3")
            |> LazyHTML.text() ==
-             "Keyfleet CascadeKeyfleet Classic"
+             "Keyfleet ClassicKeyfleet Cascade"
 
     assert keys_listed(html) == [
+             "/app/fleets/fleet_tech_classic?key=2",
              "/app/fleets/fibonacci_cascade?key=3",
-             "/app/fleets/fibonacci_cascade?key=5",
-             "/app/fleets/fleet_tech_classic?key=2"
+             "/app/fleets/fibonacci_cascade?key=5"
            ]
 
     view |> element("#account-keys a", "Key 5") |> render_click()

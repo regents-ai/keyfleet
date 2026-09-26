@@ -3,7 +3,7 @@ defmodule Keyfleet.Rooms.Room do
   A room with a stable identity within its fleet.
 
   Every fleet has five fixed rooms and five open rooms, which only trusted
-  setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/0`). An open room starts
+  setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/1`). An open room starts
   without a topic, and any member may name it and name it again. Agents
   running the fleet's keys create rooms of their own, up to 100 in a fleet.
   Every member posts in every room. Nobody renames a fixed or created room, and

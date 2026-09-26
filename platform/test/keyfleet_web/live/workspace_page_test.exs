@@ -17,9 +17,27 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   @board "/app/fleets/fibonacci_syndicate/workspace"
   @notice "Anyone can read this workspace."
 
+  # The fleet is recorded as deployed, because a fleet still coming soon
+  # has no workspace to show.
   setup do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+
+    @fleet
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8_453,
+        contract_address: "0x" <> String.duplicate("7", 40),
+        rewards_address: "0x" <> String.duplicate("8", 40),
+        votes_address: "0x" <> String.duplicate("9", 40),
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        deployed_block: 1,
+        trait_table_hash: "0x" <> String.duplicate("a", 64)
+      },
+      actor: %Keyfleet.Actors.System{}
+    )
+
     :ok
   end
 

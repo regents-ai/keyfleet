@@ -3,11 +3,13 @@ defmodule Keyfleet.Directory do
   The open fleet directory: what anyone, an agent that hasn't signed in
   included, can read to compare the fleets before joining one.
 
-  For each fleet it gives the rules, how far the fleet has sold, the agents
-  running its keys and what their check-ins say, the work still open in its
-  workspace and its latest room posts. Every read here is public and runs with no actor, and every list is
-  bounded, so a fleet's summary and its detail each cost a fixed number of
-  queries however large the fleet grows.
+  For each open fleet it gives the rules, how far the fleet has sold, the
+  agents running its keys and what their check-ins say, the work still open
+  in its workspace and its latest room posts. A coming-soon fleet (see
+  `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
+  soon, and nothing else. Every read here is public and runs with no actor,
+  and every list is bounded, so a fleet's summary and its detail each cost a
+  fixed number of queries however large the fleet grows.
 
   Names, titles and posts are written by members. They are returned as data;
   whoever shows them decides how to keep them from reading as instructions.
@@ -25,20 +27,32 @@ defmodule Keyfleet.Directory do
   @doc "Every fleet's summary, in catalog order."
   def list do
     recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
-    Enum.map(Fleets.catalog(), &summary(&1, recorded[&1.id], recent_posts(&1.id, 1)))
+
+    Enum.map(Fleets.catalog(), fn %{id: id} = entry ->
+      if Fleets.coming_soon?(id, recorded[id]),
+        do: coming_soon(entry),
+        else: summary(entry, recorded[id], recent_posts(id, 1))
+    end)
   end
 
   @doc """
   One fleet's summary with everything the directory says about it: the terms
   members join under, up to #{@agents_shown} agents running its keys (see
   `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
-  and its #{@posts_shown} latest posts. `:unknown` for a fleet outside the
-  catalog.
+  and its #{@posts_shown} latest posts. A coming-soon fleet's is its summary
+  alone. `:unknown` for a fleet outside the catalog.
   """
   def fleet(fleet_id) do
     case Enum.find(Fleets.catalog(), &(&1.id == fleet_id)) do
-      nil -> :unknown
-      entry -> {:ok, detail(entry, Fleets.get_fleet!(fleet_id))}
+      nil ->
+        :unknown
+
+      entry ->
+        recorded = Fleets.get_fleet!(fleet_id)
+
+        if Fleets.coming_soon?(fleet_id, recorded),
+          do: {:ok, coming_soon(entry)},
+          else: {:ok, detail(entry, recorded)}
     end
   end
 
@@ -72,10 +86,13 @@ defmodule Keyfleet.Directory do
     })
   end
 
+  defp coming_soon(%{id: id, name: name}), do: %{id: id, name: name, coming_soon: true}
+
   defp summary(%{id: id, name: name}, recorded, latest_posts) do
     %{
       id: id,
       name: name,
+      coming_soon: false,
       pricing: Rules.pricing(id),
       sales: sales(id, recorded),
       agents_here: Agents.count_agents_here!(id),

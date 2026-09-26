@@ -4,11 +4,15 @@ defmodule Keyfleet.Fleets do
 
   alias Keyfleet.Fleets.Fleet
 
+  # The fleets in the order the site shows them. Classic opens first; the
+  # others show as coming soon until the founder opens them, one at a time,
+  # by marking them `coming_soon?: false` here or by recording their
+  # deployment.
   @catalog [
-    %{id: "fibonacci_syndicate", name: "Keyfleet Syndicate"},
-    %{id: "fibonacci_cascade", name: "Keyfleet Cascade"},
-    %{id: "fleet_tech_classic", name: "Keyfleet Classic"},
-    %{id: "fleet_tech_accelerant", name: "Keyfleet Accelerant"}
+    %{id: "fleet_tech_classic", name: "Keyfleet Classic", coming_soon?: false},
+    %{id: "fibonacci_syndicate", name: "Keyfleet Syndicate", coming_soon?: true},
+    %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon?: true},
+    %{id: "fleet_tech_accelerant", name: "Keyfleet Accelerant", coming_soon?: true}
   ]
 
   resources do
@@ -20,11 +24,33 @@ defmodule Keyfleet.Fleets do
     end
   end
 
-  @doc "The fixed catalog's fleets as `%{id: id, name: name}`, in catalog order."
+  @doc """
+  The fixed catalog's fleets as `%{id: id, name: name, coming_soon?: marked}`,
+  in the order the site shows them. `coming_soon?` is the catalog's mark
+  alone; `coming_soon?/2` says whether a fleet is coming soon.
+  """
   def catalog, do: @catalog
 
   @doc "The machine ids of the fixed catalog, in catalog order."
   def catalog_ids, do: Enum.map(@catalog, & &1.id)
+
+  @doc """
+  Whether the fleet `fleet_id`, recorded as `recorded` (or `nil` before the
+  catalog is seeded), is coming soon: the catalog marks it so and no
+  deployment is recorded for it. A coming-soon fleet shows its name and that
+  it is coming soon, and nothing else: no price, no keys, no rooms and no
+  way to join. Recording its deployment by hand opens it.
+  """
+  def coming_soon?(fleet_id, recorded) do
+    Enum.any?(@catalog, &(&1.id == fleet_id and &1.coming_soon?)) and
+      (recorded == nil or recorded.contract_address == nil)
+  end
+
+  @doc "The ids of the fleets that are not coming soon, in catalog order."
+  def open_fleet_ids do
+    recorded = Map.new(list_fleets!(), &{&1.id, &1})
+    for %{id: id} <- @catalog, not coming_soon?(id, recorded[id]), do: id
+  end
 
   @doc """
   Seeds the fixed catalog from trusted application setup code.
@@ -35,7 +61,9 @@ defmodule Keyfleet.Fleets do
   """
   def bootstrap_catalog! do
     %Ash.BulkResult{records: fleets} =
-      Ash.bulk_create!(@catalog, Fleet, :bootstrap,
+      @catalog
+      |> Enum.map(&Map.take(&1, [:id, :name]))
+      |> Ash.bulk_create!(Fleet, :bootstrap,
         actor: %Keyfleet.Actors.System{},
         return_records?: true,
         return_errors?: true,
@@ -47,7 +75,7 @@ defmodule Keyfleet.Fleets do
     fleets
   end
 
-  # The deployed manifest names each fleet by its slot in the deployment.
+  # The deployed manifest names its fleet by its slot in the deployment.
   @manifest_slots %{
     "syndicate" => "fibonacci_syndicate",
     "cascade" => "fibonacci_cascade",
@@ -59,47 +87,37 @@ defmodule Keyfleet.Fleets do
   def slot_fleet_id(slot), do: Map.get(@manifest_slots, slot)
 
   @doc """
-  Binds the four fleets to the deployment described by a deployed manifest,
-  the JSON `contracts/script/RecordKeyfleets.s.sol` writes, from trusted
-  operator code.
+  Binds one fleet to the deployment a deployed manifest describes, the JSON
+  `contracts/script/RecordKeyfleets.s.sol` writes for one fleet, from trusted
+  operator code, and returns the fleet.
 
-  All four are bound together or none is. Recording the same manifest again
-  changes nothing; a manifest naming other contracts for a bound fleet is
-  refused.
+  Recording the same manifest again changes nothing; a manifest naming other
+  contracts for a bound fleet is refused. Every other fleet is left as it is.
   """
-  def record_deployments!(%{
+  def record_manifest!(%{
         "chainId" => chain_id,
         "deploymentBlock" => block,
         "usdc" => usdc,
         "traitTableHash" => trait_table_hash,
-        "fleets" => fleets
+        "fleet" => %{"slot" => slot, "address" => address, "rewards" => rewards, "votes" => votes}
       })
       when is_integer(chain_id) and is_integer(block) do
     bootstrap_catalog!()
 
-    {:ok, recorded} =
-      Ash.transact(Fleet, fn ->
-        for {slot, fleet_id} <- @manifest_slots do
-          %{"address" => address, "rewards" => rewards, "votes" => votes} =
-            Map.fetch!(fleets, slot)
-
-          fleet_id
-          |> get_fleet!()
-          |> record_deployment!(
-            %{
-              chain_id: chain_id,
-              contract_address: String.downcase(address),
-              rewards_address: String.downcase(rewards),
-              votes_address: String.downcase(votes),
-              usdc_address: String.downcase(usdc),
-              deployed_block: block,
-              trait_table_hash: String.downcase(trait_table_hash)
-            },
-            actor: %Keyfleet.Actors.System{}
-          )
-        end
-      end)
-
-    Enum.sort_by(recorded, & &1.id)
+    @manifest_slots
+    |> Map.fetch!(slot)
+    |> get_fleet!()
+    |> record_deployment!(
+      %{
+        chain_id: chain_id,
+        contract_address: String.downcase(address),
+        rewards_address: String.downcase(rewards),
+        votes_address: String.downcase(votes),
+        usdc_address: String.downcase(usdc),
+        deployed_block: block,
+        trait_table_hash: String.downcase(trait_table_hash)
+      },
+      actor: %Keyfleet.Actors.System{}
+    )
   end
 end

@@ -815,7 +815,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   # Until a fleet is on chain it has no budget, and its page says nothing
   # about one.
   test "a fleet not yet on chain shows no budget", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_accelerant/proposals")
+    {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic/proposals")
     assert has_element?(view, "#proposals-page")
     refute has_element?(view, "#proposals-budget")
     refute has_element?(view, "[data-fleet-action]")

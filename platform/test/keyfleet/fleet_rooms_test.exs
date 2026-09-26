@@ -22,7 +22,7 @@ defmodule Keyfleet.FleetRoomsTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
     Enum.each(Fleets.catalog_ids(), &ChainHelpers.seed_cursor!/1)
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     :ok
   end
 

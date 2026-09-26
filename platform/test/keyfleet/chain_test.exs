@@ -282,40 +282,54 @@ defmodule Keyfleet.ChainTest do
     end
   end
 
-  describe "binding the fleets to a deployment" do
-    # Rerunning the seed with the same manifest is harmless; a manifest naming
-    # other contracts for a bound fleet is refused and changes nothing.
+  describe "binding a fleet to its deployment" do
+    # Each fleet is deployed and recorded on its own. Rerunning the seed with
+    # the same manifest is harmless; a manifest naming other contracts for a
+    # bound fleet is refused and changes nothing.
     @tag :tmp_dir
-    test "the deployed manifest binds all four fleets once and opens their rooms", %{
+    test "a fleet's deployed manifest binds that fleet alone, once, and opens its rooms", %{
       tmp_dir: dir
     } do
       path = Path.join(dir, "deployed.json")
-      File.write!(path, Jason.encode!(manifest("1")))
+      File.write!(path, Jason.encode!(manifest("classic", "1")))
 
-      assert capture_io(fn -> Release.seed_deployment!(path) end) =~
-               "fleet_tech_classic: 0x#{String.duplicate("c1", 20)} from block 42"
+      assert capture_io(fn -> Release.seed_deployment!(path) end) ==
+               "fleet_tech_classic: 0x#{String.duplicate("c1", 20)} from block 42\n"
 
       capture_io(fn -> Release.seed_deployment!(path) end)
 
-      bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
-      assert bound["fleet_tech_classic"].contract_address == "0x" <> String.duplicate("c1", 20)
-      assert bound["fibonacci_cascade"].votes_address == "0x" <> String.duplicate("e1", 20)
-      assert Enum.all?(Map.values(bound), &(&1.deployed_block == 42 and &1.chain_id == 8_453))
+      classic = Fleets.get_fleet!("fleet_tech_classic")
 
-      assert Enum.all?(
-               Map.values(bound),
-               &(&1.usdc_address == "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913")
-             )
+      assert %{
+               chain_id: 8_453,
+               deployed_block: 42,
+               contract_address: "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+               rewards_address: "0xd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+               votes_address: "0x9191919191919191919191919191919191919191",
+               usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+             } = classic
 
-      assert Enum.all?(
-               Map.values(bound),
-               &(&1.trait_table_hash == "0x" <> String.duplicate("a1", 32))
-             )
+      assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
+      assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
 
       own = ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
-      assert Enum.all?(Map.keys(bound), &(Enum.take(slugs(&1), 10) == own))
+      assert Enum.take(slugs("fleet_tech_classic"), 10) == own
+      assert slugs("fibonacci_cascade") == []
 
-      File.write!(path, Jason.encode!(manifest("2")))
+      # A coming-soon fleet recorded later opens with its rooms, and the
+      # fleet recorded before it is left as it was.
+      cascade_path = Path.join(dir, "cascade.json")
+      File.write!(cascade_path, Jason.encode!(manifest("cascade", "1")))
+      capture_io(fn -> Release.seed_deployment!(cascade_path) end)
+
+      cascade = Fleets.get_fleet!("fibonacci_cascade")
+      assert cascade.votes_address == "0x" <> String.duplicate("e1", 20)
+      refute Fleets.coming_soon?("fibonacci_cascade", cascade)
+      assert Enum.take(slugs("fibonacci_cascade"), 10) == own
+      assert Fleets.get_fleet!("fleet_tech_classic") == classic
+
+      bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+      File.write!(path, Jason.encode!(manifest("classic", "2")))
       assert_raise Ash.Error.Invalid, fn -> Release.seed_deployment!(path) end
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
     end
@@ -323,19 +337,28 @@ defmodule Keyfleet.ChainTest do
 
   describe "opening the fleets without a deployment" do
     @tag :tmp_dir
-    test "the catalog opens every fleet unbound and never unbinds a bound one", %{tmp_dir: dir} do
-      capture_io(fn -> Release.seed_catalog!() end)
+    test "the catalog opens rooms only for open fleets and never unbinds a bound one", %{
+      tmp_dir: dir
+    } do
+      assert capture_io(fn -> Release.seed_catalog!() end) ==
+               """
+               fleet_tech_classic: open
+               fibonacci_syndicate: coming soon
+               fibonacci_cascade: coming soon
+               fleet_tech_accelerant: coming soon
+               """
 
       assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.contract_address))
       assert Fleets.list_deployed_fleets!() == []
-      assert Enum.all?(Fleets.catalog_ids(), &(length(slugs(&1)) >= 10))
+      assert length(slugs("fleet_tech_classic")) >= 10
+      assert slugs("fibonacci_syndicate") == []
 
       path = Path.join(dir, "deployed.json")
-      File.write!(path, Jason.encode!(manifest("1")))
+      File.write!(path, Jason.encode!(manifest("syndicate", "1")))
       capture_io(fn -> Release.seed_deployment!(path) end)
       bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
-      capture_io(fn -> Release.seed_catalog!() end)
+      assert capture_io(fn -> Release.seed_catalog!() end) =~ "fibonacci_syndicate: open"
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
     end
   end
@@ -359,25 +382,20 @@ defmodule Keyfleet.ChainTest do
     )
   end
 
-  defp manifest(generation) do
-    fleet = fn letter ->
-      %{
-        "address" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
-        "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
-        "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20)
-      }
-    end
+  # The manifest `RecordKeyfleets` writes for the fleet in `slot`.
+  defp manifest(slot, generation) do
+    letter = %{"syndicate" => "a", "cascade" => "b", "classic" => "c", "accelerant" => "f"}[slot]
 
     %{
       "chainId" => 8_453,
       "deploymentBlock" => 42,
       "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       "traitTableHash" => "0x" <> String.duplicate("A" <> generation, 32),
-      "fleets" => %{
-        "syndicate" => fleet.("a"),
-        "cascade" => fleet.("b"),
-        "classic" => fleet.("c"),
-        "accelerant" => fleet.("f")
+      "fleet" => %{
+        "slot" => slot,
+        "address" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
+        "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
+        "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20)
       }
     }
   end

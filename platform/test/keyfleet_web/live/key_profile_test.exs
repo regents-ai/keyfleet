@@ -28,7 +28,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     :ets.delete_all_objects(RewardsWaiting)
     rewards_answer(fn _to, _data, _block_hash -> {:ok, <<0::256>>} end)
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
 

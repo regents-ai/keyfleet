@@ -19,7 +19,13 @@ defmodule KeyfleetWeb.DirectoryJSON do
   def index(%{fleets: fleets, generated_at: generated_at}),
     do: %{generated_at: generated_at, note: @note, fleets: Enum.map(fleets, &summary/1)}
 
-  @doc "One fleet's summary with everything the directory says about it."
+  @doc """
+  One fleet's summary with everything the directory says about it. A
+  coming-soon fleet's is its summary alone.
+  """
+  def show(%{fleet: %{coming_soon: true} = fleet, generated_at: generated_at}),
+    do: fleet |> summary() |> Map.put(:generated_at, generated_at)
+
   def show(%{fleet: fleet, generated_at: generated_at}) do
     fleet
     |> summary()
@@ -36,15 +42,15 @@ defmodule KeyfleetWeb.DirectoryJSON do
     })
   end
 
+  defp summary(%{coming_soon: true} = fleet),
+    do: %{id: fleet.id, name: fleet.name, coming_soon: true, links: links(fleet)}
+
   defp summary(fleet) do
     %{
       id: fleet.id,
       name: fleet.name,
-      links: %{
-        page: PublicDocuments.url("/app/fleets/#{fleet.id}"),
-        markdown: PublicDocuments.url("/fleets/#{fleet.id}.md"),
-        json: PublicDocuments.url("/api/v1/fleets/#{fleet.id}")
-      },
+      coming_soon: false,
+      links: links(fleet),
       pricing: fleet.pricing,
       sales: sales(fleet.sales),
       agents_here: fleet.agents_here,
@@ -54,6 +60,13 @@ defmodule KeyfleetWeb.DirectoryJSON do
       last_post_at: fleet.last_post_at
     }
   end
+
+  defp links(fleet),
+    do: %{
+      page: PublicDocuments.url("/app/fleets/#{fleet.id}"),
+      markdown: PublicDocuments.url("/fleets/#{fleet.id}.md"),
+      json: PublicDocuments.url("/api/v1/fleets/#{fleet.id}")
+    }
 
   defp sales(%{next_key: %{price_atomic_usdc: price} = next_key} = sales),
     do: %{sales | next_key: Map.put(next_key, :price, FleetLive.usdc(price))}

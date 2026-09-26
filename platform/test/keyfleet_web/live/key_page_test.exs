@@ -8,8 +8,8 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
 
-  @fleet "fibonacci_syndicate"
-  @path "/app/keys/fibonacci_syndicate/1"
+  @fleet "fleet_tech_classic"
+  @path "/app/keys/fleet_tech_classic/1"
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
   @operator "0x" <> String.duplicate("c", 40)

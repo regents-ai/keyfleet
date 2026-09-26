@@ -130,19 +130,31 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_params(params, _uri, socket) do
     route_spec = RouteCatalog.fetch!(socket.assigns.live_action, params)
 
-    # Going anywhere, back and forward included, closes "Send your agent".
-    {:noreply,
-     socket
-     |> assign(route_spec: route_spec, send_agent_open: false)
-     |> load_verified_connections(route_spec)
-     |> load_held_keys(route_spec)
-     |> load_fleet(route_spec, params)
-     |> load_key_profile(socket.assigns)
-     |> load_key(route_spec, params)
-     |> load_room(route_spec, params)
-     |> load_workspace(route_spec, params)
-     |> load_proposals(route_spec, params)}
+    if coming_soon_inside?(route_spec, params) do
+      {:noreply, push_patch(socket, to: "/app/fleets/#{params["fleet_id"]}", replace: true)}
+    else
+      # Going anywhere, back and forward included, closes "Send your agent".
+      {:noreply,
+       socket
+       |> assign(route_spec: route_spec, send_agent_open: false)
+       |> load_verified_connections(route_spec)
+       |> load_held_keys(route_spec)
+       |> load_fleet(route_spec, params)
+       |> load_key_profile(socket.assigns)
+       |> load_key(route_spec, params)
+       |> load_room(route_spec, params)
+       |> load_workspace(route_spec, params)
+       |> load_proposals(route_spec, params)}
+    end
   end
+
+  # A coming-soon fleet has only its own page: its rooms, workspace and
+  # proposals open with the fleet.
+  defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
+       when route_id in [:rooms, :workspace, :workspace_item, :proposals, :proposal],
+       do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
+
+  defp coming_soon_inside?(_route_spec, _params), do: false
 
   @impl true
   def handle_event(
@@ -547,19 +559,25 @@ defmodule KeyfleetWeb.ShellLive do
   defp read_fleet(socket, _route_spec, %{"fleet_id" => fleet_id} = params) do
     actor = human_actor(socket)
 
-    case Fleets.get_fleet!(fleet_id, actor: actor) do
-      nil ->
-        socket
-        |> assign(
-          fleet: %{fleet_id: fleet_id, name: nil},
-          fleet_params: params,
-          activity: nil,
-          activity_refresh: nil
-        )
-        |> stream(:fleet_keys, [], reset: true)
-        |> stream(:activity, [], reset: true)
+    fleet = Fleets.get_fleet!(fleet_id, actor: actor)
 
-      fleet ->
+    cond do
+      fleet == nil ->
+        show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params)
+
+      Fleets.coming_soon?(fleet_id, fleet) ->
+        show_without_keys(
+          socket,
+          %{
+            fleet_id: fleet_id,
+            name: fleet.name,
+            coming_soon?: true,
+            layout: Presets.preset(fleet_id)
+          },
+          params
+        )
+
+      true ->
         page = key_page!(fleet_id, params, actor)
         pages = page_links(fleet_id, page, params)
         deployed? = fleet.contract_address != nil
@@ -570,6 +588,7 @@ defmodule KeyfleetWeb.ShellLive do
         |> assign(:fleet, %{
           fleet_id: fleet_id,
           name: fleet.name,
+          coming_soon?: false,
           contract_address: fleet.contract_address,
           rewards_address: fleet.rewards_address,
           usdc_address: fleet.usdc_address,
@@ -593,6 +612,15 @@ defmodule KeyfleetWeb.ShellLive do
         |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor), reset: true)
         |> read_activity(fleet_id)
     end
+  end
+
+  # A fleet there is not, or one coming soon: its name at most, and no keys
+  # or activity to read.
+  defp show_without_keys(socket, fleet, params) do
+    socket
+    |> assign(fleet: fleet, fleet_params: params, activity: nil, activity_refresh: nil)
+    |> stream(:fleet_keys, [], reset: true)
+    |> stream(:activity, [], reset: true)
   end
 
   # "What's happening": the fleet's activity, newest first. A page moving

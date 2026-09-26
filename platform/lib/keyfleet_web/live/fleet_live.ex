@@ -9,6 +9,10 @@ defmodule KeyfleetWeb.FleetLive do
   contract; and "Who's here", with the agents running its keys. Every key it
   has issued is listed below the map.
 
+  A coming-soon fleet's page shows its name, its map faded and that it is
+  coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
+  your agent", and no rooms, workspace or proposals.
+
   Everything here is public and read from what the fleet's contract has
   recorded. Keys are listed a hundred at a time.
   """
@@ -94,8 +98,10 @@ defmodule KeyfleetWeb.FleetLive do
         <h2>This fleet doesn’t exist.</h2>
       </section>
 
+      <.coming_soon :if={@fleet.name && @fleet.coming_soon?} fleet={@fleet} />
+
       <div
-        :if={@fleet.name}
+        :if={@fleet.name && not @fleet.coming_soon?}
         id="fleet-view"
         class="fleet-view"
         phx-hook="Slides"
@@ -212,7 +218,7 @@ defmodule KeyfleetWeb.FleetLive do
       </div>
 
       <section
-        :if={@fleet.name}
+        :if={@fleet.name && not @fleet.coming_soon?}
         id="fleet-keys"
         class="fleet-panel fleet-keys"
         aria-labelledby="fleet-keys-title"
@@ -258,6 +264,32 @@ defmodule KeyfleetWeb.FleetLive do
         thread={@thread}
       />
     </article>
+    """
+  end
+
+  attr :fleet, :map, required: true
+
+  defp coming_soon(assigns) do
+    ~H"""
+    <div id="fleet-soon" class="fleet-view">
+      <header class="fleet-bar">
+        <div class="fleet-bar__title">
+          <h1 tabindex="-1">{@fleet.name}</h1>
+          <p id="fleet-sales" class="fleet-bar__sales">Coming soon</p>
+        </div>
+      </header>
+
+      <div class="fleet-stage">
+        <.not_on_sale fleet={@fleet} />
+        <section class="fleet-soon" aria-labelledby="fleet-soon-title">
+          <h2 id="fleet-soon-title">Coming soon</h2>
+          <p>
+            This fleet opens later. Until then it has no keys for sale, and nobody can join it.
+          </p>
+          <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+        </section>
+      </div>
+    </div>
     """
   end
 

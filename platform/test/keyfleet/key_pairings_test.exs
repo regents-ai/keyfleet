@@ -306,7 +306,7 @@ defmodule Keyfleet.KeyPairingsTest do
   end
 
   test "after stepping down the agent can no longer post as the key, and keeps what it wrote" do
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     runner = agent("b")
     attached = attach!(runner, "Runner")
     post = &%{fleet_id: @fleet, slug: "general", body: "Hello", idempotency_key: &1}

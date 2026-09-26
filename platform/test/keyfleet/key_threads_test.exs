@@ -24,7 +24,7 @@ defmodule Keyfleet.KeyThreadsTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     for {token_id, owner} <- [{1, "a"}, {5, "b"}, {7, "c"}], do: epoch!(token_id, wallet(owner))
     %{first: human("a"), fifth: human("b")}
   end

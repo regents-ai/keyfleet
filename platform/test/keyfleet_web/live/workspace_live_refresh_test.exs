@@ -16,8 +16,8 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   @endpoint KeyfleetWeb.Endpoint
   @moduletag :tmp_dir
 
-  @fleet "fibonacci_syndicate"
-  @board "/app/fleets/fibonacci_syndicate/workspace"
+  @fleet "fleet_tech_classic"
+  @board "/app/fleets/fleet_tech_classic/workspace"
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
 
@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
     owner = Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
     on_exit(fn -> Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     start_supervised!(
       {Keyfleet.Graph.Supervisor,

@@ -20,10 +20,11 @@ defmodule Keyfleet.Release do
   end
 
   @doc """
-  Binds the four fleets to the deployment a deployed manifest records, the
-  JSON `contracts/script/RecordKeyfleets.s.sol` writes, opens each fleet's
-  fixed and open rooms, and prints what each fleet is now bound to.
-  `bin/seed-deployment <path>` runs it.
+  Binds one fleet to the deployment a deployed manifest records, the JSON
+  `contracts/script/RecordKeyfleets.s.sol` writes for that fleet, opens the
+  fleet's fixed and open rooms, and prints what it is now bound to.
+  `bin/seed-deployment <path>` runs it. This is what puts a fleet's keys on
+  sale, a coming-soon fleet's included; every other fleet is left as it is.
 
   Recording the same manifest again changes nothing; a manifest naming other
   contracts for a bound fleet is refused and changes nothing. A running app
@@ -36,30 +37,32 @@ defmodule Keyfleet.Release do
   # The path is the operator's own argument on the machine they are signed in to.
   # sobelow_skip ["Traversal.FileModule"]
   def seed_deployment!(path) do
-    fleets = path |> File.read!() |> Jason.decode!() |> Keyfleet.Fleets.record_deployments!()
-    Keyfleet.Rooms.bootstrap_rooms!()
+    fleet = path |> File.read!() |> Jason.decode!() |> Keyfleet.Fleets.record_manifest!()
+    Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
 
-    for fleet <- fleets do
-      IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
-    end
+    IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
 
     :ok
   end
 
   @doc """
-  Opens the four fleets and their fixed and open rooms without binding any of
-  them to a deployment, so the site can show every fleet while key sales stay
-  off. `bin/seed-catalog` runs it. Running it again changes nothing, and it
+  Seeds the four fleets and opens the rooms of every fleet that is not coming
+  soon, without binding any fleet to a deployment, so the site shows every
+  fleet while key sales stay off. A coming-soon fleet gets its rooms when it
+  opens. `bin/seed-catalog` runs it. Running it again changes nothing, and it
   never touches a fleet's recorded deployment.
   """
   def seed_catalog, do: with_release_repo(&seed_catalog!/0)
 
-  @doc "Opens the fleets through an already running repository, as `seed_catalog/0` does."
+  @doc "Seeds the fleets through an already running repository, as `seed_catalog/0` does."
   def seed_catalog! do
     fleets = Keyfleet.Fleets.bootstrap_catalog!()
-    Keyfleet.Rooms.bootstrap_rooms!()
+    open = Keyfleet.Fleets.open_fleet_ids()
+    Keyfleet.Rooms.bootstrap_rooms!(open)
 
-    for fleet <- fleets, do: IO.puts("#{fleet.id}: open")
+    for fleet <- fleets do
+      IO.puts("#{fleet.id}: #{if fleet.id in open, do: "open", else: "coming soon"}")
+    end
 
     :ok
   end

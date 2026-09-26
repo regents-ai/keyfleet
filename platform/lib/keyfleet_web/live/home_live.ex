@@ -7,17 +7,19 @@ defmodule KeyfleetWeb.HomeLive do
   sold across every fleet, once every card has read its fleet: each agent
   once, however many fleets it runs keys in.
 
-  Each fleet's card shows its map, how many keys it has sold and how many
+  Each open fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
   latest item, and opens that fleet's map. A fleet not yet deployed, or one
-  whose sales are still being read, shows no key count.
+  whose sales are still being read, shows no key count. A coming-soon fleet's
+  card shows its map faded, its name and that it is coming soon, and nothing
+  it would have to read; the count above the headline leaves it out.
 
   The first render reads only each fleet's record and sales, for its map.
-  Once connected, each card reads the rest on its own, and reads again a few
-  seconds after a notice that something changed in its fleet: once for a
-  burst of notices, and only for the fleet the notice was about. The count
-  of agents across every fleet is read alongside, once for a burst of notices
-  about any fleet.
+  Once connected, each open fleet's card reads the rest on its own, and reads
+  again a few seconds after a notice that something changed in its fleet:
+  once for a burst of notices, and only for the fleet the notice was about.
+  The count of agents across the open fleets is read alongside, once for a
+  burst of notices about any of them.
   """
 
   use KeyfleetWeb, :live_view
@@ -69,8 +71,8 @@ defmodule KeyfleetWeb.HomeLive do
   # after the first of them.
   @refresh_after 5_000
 
-  # One fixed sentence about each fleet for the Markdown homepage, which
-  # reads nothing: what each fleet is doing right now is at /fleets/<id>.md.
+  # One fixed sentence about each fleet for the Markdown homepage: what each
+  # fleet is doing right now is at /fleets/<id>.md.
   @about %{
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared funds.",
@@ -84,16 +86,21 @@ defmodule KeyfleetWeb.HomeLive do
   }
 
   @doc """
-  The homepage for agents, in Markdown. It reads nothing, so it costs a plain
-  visit nothing: each fleet links to `/fleets/<id>.md` for what it is doing
-  right now.
+  The homepage for agents, in Markdown. It reads only which fleets are coming
+  soon, so it costs a plain visit one small read: each open fleet links to
+  `/fleets/<id>.md` for what it is doing right now.
   """
   def agent_markdown do
+    recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+
     fleets =
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
         "## #{name}\n\n#{Map.fetch!(@about, id)}\n\n" <>
-          "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
-          "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{id}.md")})"
+          if Fleets.coming_soon?(id, recorded[id]),
+            do: "Coming soon. It has no keys for sale and can’t be joined yet.",
+            else:
+              "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
+                "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{id}.md")})"
       end)
 
     opportunities =
@@ -141,9 +148,22 @@ defmodule KeyfleetWeb.HomeLive do
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
   end
 
-  # A fleet's card before its first read: its name, its sales and its map.
-  defp card(%{id: id, name: name}, recorded),
-    do: %{id: id, name: name, layout: Presets.preset(id), sales: sales(id, recorded), now: nil}
+  # A fleet's card before its first read: its name, its sales and its map. A
+  # coming-soon fleet's card is never read.
+  defp card(%{id: id, name: name}, recorded) do
+    if Fleets.coming_soon?(id, recorded) do
+      %{id: id, name: name, layout: Presets.preset(id), coming_soon?: true, sales: nil, now: nil}
+    else
+      %{
+        id: id,
+        name: name,
+        layout: Presets.preset(id),
+        coming_soon?: false,
+        sales: sales(id, recorded),
+        now: nil
+      }
+    end
+  end
 
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current, and shows no count.
@@ -156,7 +176,7 @@ defmodule KeyfleetWeb.HomeLive do
   defp watch(socket) do
     socket = start_agents_read(socket)
 
-    Enum.reduce(Fleets.catalog_ids(), socket, fn fleet_id, socket ->
+    Enum.reduce(open_fleet_ids(socket), socket, fn fleet_id, socket ->
       for topic <- [
             Keys.topic(fleet_id),
             Rooms.fleet_topic(fleet_id),
@@ -172,11 +192,14 @@ defmodule KeyfleetWeb.HomeLive do
   defp start_read(socket, fleet_id),
     do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
 
-  # Every agent here across the fleets, each once.
+  # Every agent here across the open fleets, each once.
   defp start_agents_read(socket) do
-    fleet_ids = Fleets.catalog_ids()
+    fleet_ids = open_fleet_ids(socket)
     start_async(socket, :agents, fn -> Agents.count_agents_in_fleets!(fleet_ids) end)
   end
+
+  defp open_fleet_ids(socket),
+    do: for(%{coming_soon?: false, id: id} <- socket.assigns.fleets, do: id)
 
   # Everything a card shows about its fleet right now. With nothing else to
   # feature, the card features its latest item.
@@ -302,11 +325,13 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp opportunities, do: @opportunities
 
-  # Every agent here, each once, and every key sold, summed over the fleets'
-  # cards, once the agents and each card have been read; nothing before.
-  # While any fleet's sales are catching up the keys are left out rather than
-  # undercounted.
+  # Every agent here, each once, and every key sold, summed over the open
+  # fleets' cards, once the agents and each open card have been read; nothing
+  # before. While any fleet's sales are catching up the keys are left out
+  # rather than undercounted.
   defp tally(fleets, agents) do
+    fleets = Enum.reject(fleets, & &1.coming_soon?)
+
     if agents && Enum.all?(fleets, & &1.now) do
       %{
         agents: agents,
@@ -467,6 +492,7 @@ defmodule KeyfleetWeb.HomeLive do
           :for={fleet <- @fleets}
           id={"home-fleet-#{fleet.id}"}
           class="rl-fleet-card"
+          data-coming-soon={fleet.coming_soon?}
           phx-mounted={JS.ignore_attributes(["style"])}
         >
           <a href={fleet_path(fleet.id)} class="rl-fleet-card__link">
@@ -476,11 +502,12 @@ defmodule KeyfleetWeb.HomeLive do
               phx-hook="FleetPreview"
               phx-update="ignore"
               data-layout={fleet.layout}
-              data-minted={fleet.sales.keys}
+              data-minted={if fleet.sales, do: fleet.sales.keys, else: 0}
               aria-hidden="true"
             >
             </div>
             <h3>{fleet.name}</h3>
+            <p :if={fleet.coming_soon?} class="rl-fleet-card__soon" data-fleet-soon>Coming soon</p>
             <.right_now
               :if={fleet.now}
               id={"home-fleet-#{fleet.id}"}

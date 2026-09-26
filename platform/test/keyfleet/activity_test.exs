@@ -36,7 +36,7 @@ defmodule Keyfleet.ActivityTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.utc_now())
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     Workspace.open_log(@fleet)
     # Chain records are stamped with the time the reader saw them: in a test,
     # the time its transaction began, the same for every one.

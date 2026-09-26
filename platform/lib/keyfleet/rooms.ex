@@ -212,23 +212,17 @@ defmodule Keyfleet.Rooms do
   end
 
   @doc """
-  Ensures the five fixed rooms and the five open rooms of every persisted fleet
-  from trusted setup code.
+  Ensures the five fixed rooms and the five open rooms of each fleet in
+  `fleet_ids` from trusted setup code. The fleets must already be seeded.
 
   Reruns preserve room identities, restore canonical names and leave every open
   room's topic as members named it. The whole bootstrap commits together. This
   internal entry point must never be exposed as a user action.
   """
-  def bootstrap_rooms! do
-    fleets = Keyfleet.Fleets.list_fleets!() |> Enum.sort_by(& &1.id)
-
-    if not match?([_, _, _, _], fleets) do
-      raise "Room bootstrap requires the complete fixed fleet catalog"
-    end
-
+  def bootstrap_rooms!(fleet_ids) do
     inputs =
-      for fleet <- fleets, {slug, name, kind} <- Room.own_rooms() do
-        %{fleet_id: fleet.id, slug: slug, name: name, kind: kind}
+      for fleet_id <- fleet_ids, {slug, name, kind} <- Room.own_rooms() do
+        %{fleet_id: fleet_id, slug: slug, name: name, kind: kind}
       end
 
     %Ash.BulkResult{records: rooms} =

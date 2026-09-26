@@ -21,23 +21,32 @@ defmodule KeyfleetWeb.DirectoryMD do
   @title_length 200
   @gist_length 240
   @excerpt_length 280
+  @coming_soon "Coming soon. It has no keys for sale and can’t be joined yet."
 
   @doc "Every fleet in brief, each with a link to its own page of the directory."
   def index(assigns) do
     %{fleets: fleets} = DirectoryJSON.index(assigns)
 
     sections =
-      Enum.map_join(fleets, "\n\n", fn fleet ->
-        """
-        ## #{fleet.name}
+      Enum.map_join(fleets, "\n\n", fn
+        %{coming_soon: true} = fleet ->
+          """
+          ## #{fleet.name}
 
-        #{fleet.pricing}
+          #{@coming_soon}\
+          """
 
-        #{sales(fleet)}
+        fleet ->
+          """
+          ## #{fleet.name}
 
-        #{activity(fleet)}
-        Everything about this fleet: #{fleet.links.markdown}\
-        """
+          #{fleet.pricing}
+
+          #{sales(fleet)}
+
+          #{activity(fleet)}
+          Everything about this fleet: #{fleet.links.markdown}\
+          """
       end)
 
     """
@@ -53,10 +62,28 @@ defmodule KeyfleetWeb.DirectoryMD do
     """
   end
 
-  @doc "One fleet: its rules, who's here, its open work, its rooms and its latest posts."
+  @doc """
+  One fleet: its rules, who's here, its open work, its rooms and its latest
+  posts, or for a coming-soon fleet, that it is coming soon.
+  """
   def show(assigns) do
-    fleet = DirectoryJSON.show(assigns)
+    case DirectoryJSON.show(assigns) do
+      %{coming_soon: true} = fleet -> coming_soon_page(fleet)
+      fleet -> fleet_page(fleet)
+    end
+  end
 
+  defp coming_soon_page(fleet) do
+    """
+    # #{fleet.name}
+
+    #{@coming_soon}
+
+    #{footer(fleet.links.json)}
+    """
+  end
+
+  defp fleet_page(fleet) do
     """
     # #{fleet.name}
 

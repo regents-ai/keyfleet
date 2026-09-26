@@ -20,12 +20,12 @@ defmodule Keyfleet.RoomsTest do
         actor: %Keyfleet.Actors.System{}
       )
 
-    assert length(Rooms.bootstrap_rooms!()) == 40
+    assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 40
     first = persisted_rooms()
     assert length(first) == 40
     assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "General"}))
 
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     assert persisted_rooms() == first
 
     for fleet <- Fleets.list_fleets!() do
@@ -58,7 +58,7 @@ defmodule Keyfleet.RoomsTest do
 
   test "running bootstrap again keeps what members named the open rooms" do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     Repo.query!(
       "UPDATE keyfleet_app.rooms SET topic = 'Hull survey', topic_set_by = $1, " <>
@@ -66,7 +66,7 @@ defmodule Keyfleet.RoomsTest do
       ["0x" <> String.duplicate("a", 40)]
     )
 
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     assert %{topic: "Hull survey", topic_set_by: "0x" <> _} =
              Rooms.get_room!("fibonacci_syndicate", "open-2")
@@ -74,7 +74,7 @@ defmodule Keyfleet.RoomsTest do
 
   test "ordinary and forged actors cannot write rooms and leave persisted state unchanged" do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     before = persisted_rooms()
 
     for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
@@ -97,7 +97,7 @@ defmodule Keyfleet.RoomsTest do
 
   test "database rejects duplicate fleet slugs and orphan rooms" do
     Fleets.bootstrap_catalog!()
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     before = persisted_rooms()
 
     for {fleet_id, slug, code} <- [
@@ -116,15 +116,11 @@ defmodule Keyfleet.RoomsTest do
     assert persisted_rooms() == before
   end
 
-  test "bootstrap refuses an incomplete fleet catalog before writing any rooms" do
+  test "bootstrap opens rooms only for the fleets it is given" do
     Fleets.bootstrap_catalog!()
-    Repo.query!("DELETE FROM keyfleet_app.fleets WHERE id = 'fleet_tech_classic'")
 
-    assert_raise RuntimeError, ~r/complete fixed fleet catalog/, fn ->
-      Rooms.bootstrap_rooms!()
-    end
-
-    assert persisted_rooms() == []
+    assert length(Rooms.bootstrap_rooms!(["fleet_tech_classic"])) == 10
+    assert persisted_rooms() |> Enum.map(&elem(&1, 1)) |> Enum.uniq() == ["fleet_tech_classic"]
   end
 
   test "failure on a later room rolls back all earlier room writes" do
@@ -134,7 +130,7 @@ defmodule Keyfleet.RoomsTest do
       "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT reject_coding CHECK (slug <> 'coding')"
     )
 
-    assert_raise Ash.Error.Unknown, fn -> Rooms.bootstrap_rooms!() end
+    assert_raise Ash.Error.Unknown, fn -> Rooms.bootstrap_rooms!(Fleets.catalog_ids()) end
 
     assert persisted_rooms() == []
   end

@@ -37,7 +37,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
       owner = Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
       on_exit(fn -> Sandbox.stop_owner(owner) end)
       Fleets.bootstrap_catalog!()
-      Rooms.bootstrap_rooms!()
+      Rooms.bootstrap_rooms!(Fleets.catalog_ids())
       start_writer(Path.join(tmp_dir, "graph"))
     end
 

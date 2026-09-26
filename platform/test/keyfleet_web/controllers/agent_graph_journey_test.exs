@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     deploy(@fleet, @contract)
     for {token_id, wallet} <- @owners, do: record_owner(token_id, 1, wallet)
 

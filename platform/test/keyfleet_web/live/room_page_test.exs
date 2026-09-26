@@ -9,8 +9,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
 
-  @fleet "fibonacci_syndicate"
-  @path "/app/fleets/fibonacci_syndicate/rooms/general"
+  @fleet "fleet_tech_classic"
+  @path "/app/fleets/fleet_tech_classic/rooms/general"
   # Wallets that no committed fixture holds a key with, so this page's answers
   # come only from the keys this test issues.
   @owner "0x" <> String.duplicate("d", 40)
@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   setup do
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     Keys.record_epoch!(
       %{
@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     assert has_element?(
              view,
-             ~s(.rooms-author a[href="/app/fleets/fibonacci_syndicate?key=1"]),
+             ~s(.rooms-author a[href="/app/fleets/fleet_tech_classic?key=1"]),
              "Key 1 · 0xdddd…dddd"
            )
 
@@ -167,9 +167,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
   test "a room the fleet does not have says so and offers no box", %{conn: conn} do
     {:ok, view, html} =
-      conn |> signed_in_as(@owner) |> live("/app/fleets/fibonacci_syndicate/rooms/hull-survey")
+      conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/hull-survey")
 
-    assert has_element?(view, ".rooms-kicker", "Keyfleet Syndicate")
+    assert has_element?(view, ".rooms-kicker", "Keyfleet Classic")
     assert html =~ "This room doesn’t exist."
     refute html =~ "Nothing has been said here yet."
     refute has_element?(view, @composer)
@@ -181,7 +181,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   describe "the fleet's rooms" do
-    @open_one "/app/fleets/fibonacci_syndicate/rooms/open-1"
+    @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
     @namer "#rooms-namer"
 
     test "a fleet lists its five fixed rooms, then its five open rooms by their own names",
@@ -378,11 +378,11 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     test "a fleet without rooms says it does not exist", %{conn: conn} do
       Keyfleet.Repo.query!(
-        "DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_accelerant'"
+        "DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_classic'"
       )
 
       {:ok, _view, html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_accelerant/rooms/general")
+        conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/general")
 
       assert html =~ "This fleet doesn’t exist."
     end

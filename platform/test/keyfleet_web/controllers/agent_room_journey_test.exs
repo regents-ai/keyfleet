@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
-    Rooms.bootstrap_rooms!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     Keys.record_epoch!(
       %{
