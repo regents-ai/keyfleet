@@ -149,9 +149,7 @@ defmodule Keyfleet.DatabaseConfig do
 
     if fly_mpg_host?(host) do
       options =
-        options
-        |> Keyword.put(:port, 5432)
-        |> Keyword.put(:ssl,
+        Keyword.put(options, :ssl,
           verify: :verify_peer,
           cacerts: :public_key.cacerts_get(),
           server_name_indication: String.to_charlist(host),

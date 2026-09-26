@@ -263,9 +263,11 @@ defmodule Keyfleet.DatabaseConfigTest do
     assert_verified_tls(effective[:ssl], "direct.dzx6qo6xqzvojpv5.flympg.net")
   end
 
-  test "Fly MPG runtime options override the compiled sentinel port when URLs omit it" do
+  # A deployed site's settings are the base configuration with the database
+  # settings laid over it, so nothing in the base configuration may reach the
+  # connection: a URL without a port then reaches PostgreSQL's own port.
+  test "a database URL without a port connects with the URL's settings alone on every venue" do
     compiled_config = Config.Reader.read!("config/config.exs", env: :prod, target: :host)
-    assert get_in(compiled_config, [:keyfleet, Keyfleet.Repo])[:port] == 1
 
     configs = [
       DatabaseConfig.runtime_config!(
@@ -283,20 +285,28 @@ defmodule Keyfleet.DatabaseConfigTest do
               "postgresql://user:secret@pgbouncer.dzx6qo6xqzvojpv5.flympg.net/keyfleet"
           })
         )
+      ),
+      DatabaseConfig.runtime_config!(
+        :prod,
+        staging_env(%{
+          "DATABASE_POOLED_URL" => "postgresql://user:secret@regents-staging-db.flycast/keyfleet"
+        })
+      ),
+      DatabaseConfig.release_config!(
+        staging_env(%{
+          "DATABASE_DIRECT_URL" => "postgresql://user:secret@regents-staging-db.internal/keyfleet"
+        })
       )
     ]
 
     for config <- configs do
       merged =
-        Config.Reader.merge(
-          compiled_config,
-          keyfleet: [{Keyfleet.Repo, config}]
-        )
+        compiled_config
+        |> Config.Reader.merge(keyfleet: [{Keyfleet.Repo, config}])
+        |> get_in([:keyfleet, Keyfleet.Repo])
 
-      assert config[:port] == 5432
-      merged_repo = get_in(merged, [:keyfleet, Keyfleet.Repo])
-      assert merged_repo[:port] == 5432
-      assert effective_repo_config(merged_repo)[:port] == 5432
+      assert Enum.sort(Keyword.delete(merged, :migration_default_prefix)) == Enum.sort(config)
+      refute Keyword.has_key?(effective_repo_config(merged), :port)
     end
   end
 

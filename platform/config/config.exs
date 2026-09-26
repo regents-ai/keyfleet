@@ -43,12 +43,7 @@ config :keyfleet,
 
 config :keyfleet, ecto_repos: [Keyfleet.Repo]
 
-config :keyfleet, Keyfleet.Repo,
-  database: "keyfleet_disabled",
-  hostname: "127.0.0.1",
-  port: 1,
-  pool_size: 1,
-  migration_default_prefix: "keyfleet_app"
+config :keyfleet, Keyfleet.Repo, migration_default_prefix: "keyfleet_app"
 
 config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 

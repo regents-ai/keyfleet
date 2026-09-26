@@ -96,7 +96,6 @@ defmodule Keyfleet.RuntimeConfigTest do
                  match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
                ]
              ],
-             port: 5432,
              url: pooled,
              socket_options: [:inet6]
            ]
@@ -190,7 +189,6 @@ defmodule Keyfleet.RuntimeConfigTest do
                  match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
                ]
              ],
-             port: 5432,
              url: direct,
              socket_options: [:inet6]
            ]
@@ -286,7 +284,6 @@ defmodule Keyfleet.RuntimeConfigTest do
                  match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
                ]
              ],
-             port: 5432,
              url: direct,
              socket_options: [:inet6]
            ]
