@@ -609,7 +609,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                     summary="Diagnostic boundary"
                   >
                     <p>
-                      Runs SELECT current_database(), 1 only against this worktree's prepared loopback test database. Other database configurations are refused. No arbitrary query, fixture writes, schema changes or resets.
+                      Runs SELECT current_database(), 1 only against a partitioned loopback test database. Other database configurations are refused. No arbitrary query, fixture writes, schema changes or resets.
                     </p>
                   </P.disclosure>
                 </S.panel>
