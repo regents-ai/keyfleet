@@ -8,11 +8,11 @@ import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
-/// @notice Step one of two: deploys one fleet — and the shared asset registry if the manifest
-/// names none — and writes nothing.
-/// @dev Each fleet goes on chain on its own run. The first run deploys the registry; every later
-/// fleet on the chain must share it, so its address is written into the manifest's
-/// `assetRegistry` before the next fleet is deployed.
+/// @notice Step one of two: deploys one fleet into the shared asset registry the manifest names,
+/// and writes nothing.
+/// @dev Each fleet goes on chain on its own run. The registry is not deployed here:
+/// `DeployKeyfleetAssetRegistry` deploys it once, before the first fleet, and a manifest that does
+/// not name it is refused, so no run can put a second registry on the chain.
 ///
 /// Forge simulates a script in full before it broadcasts anything, so any file this step wrote
 /// would be written by a dry run too, and by a broadcast that failed partway. The deployed
@@ -27,15 +27,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// Safe alone, and USDC and REGENT are admitted by the Safe after this script has run. Nor does it
 /// touch the VRF subscription: the Safe owns it and adds the fleet as a consumer afterwards.
 contract DeployKeyfleets is KeyfleetManifest {
-    /// @notice What one run of `deploy` created or reused.
-    /// @param registry The shared asset registry, whether newly deployed or supplied.
-    /// @param fleet The fleet deployed.
-    struct Deployment {
-        KeyfleetAssetRegistry registry;
-        Keyfleet fleet;
-    }
-
-    /// @notice The supplied registry is administered by a different Safe than the manifest names.
+    /// @notice The manifest's registry is administered by a different Safe than the manifest names.
     error RegistrySafeMismatch(address expected, address found);
 
     /// @notice Reads the named manifest for the named fleet and deploys it.
@@ -52,25 +44,23 @@ contract DeployKeyfleets is KeyfleetManifest {
         vm.stopBroadcast();
     }
 
-    /// @notice Deploys the registry if the manifest does not name one, then the manifest's fleet.
+    /// @notice Deploys the manifest's fleet into the manifest's registry.
     /// @dev Reads no file and no environment variable, so this is the function the suite runs.
     /// The fleet deploys its own reward ledger and voting controller in its own constructor, so
     /// there is no window in which it exists without them.
-    function deploy(Manifest memory manifest) public returns (Deployment memory deployment) {
+    function deploy(Manifest memory manifest) public returns (Keyfleet fleet) {
         _requireManifestFitsChain(manifest);
 
-        deployment.registry = manifest.assetRegistry == address(0)
-            ? new KeyfleetAssetRegistry(manifest.regentSafe, manifest.usdc)
-            : KeyfleetAssetRegistry(manifest.assetRegistry);
-        if (deployment.registry.REGENT_SAFE() != manifest.regentSafe) {
-            revert RegistrySafeMismatch(manifest.regentSafe, deployment.registry.REGENT_SAFE());
+        KeyfleetAssetRegistry registry = KeyfleetAssetRegistry(manifest.assetRegistry);
+        if (registry.REGENT_SAFE() != manifest.regentSafe) {
+            revert RegistrySafeMismatch(manifest.regentSafe, registry.REGENT_SAFE());
         }
 
-        deployment.fleet = new Keyfleet(
+        fleet = new Keyfleet(
             _presets()[manifest.slot],
             IERC20(manifest.usdc),
             manifest.treasury,
-            deployment.registry,
+            registry,
             IRegentRevenueStaking(manifest.staking),
             IRegentsAutolaunchFactoryV1(manifest.autolaunchFactory),
             manifest.votingWindow,

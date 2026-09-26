@@ -102,10 +102,11 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @notice Reads the broadcast's fleet back from the chain, checks it against the manifest, and
     /// returns its deployed manifest's JSON.
-    /// @dev The fleet's preset must be the manifest slot's. Its USDC is not compared on its own: a
-    /// fleet refuses at construction any USDC but its registry's `BASE_USDC`, and the registry is
-    /// compared. The fleet must be a consumer of the subscription, and on Base the subscription
-    /// must be owned by the manifest's Safe.
+    /// @dev The fleet's preset must be the manifest slot's, and its registry the one the manifest
+    /// names, so a fleet deployed into a second registry is never recorded. Its USDC is not
+    /// compared on its own: a fleet refuses at construction any USDC but its registry's
+    /// `BASE_USDC`, and the registry is compared. The fleet must be a consumer of the subscription,
+    /// and on Base the subscription must be owned by the manifest's Safe.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         Keyfleet fleet = summary.fleet;
@@ -113,9 +114,7 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         if (fleet.PRESET() != _presets()[manifest.slot]) revert RecordedMismatch("preset");
         KeyfleetAssetRegistry registry = fleet.ASSET_REGISTRY();
-        if (manifest.assetRegistry != address(0) && address(registry) != manifest.assetRegistry) {
-            revert RecordedMismatch("assetRegistry");
-        }
+        if (address(registry) != manifest.assetRegistry) revert RecordedMismatch("assetRegistry");
         if (registry.REGENT_SAFE() != manifest.regentSafe) revert RecordedMismatch("regentSafe");
         if (registry.BASE_USDC() != manifest.usdc) revert RecordedMismatch("usdc");
         if (fleet.TREASURY() != manifest.treasury) revert RecordedMismatch("treasury");

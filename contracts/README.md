@@ -716,9 +716,8 @@ checksums in the README beside them.
 `KeyfleetDirectory` names the four fleets of one release and does nothing else.
 It deploys nothing: `Keyfleet` initcode is 41,304 bytes and its runtime 21,865, so a contract carrying
 a `new Keyfleet` would exceed the 24,576-byte runtime limit and a constructor
-deploying all four would exceed the 49,152-byte initcode limit. The script
-deploys the fleets and hands them to the directory, whose constructor is its
-only check: each slot must hold the preset that belongs to it — Syndicate,
+deploying all four would exceed the 49,152-byte initcode limit. It is given four
+fleets already deployed, and its constructor is its only check: each slot must hold the preset that belongs to it — Syndicate,
 Cascade, Classic, Accelerant, in that order — and all four must share the same
 treasury, asset registry, staking contract, Autolaunch factory, voting
 window, randomness coordinator, subscription, gas lane and trait table hash, or
@@ -726,16 +725,21 @@ it reverts with the slot that did not fit. USDC needs no
 comparison of its own: a fleet refuses any USDC but its registry's, and the
 registry is compared. `fleets()` and `isFleet(address)` are the whole of its
 surface. It has no owner, no setter and no upgrade path, holds no authority over
-any fleet, and a different set of fleets means a different directory. The
-scripts no longer deploy it, because the fleets now go on chain one at a time;
-the contract and its tests are kept.
+any fleet, and a different set of fleets means a different directory. No
+script deploys it, because the fleets now go on chain one at a time; the
+contract and its tests are kept.
 
-Each fleet is deployed and recorded on its own, in two steps, named by
+The shared asset registry is deployed once per chain, before any fleet, by
+`script/DeployKeyfleetAssetRegistry.s.sol`, which reads only `KEYFLEET_MANIFEST`,
+binds the registry to the manifest's Safe and USDC, and prints its address to
+write into the manifest's `assetRegistry`. It refuses a manifest that already
+names a registry, so a second one cannot reach the chain by running it twice.
+
+Each fleet is then deployed and recorded on its own, in two steps, named by
 `KEYFLEET_FLEET` (`syndicate`, `cascade`, `classic` or `accelerant`) beside
-`KEYFLEET_MANIFEST`. `script/DeployKeyfleets.s.sol` deploys the shared registry
-when the manifest does not name one, then that fleet, and writes nothing: every
-later fleet on the chain shares the registry, whose address is written into the
-manifest once the first fleet is recorded. Forge simulates a script in full before it
+`KEYFLEET_MANIFEST`. `script/DeployKeyfleets.s.sol` deploys that fleet into the
+registry the manifest names and writes nothing; it never deploys a registry,
+and refuses a manifest whose `assetRegistry` is zero or holds no code. Forge simulates a script in full before it
 broadcasts, so any file this step wrote would also be written by a dry run or a
 broadcast that failed partway. It refuses a manifest whose `chainId` is not the
 chain it is running on; on Base, a USDC other than Base USDC
@@ -755,7 +759,8 @@ transaction afterwards.
 It reads Forge's broadcast log, refuses a transaction without a receipt or a
 receipt that failed, applies the same manifest refusals as the deployment step,
 takes the fleet from the broadcast, and reads it back from the chain, refusing a
-preset other than the named fleet's, any value that differs from the manifest, a
+preset other than the named fleet's, any value that differs from the manifest
+(the asset registry included), a
 fleet the subscription does not yet list as a consumer and, on Base, a
 subscription the manifest's Safe does not own. Only then does it write
 `deployments/<name>.<fleet>.deployed.json`, the fleet's published deployment
@@ -770,12 +775,13 @@ was compiled with, and the fleet's runtime code hash is recorded so it can be
 checked against the deployed code. It must run straight after its fleet's
 deployment, since Forge's `run-latest.json` holds only the latest broadcast.
 
-Both scripts share `script/KeyfleetManifest.sol`, which reads the inputs
+All three scripts share `script/KeyfleetManifest.sol`, which reads the inputs
 `deployments/base.json` and `deployments/anvil.json`, one per chain. Their cores —
 `deploy`, `parseManifest`, `parseBroadcast` and `record` — take and return
-values, so the suite runs the real deployment and the real record against local
-mocks without reading or writing a file. `docs/deployment.md` is how to run both
-steps, what each refuses, and what the Safe does next.
+values, so the suite runs the real registry deployment, the real fleet
+deployment and the real record against local mocks without reading or writing a
+file. `docs/deployment.md` is how to run each step, what each refuses, and what
+the Safe does next.
 
 `script/KeeperLab.s.sol` is no part of a release. It puts one fleet, with
 stand-in USDC, staking and VRF coordinator, on a plain local anvil for the

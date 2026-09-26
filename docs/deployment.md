@@ -1,12 +1,19 @@
 # Deploying the fleets
 
 Each fleet is deployed and recorded on its own: Keyfleet Classic first, and each
-of the others later, one at a time, when the founder opens it. A fleet is
-deployed in two steps.
+of the others later, one at a time, when the founder opens it.
 
-1. **Deploy.** `DeployKeyfleets` deploys the one fleet it is told to, and the
-   shared asset registry too when the manifest names none. It writes no file of
-   its own.
+Once per chain, before the first fleet, `DeployKeyfleetAssetRegistry` deploys
+the asset registry every fleet on that chain shares, and its address is written
+into the manifest's `assetRegistry` and committed. It refuses a manifest that
+already names a registry, so a second registry cannot be deployed by mistake,
+and applies the deployment step's chain and USDC refusals.
+
+After that, a fleet is deployed in two steps.
+
+1. **Deploy.** `DeployKeyfleets` deploys the one fleet it is told to, into the
+   registry the manifest names. It never deploys a registry, and refuses a
+   manifest that names none. It writes no file of its own.
 2. **Record.** After the deployment has been broadcast, and after the Safe has
    added the fleet to the randomness subscription, `RecordKeyfleets` reads the
    fleet back from the chain, checks every value against the manifest, and only
@@ -14,7 +21,9 @@ deployed in two steps.
 
 Nothing puts a fleet's keys on sale until its deployed manifest is recorded in
 the app by hand with `bin/seed-deployment` (see
-[deploy-checklist.md](deploy-checklist.md)).
+[deploy-checklist.md](deploy-checklist.md)). The app refuses to record a fleet
+whose chain, USDC, asset registry or trait table differs from a fleet it has
+already recorded.
 
 The steps are separate because Forge runs a script in full, locally, before it
 broadcasts anything. A file written by the deployment step would be written by
@@ -42,7 +51,7 @@ itself.
 | `staking` | The Regents revenue staking contract. It registers the 2% USDC deposit fee and the 5% protocol share of every purchase as revenue, credits REGENT stakers their staked share and keeps the rest as treasury residual. |
 | `regentSafe` | The Safe that administers deposit admission. |
 | `autolaunchFactory` | The one Autolaunch factory the fleets may ever launch through. |
-| `assetRegistry` | The shared registry every fleet on the chain uses, or zero to deploy one with the first fleet. Once the first fleet is recorded, its `assetRegistry` is written here and committed before the next fleet is deployed. |
+| `assetRegistry` | The shared registry every fleet on the chain uses. Zero until `DeployKeyfleetAssetRegistry` has deployed it; its address is then written here and committed before any fleet is deployed. Both fleet steps refuse zero or an address that holds no code. |
 | `autolaunchFactoryMayBeEmpty` | Whether the factory may still be undeployed. Ignored on Base. |
 | `votingWindow` | Seconds a proposal stays open. 86,400 on both manifests. |
 | `fleets.*` | Per fleet, under `syndicate`, `cascade`, `classic` and `accelerant`: ERC-721 `name`, `symbol` and `baseTokenURI`. A run reads only the fleet it deploys. |
@@ -135,7 +144,22 @@ the manifest it deploys, and adds the fleets from the same account.
 
 ## Running it
 
-All commands run from `contracts/`. Both steps take the same
+All commands run from `contracts/`. The registry step takes only
+`KEYFLEET_MANIFEST` and the RPC, and runs once per chain:
+
+```sh
+cd contracts
+
+# Once per chain, before the first fleet. Simulate first by leaving off --broadcast.
+KEYFLEET_MANIFEST=anvil \
+  forge script script/DeployKeyfleetAssetRegistry.s.sol:DeployKeyfleetAssetRegistry \
+  --rpc-url "$RPC_URL" --broadcast --unlocked --sender <lab account>
+```
+
+It prints the registry's address. Write it into the manifest's `assetRegistry`
+and commit it before deploying any fleet.
+
+The two fleet steps take the same
 `KEYFLEET_MANIFEST`, the same `KEYFLEET_FLEET` (`syndicate`, `cascade`,
 `classic` or `accelerant`) and the same RPC. Neither has a default. For the
 anvil manifest, `RPC_URL` is one of
@@ -143,8 +167,6 @@ the Base forks under Rehearsing: the manifest names Base's own USDC and REGENT,
 and a plain `anvil` without a fork holds neither, so the deployment is refused.
 
 ```sh
-cd contracts
-
 # Step 1, simulated. Sends nothing, needs no signer, and writes no deployment file.
 KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets --rpc-url "$RPC_URL"
@@ -171,15 +193,14 @@ there, so each fleet is recorded straight after its own deployment, before the
 next fleet is deployed; the dated `run-<timestamp>.json` beside it keeps each
 fleet's broadcast for good.
 
-After the first fleet is recorded, copy the `assetRegistry` from its deployed
-manifest into the input manifest's `assetRegistry` and commit it. Every later
-fleet on the chain then shares that registry, and the deployment step refuses a
-registry bound to a different Safe.
-
-Base is the same pair of commands with the Base manifest and a signer that
-keeps its key in hardware:
+Base is the same commands with the Base manifest and a signer that keeps its
+key in hardware:
 
 ```sh
+KEYFLEET_MANIFEST=base \
+  forge script script/DeployKeyfleetAssetRegistry.s.sol:DeployKeyfleetAssetRegistry \
+  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
+
 KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
   --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
@@ -190,7 +211,7 @@ KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
 
 `--verify` wants an explorer API key in `ETHERSCAN_API_KEY`; leave the flag off
 and verify afterwards if there is none to hand. The record step sends nothing
-and needs no signer.
+and needs no signer. The registry step runs once on Base, before Classic.
 
 No private key goes in a file, an environment variable or a command line.
 Neither step reads one: they read the manifest and the chain, and signing is
@@ -258,8 +279,8 @@ key minted to it fails.
 
 REGENT, USDC and the staking contract are Base's own on either fork; the
 Autolaunch factory has no code on this one either. Each fleet came to about 8.0
-million gas, or about 10.4 million at Forge's default 130% gas estimate, and the
-first run also deploys the registry. That was measured on an earlier version of
+million gas, or about 10.4 million at Forge's default 130% gas estimate; the
+registry is its own run before the first fleet. That was measured on an earlier version of
 the fleet. Its code has grown since, to 21,865 bytes, and each byte of deployed
 code costs 200 gas, so each run now costs more; measure it again on the fork
 before relying on it. `--gas-limit 100000000` leaves room for a run in one
@@ -278,7 +299,9 @@ block.
   with `"autolaunchFactoryMayBeEmpty": true`; the waiver is ignored on Base, and
   the deployed manifest records that a waiver was in force so a lab deployment is
   never mistaken for a production one.
-- A supplied `assetRegistry` bound to a different Safe than the manifest names.
+- An `assetRegistry` that is zero or holds no code: the registry step runs
+  first.
+- An `assetRegistry` bound to a different Safe than the manifest names.
 - A USDC address that is not the one the registry is bound to, or that does not
   report six decimals, both of which the fleet itself refuses at construction.
 - On Base, a `vrf.coordinator` other than
@@ -307,7 +330,7 @@ block.
   Autolaunch factory, the voting window, the coordinator, subscription, gas lane
   and trait table hash, and the fleet's name, symbol and metadata base. Every
   fleet on a chain is checked against the same manifest, so they all share
-  those values. REGENT is held by no fleet, so it is published as the manifest
+  those values, the asset registry included. REGENT is held by no fleet, so it is published as the manifest
   names it, once the refusals above have passed.
 
 ## What the record step writes

@@ -6,6 +6,7 @@ import {DeployKeyfleets} from "../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken, StrategyPublishingFactory} from "./DeployKeyfleets.t.sol";
@@ -33,6 +34,7 @@ contract RecordKeyfleetsTest is Test {
     StrategyPublishingFactory private factory;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
+    KeyfleetAssetRegistry private registry;
 
     function setUp() public {
         deployer = new DeployKeyfleets();
@@ -44,18 +46,18 @@ contract RecordKeyfleetsTest is Test {
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
+        registry = new KeyfleetAssetRegistry(SAFE, address(usdc));
     }
 
     function test_recordPublishesTheFleetAsTheChainReportsIt() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        DeployKeyfleets.Deployment memory deployment = _deployAndAddConsumer(manifest);
-        Keyfleet fleet = deployment.fleet;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         string memory json = recorder.record(manifest, _summary(fleet));
 
         assertEq(vm.parseJsonUint(json, ".chainId"), ANVIL_CHAIN_ID, "Chain");
         assertEq(vm.parseJsonUint(json, ".deploymentBlock"), DEPLOYMENT_BLOCK, "Deployment block");
-        assertEq(vm.parseJsonAddress(json, ".assetRegistry"), address(deployment.registry), "Registry");
+        assertEq(vm.parseJsonAddress(json, ".assetRegistry"), address(registry), "Registry");
         assertEq(vm.parseJsonAddress(json, ".regent"), manifest.regent, "REGENT as the manifest names it");
         assertEq(vm.parseJsonAddress(json, ".usdc"), address(usdc), "USDC");
         assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "Every first key costs 10 USDC");
@@ -148,13 +150,12 @@ contract RecordKeyfleetsTest is Test {
             manifest.fleet = KeyfleetManifest.FleetSpec(
                 string.concat("Fleet ", keys[slot]), "KEYFLEET", string.concat("https://k/", keys[slot], "/")
             );
-            DeployKeyfleets.Deployment memory deployment = _deployAndAddConsumer(manifest);
-            manifest.assetRegistry = address(deployment.registry);
+            Keyfleet fleet = _deployAndAddConsumer(manifest);
 
-            string memory json = recorder.record(manifest, _summary(deployment.fleet));
+            string memory json = recorder.record(manifest, _summary(fleet));
 
             assertEq(vm.parseJsonString(json, ".fleet.slot"), keys[slot], "Key");
-            assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(deployment.fleet), "Fleet");
+            assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
             assertEq(vm.parseJsonUint(json, ".fleet.maxSupply"), supplies[slot], "Supply");
             assertEq(vm.parseJsonAddress(json, ".assetRegistry"), manifest.assetRegistry, "The shared registry");
         }
@@ -164,7 +165,7 @@ contract RecordKeyfleetsTest is Test {
     /// the site never lists a fleet whose keys would stay unrevealed.
     function test_recordRefusesAFleetTheSubscriptionDoesNotListYet() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        Keyfleet fleet = deployer.deploy(manifest).fleet;
+        Keyfleet fleet = deployer.deploy(manifest);
 
         _expectRecordRefused(
             manifest, fleet, abi.encodeWithSelector(RecordKeyfleets.FleetNotVrfConsumer.selector, fleet)
@@ -178,7 +179,7 @@ contract RecordKeyfleetsTest is Test {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         manifest.autolaunchFactory = address(0xFAC7);
         manifest.autolaunchFactoryMayBeEmpty = true;
-        Keyfleet fleet = _deployAndAddConsumer(manifest).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         string memory json = recorder.record(manifest, _summary(fleet));
 
@@ -188,7 +189,7 @@ contract RecordKeyfleetsTest is Test {
     }
 
     function test_recordRefusesEveryValueThatDiffersFromTheManifest() public {
-        Keyfleet fleet = _deployAndAddConsumer(_manifest()).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest;
 
         manifest = _manifest();
@@ -196,9 +197,16 @@ contract RecordKeyfleetsTest is Test {
         manifest.fleet = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
         _expectRecordRefused(manifest, fleet, _released("preset"));
 
+        // A second registry under the same Safe and USDC: the fleet was not deployed into it.
         manifest = _manifest();
-        manifest.assetRegistry = address(0xBEEF);
+        manifest.assetRegistry = address(new KeyfleetAssetRegistry(SAFE, address(usdc)));
         _expectRecordRefused(manifest, fleet, _released("assetRegistry"));
+
+        manifest = _manifest();
+        manifest.assetRegistry = address(0);
+        _expectRecordRefused(
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.AssetRegistryMissing.selector, address(0))
+        );
 
         manifest = _manifest();
         manifest.regentSafe = address(0xBEEF);
@@ -257,7 +265,7 @@ contract RecordKeyfleetsTest is Test {
     /// @dev A zero trait table is refused by the manifest check itself, before anything is read back
     /// from the chain, so the refusal names the missing table rather than a mismatch.
     function test_recordRefusesAManifestWithoutATraitTable() public {
-        Keyfleet fleet = _deployAndAddConsumer(_manifest()).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest = _manifest();
         manifest.traitTableHash = bytes32(0);
 
@@ -268,7 +276,7 @@ contract RecordKeyfleetsTest is Test {
     /// subscription that pays for its reveals, so nobody else can remove the fleet or cancel it.
     function test_recordOnBaseRefusesASubscriptionTheSafeDoesNotOwn() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
-        Keyfleet fleet = _deployAndAddConsumer(manifest).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
         MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
 
         base.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
@@ -283,7 +291,7 @@ contract RecordKeyfleetsTest is Test {
     }
 
     function test_recordRefusesAManifestForAnotherChain() public {
-        Keyfleet fleet = _deployAndAddConsumer(_manifest()).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
 
@@ -295,7 +303,7 @@ contract RecordKeyfleetsTest is Test {
     function test_emptyFactoryWaiverIsNeverRecordedOnBase() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.autolaunchFactoryMayBeEmpty = true;
-        Keyfleet fleet = _deployAndAddConsumer(manifest).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         string memory json = recorder.record(manifest, _summary(fleet));
 
@@ -306,7 +314,7 @@ contract RecordKeyfleetsTest is Test {
     /// for a release that was deployed correctly.
     function test_recordOnBaseRefusesAnyUsdcOrRegentButBase() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
-        Keyfleet fleet = _deployAndAddConsumer(manifest).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         manifest.usdc = address(usdc);
         _expectRecordRefused(
@@ -323,7 +331,7 @@ contract RecordKeyfleetsTest is Test {
     /// @dev Invariant: the REGENT the record step tells the Safe to admit always holds code, so a
     /// zero or mistyped address is never published into `regent` or `initialAssetFlags`.
     function test_recordRefusesARegentWithoutCode() public {
-        Keyfleet fleet = _deployAndAddConsumer(_manifest()).fleet;
+        Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest = _manifest();
 
         manifest.regent = address(0xBEEF);
@@ -374,8 +382,8 @@ contract RecordKeyfleetsTest is Test {
         recorder.parseBroadcast(json);
     }
 
-    /// @dev A broadcast of a registry and a fleet, in the shape Forge writes, with the given
-    /// receipts.
+    /// @dev A broadcast in the shape Forge writes, whose fleet is not its first transaction, with
+    /// the given receipts.
     function _broadcast(string memory receipts) private pure returns (string memory) {
         return string.concat(
             '{"transactions": [',
@@ -389,14 +397,11 @@ contract RecordKeyfleetsTest is Test {
 
     /// @dev Deploys, then adds the fleet to the manifest's subscription as its owner does between
     /// the two steps: the Safe on Base, the test contract on a lab chain.
-    function _deployAndAddConsumer(KeyfleetManifest.Manifest memory manifest)
-        private
-        returns (DeployKeyfleets.Deployment memory deployment)
-    {
-        deployment = deployer.deploy(manifest);
+    function _deployAndAddConsumer(KeyfleetManifest.Manifest memory manifest) private returns (Keyfleet fleet) {
+        fleet = deployer.deploy(manifest);
         (,,, address owner,) = manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
         vm.prank(owner);
-        manifest.vrf.coordinator.addConsumer(manifest.vrf.subscriptionId, address(deployment.fleet));
+        manifest.vrf.coordinator.addConsumer(manifest.vrf.subscriptionId, address(fleet));
     }
 
     /// @dev A second coordinator that knows the manifest's gas lane and subscription id, so only
@@ -438,6 +443,7 @@ contract RecordKeyfleetsTest is Test {
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
         manifest.usdc = deployer.BASE_USDC();
+        manifest.assetRegistry = address(new KeyfleetAssetRegistry(SAFE, deployer.BASE_USDC()));
         manifest.regent = deployer.BASE_REGENT();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(base));
         manifest.vrf.subscriptionId = base.createSubscription();
@@ -453,7 +459,7 @@ contract RecordKeyfleetsTest is Test {
         manifest.staking = STAKING;
         manifest.regentSafe = SAFE;
         manifest.autolaunchFactory = address(factory);
-        manifest.assetRegistry = address(0);
+        manifest.assetRegistry = address(registry);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
         manifest.vrf = Keyfleet.Randomness({
