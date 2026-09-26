@@ -221,11 +221,14 @@ fly deploy <folder> --config <folder>/platform/fly.toml \
 The context is built from this repository's last commit; the script warns
 when there are uncommitted changes, which it leaves out.
 
-`/app/bin/seed-catalog` puts the four fleets on the site and opens the rooms of
-the fleets that are not coming soon, without binding any of them to contracts,
-so key sales stay off. `/app/bin/seed-deployment <file>` binds one fleet to its
-deployed contracts from that fleet's deployed manifest, opens its rooms and
-turns its key sales on; a coming-soon fleet opens with it.
+The migration step every deploy runs (`/app/bin/migrate`) also puts the four
+fleets on the site and opens the rooms of the fleets that are not coming soon,
+without binding any of them to contracts, so key sales stay off; running it
+again changes nothing that is already there. `/app/bin/seed-deployment <file>`
+binds one fleet to its deployed contracts from that fleet's deployed manifest,
+opens its rooms and turns its key sales on, all at once; a coming-soon fleet
+opens with it. It refuses a fleet whose chain, USDC, asset registry or trait
+table differs from a fleet already recorded.
 
 The graph host's Python supply is sealed by
 `scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for

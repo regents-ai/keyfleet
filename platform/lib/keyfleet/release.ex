@@ -12,24 +12,32 @@ defmodule Keyfleet.Release do
     Keyfleet.DatabaseConfig.release_config!(getenv)
   end
 
+  @doc """
+  Brings a deployed database up to the release: runs every migration, then
+  seeds the catalog as `seed_catalog!/0` does. Deploying runs it as the
+  release command, so a deploy that takes a fleet's coming-soon mark away also
+  opens that fleet's rooms. It never binds a fleet to a deployment.
+  """
   def migrate do
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, migration_config!())
-
-    Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo -> repo.migrate!(migrations_path()) end)
+    with_release_repo(fn ->
+      Keyfleet.Repo.migrate!(migrations_path())
+      seed_catalog!()
+    end)
   end
 
   @doc """
   Binds one fleet to the deployment a deployed manifest records, the JSON
   `contracts/script/RecordKeyfleets.s.sol` writes for that fleet, opens the
-  fleet's fixed and open rooms, and prints what it is now bound to.
+  fleet's fixed and open rooms, and prints what it is now bound to. The fleet
+  is bound and its rooms opened together or not at all.
   `bin/seed-deployment <path>` runs it. This is what puts a fleet's keys on
   sale, a coming-soon fleet's included; every other fleet is left as it is.
 
   Recording the same manifest again changes nothing; a manifest naming other
-  contracts for a bound fleet is refused and changes nothing. A running app
-  reads only the fleets that were deployed when it started, so it must be
-  restarted before it reads a newly bound fleet.
+  contracts for a bound fleet, or wiring that differs from the fleets already
+  bound, is refused and changes nothing. A running app reads only the fleets
+  that were deployed when it started, so it must be restarted before it reads
+  a newly bound fleet.
   """
   def seed_deployment(path), do: with_release_repo(fn -> seed_deployment!(path) end)
 
@@ -37,8 +45,14 @@ defmodule Keyfleet.Release do
   # The path is the operator's own argument on the machine they are signed in to.
   # sobelow_skip ["Traversal.FileModule"]
   def seed_deployment!(path) do
-    fleet = path |> File.read!() |> Jason.decode!() |> Keyfleet.Fleets.record_manifest!()
-    Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
+    manifest = path |> File.read!() |> Jason.decode!()
+
+    {:ok, fleet} =
+      Ash.transact([Keyfleet.Fleets.Fleet, Keyfleet.Rooms.Room], fn ->
+        fleet = Keyfleet.Fleets.record_manifest!(manifest)
+        Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
+        fleet
+      end)
 
     IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
 
@@ -49,12 +63,9 @@ defmodule Keyfleet.Release do
   Seeds the four fleets and opens the rooms of every fleet that is not coming
   soon, without binding any fleet to a deployment, so the site shows every
   fleet while key sales stay off. A coming-soon fleet gets its rooms when it
-  opens. `bin/seed-catalog` runs it. Running it again changes nothing, and it
-  never touches a fleet's recorded deployment.
+  opens. `migrate/0` runs it after the migrations on every deploy. Running it
+  again changes nothing, and it never touches a fleet's recorded deployment.
   """
-  def seed_catalog, do: with_release_repo(&seed_catalog!/0)
-
-  @doc "Seeds the fleets through an already running repository, as `seed_catalog/0` does."
   def seed_catalog! do
     fleets = Keyfleet.Fleets.bootstrap_catalog!()
     open = Keyfleet.Fleets.open_fleet_ids()

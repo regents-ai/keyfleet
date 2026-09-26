@@ -7,7 +7,7 @@ defmodule Keyfleet.ReleasePackageTest do
   @fly_template Path.join(@package_root, "fly.toml")
   @fly_staging_template Path.join(@package_root, "fly.staging.toml")
   @context_script Path.join(@package_root, "scripts/build-release-context.sh")
-  @release_commands ~w(migrate bootstrap-staging pending-migrations seed-catalog)
+  @release_commands ~w(migrate bootstrap-staging pending-migrations seed-deployment)
 
   test "PKG-IMAGE and PKG-TEMPLATE ship the release package files" do
     assert File.regular?(@dockerfile)

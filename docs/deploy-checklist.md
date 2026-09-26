@@ -85,7 +85,7 @@ production.
 If `keyfleet_app` does not exist yet, skip to step 6: every migration below
 then runs on empty tables.
 
-If it does exist, four migrations need care:
+If it does exist, five migrations need care, and one count goes to the founder:
 
 - **Graph files** (and the migrations `20260923005641` and `20260925054716`).
   Both migrations empty `keyfleet_app.graph_cursors`, which also empties the
@@ -116,6 +116,23 @@ If it does exist, four migrations need care:
   SELECT count(*) FROM keyfleet_app.key_attachments WHERE ownership_epoch < 1;
   SELECT count(*) FROM keyfleet_app.key_pairings WHERE ownership_epoch < 1;
   ```
+- **Shared asset registry** (`20260926195935`). A recorded fleet now also
+  records its asset registry, so the migration stops if any fleet was recorded
+  before it. First run, and expect `0`:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.fleets WHERE contract_address IS NOT NULL;
+  ```
+  If it is above 0, stop and tell the founder; do not clear the recorded fleet.
+- **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
+  rooms while they are coming soon, and agents are told those fleets are
+  coming soon whatever rooms they already have. Rooms made for them before are
+  left in place. Count them, and report the counts to the founder rather than
+  deleting anything:
+  ```sql
+  SELECT fleet_id, count(*) FROM keyfleet_app.rooms
+  WHERE fleet_id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_accelerant')
+  GROUP BY fleet_id;
+  ```
 
 `/app/bin/pending-migrations` lists what the database is missing without
 changing anything, but on a database with no `keyfleet_app` yet it only says
@@ -133,20 +150,19 @@ refuses anything but staging.
    The build script prints this command with the folder filled in. A plain
    `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
    second machine would get its own empty volume and the fleets' graphs would
-   split without any error. The migration step runs before the site starts.
+   split without any error. The migration step runs before the site starts:
+   it brings the database up to date and then puts the four fleets on the
+   site, opening Keyfleet Classic's rooms. Classic is open, and Syndicate,
+   Cascade and Accelerant are coming soon, shown by name with no price, no
+   keys, no rooms and no way to join. It records no contracts, and every
+   later deploy runs it again without changing anything that is already there.
    **Not verified**: these flags are the ones `fly deploy --help` lists
    (flyctl 0.4.107), but no remote build has been run, so it is not known
    whether Fly's builder reads the ignore file exactly as Docker does here.
 2. The site starts, and every fleet's graph shows as unavailable because the
    new volume belongs to root: `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`.
    The graphs come back within 30 seconds with no restart.
-3. `fly ssh console --config fly.toml -C "/app/bin/seed-catalog"`. This puts
-   the four fleets on the site and opens Keyfleet Classic's rooms. It prints
-   each fleet as `open` or `coming soon`: Classic is open, and Syndicate, Cascade
-   and Accelerant are coming soon, shown by name with no price, no keys, no
-   rooms and no way to join. Before it runs, every fleet page says the fleet
-   doesn't exist. It records no contracts, and running it again changes nothing.
-4. Check `https://keyfleet.ai/healthz` answers, and that `fly status` shows one
+3. Check `https://keyfleet.ai/healthz` answers, and that `fly status` shows one
    machine that stays running.
 
 ## Key sales stay off
@@ -159,18 +175,21 @@ Do not run it, or deploy the contracts, as part of this launch.
 ## Opening a fleet later
 
 Each fleet is deployed and recorded on its own, when the founder says so;
-[deployment.md](deployment.md) has the two contract steps, run with
-`KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest with
+[deployment.md](deployment.md) has the contract steps: the shared asset
+registry once, before the first fleet, then each fleet with `KEYFLEET_FLEET`
+set to that one fleet. Recording its deployed manifest with
 `/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
 [chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
-puts its keys on sale. A fleet shown as coming soon opens at that moment; every
+puts its keys on sale, all at once: if the fleet cannot be opened, nothing is
+recorded. It refuses a fleet whose chain, USDC, asset registry or trait table
+differs from a fleet already recorded. A fleet shown as coming soon opens at that moment; every
 other fleet is left as it is. Restart the app afterwards so the chain reader
 starts for it.
 
 Coming-soon fleets get no rooms until they open, because nobody can join them.
 A fleet can also be shown before it is deployed by changing its
 `coming_soon?` mark in `platform/lib/keyfleet/fleets.ex` and releasing; it then
-shows "Not on sale yet", and `seed-catalog` run again opens its rooms. Its keys
+shows "Not on sale yet", and that release's migration step opens its rooms. Its keys
 still stay off sale until its deployment is recorded.
 
 ## What was checked locally
@@ -179,6 +198,7 @@ On 2026-09-26 the arm64 image was built from the context script and run
 against a fresh local database: every migration ran, `pending-migrations` said
 `none`, `/healthz` answered, the graph processes started once `/data` was
 handed to uid 1001, `seed-catalog` opened the four fleets, and no page offered
-a key for sale. That check was made before Classic opened first; it has not
-been repeated since. Not checked: the amd64 image, the Fly remote build and deploy
+a key for sale. That check was made before Classic opened first and before
+the migration step took over putting the fleets on the site (`seed-catalog`
+no longer exists); it has not been repeated since. Not checked: the amd64 image, the Fly remote build and deploy
 command, the production database, Privy, siwa-server and DNS.
