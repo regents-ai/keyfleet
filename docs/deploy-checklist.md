@@ -196,11 +196,12 @@ still stay off sale until its deployment is recorded.
 
 ## What was checked locally
 
-On 2026-09-26 the arm64 image was built from the context script and run
-against a fresh local database: every migration ran, `pending-migrations` said
-`none`, `/healthz` answered, the graph processes started once `/data` was
-handed to uid 1001, `seed-catalog` opened the four fleets, and no page offered
-a key for sale. That check was made before Classic opened first and before
-the migration step took over putting the fleets on the site (`seed-catalog`
-no longer exists); it has not been repeated since. Not checked: the amd64 image, the Fly remote build and deploy
+On 2026-09-26 the arm64 image was built from the context script at `e21b407`
+and run against a fresh local database through the staging role:
+`bootstrap-staging` ran, `/app/bin/migrate` ran every migration and put the
+four fleets on the site with Keyfleet Classic open and the other three coming
+soon, a second `migrate` changed nothing, `pending-migrations` said `none`,
+`/healthz` answered, the graph processes started once `/data` was handed to
+uid 1001, no fleet was recorded, only Classic had rooms and no page offered a
+key for sale. Not checked: the amd64 image, the Fly remote build and deploy
 command, the production database, Privy, siwa-server and DNS.
