@@ -1,18 +1,18 @@
 defmodule Keyfleet.CreatedRoomRaceTest do
   use ExUnit.Case, async: false
 
-  alias Keyfleet.Fleets
+  alias Keyfleet.CommittedCatalog
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
   # Each creation runs on a connection of its own and commits, so the rooms
-  # this test leaves behind are removed when it ends.
+  # and any fleets committed here are removed when it ends.
   @fleet "fleet_tech_classic"
 
   setup do
-    Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      Fleets.bootstrap_catalog!()
+    added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
 
+    Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       # The first 98 created rooms, written straight to the table: only the
       # last two creations are under test.
       Repo.insert_all(
@@ -34,6 +34,8 @@ defmodule Keyfleet.CreatedRoomRaceTest do
         Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = $1 AND kind = 'created'", [
           @fleet
         ])
+
+        CommittedCatalog.remove!(added_fleets)
       end)
     end)
   end

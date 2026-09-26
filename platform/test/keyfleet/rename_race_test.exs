@@ -3,15 +3,15 @@ defmodule Keyfleet.RenameRaceTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
-  alias Keyfleet.Fleets
+  alias Keyfleet.CommittedCatalog
   alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
 
   # Each naming runs on a connection of its own and commits. The room, its
-  # naming lines, the keys and the fleet's key reading are all removed when the
-  # test ends, so no other test sees them.
+  # naming lines, the keys, the fleet's key reading and any fleets committed
+  # here are all removed when the test ends, so no other test sees them.
   @fleet "fibonacci_syndicate"
   @slug "open-5"
 
@@ -19,8 +19,9 @@ defmodule Keyfleet.RenameRaceTest do
     owners = for _ <- 1..2, do: random_wallet()
     token_ids = for _ <- 1..2, do: :rand.uniform(1_000_000_000) + 1_000_000_000
 
+    added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      Fleets.bootstrap_catalog!()
       ChainHelpers.seed_cursor!(@fleet)
 
       Repo.insert_all("rooms", [
@@ -50,7 +51,12 @@ defmodule Keyfleet.RenameRaceTest do
       end
     end)
 
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> clean_up(token_ids) end) end)
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        clean_up(token_ids)
+        CommittedCatalog.remove!(added_fleets)
+      end)
+    end)
 
     %{owners: Enum.map(owners, &%Actors.Human{human_account_id: 1, wallet_addresses: [&1]})}
   end

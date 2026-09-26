@@ -2,7 +2,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
   use ExUnit.Case, async: false
   require Ash.Query
 
-  alias Keyfleet.{ChainHelpers, Fleets, Keys, Repo}
+  alias Keyfleet.{ChainHelpers, CommittedCatalog, Fleets, Keys, Repo}
   alias Keyfleet.Keys.KeyAttachment
 
   @fleet "fibonacci_syndicate"
@@ -11,6 +11,14 @@ defmodule Keyfleet.KeyAttachmentsTest do
 
   setup context do
     if context[:independent_connections] do
+      added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+
+      on_exit(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+          CommittedCatalog.remove!(added_fleets)
+        end)
+      end)
+
       Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &open_fleets!/0)
     else
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)

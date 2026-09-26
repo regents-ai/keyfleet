@@ -25,9 +25,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  // The fleet pages need the four fleets in the catalog, so they are put there
+  // before the server starts; they are never deployed, so nothing is on sale.
   webServer: {
     command:
-      "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
+      "MIX_ENV=test mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()' && MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
     url: `${baseURL}/`,
     reuseExistingServer: false,
     timeout: 120_000,

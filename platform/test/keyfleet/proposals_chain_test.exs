@@ -6,6 +6,7 @@ defmodule Keyfleet.ProposalsChainTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.{LaunchEnvelopes, Logs, Scanner, StubClient}
+  alias Keyfleet.CommittedCatalog
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -40,12 +41,16 @@ defmodule Keyfleet.ProposalsChainTest do
 
   setup context do
     if context[:independent_connections] do
-      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &remove_committed_records/0) end)
+      added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
 
-      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-        Fleets.bootstrap_catalog!()
-        %{fleet: deploy!()}
+      on_exit(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+          remove_committed_records()
+          CommittedCatalog.remove!(added_fleets)
+        end)
       end)
+
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> %{fleet: deploy!()} end)
     else
       :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
       Fleets.bootstrap_catalog!()

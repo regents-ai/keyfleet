@@ -3,6 +3,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Keyfleet.Actors
+  alias Keyfleet.CommittedCatalog
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
@@ -25,7 +26,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   setup %{tmp_dir: tmp_dir} = context do
     if context[:independent_connections] do
-      Sandbox.unboxed_run(Repo, &Fleets.bootstrap_catalog!/0)
+      added_fleets = Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+
+      on_exit(fn ->
+        Sandbox.unboxed_run(Repo, fn -> CommittedCatalog.remove!(added_fleets) end)
+      end)
     else
       # Workspace reads take a repeatable-read snapshot, which Postgres allows
       # inside the sandbox only when its transaction is at that level already.

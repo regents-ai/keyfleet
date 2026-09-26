@@ -3,22 +3,23 @@ defmodule Keyfleet.KeyThreadRaceTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
-  alias Keyfleet.Fleets
+  alias Keyfleet.CommittedCatalog
   alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
   # Each post runs on a connection of its own and commits. The thread, its
-  # posts, the keys and the fleet's key reading are all removed when the test
-  # ends, so no other test sees them.
+  # posts, the keys, the fleet's key reading and any fleets committed here are
+  # all removed when the test ends, so no other test sees them.
   @fleet "fibonacci_syndicate"
 
   setup do
     owners = for _ <- 1..2, do: random_wallet()
     token_ids = for _ <- 1..2, do: :rand.uniform(1_000_000_000) + 1_000_000_000
 
+    added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      Fleets.bootstrap_catalog!()
       ChainHelpers.seed_cursor!(@fleet)
 
       for {owner, token_id} <- Enum.zip(owners, token_ids) do
@@ -38,7 +39,12 @@ defmodule Keyfleet.KeyThreadRaceTest do
       end
     end)
 
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> clean_up(token_ids) end) end)
+    on_exit(fn ->
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        clean_up(token_ids)
+        CommittedCatalog.remove!(added_fleets)
+      end)
+    end)
 
     %{
       owners: Enum.map(owners, &%Actors.Human{human_account_id: 1, wallet_addresses: [&1]}),
