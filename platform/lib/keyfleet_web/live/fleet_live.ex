@@ -84,7 +84,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :now, :map,
     required: true,
     doc:
-      ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
+      ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it; and `list`, naming the fleet and the pages shown)
 
   def page(assigns) do
     ~H"""
@@ -203,6 +203,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
           <.about fleet={@fleet} />
           <CheckIns.who_is_here
+            fleet_id={@fleet.fleet_id}
             agents={@fleet.agents}
             agents_here={@fleet.agents_here}
             on_close={close("#fleet-who", "#fleet-who-toggle")}
@@ -351,6 +352,7 @@ defmodule KeyfleetWeb.FleetLive do
           phx-update="stream"
           phx-hook="Arrivals"
           data-variant={Motion.standard("list")}
+          data-list={@now.list}
         >
           <.activity_line
             :for={{dom_id, item} <- @activity}
@@ -801,7 +803,7 @@ defmodule KeyfleetWeb.FleetLive do
           </dl>
 
           <Regent.Primitives.button id="buy-key-button" type="button" data-buy-key>
-            Buy key {grouped(@buy.token_id)}
+            <span data-press-label>Buy key {grouped(@buy.token_id)}</span>
           </Regent.Primitives.button>
         </div>
 

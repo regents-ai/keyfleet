@@ -443,7 +443,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       data-demo-outcome
                     ><option value="confirmed">Confirmed</option><option value="rejected">
                       Rejected
-                    </option><option value="reverted">Reverted</option></select><P.button data-demo-send>Send fixture transaction</P.button><ol
+                    </option><option value="reverted">Reverted</option></select><P.button data-demo-send><span data-press-label>Send fixture transaction</span></P.button><ol
                       data-demo-results
                       aria-live="polite"
                     >

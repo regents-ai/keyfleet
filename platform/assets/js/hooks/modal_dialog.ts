@@ -1,4 +1,5 @@
 import type {Hook} from "../hook_composition"
+import {pressedControl} from "./motion/shared"
 
 interface ModalDialogHook {
   el: HTMLDialogElement
@@ -10,30 +11,10 @@ interface ModalDialogHook {
 const focusable =
   "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"
 
-// The control the visitor last pressed with the pointer, forgotten at the next
-// key press. Safari doesn't focus a link or button when it is clicked, so what
-// has focus can't say which one opened a dialog; a key press can, since it
-// reaches whatever has focus.
-let pressed: string | undefined
-
-export function rememberPress(event: Event) {
-  const control = (event.target as Element | null)?.closest?.("a[id], button[id], [tabindex][id]")
-  pressed = control?.id
-}
-
-export function forgetPress() {
-  pressed = undefined
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("click", rememberPress, true)
-  document.addEventListener("keydown", forgetPress, true)
-}
-
 // The control that opened the dialog: the one just pressed, or else the one
 // with focus.
 export function openerOf(active: Element | null, body: Element | null) {
-  return pressed ?? (active && active !== body && active.id ? active.id : undefined)
+  return pressedControl() ?? (active && active !== body && active.id ? active.id : undefined)
 }
 
 // Tab and Shift+Tab step through the dialog's controls and go round at either

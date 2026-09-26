@@ -4,7 +4,7 @@
  * islands only move a panel as it opens, and only when a pointer press opened
  * it. Closing is instant, as the page already hid the panel.
  */
-import {animate, createScope, spring, utils, type AnimationParams, type JSAnimation, type Scope} from "animejs"
+import {animate, cleanInlineStyles, spring, type AnimationParams, type JSAnimation} from "animejs"
 import {SLOW, still, takePointerPress} from "./shared"
 import type {Hook} from "../../hook_composition"
 
@@ -23,20 +23,20 @@ const PANELS: Record<string, Record<string, AnimationParams>> = {
   },
 }
 
-const tidy = (animation: JSAnimation) => utils.cleanInlineStyles(animation)
+const tidy = (animation: JSAnimation) => cleanInlineStyles(animation)
 const arrive = (el: HTMLElement, move: AnimationParams) => animate(el, {...move, onComplete: tidy})
 
 // Showing: not hidden, and not inside a closed disclosure.
 const shown = (el: HTMLElement) => !el.hidden && el.closest("details:not([open])") === null
 
-type SlidesHook = {el: HTMLElement; scope?: Scope}
+type SlidesHook = {el: HTMLElement; watch?: MutationObserver; moving?: Map<HTMLElement, JSAnimation>}
 
 /**
  * An island holding panels marked `data-panel="drawer"` or `"menu"`, each
  * moving as `data-drawer` or `data-menu` on the island says. A panel opens
  * when its `hidden` goes, or when the disclosure around it opens. The page
  * puts both back after every update, so a panel that is open before and after
- * an update is left alone.
+ * an update is left alone. Each panel has at most one move running.
  */
 export const Slides: Hook = {
   mounted(this: SlidesHook) {
@@ -44,43 +44,40 @@ export const Slides: Hook = {
     const panels = () => [...island.querySelectorAll<HTMLElement>("[data-panel]")]
     const open = new Set(panels().filter(shown))
     const moving = new Map<HTMLElement, JSAnimation>()
-    const scope = createScope({root: island})
 
-    this.scope = scope.add(self => {
-      self!.add("open", (el: HTMLElement) => {
-        const kind = el.dataset.panel as string
-        const animation = arrive(el, PANELS[kind][island.dataset[kind] as string])
-        moving.set(el, animation)
-        animation.then(() => moving.delete(el))
-      })
+    const slide = (el: HTMLElement) => {
+      const kind = el.dataset.panel as string
+      const animation = arrive(el, PANELS[kind][island.dataset[kind] as string])
+      moving.set(el, animation)
+      animation.then(() => moving.delete(el))
+    }
 
-      const watch = new MutationObserver(() => {
-        const opened = []
-        for (const el of panels()) {
-          if (shown(el) === open.has(el)) continue
-          if (shown(el)) {
-            open.add(el)
-            opened.push(el)
-          } else {
-            open.delete(el)
-            moving.get(el)?.revert()
-            moving.delete(el)
-          }
+    this.moving = moving
+    this.watch = new MutationObserver(() => {
+      const opened = []
+      for (const el of panels()) {
+        if (shown(el) === open.has(el)) continue
+        if (shown(el)) {
+          open.add(el)
+          opened.push(el)
+        } else {
+          open.delete(el)
+          moving.get(el)?.revert()
+          moving.delete(el)
         }
-        if (opened.length > 0 && takePointerPress() && !still()) opened.forEach(scope.methods.open)
-      })
-
-      watch.observe(island, {subtree: true, attributes: true, attributeFilter: ["hidden", "open"]})
-      return () => watch.disconnect()
+      }
+      if (opened.length > 0 && takePointerPress() && !still()) opened.forEach(slide)
     })
+    this.watch.observe(island, {subtree: true, attributes: true, attributeFilter: ["hidden", "open"]})
   },
 
   destroyed(this: SlidesHook) {
-    this.scope?.revert()
+    this.watch?.disconnect()
+    this.moving?.forEach(animation => animation.revert())
   },
 }
 
-type SheetHook = {el: HTMLDialogElement; scope?: Scope}
+type SheetHook = {el: HTMLDialogElement; rising?: JSAnimation}
 
 /**
  * A dialog the page opens by adding it, composed after `ModalDialog` so it is
@@ -89,12 +86,10 @@ type SheetHook = {el: HTMLDialogElement; scope?: Scope}
 export const Sheet: Hook = {
   mounted(this: SheetHook) {
     const dialog = this.el
-    this.scope = createScope({root: dialog}).add(() => {
-      if (takePointerPress() && !still()) arrive(dialog, PANELS.sheet[dialog.dataset.variant as string])
-    })
+    if (takePointerPress() && !still()) this.rising = arrive(dialog, PANELS.sheet[dialog.dataset.variant as string])
   },
 
   destroyed(this: SheetHook) {
-    this.scope?.revert()
+    this.rising?.revert()
   },
 }

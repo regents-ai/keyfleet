@@ -1,6 +1,7 @@
 import {afterEach, expect, it, vi} from "vitest"
 
-import {forgetPress, ModalDialog, openerOf, rememberPress, stepTab} from "../js/hooks/modal_dialog"
+import {ModalDialog, openerOf, stepTab} from "../js/hooks/modal_dialog"
+import {forgetPress, notePress} from "../js/hooks/motion/shared"
 
 // Vitest here runs without a document, so the page and the dialog are the
 // small surfaces the hook touches.
@@ -171,7 +172,7 @@ it("steps Tab and Shift+Tab through the dialog's controls, going round at either
 it("names the control just pressed as the opener, and else the one with focus", () => {
   const body = {}
   const map = {id: "key-map-fibonacci_cascade"} as Element
-  rememberPress({target: {closest: () => ({id: "fleet-key-link-7"})}} as unknown as Event)
+  notePress({target: {closest: () => ({id: "fleet-key-link-7"})}, detail: 1} as unknown as MouseEvent)
 
   expect(openerOf(map, body as Element)).toBe("fleet-key-link-7")
 

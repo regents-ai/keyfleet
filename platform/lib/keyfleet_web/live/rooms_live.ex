@@ -120,6 +120,7 @@ defmodule KeyfleetWeb.RoomsLive do
             phx-update="stream"
             phx-hook="Arrivals"
             data-variant={Motion.standard("list")}
+            data-list={"#{@room.fleet_id}/#{@room.slug}"}
           >
             <li
               :for={{dom_id, message} <- @posts}

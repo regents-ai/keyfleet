@@ -282,6 +282,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-update="stream"
         phx-hook="Arrivals"
         data-variant={Motion.standard("list")}
+        data-list={"#{@profile.fleet_id}/#{@profile.token_id}"}
       >
         <li :for={{dom_id, message} <- @thread} id={dom_id}>
           <p class="rooms-author">

@@ -37,6 +37,7 @@ defmodule KeyfleetWeb.CheckIns do
     """
   end
 
+  attr :fleet_id, :string, required: true
   attr :agents, :list, required: true, doc: "the agents shown, as `Keyfleet.Directory.agents/1`"
   attr :agents_here, :integer, required: true, doc: "every agent running the fleet's keys"
   attr :on_close, JS, required: true
@@ -77,6 +78,7 @@ defmodule KeyfleetWeb.CheckIns do
         class="who-is-here__list"
         phx-hook="Arrivals"
         data-variant={Motion.standard("list")}
+        data-list={@fleet_id}
       >
         <li :for={agent <- @agents} id={"fleet-who-#{agent.first_key}"}>
           <p class="who-is-here__name">

@@ -57,9 +57,11 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
               if @account_control.kind == :signed_in, do: "connect-wallet", else: "sign-in"
             }
           >
-            {if @account_control.kind == :signed_in,
-              do: "Connect or change wallet",
-              else: "Sign in with Privy"}
+            <span data-press-label>
+              {if @account_control.kind == :signed_in,
+                do: "Connect or change wallet",
+                else: "Sign in with Privy"}
+            </span>
           </P.button>
           <p :if={@mode == :unconfigured} role="status">
             Configure the local Privy app and verification key before using these controls. Nothing is simulated.
@@ -93,7 +95,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
               if @account_control.kind == :signed_in, do: "connect-wallet", else: "sign-in"
             }
           >
-            Connect wallet
+            <span data-press-label>Connect wallet</span>
           </P.button>
           <p>
             Signing in and having a transaction-ready wallet are separate states. Disconnect in the header clears this wallet selection.

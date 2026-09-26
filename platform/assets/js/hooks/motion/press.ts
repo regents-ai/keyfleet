@@ -4,10 +4,10 @@
  * hand the element back to its stylesheet. One pressed again mid-move starts
  * over from wherever it is.
  */
-import {animate, utils, type JSAnimation} from "animejs"
+import {animate, cleanInlineStyles, type JSAnimation} from "animejs"
 import {still} from "./shared"
 
-const tidy = (animation: JSAnimation) => utils.cleanInlineStyles(animation)
+const tidy = (animation: JSAnimation) => cleanInlineStyles(animation)
 
 export const squish = (el: HTMLElement) =>
   animate(el, {
@@ -15,11 +15,9 @@ export const squish = (el: HTMLElement) =>
     onComplete: tidy,
   })
 
-export const nope = (el: HTMLElement) =>
-  animate(el, {x: [0, -7, 6, -4, 2, 0], duration: 380, ease: "inOut(2)", onComplete: tidy})
-
 // Something was refused. Unlike a press, the shake plays however the refused
 // thing was asked for, because it is the answer, not decoration.
 export function deny(el: HTMLElement) {
-  if (!still()) nope(el)
+  if (still()) return
+  return animate(el, {x: [0, -7, 6, -4, 2, 0], duration: 380, ease: "inOut(2)", onComplete: tidy})
 }

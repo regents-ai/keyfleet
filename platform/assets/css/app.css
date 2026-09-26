@@ -97,6 +97,11 @@ input:focus-visible,
   outline-offset: 2px;
 }
 
+/* The label a wallet button squishes when pressed, while the button keeps its size. */
+[data-press-label] {
+  display: inline-block;
+}
+
 /* Carries the exact figure behind a shortened one, for assistive technology. */
 .visually-hidden {
   position: absolute;

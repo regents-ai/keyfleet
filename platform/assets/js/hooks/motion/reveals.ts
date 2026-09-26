@@ -2,9 +2,20 @@
  * Motion for something arriving: a headline that rises in word by word and a
  * list of cards that settles into place.
  */
-import {animate, createScope, stagger, utils, type JSAnimation, type Scope, type TextSplitter} from "animejs"
-import {EASE_OUT, SLOW, still} from "./shared"
+import {
+  animate,
+  cleanInlineStyles,
+  createScope,
+  cubicBezier,
+  stagger,
+  type JSAnimation,
+  type Scope,
+  type TextSplitter,
+} from "animejs"
+import {SLOW, still} from "./shared"
 import type {Hook} from "../../hook_composition"
+
+const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1)
 
 // Moves in percent name both ends, so they stay a share of each word's own
 // height instead of being converted to pixels from its width.
@@ -13,7 +24,7 @@ export const HEADLINES: Record<string, (split: TextSplitter) => JSAnimation> = {
     animate(split.words as HTMLElement[], {y: ["100%", "0%"], delay: stagger(50), duration: SLOW, ease: EASE_OUT}),
 }
 
-export const GRIDS: Record<string, (cards: HTMLElement[]) => JSAnimation> = {
+const GRIDS: Record<string, (cards: HTMLElement[]) => JSAnimation> = {
   cascade: cards =>
     animate(cards, {
       y: {from: 16},
@@ -21,12 +32,12 @@ export const GRIDS: Record<string, (cards: HTMLElement[]) => JSAnimation> = {
       delay: stagger(45),
       duration: SLOW,
       ease: EASE_OUT,
-      onComplete: animation => utils.cleanInlineStyles(animation),
+      onComplete: animation => cleanInlineStyles(animation),
     }),
 }
 
 // The first cards of a list cascade in; later ones are simply there.
-export const CASCADE = 12
+const CASCADE = 12
 
 type CascadeHook = {el: HTMLElement; scope?: Scope}
 

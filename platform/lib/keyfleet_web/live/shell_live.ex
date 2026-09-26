@@ -664,10 +664,17 @@ defmodule KeyfleetWeb.ShellLive do
 
   # What the panel needs to know of the pages read, and never the cursor:
   # whether anything is there, whether earlier items are a press of "Show
-  # earlier" away or past the pages it shows, and what the fleet is trying.
+  # earlier" away or past the pages it shows, what the fleet is trying, and
+  # which list it shows: the fleet and how many pages of it.
   defp now_shown(nil), do: nil
 
-  defp now_shown(%{cursor: cursor, pages: pages, empty?: empty?, trying: trying}) do
+  defp now_shown(%{
+         fleet_id: fleet_id,
+         cursor: cursor,
+         pages: pages,
+         empty?: empty?,
+         trying: trying
+       }) do
     earlier =
       cond do
         cursor == nil -> nil
@@ -675,7 +682,7 @@ defmodule KeyfleetWeb.ShellLive do
         true -> :elsewhere
       end
 
-    %{empty?: empty?, earlier: earlier, trying: trying}
+    %{empty?: empty?, earlier: earlier, trying: trying, list: "#{fleet_id}:#{pages}"}
   end
 
   defp activity_dom_id(%{id: id}), do: "fleet-now-" <> String.replace(id, ":", "-")

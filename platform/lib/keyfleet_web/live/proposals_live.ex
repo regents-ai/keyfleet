@@ -298,7 +298,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             data-support="yes"
             data-proposal={@proposal.number}
           >
-            Vote yes
+            <span data-press-label>Vote yes</span>
           </Regent.Primitives.button>
           <Regent.Primitives.button
             id="proposal-vote-no"
@@ -307,7 +307,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             data-support="no"
             data-proposal={@proposal.number}
           >
-            Vote no
+            <span data-press-label>Vote no</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -342,7 +342,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             data-fleet-action="execute"
             data-proposal={@proposal.number}
           >
-            {carry_out_word(@proposal.kind)}
+            <span data-press-label>{carry_out_word(@proposal.kind)}</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -375,7 +375,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:fields>
         <:buttons>
           <Regent.Primitives.button id="propose-decision-button" data-fleet-action="propose_decision">
-            Propose this decision
+            <span data-press-label>Propose this decision</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -428,7 +428,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:fields>
         <:buttons>
           <Regent.Primitives.button id="propose-payment-button" data-fleet-action="propose_pay">
-            Propose this payment
+            <span data-press-label>Propose this payment</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -502,7 +502,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:fields>
         <:buttons>
           <Regent.Primitives.button id="propose-launch-button" data-fleet-action="propose_launch">
-            Propose this launch
+            <span data-press-label>Propose this launch</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -576,14 +576,14 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:fields>
         <:buttons>
           <Regent.Primitives.button id="voting-delegate-button" data-fleet-action="delegate">
-            Let this wallet vote for me
+            <span data-press-label>Let this wallet vote for me</span>
           </Regent.Primitives.button>
           <Regent.Primitives.button
             id="voting-delegate-clear"
             variant="secondary"
             data-fleet-action="clear_delegate"
           >
-            Stop any wallet voting for me
+            <span data-press-label>Stop any wallet voting for me</span>
           </Regent.Primitives.button>
         </:buttons>
       </.action>
@@ -609,7 +609,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       </:notes>
       <:buttons>
         <Regent.Primitives.button id="proposals-send-share" data-fleet-action="send_share">
-          Send stakers their share
+          <span data-press-label>Send stakers their share</span>
         </Regent.Primitives.button>
       </:buttons>
     </.action>
