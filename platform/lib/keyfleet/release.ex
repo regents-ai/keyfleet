@@ -47,6 +47,24 @@ defmodule Keyfleet.Release do
   end
 
   @doc """
+  Opens the four fleets and their fixed and open rooms without binding any of
+  them to a deployment, so the site can show every fleet while key sales stay
+  off. `bin/seed-catalog` runs it. Running it again changes nothing, and it
+  never touches a fleet's recorded deployment.
+  """
+  def seed_catalog, do: with_release_repo(&seed_catalog!/0)
+
+  @doc "Opens the fleets through an already running repository, as `seed_catalog/0` does."
+  def seed_catalog! do
+    fleets = Keyfleet.Fleets.bootstrap_catalog!()
+    Keyfleet.Rooms.bootstrap_rooms!()
+
+    for fleet <- fleets, do: IO.puts("#{fleet.id}: open")
+
+    :ok
+  end
+
+  @doc """
   Lets a fleet stopped at a disagreement with the chain be read again, once
   the record has been corrected by hand. `bin/clear-fleet-stop <fleet id>`
   runs it; a running app picks the fleet up on its next pass.

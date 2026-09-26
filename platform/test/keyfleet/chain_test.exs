@@ -321,6 +321,25 @@ defmodule Keyfleet.ChainTest do
     end
   end
 
+  describe "opening the fleets without a deployment" do
+    @tag :tmp_dir
+    test "the catalog opens every fleet unbound and never unbinds a bound one", %{tmp_dir: dir} do
+      capture_io(fn -> Release.seed_catalog!() end)
+
+      assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.contract_address))
+      assert Fleets.list_deployed_fleets!() == []
+      assert Enum.all?(Fleets.catalog_ids(), &(length(slugs(&1)) >= 10))
+
+      path = Path.join(dir, "deployed.json")
+      File.write!(path, Jason.encode!(manifest("1")))
+      capture_io(fn -> Release.seed_deployment!(path) end)
+      bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+
+      capture_io(fn -> Release.seed_catalog!() end)
+      assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
+    end
+  end
+
   defp slugs(fleet), do: Enum.map(Rooms.list_rooms!(fleet), & &1.slug)
 
   defp deploy!(fleet, contract) do
