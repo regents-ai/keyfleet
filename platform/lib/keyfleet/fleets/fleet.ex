@@ -96,8 +96,11 @@ defmodule Keyfleet.Fleets.Fleet do
         :trait_table_hash
       ]
 
-      validate Keyfleet.Fleets.Validations.SameDeployment
+      # Both run inside the action's transaction, in this order: the wiring
+      # check locks every fleet row first, so the fleet this compares against
+      # is the one committed, not the one read before the lock.
       validate Keyfleet.Fleets.Validations.SharedWiring, before_action?: true
+      validate Keyfleet.Fleets.Validations.SameDeployment, before_action?: true
     end
   end
 
