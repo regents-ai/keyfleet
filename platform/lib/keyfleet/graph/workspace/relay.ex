@@ -97,12 +97,18 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   # The actor's standing could not be read at the write's turn.
   defp refused({:error, error}, fleet_id) do
     Logger.warning(
-      "graph write for #{fleet_id} not sent: its ownership check failed: " <>
-        Exception.message(error)
+      "graph write for #{fleet_id} not sent: its ownership check failed: " <> reason(error)
     )
 
     unavailable(fleet_id)
   end
+
+  # What went wrong, on one line: an error that gathers others, as Ash's do,
+  # by each error it holds, and each error by the first line of its message,
+  # which names its kind, without the trail of where it was passed along.
+  defp reason(%{errors: [_ | _] = errors}), do: Enum.map_join(errors, "; ", &reason/1)
+  defp reason(%{bread_crumbs: [_ | _]} = error), do: reason(%{error | bread_crumbs: []})
+  defp reason(error), do: error |> Exception.message() |> String.split("\n", parts: 2) |> hd()
 
   defp unavailable(fleet_id), do: {:error, UnavailableError.exception(fleet_id: fleet_id)}
 end

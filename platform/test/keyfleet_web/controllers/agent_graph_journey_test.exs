@@ -740,7 +740,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, {:shared, c.sandbox})
 
-    assert log =~ "graph write for #{@fleet} not sent: its ownership check failed"
+    assert log =~
+             "graph write for #{@fleet} not sent: its ownership check failed: " <>
+               "** (DBConnection.OwnershipError) cannot find ownership process for"
+
+    refute log =~ "Unknown Error"
     assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
     assert refused.body["message"] =~ "nothing was written"
 
