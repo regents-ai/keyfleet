@@ -100,7 +100,7 @@ defmodule KeyfleetWeb.FleetLive do
             </Regent.Primitives.button>
             <SendAgent.button
               id="fleet-send-agent"
-              instruction={SendAgent.fleet_instruction(@fleet.name, @fleet.fleet_id)}
+              instruction={SendAgent.fleet_instruction(@fleet.name)}
               open={@send_agent_open}
             />
           </div>

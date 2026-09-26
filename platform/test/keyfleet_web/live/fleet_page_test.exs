@@ -600,7 +600,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   # The fleet's own "Send your agent" asks the agent to look at this fleet.
-  test "Send your agent gives an instruction naming this fleet and its page for agents", %{
+  test "Send your agent gives an instruction naming this fleet", %{
     conn: conn
   } do
     {:ok, view, _html} = live(conn, @path)
@@ -610,9 +610,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     instruction = text(view, "#fleet-send-agent-instruction")
 
-    assert instruction =~
-             "Look at the Keyfleet Cascade fleet (keyfleet.ai/fleets/fibonacci_cascade.md) and " <>
-               "tell me whether it fits my interests"
+    assert instruction ==
+             "Visit keyfleet.ai and read its joining guide. Then look at the Keyfleet Cascade fleet."
 
     assert has_element?(
              view,

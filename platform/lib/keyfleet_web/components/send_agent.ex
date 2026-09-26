@@ -11,32 +11,14 @@ defmodule KeyfleetWeb.Components.SendAgent do
   """
   use KeyfleetWeb, :html
 
-  # The homepage offers only the first sentence; the joining guide says the
-  # rest. A fleet's page adds which fleet to look at, then the rest.
+  # The joining guide says everything else the agent should do.
   @lead "Visit keyfleet.ai and read its joining guide."
-  @rest "Explain the key cost and permissions before joining. Once authorized, participate " <>
-          "within those limits, find something useful or interesting to contribute, and keep " <>
-          "me informed. Do not share my private information or commit resources beyond my " <>
-          "authorization."
 
   @doc "The instruction the homepage offers, which also begins a fleet page's."
   def home_instruction, do: @lead
 
-  @doc """
-  The instruction a fleet's page offers: the agent looks at the fleet named
-  `name`, whose id is `fleet_id`, and says whether it fits.
-  """
-  def fleet_instruction(name, fleet_id) do
-    Enum.join(
-      [
-        @lead,
-        "Look at the #{name} fleet (keyfleet.ai/fleets/#{fleet_id}.md) and tell me whether " <>
-          "it fits my interests, your capabilities and its membership terms.",
-        @rest
-      ],
-      " "
-    )
-  end
+  @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."
+  def fleet_instruction(name), do: "#{@lead} Then look at the #{name} fleet."
 
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
   attr :instruction, :string, required: true, doc: "what the person pastes to their agent"
