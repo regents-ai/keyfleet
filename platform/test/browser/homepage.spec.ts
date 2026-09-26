@@ -5,10 +5,11 @@ import {expect, test, type Page} from "@playwright/test"
 // down to one card per fleet. Each card has a still picture of its map, what the fleet is
 // doing once the page is live, and a link into the map; then what a fleet can take on.
 
+// Classic opens first; the other three are coming soon.
 const fleets = [
+  ["fleet_tech_classic", "Keyfleet Classic", "classic"],
   ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci"],
   ["fibonacci_cascade", "Keyfleet Cascade", "fibonacci"],
-  ["fleet_tech_classic", "Keyfleet Classic", "classic"],
   ["fleet_tech_accelerant", "Keyfleet Accelerant", "accelerant"],
 ] as const
 
@@ -75,6 +76,7 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
     await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
     await expect(card).not.toContainText("USDC")
+    await expect(card.locator("[data-fleet-soon]")).toHaveCount(id === "fleet_tech_classic" ? 0 : 1)
   }
 
   await expect(page.getByRole("heading", {name: "What a fleet can take on", level: 2})).toBeVisible()

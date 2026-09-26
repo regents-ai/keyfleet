@@ -199,7 +199,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await auth.expectCounts({documents: 2, sessionChecks: 2, syncs: 2})
 })
 
-test("the sidebar lists the four fleets, then the Account page", async ({page}) => {
+test("the sidebar lists the four fleets, Classic first, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
@@ -209,9 +209,9 @@ test("the sidebar lists the four fleets, then the Account page", async ({page}) 
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
   expect(links).toEqual([
+    ["Keyfleet Classic", "/app/fleets/fleet_tech_classic"],
     ["Keyfleet Syndicate", "/app/fleets/fibonacci_syndicate"],
     ["Keyfleet Cascade", "/app/fleets/fibonacci_cascade"],
-    ["Keyfleet Classic", "/app/fleets/fleet_tech_classic"],
     ["Keyfleet Accelerant", "/app/fleets/fleet_tech_accelerant"],
     ["Account", "/account"],
   ])
