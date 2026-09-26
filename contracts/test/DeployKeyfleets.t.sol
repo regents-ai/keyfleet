@@ -65,34 +65,44 @@ contract DeployKeyfleetsTest is Test {
         subscriptionId = vrf.createSubscription();
     }
 
-    function test_deployedFleetsCarryTheManifestAndTheDirectoryNamesThem() public {
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        DeployKeyfleets.Deployment memory deployment = script.deploy(manifest);
-
-        assertEq(deployment.registry.REGENT_SAFE(), SAFE, "Registry Safe");
-        assertEq(deployment.registry.BASE_USDC(), address(usdc), "Registry USDC");
-
+    /// @dev Each run puts one fleet on chain. The first creates the registry and every later fleet
+    /// is deployed into it, so the four go on sale one at a time on shared wiring.
+    function test_eachRunDeploysOneFleetCarryingTheManifest() public {
         KeyfleetPresets.Preset[4] memory presets = [
             KeyfleetPresets.Preset.FibonacciSyndicate,
             KeyfleetPresets.Preset.FibonacciCascade,
             KeyfleetPresets.Preset.FleetTechClassic,
             KeyfleetPresets.Preset.FleetTechAccelerant
         ];
-        for (uint256 slot = 0; slot < 4; ++slot) {
-            Keyfleet fleet = deployment.fleets[slot];
-            assertTrue(fleet.PRESET() == presets[slot], "Preset of slot");
-            assertEq(fleet.name(), manifest.fleets[slot].name, "Name");
-            assertEq(fleet.symbol(), manifest.fleets[slot].symbol, "Symbol");
+        string[4] memory keys = ["syndicate", "cascade", "classic", "accelerant"];
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        KeyfleetAssetRegistry registry;
+
+        for (uint8 slot = 0; slot < 4; ++slot) {
+            manifest.slot = slot;
+            manifest.fleet = KeyfleetManifest.FleetSpec(
+                string.concat("Fleet ", keys[slot]), "KEYFLEET", string.concat("https://k/", keys[slot], "/")
+            );
+            manifest.assetRegistry = address(registry);
+            uint256 nonceBefore = vm.getNonce(address(script));
+
+            DeployKeyfleets.Deployment memory deployment = script.deploy(manifest);
+
+            if (slot == 0) registry = deployment.registry;
+            assertEq(address(deployment.registry), address(registry), "Every fleet shares the first registry");
+            assertEq(vm.getNonce(address(script)) - nonceBefore, slot == 0 ? 2 : 1, "The registry once, then one fleet");
+            Keyfleet fleet = deployment.fleet;
+            assertTrue(fleet.PRESET() == presets[slot], "Preset of the slot");
+            assertEq(fleet.name(), manifest.fleet.name, "Name");
+            assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
-            assertEq(address(fleet.USDC()), deployment.registry.BASE_USDC(), "USDC is the registry's");
             assertEq(fleet.TREASURY(), TREASURY, "Treasury");
-            assertEq(address(fleet.ASSET_REGISTRY()), address(deployment.registry), "Asset registry");
+            assertEq(address(fleet.ASSET_REGISTRY()), address(registry), "Asset registry");
             assertEq(address(fleet.STAKING()), STAKING, "Staking");
             assertEq(address(fleet.FACTORY()), address(factory), "Autolaunch factory");
             assertEq(fleet.VOTES().VOTING_WINDOW(), VOTING_WINDOW, "Voting window");
             assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
-            assertTrue(deployment.directory.isFleet(address(fleet)), "Directory names the fleet");
             assertEq(address(fleet.VRF_COORDINATOR()), address(vrf), "VRF coordinator");
             assertEq(fleet.VRF_SUBSCRIPTION_ID(), subscriptionId, "VRF subscription");
             assertEq(fleet.VRF_KEY_HASH(), KEY_HASH, "VRF gas lane");
@@ -110,14 +120,9 @@ contract DeployKeyfleetsTest is Test {
             fleet.purchase(BUYER, address(0), price, block.timestamp);
             vm.stopPrank();
             assertEq(
-                fleet.tokenURI(1),
-                string.concat(manifest.fleets[slot].baseTokenURI, "1"),
-                "Metadata base is the fleet's own"
+                fleet.tokenURI(1), string.concat(manifest.fleet.baseTokenURI, "1"), "Metadata base is the fleet's own"
             );
         }
-
-        assertEq(address(deployment.directory.SYNDICATE()), address(deployment.fleets[0]), "Slot 0");
-        assertEq(address(deployment.directory.ACCELERANT()), address(deployment.fleets[3]), "Slot 3");
     }
 
     function test_deploySetsNoAllowlistFlag() public {
@@ -125,7 +130,7 @@ contract DeployKeyfleetsTest is Test {
 
         assertFalse(deployment.registry.factoryTokenAllowed(address(usdc)), "USDC is not admitted globally");
         assertFalse(
-            deployment.registry.fleetTokenAllowed(address(deployment.fleets[0]), address(regent)),
+            deployment.registry.fleetTokenAllowed(address(deployment.fleet), address(regent)),
             "REGENT is not admitted for a fleet"
         );
     }
@@ -153,7 +158,7 @@ contract DeployKeyfleetsTest is Test {
 
         DeployKeyfleets.Deployment memory deployment = script.deploy(manifest);
 
-        assertEq(address(deployment.fleets[0].FACTORY()), address(0xFAC7), "Factory recorded as given");
+        assertEq(address(deployment.fleet.FACTORY()), address(0xFAC7), "Factory recorded as given");
     }
 
     function test_baseIgnoresTheEmptyAutolaunchFactoryAllowance() public {
@@ -250,7 +255,7 @@ contract DeployKeyfleetsTest is Test {
         DeployKeyfleets.Deployment memory deployment = script.deploy(manifest);
 
         assertEq(address(deployment.registry), address(existing), "Registry reused");
-        assertEq(address(deployment.fleets[2].ASSET_REGISTRY()), address(existing), "Fleets point at it");
+        assertEq(address(deployment.fleet.ASSET_REGISTRY()), address(existing), "The fleet points at it");
     }
 
     function test_suppliedRegistryUnderAnotherSafeIsRefused() public {
@@ -262,7 +267,7 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    function test_manifestIsReadFieldByFieldWhateverItsKeyOrder() public view {
+    function test_manifestIsReadFieldByFieldForTheNamedFleetWhateverItsKeyOrder() public {
         string memory json = string.concat(
             '{"votingWindow": 7200, "assetRegistry": "0x00000000000000000000000000000000000000a7",',
             ' "autolaunchFactoryMayBeEmpty": true, "chainId": 31337,',
@@ -284,7 +289,7 @@ contract DeployKeyfleetsTest is Test {
             " }}"
         );
 
-        KeyfleetManifest.Manifest memory manifest = script.parseManifest(json);
+        KeyfleetManifest.Manifest memory manifest = script.parseManifest(json, "classic");
 
         assertEq(manifest.chainId, ANVIL_CHAIN_ID, "chainId");
         assertEq(manifest.regent, address(0xA1), "regent");
@@ -301,22 +306,27 @@ contract DeployKeyfleetsTest is Test {
         assertEq(manifest.vrf.keyHash, bytes32(uint256(0xC3)), "vrf.keyHash");
         assertEq(manifest.traitTableHash, bytes32(uint256(0xC4)), "traitTableHash");
 
+        string[4] memory keys = ["syndicate", "cascade", "classic", "accelerant"];
         string[4] memory letters = ["A", "B", "C", "D"];
         string[4] memory lower = ["a", "b", "c", "d"];
         for (uint256 slot = 0; slot < 4; ++slot) {
-            KeyfleetManifest.FleetSpec memory fleet = manifest.fleets[slot];
-            assertEq(fleet.name, string.concat("Fleet ", letters[slot]), "name of the slot's own key");
-            assertEq(fleet.symbol, letters[slot], "symbol of the slot's own key");
-            assertEq(fleet.baseTokenURI, string.concat("u/", lower[slot], "/"), "base of the slot's own key");
+            manifest = script.parseManifest(json, keys[slot]);
+            assertEq(manifest.slot, slot, "slot of the key");
+            assertEq(manifest.fleet.name, string.concat("Fleet ", letters[slot]), "name of the key's own fleet");
+            assertEq(manifest.fleet.symbol, letters[slot], "symbol of the key's own fleet");
+            assertEq(manifest.fleet.baseTokenURI, string.concat("u/", lower[slot], "/"), "base of the key's own fleet");
         }
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.UnknownFleet.selector, "Classic"));
+        script.parseManifest(json, "Classic");
     }
 
     /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a zero
     /// subscription and a zero trait table until the operator writes in the subscription the Safe
     /// owns and the final trait table's hash. Until then they cannot be deployed; with both written
-    /// in, every other refusal passes.
+    /// in, every other refusal passes for Classic, the fleet that opens first.
     function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
-        KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil");
+        KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
         vm.etch(anvil.usdc, address(usdc).code);
         vm.etch(anvil.regent, address(regent).code);
         uint256 labSubscription = _standInForBaseCoordinator();
@@ -330,9 +340,9 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(anvil);
         anvil.traitTableHash = TRAIT_TABLE;
         DeployKeyfleets.Deployment memory lab = script.deploy(anvil);
-        assertGt(address(lab.directory).code.length, 0, "The anvil manifest deploys on its chain");
+        assertGt(address(lab.fleet).code.length, 0, "The anvil manifest deploys on its chain");
 
-        KeyfleetManifest.Manifest memory base = script.readManifest("base");
+        KeyfleetManifest.Manifest memory base = script.readManifest("base", "classic");
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(base.autolaunchFactory, address(factory).code);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
@@ -340,7 +350,7 @@ contract DeployKeyfleetsTest is Test {
         base.vrf.subscriptionId = labSubscription;
         base.traitTableHash = TRAIT_TABLE;
         DeployKeyfleets.Deployment memory release = script.deploy(base);
-        assertGt(address(release.directory).code.length, 0, "The Base manifest deploys once its factory exists");
+        assertGt(address(release.fleet).code.length, 0, "The Base manifest deploys once its factory exists");
     }
 
     function test_manifestVotingWindowWiderThanAFleetCanHoldIsRefused() public {
@@ -360,7 +370,7 @@ contract DeployKeyfleetsTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(KeyfleetManifest.VotingWindowTooLarge.selector, uint256(type(uint64).max) + 1)
         );
-        script.parseManifest(json);
+        script.parseManifest(json, "classic");
     }
 
     /// @dev Puts the mock coordinator's code at Base's coordinator address, registers Base's gas
@@ -405,9 +415,7 @@ contract DeployKeyfleetsTest is Test {
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });
         manifest.traitTableHash = TRAIT_TABLE;
-        manifest.fleets[0] = KeyfleetManifest.FleetSpec("Keyfleet Syndicate", "KEYFLEET", "https://k/syndicate/");
-        manifest.fleets[1] = KeyfleetManifest.FleetSpec("Keyfleet Cascade", "KEYFLEET", "https://k/cascade/");
-        manifest.fleets[2] = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
-        manifest.fleets[3] = KeyfleetManifest.FleetSpec("Keyfleet Accelerant", "KEYFLEET", "https://k/accelerant/");
+        manifest.slot = 2;
+        manifest.fleet = KeyfleetManifest.FleetSpec("Keyfleet Classic", "KEYFLEET", "https://k/classic/");
     }
 }

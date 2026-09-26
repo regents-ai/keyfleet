@@ -14,8 +14,11 @@ interface IVRFProvingKeys {
 
 /// @notice The input manifest both deployment steps share: its shape, its reader, and the
 /// refusals that hold for the manifest before anything is deployed or recorded.
-/// @dev `parseManifest` takes the JSON text and `readManifest` is the only part that opens a file,
-/// so the suite parses manifests without writing any.
+/// @dev A manifest file holds what every fleet on its chain shares and the name, symbol and
+/// metadata base of each of the four fleets. One run deploys or records one of them, named by its
+/// key, so each fleet goes on chain on its own. `parseManifest` takes the JSON text and
+/// `readManifest` is the only part that opens a file, so the suite parses manifests without
+/// writing any.
 abstract contract KeyfleetManifest is Script {
     /// @notice The chain the release deploys to. A manifest naming it is held to the strictest
     /// checks the deployment has.
@@ -40,7 +43,7 @@ abstract contract KeyfleetManifest is Script {
         string baseTokenURI;
     }
 
-    /// @notice One deployment's complete inputs.
+    /// @notice One fleet's deployment inputs.
     /// @param chainId The chain this manifest is for. Both steps refuse any other.
     /// @param regent The REGENT token, which the record step lists among the deposit assets the
     /// Regents Safe is expected to admit. No fleet holds it. It must hold code, and on Base it must
@@ -56,12 +59,15 @@ abstract contract KeyfleetManifest is Script {
     /// @param assetRegistry An existing shared registry, or zero to deploy one for this release.
     /// @param autolaunchFactoryMayBeEmpty Whether the Autolaunch factory may have no code yet. It
     /// is ignored on Base, where the factory must already exist.
-    /// @param votingWindow Seconds a proposal stays open, identical on all four fleets.
-    /// @param vrf The VRF coordinator, subscription and gas lane, identical on all four fleets. On
-    /// Base the coordinator and gas lane must be `BASE_VRF_COORDINATOR` and `BASE_VRF_KEY_HASH`.
-    /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte, identical
-    /// on all four fleets. Never zero.
-    /// @param fleets Syndicate, Cascade, Classic and Accelerant, in that order.
+    /// @param votingWindow Seconds a proposal stays open, the same for every fleet on the chain.
+    /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
+    /// chain. On Base the coordinator and gas lane must be `BASE_VRF_COORDINATOR` and
+    /// `BASE_VRF_KEY_HASH`.
+    /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte, the same
+    /// for every fleet on the chain. Never zero.
+    /// @param slot The fleet's slot: 0 Syndicate, 1 Cascade, 2 Classic, 3 Accelerant. It decides
+    /// the fleet's preset.
+    /// @param fleet The fleet's name, symbol and metadata base, from the file's `fleets.<key>`.
     struct Manifest {
         uint256 chainId;
         address regent;
@@ -75,7 +81,8 @@ abstract contract KeyfleetManifest is Script {
         uint64 votingWindow;
         Keyfleet.Randomness vrf;
         bytes32 traitTableHash;
-        FleetSpec[4] fleets;
+        uint8 slot;
+        FleetSpec fleet;
     }
 
     /// @notice The manifest is for another chain.
@@ -99,16 +106,19 @@ abstract contract KeyfleetManifest is Script {
     error VrfCoordinatorMissing(address coordinator);
     /// @notice The coordinator has no proving key for the manifest's gas lane.
     error VrfKeyHashUnknown(bytes32 keyHash);
+    /// @notice No fleet has this key.
+    error UnknownFleet(string fleetKey);
 
-    /// @notice Reads `deployments/<manifestName>.json`.
-    function readManifest(string memory manifestName) public view returns (Manifest memory) {
-        return parseManifest(vm.readFile(string.concat("deployments/", manifestName, ".json")));
+    /// @notice Reads `deployments/<manifestName>.json` for the fleet with key `fleetKey`.
+    function readManifest(string memory manifestName, string memory fleetKey) public view returns (Manifest memory) {
+        return parseManifest(vm.readFile(string.concat("deployments/", manifestName, ".json")), fleetKey);
     }
 
-    /// @notice Parses manifest JSON into the value both steps take.
+    /// @notice Parses manifest JSON into the value both steps take, for the fleet with key
+    /// `fleetKey`.
     /// @dev Every field is read by name rather than decoded from the whole object, so the file is
     /// keyed by what it says and not by the order it says it in.
-    function parseManifest(string memory json) public pure returns (Manifest memory manifest) {
+    function parseManifest(string memory json, string memory fleetKey) public pure returns (Manifest memory manifest) {
         manifest.chainId = vm.parseJsonUint(json, ".chainId");
         manifest.regent = vm.parseJsonAddress(json, ".regent");
         manifest.usdc = vm.parseJsonAddress(json, ".usdc");
@@ -128,15 +138,23 @@ abstract contract KeyfleetManifest is Script {
         });
         manifest.traitTableHash = vm.parseJsonBytes32(json, ".traitTableHash");
 
+        manifest.slot = fleetSlot(fleetKey);
+        string memory key = string.concat(".fleets.", fleetKey);
+        manifest.fleet = FleetSpec({
+            name: vm.parseJsonString(json, string.concat(key, ".name")),
+            symbol: vm.parseJsonString(json, string.concat(key, ".symbol")),
+            baseTokenURI: vm.parseJsonString(json, string.concat(key, ".baseTokenURI"))
+        });
+    }
+
+    /// @notice The slot of the fleet with key `fleetKey`: `syndicate`, `cascade`, `classic` or
+    /// `accelerant`.
+    function fleetSlot(string memory fleetKey) public pure returns (uint8) {
         string[4] memory keys = _fleetKeys();
-        for (uint256 slot = 0; slot < 4; ++slot) {
-            string memory key = string.concat(".fleets.", keys[slot]);
-            manifest.fleets[slot] = FleetSpec({
-                name: vm.parseJsonString(json, string.concat(key, ".name")),
-                symbol: vm.parseJsonString(json, string.concat(key, ".symbol")),
-                baseTokenURI: vm.parseJsonString(json, string.concat(key, ".baseTokenURI"))
-            });
+        for (uint8 slot = 0; slot < 4; ++slot) {
+            if (keccak256(bytes(keys[slot])) == keccak256(bytes(fleetKey))) return slot;
         }
+        revert UnknownFleet(fleetKey);
     }
 
     /// @dev The manifest's chain must be this chain. On Base its USDC and REGENT must be Base USDC
