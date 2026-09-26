@@ -8,7 +8,7 @@ defmodule Keyfleet.CheckInsTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Repo
 
-  @fleet "fibonacci_syndicate"
+  @fleet "fleet_tech_classic"
   @t0 ~U[2026-09-25 12:00:00.000000Z]
 
   setup do

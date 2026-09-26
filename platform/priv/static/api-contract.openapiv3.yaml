@@ -186,8 +186,8 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
           description: >-
-            fleet_unknown: there is no such fleet. key_not_found: no owner is recorded for the key.
-            profile_not_found: the signing wallet has no agent profile yet; POST
+            fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. key_not_found: no owner is recorded for
+            the key. profile_not_found: the signing wallet has no agent profile yet; POST
             /api/v1/agent/join/status makes one.
           content:
             application/json:
@@ -212,8 +212,8 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
           description: >-
-            fleet_unknown: there is no such fleet. pairing_not_found: the signing wallet has no open
-            request on the key.
+            fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. pairing_not_found: the signing wallet has
+            no open request on the key.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyPairingRequestNotFoundError"}
@@ -241,8 +241,8 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
           description: >-
-            fleet_unknown: there is no such fleet. pairing_not_found: the signing wallet does not run
-            the key.
+            fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. pairing_not_found: the signing wallet does
+            not run the key.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyPairingRequestNotFoundError"}
@@ -268,7 +268,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RoomList"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "404": {$ref: "#/components/responses/FleetUnknown"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
   /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read:
@@ -442,7 +442,7 @@ paths:
         "404":
           description: >-
             room_unknown: the fleet has no room by one of the slugs named. fleet_unknown: there is
-            no such fleet.
+            no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. Nothing is recorded, not even the check-in.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RoomNotFoundError"}
@@ -479,7 +479,9 @@ paths:
               schema: {$ref: "#/components/schemas/ProposalRead"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404":
-          description: "fleet_unknown: there is no such fleet. proposal_unknown: the fleet has no proposal by this number yet."
+          description: >-
+            fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. proposal_unknown: the fleet has no
+            proposal by this number yet.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ProposalNotFoundError"}
@@ -505,7 +507,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/WorkspaceObjectView"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
   /api/v1/agent/fleets/{fleet_id}/graph/changes:
@@ -527,7 +529,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/WorkspaceChanges"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentOutOfRange"}
         "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
@@ -548,7 +550,7 @@ paths:
         "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/WorkspaceRefused"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "409": {$ref: "#/components/responses/WorkspaceConflict"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
@@ -570,7 +572,7 @@ paths:
         "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/WorkspaceRefused"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "409": {$ref: "#/components/responses/WorkspaceConflict"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
@@ -592,7 +594,7 @@ paths:
         "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/WorkspaceRefused"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "409": {$ref: "#/components/responses/WorkspaceConflict"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
@@ -614,7 +616,7 @@ paths:
         "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/WorkspaceRefused"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "409": {$ref: "#/components/responses/WorkspaceConflict"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
@@ -636,7 +638,7 @@ paths:
         "400": {$ref: "#/components/responses/WorkspaceRefused"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/WorkspaceRefused"}
-        "404": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "409": {$ref: "#/components/responses/WorkspaceConflict"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
@@ -668,7 +670,7 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RoomMemberError"}
-        "404": {$ref: "#/components/responses/FleetUnknown"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "409":
           description: >-
             room_taken: the fleet already has a room at this slug. name_taken: another room of the
@@ -1060,15 +1062,22 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/FleetUnknownError"}
+    AgentFleetNotFound:
+      description: "fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentFleetNotFoundError"}
     RoomNotFound:
-      description: "fleet_unknown: there is no such fleet. room_unknown: the fleet has no room by this slug."
+      description: >-
+        fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. room_unknown: the fleet has no room by
+        this slug.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/RoomNotFoundError"}
     KeyNotFound:
       description: >-
-        fleet_unknown: there is no such fleet. key_unknown: the fleet has not issued this key, or its
-        sale has not been seen yet; a key sold moments ago is known shortly.
+        fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys. key_unknown: the fleet has not issued this
+        key, or its sale has not been seen yet; a key sold moments ago is known shortly.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/KeyUnknownError"}
@@ -1083,10 +1092,18 @@ components:
         403 not_a_key_holder: the signing wallet does not own or run the named key today. 403
         forbidden_scope: the write names a scope, or touches an object or either end of a link in a
         scope, that the key may not write; details name that scope.
-        404 fleet_unknown: there is no such fleet. 404 not_found: there is no such object or link.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/WorkspaceError"}
+    WorkspaceNotFound:
+      description: >-
+        fleet_unknown: there is no such fleet. not_found: there is no such object or link. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or keys.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/FleetComingSoonError"}
     WorkspaceConflict:
       description: The object changed since the version the caller named; details carry the current version and the object as it now stands
       content:
@@ -1636,7 +1653,7 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, key_not_found, profile_not_found]}
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_not_found, profile_not_found]}
     KeyPairingOperatingError:
       type: object
       additionalProperties: false
@@ -1648,7 +1665,7 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, pairing_not_found]}
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, pairing_not_found]}
     KeyPairingDecidedError:
       type: object
       additionalProperties: false
@@ -1800,6 +1817,18 @@ components:
       required: [error]
       properties:
         error: {type: string, const: fleet_unknown}
+    AgentFleetNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon]}
+    FleetComingSoonError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error: {type: string, const: fleet_coming_soon}
     FleetList:
       type: object
       additionalProperties: false
@@ -2012,13 +2041,13 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, room_unknown]}
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, room_unknown]}
     KeyUnknownError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, key_unknown]}
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_unknown]}
     RoomMemberError:
       type: object
       additionalProperties: false
@@ -2410,7 +2439,7 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, proposal_unknown]}
+        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, proposal_unknown]}
     FleetSyncInvalidError:
       type: object
       additionalProperties: false

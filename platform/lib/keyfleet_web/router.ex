@@ -18,6 +18,10 @@ defmodule KeyfleetWeb.Router do
     plug KeyfleetWeb.Plugs.LaunchGate
   end
 
+  pipeline :agent do
+    plug KeyfleetWeb.Plugs.FleetComingSoon
+  end
+
   # The open fleet directory's Markdown. The format is set before the gate,
   # so a closed site answers these in Markdown too.
   pipeline :directory do
@@ -109,7 +113,7 @@ defmodule KeyfleetWeb.Router do
   end
 
   scope "/api/v1/agent", KeyfleetWeb do
-    pipe_through :api
+    pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
     get "/pairings", AgentPairingController, :index

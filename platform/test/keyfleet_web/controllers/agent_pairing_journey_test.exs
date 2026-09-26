@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fibonacci_syndicate")
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
 
     Keys.record_epoch!(

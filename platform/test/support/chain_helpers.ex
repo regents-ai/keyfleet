@@ -9,8 +9,33 @@ defmodule Keyfleet.ChainHelpers do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
+  alias Keyfleet.Fleets
 
   @head_hash "0x" <> String.duplicate("c", 64)
+
+  @doc """
+  Records a deployment on Base for `fleet_id`, which opens a fleet the
+  catalog shows as coming soon. Each fleet gets contract addresses of its own.
+  """
+  def deploy!(fleet_id) do
+    digit = Fleets.catalog_ids() |> Enum.find_index(&(&1 == fleet_id)) |> Integer.to_string()
+
+    fleet_id
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      %{
+        chain_id: 8_453,
+        contract_address: "0x" <> String.duplicate("c" <> digit, 20),
+        rewards_address: "0x" <> String.duplicate("d" <> digit, 20),
+        votes_address: "0x" <> String.duplicate("e" <> digit, 20),
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        asset_registry_address: "0x" <> String.duplicate("4", 40),
+        deployed_block: 1,
+        trait_table_hash: "0x" <> String.duplicate("a", 64)
+      },
+      actor: %System{}
+    )
+  end
 
   @doc """
   A fleet's cursor opened and not yet read, as the chain reader keeps it

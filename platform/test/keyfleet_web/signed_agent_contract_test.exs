@@ -153,6 +153,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     {:ok, signer} = Siwa.LocalSigner.new()
