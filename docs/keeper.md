@@ -148,8 +148,9 @@ restart, and first settles anything it left waiting.
 ## Funding a randomness subscription
 
 The Regents Safe owns the subscription, but anyone may fund it, and the keeper
-never does. Its coordinator and id are in `contracts/deployments/base.deployed.json`,
-under `vrf`. From a wallet of your own:
+never does. Its coordinator and id are in every fleet's deployed manifest, such
+as `contracts/deployments/base.classic.deployed.json`, under `vrf`. From a
+wallet of your own:
 
 ```sh
 cast send <coordinator> "fundSubscriptionWithNative(uint256)" <subscription id> \

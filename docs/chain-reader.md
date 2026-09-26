@@ -49,19 +49,23 @@ an operator fixes the record by hand, as below.
    With no `KEYFLEET_RPC_URL` the reader does not run. A node on any chain other
    than the one the manifest names is refused and logged, and nothing is read.
 
-2. Bind the four fleets to the deployment. Copy the deployed manifest that
-   `RecordKeyfleets` wrote onto a machine (`fly ssh sftp shell`, then
-   `put contracts/deployments/base.deployed.json /tmp/base.deployed.json`) and run:
+2. Bind the fleet to its deployment. Each fleet is deployed and recorded on its
+   own, so this runs once per fleet. Copy the deployed manifest that
+   `RecordKeyfleets` wrote for it onto a machine (`fly ssh sftp shell`, then
+   `put contracts/deployments/base.classic.deployed.json /tmp/base.classic.deployed.json`)
+   and run:
 
    ```sh
-   fly ssh console -C "/app/bin/seed-deployment /tmp/base.deployed.json"
+   fly ssh console -C "/app/bin/seed-deployment /tmp/base.classic.deployed.json"
    ```
 
-   It opens each fleet's five fixed rooms and five open rooms and prints each
-   fleet with its contract and first block. Running it again
-   with the same manifest changes nothing; a manifest naming other contracts for
-   a bound fleet is refused and changes nothing. In development the same step
-   is `mix keyfleet.seed_deployment ../contracts/deployments/<name>.deployed.json`.
+   It binds that fleet alone, opens its five fixed rooms and five open rooms,
+   and prints the fleet with its contract and first block. This is what puts
+   the fleet's keys on sale, and it opens a fleet the site showed as coming
+   soon. Every other fleet is left as it is. Running it again with the same
+   manifest changes nothing; a manifest naming other contracts for a bound
+   fleet is refused and changes nothing. In development the same step is
+   `mix keyfleet.seed_deployment ../contracts/deployments/<name>.<fleet>.deployed.json`.
 
    Metadata for a revealed key is drawn from the fleet's trait table, which
    ships with the release: the art agent commits it as

@@ -7,7 +7,9 @@
 
 The Phoenix/Ash web application of Keyfleet. It serves the public home
 page, where a visitor chooses one of the four fleets, and each fleet's page
-(`/app/fleets/<fleet>`), which is its map of keys. From a fleet's page, key
+(`/app/fleets/<fleet>`), which is its map of keys. Keyfleet Classic opens
+first; the other three show as coming soon, with no keys, rooms or way to join,
+until each one's deployment is recorded (`Keyfleet.Fleets.coming_soon?/2`). From a fleet's page, key
 holders reach its rooms, its shared workspace and its proposals. A signed-in
 person's keys are on the Account page (`/account`). The site also serves Privy
 wallet sign-in, the public pages, the agent API, health and metrics. Inside it,
@@ -219,10 +221,11 @@ fly deploy <folder> --config <folder>/platform/fly.toml \
 The context is built from this repository's last commit; the script warns
 when there are uncommitted changes, which it leaves out.
 
-`/app/bin/seed-catalog` opens the four fleets and their rooms without binding
-any of them to contracts, so the site shows every fleet with key sales off.
-`/app/bin/seed-deployment` binds them to deployed contracts, which turns key
-sales on.
+`/app/bin/seed-catalog` puts the four fleets on the site and opens the rooms of
+the fleets that are not coming soon, without binding any of them to contracts,
+so key sales stay off. `/app/bin/seed-deployment <file>` binds one fleet to its
+deployed contracts from that fleet's deployed manifest, opens its rooms and
+turns its key sales on; a coming-soon fleet opens with it.
 
 The graph host's Python supply is sealed by
 `scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for

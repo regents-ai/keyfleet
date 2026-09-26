@@ -706,7 +706,7 @@ ETH, moves its ownership to the Regents Safe, and writes its id into the
 manifest's `vrf` block and the trait table's hash into its `traitTableHash`. The
 fleets are deployed with the coordinator, the subscription, the gas lane and the
 trait table fixed; the Safe then adds each fleet to the subscription as a
-consumer, and only after that does the record step accept the release. On Base
+consumer, and only after that does the record step accept the fleet. On Base
 the record step also requires the subscription to be owned by the manifest's
 Safe. Keys sold in between are sold without a request and can ask
 again as soon as their fleet is added. The three Chainlink files the fleet uses
@@ -726,13 +726,16 @@ it reverts with the slot that did not fit. USDC needs no
 comparison of its own: a fleet refuses any USDC but its registry's, and the
 registry is compared. `fleets()` and `isFleet(address)` are the whole of its
 surface. It has no owner, no setter and no upgrade path, holds no authority over
-any fleet, and a different set of fleets means a different directory. The app
-seeds from this one address, and a later factory that reads a fleet's public
-immutables learns exactly what this constructor learned.
+any fleet, and a different set of fleets means a different directory. The
+scripts no longer deploy it, because the fleets now go on chain one at a time;
+the contract and its tests are kept.
 
-A release is deployed in two steps. `script/DeployKeyfleets.s.sol` deploys the
-shared registry when the manifest does not name one, then the four fleets, then
-the directory, and writes nothing: Forge simulates a script in full before it
+Each fleet is deployed and recorded on its own, in two steps, named by
+`KEYFLEET_FLEET` (`syndicate`, `cascade`, `classic` or `accelerant`) beside
+`KEYFLEET_MANIFEST`. `script/DeployKeyfleets.s.sol` deploys the shared registry
+when the manifest does not name one, then that fleet, and writes nothing: every
+later fleet on the chain shares the registry, whose address is written into the
+manifest once the first fleet is recorded. Forge simulates a script in full before it
 broadcasts, so any file this step wrote would also be written by a dry run or a
 broadcast that failed partway. It refuses a manifest whose `chainId` is not the
 chain it is running on; on Base, a USDC other than Base USDC
@@ -751,20 +754,21 @@ transaction afterwards.
 `script/RecordKeyfleets.s.sol` runs after the broadcast, against the same chain.
 It reads Forge's broadcast log, refuses a transaction without a receipt or a
 receipt that failed, applies the same manifest refusals as the deployment step,
-takes the directory from the broadcast, and reads the release back from the chain
-through that directory, refusing any value that differs from the manifest, any
+takes the fleet from the broadcast, and reads it back from the chain, refusing a
+preset other than the named fleet's, any value that differs from the manifest, a
 fleet the subscription does not yet list as a consumer and, on Base, a
 subscription the manifest's Safe does not own. Only then does it write
-`deployments/<name>.deployed.json`, the published deployment manifest the app and
-the product copy are seeded from: addresses, the deployment block, the numeric
+`deployments/<name>.<fleet>.deployed.json`, the fleet's published deployment
+manifest the app and the product copy are seeded from: addresses, the deployment block, the numeric
 bounds, the ten-USDC reference price, the fee basis points, the fixed vote window, the Autolaunch binding with
 the code hashes of the factory and strategy, the randomness terms (coordinator and
 its code hash, subscription, gas lane, confirmations, answer gas and retry wait),
 the trait table hash, the asset flags awaiting the Safe, and the terms the release
 discloses. Addresses and fleet values come from the
 chain; the supply and split constants come from the `KeyfleetPresets` the script
-was compiled with, and the runtime code hash of the directory and of each fleet
-is recorded so they can be checked against the deployed code.
+was compiled with, and the fleet's runtime code hash is recorded so it can be
+checked against the deployed code. It must run straight after its fleet's
+deployment, since Forge's `run-latest.json` holds only the latest broadcast.
 
 Both scripts share `script/KeyfleetManifest.sol`, which reads the inputs
 `deployments/base.json` and `deployments/anvil.json`, one per chain. Their cores —

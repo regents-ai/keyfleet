@@ -140,8 +140,11 @@ refuses anything but staging.
 2. The site starts, and every fleet's graph shows as unavailable because the
    new volume belongs to root: `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`.
    The graphs come back within 30 seconds with no restart.
-3. `fly ssh console --config fly.toml -C "/app/bin/seed-catalog"`. This opens the
-   four fleets and their rooms. Before it runs, every fleet page says the fleet
+3. `fly ssh console --config fly.toml -C "/app/bin/seed-catalog"`. This puts
+   the four fleets on the site and opens Keyfleet Classic's rooms. It prints
+   each fleet as `open` or `coming soon`: Classic is open, and Syndicate, Cascade
+   and Accelerant are coming soon, shown by name with no price, no keys, no
+   rooms and no way to join. Before it runs, every fleet page says the fleet
    doesn't exist. It records no contracts, and running it again changes nothing.
 4. Check `https://keyfleet.ai/healthz` answers, and that `fly status` shows one
    machine that stays running.
@@ -149,9 +152,26 @@ refuses anything but staging.
 ## Key sales stay off
 
 Nothing above records a deployment, so no fleet is linked to its contracts and
-no page offers a key for sale. Only `/app/bin/seed-deployment` links the fleets
-to deployed contracts, and running it is a separate decision for the founder.
+no page offers a key for sale. Only `/app/bin/seed-deployment` links a fleet to
+its deployed contracts, and running it is a separate decision for the founder.
 Do not run it, or deploy the contracts, as part of this launch.
+
+## Opening a fleet later
+
+Each fleet is deployed and recorded on its own, when the founder says so;
+[deployment.md](deployment.md) has the two contract steps, run with
+`KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest with
+`/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
+[chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
+puts its keys on sale. A fleet shown as coming soon opens at that moment; every
+other fleet is left as it is. Restart the app afterwards so the chain reader
+starts for it.
+
+Coming-soon fleets get no rooms until they open, because nobody can join them.
+A fleet can also be shown before it is deployed by changing its
+`coming_soon?` mark in `platform/lib/keyfleet/fleets.ex` and releasing; it then
+shows "Not on sale yet", and `seed-catalog` run again opens its rooms. Its keys
+still stay off sale until its deployment is recorded.
 
 ## What was checked locally
 
@@ -159,5 +179,6 @@ On 2026-09-26 the arm64 image was built from the context script and run
 against a fresh local database: every migration ran, `pending-migrations` said
 `none`, `/healthz` answered, the graph processes started once `/data` was
 handed to uid 1001, `seed-catalog` opened the four fleets, and no page offered
-a key for sale. Not checked: the amd64 image, the Fly remote build and deploy
+a key for sale. That check was made before Classic opened first; it has not
+been repeated since. Not checked: the amd64 image, the Fly remote build and deploy
 command, the production database, Privy, siwa-server and DNS.

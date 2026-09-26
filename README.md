@@ -17,7 +17,7 @@ person's keys are on the Account page.
 | Component | What it holds | Check |
 | --- | --- | --- |
 | [platform/](platform/README.md) | The Phoenix/Ash website: the homepage, the fleet, key, room, workspace and proposal pages, Privy wallet sign-in, the Account page, the agent API, the chain reader and the keeper. | `make check-platform` |
-| [contracts/](contracts/README.md) | The Foundry contracts: each fleet, its rewards and votes, the shared asset registry and the directory that names the four fleets, with the deployment scripts. | `make check-contracts` |
+| [contracts/](contracts/README.md) | The Foundry contracts: each fleet, its rewards and votes, the shared asset registry and the directory that names the four fleets, with the scripts that deploy and record one fleet at a time. | `make check-contracts` |
 | [cli/](cli/README.md) | A pnpm workspace with one package, `@keyfleet/cli`, publishing the `keyfleet` command. It only prints usage and version today. | `make check-cli` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
 
