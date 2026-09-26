@@ -4,8 +4,8 @@
  * islands only move a panel as it opens, and only when a pointer press opened
  * it. Closing is instant, as the page already hid the panel.
  */
-import {animate, cleanInlineStyles, spring, type AnimationParams, type JSAnimation} from "animejs"
-import {SLOW, still, takePointerPress} from "./shared"
+import {spring, type AnimationParams} from "animejs"
+import {play, SLOW, still, stop, takePointerPress} from "./shared"
 import type {Hook} from "../../hook_composition"
 
 // Each panel moves from where it waits while closed to where the stylesheet
@@ -23,36 +23,29 @@ const PANELS: Record<string, Record<string, AnimationParams>> = {
   },
 }
 
-const tidy = (animation: JSAnimation) => cleanInlineStyles(animation)
-const arrive = (el: HTMLElement, move: AnimationParams) => animate(el, {...move, onComplete: tidy})
-
 // Showing: not hidden, and not inside a closed disclosure.
 const shown = (el: HTMLElement) => !el.hidden && el.closest("details:not([open])") === null
 
-type SlidesHook = {el: HTMLElement; watch?: MutationObserver; moving?: Map<HTMLElement, JSAnimation>}
+type SlidesHook = {el: HTMLElement; watch?: MutationObserver}
 
 /**
  * An island holding panels marked `data-panel="drawer"` or `"menu"`, each
  * moving as `data-drawer` or `data-menu` on the island says. A panel opens
  * when its `hidden` goes, or when the disclosure around it opens. The page
  * puts both back after every update, so a panel that is open before and after
- * an update is left alone. Each panel has at most one move running.
+ * an update is left alone. A panel closed mid-move is put back at rest.
  */
 export const Slides: Hook = {
   mounted(this: SlidesHook) {
     const island = this.el
     const panels = () => [...island.querySelectorAll<HTMLElement>("[data-panel]")]
     const open = new Set(panels().filter(shown))
-    const moving = new Map<HTMLElement, JSAnimation>()
 
     const slide = (el: HTMLElement) => {
       const kind = el.dataset.panel as string
-      const animation = arrive(el, PANELS[kind][island.dataset[kind] as string])
-      moving.set(el, animation)
-      animation.then(() => moving.delete(el))
+      play(el, PANELS[kind][island.dataset[kind] as string])
     }
 
-    this.moving = moving
     this.watch = new MutationObserver(() => {
       const opened = []
       for (const el of panels()) {
@@ -62,8 +55,7 @@ export const Slides: Hook = {
           opened.push(el)
         } else {
           open.delete(el)
-          moving.get(el)?.revert()
-          moving.delete(el)
+          stop(el)
         }
       }
       if (opened.length > 0 && takePointerPress() && !still()) opened.forEach(slide)
@@ -73,11 +65,11 @@ export const Slides: Hook = {
 
   destroyed(this: SlidesHook) {
     this.watch?.disconnect()
-    this.moving?.forEach(animation => animation.revert())
+    stop(this.el)
   },
 }
 
-type SheetHook = {el: HTMLDialogElement; rising?: JSAnimation}
+type SheetHook = {el: HTMLDialogElement}
 
 /**
  * A dialog the page opens by adding it, composed after `ModalDialog` so it is
@@ -86,10 +78,10 @@ type SheetHook = {el: HTMLDialogElement; rising?: JSAnimation}
 export const Sheet: Hook = {
   mounted(this: SheetHook) {
     const dialog = this.el
-    if (takePointerPress() && !still()) this.rising = arrive(dialog, PANELS.sheet[dialog.dataset.variant as string])
+    if (takePointerPress() && !still()) play(dialog, PANELS.sheet[dialog.dataset.variant as string])
   },
 
   destroyed(this: SheetHook) {
-    this.rising?.revert()
+    stop(this.el)
   },
 }

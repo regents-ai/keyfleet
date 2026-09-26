@@ -2,17 +2,8 @@
  * Motion for something arriving: a headline that rises in word by word and a
  * list of cards that settles into place.
  */
-import {
-  animate,
-  cleanInlineStyles,
-  createScope,
-  cubicBezier,
-  stagger,
-  type JSAnimation,
-  type Scope,
-  type TextSplitter,
-} from "animejs"
-import {SLOW, still} from "./shared"
+import {createScope, cubicBezier, stagger, type JSAnimation, type Scope, type TextSplitter} from "animejs"
+import {play, SLOW, still} from "./shared"
 import type {Hook} from "../../hook_composition"
 
 const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1)
@@ -21,19 +12,12 @@ const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1)
 // height instead of being converted to pixels from its width.
 export const HEADLINES: Record<string, (split: TextSplitter) => JSAnimation> = {
   rise: split =>
-    animate(split.words as HTMLElement[], {y: ["100%", "0%"], delay: stagger(50), duration: SLOW, ease: EASE_OUT}),
+    play(split.words as HTMLElement[], {y: ["100%", "0%"], delay: stagger(50), duration: SLOW, ease: EASE_OUT}),
 }
 
 const GRIDS: Record<string, (cards: HTMLElement[]) => JSAnimation> = {
   cascade: cards =>
-    animate(cards, {
-      y: {from: 16},
-      opacity: {from: 0},
-      delay: stagger(45),
-      duration: SLOW,
-      ease: EASE_OUT,
-      onComplete: animation => cleanInlineStyles(animation),
-    }),
+    play(cards, {y: {from: 16}, opacity: {from: 0}, delay: stagger(45), duration: SLOW, ease: EASE_OUT}),
 }
 
 // The first cards of a list cascade in; later ones are simply there.

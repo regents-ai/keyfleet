@@ -13,6 +13,7 @@ import {
   type MotionAnimation,
   type MotionDriver,
 } from "../js/hooks/shell_motion"
+import {forgetPress, notePress} from "../js/hooks/motion/shared"
 
 // Inline styles as the browser keeps them: a removed property reads as "", and
 // the length counts only the properties still set.
@@ -53,6 +54,12 @@ const harness = () => {
   Object.defineProperty(root, "getBoundingClientRect", {value: () => ({left: 0, width: 100})})
   return {animations, driver, root}
 }
+
+// The reader here hasn't asked for less motion; the hook asks as each page changes.
+vi.stubGlobal("matchMedia", () => ({matches: false}))
+
+// The press that changed the page, as the page-wide listener notes it.
+const pointerPress = () => notePress({target: null, detail: 1} as unknown as MouseEvent)
 
 describe("shell motion", () => {
   it("renders a direct load immediately without fabricating travel", () => {
@@ -217,7 +224,9 @@ describe("shell motion", () => {
       motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver),
     }
 
+    pointerPress()
     ShellMotion.mounted.call(state)
+    forgetPress()
 
     expect(animations).toHaveLength(2)
     expect(animations.every(({options}) => options.ease === "outQuart")).toBe(true)
@@ -312,6 +321,7 @@ describe("shell motion", () => {
       motionFactory: (motionRoot: HTMLElement) => createMotionController(motionRoot, driver),
     }
 
+    pointerPress()
     ShellMotion.mounted.call(state)
     expect(animations).toHaveLength(0)
     ShellMotion.beforeUpdate.call(state)
@@ -335,6 +345,7 @@ describe("shell motion", () => {
     expect(removed.length).toBe(2)
 
     ShellMotion.destroyed.call(state)
+    forgetPress()
     expect(removed.length).toBe(4)
   })
 

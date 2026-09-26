@@ -291,13 +291,9 @@ test("rapid page switches settle only the latest scene and remove motion copies"
   }
 })
 
-test("theme and reduced-motion preferences apply immediately", async ({browser}) => {
-  const context = await browser.newContext({reducedMotion: "reduce"})
-  const page = await context.newPage()
+test("the theme preference applies immediately", async ({page}) => {
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-
-  await expect(page.locator("html")).toHaveAttribute("data-reduced-motion", "true")
 
   // With nothing saved the server renders the dark theme, and the switch says so
   // before it is touched.
@@ -323,7 +319,6 @@ test("theme and reduced-motion preferences apply immediately", async ({browser})
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
   await page.reload()
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
-  await context.close()
 })
 
 for (const width of [320, 390]) {

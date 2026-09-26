@@ -1,8 +1,8 @@
 /**
  * What all of Keyfleet's motion shares: the timing, the two questions asked
- * before anything moves, the last press, and the moves an island has running.
+ * before anything moves, the last press, and the one way a move is played.
  */
-import type {JSAnimation} from "animejs"
+import {animate, utils, type AnimationParams, type JSAnimation} from "animejs"
 
 export const SLOW = 280
 
@@ -39,6 +39,12 @@ export function pressedControl() {
   return last.control
 }
 
+// Whether the last press was a pointer's, without taking the answer: a page
+// change asks, and what the new page opens may ask again.
+export function lastPressByPointer() {
+  return last.pointer
+}
+
 // Whether the last press was a pointer's, asked once by whatever it opened.
 export function takePointerPress() {
   const {pointer} = last
@@ -46,20 +52,34 @@ export function takePointerPress() {
   return pointer
 }
 
-/**
- * The moves an island has running. Each leaves once it ends, or once a newer
- * move on the same thing cuts it short, so a page watched for hours holds
- * only what is moving now. Whatever still moves stops when the island goes.
- */
-export type Moves = Set<JSAnimation>
+// Anime.js hands an element back to its stylesheet by restoring the inline
+// style it found when the animation began. One begun over another's
+// half-way frame would end on that frame, so each run first puts its
+// elements back as they were before the last run on them began. Every run
+// then starts from rest, and ends there with no inline style left behind.
+// A finished run is forgotten, so nothing later puts back its old snapshot.
+// `play` owns `onComplete`; anything to do afterwards chains on `.then()`.
+const playing = new WeakMap<Element, JSAnimation>()
 
-export function play(moves: Moves, move: JSAnimation) {
-  moves.forEach(earlier => earlier.cancelled && moves.delete(earlier))
-  moves.add(move)
-  move.then(() => moves.delete(move))
+export function play(targets: Element | Element[], params: AnimationParams) {
+  const els = [targets].flat()
+  for (const el of els) playing.get(el)?.revert()
+  const animation = animate(els, {
+    ...params,
+    onComplete: done => {
+      utils.cleanInlineStyles(done)
+      for (const el of els) if (playing.get(el) === done) playing.delete(el)
+    },
+  })
+  for (const el of els) playing.set(el, animation)
+  return animation
 }
 
-export function stop(moves: Moves) {
-  moves.forEach(move => move.revert())
-  moves.clear()
+// An island's moves stop when it goes: whatever still moves inside its
+// element is put back at rest.
+export function stop(root: Element) {
+  for (const el of [root, ...root.querySelectorAll("*")]) {
+    playing.get(el)?.revert()
+    playing.delete(el)
+  }
 }

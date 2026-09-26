@@ -20,6 +20,7 @@ vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({Arrivals: {}, Counter: {}, Refusal: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({Cascade: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({Sheet: {}, Slides: {}}))
+vi.mock("../js/hooks/motion/shared", () => ({pressedControl: vi.fn()}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(
@@ -98,11 +99,6 @@ const fakeWindow = {
   location: {pathname: "/account"},
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
-  matchMedia: () => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  }),
   localStorage: {
     getItem: (key: string) => fakeStorage.get(key) ?? null,
     setItem: (key: string, value: string) => fakeStorage.set(key, value),

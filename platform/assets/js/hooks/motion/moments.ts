@@ -3,23 +3,17 @@
  * moves and a refusal. The page renders every result first; these islands
  * only animate from the old picture to the new one.
  */
-import {animate, cleanInlineStyles, spring, splitText, stagger, type JSAnimation, type TextSplitter} from "animejs"
-import {play, SLOW, still, stop, type Moves} from "./shared"
+import {spring, splitText, stagger, type JSAnimation, type TextSplitter} from "animejs"
+import {play, SLOW, still, stop} from "./shared"
 import {deny} from "./press"
 import type {Hook} from "../../hook_composition"
 
 // How the items the server adds to a list arrive.
 const ARRIVALS: Record<string, (items: HTMLElement[]) => JSAnimation> = {
-  bounce: items =>
-    animate(items, {
-      y: [-12, 0],
-      opacity: [0, 1],
-      ease: spring({bounce: 0.35, duration: 420}),
-      onComplete: animation => cleanInlineStyles(animation),
-    }),
+  bounce: items => play(items, {y: [-12, 0], opacity: [0, 1], ease: spring({bounce: 0.35, duration: 420})}),
 }
 
-type ArrivalsHook = {el: HTMLElement; moves: Moves; list?: string; ids?: Set<string>}
+type ArrivalsHook = {el: HTMLElement; list?: string; ids?: Set<string>}
 
 const itemsOf = (list: HTMLElement) => [...list.children] as HTMLElement[]
 const idsOf = (items: HTMLElement[]) => new Set(items.map(item => item.id))
@@ -35,7 +29,6 @@ const idsOf = (items: HTMLElement[]) => new Set(items.map(item => item.id))
  */
 export const Arrivals: Hook = {
   mounted(this: ArrivalsHook) {
-    this.moves = new Set()
     this.list = this.el.dataset.list
     this.ids = idsOf(itemsOf(this.el))
   },
@@ -48,11 +41,11 @@ export const Arrivals: Hook = {
     if (this.list !== list || still()) return
 
     const arrived = items.filter(item => !before!.has(item.id))
-    if (arrived.length > 0) play(this.moves, ARRIVALS[this.el.dataset.variant as string](arrived))
+    if (arrived.length > 0) ARRIVALS[this.el.dataset.variant as string](arrived)
   },
 
   destroyed(this: ArrivalsHook) {
-    stop(this.moves)
+    stop(this.el)
   },
 }
 
@@ -66,7 +59,7 @@ const ROLLS: Record<string, (up: boolean) => Record<string, unknown>> = {
 const glyphs = (el: HTMLElement) => (el.textContent ?? "").replace(/\s/g, "")
 const worth = (text: string) => Number(text.replace(/[^\d.]/g, ""))
 
-type CounterHook = {el: HTMLElement; moves: Moves; split?: TextSplitter; before?: string}
+type CounterHook = {el: HTMLElement; split?: TextSplitter; before?: string}
 
 // Put the plain number back, but only for the split still on the page: an
 // older one would write its stale number over the new one.
@@ -83,10 +76,6 @@ function join(hook: CounterHook, split?: TextSplitter) {
  * page always patches the plain text it rendered.
  */
 export const Counter: Hook = {
-  mounted(this: CounterHook) {
-    this.moves = new Set()
-  },
-
   beforeUpdate(this: CounterHook) {
     join(this, this.split)
     this.before = glyphs(this.el)
@@ -100,27 +89,23 @@ export const Counter: Hook = {
     const split = splitText(this.el, {words: false, chars: {wrap: "clip"}})
     const digits = (split.chars as HTMLElement[]).filter((_char, i) => before.at(i - after.length) !== after[i])
     this.split = split
-    const roll = animate(digits, {
+    play(digits, {
       ...ROLLS[this.el.dataset.variant as string](worth(after) > worth(before)),
       delay: stagger(45, {from: "last"}),
-      onComplete: () => join(this, split),
-    })
-    play(this.moves, roll)
+    }).then(() => join(this, split))
   },
 
   destroyed(this: CounterHook) {
-    stop(this.moves)
+    stop(this.el)
     join(this, this.split)
   },
 }
 
-type RefusalHook = {el: HTMLElement; moves: Moves; said?: string}
+type RefusalHook = {el: HTMLElement; said?: string}
 
 // Shake while `data-refused` is on the message.
 function shake(hook: RefusalHook) {
-  if (hook.el.dataset.refused === undefined) return
-  const move = deny(hook.el)
-  if (move !== undefined) play(hook.moves, move)
+  if (hook.el.dataset.refused !== undefined) deny(hook.el)
 }
 
 /**
@@ -130,7 +115,6 @@ function shake(hook: RefusalHook) {
  */
 export const Refusal: Hook = {
   mounted(this: RefusalHook) {
-    this.moves = new Set()
     this.said = this.el.textContent ?? ""
     shake(this)
   },
@@ -142,6 +126,6 @@ export const Refusal: Hook = {
   },
 
   destroyed(this: RefusalHook) {
-    stop(this.moves)
+    stop(this.el)
   },
 }

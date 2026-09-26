@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {prepareFleet, sellKey} from "./support/fleet_chain"
-import {anythingMoved, forget, leftovers, moved, movedCount, rolled, watchMotion} from "./support/motion"
+import {anythingMoved, forget, leftovers, moved, movedCount, pressRapidly, rolled, watchMotion} from "./support/motion"
 
 // A fleet page's motion: presses squish, panels slide and dialogs rise only for
 // a pointer, a sale rolls its numbers and bounces its line into What's
@@ -52,6 +52,24 @@ test("a keyboard press opens panels and dialogs at once, with no squish", async 
   await page.waitForTimeout(600)
 
   expect(await anythingMoved(page)).toBe(false)
+})
+
+test("Buy pressed again and again squishes only its label, which ends at rest, and every press is answered", async ({
+  page,
+}) => {
+  await openFleet(page)
+  await page.locator("#fleet-get-key").click()
+  await expect(page.locator("#buy-key-button")).toBeVisible()
+  await page.waitForTimeout(1_000)
+  await forget(page)
+
+  await pressRapidly(page, "#buy-key-button")
+  await page.waitForTimeout(1_000)
+
+  expect(await moved(page, "#buy-key-button [data-press-label]")).toBe(true)
+  expect(await moved(page, "#buy-key-button")).toBe(false)
+  expect(await leftovers(page)).toEqual([])
+  await expect(page.locator("#buy-key-status > li")).toHaveCount(5)
 })
 
 test("a sale rolls the count and bounces only its new line in, ending as plain text", async ({page}) => {

@@ -8,18 +8,21 @@ vi.mock("../js/hooks/motion/press", () => ({
   squish: (el: unknown) => moved.squish.push(el),
 }))
 
-vi.mock("animejs", async original => ({
-  ...(await original<typeof import("animejs")>()),
-  animate: (targets: unknown[]) => {
-    moved.animate.push(targets)
-    return move()
-  },
-}))
+vi.mock("animejs", async original => {
+  const anime = await original<typeof import("animejs")>()
+  return {
+    ...anime,
+    animate: (targets: unknown[], params: {onComplete: (done: unknown) => void}) => {
+      moved.animate.push(targets)
+      return move(params.onComplete)
+    },
+    utils: {...anime.utils, cleanInlineStyles: () => {}},
+  }
+})
 
 import {mountMotion, press} from "../js/motion"
-import {forgetPress, notePress, play, stop, takePointerPress, type Moves} from "../js/hooks/motion/shared"
+import {forgetPress, notePress, play, stop, takePointerPress} from "../js/hooks/motion/shared"
 import {Arrivals} from "../js/hooks/motion/moments"
-import type {JSAnimation} from "animejs"
 
 let lessMotion = false
 
@@ -34,18 +37,13 @@ afterEach(() => {
   forgetPress()
 })
 
-// A move that ends when `end` is called, or is cut short by a newer one.
-function move() {
-  const animation = {
-    cancelled: false,
-    end: () => {},
-    then(done: () => void) {
-      animation.end = done
-    },
-    revert: vi.fn(),
-  }
-  return animation as unknown as JSAnimation & {cancelled: boolean; end: () => void; revert: ReturnType<typeof vi.fn>}
+// A move that ends when `end` is called, or is put back by `revert`.
+function move(onComplete: (done: unknown) => void) {
+  const animation = {end: () => onComplete(animation), revert: vi.fn()}
+  return animation
 }
+
+type Move = ReturnType<typeof move>
 
 // A control that matches a selector list when one of its parts names the
 // control's marker: its class or its attribute.
@@ -131,26 +129,33 @@ it("going back or forward forgets the last press, so what reopens appears at onc
   expect(takePointerPress()).toBe(false)
 })
 
-it("a move leaves the running ones when it ends, or when a newer move cuts it short", () => {
-  const moves: Moves = new Set()
-  const ended = move()
-  const cut = move()
-  play(moves, ended)
-  play(moves, cut)
-  ended.end()
-  cut.cancelled = true
-  const latest = move()
-  play(moves, latest)
-  expect([...moves]).toEqual([latest])
+// An element in an island, as `stop` walks it.
+const island = (...inside: Element[]) => ({querySelectorAll: () => inside}) as unknown as Element
+
+it("a move begun on something still moving first puts the earlier move back at rest", () => {
+  const el = {} as Element
+  const earlier = play(el, {}) as unknown as Move
+  play(el, {})
+  expect(earlier.revert).toHaveBeenCalledOnce()
 })
 
-it("whatever still moves stops when its island goes", () => {
-  const moves: Moves = new Set()
-  const moving = move()
-  play(moves, moving)
-  stop(moves)
+it("a move that has ended is never put back, so it can't undo what came after it", () => {
+  const el = {} as Element
+  const ended = play(el, {}) as unknown as Move
+  ended.end()
+  play(el, {})
+  stop(island())
+  expect(ended.revert).not.toHaveBeenCalled()
+})
+
+it("whatever still moves inside an island is put back at rest when the island goes", () => {
+  const inside = {} as Element
+  const outside = {} as Element
+  const moving = play(inside, {}) as unknown as Move
+  const elsewhere = play(outside, {}) as unknown as Move
+  stop(island(inside))
   expect(moving.revert).toHaveBeenCalledOnce()
-  expect(moves.size).toBe(0)
+  expect(elsewhere.revert).not.toHaveBeenCalled()
 })
 
 type Item = {id: string}

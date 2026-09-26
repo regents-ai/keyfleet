@@ -1,4 +1,5 @@
 import {animate, type AnimationParams} from "animejs"
+import {lastPressByPointer, still} from "./motion/shared"
 
 export const APP_ENTRY_DURATION = 270
 export const APP_EXIT_DURATION = 180
@@ -327,8 +328,8 @@ export const ShellMotion = {
     if (incomingSurfaces.length > 0) {
       this.motion.transition({
         kind: "content",
-        source: this.el.dataset.motionSource === "keyboard" ? "keyboard" : "pointer",
-        reducedMotion: this.el.dataset.reducedMotion === "true",
+        source: lastPressByPointer() ? "pointer" : "keyboard",
+        reducedMotion: still(),
         incoming: [],
         incomingSurfaces,
       })
@@ -366,12 +367,10 @@ export const ShellMotion = {
     this.el.append(...copies)
 
     const nextApp = this.el.dataset.motionApp
-    const source = this.el.dataset.motionSource === "keyboard" ? "keyboard" : "pointer"
-    const reducedMotion = this.el.dataset.reducedMotion === "true"
     this.motion.transition({
       kind: snapshot.app && nextApp && snapshot.app !== nextApp ? "app" : "content",
-      source,
-      reducedMotion,
+      source: lastPressByPointer() ? "pointer" : "keyboard",
+      reducedMotion: still(),
       outgoing: snapshot.regions,
       incoming,
       outgoingSurfaces: snapshot.surfaces,

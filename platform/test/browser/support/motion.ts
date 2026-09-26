@@ -3,10 +3,12 @@ import type {Page} from "@playwright/test"
 // From the first paint the page records every inline transform or opacity any
 // element takes, every number split into pieces to roll and whether the
 // headline moved, so a test can ask what moved and whether it ended clean.
+// The shell's page-change motion is recorded apart, as the regions it moved.
 function recordMotion() {
   const moves = new Map<Element, string[]>()
   const rolled = new Set<string>()
-  Object.assign(window, {__moves: moves, __rolled: rolled})
+  const pageMoves = new Set<string>()
+  Object.assign(window, {__moves: moves, __rolled: rolled, __pageMoves: pageMoves})
   const watch = () =>
     new MutationObserver(records => {
       for (const record of records) {
@@ -16,8 +18,14 @@ function recordMotion() {
           continue
         }
         const style = el.getAttribute("style") ?? ""
-        // The shell's page-change motion is its own and not part of this.
-        if (!/transform|opacity/.test(style) || el.matches("#shell-sidebar, #route-content")) continue
+        if (!/transform|opacity/.test(style)) continue
+        // The copies of the page being left fade out whatever the reader asked for;
+        // only the page arriving tells whether the change moved.
+        if (el.closest("[data-motion-copy]")) continue
+        if (el.matches("[data-motion-region], [data-motion-surface], [data-motion-background]")) {
+          pageMoves.add(el.id)
+          continue
+        }
         if (el.closest("main h1")) rolled.add("headline")
         moves.set(el, [...(moves.get(el) ?? []), style])
       }
@@ -31,7 +39,7 @@ function recordMotion() {
   else watch()
 }
 
-type Recorded = {__moves: Map<Element, string[]>; __rolled: Set<string>}
+type Recorded = {__moves: Map<Element, string[]>; __rolled: Set<string>; __pageMoves: Set<string>}
 
 export const watchMotion = (page: Page) => page.addInitScript(recordMotion)
 
@@ -52,10 +60,14 @@ export const anythingMoved = (page: Page) =>
 
 export const rolled = (page: Page, id: string) => page.evaluate(id => (window as unknown as Recorded).__rolled.has(id), id)
 
+// Whether a page change moved the page arriving.
+export const pageChangeMoved = (page: Page) => page.evaluate(() => (window as unknown as Recorded).__pageMoves.size > 0)
+
 export const forget = (page: Page) =>
   page.evaluate(() => {
     ;(window as unknown as Recorded).__moves.clear()
     ;(window as unknown as Recorded).__rolled.clear()
+    ;(window as unknown as Recorded).__pageMoves.clear()
   })
 
 // What still carries an inline transform or opacity after moving; empty once
@@ -66,3 +78,15 @@ export const leftovers = (page: Page) =>
       .filter(el => el.isConnected && /transform|opacity/.test(el.getAttribute("style") ?? ""))
       .map(el => `${el.tagName.toLowerCase()}#${el.id}`),
   )
+
+// Presses the control again and again with a pointer, each press landing while
+// the last one's motion is still playing. The mouse goes straight to the
+// control's middle, since waiting for it to hold still would wait out the
+// motion under test.
+export async function pressRapidly(page: Page, selector: string, presses = 5, gap = 70) {
+  const box = (await page.locator(selector).boundingBox())!
+  for (let press = 0; press < presses; press++) {
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await page.waitForTimeout(gap)
+  }
+}
