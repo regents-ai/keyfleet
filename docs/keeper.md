@@ -193,4 +193,5 @@ From `platform/`:
   protocol share through it, including a request raised three times while no
   block is mined. It needs Foundry's `anvil` and `forge` on the path, uses only
   anvil's public test accounts, and stops its anvil when it finishes. The same
-  command runs the release package's external test, which needs Docker.
+  command runs the rewards and wallet-button labs on anvils of their own, and
+  the release package's external test, which needs Docker.
