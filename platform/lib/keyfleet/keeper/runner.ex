@@ -34,8 +34,7 @@ defmodule Keyfleet.Keeper.Runner do
     {:ok,
      %{
        sender: Sender.new(wallet, Node.configured()),
-       reveals: nil,
-       income: Income.new()
+       reveals: nil
      }, {:continue, :start}}
   end
 
@@ -51,10 +50,10 @@ defmodule Keyfleet.Keeper.Runner do
     {:noreply, %{state | sender: sender, reveals: reveals}}
   end
 
-  def handle_info(:income, %{sender: sender, income: income} = state) do
-    {sender, income} = Income.run(sender, income)
+  def handle_info(:income, %{sender: sender} = state) do
+    sender = Income.run(sender)
     after_round(sender, :income, @income_every)
-    {:noreply, %{state | sender: sender, income: income}}
+    {:noreply, %{state | sender: sender}}
   end
 
   @impl true

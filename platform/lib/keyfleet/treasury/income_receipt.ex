@@ -1,9 +1,8 @@
-defmodule Keyfleet.Treasury.IncomeSplit do
+defmodule Keyfleet.Treasury.IncomeReceipt do
   @moduledoc """
-  One `LaunchIncomeSplit` log: income that reached the fleet after its launch
-  settled, split by the fixed rule into the protocol fee, the budget and the
-  keys' share. Amounts are in the asset's atomic units, any uint256. Only the
-  chain reader writes it, and nothing ever changes it.
+  One `IncomeRecognized` log: income in one of the fleet's income tokens,
+  paid to the keys in full. `amount` is in the asset's atomic units, any
+  uint256. Only the chain reader writes it, and nothing ever changes it.
 
   `record_seq` is the fleet's count of proposal and budget records when it
   was made.
@@ -14,43 +13,32 @@ defmodule Keyfleet.Treasury.IncomeSplit do
     authorizers: [Ash.Policy.Authorizer]
 
   @max_bigint 9_223_372_036_854_775_807
-  @amounts [:gross, :fee, :to_budget, :to_keys]
 
   postgres do
-    table "launch_income_splits"
+    table "income_receipts"
     repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
       for field <- [:asset, :caller] do
-        check_constraint(field, "launch_income_splits_#{field}_shape",
+        check_constraint(field, "income_receipts_#{field}_shape",
           check: "#{field} ~ '^0x[0-9a-f]{40}$'"
         )
       end
 
-      for field <- @amounts do
-        check_constraint(field, "launch_income_splits_nonnegative_#{field}",
-          check: "#{field} >= 0"
-        )
-      end
-
-      check_constraint(:gross, "launch_income_splits_parts_add_up",
-        check: "gross = fee + to_budget + to_keys"
-      )
+      check_constraint(:amount, "income_receipts_nonnegative_amount", check: "amount >= 0")
 
       for field <- [:block_hash, :transaction_hash] do
-        check_constraint(field, "launch_income_splits_#{field}_shape",
+        check_constraint(field, "income_receipts_#{field}_shape",
           check: "#{field} ~ '^0x[0-9a-f]{64}$'"
         )
       end
 
       for field <- [:block_number, :log_index] do
-        check_constraint(field, "launch_income_splits_nonnegative_#{field}",
-          check: "#{field} >= 0"
-        )
+        check_constraint(field, "income_receipts_nonnegative_#{field}", check: "#{field} >= 0")
       end
 
-      check_constraint(:record_seq, "launch_income_splits_positive_record_seq",
+      check_constraint(:record_seq, "income_receipts_positive_record_seq",
         check: "record_seq > 0"
       )
     end
@@ -61,24 +49,22 @@ defmodule Keyfleet.Treasury.IncomeSplit do
     end
 
     custom_statements do
-      statement :immutable_launch_income_splits_trigger do
+      statement :immutable_income_receipts_trigger do
         up("""
-        CREATE TRIGGER immutable_launch_income_splits BEFORE UPDATE OR DELETE ON keyfleet_app.launch_income_splits
+        CREATE TRIGGER immutable_income_receipts BEFORE UPDATE OR DELETE ON keyfleet_app.income_receipts
         FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down("DROP TRIGGER immutable_launch_income_splits ON keyfleet_app.launch_income_splits;")
+        down("DROP TRIGGER immutable_income_receipts ON keyfleet_app.income_receipts;")
       end
 
-      statement :untruncatable_launch_income_splits_trigger do
+      statement :untruncatable_income_receipts_trigger do
         up("""
-        CREATE TRIGGER untruncatable_launch_income_splits BEFORE TRUNCATE ON keyfleet_app.launch_income_splits
+        CREATE TRIGGER untruncatable_income_receipts BEFORE TRUNCATE ON keyfleet_app.income_receipts
         FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down(
-          "DROP TRIGGER untruncatable_launch_income_splits ON keyfleet_app.launch_income_splits;"
-        )
+        down("DROP TRIGGER untruncatable_income_receipts ON keyfleet_app.income_receipts;")
       end
     end
   end
@@ -93,10 +79,7 @@ defmodule Keyfleet.Treasury.IncomeSplit do
         :fleet_id,
         :asset,
         :caller,
-        :gross,
-        :fee,
-        :to_budget,
-        :to_keys,
+        :amount,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -151,9 +134,7 @@ defmodule Keyfleet.Treasury.IncomeSplit do
         constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
     end
 
-    for field <- @amounts do
-      attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
-    end
+    attribute :amount, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,

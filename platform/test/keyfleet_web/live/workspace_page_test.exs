@@ -32,7 +32,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

@@ -65,7 +65,6 @@ defmodule KeyfleetWeb.ShellLive do
   # The same for a proposals page after a notice that the fleet's proposal
   # records or balances changed.
   @proposals_refresh_after 1_000
-  @zero_address "0x" <> String.duplicate("0", 40)
   # How long a purchase has to reach Base, counted from Base's latest block
   # when the buyer confirms it. The wallet and the words it shows read it
   # from the page.
@@ -595,7 +594,7 @@ defmodule KeyfleetWeb.ShellLive do
           deployed?: deployed?,
           current?: current?,
           progress: progress,
-          buy: if(deployed?, do: buy_offer(fleet, progress, params["ref"])),
+          buy: if(deployed?, do: buy_offer(fleet, progress)),
           signed_in: signed_in_wallets(actor),
           rooms: Rooms.list_rooms!(fleet_id, actor: actor),
           no_keys?: page.results == [] and not paged?(params),
@@ -991,14 +990,13 @@ defmodule KeyfleetWeb.ShellLive do
   # deployment and the latest reading of its sales. A reading that has fallen
   # behind still offers the key: the purchase names this price as its most, so
   # a key that has since cost more is refused by the contract and no USDC is taken.
-  defp buy_offer(fleet, progress, ref) do
+  defp buy_offer(fleet, progress) do
     %{
       chain_id: fleet.chain_id,
       contract_address: fleet.contract_address,
       usdc_address: fleet.usdc_address,
       deadline_seconds: @purchase_deadline_seconds
     }
-    |> Map.merge(referral(ref))
     |> Map.merge(next_sale(fleet.id, progress))
   end
 
@@ -1015,26 +1013,6 @@ defmodule KeyfleetWeb.ShellLive do
       level: level
     }
   end
-
-  # A referral link names the wallet credited for the purchase. The contract
-  # takes any address, the buyer's own included, and treats the zero address as
-  # no referral, so the shape of the address is all that is checked here.
-  defp referral(nil), do: %{referrer: nil, referral_refused?: false}
-
-  defp referral(ref) when is_binary(ref) do
-    cond do
-      not Regex.match?(~r/\A0x[0-9a-fA-F]{40}\z/, ref) ->
-        %{referrer: nil, referral_refused?: true}
-
-      String.downcase(ref) == @zero_address ->
-        %{referrer: nil, referral_refused?: false}
-
-      true ->
-        %{referrer: String.downcase(ref), referral_refused?: false}
-    end
-  end
-
-  defp referral(_ref), do: %{referrer: nil, referral_refused?: true}
 
   # A page is named by the key it follows or precedes; a name that isn't one
   # is a page that doesn't exist.
@@ -1064,9 +1042,8 @@ defmodule KeyfleetWeb.ShellLive do
         _first_page -> {false, more?}
       end
 
-    # A referral link keeps its referral, and the map its chosen key, while the
-    # visitor pages through keys.
-    kept = for name <- ["ref", "key"], is_binary(params[name]), do: {name, params[name]}
+    # The map keeps its chosen key while the visitor pages through keys.
+    kept = for name <- ["key"], is_binary(params[name]), do: {name, params[name]}
 
     %{
       previous:

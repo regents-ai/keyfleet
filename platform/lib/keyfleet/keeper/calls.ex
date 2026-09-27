@@ -84,11 +84,8 @@ defmodule Keyfleet.Keeper.Calls do
          {:uint, 256}
        ]},
     factory: {"FACTORY()", [], [:address]},
-    asset_registry: {"ASSET_REGISTRY()", [], [:address]},
     vrf_coordinator: {"VRF_COORDINATOR()", [], [:address]},
     vrf_subscription_id: {"VRF_SUBSCRIPTION_ID()", [], [{:uint, 256}]},
-    # KeyfleetAssetRegistry.sol
-    is_token_allowed: {"isTokenAllowed(address,address)", [:address, :address], [:bool]},
     # Chainlink VRF v2.5 coordinator
     get_subscription:
       {"getSubscription(uint256)", [:uint256],

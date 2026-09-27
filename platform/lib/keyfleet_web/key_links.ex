@@ -1,11 +1,11 @@
 defmodule KeyfleetWeb.KeyLinks do
   @moduledoc """
   Where a key's profile opens: its fleet's page, with the key named in the
-  address. The fleet page's list position and any referral stay in the
-  address beside it, so closing the profile leaves the page as it was.
+  address. The fleet page's list position stays in the address beside it,
+  so closing the profile leaves the page as it was.
   """
 
-  @kept ["after", "before", "ref"]
+  @kept ["after", "before"]
 
   @doc "The fleet page with key `token_id`'s profile open, keeping what `params` kept."
   def key_path(fleet_id, token_id, params \\ %{}),

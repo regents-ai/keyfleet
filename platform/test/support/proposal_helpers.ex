@@ -73,16 +73,9 @@ defmodule Keyfleet.ProposalHelpers do
     |> Proposals.record_launch_envelope!(actor: @system)
   end
 
-  @doc "A deposit of 10 USDC-sized units into the budget, 9.8 kept, unless `attrs` says otherwise."
+  @doc "10 USDC-sized units of a token recognized into the budget, unless `attrs` says otherwise."
   def budget_receipt!(fleet_id, attrs \\ %{}) do
-    %{
-      fleet_id: fleet_id,
-      kind: :deposit,
-      asset: wallet("a"),
-      sender: wallet("f"),
-      amount: Decimal.new(10_000_000),
-      net: Decimal.new(9_800_000)
-    }
+    %{fleet_id: fleet_id, kind: :recognized, asset: wallet("a"), amount: Decimal.new(10_000_000)}
     |> Map.merge(event())
     |> Map.merge(Map.new(attrs))
     |> Treasury.record_budget_receipt!(actor: @system)
@@ -96,20 +89,17 @@ defmodule Keyfleet.ProposalHelpers do
     )
   end
 
-  @doc "Launch income of 10 USDC-sized units, split 1 fee, 4 budget, 5 keys, unless `attrs` says otherwise."
-  def income_split!(fleet_id, attrs \\ %{}) do
+  @doc "Income of 10 USDC-sized units paid to the keys, unless `attrs` says otherwise."
+  def income_receipt!(fleet_id, attrs \\ %{}) do
     %{
       fleet_id: fleet_id,
       asset: wallet("a"),
       caller: wallet("f"),
-      gross: Decimal.new(10_000_000),
-      fee: Decimal.new(1_000_000),
-      to_budget: Decimal.new(4_000_000),
-      to_keys: Decimal.new(5_000_000)
+      amount: Decimal.new(10_000_000)
     }
     |> Map.merge(event())
     |> Map.merge(Map.new(attrs))
-    |> Treasury.record_income_split!(actor: @system)
+    |> Treasury.record_income_receipt!(actor: @system)
   end
 
   @doc "A payment of 5 USDC-sized units from the budget, unless `attrs` says otherwise."

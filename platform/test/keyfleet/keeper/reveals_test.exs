@@ -47,7 +47,9 @@ defmodule Keyfleet.Keeper.RevealsTest do
   end
 
   describe "a round" do
-    test "asks again for each sold key with no seed, never asked for or asked for an hour ago" do
+    # A request the coordinator took is answered once, and a key is never
+    # asked for again after that, however long its answer takes.
+    test "asks again only for sold keys whose every request the coordinator refused" do
       ChainHelpers.seed_cursor!(@fleet_id)
       record_reveal!(5)
 
@@ -55,7 +57,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
         minted: 6,
         keys: %{
           1 => {@seed, @now - 4_000},
-          2 => {0, @now - 3_600},
+          2 => {0, @now - 86_400},
           3 => {0, @now - 3_599},
           4 => {0, 0},
           6 => {0, @now - 60}
@@ -64,9 +66,9 @@ defmodule Keyfleet.Keeper.RevealsTest do
 
       assert {_sender, _reveals} = run(started!())
 
-      assert requested() == [2, 4]
+      assert requested() == [4]
       assert runs() == [{:reveal, :sent}]
-      assert [%{sent: 2, skipped: 3}] = Ash.read!(Keeper.Run, actor: %System{})
+      assert [%{sent: 1, skipped: 4}] = Ash.read!(Keeper.Run, actor: %System{})
 
       assert_received {:telemetry, [:keyfleet, :keeper, :vrf], %{native_balance_wei: @funded},
                        %{fleet: @fleet_id}}
@@ -80,7 +82,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
       ChainHelpers.seed_cursor!(@fleet_id)
       included!(@fleet_id, {:request_reveal, @fleet, 1}, 0, ago(3_540))
       included!(@fleet_id, {:request_reveal, @fleet, 2}, 1, ago(3_660))
-      put_chain(nonce: 2, minted: 2, keys: %{1 => {0, @now - 3_600}, 2 => {0, @now - 3_600}})
+      put_chain(nonce: 2, minted: 2, keys: %{1 => {0, 0}, 2 => {0, 0}})
 
       run(started!())
 

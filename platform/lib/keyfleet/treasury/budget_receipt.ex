@@ -1,11 +1,12 @@
 defmodule Keyfleet.Treasury.BudgetReceipt do
   @moduledoc """
-  One asset received into a fleet's budget, from a `CapitalDeposited` log
-  (`:deposit`, paid in by `sender`) or a `SurplusRecognized` log (`:surplus`,
-  a bare transfer recognized by `sender` before the launch settled). `amount`
-  is what arrived and `net` what the budget kept after the receipt fee, in
-  the asset's atomic units, any uint256. Only the chain reader writes it, and
-  nothing ever changes it.
+  One amount the fleet's budget took in: a token that is not income, arrived
+  by bare transfer and recognized (`:recognized`, a `SharedMoneyRecognized`
+  log), the REGENT the launch sent at graduation (`:graduation`,
+  `GraduationHoldingsBooked`), or launched tokens the vesting escrow
+  released (`:vesting`, `VestingBooked`). `amount` is in the asset's atomic
+  units, any uint256. Only the chain reader writes it, and nothing ever
+  changes it.
 
   `record_seq` is the fleet's count of proposal and budget records when it
   was made.
@@ -23,17 +24,13 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      check_constraint(:kind, "budget_receipts_kind", check: "kind IN ('deposit', 'surplus')")
-
-      for field <- [:asset, :sender] do
-        check_constraint(field, "budget_receipts_#{field}_shape",
-          check: "#{field} ~ '^0x[0-9a-f]{40}$'"
-        )
-      end
-
-      check_constraint(:net, "budget_receipts_net_within_amount",
-        check: "net >= 0 AND net <= amount"
+      check_constraint(:kind, "budget_receipts_kind",
+        check: "kind IN ('recognized', 'graduation', 'vesting')"
       )
+
+      check_constraint(:asset, "budget_receipts_asset_shape", check: "asset ~ '^0x[0-9a-f]{40}$'")
+
+      check_constraint(:amount, "budget_receipts_nonnegative_amount", check: "amount >= 0")
 
       for field <- [:block_hash, :transaction_hash] do
         check_constraint(field, "budget_receipts_#{field}_shape",
@@ -86,9 +83,7 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
         :fleet_id,
         :kind,
         :asset,
-        :sender,
         :amount,
-        :net,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -138,19 +133,14 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:deposit, :surplus]]
+      constraints: [one_of: [:recognized, :graduation, :vesting]]
 
-    # The asset received, and who paid it in or had it recognized.
-    for field <- [:asset, :sender] do
-      attribute field, :string,
-        allow_nil?: false,
-        public?: true,
-        constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
-    end
+    attribute :asset, :string,
+      allow_nil?: false,
+      public?: true,
+      constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    for field <- [:amount, :net] do
-      attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
-    end
+    attribute :amount, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,

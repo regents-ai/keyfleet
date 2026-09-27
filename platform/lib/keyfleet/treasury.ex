@@ -1,8 +1,7 @@
 defmodule Keyfleet.Treasury do
   @moduledoc """
-  A fleet's budget as its contract reports it: assets received into it,
-  launch income split between the budget and the keys, payments out of the
-  budget, the latest reading of its balances, and the symbol and decimals of
+  A fleet's money as its contract reports it: amounts its budget took in,
+  income paid to the keys, payments out of the budget, the latest reading of its balances, and the symbol and decimals of
   each asset they name. Recorded from the fleet's contracts by the chain
   reader and by nothing else. The chain is the authority; these records only
   mirror it.
@@ -12,7 +11,7 @@ defmodule Keyfleet.Treasury do
   require Ash.Query
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
+  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
 
   @latest 20
 
@@ -36,10 +35,10 @@ defmodule Keyfleet.Treasury do
         args: [:fleet_id, :from_block, :to_block]
     end
 
-    resource Keyfleet.Treasury.IncomeSplit do
-      define :record_income_split, action: :record
+    resource Keyfleet.Treasury.IncomeReceipt do
+      define :record_income_receipt, action: :record
 
-      define :income_splits_recorded_in_blocks,
+      define :income_receipts_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
     end
@@ -54,7 +53,7 @@ defmodule Keyfleet.Treasury do
   end
 
   @doc """
-  Every budget receipt, income split and budget payment recorded from blocks
+  Every budget receipt, income receipt and budget payment recorded from blocks
   `from..to` of the fleet, so a second reading of them can be checked against
   the record.
   """
@@ -62,7 +61,7 @@ defmodule Keyfleet.Treasury do
     Enum.flat_map(
       [
         &budget_receipts_recorded_in_blocks!/4,
-        &income_splits_recorded_in_blocks!/4,
+        &income_receipts_recorded_in_blocks!/4,
         &budget_payments_recorded_in_blocks!/4
       ],
       & &1.(fleet_id, from, to, actor: %System{})
@@ -72,13 +71,12 @@ defmodule Keyfleet.Treasury do
   @doc """
   Every asset the fleet's budget can hold, as its history shows them: USDC,
   which key sales pay in, then `reward_assets`, the reward ledger's assets in
-  its order, then, by address, each asset received into the budget or split
-  from launch income. The fleet contract takes in only the assets its
-  registry admits, so the list stays as short as that.
+  its order, then, by address, each asset the budget took in or the keys
+  were paid as income.
   """
   def budget_assets(fleet, reward_assets) do
     recorded =
-      [BudgetReceipt, IncomeSplit]
+      [BudgetReceipt, IncomeReceipt]
       |> Enum.flat_map(&assets_of(&1, fleet.id))
       |> Enum.sort()
 
@@ -110,11 +108,11 @@ defmodule Keyfleet.Treasury do
   end
 
   @doc """
-  The fleet's latest #{@latest} launch income splits and budget payments,
+  The fleet's latest #{@latest} income receipts and budget payments,
   newest first, and whether earlier ones were recorded.
   """
   def latest(fleet_id),
-    do: %{income: latest(IncomeSplit, fleet_id), payments: latest(BudgetPayment, fleet_id)}
+    do: %{income: latest(IncomeReceipt, fleet_id), payments: latest(BudgetPayment, fleet_id)}
 
   defp latest(resource, fleet_id) do
     {shown, earlier} =

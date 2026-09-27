@@ -100,23 +100,23 @@ defmodule Keyfleet.Keeper.AnvilTest do
 
   test "the fleet's protocol share is sent to staking once, and not again the same day",
        %{url: url, fleet: fleet, staking: staking, sender: sender} do
-    # Five per cent of two ten-USDC keys.
-    assert owed(sender, fleet) == 1_000_000
+    # Two per cent of two ten-USDC keys.
+    assert owed(sender, fleet) == 400_000
 
-    {sender, income} = Income.run(sender, Income.new())
+    sender = Income.run(sender)
 
     assert [%{function: :send_protocol_share, target: ^fleet, status: :mined} = sent] = txs()
     receipt = AnvilLab.receipt!(url, sent.tx_hash)
     assert receipt["status"] == "0x1"
     assert owed(sender, fleet) == 0
-    assert registered(url, staking) == 1_000_000
+    assert registered(url, staking) == 400_000
 
     # A key sold since makes the fleet owe again, but the keeper's share
     # went less than a day ago.
     buy(url, fleet)
-    assert owed(sender, fleet) == 500_000
+    assert owed(sender, fleet) == 200_000
 
-    {_sender, _income} = Income.run(sender, income)
+    Income.run(sender)
     assert [^sent] = txs()
     assert runs() == [{:income, :sent}]
   end
@@ -139,8 +139,8 @@ defmodule Keyfleet.Keeper.AnvilTest do
   # The buyer's third key, at its ten-USDC price.
   defp buy(url, fleet) do
     data =
-      selector("purchase(address,address,uint256,uint256)") <>
-        words([0, 0, 10_000_000, 2 ** 40])
+      selector("purchase(address,uint256,uint256)") <>
+        words([0, 10_000_000, 2 ** 40])
 
     hash =
       AnvilLab.rpc!(url, "eth_sendTransaction", [%{from: @buyer, to: fleet, data: hex(data)}])

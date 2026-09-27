@@ -132,7 +132,7 @@ defmodule Keyfleet.ProposalsTest do
 
       for number <- 1..3, do: ProposalHelpers.proposal!(@fleet, number)
       ProposalHelpers.vote!(@fleet, 1, @owner, true, [1, 2])
-      income_split!()
+      income_receipt!()
 
       changes = Proposals.changes(@fleet, 0, DateTime.utc_now())
 
@@ -140,7 +140,7 @@ defmodule Keyfleet.ProposalsTest do
                [{2, 2, :voting}, {3, 3, :voting}, {1, 4, :voting}]
 
       assert List.last(changes.items).proposal.yes_keys == 2
-      # The launch income is numbered with the rest but changes no proposal.
+      # The income is numbered with the rest but changes no proposal.
       assert {changes.next_cursor, changes.head_seq, changes.has_more} == {5, 5, false}
 
       assert Proposals.changes(@fleet, 5, DateTime.utc_now()) ==
@@ -155,8 +155,8 @@ defmodule Keyfleet.ProposalsTest do
       test_pid = self()
       saved = :atomics.new(1, [])
 
-      # Right after the proposals are read, a new proposal and then launch
-      # income are saved: the income is numbered after the proposal the read
+      # Right after the proposals are read, a new proposal and then income
+      # are saved: the income is numbered after the proposal the read
       # has missed, and touches no proposal of its own.
       :telemetry.attach(
         "saved-while-reading-changes",
@@ -165,7 +165,7 @@ defmodule Keyfleet.ProposalsTest do
           if self() == test_pid and meta.source == "proposals" and
                :atomics.compare_exchange(saved, 1, 0, 1) == :ok do
             ProposalHelpers.proposal!(@fleet, 2)
-            ProposalHelpers.income_split!(@fleet)
+            ProposalHelpers.income_receipt!(@fleet)
           end
         end,
         nil
@@ -270,16 +270,13 @@ defmodule Keyfleet.ProposalsTest do
 
   defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
 
-  defp income_split! do
-    Treasury.record_income_split!(
+  defp income_receipt! do
+    Treasury.record_income_receipt!(
       %{
         fleet_id: @fleet,
         asset: ProposalHelpers.wallet("c"),
         caller: @owner,
-        gross: Decimal.new(10),
-        fee: Decimal.new(1),
-        to_budget: Decimal.new(4),
-        to_keys: Decimal.new(5),
+        amount: Decimal.new(10),
         block_number: 900,
         block_hash: "0x" <> String.duplicate("b", 64),
         transaction_hash: "0x" <> String.duplicate("9", 64),

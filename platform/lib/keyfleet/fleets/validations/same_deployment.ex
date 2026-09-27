@@ -18,7 +18,6 @@ defmodule Keyfleet.Fleets.Validations.SameDeployment do
     :rewards_address,
     :votes_address,
     :usdc_address,
-    :asset_registry_address,
     :deployed_block,
     :trait_table_hash
   ]

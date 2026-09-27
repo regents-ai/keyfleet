@@ -92,15 +92,14 @@ defmodule Keyfleet.Fleets do
   operator code, and returns the fleet.
 
   Recording the same manifest again changes nothing; a manifest naming other
-  contracts for a bound fleet is refused, and so is one whose chain, USDC,
-  asset registry or trait table differs from a fleet already bound. Every
+  contracts for a bound fleet is refused, and so is one whose chain, USDC or
+  trait table differs from a fleet already bound. Every
   other fleet is left as it is.
   """
   def record_manifest!(%{
         "chainId" => chain_id,
         "deploymentBlock" => block,
         "usdc" => usdc,
-        "assetRegistry" => asset_registry,
         "traitTableHash" => trait_table_hash,
         "fleet" => %{"slot" => slot, "address" => address, "rewards" => rewards, "votes" => votes}
       })
@@ -114,7 +113,6 @@ defmodule Keyfleet.Fleets do
       rewards_address: String.downcase(rewards),
       votes_address: String.downcase(votes),
       usdc_address: String.downcase(usdc),
-      asset_registry_address: String.downcase(asset_registry),
       deployed_block: block,
       trait_table_hash: String.downcase(trait_table_hash)
     }

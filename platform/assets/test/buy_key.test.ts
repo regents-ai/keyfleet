@@ -7,7 +7,6 @@ import {
   maxUint256,
   parseAbi,
   toHex,
-  zeroAddress,
   type Address,
   type Hex,
 } from "viem"
@@ -31,7 +30,6 @@ const buyer = "0x1111111111111111111111111111111111111111" as Address
 const signedIn = `0x${"9".repeat(40)}`
 const fleet = "0x7777777777777777777777777777777777777777" as Address
 const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address
-const referrer = "0x2222222222222222222222222222222222222222" as Address
 const price = 42_998_170n
 const now = 1_790_000_000_000
 // Base's clock, deliberately not the computer's: the deadline counts from it.
@@ -44,11 +42,10 @@ const order: KeyOrder = readKeyOrder({
   usdc: usdc.toLowerCase(),
   price: price.toString(),
   priceLabel: "42.99817 USDC",
-  referrer: referrer.toLowerCase(),
   deadlineSeconds: "600",
 })
 
-// The order a page renders with no referral.
+// The order as a page renders it.
 const page = () => ({
   chainId: "8453",
   fleet,
@@ -147,15 +144,13 @@ function purchasedLog(address: Address, tokenId: bigint) {
     }) as Hex[],
     data: encodeAbiParameters(
       [
-        {type: "address"},
-        {type: "uint256"},
         {type: "uint256"},
         {type: "uint256"},
         {type: "uint256"},
         {type: "uint256"},
         {type: "uint256"},
       ],
-      [referrer, price, 1n, 2n, 3n, 4n, 5n],
+      [price, 1n, 2n, 3n, 4n],
     ),
   }
 }
@@ -195,7 +190,7 @@ group("buying a key", () => {
     expect(purchase).toMatchObject({from: buyer, to: fleet, value: "0x0", chainId: "0x2105"})
     expect(decodeFunctionData({abi: keyfleetAbi, data: purchase.data})).toEqual({
       functionName: "purchase",
-      args: [buyer, referrer, price, deadline],
+      args: [buyer, price, deadline],
     })
 
     expect(updates).toEqual([
@@ -238,14 +233,6 @@ group("buying a key", () => {
     expect(updates.map(update => update.kind)).toEqual(["wallet", "sent", "bought"])
   })
 
-  it("sends no referrer as the zero address", async () => {
-    const wallet = fakeWallet({allowance: price})
-    await run(wallet, readKeyOrder(page()))
-
-    const {args} = decodeFunctionData({abi: keyfleetAbi, data: sent(wallet)[0].data})
-    expect(args?.[1]).toBe(zeroAddress)
-  })
-
   it("asks the wallet to move to the fleet's network first", async () => {
     const wallet = fakeWallet({chainId: "0x1", allowance: price})
     await run(wallet)
@@ -285,7 +272,7 @@ group("buying a key", () => {
 
     const [approval, purchase] = sent(wallet)
     expect(decodeFunctionData({abi: usdcAbi, data: approval.data}).args).toEqual([fleet, huge])
-    expect(decodeFunctionData({abi: keyfleetAbi, data: purchase.data}).args?.[2]).toBe(huge)
+    expect(decodeFunctionData({abi: keyfleetAbi, data: purchase.data}).args?.[1]).toBe(huge)
   })
 
   it("sends a second purchase when Buy is pressed again while the first is still in the wallet", async () => {
@@ -515,12 +502,11 @@ group("the page's order", () => {
       usdc,
       price,
       priceLabel: "42.99817 USDC",
-      referrer,
       deadlineSeconds: 600n,
     })
   })
 
-  it.each([["price", "42.99"], ["price", "0"], ["fleet", "0x123"], ["chainId", ""], ["referrer", "0xnope"]])(
+  it.each([["price", "42.99"], ["price", "0"], ["fleet", "0x123"], ["chainId", ""]])(
     "calls a page with a malformed %s out of date",
     (field, value) => {
       expect(() => readKeyOrder({...page(), [field]: value})).toThrow()

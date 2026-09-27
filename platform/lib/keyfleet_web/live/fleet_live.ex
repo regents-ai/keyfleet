@@ -806,7 +806,6 @@ defmodule KeyfleetWeb.FleetLive do
         data-usdc={@buy.usdc_address}
         data-price={@buy.price}
         data-price-label={@buy.price && usdc(@buy.price)}
-        data-referrer={@buy.referrer}
         data-deadline-seconds={@buy.deadline_seconds}
         data-signed-in={Jason.encode!(@signed_in)}
       >
@@ -843,16 +842,6 @@ defmodule KeyfleetWeb.FleetLive do
           Sales are still being counted, so this price may already have gone up. If it has,
           the purchase is refused and no USDC is taken, though your wallet still pays the
           Base network fee for trying.
-        </p>
-        <p :if={@buy.price && @buy.referrer} id="buy-key-referrer" class="fleet-detail">
-          Referred by {short_wallet(@buy.referrer)}
-        </p>
-        <p
-          :if={@buy.price && @buy.referral_refused?}
-          id="buy-key-referral-refused"
-          class="fleet-detail"
-        >
-          The referral in this link isn’t a wallet address, so this purchase has no referrer.
         </p>
 
         <%!-- Nothing between the tags, so the note stays hidden until it has something to say. --%>

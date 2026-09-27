@@ -473,13 +473,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       income:
         Enum.map(
           income.shown,
-          &%{
-            id: &1.id,
-            received: shown.(&1.gross, &1),
-            fee: shown.(&1.fee, &1),
-            to_budget: shown.(&1.to_budget, &1),
-            to_keys: shown.(&1.to_keys, &1)
-          }
+          &%{id: &1.id, amount: shown.(&1.amount, &1)}
         ),
       earlier_income?: income.earlier?,
       payments:

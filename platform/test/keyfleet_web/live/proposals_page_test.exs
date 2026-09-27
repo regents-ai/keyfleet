@@ -31,7 +31,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
         usdc_address: @usdc,
-        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
@@ -192,7 +191,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       balance(fake, free_capital: 1_000_000, backed: 3_000_000)
     ])
 
-    ProposalHelpers.income_split!(@fleet, asset: fake)
+    ProposalHelpers.income_receipt!(@fleet, asset: fake)
     ProposalHelpers.budget_payment!(@fleet, asset: fake)
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
@@ -224,7 +223,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
       |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
 
-    assert tokens == List.duplicate({"0xdddd…dddd", fake}, 5)
+    assert tokens == List.duplicate({"0xdddd…dddd", fake}, 2)
   end
 
   # How long a proposal can be carried out for matters only while it has
@@ -412,8 +411,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
 
       assert text(view, "#proposal-plan-benefits") ==
-               "Who benefits: the fleet receives the launch’s income; after a 2% fee to Regent, " <>
-                 "a fifth goes to its budget and the rest to its keys."
+               "Who benefits: the fleet’s keys receive all of the launch’s income, and its budget " <>
+                 "keeps what the launch raises and the launched tokens as they vest."
 
       refute has_element?(view, "#proposal-plan-mismatch")
       refute has_element?(view, "#proposal-plan-changed")
@@ -691,7 +690,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       protocol_share_owed: Decimal.new(2_500_000)
     )
 
-    ProposalHelpers.income_split!(@fleet, asset: @usdc)
+    ProposalHelpers.income_receipt!(@fleet, asset: @usdc)
     ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
 
     {:ok, view, _html} = live(conn, @list)
@@ -719,13 +718,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     refute has_element?(view, "#proposals-payments-closed")
 
-    assert has_element?(view, "#proposals-income li", "10 USDC received")
-
-    assert has_element?(
-             view,
-             "#proposals-income li",
-             "4 USDC to the budget, 5 USDC to key holders, 1 USDC fee"
-           )
+    assert has_element?(view, "#proposals-income li", "10 USDC paid to key holders")
 
     assert has_element?(view, "#proposals-payments li", "5 USDC")
     assert has_element?(view, "#proposals-payments li", "to #{ProposalHelpers.wallet("b")}")
@@ -739,7 +732,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     {:ok, view, _html} = live(conn, @list)
     assert has_element?(view, "#proposals-budget-pending", "Budget figures are still being read.")
-    assert has_element?(view, "#proposals-no-income", "No launch income yet.")
+    assert has_element?(view, "#proposals-no-income", "No income yet.")
 
     assert has_element?(
              view,

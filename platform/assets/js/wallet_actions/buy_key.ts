@@ -4,7 +4,6 @@ import {
   encodeFunctionData,
   getAddress,
   parseAbi,
-  zeroAddress,
   type Address,
   type Hex,
 } from "viem"
@@ -25,8 +24,8 @@ import type {EthereumProvider, SelectedWallet} from "./connected_wallet"
 
 /** The parts of `contracts/src/Keyfleet.sol` a purchase touches. */
 export const keyfleetAbi = parseAbi([
-  "function purchase(address receiver, address referrer, uint256 maxPrice, uint256 deadline) returns (uint256 tokenId)",
-  "event Purchased(uint256 indexed tokenId, address indexed buyer, address indexed receiver, address referrer, uint256 gross, uint256 protocol, uint256 referral, uint256 capital, uint256 reserve, uint256 rebate)",
+  "function purchase(address receiver, uint256 maxPrice, uint256 deadline) returns (uint256 tokenId)",
+  "event Purchased(uint256 indexed tokenId, address indexed buyer, address indexed receiver, uint256 gross, uint256 protocol, uint256 capital, uint256 reserve, uint256 rebate)",
   "error Expired(uint256 deadline)",
   "error PriceAboveMax(uint256 price, uint256 maxPrice)",
   "error SoldOut()",
@@ -48,7 +47,6 @@ export type KeyOrder = Readonly<{
   usdc: Address
   price: bigint
   priceLabel: string
-  referrer: Address
   deadlineSeconds: bigint
 }>
 
@@ -79,7 +77,7 @@ class Failure extends Error {
  * address.
  */
 export function readKeyOrder(data: Readonly<Record<string, string | undefined>>): KeyOrder {
-  const {chainId, fleet = "", usdc = "", price, priceLabel, referrer = "", deadlineSeconds} = data
+  const {chainId, fleet = "", usdc = "", price, priceLabel, deadlineSeconds} = data
   if (
     !chainId || !/^[1-9]\d*$/.test(chainId) ||
     !price || !/^[1-9]\d*$/.test(price) ||
@@ -95,7 +93,6 @@ export function readKeyOrder(data: Readonly<Record<string, string | undefined>>)
     usdc: getAddress(usdc),
     price: BigInt(price),
     priceLabel,
-    referrer: referrer === "" ? zeroAddress : getAddress(referrer),
     deadlineSeconds: BigInt(deadlineSeconds),
   })
 }
@@ -140,7 +137,7 @@ export async function buyKey(
     const data = encodeFunctionData({
       abi: keyfleetAbi,
       functionName: "purchase",
-      args: [buyer, order.referrer, order.price, deadline],
+      args: [buyer, order.price, deadline],
     })
     report({kind: "wallet", step: "purchase"})
     const purchase = await send(provider, order.chainId, buyer, order.fleet, data)

@@ -27,12 +27,11 @@ defmodule Keyfleet.Keeper.Income do
     * `recognizeSurplusRevenue` of each of the three the splitter holds
       beyond what it owes;
     * `recognizeSurplus` of each of the three the fleet holds beyond what
-      it has booked, once the fleet admits it.
+      it has booked.
 
   A call whose check finds nothing to do, or which the contract refuses,
   is passed over. A check the chain cannot answer ends that fleet's part of
-  the round; the other fleets go on. A subject token the fleet does not
-  admit yet waits as surplus, with a warning once a day.
+  the round; the other fleets go on.
 
   For every fleet, once 24 hours have passed since the keeper's own last
   `sendProtocolShare` for it was included, and none is still waiting, it
@@ -49,23 +48,17 @@ defmodule Keyfleet.Keeper.Income do
   @day_seconds 86_400
   @vesting_seconds 365 * @day_seconds
 
-  @doc false
-  defstruct warned: %{}
-
-  @doc "The job before its first round: nothing warned about."
-  def new, do: %__MODULE__{}
-
-  @doc "Runs one round, and returns the sender and the job for the next."
-  def run(%Sender{} = sender, %__MODULE__{} = income) do
+  @doc "Runs one round, and returns the sender for the next."
+  def run(%Sender{} = sender) do
     started_at = DateTime.utc_now()
 
-    {sender, income, tally} =
+    {sender, tally} =
       sender
       |> Jobs.fleets()
-      |> Enum.reduce_while({sender, income, %{sent: 0, skipped: 0}}, &fleet_round/2)
+      |> Enum.reduce_while({sender, %{sent: 0, skipped: 0}}, &fleet_round/2)
 
     if tally.sent > 0, do: Keeper.record_round(:income, started_at, tally)
-    {sender, income}
+    sender
   end
 
   # `{:next_fleet, acc}` ends the fleet's part of the round, and `{:halt,
@@ -78,7 +71,7 @@ defmodule Keyfleet.Keeper.Income do
     end
   end
 
-  defp launch_income(fleet, {sender, _income, _tally} = acc) do
+  defp launch_income(fleet, {sender, _tally} = acc) do
     case Sender.read(sender, fleet.contract_address, :launch_state) do
       {:ok, :graduated} ->
         income_round(fleet, acc)
@@ -101,25 +94,25 @@ defmodule Keyfleet.Keeper.Income do
   defp income_round(fleet, acc),
     do: in_round(&Sender.income_round/3, "income", fleet, &income_calls(fleet, &1), acc)
 
-  defp in_round(open, name, fleet, calls, {sender, income, tally}) do
+  defp in_round(open, name, fleet, calls, {sender, tally}) do
     case open.(sender, fleet.id, fn sender, round ->
-           {next, {sender, income, tally}} =
+           {next, {sender, tally}} =
              round
              |> calls.()
-             |> send_all(fleet, round, {sender, income, tally})
+             |> send_all(fleet, round, {sender, tally})
 
-           {{next, income, tally}, sender}
+           {{next, tally}, sender}
          end) do
-      {:ok, {next, income, tally}, sender} ->
-        {next, {sender, income, tally}}
+      {:ok, {next, tally}, sender} ->
+        {next, {sender, tally}}
 
       # Their own alerts have said why.
       {:error, reason, sender} when reason in [:launch_mismatch, :treasury_mismatch] ->
-        {:cont, {sender, income, tally}}
+        {:cont, {sender, tally}}
 
       {:error, reason, sender} ->
         Logger.warning("Keeper could not open #{fleet.id}'s #{name} round: #{inspect(reason)}")
-        {:cont, {sender, income, tally}}
+        {:cont, {sender, tally}}
     end
   end
 
@@ -142,57 +135,52 @@ defmodule Keyfleet.Keeper.Income do
 
   defp send_all([], _fleet, _round, acc), do: {:cont, acc}
 
-  defp send_due(fleet, round, {fun, target, arg}, {sender, income, tally}) do
-    case due(sender, income, fleet, round, {fun, target, arg}) do
-      {:ok, true, income} ->
+  defp send_due(fleet, round, {fun, target, arg}, {sender, tally}) do
+    case due(sender, fleet, round, {fun, target, arg}) do
+      {:ok, true} ->
         sender
         |> Jobs.send(:income, fleet, fun, target, arg)
-        |> steer(income, tally)
+        |> steer(tally)
 
-      {:ok, false, income} ->
-        {:cont, {sender, income, count(tally, :skipped)}}
+      {:ok, false} ->
+        {:cont, {sender, count(tally, :skipped)}}
 
       {:error, {:revert, _selector, _args} = reason} ->
         Logger.warning(
           "Keeper passed over #{fun} to #{target} for #{fleet.id}: its check was refused: #{inspect(reason)}"
         )
 
-        {:cont, {sender, income, count(tally, :skipped)}}
+        {:cont, {sender, count(tally, :skipped)}}
 
       {:error, reason} ->
         Logger.warning(
           "Keeper passed over the rest of #{fleet.id}'s income round: it could not check #{fun} to #{target}: #{inspect(reason)}"
         )
 
-        {:next_fleet, {sender, income, tally}}
+        {:next_fleet, {sender, tally}}
     end
   end
 
-  defp steer({:sent, _tx, sender}, income, tally),
-    do: {:cont, {sender, income, count(tally, :sent)}}
+  defp steer({:sent, _tx, sender}, tally), do: {:cont, {sender, count(tally, :sent)}}
+  defp steer({:skipped, sender}, tally), do: {:cont, {sender, count(tally, :skipped)}}
+  defp steer({:halt, sender}, tally), do: {:halt, {sender, tally}}
 
-  defp steer({:skipped, sender}, income, tally),
-    do: {:cont, {sender, income, count(tally, :skipped)}}
-
-  defp steer({:halt, sender}, income, tally), do: {:halt, {sender, income, tally}}
-
-  # Whether a call would do anything now: `{:ok, due?, income}`, or
-  # `{:error, reason}` when the chain could not say.
-  defp due(sender, income, fleet, _round, {:migrate, _strategy, _auction}) do
+  # Whether a call would do anything now: `{:ok, due?}`, or `{:error,
+  # reason}` when the chain could not say.
+  defp due(sender, fleet, _round, {:migrate, _strategy, _auction}) do
     with {:ok, distribution} <- Sender.read(sender, fleet.contract_address, :launch_distribution),
          {:ok, block} <- sender.node.latest_block() do
-      {:ok, distribution.lifecycle == :active and block.number >= distribution.migration_block,
-       income}
+      {:ok, distribution.lifecycle == :active and block.number >= distribution.migration_block}
     end
   end
 
-  defp due(sender, income, _fleet, _round, {:sync_launch, fleet_address, nil}) do
+  defp due(sender, _fleet, _round, {:sync_launch, fleet_address, nil}) do
     with {:ok, call} <- Calls.new(:sync_launch, fleet_address, nil),
          {:ok, state} <- Sender.dry_run(sender, call),
-         do: {:ok, state != :auction_created, income}
+         do: {:ok, state != :auction_created}
   end
 
-  defp due(sender, income, _fleet, round, {:release, escrow, nil}) do
+  defp due(sender, _fleet, round, {:release, escrow, nil}) do
     [_usdc, _regent, subject] = round.tokens
 
     with {:ok, :graduated} <- Sender.read(sender, escrow, :lifecycle),
@@ -200,40 +188,33 @@ defmodule Keyfleet.Keeper.Income do
          {:ok, released} <- Sender.read(sender, escrow, :total_released),
          {:ok, start} <- Sender.read(sender, escrow, :vesting_start),
          {:ok, block} <- sender.node.latest_block() do
-      {:ok, releasable(held, released, start, block.timestamp) > 0, income}
+      {:ok, releasable(held, released, start, block.timestamp) > 0}
     else
-      {:ok, _pending_or_failed} -> {:ok, false, income}
+      {:ok, _pending_or_failed} -> {:ok, false}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp due(sender, income, _fleet, _round, {:collect, locker, lp_token_id}) do
+  defp due(sender, _fleet, _round, {:collect, locker, lp_token_id}) do
     with {:ok, call} <- Calls.new(:collect, locker, lp_token_id),
          {:ok, {amount0, amount1}} <- Sender.dry_run(sender, call),
-         do: {:ok, amount0 > 0 or amount1 > 0, income}
+         do: {:ok, amount0 > 0 or amount1 > 0}
   end
 
-  defp due(sender, income, _fleet, _round, {:sweep, receiver, token}) do
+  defp due(sender, _fleet, _round, {:sweep, receiver, token}) do
     with {:ok, held} <- Sender.read(sender, token, :balance_of, [receiver]),
-         do: {:ok, held > 0, income}
+         do: {:ok, held > 0}
   end
 
-  defp due(sender, income, _fleet, _round, {:recognize_surplus_revenue, splitter, token}) do
+  defp due(sender, _fleet, _round, {:recognize_surplus_revenue, splitter, token}) do
     with {:ok, held} <- Sender.read(sender, token, :balance_of, [splitter]),
          {:ok, owed} <- Sender.read(sender, splitter, :protected_balance, [token]),
-         do: {:ok, held > owed, income}
+         do: {:ok, held > owed}
   end
 
-  defp due(sender, income, fleet, _round, {:recognize_surplus, fleet_address, token}) do
-    with {:ok, surplus} when surplus > 0 <- Sender.read(sender, fleet_address, :surplus, [token]),
-         {:ok, registry} <- Sender.read(sender, fleet_address, :asset_registry),
-         {:ok, admitted?} <-
-           Sender.read(sender, registry, :is_token_allowed, [fleet_address, token]) do
-      {:ok, admitted?, if(admitted?, do: income, else: not_admitted(income, fleet, token))}
-    else
-      {:ok, 0} -> {:ok, false, income}
-      {:error, reason} -> {:error, reason}
-    end
+  defp due(sender, _fleet, _round, {:recognize_surplus, fleet_address, token}) do
+    with {:ok, surplus} <- Sender.read(sender, fleet_address, :surplus, [token]),
+         do: {:ok, surplus > 0}
   end
 
   # What `release` would send now: the vested share of everything the escrow
@@ -248,17 +229,9 @@ defmodule Keyfleet.Keeper.Income do
     vested - released
   end
 
-  defp not_admitted(income, fleet, token) do
-    daily(income, {:not_admitted, fleet.id, token}, fn ->
-      Logger.warning(
-        "Keeper: #{fleet.id} holds #{token} it does not admit yet; it waits as surplus until the fleet admits it."
-      )
-    end)
-  end
-
   # The keeper's own shares still waiting, or included in the last day, hold
   # the next back.
-  defp protocol_share(fleet, {sender, income, tally} = acc) do
+  defp protocol_share(fleet, {sender, tally} = acc) do
     since = DateTime.add(DateTime.utc_now(), -@day_seconds)
 
     with {:ok, []} <-
@@ -274,13 +247,13 @@ defmodule Keyfleet.Keeper.Income do
            Sender.read(sender, fleet.contract_address, :protocol_share_owed) do
       sender
       |> Jobs.send(:income, fleet, :send_protocol_share, fleet.contract_address, nil)
-      |> steer(income, tally)
+      |> steer(tally)
     else
       {:ok, [_sent | _earlier]} ->
         {:cont, acc}
 
       {:ok, 0} ->
-        {:cont, {sender, income, count(tally, :skipped)}}
+        {:cont, {sender, count(tally, :skipped)}}
 
       {:error, reason} ->
         Logger.warning("Keeper could not check #{fleet.id}'s protocol share: #{inspect(reason)}")
@@ -290,17 +263,4 @@ defmodule Keyfleet.Keeper.Income do
   end
 
   defp count(tally, counted), do: Map.update!(tally, counted, &(&1 + 1))
-
-  # Runs `warn` unless it ran for `key` in the last 24 hours.
-  defp daily(income, key, warn) do
-    now = DateTime.utc_now()
-    last = Map.get(income.warned, key)
-
-    if last && DateTime.diff(now, last) < @day_seconds do
-      income
-    else
-      warn.()
-      %{income | warned: Map.put(income.warned, key, now)}
-    end
-  end
 end

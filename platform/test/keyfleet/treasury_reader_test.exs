@@ -17,7 +17,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   @rewards "0x" <> String.duplicate("8", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   @other "0x" <> String.duplicate("5", 40)
-  @deposited "0x" <> String.duplicate("3", 40)
+  @booked "0x" <> String.duplicate("3", 40)
   @named "0x" <> String.duplicate("4", 40)
   @max_uint256 2 ** 256 - 1
   @head_hash "0x" <> String.duplicate("f", 64)
@@ -50,7 +50,6 @@ defmodule Keyfleet.TreasuryReaderTest do
           rewards_address: @rewards,
           votes_address: "0x" <> String.duplicate("9", 40),
           usdc_address: @usdc,
-          asset_registry_address: "0x" <> String.duplicate("4", 40),
           deployed_block: 1,
           trait_table_hash: "0x" <> String.duplicate("a", 64)
         },
@@ -66,9 +65,9 @@ defmodule Keyfleet.TreasuryReaderTest do
   # after, those payment proposals name among them.
   test "a reading keeps every balance from the one block it was read at", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
-    ProposalHelpers.budget_receipt!(@fleet, asset: @deposited)
-    ProposalHelpers.budget_receipt!(@fleet, asset: @deposited, kind: :surplus)
-    ProposalHelpers.income_split!(@fleet, asset: @other)
+    ProposalHelpers.budget_receipt!(@fleet, asset: @booked)
+    ProposalHelpers.budget_receipt!(@fleet, asset: @booked, kind: :graduation)
+    ProposalHelpers.income_receipt!(@fleet, asset: @other)
     ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @named)
     StubClient.put_chain(head(40), [], calls: answers(chain()))
 
@@ -87,8 +86,8 @@ defmodule Keyfleet.TreasuryReaderTest do
     reading = Treasury.get_reading!(@fleet)
 
     assert %{block_number: 40, block_hash: @head_hash, launch_settled: true} = reading
-    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @deposited]
-    [usdc, other, deposited] = reading.assets
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @booked]
+    [usdc, other, booked] = reading.assets
 
     assert DateTime.compare(reading.block_time, head(40).timestamp) == :eq
     assert Decimal.equal?(reading.cascade_reserve, 700)
@@ -101,13 +100,13 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert %{free_capital: 5_000, pay_cap: 1_000, pay_spent: 400, backed: 60} = other
 
     # Every digit of the largest amount the contract can hold is kept.
-    assert deposited.free_capital == @max_uint256
+    assert booked.free_capital == @max_uint256
 
     # Each token's symbol and decimals, or nothing for one it does not answer.
     assert details() == %{
              @usdc => {"USDC", 6},
              @other => {"WETH", 18},
-             @deposited => {"DEP", nil},
+             @booked => {"DEP", nil},
              @named => {nil, nil}
            }
   end
@@ -150,8 +149,8 @@ defmodule Keyfleet.TreasuryReaderTest do
     refute_received {:balances_changed, _fleet}
   end
 
-  # The budget's own tokens are admitted by the fleet's registry, so a call
-  # to one that fails may be the node's: nothing is kept, the balances are
+  # The budget's own tokens are ones it has held, so a call to one that fails
+  # may be the node's: nothing is kept, the balances are
   # kept and announced all the same, and the token is asked again.
   test "a budget token whose call fails is asked again at the next reading", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
@@ -331,11 +330,11 @@ defmodule Keyfleet.TreasuryReaderTest do
   defp chain do
     %{
       {@rewards, @reward_assets} => {:ok, <<32::256, 2::256>> <> word(@usdc) <> word(@other)},
-      {@deposited, @symbol} => {:ok, text("DEP")},
-      {@deposited, @decimals} => {:error, :reverted},
-      {@contract, @free_capital <> word(@deposited)} => {:ok, <<@max_uint256::256>>},
-      {@contract, @pay_period <> word(@deposited)} => {:ok, <<0::256, 0::256, 0::256>>},
-      {@rewards, @backed <> word(@deposited)} => {:ok, <<0::256>>},
+      {@booked, @symbol} => {:ok, text("DEP")},
+      {@booked, @decimals} => {:error, :reverted},
+      {@contract, @free_capital <> word(@booked)} => {:ok, <<@max_uint256::256>>},
+      {@contract, @pay_period <> word(@booked)} => {:ok, <<0::256, 0::256, 0::256>>},
+      {@rewards, @backed <> word(@booked)} => {:ok, <<0::256>>},
       {@named, @symbol} => {:error, :reverted},
       {@named, @decimals} => {:ok, <<256::256>>},
       {@contract, @free_capital <> word(@named)} => {:ok, <<0::256>>},

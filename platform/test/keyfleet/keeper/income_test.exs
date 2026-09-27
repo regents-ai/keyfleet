@@ -20,7 +20,6 @@ defmodule Keyfleet.Keeper.IncomeTest do
   @stranger KeeperHelpers.address(:stranger)
   @strategy KeeperHelpers.address(:strategy)
   @lp_token_id KeeperHelpers.lp_token_id()
-  @registry "0x" <> String.duplicate("ab", 20)
   @tokens [@usdc, @regent, @subject]
   @now 1_800_000_000
   @year 365 * 86_400
@@ -50,7 +49,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
     test "sends every call with something to do, in order, each once the one before is included" do
       StubNode.put_chain(calls: answering(chain(Enum.map(@calls, &due/1))))
 
-      run(start!(), Income.new())
+      Income.run(start!())
 
       assert calls() == @calls
       assert Enum.map(sent(), & &1.nonce) == Enum.to_list(0..11)
@@ -61,7 +60,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
     test "sends nothing, and records nothing, when no call has anything to do" do
       StubNode.put_chain(calls: answering(chain([])))
 
-      run(start!(), Income.new())
+      Income.run(start!())
 
       assert sent() == []
       assert runs() == []
@@ -72,7 +71,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
       |> Enum.with_index()
       |> Enum.each(fn {call, nonce} ->
         StubNode.put_chain(nonce: nonce, calls: answering(chain([due(call)])))
-        run(start!(), Income.new())
+        Income.run(start!())
         assert calls() == [call]
       end)
     end
@@ -97,7 +96,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
       |> Enum.with_index()
       |> Enum.each(fn {{answers, due?}, nonce} ->
         StubNode.put_chain(nonce: nonce, calls: answering(chain([answers])))
-        run(start!(), Income.new())
+        Income.run(start!())
         assert calls() == if(due?, do: [{:release, @escrow, nil}], else: []), inspect(answers)
       end)
     end
@@ -113,7 +112,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
           )
       )
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~
                "Keeper passed over release to #{@escrow} for #{@fleet_id}: its check was refused"
@@ -131,7 +130,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
         end
       )
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~
                "Keeper passed over release to #{@escrow} for #{@fleet_id}: the contract refuses it"
@@ -155,7 +154,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
 
       StubNode.put_chain(calls: answering(answers))
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~
                "Keeper passed over the rest of #{@fleet_id}'s income round: it could not check sweep to #{@receiver}"
@@ -169,7 +168,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
         mine: fn _n, _raw -> :pending end
       )
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~ "its income round sends nothing more until the next"
       assert Enum.uniq(calls()) == [{:release, @escrow, nil}]
@@ -186,7 +185,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
 
       StubNode.put_chain(calls: answering(answers))
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~ "Keeper alert: #{@fleet_id}'s"
       assert log =~ "pays #{@stranger}, not the fleet"
@@ -200,7 +199,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
             answering(chain([due_all(), %{[@fleet, :launch_state] => [state]}, @owes_nothing]))
         )
 
-        log = capture_log(fn -> run(start!(), Income.new()) end)
+        log = capture_log(fn -> Income.run(start!()) end)
 
         assert log == ""
         assert sent() == []
@@ -210,12 +209,12 @@ defmodule Keyfleet.Keeper.IncomeTest do
     test "that graduated before the fleet recorded it is synced, then gets its income round" do
       StubNode.put_chain(calls: answering(chain([due_all(), at_auction(2), @owes_nothing])))
 
-      {sender, income} = Income.run(start!(), Income.new())
+      sender = Income.run(start!())
       assert calls() == [@sync]
 
       # The chain once the sync is included: the fleet has recorded its graduation.
       StubNode.update(calls: answering(chain([due_all(), @owes_nothing])))
-      Income.run(sender, income)
+      Income.run(sender)
 
       assert calls() == [@sync | Enum.drop(@calls, -1)]
     end
@@ -223,12 +222,12 @@ defmodule Keyfleet.Keeper.IncomeTest do
     test "that failed before the fleet recorded it is synced, then gets only the protocol share" do
       StubNode.put_chain(calls: answering(chain([due_all(), at_auction(3), @owes_nothing])))
 
-      {sender, income} = Income.run(start!(), Income.new())
+      sender = Income.run(start!())
       assert calls() == [@sync]
 
       StubNode.update(calls: answering(chain([due_all(), %{[@fleet, :launch_state] => [3]}])))
 
-      Income.run(sender, income)
+      Income.run(sender)
 
       assert calls() == [@sync, {:send_protocol_share, @fleet, nil}]
     end
@@ -244,7 +243,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
           )
       )
 
-      assert capture_log(fn -> run(start!(), Income.new()) end) == ""
+      assert capture_log(fn -> Income.run(start!()) end) == ""
       assert sent() == []
     end
 
@@ -259,12 +258,12 @@ defmodule Keyfleet.Keeper.IncomeTest do
           )
       )
 
-      {sender, income} = Income.run(start!(), Income.new())
+      sender = Income.run(start!())
       assert calls() == [@migrate]
 
       # The chain once the settle is included: the strategy has its verdict.
       StubNode.update(calls: answering(chain([due_all(), at_auction(2), @owes_nothing])))
-      Income.run(sender, income)
+      Income.run(sender)
 
       assert calls() == [@migrate, @sync]
     end
@@ -281,7 +280,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
           )
       )
 
-      log = capture_log(fn -> run(start!(), Income.new()) end)
+      log = capture_log(fn -> Income.run(start!()) end)
 
       assert log =~
                "Keeper passed over sync_launch to #{@fleet} for #{@fleet_id}: its check was refused"
@@ -290,42 +289,13 @@ defmodule Keyfleet.Keeper.IncomeTest do
     end
   end
 
-  test "surplus of a subject token the fleet does not admit waits, with a warning once a day" do
-    StubNode.put_chain(
-      calls:
-        answering(
-          chain(
-            for(token <- @tokens, do: due({:recognize_surplus, @fleet, token})) ++
-              [%{[@registry, :is_token_allowed, [@fleet, @subject]] => [0]}]
-          )
-        )
-    )
-
-    log =
-      capture_log(fn ->
-        {sender, income} = Income.run(start!(), Income.new())
-        Income.run(sender, income)
-      end)
-
-    assert [_warning] =
-             Regex.scan(~r/Keeper: #{@fleet_id} holds #{@subject} it does not admit yet/, log)
-
-    # Each round sends the two it admits: the chain still shows their surplus.
-    assert calls() ==
-             List.duplicate(
-               [{:recognize_surplus, @fleet, @usdc}, {:recognize_surplus, @fleet, @regent}],
-               2
-             )
-             |> List.flatten()
-  end
-
   describe "the protocol share" do
     test "is sent once a day while the fleet owes any" do
       share = {:send_protocol_share, @fleet, nil}
       StubNode.put_chain(calls: answering(chain([due(share)])))
 
-      {sender, income} = Income.run(start!(), Income.new())
-      Income.run(sender, income)
+      sender = Income.run(start!())
+      Income.run(sender)
 
       assert calls() == [share]
     end
@@ -335,7 +305,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
 
       included!(@fleet_id, share, 0, ago(23 * 3_600))
       StubNode.put_chain(nonce: 1, calls: answering(chain([due(share)])))
-      run(start!(), Income.new())
+      Income.run(start!())
 
       assert sent() == []
     end
@@ -348,11 +318,11 @@ defmodule Keyfleet.Keeper.IncomeTest do
         mine: fn _n, _raw -> :pending end
       )
 
-      {{sender, income}, _log} = with_log(fn -> Income.run(start!(), Income.new()) end)
+      {sender, _log} = with_log(fn -> Income.run(start!()) end)
       waiting = length(sent())
 
       StubNode.update(mine: fn _n, _raw -> {:mined, 1} end)
-      Income.run(sender, income)
+      Income.run(sender)
 
       assert length(sent()) == waiting
     end
@@ -362,21 +332,16 @@ defmodule Keyfleet.Keeper.IncomeTest do
 
       included!(@fleet_id, share, 0, ago(24 * 3_600 + 60))
       StubNode.put_chain(nonce: 1, calls: answering(chain([due(share)])))
-      run(start!(), Income.new())
+      Income.run(start!())
 
       assert calls() == [share]
     end
 
     test "is not sent while the fleet owes nothing" do
       StubNode.put_chain(calls: answering(chain([])))
-      run(start!(), Income.new())
+      Income.run(start!())
       assert sent() == []
     end
-  end
-
-  defp run(sender, income) do
-    {_sender, income} = Income.run(sender, income)
-    income
   end
 
   # The calls the keeper sent, in order, as `{function, contract, argument}`.
@@ -401,7 +366,6 @@ defmodule Keyfleet.Keeper.IncomeTest do
         [@escrow, :total_released] => [1_000],
         [@escrow, :vesting_start] => [@now - 2 * @year],
         [@locker, :collect] => [0, 0],
-        [@fleet, :asset_registry] => [@registry],
         [@fleet, :protocol_share_owed] => [0],
         [@fleet, :sync_launch] => [1]
       }
@@ -412,8 +376,7 @@ defmodule Keyfleet.Keeper.IncomeTest do
               {[token, :balance_of, [@receiver]], [0]},
               {[token, :balance_of, [@splitter]], [5]},
               {[@splitter, :protected_balance, [token]], [5]},
-              {[@fleet, :surplus, [token]], [0]},
-              {[@registry, :is_token_allowed, [@fleet, token]], [1]}
+              {[@fleet, :surplus, [token]], [0]}
             ]
           end)
         )

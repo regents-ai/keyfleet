@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keeper.Reveals do
   @moduledoc """
   The keeper's reveal job, run every 30 seconds: it asks a fleet's VRF
-  coordinator again for keys that were sold but never got their seed.
+  coordinator again for keys whose every request it refused.
 
   A round sends nothing while the base fee is above 2 gwei. It then takes
   each fleet on the keeper's chain whose key history was read recently,
@@ -14,11 +14,12 @@ defmodule Keyfleet.Keeper.Reveals do
   For each fleet it looks at up to 25 keys with no recorded reveal, lowest
   first, leaving out any the keeper asked for in the last hour or is still
   waiting on, and reads each from the chain. A key with a seed is left for
-  the chain reader to record. One never requested, or last requested an
-  hour or more ago, is asked for again. Once the coordinator refuses one
-  request, which the sender records and alerts, the fleet's reveals wait
-  an hour from it. A key that cannot be read ends that fleet's part of the
-  round; the other fleets go on.
+  the chain reader to record. One whose request the coordinator took waits
+  for that answer: the fleet never lets it be asked for again. One the
+  coordinator has never taken a request for is asked for again. Once the
+  coordinator refuses one request, which the sender records and alerts,
+  the fleet's reveals wait an hour from it. A key that cannot be read ends
+  that fleet's part of the round; the other fleets go on.
 
   It reports each fleet's subscription balance, and how many of the keys
   it looked at have waited more than two minutes for a seed.
@@ -33,7 +34,7 @@ defmodule Keyfleet.Keeper.Reveals do
   @max_base_fee 2_000_000_000
   @min_vrf_balance 20_000_000_000_000_000
   @per_round 25
-  @retry_after 3_600
+  @refusal_hold 3_600
   @waiting_after 120
   @no_seed "0x" <> String.duplicate("0", 64)
 
@@ -175,7 +176,7 @@ defmodule Keyfleet.Keeper.Reveals do
       sender.wallet.address,
       fleet.id,
       :request_reveal,
-      DateTime.add(DateTime.utc_now(), -@retry_after),
+      DateTime.add(DateTime.utc_now(), -@refusal_hold),
       actor: %System{}
     )
   end
@@ -215,8 +216,8 @@ defmodule Keyfleet.Keeper.Reveals do
     {:cont, sender, reveals, tally}
   end
 
-  # The chain decides: a key with a seed is revealed, and one requested less
-  # than an hour ago is still waiting for its answer. Returns whether it was
+  # The chain decides: a key with a seed is revealed, and one whose request
+  # the coordinator took is waiting for its answer. Returns whether it was
   # sent or passed over, and whether it has waited long for its seed.
   defp reveal_key(sender, fleet, block, token_id) do
     with {:ok, seed} <- Sender.read(sender, fleet.contract_address, :reveal_seed, [token_id]),
@@ -225,7 +226,7 @@ defmodule Keyfleet.Keeper.Reveals do
       unseeded? = seed == @no_seed
       waited? = unseeded? and waited?(requested_at, block)
 
-      if unseeded? and (requested_at == 0 or block.timestamp >= requested_at + @retry_after),
+      if unseeded? and requested_at == 0,
         do: request(sender, fleet, token_id, waited?),
         else: {:skipped, sender, waited?}
     else

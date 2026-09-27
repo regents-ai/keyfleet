@@ -12,7 +12,7 @@ defmodule Keyfleet.Proposals do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Proposals.{Execution, LaunchEnvelope, Proposal, Vote}
-  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeSplit}
+  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
 
   @page 20
   @changes_page 50
@@ -210,7 +210,7 @@ defmodule Keyfleet.Proposals do
     head_seq = if(cursor, do: cursor.proposal_seq, else: 0)
 
     {read, rest} =
-      [Proposal, Vote, Execution, LaunchEnvelope, BudgetReceipt, IncomeSplit, BudgetPayment]
+      [Proposal, Vote, Execution, LaunchEnvelope, BudgetReceipt, IncomeReceipt, BudgetPayment]
       |> Enum.flat_map(&records_after(&1, fleet_id, after_seq, head_seq))
       |> Enum.sort()
       |> Enum.split(@changes_page)

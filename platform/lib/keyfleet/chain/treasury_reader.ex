@@ -19,9 +19,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
   kept as unknown. What a call that fails otherwise means depends on whose
   token it is:
 
-    * an asset of the reading kept, one the fleet's registry admits, is asked
-      again at the next reading, with a warning, since the node may have
-      failed; and one whose symbol or decimals are kept as unknown is asked
+    * an asset of the reading kept is asked again at the next reading, with
+      a warning, since the node may have failed; and one whose symbol or decimals are kept as unknown is asked
       again at every reading, so an earlier failure heals;
     * an asset only a payment proposal names, which the budget cannot hold
       or pay, is asked once: a call that fails keeps it as unknown for good.

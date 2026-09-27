@@ -1,7 +1,8 @@
 defmodule Keyfleet.Chain.Scanner do
   @moduledoc """
   One pass over a deployed fleet's history: who holds each key, each key's
-  reveal, and what its budget took in and paid out, from the fleet contract,
+  reveal, what its budget took in and paid out and the income paid to its
+  keys, from the fleet contract,
   and its proposals, votes and executions, from its vote contract.
 
   Each pass reads the head, reads again the last 30 blocks it already
@@ -257,8 +258,8 @@ defmodule Keyfleet.Chain.Scanner do
   defp make_record({:budget_receipt, receipt}),
     do: Treasury.record_budget_receipt(receipt, @record_opts)
 
-  defp make_record({:income_split, split}),
-    do: Treasury.record_income_split(split, @record_opts)
+  defp make_record({:income, income}),
+    do: Treasury.record_income_receipt(income, @record_opts)
 
   defp make_record({:budget_paid, payment}),
     do: Treasury.record_budget_payment(payment, @record_opts)

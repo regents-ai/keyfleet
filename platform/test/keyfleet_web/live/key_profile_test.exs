@@ -153,15 +153,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     refute has_element?(view, "#key-profile-composer")
   end
 
-  test "another of the holder's keys opens in place of the one on show, keeping the referral",
-       %{conn: conn} do
-    ref = "0x" <> String.duplicate("d", 40)
-    {:ok, view, _html} = live(conn, @path <> "?key=12&ref=" <> ref)
+  test "another of the holder's keys opens in place of the one on show", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path <> "?key=12")
 
     assert has_element?(view, "#key-profile-key-3[data-phx-link-state='replace']")
     view |> element("#key-profile-key-3") |> render_click()
 
-    assert_patch(view, @path <> "?ref=#{ref}&key=3")
+    assert_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
     assert has_element?(view, "#key-profile-key-3[aria-current='true']")
   end
@@ -401,7 +399,6 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

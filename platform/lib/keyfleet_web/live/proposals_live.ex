@@ -719,23 +719,17 @@ defmodule KeyfleetWeb.ProposalsLive do
       <.balances :if={@treasury.read?} treasury={@treasury} />
       <.stakers_share wallet={@wallet} treasury={@treasury} />
 
-      <h3>Launch income</h3>
+      <h3>Income</h3>
       <p :if={@treasury.income == []} id="proposals-no-income" class="proposals-detail">
-        No launch income yet.
+        No income yet.
       </p>
       <ol :if={@treasury.income != []} id="proposals-income" class="proposals-lines">
         <li :for={income <- @treasury.income} data-income={income.id}>
-          <span><.amount value={income.received} /> received</span>
-          <span class="proposals-detail">
-            <span>
-              <.amount value={income.to_budget} /> to the budget, <.amount value={income.to_keys} />
-              to key holders, <.amount value={income.fee} /> fee
-            </span>
-          </span>
+          <span><.amount value={income.amount} /> paid to key holders</span>
         </li>
       </ol>
       <p :if={@treasury.earlier_income?} class="proposals-detail">
-        Earlier launch income is not shown here.
+        Earlier income is not shown here.
       </p>
 
       <h3>Payments</h3>
@@ -914,7 +908,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </div>
         </dl>
         <p id="proposal-plan-benefits" class="proposals-rule">
-          Who benefits: the fleet receives the launch’s income; after a 2% fee to Regent, a fifth goes to its budget and the rest to its keys.
+          Who benefits: the fleet’s keys receive all of the launch’s income, and its budget keeps what the launch raises and the launched tokens as they vest.
         </p>
       </div>
     </section>

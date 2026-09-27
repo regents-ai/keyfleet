@@ -344,74 +344,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  describe "a referral link" do
-    setup do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet)
-      :ok
-    end
-
-    test "carries a well-formed address into the purchase and names it", %{conn: conn} do
-      ref = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf12"
-
-      {:ok, view, _html} = live(conn, @path <> "?ref=" <> ref)
-
-      assert order(view)["data-referrer"] == String.downcase(ref)
-      assert text(view, "#buy-key-referrer") == "Referred by 0xabcd…ef12"
-      refute has_element?(view, "#buy-key-referral-refused")
-    end
-
-    test "that isn't an address is left out, and the buyer is told", %{conn: conn} do
-      for ref <- [
-            "0x1234",
-            "bob",
-            "0x" <> String.duplicate("g", 40),
-            "0x" <> String.duplicate("a", 41)
-          ] do
-        {:ok, view, _html} = live(conn, @path <> "?" <> URI.encode_query(ref: ref))
-
-        refute Map.has_key?(order(view), "data-referrer")
-        refute has_element?(view, "#buy-key-referrer")
-
-        assert text(view, "#buy-key-referral-refused") ==
-                 "The referral in this link isn’t a wallet address, so this purchase has no referrer."
-      end
-
-      {:ok, view, _html} = live(conn, @path <> "?ref[]=" <> @owner)
-      refute Map.has_key?(order(view), "data-referrer")
-      assert has_element?(view, "#buy-key-referral-refused")
-    end
-
-    # The contract credits any referrer, the buyer's own wallet included.
-    test "naming the buyer's own wallet is carried as it is", %{conn: conn} do
-      {:ok, view, _html} = live(conn, @path <> "?ref=" <> @owner)
-
-      assert order(view)["data-referrer"] == @owner
-      refute has_element?(view, "#buy-key-referral-refused")
-    end
-
-    # The contract reads the zero address as no referral.
-    test "naming the zero address is no referral", %{conn: conn} do
-      {:ok, view, _html} = live(conn, @path <> "?ref=0x" <> String.duplicate("0", 40))
-
-      refute Map.has_key?(order(view), "data-referrer")
-      refute has_element?(view, "#buy-key-referrer")
-      refute has_element?(view, "#buy-key-referral-refused")
-    end
-
-    test "stays with the page while the buyer pages through keys", %{conn: conn} do
-      ref = "0x" <> String.duplicate("b", 40)
-      {:ok, view, _html} = live(conn, @path <> "?ref=" <> ref)
-
-      view |> element("#fleet-keys-next") |> render_click()
-      assert shown_keys(view) == Enum.to_list(101..150)
-      assert order(view)["data-referrer"] == ref
-
-      view |> element("#fleet-keys-previous") |> render_click()
-      assert order(view)["data-referrer"] == ref
-    end
-  end
-
   describe "the key map" do
     # Each fleet draws its keys in its own shape, and only once it is deployed.
     test "every fleet's map draws its own layout", %{conn: conn} do
@@ -710,8 +642,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     pages = [
       {fn -> ChainHelpers.seed_cursor!(@fleet) end, conn, @path},
-      {fn -> :ok end, conn, @path <> "?ref=" <> @owner},
-      {fn -> :ok end, conn, @path <> "?ref=nonsense"},
       {fn -> :ok end, init_test_session(build_conn(), %{}), @path},
       {fn -> ChainHelpers.seed_cursor!(@fleet, head_block: 5_000) end, conn, @path}
     ]
@@ -1044,7 +974,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         usdc_address: @usdc,
-        asset_registry_address: "0x" <> String.duplicate("4", 40),
         deployed_block: deployed_block,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

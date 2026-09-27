@@ -310,7 +310,6 @@ defmodule Keyfleet.ChainTest do
              } = classic
 
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
-      assert classic.asset_registry_address == "0x" <> String.duplicate("4a", 20)
       assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
 
       own = ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
@@ -335,8 +334,8 @@ defmodule Keyfleet.ChainTest do
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
     end
 
-    # Every fleet sells on one chain, for one USDC, through one asset registry,
-    # with one trait table, so a fleet deployed on other wiring is never bound.
+    # Every fleet sells on one chain, for one USDC, with one trait table, so a
+    # fleet deployed on other wiring is never bound.
     @tag :tmp_dir
     test "a fleet whose shared wiring differs from a bound fleet's is refused and stays shut", %{
       tmp_dir: dir
@@ -349,7 +348,6 @@ defmodule Keyfleet.ChainTest do
       for {key, value, field} <- [
             {"chainId", 1, "chain_id"},
             {"usdc", "0x" <> String.duplicate("0b", 20), "usdc_address"},
-            {"assetRegistry", "0x" <> String.duplicate("5b", 20), "asset_registry_address"},
             {"traitTableHash", "0x" <> String.duplicate("b2", 32), "trait_table_hash"}
           ] do
         File.write!(path, Jason.encode!(manifest("cascade", "1", %{key => value})))
@@ -387,14 +385,14 @@ defmodule Keyfleet.ChainTest do
 
   # Run one after the other: the row lock the rule takes is what keeps two
   # recordings at the same moment in this order too.
-  test "a second fleet naming another asset registry is refused however it is recorded" do
+  test "a second fleet naming another trait table is refused however it is recorded" do
     deploy!("fleet_tech_classic", "0x" <> String.duplicate("c", 40))
 
     other =
       Map.put(
         deployment("0x" <> String.duplicate("b", 40)),
-        :asset_registry_address,
-        "0x" <> String.duplicate("5", 40)
+        :trait_table_hash,
+        "0x" <> String.duplicate("5", 64)
       )
 
     assert {:error, %Ash.Error.Invalid{} = error} =
@@ -402,7 +400,7 @@ defmodule Keyfleet.ChainTest do
              |> Fleets.get_fleet!()
              |> Fleets.record_deployment(other, actor: %System{})
 
-    assert Exception.message(error) =~ "asset_registry_address: differs from fleet_tech_classic's"
+    assert Exception.message(error) =~ "trait_table_hash: differs from fleet_tech_classic's"
     assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
   end
 
@@ -448,7 +446,6 @@ defmodule Keyfleet.ChainTest do
       rewards_address: "0x" <> String.duplicate("8", 40),
       votes_address: "0x" <> String.duplicate("9", 40),
       usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-      asset_registry_address: "0x" <> String.duplicate("4", 40),
       deployed_block: @deployed,
       trait_table_hash: "0x" <> String.duplicate("a", 64)
     }
@@ -464,7 +461,6 @@ defmodule Keyfleet.ChainTest do
         "chainId" => 8_453,
         "deploymentBlock" => 42,
         "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "assetRegistry" => "0x" <> String.duplicate("4A", 20),
         "traitTableHash" => "0x" <> String.duplicate("A1", 32),
         "fleet" => %{
           "slot" => slot,
