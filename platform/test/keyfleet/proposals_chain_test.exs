@@ -33,6 +33,7 @@ defmodule Keyfleet.ProposalsChainTest do
   @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
   @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
+  @withdrawn "0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
   @income_recognized "0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13"
   @shared_money_recognized "0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7"
@@ -87,6 +88,7 @@ defmodule Keyfleet.ProposalsChainTest do
                   @autolaunch,
                   @pay,
                   @vote,
+                  @withdrawn,
                   @executed,
                   @income_recognized,
                   @shared_money_recognized,
@@ -153,6 +155,46 @@ defmodule Keyfleet.ProposalsChainTest do
       refute Ash.load!(launch, :executed?).executed?
 
       assert Chain.get_cursor!(@fleet).proposal_seq == 5
+    end
+
+    # A withdrawn vote takes its keys off their side, a key that votes again
+    # counts again, and a withdrawal naming no keys is not one the contract
+    # emits.
+    test "a withdrawn vote counts for neither side until the key votes again", %{fleet: fleet} do
+      logs =
+        List.flatten([
+          decision(1, @deployed + 1),
+          vote(1, "a", true, [1, 2, 3], @deployed + 2, 0),
+          vote(1, "b", false, [4], @deployed + 2, 1),
+          withdrawn(1, "a", [2, 4], @deployed + 3, 0)
+        ])
+
+      StubClient.put_chain(head(@deployed + 10), logs)
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      decision = Proposals.get_proposal!(@fleet, 1)
+      assert %{yes_keys: 2, no_keys: 0} = Ash.load!(decision, [:yes_keys, :no_keys])
+
+      assert %{support: nil, token_ids: [2, 4], record_seq: 4} =
+               @fleet
+               |> Proposals.votes_recorded_in_blocks!(@deployed, @deployed + 10, actor: %System{})
+               |> Enum.max_by(& &1.record_seq)
+
+      StubClient.put_chain(
+        head(@deployed + 20),
+        logs ++ [vote(1, "a", false, [2], @deployed + 11, 0)]
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert %{yes_keys: 2, no_keys: 1} = Ash.load!(decision, [:yes_keys, :no_keys])
+
+      assert Logs.decode(
+               [withdrawn(1, "a", [], @deployed + 21, 0)],
+               fleet,
+               @deployed,
+               @deployed + 30
+             ) ==
+               {:error, {:unreadable_log, transaction(@deployed + 21), quantity(0)}}
     end
 
     # A payment keeps its asset, amount, recipient and reason, and its
@@ -1314,6 +1356,13 @@ defmodule Keyfleet.ProposalsChainTest do
         for(id <- token_ids, into: <<>>, do: <<id::256>>)
 
     log(@votes, [@vote, <<number::256>>, address_word_bytes(voter)], data, block, log_index)
+  end
+
+  defp withdrawn(number, voter, token_ids, block, log_index) do
+    data =
+      <<32::256, length(token_ids)::256>> <> for(id <- token_ids, into: <<>>, do: <<id::256>>)
+
+    log(@votes, [@withdrawn, <<number::256>>, address_word_bytes(voter)], data, block, log_index)
   end
 
   defp executed(number, executor, block, log_index) do

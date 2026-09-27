@@ -39,6 +39,12 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetVotes.VoteCast.selector, 0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53);
     }
 
+    function test_voteWithdrawnTopic() public pure {
+        assertEq(
+            KeyfleetVotes.VoteWithdrawn.selector, 0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4
+        );
+    }
+
     function test_proposalKindNumbers() public pure {
         assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
         assertEq(uint8(KeyfleetVotes.Kind.Autolaunch), 1);

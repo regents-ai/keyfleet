@@ -496,7 +496,7 @@ defmodule Keyfleet.Activity do
       )
 
     rest = rest ++ Enum.drop(records, @group_cap)
-    {yes, no} = Enum.split_with(votes, & &1.support)
+    sides = Enum.group_by(votes, & &1.support)
 
     item =
       entry(
@@ -506,8 +506,9 @@ defmodule Keyfleet.Activity do
         List.last(votes).record_seq,
         %{
           number: first.proposal_number,
-          yes: tally(yes),
-          no: tally(no)
+          yes: tally(sides[true]),
+          no: tally(sides[false]),
+          withdrawn: tally(sides[nil])
         }
       )
 
@@ -546,6 +547,8 @@ defmodule Keyfleet.Activity do
       Map.merge(offer(proposal), %{number: proposal.number, kind: proposal.kind})
     )
   end
+
+  defp tally(nil), do: tally([])
 
   defp tally(votes) do
     token_ids = votes |> Enum.flat_map(& &1.token_ids) |> Enum.uniq() |> Enum.sort()

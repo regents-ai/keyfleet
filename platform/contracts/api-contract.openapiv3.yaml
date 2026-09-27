@@ -2411,13 +2411,15 @@ components:
       required: [voter, support, votes, keys, transaction_hash, block_number, seq]
       properties:
         voter: {$ref: "#/components/schemas/AgentWallet"}
-        support: {type: boolean, description: True for yes}
+        support:
+          type: [boolean, "null"]
+          description: True for yes, false for no, null when the keys withdrew their votes
         votes: {type: integer, minimum: 1, maximum: 9223372036854775807, description: One per key}
         keys:
           type: array
           description: >-
-            The keys that voted, by token id. A key may vote again until the proposal is carried
-            out, and its latest vote is the one that counts
+            The keys that voted, by token id. A key may vote again, or withdraw its vote, until
+            the proposal is carried out, and its latest vote is the one that counts
           items: {type: integer, minimum: 1, maximum: 9223372036854775807}
         transaction_hash: {$ref: "#/components/schemas/ChainHash"}
         block_number: {$ref: "#/components/schemas/RoomSeq"}

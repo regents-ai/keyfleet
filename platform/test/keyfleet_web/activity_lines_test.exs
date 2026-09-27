@@ -71,7 +71,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
       facts: %{
         number: 12,
         yes: %{count: 1, token_ids: [1234]},
-        no: %{count: 0, token_ids: []}
+        no: %{count: 0, token_ids: []},
+        withdrawn: %{count: 0, token_ids: []}
       }
     }
 
@@ -79,6 +80,27 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert {:proposal, 12} in ActivityLines.parts(votes)
     assert ActivityLines.text(votes) == "Key 1,234 voted yes on Proposal 12."
     assert ActivityLines.markdown(votes) == "Key 1,234 voted yes on Proposal 12."
+  end
+
+  test "keys that withdrew their votes are said to have withdrawn them" do
+    facts = %{
+      number: 12,
+      yes: %{count: 0, token_ids: []},
+      no: %{count: 1, token_ids: [5]},
+      withdrawn: %{count: 2, token_ids: [3, 4]}
+    }
+
+    votes = %{id: "votes:1", at: ~U[2026-09-25 12:00:00Z], kind: :votes, facts: facts}
+
+    assert ActivityLines.text(votes) ==
+             "Key 5 voted no and Keys 3 and 4 withdrew their votes on Proposal 12."
+
+    one = %{
+      votes
+      | facts: %{facts | no: %{count: 0, token_ids: []}, withdrawn: %{count: 1, token_ids: [3]}}
+    }
+
+    assert ActivityLines.text(one) == "Key 3 withdrew its vote on Proposal 12."
   end
 
   @usdc "0x" <> String.duplicate("e", 40)

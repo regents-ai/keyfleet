@@ -109,6 +109,23 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            end)
   end
 
+  test "a withdrawn vote counts for neither side and is listed as withdrawn", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, 1..3)
+    ProposalHelpers.proposal!(@fleet, 1)
+    votes!(1, true: [1, 2], false: [3])
+    votes!(1, nil: [2, 3])
+
+    {:ok, view, _html} = live(conn, "#{@list}/1")
+    assert has_element?(view, "#proposal-status", "Voting open")
+    assert has_element?(view, "#proposal-yes", "1 key")
+    assert has_element?(view, "#proposal-no", "0 keys")
+    assert [yes, no, withdrawn] = votes(view)
+    assert yes =~ ~r/^Yes.*with keys 1, 2$/
+    assert no =~ ~r/^No.*with key 3$/
+    assert withdrawn =~ ~r/^Withdrawn.*with keys 2, 3$/
+  end
+
   test "a proposal's page shows its text, its outcome and every vote, fifty at a time", %{
     conn: conn
   } do

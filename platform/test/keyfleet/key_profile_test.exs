@@ -56,6 +56,8 @@ defmodule Keyfleet.KeyProfileTest do
       proposal!(@fleet, 2)
       vote!(@fleet, 1, holder, true, [3, 12])
       vote!(@fleet, 2, holder, false, [12])
+      # A withdrawal is not a vote cast.
+      vote!(@fleet, 2, holder, nil, [12])
       # Other keys' votes, and key 12 of another fleet, are not key 12's.
       vote!(@fleet, 1, wallet("b"), true, [120])
       ChainHelpers.seed_cursor!("fibonacci_syndicate")

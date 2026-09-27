@@ -10,7 +10,9 @@ defmodule Keyfleet.Chain.VotesLog do
   `Keyfleet.Chain.Logs` joins them.
 
   Every key is one vote, so a vote carries its keys and nothing else. A key
-  may vote again, and its latest vote is the one that counts.
+  may vote again, and its latest vote is the one that counts. A
+  `VoteWithdrawn` log is read as a vote whose `support` is nil: the keys it
+  names count for neither side until they vote again.
 
   A Decision's or payment's text is kept up to its first 64 KiB, as raw bytes
   that need not be valid text, beside its full length and its SHA-256. A
@@ -27,6 +29,8 @@ defmodule Keyfleet.Chain.VotesLog do
   @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
   # cast keccak "VoteCast(uint256,address,bool,uint256[])"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
+  # cast keccak "VoteWithdrawn(uint256,address,uint256[])"
+  @withdrawn "0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4"
   # cast keccak "ProposalExecuted(uint256,address)"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
 
@@ -36,7 +40,7 @@ defmodule Keyfleet.Chain.VotesLog do
   @kinds %{0 => :decision, 1 => :autolaunch, 2 => :pay}
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@created, @autolaunch, @pay, @vote, @executed]
+  def topics, do: [@created, @autolaunch, @pay, @vote, @withdrawn, @executed]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
@@ -91,22 +95,13 @@ defmodule Keyfleet.Chain.VotesLog do
   end
 
   def decode(@vote, [id, voter], data) do
-    with {:ok, number} <- number(id),
-         {:ok, voter} <- Abi.word(voter, :address),
-         {:ok, [support, [_ | _] = token_ids]} <-
-           Abi.decode(data, [:bool, {:array, {:uint, 63}}]),
-         true <- Enum.all?(token_ids, &(&1 > 0)) do
-      {:ok,
-       {:vote,
-        %{
-          proposal_number: number,
-          voter: voter,
-          support: support,
-          token_ids: token_ids
-        }}}
-    else
-      _malformed -> :error
-    end
+    with {:ok, [support, token_ids]} <- Abi.decode(data, [:bool, {:array, {:uint, 63}}]),
+         do: vote(id, voter, support, token_ids)
+  end
+
+  def decode(@withdrawn, [id, voter], data) do
+    with {:ok, [token_ids]} <- Abi.decode(data, [{:array, {:uint, 63}}]),
+         do: vote(id, voter, nil, token_ids)
   end
 
   def decode(@executed, [id, executor], data) do
@@ -120,6 +115,24 @@ defmodule Keyfleet.Chain.VotesLog do
   end
 
   def decode(_topic0, _topics, _data), do: :error
+
+  defp vote(id, voter, support, token_ids) do
+    with {:ok, number} <- number(id),
+         {:ok, voter} <- Abi.word(voter, :address),
+         [_ | _] <- token_ids,
+         true <- Enum.all?(token_ids, &(&1 > 0)) do
+      {:ok,
+       {:vote,
+        %{
+          proposal_number: number,
+          voter: voter,
+          support: support,
+          token_ids: token_ids
+        }}}
+    else
+      _malformed -> :error
+    end
+  end
 
   defp number(topic) do
     case Abi.word(topic, {:uint, 63}) do

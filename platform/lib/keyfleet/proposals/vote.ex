@@ -1,8 +1,9 @@
 defmodule Keyfleet.Proposals.Vote do
   @moduledoc """
   One `VoteCast` log: a set of keys voted for or against a recorded proposal,
-  one vote per key. Only the chain reader writes it, and nothing ever changes
-  it.
+  one vote per key; or one `VoteWithdrawn` log, with `support` nil: the keys'
+  votes on it were withdrawn. Only the chain reader writes it, and nothing
+  ever changes it.
   """
   use Ash.Resource,
     domain: Keyfleet.Proposals,
@@ -141,13 +142,13 @@ defmodule Keyfleet.Proposals.Vote do
               )
     end
 
-    # Every vote in the fleet that used key `token_id`.
+    # Every vote in the fleet cast with key `token_id`.
     read :with_key do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @max_bigint]
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and
+               fleet_id == ^arg(:fleet_id) and not is_nil(support) and
                  fragment("? @> ARRAY[?]::bigint[]", token_ids, ^arg(:token_id))
              )
     end
@@ -156,7 +157,7 @@ defmodule Keyfleet.Proposals.Vote do
     read :by_voter do
       argument :fleet_id, :string, allow_nil?: false
       argument :voter, :string, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and voter == ^arg(:voter))
+      filter expr(fleet_id == ^arg(:fleet_id) and voter == ^arg(:voter) and not is_nil(support))
     end
   end
 
@@ -178,7 +179,8 @@ defmodule Keyfleet.Proposals.Vote do
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    attribute :support, :boolean, allow_nil?: false, public?: true
+    # Nil when the keys' votes were withdrawn.
+    attribute :support, :boolean, public?: true
 
     attribute :token_ids, {:array, :integer},
       allow_nil?: false,

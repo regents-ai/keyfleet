@@ -218,7 +218,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </p>
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
-              <span>{if vote.support, do: "Yes", else: "No"}</span>
+              <span>{vote_word(vote.support)}</span>
               <span>{FleetLive.short_wallet(vote.voter)}, with {key_list(vote.keys)}</span>
             </li>
           </ol>
@@ -906,6 +906,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp carry_out_word(kind), do: Map.fetch!(@carry_out_words, kind)
 
   defp carry_out_note(%{status: status}), do: Map.fetch!(@carry_out_notes, status)
+
+  defp vote_word(true), do: "Yes"
+  defp vote_word(false), do: "No"
+  defp vote_word(nil), do: "Withdrawn"
 
   # Each asset by address: the decimals amounts typed in whole tokens are
   # converted with, and the words that name an amount of it.

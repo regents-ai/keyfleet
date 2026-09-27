@@ -149,7 +149,7 @@ defmodule KeyfleetWeb.ActivityLines do
 
   def parts(%{kind: :votes, facts: f}) do
     votes =
-      [voted(f.yes, "yes"), voted(f.no, "no")]
+      [voted(f.yes, :yes), voted(f.no, :no), voted(f.withdrawn, :withdrawn)]
       |> Enum.reject(&is_nil/1)
       |> Enum.intersperse([" and "])
       |> List.flatten()
@@ -315,11 +315,16 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp voted(%{count: 0}, _word), do: nil
 
-  defp voted(%{count: count, token_ids: token_ids}, word) do
+  defp voted(%{count: count, token_ids: token_ids}, side) do
     named = Enum.map(token_ids, &Rules.grouped/1)
     lead = if count == 1, do: "Key ", else: "Keys "
-    [lead | listing(named, count - length(token_ids))] ++ [" voted #{word}"]
+    [lead | listing(named, count - length(token_ids))] ++ [did(side, count)]
   end
+
+  defp did(:yes, _count), do: " voted yes"
+  defp did(:no, _count), do: " voted no"
+  defp did(:withdrawn, 1), do: " withdrew its vote"
+  defp did(:withdrawn, _count), do: " withdrew their votes"
 
   # "A", "A and B", "A, B and C", "A, B, C and 2 others".
   defp listing(parts, 0), do: joined(parts)
