@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
+import {IAutolaunchAuction} from "../../src/interfaces/IAutolaunchAuction.sol";
 import {IRegentLBPStrategy} from "../../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
@@ -48,8 +49,8 @@ interface IForkSplitter {
 }
 
 /// @notice The whole post-launch path of one fleet against a running Autolaunch lab: the keys vote
-/// a launch through the lab's own factory and one bidder graduates it. The REGENT the strategy sends
-/// the fleet at graduation and the SUBJECT the escrow releases become shared money; USDC and REGENT
+/// a launch through the lab's own factory and one bidder graduates it. The REGENT the auction raised
+/// that the pool did not use and the SUBJECT the escrow releases become shared money; USDC and REGENT
 /// the launch's splitter pays on reach the keys whole; keys claim, and a Pay vote spends shared
 /// money.
 /// @dev Runs only when `KEYFLEET_FORK_RPC_URL` names a Base-shaped chain with the Autolaunch graph
@@ -197,16 +198,21 @@ contract KeyfleetLaunchIncomeForkTest is Test {
 
         vm.roll(uint256(cca.endBlock()) + strategy.MIGRATION_DELAY_BLOCKS());
         strategy.migrate(auction);
-        assertGt(IERC20(REGENT).balanceOf(address(fleet)), 0, "the strategy sent the fleet the REGENT the pool left");
         assertEq(uint256(fleet.syncLaunch()), uint256(Keyfleet.LaunchState.Graduated), "the launch graduated");
+        IRegentLBPStrategy.Distribution memory distribution = fleet.launchDistribution();
         assertEq(
-            fleet.freeCapital(REGENT), IERC20(REGENT).balanceOf(address(fleet)), "all of that REGENT is shared money"
-        );
-        assertEq(
-            uint256(fleet.launchDistribution().lifecycle),
+            uint256(distribution.lifecycle),
             uint256(IRegentLBPStrategy.Lifecycle.Graduated),
             "as the strategy reports it"
         );
+        uint256 raised = IAutolaunchAuction(auction).lbpInitializationParams().currencyRaised;
+        assertEq(
+            fleet.freeCapital(REGENT),
+            raised - distribution.lpRegentUsed,
+            "exactly the REGENT the auction raised that the pool did not use is shared money"
+        );
+        console2.log("raised", raised, "pool", distribution.lpRegentUsed);
+        console2.log("REGENT the fleet received", IERC20(REGENT).balanceOf(address(fleet)));
     }
 
     /// @dev Recognizes the fleet's whole surplus in an income token and checks that all of it went
@@ -264,11 +270,12 @@ contract KeyfleetLaunchIncomeForkTest is Test {
 
     /// @dev An ordinary payer sends `amount` to the splitter and anyone recognizes it there.
     function _payThroughSplitter(IForkSplitter splitter, address token, uint256 amount) private {
+        uint256 before = fleet.surplus(token);
         deal(token, payer, amount);
         vm.prank(payer);
         assertTrue(IERC20(token).transfer(address(splitter), amount));
         splitter.recognizeSurplusRevenue(token);
-        assertEq(fleet.surplus(token), amount - (amount * 200) / 10_000, "the splitter paid on all but its 2%");
+        assertEq(fleet.surplus(token) - before, amount - (amount * 200) / 10_000, "the splitter paid on all but its 2%");
     }
 
     function _passAll(uint256 proposalId) private {
