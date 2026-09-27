@@ -453,8 +453,9 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// The proposal is marked carried out before the fleet is called, so a launch artifact or a
     /// paid asset that calls back can never carry it out twice. Any revert inside the fleet or the
     /// factory — a paused factory, a raise the strategy refuses, a running or graduated launch, a
-    /// launch approved before a failed one was created, a payment whose matches do not fit — undoes
-    /// the mark with everything else, so the attempt consumes nothing and the proposal stays open.
+    /// launch proposal that opened in or before the block a failed launch was created in, a payment
+    /// whose matches do not fit — undoes the mark with everything else, so the attempt consumes
+    /// nothing and the proposal stays open.
     /// @param proposalId The proposal to carry out.
     function execute(uint256 proposalId) external nonReentrant {
         Proposal storage stored = _require(proposalId);

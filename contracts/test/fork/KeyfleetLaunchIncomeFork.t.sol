@@ -199,6 +199,11 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         vm.roll(uint256(cca.endBlock()) + strategy.MIGRATION_DELAY_BLOCKS());
         strategy.migrate(auction);
         assertEq(uint256(fleet.syncLaunch()), uint256(Keyfleet.LaunchState.Graduated), "the launch graduated");
+        assertEq(
+            fleet.freeCapital(REGENT),
+            IERC20(REGENT).balanceOf(address(fleet)),
+            "the fleet holds every REGENT it booked as shared money, and no more"
+        );
         IRegentLBPStrategy.Distribution memory distribution = fleet.launchDistribution();
         assertEq(
             uint256(distribution.lifecycle),
@@ -212,7 +217,6 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             "exactly the REGENT the auction raised that the pool did not use is shared money"
         );
         console2.log("raised", raised, "pool", distribution.lpRegentUsed);
-        console2.log("REGENT the fleet received", IERC20(REGENT).balanceOf(address(fleet)));
     }
 
     /// @dev Recognizes the fleet's whole surplus in an income token and checks that all of it went

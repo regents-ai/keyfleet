@@ -196,8 +196,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param matched The matches it would set aside for the keys that did not vote YES.
     /// @param available The asset's shared money.
     error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available);
-    /// @notice The launch proposal opened at or before the block this fleet's failed launch was
-    /// created in, so it was approved before that launch failed and cannot follow it.
+    /// @notice The launch proposal opened in or before the block this fleet's failed launch was
+    /// created in, so it cannot be carried out.
     error StaleLaunch(uint256 proposalId);
     /// @notice The factory does not record the launch it just said it created.
     error LaunchProvenanceMismatch();
@@ -807,9 +807,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// refuses — reverts the controller's execution with it, including the mark that the proposal
     /// was carried out. The proposal therefore stays open and consumes nothing, which is what lets a
     /// fleet wait for the factory to open and try again. The first approved Autolaunch carried out
-    /// wins; another can follow only if that launch fails, and only a proposal that opened after
-    /// the failed launch was created, in a later block, so an approval given before that launch
-    /// failed cannot be carried out once it has; it reverts with `StaleLaunch`.
+    /// wins; another can follow only if that launch fails. A launch proposal that opened in or
+    /// before the block the failed launch was created in cannot be carried out; it reverts with
+    /// `StaleLaunch`.
     ///
     /// Guarded, so a launch artifact that calls back cannot reach another entry point while this
     /// one is half done.
