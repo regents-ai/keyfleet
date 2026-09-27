@@ -1,7 +1,8 @@
 # Putting the Keyfleet site on Fly
 
 The steps, in order, for the first launch of the website at keyfleet.ai. Key
-sales stay off throughout (see the last section). Commands run from
+sales stay off throughout: they need the key and treasury contracts finished
+and deployed on Base first (see "Before any key is sold"). Commands run from
 `platform/` unless a step says otherwise. Anything marked **not verified** was
 not tried before this list was written.
 
@@ -172,9 +173,25 @@ no page offers a key for sale. Only `/app/bin/seed-deployment` links a fleet to
 its deployed contracts, and running it is a separate decision for the founder.
 Do not run it, or deploy the contracts, as part of this launch.
 
+## Before any key is sold
+
+Key sales cannot start until the fleet contracts are finished and deployed on
+Base. The contracts are not finished yet. These must be done first, in order:
+
+1. **The key contract finished.** The founder decides when the key (NFT)
+   contract is complete, including the trait table and key art its deploy step
+   requires.
+2. **The treasury contract finished.** The contracts in `contracts/src` still
+   carry the earlier treasury design (a launch-income budget spent by Pay
+   votes), which the founder has moved away from. Treasury contract work is on
+   hold until the founder settles the new design. A deployed fleet can never be
+   changed, so no fleet may be deployed before this is built.
+3. **Deployed on Base** with the founder's approval, then recorded as below.
+
 ## Opening a fleet later
 
-Each fleet is deployed and recorded on its own, when the founder says so;
+Each fleet is deployed and recorded on its own, when the founder says so and
+only after everything in "Before any key is sold" is done;
 [deployment.md](deployment.md) has the contract steps: the shared asset
 registry once, before the first fleet, then each fleet with `KEYFLEET_FLEET`
 set to that one fleet. **Commit the registry's address into the manifest before
