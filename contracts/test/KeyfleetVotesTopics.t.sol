@@ -45,6 +45,14 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
+    function test_launchStateNumbers() public pure {
+        assertEq(uint8(Keyfleet.LaunchState.NotCreated), 0);
+        assertEq(uint8(Keyfleet.LaunchState.AuctionCreated), 1);
+        assertEq(uint8(Keyfleet.LaunchState.Graduated), 2);
+        assertEq(uint8(Keyfleet.LaunchState.EconomicallyFailed), 3);
+        assertEq(uint8(type(Keyfleet.LaunchState).max), 3);
+    }
+
     function test_proposalKindNumbers() public pure {
         assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
         assertEq(uint8(KeyfleetVotes.Kind.Autolaunch), 1);
@@ -94,6 +102,8 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet(address(0)).freeCapital.selector, bytes4(0x2b84308e));
         assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
         assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
+        assertEq(Keyfleet(address(0)).launchState.selector, bytes4(0x2fcd0f25));
+        assertEq(Keyfleet(address(0)).launchRecord.selector, bytes4(0xff1ac947));
     }
 
     function test_proposalExecutedTopic() public pure {

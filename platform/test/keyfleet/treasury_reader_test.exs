@@ -30,6 +30,8 @@ defmodule Keyfleet.TreasuryReaderTest do
   @backed <<0x59, 0x5B, 0x7F, 0x21>>
   @cascade_reserve <<0xFC, 0x4E, 0x89, 0x64>>
   @protocol_share_owed <<0xC4, 0x90, 0xB9, 0xC7>>
+  @launch_state <<0x2F, 0xCD, 0x0F, 0x25>>
+  @launch_record <<0xFF, 0x1A, 0xC9, 0x47>>
   @decimals <<0x31, 0x3C, 0xE5, 0x67>>
   @symbol <<0x95, 0xD8, 0x9B, 0x41>>
 
@@ -73,11 +75,11 @@ defmodule Keyfleet.TreasuryReaderTest do
     refute_received {:proposals_changed, _fleet}
 
     requests = StubClient.call_requests()
-    assert length(requests) == 17
+    assert length(requests) == 18
     assert Enum.all?(requests, fn {_to, _data, block_hash} -> block_hash == @head_hash end)
 
-    {balances, details} = Enum.split(requests, 9)
-    assert List.last(balances) == {@contract, @protocol_share_owed, @head_hash}
+    {balances, details} = Enum.split(requests, 10)
+    assert List.last(balances) == {@contract, @launch_state, @head_hash}
     assert Enum.all?(details, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
@@ -89,6 +91,7 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert DateTime.compare(reading.block_time, head(40).timestamp) == :eq
     assert Decimal.equal?(reading.cascade_reserve, 700)
     assert Decimal.equal?(reading.protocol_share_owed, 800)
+    assert reading.failed_launch_block == nil
 
     assert %{asset: @usdc, free_capital: 100_000_000, backed: 30_000_000} = usdc
     assert %{free_capital: 5_000, backed: 60} = other
@@ -103,6 +106,27 @@ defmodule Keyfleet.TreasuryReaderTest do
              @named => {"NMD", nil},
              @paid => {nil, nil}
            }
+  end
+
+  # Once the fleet's latest launch has failed, the reading keeps the block it
+  # was created in, from the same block as every other figure.
+  test "a failed launch's block is kept with the reading", %{fleet: fleet} do
+    record = <<7::256, 3::256, 0::96, 1::160, 1_234::256>> <> :binary.copy(<<0::256>>, 7)
+
+    failed =
+      chain()
+      |> Map.put({@contract, @launch_state}, {:ok, <<3::256>>})
+      |> Map.put({@contract, @launch_record}, {:ok, record})
+
+    StubClient.put_chain(head(40), [], calls: answers(failed))
+    assert {:ok, %{failed_launch_block: 1_234}} = TreasuryReader.read(fleet, StubClient)
+
+    StubClient.put_chain(head(41), [],
+      calls: answers(Map.delete(failed, {@contract, @launch_record}))
+    )
+
+    assert TreasuryReader.read(fleet, StubClient) == {:error, {@contract, :no_answer}}
+    assert Treasury.get_reading!(@fleet).failed_launch_block == 1_234
   end
 
   # A token sent to the fleet that no payment waits on is neither read nor
@@ -351,7 +375,8 @@ defmodule Keyfleet.TreasuryReaderTest do
       {@contract, @free_capital <> word(@other)} => {:ok, <<5_000::256>>},
       {@rewards, @backed <> word(@other)} => {:ok, <<60::256>>},
       {@contract, @cascade_reserve} => {:ok, <<700::256>>},
-      {@contract, @protocol_share_owed} => {:ok, <<800::256>>}
+      {@contract, @protocol_share_owed} => {:ok, <<800::256>>},
+      {@contract, @launch_state} => {:ok, <<1::256>>}
     }
   end
 

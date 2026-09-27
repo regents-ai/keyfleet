@@ -20,7 +20,11 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
-  @status_words %{voting: "Voting open", passed: "Passed"}
+  @status_words %{
+    voting: "Voting open",
+    passed: "Passed",
+    stale: "Proposed before the last launch"
+  }
 
   @executed_words %{decision: "Passed and recorded", autolaunch: "Launched", pay: "Paid"}
 
@@ -36,6 +40,8 @@ defmodule KeyfleetWeb.ProposalsLive do
     voting:
       "Yes votes aren’t yet more than half of all the keys sold, so carrying it out now will be refused.",
     passed: nil,
+    stale:
+      "This launch was proposed before the fleet’s last launch, which didn’t succeed, so carrying it out will be refused. Propose it again to try another launch.",
     executed: "It has already been carried out, so doing it again will be refused."
   }
 

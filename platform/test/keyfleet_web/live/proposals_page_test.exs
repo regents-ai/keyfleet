@@ -722,18 +722,30 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.proposal!(@fleet, 1)
     ProposalHelpers.proposal!(@fleet, 2)
     ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
-    ProposalHelpers.proposal!(@fleet, 4, kind: :autolaunch)
+    # The fleet's last launch, created in block 10, failed: a launch proposal
+    # that opened in or before that block will be refused, one opened after
+    # it won't.
+    ProposalHelpers.proposal!(@fleet, 4, kind: :autolaunch, opened_block: 10)
     ProposalHelpers.proposal!(@fleet, 5, kind: :autolaunch)
-    for number <- 2..5, do: votes!(number, true: [1])
+    ProposalHelpers.proposal!(@fleet, 6, kind: :autolaunch, opened_block: 11)
+    for number <- 2..6, do: votes!(number, true: [1])
     ProposalHelpers.execution!(@fleet, 3, @voter)
     ProposalHelpers.execution!(@fleet, 5, @voter)
+    ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
+
+    {:ok, list, _html} = live(conn, @list)
+    assert {"4", "Launch", "Proposed before the last launch"} in cards(list)
+    assert {"6", "Launch", "Passed"} in cards(list)
 
     for {number, status, word, note} <- [
           {1, "Voting open", "Record the decision", "Yes votes aren’t yet more than half"},
           {2, "Passed", "Record the decision", nil},
           {3, "Paid", "Make the payment", "It has already been carried out"},
-          {4, "Passed", "Start the launch", nil},
-          {5, "Launched", "Start the launch", "It has already been carried out"}
+          {4, "Proposed before the last launch", "Start the launch",
+           "This launch was proposed before the fleet’s last launch, which didn’t succeed, " <>
+             "so carrying it out will be refused. Propose it again to try another launch."},
+          {5, "Launched", "Start the launch", "It has already been carried out"},
+          {6, "Passed", "Start the launch", nil}
         ] do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
       assert has_element?(view, "#proposal-status", status), "proposal #{number}"

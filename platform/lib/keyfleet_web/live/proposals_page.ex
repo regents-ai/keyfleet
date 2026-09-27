@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
-        proposals: Enum.map(proposals, &summary/1),
+        proposals: Enum.map(proposals, &summary(&1, failed_launch_block(balances))),
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         treasury: reading.deployed? && treasury(fleet, balances),
@@ -89,10 +89,11 @@ defmodule KeyfleetWeb.ProposalsPage do
         proposal ->
           {votes, more?} = Proposals.votes_after(proposal.id, votes_after, @votes_page)
           path = &detail_path(fleet_id, proposal.number, &1)
+          failed = failed_launch_block(reading.deployed? && Treasury.get_reading!(fleet_id))
 
           Map.merge(reading, %{
             number: number,
-            proposal: Map.merge(summary(proposal), details(proposal, fleet)),
+            proposal: Map.merge(summary(proposal, failed), details(proposal, fleet)),
             votes: Enum.map(votes, &vote/1),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
             first_votes: if(votes_after > 0, do: path.([]))
@@ -245,17 +246,31 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  defp summary(proposal) do
+  defp summary(proposal, failed_launch_block) do
     %{
       number: proposal.number,
       kind: proposal.kind,
-      status: Proposals.status(proposal),
+      status: status(proposal, failed_launch_block),
       keys_sold: proposal.keys_sold,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
       gist: gist(proposal)
     }
   end
+
+  # `Proposals.status/1`, or `:stale` for a launch proposal not carried out
+  # that opened in or before the block the fleet's failed launch was created
+  # in, which the fleet refuses to carry out.
+  defp status(%{kind: :autolaunch, execution: nil, opened_block: opened}, failed)
+       when is_integer(failed) and opened <= failed,
+       do: :stale
+
+  defp status(proposal, _failed_launch_block), do: Proposals.status(proposal)
+
+  # The block the latest reading says the fleet's failed launch was created
+  # in, or nil.
+  defp failed_launch_block(%{failed_launch_block: block}), do: block
+  defp failed_launch_block(_no_reading), do: nil
 
   defp gist(%{kind: :autolaunch, launch_envelope: %{name: name}}), do: as_text(name)
   defp gist(%{kind: :autolaunch}), do: nil
