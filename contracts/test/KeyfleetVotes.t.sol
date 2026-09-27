@@ -3,46 +3,30 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
-
-/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
-contract MockToken is ERC20 {
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
-
-    function decimals() public pure override returns (uint8) {
-        return 6;
-    }
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
+import {MockToken} from "./KeyfleetIncome.t.sol";
 
 contract KeyfleetVotesTest is Test {
     uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private usdc;
+    MockToken private regent;
     MockToken private other;
-    KeyfleetAssetRegistry private registry;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
     IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
-    address private safe = address(0x5AFE);
-    address private treasury = address(0x7EA5);
     address private buyer = address(0xB0B0B0);
-    address private payer = address(0xDEDE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
     address private dave = address(0xDA7E);
@@ -64,8 +48,8 @@ contract KeyfleetVotesTest is Test {
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
+        regent = new MockToken("Regent", "REGENT");
         other = new MockToken("Other", "OTH");
-        registry = new KeyfleetAssetRegistry(safe, address(usdc));
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
         vm.warp(1_000_000);
@@ -81,8 +65,7 @@ contract KeyfleetVotesTest is Test {
         fleet = new Keyfleet(
             preset,
             usdc,
-            treasury,
-            registry,
+            IERC20(address(regent)),
             staking,
             factory,
             votingWindow,
@@ -107,7 +90,7 @@ contract KeyfleetVotesTest is Test {
         usdc.mint(buyer, price);
         vm.startPrank(buyer);
         usdc.approve(address(fleet), price);
-        tokenId = fleet.purchase(receiver, address(0), 2 * price, block.timestamp);
+        tokenId = fleet.purchase(receiver, price, block.timestamp);
         vm.stopPrank();
     }
 
@@ -123,18 +106,11 @@ contract KeyfleetVotesTest is Test {
         return address(uint160(0x100000 + index));
     }
 
-    /// @dev Admits `token` and pays `amount` of it in as capital.
-    function _depositCapital(Keyfleet fleet, MockToken token, uint256 amount) private {
-        vm.startPrank(safe);
-        registry.setFactoryTokenAllowed(address(token), true);
-        registry.setFleetTokenAllowed(address(fleet), address(token), true);
-        vm.stopPrank();
-
-        token.mint(payer, amount);
-        vm.startPrank(payer);
-        token.approve(address(fleet), amount);
-        fleet.depositCapital(address(token), amount);
-        vm.stopPrank();
+    /// @dev Sends `amount` of `token`, which is not an income token, to the fleet and sorts it, so
+    /// it becomes shared money.
+    function _receiveSharedMoney(Keyfleet fleet, MockToken token, uint256 amount) private {
+        token.mint(address(fleet), amount);
+        fleet.recognizeSurplus(address(token));
     }
 
     function _ids(uint256 a) private pure returns (uint256[] memory ids) {
@@ -570,7 +546,7 @@ contract KeyfleetVotesTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 1);
-        _depositCapital(fleet, other, 10_000);
+        _receiveSharedMoney(fleet, other, 10_000);
         uint256 capital = fleet.freeCapital(address(other));
 
         bytes32 digest = keccak256("commit");

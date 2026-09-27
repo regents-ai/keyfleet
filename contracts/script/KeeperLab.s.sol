@@ -5,11 +5,10 @@ import {Script} from "forge-std/Script.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockStaking} from "../test/KeyfleetDeposits.t.sol";
+import {MockStaking} from "../test/KeyfleetIncome.t.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A six-decimal stand-in for USDC, as a fleet requires, that mints to whoever asks.
@@ -23,6 +22,11 @@ contract KeeperLabUsdc is ERC20 {
     function mint(uint256 amount) external {
         _mint(msg.sender, amount);
     }
+}
+
+/// @dev An eighteen-decimal stand-in for REGENT.
+contract KeeperLabRegent is ERC20 {
+    constructor() ERC20("Keeper Lab REGENT", "REGENT") {}
 }
 
 /// @notice Puts one fleet on a plain local anvil for the keeper's external test in `platform/`,
@@ -52,8 +56,7 @@ contract KeeperLab is Script {
         Keyfleet classic = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            address(0x7EA5),
-            new KeyfleetAssetRegistry(address(0x5AFE), address(usdc)),
+            new KeeperLabRegent(),
             mockStaking,
             IRegentsAutolaunchFactoryV1(address(0xFAC7)),
             VOTING_WINDOW,
@@ -68,8 +71,8 @@ contract KeeperLab is Script {
         usdc.mint(3 * KeyfleetPresets.Q_USDC);
         usdc.approve(address(classic), 3 * KeyfleetPresets.Q_USDC);
         vrf.setRevertAll(true);
-        classic.purchase(address(0), address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
-        classic.purchase(address(0), address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
+        classic.purchase(address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
+        classic.purchase(address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
         vrf.setRevertAll(false);
         vm.stopBroadcast();
 

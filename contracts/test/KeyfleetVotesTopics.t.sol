@@ -46,10 +46,25 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(uint8(type(KeyfleetVotes.Kind).max), 2);
     }
 
-    function test_launchIncomeSplitTopic() public pure {
+    function test_incomeRecognizedTopic() public pure {
+        assertEq(Keyfleet.IncomeRecognized.selector, 0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13);
+    }
+
+    function test_sharedMoneyRecognizedTopic() public pure {
         assertEq(
-            Keyfleet.LaunchIncomeSplit.selector, 0xd1de1f4a371f15e76fb100d279a26e729da58dcb604fa97058f7e3857fca911e
+            Keyfleet.SharedMoneyRecognized.selector, 0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7
         );
+    }
+
+    function test_graduationHoldingsBookedTopic() public pure {
+        assertEq(
+            Keyfleet.GraduationHoldingsBooked.selector,
+            0xd8c9a3e20faa52b5fa537458d4e055db2d5d91ef401d3120ec549f8724b42355
+        );
+    }
+
+    function test_vestingBookedTopic() public pure {
+        assertEq(Keyfleet.VestingBooked.selector, 0xee00fd5e75d11a67d01f1e2c820557fb28f1e211c8119f94759d4f5b470eeee2);
     }
 
     function test_budgetPaidTopic() public pure {
@@ -71,16 +86,6 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
         assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
         assertEq(Keyfleet.launchSettled.selector, bytes4(0x06e93dae));
-    }
-
-    function test_capitalDepositedTopic() public pure {
-        assertEq(Keyfleet.CapitalDeposited.selector, 0xf49206ff502b068fb456947e73acf6d2a86e0e30706185ec236c24a954654564);
-    }
-
-    function test_surplusRecognizedTopic() public pure {
-        assertEq(
-            Keyfleet.SurplusRecognized.selector, 0x231f7feeea7c01c57b7d3ee8b0c2c48e8bfab5565fe2a638fc209d6bcc2c94d4
-        );
     }
 
     function test_proposalExecutedTopic() public pure {

@@ -17,15 +17,13 @@ library KeyfleetPresets {
         FleetTechAccelerant
     }
 
-    /// @notice How a single gross purchase amount is divided. The five parts always sum to gross.
-    /// @param protocol Protocol share for the Regents staking contract, taken on every purchase.
-    /// @param referral Referrer share, zero when no referrer is supplied.
-    /// @param capital Fleet capital share.
+    /// @notice How a single gross purchase amount is divided. The four parts always sum to gross.
+    /// @param protocol Protocol share for the Regents staking contract, taken once on every purchase.
+    /// @param capital Share that becomes the fleet's shared money.
     /// @param reserve Level-completion reserve, used by Fibonacci Cascade only.
     /// @param rebate Share paid to the holder of the preceding key, used by Accelerant primary mints after the first only.
     struct PurchaseSplit {
         uint256 protocol;
-        uint256 referral;
         uint256 capital;
         uint256 reserve;
         uint256 rebate;
@@ -74,10 +72,8 @@ library KeyfleetPresets {
     /// @notice Keys a Classic or Accelerant fleet must have minted before it may propose its Autolaunch.
     uint256 internal constant FLEET_TECH_AUTOLAUNCH_MIN_KEYS = 100;
 
-    /// @notice Protocol share of gross for the Regents staking contract, in basis points.
-    uint256 internal constant PROTOCOL_BPS = 500;
-    /// @notice Referrer share of gross, in basis points, applied only when a referrer is supplied.
-    uint256 internal constant REFERRAL_BPS = 1000;
+    /// @notice Protocol share of gross for the Regents staking contract, in basis points: 2%.
+    uint256 internal constant PROTOCOL_BPS = 200;
     /// @notice Capital share of gross on Accelerant purchases with a predecessor, in basis points.
     uint256 internal constant ACCELERANT_CAPITAL_BPS = 1000;
     /// @notice Basis-point denominator.
@@ -188,21 +184,19 @@ library KeyfleetPresets {
         return price;
     }
 
-    /// @notice Divides a gross purchase into its parts. Each fee is floored and the preset's main part
-    ///         absorbs the dust, so the five parts always sum to exactly `gross`.
+    /// @notice Divides a gross purchase into its parts. Each floored share leaves its dust in the
+    ///         preset's main part, so the four parts always sum to exactly `gross`.
     /// @param preset The fleet preset being purchased from.
     /// @param gross The USDC purchase amount, which must be nonzero.
-    /// @param hasReferrer Whether a referrer is supplied; without one nothing is deducted for referral.
     /// @param hasPredecessor Whether an Accelerant purchase has a preceding key; ignored by other presets.
-    function splitPurchase(Preset preset, uint256 gross, bool hasReferrer, bool hasPredecessor)
+    function splitPurchase(Preset preset, uint256 gross, bool hasPredecessor)
         internal
         pure
         returns (PurchaseSplit memory split)
     {
         if (gross == 0) revert ZeroGross();
         split.protocol = (gross * PROTOCOL_BPS) / BPS_DENOMINATOR;
-        split.referral = hasReferrer ? (gross * REFERRAL_BPS) / BPS_DENOMINATOR : 0;
-        uint256 remainder = gross - split.protocol - split.referral;
+        uint256 remainder = gross - split.protocol;
 
         if (preset == Preset.FibonacciCascade) {
             split.reserve = remainder;

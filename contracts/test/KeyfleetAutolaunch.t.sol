@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
@@ -11,221 +10,25 @@ import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentLBPStrategy} from "../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
-
-/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
-contract MockToken is ERC20 {
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
-
-    function decimals() public pure override returns (uint8) {
-        return 6;
-    }
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
-
-/// @dev Stands in for the shared `RegentLBPStrategy`. It holds the one bound it publishes and the
-/// per-auction record the fleet reads, and lets a test put an auction into any lifecycle the real
-/// strategy can reach, with the four graduation artifacts a graduated record carries.
-contract MockLBPStrategy is IRegentLBPStrategy {
-    uint128 public constant MAX_REACHABLE_RAISE = 658_201_822_928_399_999_999_999_581_824_872_526;
-
-    mapping(address auction => Distribution) private _distributions;
-
-    function open(address auction, uint256 launchId, address subject, address escrow, address treasury, uint128 raise)
-        external
-    {
-        Distribution storage d = _distributions[auction];
-        d.lifecycle = Lifecycle.Active;
-        d.startBlock = uint64(block.number) + 300;
-        d.endBlock = d.startBlock + 86_401;
-        d.requiredRegentRaised = raise;
-        d.launchId = launchId;
-        d.subject = subject;
-        d.escrow = escrow;
-        d.treasury = treasury;
-    }
-
-    function graduate(address auction, address splitter, address receiver, bytes32 poolId, uint256 lpTokenId) external {
-        Distribution storage d = _distributions[auction];
-        d.lifecycle = Lifecycle.Graduated;
-        d.splitter = splitter;
-        d.receiver = receiver;
-        d.poolId = poolId;
-        d.lpTokenId = lpTokenId;
-    }
-
-    function fail(address auction) external {
-        _distributions[auction].lifecycle = Lifecycle.Failed;
-    }
-
-    function distribution(address auction) external view returns (Distribution memory) {
-        return _distributions[auction];
-    }
-}
-
-/// @dev Stands in for `RegentsAutolaunchFactoryV1`. It applies the checks the real factory applies,
-/// in the same order and with the same error shapes: launches are refused while paused, the five
-/// metadata strings must be nonempty and within their byte caps, the treasury must be nonzero and
-/// outside the system set, and the required raise must be positive and within the strategy's
-/// ceiling. It records `msg.sender` as launcher, keeps the same `launches` and `launchIdOfSubject`
-/// provenance, and opens the strategy's record for the new auction.
-///
-/// It also has two hostilities the real factory does not: it can record any of the five provenance
-/// fields differently from the ones it returned, and can break the subject index, so every
-/// condition of the fleet's provenance check can be exercised on its own against a factory that
-/// lies; and it can call anywhere from inside `launch`, which is where a real launch artifact would
-/// get its chance to re-enter.
-contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
-    error LaunchesArePaused();
-    error EmptyMetadataField(uint256 field);
-    error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found);
-    error RefusedTreasury(address treasury);
-    error UnreachableRequiredRaise(uint128 requiredRegentRaised);
-
-    uint256 public constant MAX_NAME_BYTES = 64;
-    uint256 public constant MAX_SYMBOL_BYTES = 16;
-    uint256 public constant MAX_DESCRIPTION_BYTES = 512;
-    uint256 public constant MAX_WEBSITE_BYTES = 256;
-    uint256 public constant MAX_IMAGE_BYTES = 256;
-
-    /// @notice Every factory is born paused, exactly as the real one is.
-    bool public launchesPaused = true;
-    IRegentLBPStrategy public strategy;
-    uint256 public nextLaunchId = 1;
-
-    /// @notice The exact parameters the last caller supplied, for the suite to read back.
-    LaunchParams public lastParams;
-    /// @notice Fields written into the recorded launch instead of the honest ones, where nonzero.
-    /// @dev Each field lies on its own, so one condition of the fleet's provenance check can be
-    /// broken at a time. The subject index still answers for the SUBJECT that was returned, so a
-    /// forced record subject breaks only the recorded-subject condition.
-    Launch public forcedRecord;
-    /// @notice Whether `launchIdOfSubject` answers with a different launch.
-    bool public breakSubjectIndex;
-
-    address private _reentryTarget;
-    bytes private _reentryPayload;
-    /// @notice Whether the call from inside `launch` ran, and how it came back.
-    bool public reentryFired;
-    bool public reentryOk;
-    bytes public reentryReturn;
-
-    mapping(address treasury => bool refused) public refusedTreasury;
-    mapping(address subject => uint256 launchId) private _launchIdOfSubject;
-    mapping(uint256 launchId => Launch) private _launches;
-
-    constructor(MockLBPStrategy strategy_) {
-        strategy = strategy_;
-    }
-
-    function openLaunches() external {
-        launchesPaused = false;
-    }
-
-    function closeLaunches() external {
-        launchesPaused = true;
-    }
-
-    function setRefusedTreasury(address treasury, bool refused) external {
-        refusedTreasury[treasury] = refused;
-    }
-
-    function setForcedRecord(Launch calldata record) external {
-        forcedRecord = record;
-    }
-
-    function setBreakSubjectIndex(bool broken) external {
-        breakSubjectIndex = broken;
-    }
-
-    /// @dev Arming again clears what the last call back left behind, so a suite that arms twice is
-    /// never reading the first call's answer for the second.
-    function armReentry(address target, bytes calldata payload) external {
-        _reentryTarget = target;
-        _reentryPayload = payload;
-        reentryFired = false;
-        reentryOk = false;
-        reentryReturn = "";
-    }
-
-    function launchIdOfSubject(address subject) external view returns (uint256) {
-        uint256 launchId = _launchIdOfSubject[subject];
-        return breakSubjectIndex ? launchId + 1 : launchId;
-    }
-
-    function launches(uint256 launchId) external view returns (Launch memory) {
-        return _launches[launchId];
-    }
-
-    function launch(LaunchParams calldata params)
-        external
-        returns (uint256 launchId, address subject, address auction, address escrow)
-    {
-        if (launchesPaused) revert LaunchesArePaused();
-        _requireBytes(0, bytes(params.name).length, MAX_NAME_BYTES);
-        _requireBytes(1, bytes(params.symbol).length, MAX_SYMBOL_BYTES);
-        _requireBytes(2, bytes(params.description).length, MAX_DESCRIPTION_BYTES);
-        _requireBytes(3, bytes(params.website).length, MAX_WEBSITE_BYTES);
-        _requireBytes(4, bytes(params.image).length, MAX_IMAGE_BYTES);
-        if (params.treasury == address(0) || refusedTreasury[params.treasury]) revert RefusedTreasury(params.treasury);
-        if (params.requiredRegentRaised == 0 || params.requiredRegentRaised > strategy.MAX_REACHABLE_RAISE()) {
-            revert UnreachableRequiredRaise(params.requiredRegentRaised);
-        }
-
-        lastParams = params;
-        launchId = nextLaunchId;
-        nextLaunchId = launchId + 1;
-        subject = _derive("subject", launchId);
-        auction = _derive("auction", launchId);
-        escrow = _derive("escrow", launchId);
-
-        _launches[launchId] = Launch(
-            forcedRecord.launcher == address(0) ? msg.sender : forcedRecord.launcher,
-            forcedRecord.subject == address(0) ? subject : forcedRecord.subject,
-            forcedRecord.auction == address(0) ? auction : forcedRecord.auction,
-            forcedRecord.escrow == address(0) ? escrow : forcedRecord.escrow,
-            forcedRecord.treasury == address(0) ? params.treasury : forcedRecord.treasury
-        );
-        _launchIdOfSubject[subject] = launchId;
-        MockLBPStrategy(address(strategy))
-            .open(auction, launchId, subject, escrow, params.treasury, params.requiredRegentRaised);
-
-        if (_reentryTarget != address(0) && !reentryFired) {
-            reentryFired = true;
-            (reentryOk, reentryReturn) = _reentryTarget.call(_reentryPayload);
-        }
-    }
-
-    function _requireBytes(uint256 field, uint256 length, uint256 maximum) private pure {
-        if (length == 0) revert EmptyMetadataField(field);
-        if (length > maximum) revert MetadataFieldTooLong(field, maximum, length);
-    }
-
-    function _derive(string memory kind, uint256 launchId) private pure returns (address) {
-        return address(uint160(uint256(keccak256(abi.encode(kind, launchId)))));
-    }
-}
+import {MockToken} from "./KeyfleetIncome.t.sol";
+import {IMintable, MockAutolaunchFactory, MockLBPStrategy} from "./mocks/MockAutolaunch.sol";
 
 contract KeyfleetAutolaunchTest is Test {
     uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
+    uint256 private constant EXECUTION_GAS_CEILING = 1_750_000;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private usdc;
-    KeyfleetAssetRegistry private registry;
+    MockToken private regent;
     MockLBPStrategy private strategy;
     MockAutolaunchFactory private factory;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
 
-    address private safe = address(0x5AFE);
-    address private treasury = address(0x7EA5);
     address private buyer = address(0xB0B0B0);
     address private alice = address(0xA11CE);
     address private mallory = address(0x4A11);
@@ -239,8 +42,8 @@ contract KeyfleetAutolaunchTest is Test {
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
-        registry = new KeyfleetAssetRegistry(safe, address(usdc));
-        strategy = new MockLBPStrategy();
+        regent = new MockToken("Regent", "REGENT");
+        strategy = new MockLBPStrategy(IMintable(address(regent)));
         factory = new MockAutolaunchFactory(strategy);
         factory.openLaunches();
         vrf = new MockVRFCoordinatorV2Plus();
@@ -254,8 +57,7 @@ contract KeyfleetAutolaunchTest is Test {
         fleet = new Keyfleet(
             preset,
             usdc,
-            treasury,
-            registry,
+            regent,
             staking,
             factory,
             VOTING_WINDOW,
@@ -300,7 +102,7 @@ contract KeyfleetAutolaunchTest is Test {
             usdc.mint(buyer, price);
             vm.startPrank(buyer);
             usdc.approve(address(fleet), price);
-            fleet.purchase(holder, address(0), price, block.timestamp);
+            fleet.purchase(holder, price, block.timestamp);
             vm.stopPrank();
             if (holder != alice) {
                 vm.prank(holder);
@@ -387,8 +189,7 @@ contract KeyfleetAutolaunchTest is Test {
         new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            treasury,
-            registry,
+            regent,
             staking,
             IRegentsAutolaunchFactoryV1(address(0)),
             VOTING_WINDOW,
@@ -575,17 +376,11 @@ contract KeyfleetAutolaunchTest is Test {
         uint256 balanceBefore = usdc.balanceOf(address(fleet));
 
         uint256 proposalId = _proposeAndPass(fleet, envelope);
-        vm.expectEmit(true, true, true, true, address(fleet));
-        emit AutolaunchExecuted(
-            proposalId,
-            1,
-            address(uint160(uint256(keccak256(abi.encode("subject", uint256(1)))))),
-            address(uint160(uint256(keccak256(abi.encode("auction", uint256(1)))))),
-            address(uint160(uint256(keccak256(abi.encode("escrow", uint256(1))))))
-        );
+        vm.recordLogs();
         fleet.VOTES().execute(proposalId);
 
         IRegentsAutolaunchFactoryV1.Launch memory recorded = factory.launches(1);
+        _expectExecutedLog(address(fleet), proposalId, recorded);
         assertEq(recorded.launcher, address(fleet), "the factory recorded the fleet itself as launcher");
         assertEq(recorded.treasury, address(fleet), "and the fleet itself as treasury");
 
@@ -694,7 +489,7 @@ contract KeyfleetAutolaunchTest is Test {
 
     /// @dev Invariant: a factory that is refusing launches reverts the whole execution, so the
     /// proposal stays executable and the fleet records nothing. This is the case the atomicity rule
-    /// exists for: a fleet can wait for the Safe to open the factory and execute the same approval
+    /// exists for: a fleet can wait for the factory to open and execute the same approval
     /// afterwards, as long as its envelope has not expired.
     function test_aPausedFactoryLeavesTheProposalExecutable() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
@@ -776,7 +571,7 @@ contract KeyfleetAutolaunchTest is Test {
     // --- 4. reentrancy -----------------------------------------------------
 
     /// @dev Invariant: the guards hold while a launch is half done. A factory that calls back into
-    /// the vote it is executing, or into the fleet's deposit path, is refused by the same
+    /// the vote it is executing, or into the fleet's sorting path, is refused by the same
     /// reentrancy guard that protects every other entry point, and the launch itself still
     /// completes on the factory's own terms.
     function test_aFactoryThatCallsBackIsRefusedByTheGuards() public {
@@ -799,11 +594,11 @@ contract KeyfleetAutolaunchTest is Test {
 
         Keyfleet second = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 secondId = _proposeAndPass(second, _envelope());
-        factory.armReentry(address(second), abi.encodeCall(Keyfleet.depositCapital, (address(usdc), 1e18)));
+        factory.armReentry(address(second), abi.encodeCall(Keyfleet.recognizeSurplus, (address(usdc))));
         second.VOTES().execute(secondId);
 
         assertTrue(factory.reentryFired(), "the factory called back a second time");
-        assertFalse(factory.reentryOk(), "a deposit from inside the launch is refused too");
+        assertFalse(factory.reentryOk(), "sorting from inside the launch is refused too");
         assertEq(
             bytes4(factory.reentryReturn()),
             ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
@@ -850,8 +645,7 @@ contract KeyfleetAutolaunchTest is Test {
     }
 
     /// @dev Invariant: graduation records the four artifacts the strategy published and nothing
-    /// else. The SUBJECT, the auction, the escrow and the approved envelope are untouched by it,
-    /// and the fleet's deposit admission is not turned on by it either.
+    /// else. The SUBJECT, the auction, the escrow and the approved envelope are untouched by it.
     function test_syncRecordsTheGraduationArtifactsAndReplacesNothing() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(fleet, _envelope());
@@ -860,7 +654,7 @@ contract KeyfleetAutolaunchTest is Test {
         address splitter = address(0x591177);
         address receiver = address(0xEC1E);
         bytes32 poolId = keccak256("pool");
-        strategy.graduate(before.auction, splitter, receiver, poolId, 4242);
+        strategy.graduate(before.auction, splitter, receiver, poolId, 4242, RAISE, RAISE / 2);
 
         vm.expectEmit(false, false, false, true, address(fleet));
         emit LaunchSynced(Keyfleet.LaunchState.Graduated);
@@ -877,7 +671,6 @@ contract KeyfleetAutolaunchTest is Test {
         assertEq(after_.auction, before.auction);
         assertEq(after_.escrow, before.escrow);
         assertEq(after_.envelopeHash, before.envelopeHash);
-        assertFalse(registry.isTokenAllowed(address(fleet), after_.subject), "and SUBJECT is still not admitted");
 
         IRegentLBPStrategy.Distribution memory published = fleet.launchDistribution();
         assertEq(uint256(published.lifecycle), uint256(IRegentLBPStrategy.Lifecycle.Graduated), "read live, not stored");
@@ -885,7 +678,7 @@ contract KeyfleetAutolaunchTest is Test {
     }
 
     /// @dev Invariant: an auction the strategy settled as failed makes the fleet economically
-    /// failed, and a terminal state is terminal: a later sync is refused rather than left to churn.
+    /// failed, and a terminal state is terminal: a later sync changes nothing and says nothing.
     function test_syncRecordsFailureAndTerminalStatesNeverChangeAgain() public {
         Keyfleet failed = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(failed, _envelope());
@@ -896,16 +689,16 @@ contract KeyfleetAutolaunchTest is Test {
         failed.syncLaunch();
         assertEq(uint256(failed.launchState()), uint256(Keyfleet.LaunchState.EconomicallyFailed));
 
-        vm.expectRevert(Keyfleet.LaunchSettled.selector);
-        failed.syncLaunch();
+        vm.recordLogs();
+        assertEq(uint256(failed.syncLaunch()), uint256(Keyfleet.LaunchState.EconomicallyFailed), "still failed");
+        assertEq(vm.getRecordedLogs().length, 0, "and silent");
 
         Keyfleet graduated = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         _executeFor(graduated, _envelope());
-        strategy.graduate(graduated.launchRecord().auction, address(0x1), address(0x2), keccak256("p"), 1);
+        strategy.graduate(graduated.launchRecord().auction, address(0x1), address(0x2), keccak256("p"), 1, RAISE, 0);
         graduated.syncLaunch();
 
         strategy.fail(graduated.launchRecord().auction);
-        vm.expectRevert(Keyfleet.LaunchSettled.selector);
         graduated.syncLaunch();
         assertEq(uint256(graduated.launchState()), uint256(Keyfleet.LaunchState.Graduated), "graduation is forever");
     }
@@ -914,8 +707,8 @@ contract KeyfleetAutolaunchTest is Test {
 
     /// @dev Invariant: executing an Autolaunch costs a fixed amount, whatever the fleet's size.
     /// The figure is measured against the mock factory and most of it is the mock's own writing, so
-    /// it is a regression bound on this side of the call rather than a prediction of the real cost:
-    /// the real factory deploys a token, an escrow and an auction and spends far more than this.
+    /// it is a regression bound on this side of the call rather than a prediction of the real cost.
+    /// The ceiling is the measured figure plus twenty percent, rounded up to the nearest thousand.
     function test_autolaunchExecutionGas() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
@@ -930,7 +723,7 @@ contract KeyfleetAutolaunchTest is Test {
         uint256 used = before - gasleft();
 
         console2.log("autolaunch execution gas through the mock factory:", used);
-        assertLt(used, 889_000, "an execution stays under the published ceiling");
+        assertLt(used, EXECUTION_GAS_CEILING, "an execution stays under the published ceiling");
         assertEq(fleet.launchRecord().launchId, 1);
     }
 
@@ -1077,6 +870,26 @@ contract KeyfleetAutolaunchTest is Test {
     }
 
     // --- helpers -----------------------------------------------------------
+
+    /// @dev The fleet's `AutolaunchExecuted` log from the last recorded call names exactly what the
+    /// factory recorded.
+    function _expectExecutedLog(address fleet, uint256 proposalId, IRegentsAutolaunchFactoryV1.Launch memory recorded)
+        private
+    {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 topic = Keyfleet.AutolaunchExecuted.selector;
+        for (uint256 i = 0; i < logs.length; ++i) {
+            if (logs[i].emitter != fleet || logs[i].topics[0] != topic) continue;
+            assertEq(uint256(logs[i].topics[1]), proposalId, "the authorising vote");
+            assertEq(uint256(logs[i].topics[2]), 1, "the launch id");
+            assertEq(address(uint160(uint256(logs[i].topics[3]))), recorded.subject, "the recorded SUBJECT");
+            (address auction, address escrow) = abi.decode(logs[i].data, (address, address));
+            assertEq(auction, recorded.auction);
+            assertEq(escrow, recorded.escrow);
+            return;
+        }
+        revert("no AutolaunchExecuted log");
+    }
 
     /// @dev Replaces one of the envelope's five metadata strings, numbered as the factory numbers
     /// its own fields.

@@ -53,12 +53,12 @@ contract PresetsHarness {
         return KeyfleetPresets.accelerantPrice(mintIndex);
     }
 
-    function splitPurchase(KeyfleetPresets.Preset preset, uint256 gross, bool hasReferrer, bool hasPredecessor)
+    function splitPurchase(KeyfleetPresets.Preset preset, uint256 gross, bool hasPredecessor)
         external
         pure
         returns (KeyfleetPresets.PurchaseSplit memory)
     {
-        return KeyfleetPresets.splitPurchase(preset, gross, hasReferrer, hasPredecessor);
+        return KeyfleetPresets.splitPurchase(preset, gross, hasPredecessor);
     }
 }
 
@@ -315,100 +315,64 @@ contract KeyfleetPresetsTest {
 
     // --- 8. purchase split ---------------------------------------------------------------------
 
-    /// @dev Invariant: Syndicate and Classic send everything after fees to capital.
-    function testSyndicateAndClassicSendEverythingAfterFeesToCapital() public view {
-        KeyfleetPresets.PurchaseSplit memory withReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 10_000, true, false);
-        require(withReferrer.protocol == 500, "Protocol 5%");
-        require(withReferrer.referral == 1000, "Referral 10%");
-        require(withReferrer.capital == 8500, "Capital 85%");
-        require(withReferrer.reserve == 0, "No reserve");
-        require(withReferrer.rebate == 0, "No rebate");
-
-        KeyfleetPresets.PurchaseSplit memory withoutReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 10_000, false, true);
-        require(withoutReferrer.protocol == 500, "Protocol 5%");
-        require(withoutReferrer.referral == 0, "No referral deduction");
-        require(withoutReferrer.capital == 9500, "Capital 95%");
-        require(withoutReferrer.reserve == 0, "No reserve");
-        require(withoutReferrer.rebate == 0, "No rebate");
+    /// @dev Invariant: Syndicate and Classic send everything after the 2% protocol share to capital.
+    function testSyndicateAndClassicSendEverythingAfterTheProtocolShareToCapital() public view {
+        KeyfleetPresets.PurchaseSplit memory syndicate =
+            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 10_000, true);
+        require(syndicate.protocol == 200, "Protocol 2%");
+        require(syndicate.capital == 9800, "Capital 98%");
+        require(syndicate.reserve == 0, "No reserve");
+        require(syndicate.rebate == 0, "No rebate");
 
         KeyfleetPresets.PurchaseSplit memory classic =
-            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechClassic, 10_000, true, true);
-        require(classic.protocol == 500 && classic.referral == 1000, "Classic fees");
-        require(classic.capital == 8500, "Classic capital");
+            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechClassic, 10_000, true);
+        require(classic.protocol == 200, "Classic protocol 2%");
+        require(classic.capital == 9800, "Classic capital 98%");
         require(classic.reserve == 0 && classic.rebate == 0, "Classic has no reserve or rebate");
     }
 
-    /// @dev Invariant: Cascade sends everything after fees to the level-completion reserve.
-    function testCascadeSendsEverythingAfterFeesToTheReserve() public view {
-        KeyfleetPresets.PurchaseSplit memory withReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 10_000, true, true);
-        require(withReferrer.protocol == 500, "Protocol 5%");
-        require(withReferrer.referral == 1000, "Referral 10%");
-        require(withReferrer.reserve == 8500, "Reserve 85%");
-        require(withReferrer.capital == 0, "No capital");
-        require(withReferrer.rebate == 0, "No rebate");
-
-        KeyfleetPresets.PurchaseSplit memory withoutReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 10_000, false, false);
-        require(withoutReferrer.protocol == 500, "Protocol 5%");
-        require(withoutReferrer.referral == 0, "No referral deduction");
-        require(withoutReferrer.reserve == 9500, "Reserve 95%");
-        require(withoutReferrer.capital == 0, "No capital");
+    /// @dev Invariant: Cascade sends everything after the protocol share to the level-completion reserve.
+    function testCascadeSendsEverythingAfterTheProtocolShareToTheReserve() public view {
+        KeyfleetPresets.PurchaseSplit memory split =
+            presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 10_000, false);
+        require(split.protocol == 200, "Protocol 2%");
+        require(split.reserve == 9800, "Reserve 98%");
+        require(split.capital == 0, "No capital");
+        require(split.rebate == 0, "No rebate");
     }
 
     /// @dev Invariant: an Accelerant purchase with a predecessor pays capital 10% and rebates the rest,
-    ///      while the very first mint sends everything after fees to capital.
+    ///      while the very first mint sends everything after the protocol share to capital.
     function testAccelerantRebatesThePredecessorOnlyWhenThereIsOne() public view {
-        KeyfleetPresets.PurchaseSplit memory withReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, true, true);
-        require(withReferrer.protocol == 500, "Protocol 5%");
-        require(withReferrer.referral == 1000, "Referral 10%");
-        require(withReferrer.capital == 1000, "Capital 10%");
-        require(withReferrer.rebate == 7500, "Rebate 75%");
-        require(withReferrer.reserve == 0, "No reserve");
-
-        KeyfleetPresets.PurchaseSplit memory withoutReferrer =
-            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, false, true);
-        require(withoutReferrer.protocol == 500, "Protocol 5%");
-        require(withoutReferrer.referral == 0, "No referral deduction");
-        require(withoutReferrer.capital == 1000, "Capital 10%");
-        require(withoutReferrer.rebate == 8500, "Rebate 85%");
+        KeyfleetPresets.PurchaseSplit memory later =
+            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, true);
+        require(later.protocol == 200, "Protocol 2%");
+        require(later.capital == 1000, "Capital 10%");
+        require(later.rebate == 8800, "Rebate 88%");
+        require(later.reserve == 0, "No reserve");
 
         KeyfleetPresets.PurchaseSplit memory firstMint =
-            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, true, false);
-        require(firstMint.protocol == 500 && firstMint.referral == 1000, "First mint fees");
-        require(firstMint.capital == 8500, "First mint sends the rest to capital");
+            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, false);
+        require(firstMint.protocol == 200, "First mint protocol 2%");
+        require(firstMint.capital == 9800, "First mint sends the rest to capital");
         require(firstMint.rebate == 0, "Nobody to rebate");
         require(firstMint.reserve == 0, "No reserve");
     }
 
-    /// @dev Invariant: the five parts always sum to gross, the protocol fee is always 5% floored,
-    ///      referral is deducted only with a referrer, reserve belongs to Cascade alone and rebate to
-    ///      Accelerant primary mints with a predecessor alone.
+    /// @dev Invariant: the four parts always sum to gross, the protocol share is always 2% floored,
+    ///      reserve belongs to Cascade alone and rebate to Accelerant primary mints with a
+    ///      predecessor alone.
     function testFuzzSplitAlwaysSumsToGrossAndKeepsEachPartToItsPreset(
         uint8 presetSeed,
         uint256 grossSeed,
-        bool hasReferrer,
         bool hasPredecessor
     ) public view {
         KeyfleetPresets.Preset preset = KeyfleetPresets.Preset(presetSeed % 4);
         uint256 gross = (grossSeed % (uint256(1) << 200)) + 1;
-        KeyfleetPresets.PurchaseSplit memory split = presets.splitPurchase(preset, gross, hasReferrer, hasPredecessor);
+        KeyfleetPresets.PurchaseSplit memory split = presets.splitPurchase(preset, gross, hasPredecessor);
 
-        require(
-            split.protocol + split.referral + split.capital + split.reserve + split.rebate == gross,
-            "Parts sum to gross"
-        );
-        require(split.protocol == (gross * 500) / BPS, "Protocol is 5% floored");
-
-        if (hasReferrer) {
-            require(split.referral == (gross * 1000) / BPS, "Referral is 10% floored");
-            if (gross >= 10) require(split.referral > 0, "A referrer earns on any priced purchase");
-        } else {
-            require(split.referral == 0, "No referrer means no referral");
-        }
+        require(split.protocol + split.capital + split.reserve + split.rebate == gross, "Parts sum to gross");
+        require(split.protocol == (gross * 200) / BPS, "Protocol is 2% floored");
 
         bool isCascade = preset == KeyfleetPresets.Preset.FibonacciCascade;
         require(isCascade == (split.reserve > 0), "Reserve belongs to Cascade alone");
@@ -421,7 +385,7 @@ contract KeyfleetPresetsTest {
         if (isAccelerantWithPredecessor) {
             require(split.capital == (gross * 1000) / BPS, "Capital is 10% floored");
         } else if (!isCascade) {
-            require(split.capital == gross - split.protocol - split.referral, "Capital absorbs the dust");
+            require(split.capital == gross - split.protocol, "Capital absorbs the dust");
         } else {
             require(split.capital == 0, "Cascade sends nothing to capital");
         }
@@ -430,13 +394,13 @@ contract KeyfleetPresetsTest {
     /// @dev Invariant: a purchase of zero is rejected for every preset.
     function testZeroGrossIsRejectedForEveryPreset() public {
         vm.expectRevert(KeyfleetPresets.ZeroGross.selector);
-        presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 0, true, true);
+        presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 0, true);
         vm.expectRevert(KeyfleetPresets.ZeroGross.selector);
-        presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 0, false, false);
+        presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 0, false);
         vm.expectRevert(KeyfleetPresets.ZeroGross.selector);
-        presets.splitPurchase(KeyfleetPresets.Preset.FleetTechClassic, 0, true, false);
+        presets.splitPurchase(KeyfleetPresets.Preset.FleetTechClassic, 0, false);
         vm.expectRevert(KeyfleetPresets.ZeroGross.selector);
-        presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 0, false, true);
+        presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 0, true);
     }
 
     // --- 9. rounding direction -----------------------------------------------------------------

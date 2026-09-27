@@ -15,10 +15,8 @@ interface IVRFProvingKeys {
 /// @notice The input manifest both deployment steps share: its shape, its reader, and the
 /// refusals that hold for the manifest before anything is deployed or recorded.
 /// @dev A manifest file holds what every fleet on its chain shares and the name, symbol and
-/// metadata base of each of the four fleets. The shared asset registry is deployed once, by
-/// `DeployKeyfleetAssetRegistry`, and its address written into the file before any fleet; after
-/// that one run deploys or records one fleet, named by its key, so each fleet goes on chain on its
-/// own. `parseManifest` and `parseSharedWiring` take the JSON text and `readManifest` and
+/// metadata base of each of the four fleets. One run deploys or records one fleet, named by its
+/// key, so each fleet goes on chain on its own. `parseManifest` and `parseSharedWiring` take the JSON text and `readManifest` and
 /// `readSharedWiring` are the only parts that open a file, so the suite parses manifests without
 /// writing any.
 abstract contract KeyfleetManifest is Script {
@@ -47,20 +45,14 @@ abstract contract KeyfleetManifest is Script {
 
     /// @notice One fleet's deployment inputs.
     /// @param chainId The chain this manifest is for. Both steps refuse any other.
-    /// @param regent The REGENT token, which the record step lists among the deposit assets the
-    /// Regents Safe is expected to admit. No fleet holds it. It must hold code, and on Base it must
-    /// be `BASE_REGENT`.
-    /// @param usdc The USDC every key is paid in, and the only asset whose fee and protocol share
-    /// take the staking route.
-    /// On Base it must be `BASE_USDC`.
-    /// @param treasury The Regents treasury, paid the deposit fee on every asset other than USDC.
-    /// @param staking The Regents revenue staking contract that registers the 2% USDC deposit fee
-    /// and the 5% protocol share of every purchase.
-    /// @param regentSafe The Safe that administers deposit admission, bound into a new registry.
+    /// @param regent The REGENT token, an income token of every fleet. It must hold code, and on
+    /// Base it must be `BASE_REGENT`.
+    /// @param usdc The USDC every key is paid in, and an income token of every fleet. On Base it
+    /// must be `BASE_USDC`.
+    /// @param staking The Regents revenue staking contract that registers the 2% protocol share of
+    /// every purchase.
+    /// @param regentSafe The Regents Safe, which owns the VRF subscription on Base.
     /// @param autolaunchFactory The one Autolaunch factory the fleets may ever launch through.
-    /// @param assetRegistry The shared asset registry every fleet on the chain uses, deployed once by
-    /// `DeployKeyfleetAssetRegistry`. Zero until then, and both fleet steps refuse a manifest that
-    /// does not name a registry with code.
     /// @param autolaunchFactoryMayBeEmpty Whether the Autolaunch factory may have no code yet. It
     /// is ignored on Base, where the factory must already exist.
     /// @param votingWindow Seconds a proposal stays open, the same for every fleet on the chain.
@@ -76,11 +68,9 @@ abstract contract KeyfleetManifest is Script {
         uint256 chainId;
         address regent;
         address usdc;
-        address treasury;
         address staking;
         address regentSafe;
         address autolaunchFactory;
-        address assetRegistry;
         bool autolaunchFactoryMayBeEmpty;
         uint64 votingWindow;
         Keyfleet.Randomness vrf;
@@ -112,9 +102,6 @@ abstract contract KeyfleetManifest is Script {
     error VrfKeyHashUnknown(bytes32 keyHash);
     /// @notice No fleet has this key.
     error UnknownFleet(string fleetKey);
-    /// @notice The manifest names no asset registry, or one with no code on this chain: the shared
-    /// registry is deployed first, on its own, and its address written into the manifest.
-    error AssetRegistryMissing(address registry);
 
     /// @notice Reads `deployments/<manifestName>.json` for the fleet with key `fleetKey`.
     function readManifest(string memory manifestName, string memory fleetKey) public view returns (Manifest memory) {
@@ -147,11 +134,9 @@ abstract contract KeyfleetManifest is Script {
         manifest.chainId = vm.parseJsonUint(json, ".chainId");
         manifest.regent = vm.parseJsonAddress(json, ".regent");
         manifest.usdc = vm.parseJsonAddress(json, ".usdc");
-        manifest.treasury = vm.parseJsonAddress(json, ".treasury");
         manifest.staking = vm.parseJsonAddress(json, ".staking");
         manifest.regentSafe = vm.parseJsonAddress(json, ".regentSafe");
         manifest.autolaunchFactory = vm.parseJsonAddress(json, ".autolaunchFactory");
-        manifest.assetRegistry = vm.parseJsonAddress(json, ".assetRegistry");
         manifest.autolaunchFactoryMayBeEmpty = vm.parseJsonBool(json, ".autolaunchFactoryMayBeEmpty");
         uint256 votingWindow = vm.parseJsonUint(json, ".votingWindow");
         if (votingWindow > type(uint64).max) revert VotingWindowTooLarge(votingWindow);
@@ -174,27 +159,18 @@ abstract contract KeyfleetManifest is Script {
         revert UnknownFleet(fleetKey);
     }
 
-    /// @dev What the shared registry is built from must fit this chain: the manifest's chain must be
-    /// this chain, and on Base its USDC must be Base USDC.
-    function _requireSharedWiringFitsChain(Manifest memory manifest) internal view {
-        if (block.chainid != manifest.chainId) revert WrongChain(manifest.chainId, block.chainid);
-        if (block.chainid == BASE_CHAIN_ID && manifest.usdc != BASE_USDC) revert UsdcNotBaseUsdc(manifest.usdc);
-    }
-
-    /// @dev Everything `_requireSharedWiringFitsChain` requires, and more. On Base its REGENT must
-    /// be Base REGENT, and on every chain its REGENT must hold code, because the record step
-    /// publishes REGENT for the Safe to admit and no fleet reads it. Its Autolaunch factory must
-    /// hold code unless the manifest waives that for a lab. The waiver is ignored on Base. On Base
-    /// the VRF coordinator and gas lane must be Base's own, and on every chain the coordinator must
-    /// hold code, know the gas lane and know the subscription; a subscription it does not know
-    /// reverts with the coordinator's own `InvalidSubscription`. The trait table hash must not be
-    /// zero. The shared asset registry must already exist: a fleet step never deploys one, so a
-    /// manifest the registry's address was never written into cannot put a second registry on the
-    /// chain.
+    /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC must be
+    /// Base USDC and its REGENT Base REGENT, and on every chain its REGENT must hold code. Its
+    /// Autolaunch factory must hold code unless the manifest waives that for a lab. The waiver is
+    /// ignored on Base. On Base the VRF coordinator and gas lane must be Base's own, and on every
+    /// chain the coordinator must hold code, know the gas lane and know the subscription; a
+    /// subscription it does not know reverts with the coordinator's own `InvalidSubscription`. The
+    /// trait table hash must not be zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
-        _requireSharedWiringFitsChain(manifest);
+        if (block.chainid != manifest.chainId) revert WrongChain(manifest.chainId, block.chainid);
         address coordinator = address(manifest.vrf.coordinator);
         if (block.chainid == BASE_CHAIN_ID) {
+            if (manifest.usdc != BASE_USDC) revert UsdcNotBaseUsdc(manifest.usdc);
             if (manifest.regent != BASE_REGENT) revert RegentNotBaseRegent(manifest.regent);
             if (coordinator != BASE_VRF_COORDINATOR) revert VrfCoordinatorNotBase(coordinator);
             if (manifest.vrf.keyHash != BASE_VRF_KEY_HASH) revert VrfKeyHashNotBase(manifest.vrf.keyHash);
@@ -208,7 +184,6 @@ abstract contract KeyfleetManifest is Script {
         if (!keyExists) revert VrfKeyHashUnknown(manifest.vrf.keyHash);
         manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
         if (manifest.traitTableHash == bytes32(0)) revert Keyfleet.TraitTableHashZero();
-        if (manifest.assetRegistry.code.length == 0) revert AssetRegistryMissing(manifest.assetRegistry);
     }
 
     /// @dev Whether the manifest's empty-factory waiver applies on this chain. It never does on Base.

@@ -3,11 +3,9 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {DeployKeyfleetAssetRegistry} from "../script/DeployKeyfleetAssetRegistry.s.sol";
 import {DeployKeyfleets} from "../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
@@ -40,7 +38,6 @@ contract DeployKeyfleetsTest is Test {
     uint256 private constant BASE_CHAIN_ID = 8453;
     uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant SAFE = address(0x5AFE);
-    address private constant TREASURY = address(0x7EA5);
     address private constant STAKING = address(0x57A1);
     address private constant STRATEGY = address(0x574A);
     address private constant BUYER = address(0xB0B);
@@ -55,7 +52,6 @@ contract DeployKeyfleetsTest is Test {
     StrategyPublishingFactory private factory;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
-    KeyfleetAssetRegistry private registry;
 
     function setUp() public {
         script = new DeployKeyfleets();
@@ -65,11 +61,10 @@ contract DeployKeyfleetsTest is Test {
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
-        registry = new KeyfleetAssetRegistry(SAFE, address(usdc));
     }
 
-    /// @dev Each run puts one fleet on chain, and nothing else: every fleet is deployed into the
-    /// registry the manifest names, so the four go on sale one at a time on shared wiring.
+    /// @dev Each run puts one fleet on chain, and nothing else, so the four go on sale one at a time
+    /// on shared wiring.
     function test_eachRunDeploysOneFleetCarryingTheManifest() public {
         KeyfleetPresets.Preset[4] memory presets = [
             KeyfleetPresets.Preset.FibonacciSyndicate,
@@ -94,8 +89,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.name(), manifest.fleet.name, "Name");
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
-            assertEq(fleet.TREASURY(), TREASURY, "Treasury");
-            assertEq(address(fleet.ASSET_REGISTRY()), address(registry), "The manifest's shared registry");
+            assertEq(address(fleet.REGENT()), address(regent), "REGENT");
             assertEq(address(fleet.STAKING()), STAKING, "Staking");
             assertEq(address(fleet.FACTORY()), address(factory), "Autolaunch factory");
             assertEq(fleet.VOTES().VOTING_WINDOW(), VOTING_WINDOW, "Voting window");
@@ -115,19 +109,12 @@ contract DeployKeyfleetsTest is Test {
             usdc.approve(address(fleet), price);
             vm.expectEmit(true, false, false, false, address(fleet));
             emit RevealRequestFailed(1);
-            fleet.purchase(BUYER, address(0), price, block.timestamp);
+            fleet.purchase(BUYER, price, block.timestamp);
             vm.stopPrank();
             assertEq(
                 fleet.tokenURI(1), string.concat(manifest.fleet.baseTokenURI, "1"), "Metadata base is the fleet's own"
             );
         }
-    }
-
-    function test_deploySetsNoAllowlistFlag() public {
-        Keyfleet fleet = script.deploy(_manifest());
-
-        assertFalse(registry.factoryTokenAllowed(address(usdc)), "USDC is not admitted globally");
-        assertFalse(registry.fleetTokenAllowed(address(fleet), address(regent)), "REGENT is not admitted for a fleet");
     }
 
     function test_manifestForAnotherChainIsRefused() public {
@@ -242,36 +229,30 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: a fleet step never deploys a registry, so a manifest the shared registry's
-    /// address was never written into cannot put a second registry on the chain.
-    function test_manifestNamingNoRegistryWithCodeIsRefused() public {
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.assetRegistry = address(0);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AssetRegistryMissing.selector, address(0)));
-        script.deploy(manifest);
+    function test_manifestVotingWindowWiderThanAFleetCanHoldIsRefused() public {
+        string memory json = string.concat(
+            '{"chainId": 31337,',
+            ' "regent": "0x0000000000000000000000000000000000000001",',
+            ' "usdc": "0x0000000000000000000000000000000000000002",',
+            ' "staking": "0x0000000000000000000000000000000000000004",',
+            ' "regentSafe": "0x0000000000000000000000000000000000000005",',
+            ' "autolaunchFactory": "0x0000000000000000000000000000000000000006",',
+            ' "autolaunchFactoryMayBeEmpty": true,',
+            ' "votingWindow": 18446744073709551616}'
+        );
 
-        manifest.assetRegistry = address(0xBEEF);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AssetRegistryMissing.selector, address(0xBEEF)));
-        script.deploy(manifest);
-    }
-
-    function test_registryUnderAnotherSafeIsRefused() public {
-        KeyfleetAssetRegistry foreign = new KeyfleetAssetRegistry(address(0xBEEF), address(usdc));
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.assetRegistry = address(foreign);
-
-        vm.expectRevert(abi.encodeWithSelector(DeployKeyfleets.RegistrySafeMismatch.selector, SAFE, address(0xBEEF)));
-        script.deploy(manifest);
+        vm.expectRevert(
+            abi.encodeWithSelector(KeyfleetManifest.VotingWindowTooLarge.selector, uint256(type(uint64).max) + 1)
+        );
+        script.parseManifest(json, "classic");
     }
 
     function test_manifestIsReadFieldByFieldForTheNamedFleetWhateverItsKeyOrder() public {
         string memory json = string.concat(
-            '{"votingWindow": 7200, "assetRegistry": "0x00000000000000000000000000000000000000a7",',
-            ' "autolaunchFactoryMayBeEmpty": true, "chainId": 31337,',
+            '{"votingWindow": 7200, "autolaunchFactoryMayBeEmpty": true, "chainId": 31337,',
             ' "usdc": "0x00000000000000000000000000000000000000a2",',
             ' "regent": "0x00000000000000000000000000000000000000a1",',
             ' "staking": "0x00000000000000000000000000000000000000a4",',
-            ' "treasury": "0x00000000000000000000000000000000000000a3",',
             ' "autolaunchFactory": "0x00000000000000000000000000000000000000a6",',
             ' "regentSafe": "0x00000000000000000000000000000000000000a5",',
             ' "traitTableHash": "0x00000000000000000000000000000000000000000000000000000000000000c4",',
@@ -291,11 +272,9 @@ contract DeployKeyfleetsTest is Test {
         assertEq(manifest.chainId, ANVIL_CHAIN_ID, "chainId");
         assertEq(manifest.regent, address(0xA1), "regent");
         assertEq(manifest.usdc, address(0xA2), "usdc");
-        assertEq(manifest.treasury, address(0xA3), "treasury");
         assertEq(manifest.staking, address(0xA4), "staking");
         assertEq(manifest.regentSafe, address(0xA5), "regentSafe");
         assertEq(manifest.autolaunchFactory, address(0xA6), "autolaunchFactory");
-        assertEq(manifest.assetRegistry, address(0xA7), "assetRegistry");
         assertTrue(manifest.autolaunchFactoryMayBeEmpty, "autolaunchFactoryMayBeEmpty");
         assertEq(manifest.votingWindow, 7200, "votingWindow");
         assertEq(address(manifest.vrf.coordinator), address(0xC1), "vrf.coordinator");
@@ -319,14 +298,10 @@ contract DeployKeyfleetsTest is Test {
     }
 
     /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a zero
-    /// subscription, a zero trait table and no registry until the operator writes in the
-    /// subscription the Safe owns, the final trait table's hash and the registry the one-time step
-    /// deployed. Until then no fleet can be deployed; with all three written in, every other refusal
-    /// passes for Classic, the fleet that opens first.
-    function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionTraitTableAndRegistryAreWrittenIn()
-        public
-    {
-        DeployKeyfleetAssetRegistry registryStep = new DeployKeyfleetAssetRegistry();
+    /// subscription and a zero trait table until the operator writes in the subscription the Safe
+    /// owns and the final trait table's hash. Until then no fleet can be deployed; with both written
+    /// in, every other refusal passes for Classic, the fleet that opens first.
+    function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
         vm.etch(anvil.usdc, address(usdc).code);
         vm.etch(anvil.regent, address(regent).code);
@@ -340,9 +315,6 @@ contract DeployKeyfleetsTest is Test {
         vm.expectRevert(Keyfleet.TraitTableHashZero.selector);
         script.deploy(anvil);
         anvil.traitTableHash = TRAIT_TABLE;
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AssetRegistryMissing.selector, address(0)));
-        script.deploy(anvil);
-        anvil.assetRegistry = address(registryStep.deploy(registryStep.readSharedWiring("anvil")));
         Keyfleet lab = script.deploy(anvil);
         assertGt(address(lab).code.length, 0, "The anvil manifest deploys on its chain");
 
@@ -353,31 +325,8 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(base);
         base.vrf.subscriptionId = labSubscription;
         base.traitTableHash = TRAIT_TABLE;
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AssetRegistryMissing.selector, address(0)));
-        script.deploy(base);
-        base.assetRegistry = address(registryStep.deploy(registryStep.readSharedWiring("base")));
         Keyfleet release = script.deploy(base);
         assertGt(address(release).code.length, 0, "The Base manifest deploys once its factory exists");
-    }
-
-    function test_manifestVotingWindowWiderThanAFleetCanHoldIsRefused() public {
-        string memory json = string.concat(
-            '{"chainId": 31337,',
-            ' "regent": "0x0000000000000000000000000000000000000001",',
-            ' "usdc": "0x0000000000000000000000000000000000000002",',
-            ' "treasury": "0x0000000000000000000000000000000000000003",',
-            ' "staking": "0x0000000000000000000000000000000000000004",',
-            ' "regentSafe": "0x0000000000000000000000000000000000000005",',
-            ' "autolaunchFactory": "0x0000000000000000000000000000000000000006",',
-            ' "assetRegistry": "0x0000000000000000000000000000000000000000",',
-            ' "autolaunchFactoryMayBeEmpty": true,',
-            ' "votingWindow": 18446744073709551616}'
-        );
-
-        vm.expectRevert(
-            abi.encodeWithSelector(KeyfleetManifest.VotingWindowTooLarge.selector, uint256(type(uint64).max) + 1)
-        );
-        script.parseManifest(json, "classic");
     }
 
     /// @dev Puts the mock coordinator's code at Base's coordinator address, registers Base's gas
@@ -399,7 +348,6 @@ contract DeployKeyfleetsTest is Test {
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
         manifest.usdc = script.BASE_USDC();
-        manifest.assetRegistry = address(new KeyfleetAssetRegistry(SAFE, script.BASE_USDC()));
         manifest.regent = script.BASE_REGENT();
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR()),
@@ -412,11 +360,9 @@ contract DeployKeyfleetsTest is Test {
         manifest.chainId = ANVIL_CHAIN_ID;
         manifest.regent = address(regent);
         manifest.usdc = address(usdc);
-        manifest.treasury = TREASURY;
         manifest.staking = STAKING;
         manifest.regentSafe = SAFE;
         manifest.autolaunchFactory = address(factory);
-        manifest.assetRegistry = address(registry);
         manifest.autolaunchFactoryMayBeEmpty = false;
         manifest.votingWindow = VOTING_WINDOW;
         manifest.vrf = Keyfleet.Randomness({

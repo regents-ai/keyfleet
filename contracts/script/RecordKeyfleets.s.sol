@@ -2,7 +2,6 @@
 pragma solidity 0.8.26;
 
 import {Keyfleet} from "../src/Keyfleet.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
@@ -13,12 +12,9 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// manifest.
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
 /// the fleet and the blocks the transactions landed in. Every address and value, the vote window,
-/// the deposit fee and the reward-ledger bounds are read from the chain through that fleet. REGENT
-/// is the one address taken from the manifest, because no fleet holds it: it is published only as
-/// a deposit asset the Regents Safe is expected to admit, so it must hold code, and on Base it must
-/// be Base REGENT, as on Base the USDC must be Base USDC. The supply, USDC price and split
-/// constants are the ones this script was compiled with from `KeyfleetPresets`, and the fleet's
-/// runtime code hash is recorded so it can be re-verified against the deployed code.
+/// the income tokens and the reward-ledger bound are read from the chain through that fleet. The supply, USDC price
+/// and split constants are the ones this script was compiled with from `KeyfleetPresets`, and the
+/// fleet's runtime code hash is recorded so it can be re-verified against the deployed code.
 /// `factoryMayBeEmpty` is the manifest's waiver as it applies on this chain. A receipt that
 /// failed, a transaction with no receipt, a fleet with no code, a fleet of another preset, any
 /// value that differs from the manifest, or a fleet the VRF subscription does not yet list as a
@@ -102,22 +98,17 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @notice Reads the broadcast's fleet back from the chain, checks it against the manifest, and
     /// returns its deployed manifest's JSON.
-    /// @dev The fleet's preset must be the manifest slot's, and its registry the one the manifest
-    /// names, so a fleet deployed into a second registry is never recorded. Its USDC is not
-    /// compared on its own: a fleet refuses at construction any USDC but its registry's
-    /// `BASE_USDC`, and the registry is compared. The fleet must be a consumer of the subscription,
-    /// and on Base the subscription must be owned by the manifest's Safe.
+    /// @dev The fleet's preset must be the manifest slot's, and every address it holds the one the
+    /// manifest names. The fleet must be a consumer of the subscription, and on Base the
+    /// subscription must be owned by the manifest's Safe.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         Keyfleet fleet = summary.fleet;
         if (address(fleet).code.length == 0) revert FleetMissing(address(fleet));
 
         if (fleet.PRESET() != _presets()[manifest.slot]) revert RecordedMismatch("preset");
-        KeyfleetAssetRegistry registry = fleet.ASSET_REGISTRY();
-        if (address(registry) != manifest.assetRegistry) revert RecordedMismatch("assetRegistry");
-        if (registry.REGENT_SAFE() != manifest.regentSafe) revert RecordedMismatch("regentSafe");
-        if (registry.BASE_USDC() != manifest.usdc) revert RecordedMismatch("usdc");
-        if (fleet.TREASURY() != manifest.treasury) revert RecordedMismatch("treasury");
+        if (address(fleet.USDC()) != manifest.usdc) revert RecordedMismatch("usdc");
+        if (address(fleet.REGENT()) != manifest.regent) revert RecordedMismatch("regent");
         if (address(fleet.STAKING()) != manifest.staking) revert RecordedMismatch("staking");
         if (address(fleet.FACTORY()) != manifest.autolaunchFactory) revert RecordedMismatch("autolaunchFactory");
         if (fleet.VOTES().VOTING_WINDOW() != manifest.votingWindow) revert RecordedMismatch("votingWindow");
@@ -137,21 +128,19 @@ contract RecordKeyfleets is KeyfleetManifest {
         string memory root = "deployed";
         vm.serializeUint(root, "chainId", block.chainid);
         vm.serializeUint(root, "deploymentBlock", summary.deploymentBlock);
-        vm.serializeAddress(root, "assetRegistry", address(registry));
-        vm.serializeAddress(root, "regent", manifest.regent);
-        vm.serializeAddress(root, "usdc", registry.BASE_USDC());
+        vm.serializeAddress(root, "regent", address(fleet.REGENT()));
+        vm.serializeAddress(root, "usdc", address(fleet.USDC()));
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
-        vm.serializeAddress(root, "treasury", fleet.TREASURY());
         vm.serializeAddress(root, "staking", address(fleet.STAKING()));
-        vm.serializeAddress(root, "regentSafe", registry.REGENT_SAFE());
+        vm.serializeAddress(root, "regentSafe", manifest.regentSafe);
         vm.serializeUint(root, "votingWindow", fleet.VOTES().VOTING_WINDOW());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
         vm.serializeString(root, "bounds", _boundsJson(fleet.REWARDS()));
-        vm.serializeString(root, "fees", _feesJson(fleet));
+        vm.serializeString(root, "fees", _feesJson());
         vm.serializeString(root, "autolaunch", _autolaunchJson(manifest, address(fleet.FACTORY())));
         vm.serializeString(root, "vrf", _vrfJson(fleet));
         vm.serializeBytes32(root, "traitTableHash", fleet.TRAIT_TABLE_HASH());
-        vm.serializeString(root, "initialAssetFlags", _initialAssetFlagsJson(registry.BASE_USDC(), manifest.regent));
+        vm.serializeAddress(root, "incomeTokens", fleet.REWARDS().rewardAssets());
         return vm.serializeString(root, "disclosures", _disclosuresJson());
     }
 
@@ -175,7 +164,6 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeBytes32(vrf, "keyHash", fleet.VRF_KEY_HASH());
         vm.serializeUint(vrf, "requestConfirmations", fleet.REVEAL_CONFIRMATIONS());
         vm.serializeUint(vrf, "callbackGasLimit", fleet.REVEAL_CALLBACK_GAS_LIMIT());
-        vm.serializeUint(vrf, "retryAfterSeconds", fleet.REVEAL_RETRY_AFTER());
         return vm.serializeBool(vrf, "nativePayment", true);
     }
 
@@ -193,9 +181,9 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeUint(fleetJson, "maxSupply", fleet.maxSupply());
     }
 
-    /// @dev The published numeric bounds. The two reward-ledger bounds are read from the chain; the
-    /// others are this script's compiled `KeyfleetPresets`, which the fleet's recorded code hash
-    /// lets anyone re-verify.
+    /// @dev The published numeric bounds. The reward-ledger bound is read from the chain; the others
+    /// are this script's compiled `KeyfleetPresets`, which the fleet's recorded code hash lets anyone
+    /// re-verify.
     function _boundsJson(KeyfleetRewards rewards) private returns (string memory) {
         string memory bounds = "bounds";
         vm.serializeUint(bounds, "fibonacciLevels", KeyfleetPresets.MAX_FIBONACCI_LEVEL);
@@ -204,18 +192,14 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(bounds, "accelerantMaxKeys", KeyfleetPresets.MAX_ACCELERANT_KEYS);
         vm.serializeUint(bounds, "fibonacciAutolaunchMinKeys", KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS);
         vm.serializeUint(bounds, "fleetTechAutolaunchMinKeys", KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS);
-        vm.serializeUint(bounds, "maxRewardAssets", rewards.MAX_REWARD_ASSETS());
         return vm.serializeUint(bounds, "maxCohorts", rewards.MAX_COHORTS());
     }
 
-    /// @dev The deposit fee is read from the chain; the purchase split is this script's compiled
-    /// `KeyfleetPresets`, like the supply bounds.
-    function _feesJson(Keyfleet fleet) private returns (string memory) {
+    /// @dev The purchase split, this script's compiled `KeyfleetPresets` like the supply bounds.
+    function _feesJson() private returns (string memory) {
         string memory fees = "fees";
         vm.serializeUint(fees, "protocolBps", KeyfleetPresets.PROTOCOL_BPS);
-        vm.serializeUint(fees, "referralBps", KeyfleetPresets.REFERRAL_BPS);
         vm.serializeUint(fees, "accelerantCapitalBps", KeyfleetPresets.ACCELERANT_CAPITAL_BPS);
-        vm.serializeUint(fees, "depositFeeBps", fleet.DEPOSIT_FEE_BPS());
         return vm.serializeUint(fees, "bpsDenominator", KeyfleetPresets.BPS_DENOMINATOR);
     }
 
@@ -240,22 +224,9 @@ contract RecordKeyfleets is KeyfleetManifest {
             "readiness",
             "A fleet may launch once, by vote, with itself as launcher and treasury, after it has sold"
             " the last key of level 7 (Syndicate, Cascade) or 100 keys (Classic, Accelerant). Creation"
-            " is not graduation: the app reads the strategy for the lifecycle, and a SUBJECT is"
-            " admitted for deposits only after the Regents Safe allows it."
+            " is not graduation: the app reads the strategy for the lifecycle. The launched token is"
+            " an income token of the fleet from the moment the launch is created."
         );
-    }
-
-    /// @dev The flags the Regents Safe is expected to set after deployment: USDC and REGENT in the
-    /// global catalogue and for this fleet. The deployment sets none of them.
-    function _initialAssetFlagsJson(address usdc, address regent) private returns (string memory) {
-        address[] memory tokens = new address[](2);
-        tokens[0] = usdc;
-        tokens[1] = regent;
-
-        string memory flags = "assetFlags";
-        vm.serializeString(flags, "status", "awaiting the Regents Safe");
-        vm.serializeAddress(flags, "global", tokens);
-        return vm.serializeAddress(flags, "fleet", tokens);
     }
 
     /// @dev The terms the release publishes here because it publishes them nowhere else: there is
@@ -270,13 +241,14 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(
             disclosures,
             "feeComposition",
-            "Autolaunch's splitter takes 2% of the revenue it recognizes and Keyfleet takes 2% of the"
-            " external receipt when that payout is deposited. They are two separate deductions."
+            "Keyfleet takes 2% of every key purchase for the Regents protocol and nothing from money a"
+            " fleet receives afterwards. Autolaunch's splitter takes its own share of the revenue it"
+            " recognizes before paying the fleet."
         );
         return vm.serializeString(
             disclosures,
             "safeAuthority",
-            "The Regents Safe controls deposit admission only, and no fleet vote, claim or price."
+            "The Regents Safe owns the randomness subscription only, and no fleet vote, claim, price or money."
         );
     }
 

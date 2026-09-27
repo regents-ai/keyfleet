@@ -5,11 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
-import {KeyfleetAssetRegistry} from "../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
@@ -53,13 +53,13 @@ abstract contract RevealFixture is Test {
     address internal constant BUYER = address(0xB0B0B0);
 
     RevealUsdc internal usdc;
-    KeyfleetAssetRegistry internal registry;
+    RevealUsdc internal regent;
     MockVRFCoordinatorV2Plus internal vrf;
     uint256 internal subscriptionId;
 
     function _setUpFixture() internal {
         usdc = new RevealUsdc();
-        registry = new KeyfleetAssetRegistry(address(0x5AFE), address(usdc));
+        regent = new RevealUsdc();
         vrf = new MockVRFCoordinatorV2Plus();
         subscriptionId = vrf.createSubscription();
         vm.warp(1_000_000);
@@ -79,8 +79,7 @@ abstract contract RevealFixture is Test {
         return new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            address(0x7EA5),
-            registry,
+            IERC20(address(regent)),
             IRegentRevenueStaking(address(0x57A1)),
             IRegentsAutolaunchFactoryV1(address(0xFAC7)),
             24 hours,
@@ -101,7 +100,7 @@ abstract contract RevealFixture is Test {
 
     function _buy(Keyfleet fleet) internal returns (uint256 tokenId) {
         vm.prank(BUYER);
-        tokenId = fleet.purchase(BUYER, address(0), type(uint256).max, block.timestamp);
+        tokenId = fleet.purchase(BUYER, type(uint256).max, block.timestamp);
     }
 
     /// @dev The id of the fleet's latest accepted request.
@@ -159,7 +158,6 @@ contract KeyfleetRevealTest is RevealFixture {
         assertEq(fleet.REVEAL_CONFIRMATIONS(), 3, "confirmations");
         assertEq(fleet.REVEAL_CALLBACK_GAS_LIMIT(), 100_000, "callback gas");
         assertEq(fleet.REVEAL_WORDS(), 1, "one word");
-        assertEq(fleet.REVEAL_RETRY_AFTER(), 1 hours, "retry after an hour");
         assertEq(fleet.TRAIT_SEED_TAG(), keccak256("keyfleet.trait-seed"), "seed tag");
     }
 
@@ -363,43 +361,50 @@ contract KeyfleetRevealTest is RevealFixture {
     }
 
     /// @dev Invariant: the callback never reverts for the coordinator, because a reverted callback
-    /// is final and charged: unknown ids, empty answers and answers for a revealed key are ignored
-    /// without a word.
-    function test_unknownEmptyDuplicateAndStaleAnswersAreIgnoredWithoutReverting() public {
+    /// is final and charged: unknown ids, empty answers and a second answer for a revealed key are
+    /// ignored without a word.
+    function test_unknownEmptyAndDuplicateAnswersAreIgnoredWithoutReverting() public {
         Keyfleet fleet = _deploy();
         _buy(fleet);
-        uint256 first = _lastRequestId(fleet);
+        uint256 requestId = _lastRequestId(fleet);
 
         _expectSilentAnswer(fleet, 12_345, _words(1));
-        _expectSilentAnswer(fleet, first, new uint256[](0));
+        _expectSilentAnswer(fleet, requestId, new uint256[](0));
         assertEq(fleet.revealSeed(1), bytes32(0), "an empty answer writes nothing");
 
-        vm.warp(block.timestamp + 1 hours);
-        fleet.requestReveal(1);
-        uint256 second = _lastRequestId(fleet);
-        vrf.fulfill(second, _words(2));
+        vrf.fulfill(requestId, _words(2));
         bytes32 seed = fleet.revealSeed(1);
-        assertEq(seed, _seed(fleet, 1, 2), "the answered request wins");
+        assertEq(seed, _seed(fleet, 1, 2), "the answer writes the seed");
 
-        _expectSilentAnswer(fleet, second, _words(3));
-        _expectSilentAnswer(fleet, first, _words(4));
-        assertEq(fleet.revealSeed(1), seed, "neither a duplicate nor a stale answer changes the seed");
+        _expectSilentAnswer(fleet, requestId, _words(3));
+        assertEq(fleet.revealSeed(1), seed, "a duplicate answer does not change the seed");
     }
 
-    /// @dev Invariant: when two requests are both answered, the first answer wins, whichever request
-    /// it answers.
-    function test_theFirstAnswerWinsWhenTwoRequestsAreAnswered() public {
+    /// @dev Invariant: a key has at most one accepted request, so there is only ever one answer
+    /// its seed can come from and nobody who orders the answers can choose between two. Once the
+    /// coordinator accepts a request nobody, the holder included, can ask for the key again, however
+    /// long the answer takes, and no stack of waiting requests can build up behind it.
+    function test_anAcceptedRequestIsTheOnlyOneAKeyEverGets() public {
         Keyfleet fleet = _deploy();
         _buy(fleet);
-        uint256 first = _lastRequestId(fleet);
-        vm.warp(block.timestamp + 1 hours);
-        fleet.requestReveal(1);
-        uint256 second = _lastRequestId(fleet);
+        uint256 requestId = _lastRequestId(fleet);
+        (, uint64 nonceBefore) = vrf.consumerConfig(address(fleet), subscriptionId);
 
-        vrf.fulfill(first, _words(11));
-        assertTrue(vrf.fulfill(second, _words(22)), "the late answer is accepted without a revert");
+        address[2] memory askers = [BUYER, address(0xBAD)];
+        uint256[3] memory waits = [uint256(0), 1 hours, 365 days];
+        for (uint256 i = 0; i < waits.length; ++i) {
+            vm.warp(block.timestamp + waits[i]);
+            for (uint256 j = 0; j < askers.length; ++j) {
+                vm.prank(askers[j]);
+                vm.expectRevert(abi.encodeWithSelector(Keyfleet.RevealAlreadyRequested.selector, 1));
+                fleet.requestReveal(1);
+            }
+        }
+        (, uint64 nonceAfter) = vrf.consumerConfig(address(fleet), subscriptionId);
+        assertEq(nonceAfter, nonceBefore, "no second request reached the coordinator");
 
-        assertEq(fleet.revealSeed(1), _seed(fleet, 1, 11), "the first answer's seed");
+        vrf.fulfill(requestId, _words(7));
+        assertEq(fleet.revealSeed(1), _seed(fleet, 1, 7), "the one request's answer is the seed");
     }
 
     /// @dev Invariant: an answer is cheap enough for the 100,000 callback gas with room to spare,
@@ -439,30 +444,9 @@ contract KeyfleetRevealTest is RevealFixture {
         fleet.requestReveal(1);
     }
 
-    /// @dev Invariant: an accepted request is given an hour before anyone may ask again, and not a
-    /// second more.
-    function test_requestRevealWaitsAnHourAfterAnAcceptedRequest() public {
-        Keyfleet fleet = _deploy();
-        _buy(fleet);
-        uint256 retryAt = block.timestamp + 1 hours;
-
-        vm.warp(retryAt - 1);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.RevealPending.selector, 1, retryAt));
-        fleet.requestReveal(1);
-
-        vm.warp(retryAt);
-        vm.prank(address(0x5712A26E2));
-        vm.expectEmit(true, true, false, true, address(fleet));
-        emit RevealRequested(1, _nextRequestId(fleet));
-        fleet.requestReveal(1);
-        assertEq(fleet.revealRequestedAt(1), retryAt, "the retry restarts the hour");
-
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.RevealPending.selector, 1, retryAt + 1 hours));
-        fleet.requestReveal(1);
-    }
-
-    /// @dev Invariant: a key whose request failed can be retried at once, by anyone, and a retry
-    /// the coordinator refuses says so without reverting.
+    /// @dev Invariant: a key whose request was refused can be retried at once, by anyone, as often as
+    /// the coordinator keeps refusing, and a refused retry says so without reverting. The first
+    /// retry the coordinator accepts is the last one.
     function test_aFailedRequestCanBeRetriedAtOnceByAnyone() public {
         Keyfleet fleet = _deploy();
         vrf.setRevertAll(true);
@@ -477,6 +461,8 @@ contract KeyfleetRevealTest is RevealFixture {
         vm.prank(address(0x5712A26E2));
         fleet.requestReveal(1);
         assertEq(fleet.revealRequestedAt(1), block.timestamp, "accepted");
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.RevealAlreadyRequested.selector, 1));
+        fleet.requestReveal(1);
         vrf.fulfill(_lastRequestId(fleet), _words(9));
         assertEq(fleet.revealSeed(1), _seed(fleet, 1, 9));
     }
@@ -488,7 +474,7 @@ contract KeyfleetRevealTest is RevealFixture {
 
         vm.prank(BUYER);
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-        fleet.purchase(address(receiver), address(0), type(uint256).max, block.timestamp);
+        fleet.purchase(address(receiver), type(uint256).max, block.timestamp);
     }
 
     // --- 5. fuzz ---------------------------------------------------------
@@ -518,20 +504,17 @@ contract KeyfleetRevealTest is RevealFixture {
         assertTrue(ok, "the callback never reverts for the coordinator");
     }
 
-    /// @dev Invariant: a seed is written once. However two answers for the same key arrive, the
-    /// seed is the first answer's and never changes.
-    function testFuzz_aSeedIsWrittenOnce(uint256 firstWord, uint256 secondWord, bool secondRequestFirst) public {
+    /// @dev Invariant: a seed is written once. However many answers arrive for a key, the seed is
+    /// the first one's and never changes.
+    function testFuzz_aSeedIsWrittenOnce(uint256 firstWord, uint256 secondWord) public {
         Keyfleet fleet = _deploy();
         _buy(fleet);
-        uint256 a = _lastRequestId(fleet);
-        vm.warp(block.timestamp + 1 hours);
-        fleet.requestReveal(1);
-        uint256 b = _lastRequestId(fleet);
-        if (secondRequestFirst) (a, b) = (b, a);
+        uint256 requestId = _lastRequestId(fleet);
 
-        vrf.fulfill(a, _words(firstWord));
+        vrf.fulfill(requestId, _words(firstWord));
         bytes32 seed = fleet.revealSeed(1);
-        vrf.fulfill(b, _words(secondWord));
+        vm.prank(address(vrf));
+        fleet.rawFulfillRandomWords(requestId, _words(secondWord));
 
         assertEq(seed, _seed(fleet, 1, firstWord), "the first answer's seed");
         assertEq(fleet.revealSeed(1), seed, "never rewritten");
@@ -545,7 +528,7 @@ contract KeyfleetRevealTest is RevealFixture {
         vm.recordLogs();
         vm.prank(BUYER);
         (ok,) = address(fleet).call{gas: gasLimit}(
-            abi.encodeCall(Keyfleet.purchase, (BUYER, address(0), type(uint256).max, block.timestamp))
+            abi.encodeCall(Keyfleet.purchase, (BUYER, type(uint256).max, block.timestamp))
         );
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; ++i) {
@@ -590,7 +573,7 @@ contract RevealHandler is Test {
         VRF.setRevertAll(refuse);
         uint64 nonce = _nonce();
         vm.prank(BUYER);
-        uint256 tokenId = FLEET.purchase(BUYER, address(0), type(uint256).max, block.timestamp);
+        uint256 tokenId = FLEET.purchase(BUYER, type(uint256).max, block.timestamp);
         VRF.setRevertAll(false);
         _track(tokenId, nonce);
     }

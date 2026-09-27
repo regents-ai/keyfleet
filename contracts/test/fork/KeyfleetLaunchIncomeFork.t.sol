@@ -7,12 +7,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {IRegentLBPStrategy} from "../../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
-import {KeyfleetAssetRegistry} from "../../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockStaking} from "../KeyfleetDeposits.t.sol";
+import {MockStaking} from "../KeyfleetIncome.t.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The pinned continuous clearing auction, as far as a bidder drives it.
@@ -49,27 +48,25 @@ interface IForkSplitter {
 }
 
 /// @notice The whole post-launch path of one fleet against a running Autolaunch lab: the keys vote
-/// a launch through the lab's own factory, one bidder graduates it, and then launch income reaches
-/// the fleet the two ways it does after graduation: SUBJECT the escrow releases, and USDC and
-/// REGENT the launch's splitter recognizes and pays on. Each is recognized by the fleet and split
-/// between the budget and the keys, keys claim, and a Pay vote spends budget.
+/// a launch through the lab's own factory and one bidder graduates it. The REGENT the strategy sends
+/// the fleet at graduation and the SUBJECT the escrow releases become shared money; USDC and REGENT
+/// the launch's splitter pays on reach the keys whole; keys claim, and a Pay vote spends shared
+/// money.
 /// @dev Runs only when `KEYFLEET_FORK_RPC_URL` names a Base-shaped chain with the Autolaunch graph
 /// deployed and `KEYFLEET_FORK_FACTORY` names its factory; without them the test skips. Everything
 /// happens on a local fork of that chain, so nothing is written to the chain itself. `deal` funds
-/// ordinary wallets with USDC and REGENT, and `prank` acts as ordinary holders, a bidder, a payer and
-/// the stand-in Safe this test deploys its own registry with; no lab role is taken over. The fleet's
-/// key reveals go to a stand-in VRF coordinator deployed on the fork, because the lab chain need not
-/// carry Chainlink's; reveals are not what this test covers.
+/// ordinary wallets with USDC and REGENT, and `prank` acts as ordinary holders, a bidder and a
+/// payer; no lab role is taken over. The fleet's key reveals go to a stand-in VRF coordinator
+/// deployed on the fork, because the lab chain need not carry Chainlink's; reveals are not what
+/// this test covers.
 contract KeyfleetLaunchIncomeForkTest is Test {
+    uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address private constant REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
     address private constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000e18;
     uint128 private constant BID = 4_000e18;
 
-    address private safe = makeAddr("fleet-registry-safe");
-    address private regentTreasury = makeAddr("regent-treasury");
     address private buyer = makeAddr("keyfleet-fork-buyer");
     address private alice = makeAddr("keyfleet-fork-alice");
     address private bidder = makeAddr("keyfleet-fork-bidder");
@@ -79,14 +76,11 @@ contract KeyfleetLaunchIncomeForkTest is Test {
     Keyfleet private fleet;
     KeyfleetVotes private votes;
     KeyfleetRewards private rewards;
-    KeyfleetAssetRegistry private registry;
     IForkStrategy private strategy;
 
-    event LaunchIncomeSplit(
-        address indexed asset, address indexed caller, uint256 gross, uint256 fee, uint256 toBudget, uint256 toKeys
-    );
+    event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
 
-    function test_launchIncomeReachesTheKeysAndTheBudget() public {
+    function test_launchMoneyReachesTheKeysAndTheSharedMoney() public {
         string memory rpc = vm.envOr("KEYFLEET_FORK_RPC_URL", string(""));
         if (bytes(rpc).length == 0) vm.skip(true);
         vm.createSelectFork(rpc);
@@ -94,14 +88,12 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         strategy = IForkStrategy(address(factory.strategy()));
         assertFalse(factory.launchesPaused(), "the lab's factory is not taking launches");
 
-        registry = new KeyfleetAssetRegistry(safe, USDC);
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
         uint256 vrfSubscription = vrf.createSubscription();
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FibonacciSyndicate,
             IERC20(USDC),
-            regentTreasury,
-            registry,
+            IERC20(REGENT),
             new MockStaking(IERC20(USDC)),
             factory,
             VOTING_WINDOW,
@@ -122,28 +114,31 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         _bidAndGraduate(auction);
 
         Keyfleet.LaunchRecord memory record = fleet.launchRecord();
-        _admit(REGENT);
-        _admit(record.subject);
-        _admit(USDC);
-
         IForkSplitter splitter = IForkSplitter(record.splitter);
         assertEq(splitter.regent(), REGENT, "the lab's REGENT is Base REGENT");
         assertEq(splitter.usdc(), USDC, "the lab's USDC is Base USDC");
 
-        // 1. A month of vesting: the escrow releases SUBJECT to the fleet.
+        // 1. A month of vesting: the escrow releases SUBJECT to the fleet as shared money.
         vm.warp(block.timestamp + 30 days);
+        uint256 sharedBefore = fleet.freeCapital(record.subject);
+        uint256 heldBefore = IERC20(record.subject).balanceOf(address(fleet));
         IForkEscrow(record.escrow).release();
-        _recognizeAndCheckSplit(record.subject);
+        uint256 released = IERC20(record.subject).balanceOf(address(fleet)) - heldBefore;
+        assertGt(released, 0, "the escrow released SUBJECT");
+        fleet.syncLaunch();
+        assertEq(fleet.freeCapital(record.subject) - sharedBefore, released, "every released unit is shared money");
+        assertEq(fleet.surplus(record.subject), 0, "and none of it is left to sort");
 
         // 2. USDC and REGENT paid to the launch's splitter: with nothing staked, all but the
-        // splitter's 2% is paid on to the fleet as the launch's treasury.
+        // splitter's 2% is paid on to the fleet as the launch's treasury, and all of it goes to the
+        // keys.
         _payThroughSplitter(splitter, USDC, 10_000e6);
-        _recognizeAndCheckSplit(USDC);
+        _recognizeIncome(USDC);
         _payThroughSplitter(splitter, REGENT, 5_000e18);
-        _recognizeAndCheckSplit(REGENT);
+        _recognizeIncome(REGENT);
 
-        _claimAndCompareLevels(record.subject);
-        _payFromBudget(record.subject);
+        _claimAndCompareLevels(USDC);
+        _payFromSharedMoney(record.subject);
     }
 
     // --- stages ------------------------------------------------------------
@@ -157,7 +152,7 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             deal(USDC, buyer, price);
             vm.startPrank(buyer);
             IERC20(USDC).approve(address(fleet), price);
-            fleet.purchase(holder, address(0), price, block.timestamp);
+            fleet.purchase(holder, price, block.timestamp);
             vm.stopPrank();
             if (holder != alice) {
                 vm.prank(holder);
@@ -204,7 +199,11 @@ contract KeyfleetLaunchIncomeForkTest is Test {
 
         vm.roll(uint256(cca.endBlock()) + strategy.MIGRATION_DELAY_BLOCKS());
         strategy.migrate(auction);
+        assertGt(IERC20(REGENT).balanceOf(address(fleet)), 0, "the strategy sent the fleet the REGENT the pool left");
         assertEq(uint256(fleet.syncLaunch()), uint256(Keyfleet.LaunchState.Graduated), "the launch graduated");
+        assertEq(
+            fleet.freeCapital(REGENT), IERC20(REGENT).balanceOf(address(fleet)), "all of that REGENT is shared money"
+        );
         assertEq(
             uint256(fleet.launchDistribution().lifecycle),
             uint256(IRegentLBPStrategy.Lifecycle.Graduated),
@@ -212,33 +211,30 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         );
     }
 
-    /// @dev Recognizes the fleet's whole surplus in `asset` and checks the split to the unit: the
-    /// fee, the budget and the keys' part are the gross, and the ledger holds what it owes.
-    function _recognizeAndCheckSplit(address asset) private {
-        uint256 gross = fleet.surplus(asset);
-        assertGt(gross, 0, "income arrived");
-        uint256 fee = (gross * 200) / 10_000;
-        uint256 toBudget = ((gross - fee) * fleet.BUDGET_BPS()) / 10_000;
-        uint256 toKeys = gross - fee - toBudget;
-        uint256 budgetBefore = fleet.freeCapital(asset);
-        uint256 backedBefore = rewards.isRewardAsset(asset) ? rewards.backed(asset) : 0;
+    /// @dev Recognizes the fleet's whole surplus in an income token and checks that all of it went
+    /// to the keys and none of it to the shared money.
+    function _recognizeIncome(address asset) private {
+        uint256 amount = fleet.surplus(asset);
+        assertGt(amount, 0, "income arrived");
+        uint256 sharedBefore = fleet.freeCapital(asset);
+        uint256 backedBefore = rewards.backed(asset);
 
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit LaunchIncomeSplit(asset, address(this), gross, fee, toBudget, toKeys);
+        emit IncomeRecognized(asset, address(this), amount);
         fleet.recognizeSurplus(asset);
 
-        assertEq(fleet.freeCapital(asset) - budgetBefore, toBudget, "the budget's part");
-        assertEq(rewards.backed(asset) - backedBefore, toKeys, "the keys' part");
+        assertEq(fleet.freeCapital(asset), sharedBefore, "income is never shared money");
+        assertEq(rewards.backed(asset) - backedBefore, amount, "the keys received all of it");
         assertGe(IERC20(asset).balanceOf(address(rewards)), rewards.backed(asset), "the ledger is backed");
         assertEq(fleet.surplus(asset), 0, "nothing is left unaccounted");
-        console2.log("recognized", gross, "units of", asset);
+        console2.log("recognized", amount, "units of", asset);
     }
 
-    /// @dev A level-1 key and a level-7 key claim their SUBJECT; the first receives seventeen times
+    /// @dev A level-1 key and a level-7 key claim their income; the first receives seventeen times
     /// the second.
-    function _claimAndCompareLevels(address subject) private {
-        uint256 early = _claim(subject, 1);
-        uint256 late = _claim(subject, KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS);
+    function _claimAndCompareLevels(address asset) private {
+        uint256 early = _claim(asset, 1);
+        uint256 late = _claim(asset, KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS);
         assertGt(late, 0, "the level-7 key was paid");
         assertApproxEqRel(early, 17 * late, 1e13, "a level-1 key receives seventeen times a level-7 key");
     }
@@ -253,17 +249,18 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         assertEq(IERC20(asset).balanceOf(holder) - before, paid, "the holder received the claim");
     }
 
-    /// @dev The keys vote to pay a contributor the whole period cap of the SUBJECT budget.
-    function _payFromBudget(address subject) private {
-        uint256 amount = (fleet.freeCapital(subject) * fleet.PAY_CAP_BPS()) / 10_000;
+    /// @dev The keys vote to pay a contributor the most of the SUBJECT shared money one pay period
+    /// allows.
+    function _payFromSharedMoney(address subject) private {
+        uint256 shared = fleet.freeCapital(subject);
+        uint256 amount = (shared * fleet.PAY_CAP_BPS()) / KeyfleetPresets.BPS_DENOMINATOR;
         vm.prank(alice);
         uint256 proposalId =
             votes.proposePay(1, subject, amount, contributor, "Pay the contributor", keccak256("fork invoice"));
         _passAll(proposalId);
         votes.execute(proposalId);
-        assertEq(IERC20(subject).balanceOf(contributor), amount, "the contributor was paid from the budget");
-        (, uint256 cap, uint256 spent) = fleet.payPeriod(subject);
-        assertEq(spent, cap, "the whole period cap is spent");
+        assertEq(IERC20(subject).balanceOf(contributor), amount, "the contributor was paid from shared money");
+        assertEq(fleet.freeCapital(subject), shared - amount, "and only that");
     }
 
     // --- helpers -------------------------------------------------------------
@@ -286,13 +283,6 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         vm.prank(alice);
         votes.vote(proposalId, ids, true);
         vm.warp(votes.proposal(proposalId).closesAt);
-    }
-
-    function _admit(address token) private {
-        vm.startPrank(safe);
-        registry.setFactoryTokenAllowed(token, true);
-        registry.setFleetTokenAllowed(address(fleet), token, true);
-        vm.stopPrank();
     }
 
     function _holder(uint256 tokenId) private view returns (address) {

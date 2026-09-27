@@ -4,11 +4,11 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {DeployKeyfleets} from "../../script/DeployKeyfleets.s.sol";
 import {IVRFProvingKeys} from "../../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
-import {KeyfleetAssetRegistry} from "../../src/KeyfleetAssetRegistry.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
@@ -60,8 +60,7 @@ contract KeyfleetRevealBaseForkTest is Test {
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            address(0x7EA5),
-            new KeyfleetAssetRegistry(address(0x5AFE), address(usdc)),
+            IERC20(script.BASE_REGENT()),
             IRegentRevenueStaking(address(0x57A1)),
             IRegentsAutolaunchFactoryV1(address(0xFAC7)),
             24 hours,
@@ -122,7 +121,7 @@ contract KeyfleetRevealBaseForkTest is Test {
 
     function _buy() private {
         vm.prank(BUYER);
-        fleet.purchase(BUYER, address(0), type(uint256).max, block.timestamp);
+        fleet.purchase(BUYER, type(uint256).max, block.timestamp);
     }
 
     /// @dev Reads the coordinator's own request event out of the recorded logs and checks its

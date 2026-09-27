@@ -79,10 +79,12 @@ contract ReenteringERC20 is ERC20 {
 
 contract KeyfleetRewardsTest is Test {
     uint256 private constant PRECISION = 1e27;
+    uint256 private constant SETTLE_GAS_CEILING = 168_000;
 
     MockFleet private fleet;
     KeyfleetRewards private rewards;
     MockERC20 private usdc;
+    /// @dev Stands in for REGENT, the ledger's second income token.
     MockERC20 private other;
 
     address private alice = address(0xA11CE);
@@ -90,7 +92,7 @@ contract KeyfleetRewardsTest is Test {
     address private carol = address(0xCAC01);
     address private payout = address(0xDECAF);
 
-    event AssetRegistered(address indexed asset);
+    event LaunchedTokenSet(address indexed asset);
     event KeyEnrolled(uint256 indexed tokenId, uint256 indexed cohortId);
     event Allocated(address indexed asset, uint256 indexed cohortId, uint256 amount, uint256 newIndex);
     event Credited(address indexed asset, address indexed account, uint256 amount);
@@ -99,13 +101,14 @@ contract KeyfleetRewardsTest is Test {
 
     function setUp() public {
         fleet = new MockFleet();
-        rewards = new KeyfleetRewards(address(fleet));
         usdc = new MockERC20("USD Coin", "USDC");
-        other = new MockERC20("Other", "OTH");
-        vm.startPrank(address(fleet));
-        rewards.registerAsset(address(usdc));
-        rewards.registerAsset(address(other));
-        vm.stopPrank();
+        other = new MockERC20("Regent", "REGENT");
+        rewards = new KeyfleetRewards(address(fleet), address(usdc), address(other));
+    }
+
+    function _setLaunchedToken(address asset) private {
+        vm.prank(address(fleet));
+        rewards.setLaunchedToken(asset);
     }
 
     // --- helpers ---------------------------------------------------------
@@ -139,25 +142,30 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 1. only the fleet writes ----------------------------------------
 
-    function test_constructorBindsFleetAndRejectsZero() public {
+    function test_constructorBindsFleetAndIncomeTokensAndRejectsZero() public {
         assertEq(rewards.FLEET(), address(fleet), "fleet binding is permanent");
+        assertEq(rewards.USDC(), address(usdc), "USDC binding is permanent");
+        assertEq(rewards.REGENT(), address(other), "REGENT binding is permanent");
         vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(address(0));
+        new KeyfleetRewards(address(0), address(usdc), address(other));
+        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
+        new KeyfleetRewards(address(fleet), address(0), address(other));
+        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
+        new KeyfleetRewards(address(fleet), address(usdc), address(0));
     }
 
     function test_publishedBoundsAndIndexScaleAreFixed() public view {
-        assertEq(rewards.MAX_REWARD_ASSETS(), 8, "lifetime reward asset bound");
         assertEq(rewards.MAX_COHORTS(), 32, "cohort id space");
         assertEq(rewards.PRECISION(), PRECISION, "index scale integrators read is 1e27");
     }
 
-    function testFuzz_onlyFleetCanRegisterEnrollAllocateCreditAndSettle(address caller) public {
+    function testFuzz_onlyFleetCanSetTheLaunchedTokenEnrollAllocateCreditAndSettle(address caller) public {
         vm.assume(caller != address(fleet) && caller != address(vm));
         _enroll(1, 0, alice);
 
         vm.startPrank(caller);
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
-        rewards.registerAsset(address(0xFEED));
+        rewards.setLaunchedToken(address(0xFEED));
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
         rewards.enrollKey(2, 0);
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
@@ -168,42 +176,65 @@ contract KeyfleetRewardsTest is Test {
         rewards.settleKey(1, caller);
         vm.stopPrank();
 
-        assertEq(rewards.rewardAssets().length, 2, "no asset added by a stranger");
+        assertEq(rewards.rewardAssets().length, 2, "no income token added by a stranger");
         assertEq(rewards.cohortSize(0), 1, "no key enrolled by a stranger");
         assertEq(rewards.cohortIndex(address(usdc), 0), 0, "no allocation by a stranger");
         assertEq(rewards.credits(address(usdc), caller), 0, "no credit by a stranger");
     }
 
-    // --- 2. append-only, bounded asset list -------------------------------
+    // --- 2. the income tokens are fixed -----------------------------------
 
-    function test_assetListIsAppendOnlyBoundedAtEightAndInInsertionOrder() public {
+    function test_incomeTokensAreUsdcAndRegentThenTheLaunchedTokenOnce() public {
+        address[] memory before = rewards.rewardAssets();
+        assertEq(before.length, 2, "two income tokens from deployment");
+        assertEq(before[0], address(usdc), "USDC first");
+        assertEq(before[1], address(other), "REGENT second");
+        assertFalse(rewards.isRewardAsset(address(0xFEED)), "nothing else is an income token");
+        assertFalse(rewards.isRewardAsset(address(0)), "the zero address never is");
+
         vm.startPrank(address(fleet));
         vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        rewards.registerAsset(address(0));
-        vm.expectRevert(KeyfleetRewards.AssetAlreadyRegistered.selector);
-        rewards.registerAsset(address(usdc));
-
-        address[] memory expected = new address[](8);
-        expected[0] = address(usdc);
-        expected[1] = address(other);
-        for (uint256 i = 2; i < 8; ++i) {
-            expected[i] = address(uint160(0x1000) + uint160(i));
-            rewards.registerAsset(expected[i]);
-        }
-
-        vm.expectRevert(KeyfleetRewards.AssetBoundReached.selector);
-        rewards.registerAsset(address(0x9999));
-        vm.expectRevert(KeyfleetRewards.AssetAlreadyRegistered.selector);
-        rewards.registerAsset(address(usdc));
+        rewards.setLaunchedToken(address(0));
+        vm.expectEmit(true, true, true, true, address(rewards));
+        emit LaunchedTokenSet(address(0xFEED));
+        rewards.setLaunchedToken(address(0xFEED));
+        vm.expectRevert(KeyfleetRewards.LaunchedTokenAlreadySet.selector);
+        rewards.setLaunchedToken(address(0xBEEF));
         vm.stopPrank();
 
-        address[] memory listed = rewards.rewardAssets();
-        assertEq(listed.length, rewards.MAX_REWARD_ASSETS(), "list stops at the bound");
-        for (uint256 i = 0; i < 8; ++i) {
-            assertEq(listed[i], expected[i], "insertion order preserved");
-            assertTrue(rewards.isRewardAsset(expected[i]), "registered");
-        }
-        assertFalse(rewards.isRewardAsset(address(0x9999)), "the rejected ninth asset was not recorded");
+        address[] memory later = rewards.rewardAssets();
+        assertEq(later.length, 3, "the launched token joins once");
+        assertEq(later[2], address(0xFEED), "launched token third");
+        assertTrue(rewards.isRewardAsset(address(0xFEED)), "launched token is an income token");
+        assertFalse(rewards.isRewardAsset(address(0xBEEF)), "a second launched token never is");
+    }
+
+    function test_theLedgerRefusesEveryTokenThatIsNotAnIncomeToken() public {
+        MockERC20 stray = new MockERC20("Stray", "STR");
+        _enroll(1, 0, alice);
+        stray.mint(address(rewards), 1e18);
+
+        vm.startPrank(address(fleet));
+        vm.expectRevert(KeyfleetRewards.UnknownAsset.selector);
+        rewards.allocateToCohort(address(stray), 0, 1e18);
+        vm.expectRevert(KeyfleetRewards.UnknownAsset.selector);
+        rewards.credit(address(stray), alice, 1e18);
+        vm.stopPrank();
+    }
+
+    function test_keysEnrolledBeforeTheLaunchEarnTheLaunchedTokenLikeLaterKeys() public {
+        MockERC20 subject = new MockERC20("Subject", "SUB");
+        _enroll(1, 0, alice);
+        _setLaunchedToken(address(subject));
+        _enroll(2, 0, bob);
+
+        _fundAndAllocate(subject, 0, 10e18);
+        assertEq(rewards.accrued(address(subject), 1), 5e18, "a key from before the launch earns its share");
+        assertEq(rewards.accrued(address(subject), 2), 5e18, "a key from after the launch earns the same");
+
+        vm.prank(address(fleet));
+        rewards.settleKey(1, alice);
+        assertEq(rewards.credits(address(subject), alice), 5e18, "settlement covers the launched token");
     }
 
     // --- 3. allocation math and retained dust -----------------------------
@@ -443,22 +474,17 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 8. worst-case settlement gas -------------------------------------
 
-    /// @dev Worst case: all 8 reward assets registered, every one with a pending accrual, and
-    /// every per-key slot cold and moving from zero. Measured 369,212 gas; the ceiling below is
-    /// that plus 20% (443,000) and is the number the deployment manifest quotes.
-    function test_worstCaseSettlementGasWithEightAssetsStaysUnderCeiling() public {
-        MockERC20[] memory assets = new MockERC20[](8);
+    /// @dev Worst case: all three income tokens, every one with a pending accrual, and every
+    /// per-key slot cold and moving from zero. The ceiling is the measured figure plus 20%.
+    function test_worstCaseSettlementGasWithThreeIncomeTokensStaysUnderCeiling() public {
+        MockERC20[] memory assets = new MockERC20[](3);
         assets[0] = usdc;
         assets[1] = other;
-        vm.startPrank(address(fleet));
-        for (uint256 i = 2; i < 8; ++i) {
-            assets[i] = new MockERC20("Reward", "RWD");
-            rewards.registerAsset(address(assets[i]));
-        }
-        vm.stopPrank();
+        assets[2] = new MockERC20("Subject", "SUB");
+        _setLaunchedToken(address(assets[2]));
 
         _enroll(1, 3, alice);
-        for (uint256 i = 0; i < 8; ++i) {
+        for (uint256 i = 0; i < 3; ++i) {
             _fundAndAllocate(assets[i], 3, (i + 1) * 1e18);
         }
 
@@ -466,10 +492,10 @@ contract KeyfleetRewardsTest is Test {
         uint256 before = gasleft();
         rewards.settleKey(1, alice);
         uint256 used = before - gasleft();
-        console2.log("worst-case settleKey gas (8 assets, cold slots):", used);
+        console2.log("worst-case settleKey gas (3 income tokens, cold slots):", used);
 
-        assertLt(used, 443_000, "worst-case settlement stays under the quoted ceiling");
-        for (uint256 i = 0; i < 8; ++i) {
+        assertLt(used, SETTLE_GAS_CEILING, "worst-case settlement stays under the ceiling");
+        for (uint256 i = 0; i < 3; ++i) {
             assertEq(rewards.credits(address(assets[i]), alice), (i + 1) * 1e18, "every asset settled");
         }
     }
@@ -542,8 +568,7 @@ contract KeyfleetRewardsTest is Test {
 
     function test_oneFailingTokenCannotBlockAnotherAssetsClaim() public {
         RevertingERC20 stuck = new RevertingERC20();
-        vm.prank(address(fleet));
-        rewards.registerAsset(address(stuck));
+        _setLaunchedToken(address(stuck));
 
         _enroll(1, 0, alice);
         stuck.mint(address(rewards), 7e18);
@@ -587,8 +612,7 @@ contract KeyfleetRewardsTest is Test {
 
     function test_reentrantClaimDuringTransferIsRejectedByTheGuard() public {
         ReenteringERC20 evil = new ReenteringERC20();
-        vm.prank(address(fleet));
-        rewards.registerAsset(address(evil));
+        _setLaunchedToken(address(evil));
 
         _enroll(1, 0, alice);
         evil.mint(address(rewards), 10e18);

@@ -23,10 +23,10 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// has the fleet call the pinned Autolaunch factory once with itself as launcher and treasury. A
 /// fleet may propose one only once it has sold the keys its preset requires. A `Pay` carries an
 /// asset, an amount and a recipient, with its reason in the creation event, and, when it passes,
-/// has the fleet pay that amount from its budget; it can be proposed only once the launch has
+/// has the fleet pay that amount of its shared money; it can be proposed only once the launch has
 /// graduated or failed, it can execute only until `PAY_EXECUTION_WINDOW` after its vote closes,
-/// and the fleet caps what all passed payments together can take from each asset's budget per
-/// period.
+/// and the fleet caps what all passed payments together can take from each asset's shared
+/// money per period.
 ///
 /// There are no arbitrary calls here. The three kinds are the whole surface, every payload is fixed
 /// at creation, and any change to a payload is a new proposal rather than an edit.
@@ -34,7 +34,7 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// There is no administrator, no upgrade path, no pause, no cancellation, no quorum tuning and no
 /// delegation by signature. This deliberately does not solve a majority takeover: a majority of
 /// keys can approve a launch or a payment the rest of the fleet did not want, and no hidden signer
-/// is introduced to disguise that. The only tokens a vote can move are the fleet's budget, within
+/// is introduced to disguise that. The only tokens a vote can move are the fleet's shared money, within
 /// the fleet's per-period cap, so claim and reserve solvency hold regardless of any vote.
 contract KeyfleetVotes is ReentrancyGuard {
     /// @notice What a proposal does when it passes.
@@ -66,7 +66,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @param noVotes Keys voted against.
     /// @param executed Whether it has already executed.
     /// @param digest Optional exact artifact or commit digest; zero means none.
-    /// @param asset Pay only: the asset to pay from the budget.
+    /// @param asset Pay only: the asset to pay from shared money.
     /// @param amount Pay only: atomic units to pay.
     /// @param recipient Pay only: who receives them.
     struct Proposal {
@@ -89,7 +89,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice A Pay proposal must name a nonzero amount.
     error ZeroAmount();
     /// @notice A Pay recipient may not be zero, the fleet, this controller or the fleet's ledger:
-    /// paid to any of them the budget is either stuck for good or charged the fee a second time.
+    /// paid to any of them the money is stuck for good.
     error RecipientNotAllowed(address recipient);
     /// @notice The voting window is outside `MIN_VOTING_WINDOW..MAX_VOTING_WINDOW`.
     error VotingWindowOutOfBounds(uint64 window);
@@ -182,7 +182,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// passed proposal executing against a fleet nobody recognizes any more.
     uint64 public constant MAX_VOTING_WINDOW = 30 days;
     /// @notice How long after its vote closes a passed Pay may execute, the last second included.
-    /// After that it never can, so a payment a past majority approved cannot wait for the budget to
+    /// After that it never can, so a payment a past majority approved cannot wait for shared money to
     /// grow and be taken long after those keys have changed hands. Equal to the pay period, so a
     /// payment over what is left of one period's cap can still fit once the next period begins.
     uint64 public constant PAY_EXECUTION_WINDOW = 30 days;
@@ -329,11 +329,11 @@ contract KeyfleetVotes is ReentrancyGuard {
         emit AutolaunchProposed(proposalId, keccak256(abi.encode(envelope)), envelope.executionExpiry);
     }
 
-    /// @notice Proposes paying an amount of one asset from the fleet's budget to a recipient.
+    /// @notice Proposes paying an amount of one asset from the fleet's shared money to a recipient.
     /// @dev Refused with the fleet's `LaunchNotSettled` until the launch has graduated or failed,
-    /// because before then the budget is not the keys' to spend. The recipient may not be zero, the
-    /// fleet, this controller or the fleet's ledger. What the budget and the period cap allow is not
-    /// checked here: both move with every recognized surplus and every other payment, so the fleet
+    /// because before then shared money is not the keys' to spend. The recipient may not be zero, the
+    /// fleet, this controller or the fleet's ledger. What shared money and the period cap allow is not
+    /// checked here: both move with every receipt and every other payment, so the fleet
     /// checks them at execution, and a payment over what is left of the cap reverts there and stays
     /// executable in a later period until `PAY_EXECUTION_WINDOW` after the vote closes. The text is
     /// emitted and never stored, exactly as a Decision's is.
