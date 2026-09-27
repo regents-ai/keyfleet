@@ -40,6 +40,19 @@ defmodule Keyfleet.Chain.StubClient do
   """
   def share_chain(head, opts), do: :persistent_term.put(__MODULE__, new_chain(head, [], opts))
 
+  @doc """
+  Adds the transaction `hash` and its receipt to the shared chain, as a node
+  answers them once it has included it. For the browser test server only.
+  """
+  def share_transaction(hash, transaction, receipt) do
+    shared = :persistent_term.get(__MODULE__)
+
+    :persistent_term.put(__MODULE__, %{
+      shared
+      | transactions: Map.put(shared.transactions, hash, {transaction, receipt})
+    })
+  end
+
   defp new_chain(head, logs, opts) do
     %{
       head: head,

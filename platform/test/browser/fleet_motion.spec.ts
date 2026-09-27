@@ -73,7 +73,8 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
   expect(await moved(page, "#buy-key-button [data-press-label]")).toBe(true)
   expect(await moved(page, "#buy-key-button")).toBe(false)
   expect(await leftovers(page)).toEqual([])
-  await expect(page.locator("#buy-key-status > li")).toHaveCount(5)
+  // Signed out, a press sends nothing and says so.
+  await expect(page.locator("#buy-key-order-press-note")).toHaveText("Sign in to send this. Nothing was sent.")
 })
 
 test("a sale rolls the count and bounces only its new line in, ending as plain text", async ({page}) => {

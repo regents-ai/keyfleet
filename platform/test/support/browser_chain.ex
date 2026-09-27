@@ -13,10 +13,12 @@ defmodule Keyfleet.BrowserChain do
   (`hold_database!/0`), and the transaction is never committed, so every run
   starts from the same unsold fleets.
 
-  The pages' own chain reads, of the rewards waiting for a key, are answered
-  by one chain the server's pages share: a key offered rewards
+  The pages' own chain reads are answered by one chain the server's pages
+  share. The keys are paid in USDC alone; a key offered rewards
   (`offer_rewards!/3`) has them waiting, and for any other key the node
-  fails.
+  fails. A wallet has allowed a fleet the USDC `allow!/2` names, and none
+  until then. A step a page's wallet sent is on the chain once `land!/3`
+  puts it there.
   """
 
   alias Keyfleet.Actors.Agent
@@ -31,11 +33,15 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.Repo
+  alias RegentChain.Call
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
-  # accrued(address,uint256)
-  @accrued "0xbfe87f4d"
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @chain_id 8_453
+  @accrued Call.selector("accrued(address,uint256)")
+  @reward_assets Call.selector("rewardAssets()")
+  @allowance Call.selector("allowance(address,address)")
   @operator %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
@@ -76,11 +82,11 @@ defmodule Keyfleet.BrowserChain do
       Fleets.record_deployment!(
         fleet,
         %{
-          chain_id: 8_453,
+          chain_id: @chain_id,
           contract_address: @contract,
           rewards_address: "0x" <> String.duplicate("6", 40),
           votes_address: "0x" <> String.duplicate("9", 40),
-          usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          usdc_address: @usdc,
           deployed_block: 1_000,
           trait_table_hash: "0x" <> String.duplicate("a", 64)
         },
@@ -92,7 +98,7 @@ defmodule Keyfleet.BrowserChain do
 
     StubClient.share_chain(
       %{number: 1, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()},
-      calls: &answer_rewards/3
+      calls: &answer/3
     )
 
     minted(fleet_id)
@@ -101,21 +107,55 @@ defmodule Keyfleet.BrowserChain do
   @doc "Key `token_id` of the fleet has `amount` atomic USDC waiting from now on."
   def offer_rewards!(fleet_id, token_id, amount) do
     %{rewards_address: rewards} = Fleets.get_fleet!(fleet_id)
-    :persistent_term.put(__MODULE__, Map.put(offered_rewards(), {rewards, token_id}, amount))
+    remember({:rewards, rewards, token_id}, amount)
   end
 
-  defp offered_rewards, do: :persistent_term.get(__MODULE__, %{})
+  @doc "`owner` has allowed every fleet `amount` atomic USDC from now on."
+  def allow!(owner, amount), do: remember({:allowance, String.downcase(owner)}, amount)
 
-  defp answer_rewards(
-         rewards,
-         @accrued <> <<_usdc::binary-size(64), token_id::binary-size(64)>>,
-         _block_hash
-       ) do
-    case Map.fetch(offered_rewards(), {rewards, String.to_integer(token_id, 16)}) do
+  @doc """
+  The step a page's wallet sent as `transaction` (its `from`, `to`, `data`
+  and `value`, as the page sent them) is included under `hash`, and did what
+  it asked when `succeeded`.
+  """
+  def land!(hash, transaction, succeeded) do
+    StubClient.share_transaction(
+      hash,
+      %{
+        "chainId" => quantity(@chain_id),
+        "from" => transaction["from"],
+        "to" => transaction["to"],
+        "input" => transaction["data"],
+        "value" => transaction["value"]
+      },
+      %{"status" => if(succeeded, do: "0x1", else: "0x0")}
+    )
+  end
+
+  defp remember(key, value),
+    do: :persistent_term.put(__MODULE__, Map.put(answers(), key, value))
+
+  defp answers, do: :persistent_term.get(__MODULE__, %{})
+
+  defp answer(_rewards, @reward_assets, _block_hash),
+    do:
+      {:ok,
+       <<32::256, 1::256, 0::96,
+         Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)::binary>>}
+
+  defp answer(rewards, @accrued <> <<_usdc::binary-size(64), token_id::binary-size(64)>>, _hash) do
+    case Map.fetch(answers(), {:rewards, rewards, String.to_integer(token_id, 16)}) do
       {:ok, amount} -> {:ok, <<amount::256>>}
       :error -> {:error, :chain_unavailable}
     end
   end
+
+  defp answer(@usdc, @allowance <> <<owner::binary-size(64), _fleet::binary-size(64)>>, _hash) do
+    amount = Map.get(answers(), {:allowance, "0x" <> String.slice(owner, -40, 40)}, 0)
+    {:ok, <<amount::256>>}
+  end
+
+  defp answer(_to, _data, _block_hash), do: {:error, :chain_unavailable}
 
   @doc "Sells the fleet's next key to `owner`; returns its number."
   def sell!(fleet_id, owner) do

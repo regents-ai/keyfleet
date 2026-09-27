@@ -3,8 +3,8 @@ import {execFileSync} from "node:child_process"
 // Runs `Keyfleet.BrowserChain` on the browser test server, which
 // playwright.chain.config.ts starts as a named node. Each call boots a small
 // node that listens for nobody, calls in, prints the answer and stops.
-function call(fun: string, args: (string | number)[]): string {
-  const target = `Keyfleet.BrowserChain, :${fun}, [${args.map(arg => JSON.stringify(arg)).join(", ")}]`
+function call(fun: string, args: Argument[]): string {
+  const target = `Keyfleet.BrowserChain, :${fun}, [${args.map(literal).join(", ")}]`
   const script = `
     case :rpc.call(:"keyfleet_browser@127.0.0.1", ${target}) do
       {:badrpc, reason} -> raise "the browser test server refused: " <> inspect(reason)
@@ -25,6 +25,17 @@ function call(fun: string, args: (string | number)[]): string {
     ],
     {encoding: "utf8"},
   )
+}
+
+type Argument = string | number | boolean | Record<string, string>
+
+// An argument written as Elixir: a map's keys and values are strings.
+function literal(arg: Argument): string {
+  if (typeof arg === "boolean") return String(arg)
+  if (typeof arg === "object") {
+    return `%{${Object.entries(arg).map(([key, value]) => `${JSON.stringify(key)} => ${JSON.stringify(value)}`).join(", ")}}`
+  }
+  return JSON.stringify(arg)
 }
 
 /** Deploys the fleet the first time; returns how many keys it has sold. */
@@ -48,3 +59,13 @@ export const offerRewards = (fleet: string, key: number, atoms: number) =>
 
 /** An agent asks to run a key, and its owner approves. */
 export const pairKey = (fleet: string, key: number) => void call("pair!", [fleet, key])
+
+/** `owner` has allowed every fleet `atoms` USDC from now on. */
+export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
+
+/** A transaction a page's wallet sent, as the page sent it. */
+export type SentTransaction = {from: string; to: string; data: string; value: string}
+
+/** The step sent as `transaction` is included under `hash`; it did what it asked when `succeeded`. */
+export const landStep = (hash: string, transaction: SentTransaction, succeeded: boolean) =>
+  void call("land!", [hash, transaction, succeeded])

@@ -14,6 +14,8 @@ export default defineConfig({
     "fleet_map.spec.ts",
     "key_profile.spec.ts",
     "fleet_motion.spec.ts",
+    "wallet_buttons.spec.ts",
+    "copy_buttons.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
