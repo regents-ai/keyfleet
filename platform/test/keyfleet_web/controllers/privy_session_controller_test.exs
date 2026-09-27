@@ -21,6 +21,62 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   @denial_event [:keyfleet, :session_bootstrap, :rate_limited]
   @browser_failure_event [:keyfleet, :privy, :browser_failure]
 
+  test "SIGNED_IN_WALLET: an account with two wallets gets the one Privy verified last" do
+    key = JOSE.JWK.generate_key({:ec, "P-256"})
+    {_, public} = key |> JOSE.JWK.to_public() |> JOSE.JWK.to_pem()
+
+    previous =
+      {Application.get_env(:keyfleet, :privy), Application.get_env(:keyfleet, :privy_verifier)}
+
+    Application.put_env(:keyfleet, :privy, app_id: "two-wallet-fixture", verification_key: public)
+    Application.put_env(:keyfleet, :privy_verifier, RegentPrivy.Session)
+
+    on_exit(fn ->
+      {privy, verifier} = previous
+      Application.put_env(:keyfleet, :privy, privy)
+      Application.put_env(:keyfleet, :privy_verifier, verifier)
+    end)
+
+    now = Elixir.System.system_time(:second)
+    first_linked = "0x1111111111111111111111111111111111111111"
+    signed_in_with = "0x2222222222222222222222222222222222222222"
+
+    claims = %{
+      "iss" => "privy.io",
+      "aud" => "two-wallet-fixture",
+      "sub" => "did:privy:two-wallets",
+      "iat" => now - 1,
+      "exp" => now + 600
+    }
+
+    wallets = [
+      %{type: "wallet", chain_type: "ethereum", address: first_linked, lv: now - 3_600},
+      %{type: "wallet", chain_type: "ethereum", address: signed_in_with, lv: now - 5}
+    ]
+
+    sign = fn claims ->
+      {_, token} = key |> JOSE.JWT.sign(%{"alg" => "ES256"}, claims) |> JOSE.JWS.compact()
+      token
+    end
+
+    response =
+      browser()
+      |> put_req_header("authorization", "Bearer #{sign.(Map.put(claims, "sid", "two-wallets"))}")
+      |> put_req_header(
+        "privy-id-token",
+        sign.(Map.put(claims, "linked_accounts", Jason.encode!(wallets)))
+      )
+      |> post("/auth/privy/session", %{})
+
+    assert json_response(response, 200)["authenticated"]
+
+    assert {:ok, account} =
+             Accounts.get_by_privy_did("did:privy:two-wallets", actor: %System{})
+
+    assert account.wallet_address == signed_in_with
+    assert Enum.sort(account.wallet_addresses) == [first_linked, signed_in_with]
+  end
+
   test "BROWSER_FAILURE_DIAGNOSTIC: logs only an allowlisted reason", %{conn: conn} do
     log =
       capture_log(fn ->

@@ -19,7 +19,7 @@ transactions (see [the keeper guide](../docs/keeper.md)).
 ## Shared dependencies
 
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
-repository: elixir-utils `b8691b1` (`privy`, `agent_access`, `siwa`,
+repository: elixir-utils `7a876e8` (`privy`, `agent_access`, `siwa`,
 `credo_ash`), design-system `a64ec86` (`regent_ui`) and regents `0d5d18c`
 (`identity`). `mix deps.get` fetches them with everything else, and the release
 image is built from the same commits.
