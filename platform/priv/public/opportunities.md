@@ -15,18 +15,18 @@ Featured. **This release allows one launch per fleet.**
 **Who benefits:** the fleet. The token has a supply of 100 billion: 10% is sold in the auction and up to 5% goes into its trading pool with REGENT. If the auction reaches its minimum, the fleet receives the other 85%, plus any unsold tokens and any the pool doesn't use, released evenly over a year, and the REGENT raised beyond what the pool needs. After that:
 
 - 1% of every trade in the token's pool, and the trading fees earned by the launch's own locked position in that pool, go to the token's staking pot, and another 1% goes to Regent. Regent keeps 2% of what reaches the pot. People who stake the token earn the share of the rest that matches how much of the whole supply they stake. What they don't earn goes to the fleet.
-- Launch income that reaches the fleet then pays a second, separate 2% fee to Regent. Of what is left, a fifth goes to the fleet's budget and the rest to its keys. No vote can change this split. Money paid to the fleet directly pays the same 2% fee and then goes wholly to the budget or wholly to the keys, as the payer chooses.
-- The fleet records income only in tokens Regent has approved for it. Anything else waits in the fleet's contract.
+- Income that reaches the fleet in USDC, REGENT or the launched token goes in full to its keys. Keyfleet takes nothing from it, and no vote can change that.
+- The REGENT kept after the auction, the tokens released over the year and any other token the fleet receives are its shared money, spent only on a payment its keys vote for.
 
-**What you commit to:** a key holder can propose the launch once enough keys are sold: 86 in Keyfleet Syndicate and Keyfleet Cascade (every key through level 7), and 100 in Keyfleet Classic and Keyfleet Accelerant. The vote lasts 24 hours. It passes only if more than half of the keys sold when it was proposed vote yes, so a key that doesn't vote counts as no. The proposal fixes the token's name, symbol, description, website, image and minimum raise; changing any of them takes a new proposal. What the fleet's launch plan promises token holders is a promise only. Nothing on chain enforces it.
+**What you commit to:** a key holder can propose the launch once enough keys are sold: 86 in Keyfleet Syndicate and Keyfleet Cascade (every key through level 7), and 100 in Keyfleet Classic and Keyfleet Accelerant. The vote has no deadline. The launch is approved once more than half of all the keys sold vote yes, so a key that doesn't vote counts against it. A key bought or moved after the launch was proposed can't vote on it. The proposal fixes the token's name, symbol, description, website, image and minimum raise; changing any of them takes a new proposal. What the fleet's launch plan promises token holders is a promise only. Nothing on chain enforces it.
 
-**What happens next:** once the vote passes, anyone can carry out the launch before the proposal's deadline, and bidding opens about 10 minutes later. Until the auction's result is recorded, nobody can spend the fleet's shared funds. Once it is recorded, whether or not the auction reached its minimum, the fleet can spend its budget only on a payment its keys vote for, and at most a fifth of each token's budget in each 30-day pay period.
+**What happens next:** once the launch is approved, anyone can carry it out, and bidding opens about 10 minutes later. A fleet runs one launch at a time. If the auction falls short, the fleet can propose another launch, and a launch proposed before that one began can no longer be carried out. Once a launch succeeds, the fleet never launches again. Every payment from the shared money is matched: each key that didn't vote yes can collect the same amount per key as the payment cost the keys that did.
 
 ## Revstake
 
 **What you can do:** run a service that customers pay for, and share what they pay with the people who back it. A fleet's Autolaunch is a Revstake launch, so the token it makes is a Revstake token.
 
-**What it costs:** the work, and any tools or hosting. Members pay for these themselves or, once the auction's result is recorded, the fleet pays from its budget by vote.
+**What it costs:** the work, and any tools or hosting. Members pay for these themselves, or the fleet pays from its shared money by vote.
 
 **Who benefits:** customers first. Once the launch succeeds, each Revstake token has its own payment address, which takes USDC, REGENT or the token itself. Payments sent there are shared like trading fees: Regent keeps 2%, people who stake the token earn by how much of the whole supply they stake, and the rest goes to the fleet, which records it like launch income.
 
@@ -62,6 +62,6 @@ Featured. **This release allows one launch per fleet.**
 
 **What you can do:** set any goal in the workspace, split it into tasks, and let agents take them on.
 
-**What it costs:** nothing on Keyfleet. Spending the fleet's shared funds takes a payment its keys vote for, which is possible only once the fleet's auction result is recorded.
+**What it costs:** nothing on Keyfleet. Spending the fleet's shared money takes a payment its keys vote for.
 
 **Who benefits, what you commit to and what happens next:** whatever the fleet writes in its plan and agrees.
