@@ -22,7 +22,9 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// the proposal opened in, so buying or moving a key after a proposal opens can never add a vote
 /// to it, while every key sold still counts toward "all the keys". The key's owner, or that owner's
 /// registered voting delegate, may change the key's vote until the proposal is carried out. A vote
-/// a key cast stays counted after the key moves on.
+/// a key cast stays counted after the key moves on, and whoever holds the key then, or their
+/// delegate, may withdraw it with `withdrawVote` until the proposal is carried out. A withdrawn key
+/// has no vote and counts against the proposal, exactly as a silent one does.
 ///
 /// There are three kinds. A `Decision` records agreement and has no external side effect; its
 /// text is carried in the creation event only and an optional digest pins the exact artifact or
@@ -33,12 +35,16 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// has graduated. A `Pay` carries an asset, an amount and a recipient, with its reason in the
 /// creation event, and, once carried out, has the fleet pay that amount of its shared money.
 ///
-/// Every payment is matched. It can be at most the YES keys' share of the asset's shared money:
-/// that shared money times the YES votes over all the keys sold. When it is carried out, every key
-/// sold that did not vote YES — it voted NO, stayed silent, or could not vote — is matched with
-/// the same amount per key that the YES keys paid out, which this controller holds until `collect`
-/// pays it to the key's owner. The YES keys pay for what they want out of their own share, and
-/// everyone else takes theirs out.
+/// Every payment is matched. When it is carried out, every key sold that did not vote YES — it
+/// voted NO, stayed silent, withdrew its vote, or could not vote — is matched with the payment
+/// divided by the YES votes, rounded up, and the payment and every match together must fit in the
+/// asset's shared money. The fleet sends the matches to this controller, which holds them until
+/// `collect` pays each key's match to whoever holds the key when it is collected. The YES keys pay
+/// for what they want out of their own share, and everyone else takes theirs out.
+///
+/// Payments and matches assume an asset that moves exactly the amount asked and whose balances
+/// change only by transfers. A token that takes a fee when it moves, or rebases, is not supported:
+/// the recipient or the matches can receive less than recorded, and nothing here corrects for it.
 ///
 /// There are no arbitrary calls here. The three kinds are the whole surface, every payload is fixed
 /// at creation, and any change to a payload is a new proposal rather than an edit.
@@ -79,7 +85,6 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// fields are here, and are zero on every other kind.
     /// @param kind Decision, Autolaunch or Pay.
     /// @param proposer The address that created it.
-    /// @param createdAt Block timestamp of creation.
     /// @param openedBlock Block of creation. Keys that last moved before it may vote.
     /// @param yesVotes Keys whose current vote is YES.
     /// @param noVotes Keys whose current vote is NO.
@@ -94,7 +99,6 @@ contract KeyfleetVotes is ReentrancyGuard {
     struct Proposal {
         Kind kind;
         address proposer;
-        uint64 createdAt;
         uint64 openedBlock;
         uint256 yesVotes;
         uint256 noVotes;
@@ -141,9 +145,10 @@ contract KeyfleetVotes is ReentrancyGuard {
     error RaiseOutOfBounds(uint128 requiredRegentRaised);
     /// @notice This proposal is not an Autolaunch, so it carries no launch envelope.
     error NotAnAutolaunch(uint256 proposalId);
-    /// @notice Nothing can be collected from this proposal: it is not a carried-out payment, or its
-    /// match per key rounded down to zero.
+    /// @notice Nothing can be collected from this proposal: it is not a carried-out payment.
     error NothingToCollect(uint256 proposalId);
+    /// @notice The key has no vote on this proposal to withdraw.
+    error NoVote(uint256 tokenId);
     /// @notice The key voted YES on this payment, so it paid its share and has no match.
     error VotedYes(uint256 tokenId);
     /// @notice The key's match of this payment has already been collected.
@@ -179,6 +184,9 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice Keys were voted, one vote each, or had their vote changed to this one. A key counts
     /// once in the tallies whatever its history.
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
+
+    /// @notice Keys' votes on a proposal were withdrawn, so they have no vote on it now.
+    event VoteWithdrawn(uint256 indexed proposalId, address indexed caller, uint256[] tokenIds);
 
     /// @notice An approved Decision was recorded. Nothing else happens on chain.
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
@@ -323,10 +331,11 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     /// @notice Proposes paying an amount of one asset from the fleet's shared money to a recipient.
     /// @dev The recipient may not be zero, the fleet, this controller or the fleet's ledger. What
-    /// the payment may be is not checked here: it is the YES keys' share of the shared money when
-    /// the proposal is carried out, and both move until then, so the fleet checks it at that moment
-    /// and a payment above it reverts there and stays open for later. The text is emitted and never
-    /// stored, exactly as a Decision's is.
+    /// the payment may be is not checked here: the payment and its matches must fit in the shared
+    /// money when the proposal is carried out, and the YES votes, the keys sold and the shared money
+    /// all move until then, so the fleet checks it at that moment and a payment that does not fit
+    /// reverts there and stays open for later. The text is emitted and never stored, exactly as a
+    /// Decision's is.
     /// @param tokenId A key the caller owns or is the registered delegate of.
     /// @param asset The asset to pay.
     /// @param amount Atomic units to pay.
@@ -366,7 +375,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// A key with no vote adds one to the chosen side; a key with the other vote moves from that
     /// side to this one; a key that already has this vote is refused with `AlreadyVoted`. A key that
     /// moves after the proposal opens can no longer vote or change its vote on it, and the vote it
-    /// cast before it moved stays counted.
+    /// cast before it moved stays counted until its holder withdraws it with `withdrawVote`.
     ///
     /// The whole call reverts if any one id fails, so a caller never half-votes a set by accident.
     /// @param proposalId The proposal being voted on.
@@ -400,6 +409,37 @@ contract KeyfleetVotes is ReentrancyGuard {
         emit VoteCast(proposalId, msg.sender, support, tokenIds);
     }
 
+    /// @notice Withdraws a set of keys' votes on a proposal, until it is carried out.
+    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
+    /// their delegate, and must have a vote on the proposal, whoever cast it: a key that moved after
+    /// voting can have that vote withdrawn by whoever holds it now. When the key last moved does not
+    /// matter here, because withdrawing only ever takes a vote away. A withdrawn key has no vote,
+    /// so it counts against the proposal and, on a payment, is matched like any key that did not
+    /// vote YES; it can vote again only if it could vote at all.
+    ///
+    /// The whole call reverts if any one id fails, so a caller never half-withdraws a set by accident.
+    /// @param proposalId The proposal the votes were cast on.
+    /// @param tokenIds The keys whose votes to withdraw, each at most once.
+    function withdrawVote(uint256 proposalId, uint256[] calldata tokenIds) external {
+        Proposal storage stored = _require(proposalId);
+        if (stored.executed) revert AlreadyExecuted();
+        if (tokenIds.length == 0) revert NoKeys();
+
+        uint256 yes;
+        for (uint256 i = 0; i < tokenIds.length; ++i) {
+            uint256 tokenId = tokenIds[i];
+            _requireCaster(tokenId);
+            Choice previous = voteOf[proposalId][tokenId];
+            if (previous == Choice.None) revert NoVote(tokenId);
+            if (previous == Choice.Yes) ++yes;
+            delete voteOf[proposalId][tokenId];
+        }
+
+        stored.yesVotes -= yes;
+        stored.noVotes -= tokenIds.length - yes;
+        emit VoteWithdrawn(proposalId, msg.sender, tokenIds);
+    }
+
     // --- execution -------------------------------------------------------
 
     /// @notice Carries out an approved proposal.
@@ -413,8 +453,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// The proposal is marked carried out before the fleet is called, so a launch artifact or a
     /// paid asset that calls back can never carry it out twice. Any revert inside the fleet or the
     /// factory — a paused factory, a raise the strategy refuses, a running or graduated launch, a
-    /// payment above the YES keys' share — undoes the mark with everything else, so the attempt
-    /// consumes nothing and the proposal stays open.
+    /// launch approved before a failed one was created, a payment whose matches do not fit — undoes
+    /// the mark with everything else, so the attempt consumes nothing and the proposal stays open.
     /// @param proposalId The proposal to carry out.
     function execute(uint256 proposalId) external nonReentrant {
         Proposal storage stored = _require(proposalId);
@@ -429,7 +469,7 @@ contract KeyfleetVotes is ReentrancyGuard {
         if (stored.kind == Kind.Decision) {
             emit DecisionRecorded(proposalId, stored.digest);
         } else if (stored.kind == Kind.Autolaunch) {
-            FLEET.executeAutolaunch(proposalId, _envelopes[proposalId]);
+            FLEET.executeAutolaunch(proposalId, stored.openedBlock, _envelopes[proposalId]);
         } else {
             stored.keysSold = keys;
             stored.share = FLEET.payFromBudget(stored.asset, stored.amount, stored.recipient, yesVotes);
@@ -441,9 +481,12 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice Pays keys their match of a carried-out payment, each to the key's current owner.
     /// @dev Permissionless, because the money only ever goes to whoever owns each key now, never to
     /// the caller. Each key must be one of the keys sold when the payment was carried out, must not
-    /// have voted YES on it, and is paid once: a key that voted NO, stayed silent, or moved after the
-    /// proposal opened and so could not vote is matched alike. A key that voted YES and then moved
-    /// keeps its YES, so its new owner has no match either.
+    /// have voted YES on it, and is paid once: a key that voted NO, stayed silent, withdrew its vote,
+    /// or moved after the proposal opened and so could not vote is matched alike. A key that voted
+    /// YES and then moved keeps its YES, so its new owner has no match, unless they withdrew that
+    /// vote before the payment was carried out. The match belongs to the key, not to whoever held
+    /// it when the payment was carried out: it is paid to whoever holds the key when it is
+    /// collected.
     ///
     /// The whole call reverts if any one id fails. Keys next to each other in `tokenIds` with the
     /// same owner are paid in one transfer, and a token that refuses a transfer can only block its
@@ -452,7 +495,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     ///
     /// Matches are not shared money. The fleet sent exactly `share` for every key sold that did not
     /// vote YES to this controller when the payment was carried out, so every key that may collect
-    /// is covered, and nothing else ever spends it.
+    /// is covered, and nothing else ever spends it. That holds only for an asset that moves exactly
+    /// the amount asked; a token that takes a fee when it moves, or rebases, is not supported.
     /// @param proposalId The carried-out payment.
     /// @param tokenIds The keys to pay, each at most once.
     function collect(uint256 proposalId, uint256[] calldata tokenIds) external nonReentrant {
@@ -501,7 +545,6 @@ contract KeyfleetVotes is ReentrancyGuard {
         Proposal storage stored = _proposals[proposalId];
         stored.kind = kind;
         stored.proposer = msg.sender;
-        stored.createdAt = uint64(block.timestamp);
         stored.openedBlock = uint64(block.number);
         stored.digest = digest;
 

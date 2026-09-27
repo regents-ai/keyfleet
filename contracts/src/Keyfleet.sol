@@ -48,8 +48,10 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// only tokens a vote can move are shared money: the Cascade completion reserve, the owed protocol
 /// share and the ledger's reward backing are all out of its reach. Every payment is matched: the
 /// keys that voted YES can pay out at most their own share of an asset's shared money, and in the
-/// same call the fleet sets aside, in the voting controller, the same amount per key for every other
-/// key sold, which each of those keys' owners can collect there.
+/// same call the fleet moves the matches, the payment over the YES votes rounded up for every other
+/// key sold, out of its shared money and into the voting controller, which pays each match to
+/// whoever holds that key when it is collected. Payments assume an asset that moves exactly the
+/// amount asked; a token that takes a fee when it moves, or rebases, is not supported.
 ///
 /// An approved Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1`, with this fleet as
 /// both launcher and treasury, and records what the factory says it created. That call moves no
@@ -66,7 +68,8 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
 /// this contract are the owed protocol share sent to the staking contract, the Accelerant rebate
 /// paid into the ledger, the Cascade reimbursement paid into the ledger, income paid into the
-/// ledger for the keys, and a payment of shared money the keys voted for.
+/// ledger for the keys, and a payment of shared money the keys voted for with its matches, which
+/// move to the voting controller.
 contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -187,10 +190,15 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     error LaunchAlreadyCreated();
     /// @notice This fleet has not created a launch, so there is nothing to sync or read.
     error LaunchNotCreated();
-    /// @notice The payment is more than the YES keys' share of this asset's shared money.
-    /// @param most The YES keys' share: the shared money times the YES votes over the keys sold,
-    /// rounded down.
-    error AboveYesShare(address asset, uint256 amount, uint256 most);
+    /// @notice The payment is more than the YES keys' share of this asset's shared money: with every
+    /// match, it does not fit in the shared money.
+    /// @param amount The payment.
+    /// @param matched The matches it would set aside for the keys that did not vote YES.
+    /// @param available The asset's shared money.
+    error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available);
+    /// @notice The launch proposal opened at or before the block this fleet's failed launch was
+    /// created in, so it was approved before that launch failed and cannot follow it.
+    error StaleLaunch(uint256 proposalId);
     /// @notice The factory does not record the launch it just said it created.
     error LaunchProvenanceMismatch();
     /// @notice The VRF coordinator address holds no code.
@@ -258,7 +266,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// match for every key that did not vote YES.
     /// @param amount Atomic units paid to the recipient.
     /// @param share What each key that did not vote YES may collect: `amount` over the YES votes,
-    /// rounded down.
+    /// rounded up.
     /// @param matched `share` times the keys that did not vote YES, sent to the voting controller
     /// for them to collect. No longer shared money.
     event BudgetPaid(address indexed asset, address indexed recipient, uint256 amount, uint256 share, uint256 matched);
@@ -684,15 +692,18 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// first, exactly as `recognizeSurplus` books it, so shared money the launch has already
     /// delivered counts.
     ///
-    /// With `S` the asset's shared money, `N` the keys sold and `y` the YES votes, the payment `A`
-    /// may be at most the YES keys' share, `A * N <= S * y`, checked as `A <= mulDiv(S, y, N)` so
-    /// no product can overflow. The recipient receives exactly `A`. Every key that did not vote YES
-    /// is matched with `share = A / y`, rounded down, and `share * (N - y)` goes to the voting
-    /// controller, which pays each such key's owner its share. Rounding only ever shrinks the match,
-    /// so `A + share * (N - y) <= A * N / y <= S`: the payment and the match leave shared money
-    /// together and can never take more than it holds. A payment above the YES keys' share reverts
-    /// with `AboveYesShare` and rolls back with the controller's execution, so the proposal stays
-    /// open to be carried out later.
+    /// With `S` the asset's shared money, `N` the keys sold and `y` the YES votes, every key that
+    /// did not vote YES is matched with `share = A / y`, rounded up, so a payment never rounds a
+    /// match down to less than the YES keys paid per key, and never to zero. The payment `A` and
+    /// its matches must fit together, `A + share * (N - y) <= S`, which is the YES keys' share of
+    /// the shared money, `A * N <= S * y`, with the rounding taken from the YES side. The recipient
+    /// receives exactly `A` and `share * (N - y)` goes to the voting controller, which pays each
+    /// such key's match to whoever holds the key when it is collected. A payment that does not fit
+    /// reverts with `AboveYesShare` and rolls back with the controller's execution, so the proposal
+    /// stays open to be carried out later.
+    ///
+    /// The asset must move exactly the amount asked. A token that takes a fee when it moves, or
+    /// rebases, is not supported: the recipient or the matches can receive less than recorded.
     ///
     /// Shared money is the only bucket reachable from here. The Cascade completion reserve and the
     /// owed protocol share are separate figures this function never reads, and reward backing does
@@ -715,11 +726,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         _bookLaunch();
 
         uint256 available = freeCapital[asset];
-        uint256 keys = totalMinted;
-        uint256 most = Math.mulDiv(available, yesVotes, keys);
-        if (amount > most) revert AboveYesShare(asset, amount, most);
-        share = amount / yesVotes;
-        uint256 matched = share * (keys - yesVotes);
+        share = Math.ceilDiv(amount, yesVotes);
+        uint256 matched = share * (totalMinted - yesVotes);
+        if (amount + matched > available) revert AboveYesShare(asset, amount, matched, available);
         freeCapital[asset] = available - amount - matched;
 
         emit BudgetPaid(asset, recipient, amount, share, matched);
@@ -798,17 +807,26 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// refuses — reverts the controller's execution with it, including the mark that the proposal
     /// was carried out. The proposal therefore stays open and consumes nothing, which is what lets a
     /// fleet wait for the factory to open and try again. The first approved Autolaunch carried out
-    /// wins; another can follow only if that launch fails.
+    /// wins; another can follow only if that launch fails, and only a proposal that opened after
+    /// the failed launch was created, in a later block, so an approval given before that launch
+    /// failed cannot be carried out once it has; it reverts with `StaleLaunch`.
     ///
     /// Guarded, so a launch artifact that calls back cannot reach another entry point while this
     /// one is half done.
     /// @param proposalId The proposal being executed, recorded in the launch record and the event.
+    /// @param openedBlock The block the proposal opened in.
     /// @param envelope The exact launch the keys approved.
-    function executeAutolaunch(uint256 proposalId, LaunchEnvelope calldata envelope) external nonReentrant {
+    function executeAutolaunch(uint256 proposalId, uint64 openedBlock, LaunchEnvelope calldata envelope)
+        external
+        nonReentrant
+    {
         if (msg.sender != address(VOTES)) revert OnlyVotes();
         _bookLaunch();
         LaunchState state = launchState;
         if (state == LaunchState.AuctionCreated || state == LaunchState.Graduated) revert LaunchAlreadyCreated();
+        if (state == LaunchState.EconomicallyFailed && openedBlock <= _launch.createdAtBlock) {
+            revert StaleLaunch(proposalId);
+        }
 
         (uint256 launchId, address subject, address auction, address escrow) = FACTORY.launch(
             IRegentsAutolaunchFactoryV1.LaunchParams({

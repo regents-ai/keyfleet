@@ -416,7 +416,7 @@ contract KeyfleetTreasuryTest is Test {
         vm.expectEmit(true, true, true, true, address(votes));
         emit ProposalExecuted(proposalId, mallory);
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit BudgetPaid(address(other), bob, 50_000, 16_666, 0);
+        emit BudgetPaid(address(other), bob, 50_000, 16_667, 0);
         vm.prank(mallory);
         votes.execute(proposalId);
 
@@ -484,7 +484,7 @@ contract KeyfleetTreasuryTest is Test {
         KeyfleetVotes votes = fib.VOTES();
         uint256 proposalId = _approvedPay(fib, address(other), 15_000, bob);
 
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), 15_000, 10_000));
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), 15_000, 0, 10_000));
         votes.execute(proposalId);
         assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Approved), "it is still open");
         assertFalse(votes.proposal(proposalId).executed, "and nothing was consumed");
@@ -544,7 +544,7 @@ contract KeyfleetTreasuryTest is Test {
         assertGt(usdc.balanceOf(address(cascade)), capital, "the balance would cover more");
 
         uint256 tooMuch = _approvedPay(cascade, address(usdc), capital + 1, bob);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(usdc), capital + 1, capital));
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(usdc), capital + 1, 0, capital));
         votes.execute(tooMuch);
 
         uint256 exact = _approvedPay(cascade, address(usdc), capital, bob);
@@ -569,7 +569,7 @@ contract KeyfleetTreasuryTest is Test {
 
         uint256 tooMuch = _approvedPay(fib, address(subject), 1_000e18 + 1, bob);
         vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(subject), 1_000e18 + 1, 1_000e18)
+            abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(subject), 1_000e18 + 1, 0, 1_000e18)
         );
         votes.execute(tooMuch);
 
@@ -625,7 +625,8 @@ contract KeyfleetTreasuryTest is Test {
 
     /// @dev Invariant, the worked example: a Fleet Tech Classic fleet sells all 144 keys and holds
     /// 1,411.20 USDC of shared money. With 73 keys voting YES a payment can take at most 73/144 of
-    /// it, 715.40, and 72 YES keys cannot approve anything. The payment sets aside 9.80 for each of
+    /// it, 715.40: one atomic unit more rounds each of the other 71 matches up to 9.800001, and the
+    /// payment and its matches no longer fit. 72 YES keys cannot approve anything. The payment sets aside 9.80 for each of
     /// the other 71 keys, whether they voted NO or stayed silent, and each collects exactly that,
     /// paid to whoever holds it, which leaves no shared money and nothing held for anyone.
     function test_classicSeventyThreeOfOneFortyFourMatchesEveryOtherKey() public {
@@ -640,7 +641,9 @@ contract KeyfleetTreasuryTest is Test {
         vm.prank(alice);
         votes.vote(tooMuch, _one(73), true);
         vm.expectRevert(
-            abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(usdc), 715_400_001, 715_400_000)
+            abi.encodeWithSelector(
+                Keyfleet.AboveYesShare.selector, address(usdc), 715_400_001, 71 * 9_800_001, 1_411_200_000
+            )
         );
         votes.execute(tooMuch);
 
@@ -672,7 +675,8 @@ contract KeyfleetTreasuryTest is Test {
 
     /// @dev Invariant: however many payments pass, with whichever keys voting YES, every key ends
     /// up with the same share of the shared money it started with, to within one atomic unit per
-    /// payment. A key's share is what is left divided evenly, plus what it collected, plus what it
+    /// payment: rounding each match up leaves every key that did not vote YES up to one unit ahead
+    /// of the YES keys, and never behind. A key's share is what is left divided evenly, plus what it collected, plus what it
     /// spent: its equal part of each payment it voted YES on. Nothing is created or lost: the
     /// recipient, the keys and what is left add up to the starting money exactly.
     function testFuzz_everyKeyKeepsAnEqualShareAcrossRepeatedPayments(
@@ -703,15 +707,18 @@ contract KeyfleetTreasuryTest is Test {
     }
 
     /// @dev One payment of the fuzz: YES from a run of keys starting at `offset`, wrapping round,
-    /// more than half of them; an amount up to the YES keys' share. Adds each YES key's equal part
-    /// of the payment, times 1e18, to `spent`. Returns zero when there is too little to pay.
+    /// more than half of them; an amount that fits with its matches rounded up, which the YES keys'
+    /// share less one unit for each other key always does. Adds each YES key's equal part of the
+    /// payment, times 1e18, to `spent`. Returns zero when there is too little to pay.
     function _fuzzPay(Keyfleet fleet, uint256 yesCount, uint256 offset, uint256 amount, uint256[] memory spent)
         private
         returns (uint256 proposalId)
     {
         uint256 keys = fleet.totalMinted();
         uint256 yesVotes = bound(yesCount, keys / 2 + 1, keys);
-        uint256 most = Math.mulDiv(fleet.freeCapital(address(other)), yesVotes, keys);
+        uint256 available = fleet.freeCapital(address(other));
+        if (available <= keys - yesVotes) return 0;
+        uint256 most = Math.mulDiv(available - (keys - yesVotes), yesVotes, keys);
         if (most == 0) return 0;
         amount = bound(amount, 1, most);
 
@@ -722,7 +729,11 @@ contract KeyfleetTreasuryTest is Test {
         }
         proposalId = _pay(fleet, address(other), amount, yes, _none());
         fleet.VOTES().execute(proposalId);
-        assertEq(fleet.VOTES().proposal(proposalId).share, amount / yesVotes, "every other key is matched alike");
+        assertEq(
+            fleet.VOTES().proposal(proposalId).share,
+            Math.ceilDiv(amount, yesVotes),
+            "every other key is matched alike, rounded up"
+        );
     }
 
     /// @dev Every key that may collect on `proposalId` does, one call each.
@@ -738,8 +749,8 @@ contract KeyfleetTreasuryTest is Test {
 
     /// @dev Each key's share, times the keys sold and 1e18, against the starting money times 1e18:
     /// what is left, plus the key's collected money and its spent parts each times the keys sold.
-    /// Each payment can leave a key less than one atomic unit off, and each 1e18 floor less than
-    /// one more at that scale. Then the money adds up exactly.
+    /// Each payment can leave a key less than one atomic unit off, ahead when it did not vote YES
+    /// and behind when it did, and each 1e18 floor less than one more at that scale. Then the money adds up exactly.
     function _assertEqualShares(Keyfleet fleet, uint256 start, uint256[] memory spent) private view {
         uint256 keys = fleet.totalMinted();
         uint256 left = fleet.freeCapital(address(other));
@@ -804,10 +815,9 @@ contract KeyfleetTreasuryTest is Test {
         assertEq(other.balanceOf(address(votes)), 0);
     }
 
-    /// @dev Invariant: only a carried-out payment with a nonzero match can be collected. A payment
-    /// not yet carried out, a decision, and a payment too small to split across its YES keys all
-    /// have nothing to collect.
-    function test_onlyACarriedOutPaymentWithAMatchHasAnythingToCollect() public {
+    /// @dev Invariant: only a carried-out payment can be collected. A payment not yet carried out
+    /// and a decision have nothing to collect.
+    function test_onlyACarriedOutPaymentHasAnythingToCollect() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buyKeys(fleet, 5);
         _receive(fleet, other, 1_000);
@@ -824,13 +834,65 @@ contract KeyfleetTreasuryTest is Test {
         votes.execute(decision);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, decision));
         votes.collect(decision, _one(4));
+    }
 
-        uint256 tiny = _pay(fleet, address(other), 2, _ids(1, 3), _none());
-        votes.execute(tiny);
-        assertEq(other.balanceOf(bob), 2, "the payment went through");
-        assertEq(fleet.freeCapital(address(other)), 998, "and nothing was set aside");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, tiny));
-        votes.collect(tiny, _one(4));
+    /// @dev Invariant: a match is rounded up, so a payment smaller than its YES votes still matches
+    /// every other key with at least one unit, and repeating small payments can never spend the
+    /// shared money without matching everyone else. On a 144-key fleet with 73 YES keys, 72 units
+    /// set aside 1 for each of the other 71 keys, and 145 units set aside 2 each.
+    function test_aMatchIsRoundedUpSoASmallPaymentStillMatchesEveryOtherKey() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, KeyfleetPresets.CLASSIC_SUPPLY);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 before = fleet.freeCapital(address(usdc));
+
+        uint256 rounds = 5;
+        uint256[] memory proposals = new uint256[](rounds);
+        for (uint256 r = 0; r < rounds; ++r) {
+            proposals[r] = _pay(fleet, address(usdc), 72, _ids(1, 73), _none());
+            votes.execute(proposals[r]);
+            assertEq(votes.proposal(proposals[r]).share, 1, "each other key is matched with one unit");
+        }
+        assertEq(usdc.balanceOf(bob), 72 * rounds);
+        assertEq(before - fleet.freeCapital(address(usdc)), (72 + 71) * rounds, "every payment was matched");
+        for (uint256 r = 0; r < rounds; ++r) {
+            votes.collect(proposals[r], _ids(74, 71));
+        }
+        assertEq(usdc.balanceOf(_holder(144)), rounds, "and every other key collected its unit each time");
+
+        uint256 larger = _pay(fleet, address(usdc), 2 * 73 - 1, _ids(1, 73), _none());
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit BudgetPaid(address(usdc), bob, 145, 2, 142);
+        votes.execute(larger);
+        assertEq(votes.proposal(larger).share, 2, "145 over 73 is rounded up to 2");
+    }
+
+    /// @dev Invariant: a key that voted YES and was then sold does not bind its buyer. The buyer can
+    /// withdraw the seller's YES before the payment is carried out, though not cast a new vote, and
+    /// the key then collects its match like any key that did not vote YES.
+    function test_aBuyerCanWithdrawTheSellersYesAndCollectTheKeysMatch() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, 10);
+        _receive(fleet, other, 1_000);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        uint256 proposalId = _pay(fleet, address(other), 600, _ids(1, 7), _none());
+        vm.prank(_holder(6));
+        fleet.transferFrom(_holder(6), carol, 6);
+
+        vm.startPrank(carol);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 6));
+        votes.vote(proposalId, _one(6), false);
+        votes.withdrawVote(proposalId, _one(6));
+        vm.stopPrank();
+        assertEq(votes.proposal(proposalId).yesVotes, 6, "the seller's YES is gone");
+
+        votes.execute(proposalId);
+        assertEq(votes.proposal(proposalId).share, 100);
+        votes.collect(proposalId, _one(6));
+        assertEq(other.balanceOf(carol), 100, "the buyer collected the key's match");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.VotedYes.selector, 7));
+        votes.collect(proposalId, _one(7));
     }
 
     /// @dev Invariant: money set aside for matches is never shared money. While matches wait to be
@@ -858,7 +920,7 @@ contract KeyfleetTreasuryTest is Test {
         assertEq(fleet.surplus(address(other)), 0, "so its books balance");
 
         uint256 tooMuch = _pay(fleet, address(other), left + 1, _ids(1, 7), _none());
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), left + 1, left));
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), left + 1, 0, left));
         votes.execute(tooMuch);
 
         votes.collect(first, _one(7));

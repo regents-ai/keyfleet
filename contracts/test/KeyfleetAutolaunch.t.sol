@@ -390,11 +390,11 @@ contract KeyfleetAutolaunchTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(Keyfleet.OnlyVotes.selector);
-        fleet.executeAutolaunch(1, _envelope());
+        fleet.executeAutolaunch(1, uint64(block.number - 1), _envelope());
 
         vm.prank(mallory);
         vm.expectRevert(Keyfleet.OnlyVotes.selector);
-        fleet.executeAutolaunch(1, _envelope());
+        fleet.executeAutolaunch(1, uint64(block.number - 1), _envelope());
     }
 
     /// @dev Invariant: every preset can launch. The spec requires the adapter to be testable across
@@ -417,9 +417,10 @@ contract KeyfleetAutolaunchTest is Test {
     }
 
     /// @dev Invariant: while a launch is running no other can be carried out, though one may be
-    /// proposed and approved. Once the strategy records the running launch as failed, the next
-    /// approved launch is carried out without anyone syncing first: it replaces the failed launch's
-    /// record, and its SUBJECT replaces the failed SUBJECT as the third income token.
+    /// proposed and approved. Once the strategy records the running launch as failed, an approved
+    /// launch proposed after it was created is carried out without anyone syncing first: it replaces
+    /// the failed launch's record, and its SUBJECT replaces the failed SUBJECT as the third income
+    /// token. One approved before the failed launch was created stays refused.
     function test_anotherLaunchCanFollowOnlyAFailedOne() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -438,19 +439,65 @@ contract KeyfleetAutolaunchTest is Test {
 
         strategy.fail(failed.auction);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "nobody synced");
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StaleLaunch.selector, second));
         votes.execute(second);
+        votes.execute(third);
 
         Keyfleet.LaunchRecord memory current = fleet.launchRecord();
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "a new launch runs");
-        assertEq(current.proposalId, second, "the record is the new launch's");
+        assertEq(current.proposalId, third, "the record is the new launch's");
         assertEq(current.launchId, failed.launchId + 1);
         assertTrue(current.subject != failed.subject && current.auction != failed.auction, "with its own tokens");
         assertEq(rewards.launchedToken(), current.subject, "its SUBJECT is the third income token");
         assertFalse(rewards.isRewardAsset(failed.subject), "and the failed SUBJECT no longer is");
 
         vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
-        votes.execute(third);
+        votes.execute(second);
         assertEq(factory.nextLaunchId(), 3, "the factory created exactly two launches for this fleet");
+    }
+
+    /// @dev Invariant: an approval given before a launch was created cannot be carried out once
+    /// that launch fails, however long it waited and whoever holds its keys now. The new holders
+    /// of keys that voted YES can withdraw those votes, and a launch proposed in the very block the
+    /// failed one was created is refused too; one proposed in the next block runs.
+    function test_aLaunchApprovedBeforeAFailedOneWasCreatedCannotFollowIt() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        Keyfleet.LaunchEnvelope memory oldEnvelope = _envelope();
+        oldEnvelope.name = "Old Name, Low Raise";
+        uint256 old = _proposeAndPass(fleet, oldEnvelope);
+        uint256 chosen = _proposeAndPass(fleet, _envelope());
+        votes.execute(chosen);
+        vm.prank(alice);
+        uint256 sameBlock = votes.proposeAutolaunch(1, _envelope());
+        assertEq(votes.proposal(sameBlock).openedBlock, fleet.launchRecord().createdAtBlock);
+
+        vm.roll(block.number + 1);
+        address seller = address(uint160(0x100000 + 2));
+        address newHolder = address(0xBEEF);
+        vm.prank(seller);
+        fleet.transferFrom(seller, newHolder, 2);
+        vm.prank(newHolder);
+        votes.withdrawVote(old, _ids(2, 1));
+        assertEq(uint256(votes.voteOf(old, 2)), uint256(KeyfleetVotes.Choice.None), "the new holder took it back");
+
+        uint256 fresh = _propose(fleet, _envelope());
+        vm.roll(block.number + 1);
+        vm.startPrank(alice);
+        votes.vote(sameBlock, _ids(3, fleet.totalMinted() - 2), true);
+        votes.vote(fresh, _ids(3, fleet.totalMinted() - 2), true);
+        vm.stopPrank();
+
+        strategy.fail(fleet.launchRecord().auction);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StaleLaunch.selector, old));
+        votes.execute(old);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StaleLaunch.selector, sameBlock));
+        votes.execute(sameBlock);
+        assertFalse(votes.proposal(old).executed, "the refused attempts consumed nothing");
+
+        votes.execute(fresh);
+        assertEq(fleet.launchRecord().proposalId, fresh, "the launch proposed after the failed one was created runs");
     }
 
     /// @dev Invariant: a graduated launch is the fleet's last. An approved launch cannot be carried

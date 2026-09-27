@@ -47,6 +47,7 @@ contract KeyfleetVotesTest is Test {
     );
     event VotingDelegateSet(address indexed owner, address indexed delegate);
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
+    event VoteWithdrawn(uint256 indexed proposalId, address indexed caller, uint256[] tokenIds);
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
@@ -206,7 +207,6 @@ contract KeyfleetVotesTest is Test {
         assertEq(votes.proposalCount(), 1);
         assertEq(uint256(stored.kind), uint256(KeyfleetVotes.Kind.Decision));
         assertEq(stored.proposer, _wallet(1));
-        assertEq(stored.createdAt, uint64(block.timestamp));
         assertEq(stored.openedBlock, uint64(block.number));
         assertEq(stored.digest, digest, "the digest is stored, the text is not");
         assertFalse(stored.executed);
@@ -334,8 +334,8 @@ contract KeyfleetVotesTest is Test {
 
     /// @dev Invariant: moving a key after a proposal opens can never add a vote. A holder who lends
     /// four unvoted keys to a friend after a proposal opens gives the friend nothing to vote with,
-    /// the key that had already voted keeps its vote but can no longer change it, and the keys stay
-    /// unable to vote on that proposal when they come back.
+    /// the key that had already voted keeps its vote but can no longer change it, only have it
+    /// withdrawn, and the keys stay unable to vote on that proposal when they come back.
     function test_aKeyThatMovesAfterAProposalOpensCannotVoteOnItAndItsVoteStands() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -414,6 +414,96 @@ contract KeyfleetVotesTest is Test {
         vm.prank(_wallet(3));
         vm.expectRevert(KeyfleetVotes.AlreadyExecuted.selector);
         votes.vote(proposalId, _ids(3), true);
+    }
+
+    /// @dev Invariant: whoever holds a key now, or their delegate, may withdraw the vote it carries,
+    /// whoever cast it, but a key that moved after the proposal opened still cannot cast a new one.
+    /// Keys borrowed before a proposal opens, voted and handed back do not bind their owners: each
+    /// owner takes the borrowed vote back, and the proposal loses the approval those votes gave it.
+    function test_whoeverHoldsAKeyNowMayWithdrawItsVoteButNotCastANewOne() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 10);
+        for (uint256 tokenId = 1; tokenId <= 6; ++tokenId) {
+            vm.prank(_wallet(tokenId));
+            fleet.transferFrom(_wallet(tokenId), mallory, tokenId);
+        }
+        uint256 proposalId = _propose(votes);
+        vm.roll(block.number + 1);
+        vm.startPrank(mallory);
+        votes.vote(proposalId, _range(1, 6), true);
+        for (uint256 tokenId = 1; tokenId <= 6; ++tokenId) {
+            fleet.transferFrom(mallory, _wallet(tokenId), tokenId);
+        }
+        vm.stopPrank();
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "the borrowed votes approve it");
+
+        vm.prank(_wallet(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 1));
+        votes.vote(proposalId, _ids(1), false);
+        vm.prank(mallory);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
+        votes.withdrawVote(proposalId, _ids(1));
+
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit VoteWithdrawn(proposalId, _wallet(1), _ids(1));
+        vm.prank(_wallet(1));
+        votes.withdrawVote(proposalId, _ids(1));
+        assertEq(uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.None), "key 1 has no vote");
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open), "five of ten is not more than half");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 5, 10));
+        votes.execute(proposalId);
+
+        vm.prank(_wallet(2));
+        votes.setVotingDelegate(bob);
+        vm.prank(bob);
+        votes.withdrawVote(proposalId, _ids(2));
+        vm.prank(_wallet(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 1));
+        votes.vote(proposalId, _ids(1), true);
+
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(stored.yesVotes, 4, "a delegate withdraws for the holder too");
+        assertEq(stored.noVotes, 0);
+    }
+
+    /// @dev Invariant: withdrawing takes a key's vote off whichever side it is on, needs a key the
+    /// caller may vote that has a vote, and ends when the proposal is carried out. Any refused id
+    /// reverts the whole call, and a key that could always vote may vote again after withdrawing.
+    function test_withdrawingTakesAVoteOffItsSideUntilTheProposalIsCarriedOut() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 3);
+        uint256 proposalId = _propose(votes);
+        _vote(votes, proposalId, 1, true);
+        _vote(votes, proposalId, 2, true);
+        _vote(votes, proposalId, 3, false);
+
+        vm.startPrank(_wallet(3));
+        votes.withdrawVote(proposalId, _ids(3));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NoVote.selector, 3));
+        votes.withdrawVote(proposalId, _ids(3));
+        vm.expectRevert(KeyfleetVotes.NoKeys.selector);
+        votes.withdrawVote(proposalId, new uint256[](0));
+        vm.stopPrank();
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(stored.yesVotes, 2);
+        assertEq(stored.noVotes, 0, "the NO came off the NO side");
+
+        uint256[] memory twice = new uint256[](2);
+        (twice[0], twice[1]) = (2, 2);
+        vm.prank(_wallet(2));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NoVote.selector, 2));
+        votes.withdrawVote(proposalId, twice);
+        assertEq(votes.proposal(proposalId).yesVotes, 2, "the refused call withdrew nothing");
+
+        _vote(votes, proposalId, 3, true);
+        assertEq(votes.proposal(proposalId).yesVotes, 3, "a key that could always vote votes again");
+
+        votes.execute(proposalId);
+        vm.prank(_wallet(1));
+        vm.expectRevert(KeyfleetVotes.AlreadyExecuted.selector);
+        votes.withdrawVote(proposalId, _ids(1));
     }
 
     /// @dev Invariant: an owner and their delegate share the one vote each key has. Either may set
@@ -707,8 +797,8 @@ contract KeyfleetVotesTest is Test {
 
     // --- 7. fuzz invariant ---------------------------------------------------
 
-    /// @dev Invariant: across random votes and changes of vote on a Fibonacci fleet spanning three
-    /// levels, with keys still being sold, each side's tally is always exactly the number of keys
+    /// @dev Invariant: across random votes, changes of vote and withdrawals on a Fibonacci fleet
+    /// spanning three levels, with keys still being sold, each side's tally is always exactly the number of keys
     /// whose current vote is on that side, and the two together never exceed the keys sold.
     function testFuzz_eachKeyCountsOnceOnTheSideItIsOnNow(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
@@ -728,7 +818,13 @@ contract KeyfleetVotesTest is Test {
             KeyfleetVotes.Choice choice = support ? KeyfleetVotes.Choice.Yes : KeyfleetVotes.Choice.No;
 
             vm.prank(fleet.ownerOf(tokenId));
-            if (current[tokenId] == choice) {
+            if (seed % 7 == 1) {
+                if (current[tokenId] == KeyfleetVotes.Choice.None) {
+                    vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NoVote.selector, tokenId));
+                }
+                votes.withdrawVote(proposalId, _ids(tokenId));
+                current[tokenId] = KeyfleetVotes.Choice.None;
+            } else if (current[tokenId] == choice) {
                 vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, tokenId));
                 votes.vote(proposalId, _ids(tokenId), support);
             } else {
