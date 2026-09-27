@@ -34,7 +34,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   # button that carries a proposal out.
   @carry_out_notes %{
     voting:
-      "More than half of all the keys sold haven’t voted yes yet, so carrying it out now will be refused.",
+      "Yes votes aren’t yet more than half of all the keys sold, so carrying it out now will be refused.",
     passed: nil,
     executed: "It has already been carried out, so doing it again will be refused."
   }
@@ -858,7 +858,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </div>
         </dl>
         <p id="proposal-plan-benefits" class="proposals-rule">
-          Who benefits: the fleet’s keys receive all of the launch’s income, and its budget keeps what the launch raises and the launched tokens as they vest.
+          Who benefits: the fleet’s keys receive all of the launch’s income, and its budget keeps the REGENT the auction raises beyond what goes into the pool, and the launched tokens as they vest.
         </p>
       </div>
     </section>

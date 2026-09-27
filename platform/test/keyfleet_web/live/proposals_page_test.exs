@@ -344,7 +344,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert text(view, "#proposal-plan-benefits") ==
                "Who benefits: the fleet’s keys receive all of the launch’s income, and its budget " <>
-                 "keeps what the launch raises and the launched tokens as they vest."
+                 "keeps the REGENT the auction raises beyond what goes into the pool, and the " <>
+                 "launched tokens as they vest."
 
       refute has_element?(view, "#proposal-plan-mismatch")
       refute has_element?(view, "#proposal-plan-changed")
@@ -711,7 +712,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.execution!(@fleet, 5, @voter)
 
     for {number, status, word, note} <- [
-          {1, "Voting open", "Record the decision", "More than half of all the keys sold"},
+          {1, "Voting open", "Record the decision", "Yes votes aren’t yet more than half"},
           {2, "Passed", "Record the decision", nil},
           {3, "Paid", "Make the payment", "It has already been carried out"},
           {4, "Passed", "Start the launch", nil},

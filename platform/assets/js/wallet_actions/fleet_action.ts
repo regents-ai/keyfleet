@@ -60,7 +60,8 @@ const refusalAbi = parseAbi([
   "error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found)",
   "error RaiseOutOfBounds(uint128 requiredRegentRaised)",
   "error LaunchAlreadyCreated()",
-  "error AboveYesShare(address asset, uint256 amount, uint256 most)",
+  "error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available)",
+  "error StaleLaunch(uint256 proposalId)",
   "error StakingRegistrationFailed(uint256 amount, uint256 received)",
 ])
 
@@ -108,6 +109,7 @@ export type Refusal =
         | "not_passed"
         | "above_yes_share"
         | "launch_exists"
+        | "stale_launch"
         | "zero_asset"
         | "zero_amount"
         | "recipient_not_allowed"
@@ -335,6 +337,8 @@ function contractRefusal(data: Hex): Refusal | null {
       return {reason: "raise_out_of_bounds"}
     case "LaunchAlreadyCreated":
       return {reason: "launch_exists"}
+    case "StaleLaunch":
+      return {reason: "stale_launch"}
     case "AboveYesShare":
       return {reason: "above_yes_share"}
     case "StakingRegistrationFailed":
@@ -417,6 +421,8 @@ function refusalWords(refusal: Refusal, action: Press): string {
       return "This payment is more than the yes votes’ share of the budget. It can be carried out once more keys vote yes or more money arrives."
     case "launch_exists":
       return "This fleet’s launch is still running or has already succeeded. Another launch can only follow one that didn’t succeed."
+    case "stale_launch":
+      return "This launch was proposed before the fleet’s last launch, which didn’t succeed, so it can’t be carried out. Propose it again to try another launch."
     case "zero_asset":
       return "Choose the token to pay."
     case "zero_amount":

@@ -54,7 +54,8 @@ const refusals = parseAbi([
   "error KeyNotEligible(uint256 tokenId)",
   "error NotAuthorizedForKey(uint256 tokenId, address owner)",
   "error NotApproved(uint256 yesVotes, uint256 totalMinted)",
-  "error AboveYesShare(address asset, uint256 amount, uint256 most)",
+  "error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available)",
+  "error StaleLaunch(uint256 proposalId)",
   "error ZeroAmount()",
   "error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found)",
   "error Error(string reason)",
@@ -350,7 +351,8 @@ group("sending a press", () => {
 
   it.each([
     ["execute", refusals, "NotApproved", [4n, 8n], "More than half of all the keys sold have to vote yes before this can be carried out."],
-    ["execute", refusals, "AboveYesShare", [usdc, 10n, 5n], "This payment is more than the yes votes’ share of the budget. It can be carried out once more keys vote yes or more money arrives."],
+    ["execute", refusals, "AboveYesShare", [usdc, 10n, 90n, 50n], "This payment is more than the yes votes’ share of the budget. It can be carried out once more keys vote yes or more money arrives."],
+    ["execute", refusals, "StaleLaunch", [3n], "This launch was proposed before the fleet’s last launch, which didn’t succeed, so it can’t be carried out. Propose it again to try another launch."],
     ["vote", refusals, "NotAuthorizedForKey", [4n, recipient], "Key 4 is held by 0x2222…2222, who hasn’t let this wallet vote for them."],
     ["propose_decision", refusals, "KeyNotEligible", [9n], "Key 9 hasn’t been sold yet."],
     ["send_share", refusals, "ZeroAmount", [], "Nothing is set aside for REGENT stakers right now, so there was nothing to send."],
