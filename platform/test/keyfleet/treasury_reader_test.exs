@@ -25,15 +25,15 @@ defmodule Keyfleet.TreasuryReaderTest do
 
   # Pinned from `cast sig` of each view function, and against the contracts
   # in contracts/test/KeyfleetVotesTopics.t.sol.
-  @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
-  @free_capital <<0x2B, 0x84, 0x30, 0x8E>>
-  @backed <<0x59, 0x5B, 0x7F, 0x21>>
-  @cascade_reserve <<0xFC, 0x4E, 0x89, 0x64>>
-  @protocol_share_owed <<0xC4, 0x90, 0xB9, 0xC7>>
-  @launch_state <<0x2F, 0xCD, 0x0F, 0x25>>
-  @launch_record <<0xFF, 0x1A, 0xC9, 0x47>>
-  @decimals <<0x31, 0x3C, 0xE5, 0x67>>
-  @symbol <<0x95, 0xD8, 0x9B, 0x41>>
+  @reward_assets "0x880ec04e"
+  @free_capital "0x2b84308e"
+  @backed "0x595b7f21"
+  @cascade_reserve "0xfc4e8964"
+  @protocol_share_owed "0xc490b9c7"
+  @launch_state "0x2fcd0f25"
+  @launch_record "0xff1ac947"
+  @decimals "0x313ce567"
+  @symbol "0x95d89b41"
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -153,7 +153,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   # Whether this reading called the token, or asked the fleet about it.
   defp asked?(token) do
     Enum.any?(StubClient.call_requests(), fn {to, data, _hash} ->
-      to == token or String.ends_with?(data, word(token))
+      to == token or String.ends_with?(data, arg(token))
     end)
   end
 
@@ -177,7 +177,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   # and no token is asked what it is until a reading is kept.
   test "a reading that fails in any part keeps nothing", %{fleet: fleet} do
     for {key, answer, reason} <- [
-          {{@rewards, @backed <> word(@other)}, {:error, :chain_unavailable},
+          {{@rewards, @backed <> arg(@other)}, {:error, :chain_unavailable},
            {@rewards, :chain_unavailable}},
           {{@contract, @cascade_reserve}, {:ok, <<1, 2>>}, {@contract, :unreadable_answer}}
         ] do
@@ -282,8 +282,8 @@ defmodule Keyfleet.TreasuryReaderTest do
         chain
         |> Map.put({token, @symbol}, {:ok, text(symbol)})
         |> Map.put({token, @decimals}, {:ok, <<6::256>>})
-        |> Map.put({@contract, @free_capital <> word(token)}, {:ok, <<0::256>>})
-        |> Map.put({@rewards, @backed <> word(token)}, {:ok, <<0::256>>})
+        |> Map.put({@contract, @free_capital <> arg(token)}, {:ok, <<0::256>>})
+        |> Map.put({@rewards, @backed <> arg(token)}, {:ok, <<0::256>>})
       end)
 
     StubClient.put_chain(head(40), [], calls: answers(chain))
@@ -360,20 +360,20 @@ defmodule Keyfleet.TreasuryReaderTest do
       {@rewards, @reward_assets} => {:ok, <<32::256, 2::256>> <> word(@usdc) <> word(@other)},
       {@named, @symbol} => {:ok, text("NMD")},
       {@named, @decimals} => {:error, :reverted},
-      {@contract, @free_capital <> word(@named)} => {:ok, <<@max_uint256::256>>},
-      {@rewards, @backed <> word(@named)} => {:ok, <<0::256>>},
+      {@contract, @free_capital <> arg(@named)} => {:ok, <<@max_uint256::256>>},
+      {@rewards, @backed <> arg(@named)} => {:ok, <<0::256>>},
       {@paid, @symbol} => {:error, :reverted},
       {@paid, @decimals} => {:ok, <<256::256>>},
-      {@contract, @free_capital <> word(@paid)} => {:ok, <<0::256>>},
-      {@rewards, @backed <> word(@paid)} => {:ok, <<0::256>>},
+      {@contract, @free_capital <> arg(@paid)} => {:ok, <<0::256>>},
+      {@rewards, @backed <> arg(@paid)} => {:ok, <<0::256>>},
       {@usdc, @symbol} => {:ok, text("USDC")},
       {@usdc, @decimals} => {:ok, <<6::256>>},
-      {@contract, @free_capital <> word(@usdc)} => {:ok, <<100_000_000::256>>},
-      {@rewards, @backed <> word(@usdc)} => {:ok, <<30_000_000::256>>},
+      {@contract, @free_capital <> arg(@usdc)} => {:ok, <<100_000_000::256>>},
+      {@rewards, @backed <> arg(@usdc)} => {:ok, <<30_000_000::256>>},
       {@other, @symbol} => {:ok, text("REGENT")},
       {@other, @decimals} => {:ok, <<18::256>>},
-      {@contract, @free_capital <> word(@other)} => {:ok, <<5_000::256>>},
-      {@rewards, @backed <> word(@other)} => {:ok, <<60::256>>},
+      {@contract, @free_capital <> arg(@other)} => {:ok, <<5_000::256>>},
+      {@rewards, @backed <> arg(@other)} => {:ok, <<60::256>>},
       {@contract, @cascade_reserve} => {:ok, <<700::256>>},
       {@contract, @protocol_share_owed} => {:ok, <<800::256>>},
       {@contract, @launch_state} => {:ok, <<1::256>>}
@@ -396,5 +396,7 @@ defmodule Keyfleet.TreasuryReaderTest do
     <<32::256, byte_size(string)::256>> <> string <> <<0::size(8 * (padded - byte_size(string)))>>
   end
 
+  # An address as a returned word, and as a call's argument.
   defp word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
+  defp arg("0x" <> hex), do: String.duplicate("0", 24) <> hex
 end

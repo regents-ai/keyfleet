@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
+  alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -149,7 +150,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
 
     {:ok, view, _html} = live(conn, @path <> "?key=21")
-    assert has_element?(view, "#key-profile-buy[value='buy-key-button']", "Buy key 21")
+    assert has_element?(view, "#key-profile-buy[value='fleet-get-key']", "Buy key 21")
     refute has_element?(view, "#key-profile-composer")
   end
 
@@ -189,6 +190,59 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     render_hook(view, "close_key", %{})
     assert_patch(view, @path)
     refute has_element?(view, "#key-profile")
+  end
+
+  describe "claiming a key's income" do
+    @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+
+    # Each token waiting for the key has its own Claim button, built on the
+    # server for the holder's wallet and paid to it.
+    test "the holder gets a Claim button for each token waiting, built for their wallet", %{
+      conn: conn
+    } do
+      holder = wallet("e")
+      reward_assets = Call.selector("rewardAssets()")
+
+      rewards_answer(fn
+        _to, ^reward_assets, _hash ->
+          {:ok,
+           <<32::256, 1::256, 0::96>> <>
+             Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)}
+
+        _to, _accrued, _hash ->
+          {:ok, <<2_500_000::256>>}
+      end)
+
+      {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      render_async(view)
+
+      view
+      |> with_target("#key-profile-claim-action")
+      |> render_hook("onchain_active_wallet", %{"address" => holder})
+
+      render_async(view)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        component_id: "key-profile-claim-action",
+        review: %{signer: ^holder, steps: [claim]}
+      })
+
+      assert claim.step == "claim-#{@usdc}"
+      assert claim.to == @rewards
+      assert claim.data == Call.encode("claim(address,uint256[],address)", [@usdc, [12], holder])
+      assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
+
+      assert text(view, "#key-profile-claim-action-line") ==
+               "Waiting for this key: 2.5 USDC. Each token is claimed with its own button."
+    end
+
+    test "only the key's holder sees where to claim it", %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+      refute has_element?(view, "#key-profile-claim")
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      refute has_element?(view, "#key-profile-claim")
+    end
   end
 
   describe "who may write to a key" do
@@ -356,7 +410,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "only the key on show takes its answer", %{conn: conn} do
       test = self()
 
-      rewards_answer(fn _to, <<_selector::32, _usdc::256, token_id::256>>, _block_hash ->
+      rewards_answer(fn _to,
+                        <<_accrued_usdc::binary-size(74), token_id::binary-size(64)>>,
+                        _block_hash ->
+        token_id = String.to_integer(token_id, 16)
         send(test, {:reading, token_id, self()})
 
         receive do

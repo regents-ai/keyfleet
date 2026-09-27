@@ -36,17 +36,16 @@ defmodule Keyfleet.Chain.TreasuryReader do
   alias Keyfleet.Chain.Abi
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
+  alias RegentChain.Call
 
-  # cast sig of each view function read.
-  @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
-  @free_capital <<0x2B, 0x84, 0x30, 0x8E>>
-  @backed <<0x59, 0x5B, 0x7F, 0x21>>
-  @cascade_reserve <<0xFC, 0x4E, 0x89, 0x64>>
-  @protocol_share_owed <<0xC4, 0x90, 0xB9, 0xC7>>
-  @launch_state <<0x2F, 0xCD, 0x0F, 0x25>>
-  @launch_record <<0xFF, 0x1A, 0xC9, 0x47>>
-  @decimals <<0x31, 0x3C, 0xE5, 0x67>>
-  @symbol <<0x95, 0xD8, 0x9B, 0x41>>
+  # The calldata of each view read without an argument.
+  @reward_assets Call.encode("rewardAssets()", [])
+  @cascade_reserve Call.encode("cascadeReserve()", [])
+  @protocol_share_owed Call.encode("protocolShareOwed()", [])
+  @launch_state Call.encode("launchState()", [])
+  @launch_record Call.encode("launchRecord()", [])
+  @decimals Call.encode("decimals()", [])
+  @symbol Call.encode("symbol()", [])
   @system %System{}
 
   @launch_record_types [
@@ -226,10 +225,11 @@ defmodule Keyfleet.Chain.TreasuryReader do
   end
 
   defp balance(fleet, asset, at) do
-    word = address_word(asset)
+    free_capital = Call.encode("freeCapital(address)", [asset])
+    backed = Call.encode("backed(address)", [asset])
 
-    with {:ok, [free]} <- at.(fleet.contract_address, {@free_capital <> word, [{:uint, 256}]}),
-         {:ok, [backed]} <- at.(fleet.rewards_address, {@backed <> word, [{:uint, 256}]}) do
+    with {:ok, [free]} <- at.(fleet.contract_address, {free_capital, [{:uint, 256}]}),
+         {:ok, [backed]} <- at.(fleet.rewards_address, {backed, [{:uint, 256}]}) do
       {:ok, %{asset: asset, free_capital: free, backed: backed}}
     end
   end
@@ -249,6 +249,4 @@ defmodule Keyfleet.Chain.TreasuryReader do
       :error -> {:error, :unreadable_answer}
     end
   end
-
-  defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
 end

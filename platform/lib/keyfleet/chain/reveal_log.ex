@@ -6,9 +6,9 @@ defmodule Keyfleet.Chain.RevealLog do
   """
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Event
 
-  # cast keccak "KeyRevealed(uint256,uint256,bytes32)"
-  @topic "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
+  @topic Event.topic0("KeyRevealed(uint256,uint256,bytes32)")
 
   @doc "The event's topic0."
   def topic, do: @topic

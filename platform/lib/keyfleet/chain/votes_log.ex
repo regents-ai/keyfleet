@@ -20,19 +20,14 @@ defmodule Keyfleet.Chain.VotesLog do
   """
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Event
 
-  # cast keccak "ProposalCreated(uint256,uint8,address,uint64,bytes32,string)"
-  @created "0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647"
-  # cast keccak "AutolaunchProposed(uint256,bytes32)"
-  @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
-  # cast keccak "PayProposed(uint256,address,uint256,address)"
-  @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
-  # cast keccak "VoteCast(uint256,address,bool,uint256[])"
-  @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
-  # cast keccak "VoteWithdrawn(uint256,address,uint256[])"
-  @withdrawn "0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4"
-  # cast keccak "ProposalExecuted(uint256,address)"
-  @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
+  @created Event.topic0("ProposalCreated(uint256,uint8,address,uint64,bytes32,string)")
+  @autolaunch Event.topic0("AutolaunchProposed(uint256,bytes32)")
+  @pay Event.topic0("PayProposed(uint256,address,uint256,address)")
+  @vote Event.topic0("VoteCast(uint256,address,bool,uint256[])")
+  @withdrawn Event.topic0("VoteWithdrawn(uint256,address,uint256[])")
+  @executed Event.topic0("ProposalExecuted(uint256,address)")
 
   @text_cap 65_536
   @zero_digest "0x" <> String.duplicate("0", 64)

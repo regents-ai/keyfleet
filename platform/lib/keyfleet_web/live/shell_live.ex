@@ -65,10 +65,6 @@ defmodule KeyfleetWeb.ShellLive do
   # The same for a proposals page after a notice that the fleet's proposal
   # records or balances changed.
   @proposals_refresh_after 1_000
-  # How long a purchase has to reach Base, counted from Base's latest block
-  # when the buyer confirms it. The wallet and the words it shows read it
-  # from the page.
-  @purchase_deadline_seconds 600
   # A check-in status changes as time passes, so an open fleet page reads its
   # agents' check-ins again this often.
   @check_ins_refresh_after 60_000
@@ -485,6 +481,7 @@ defmodule KeyfleetWeb.ShellLive do
         <FleetLive.page
           :if={@route_spec.route_id == :fleet}
           fleet={@fleet}
+          actor={actor(@access_context)}
           params={@fleet_params}
           keys={@streams.fleet_keys}
           profile={@key_profile}
@@ -513,9 +510,14 @@ defmodule KeyfleetWeb.ShellLive do
         <ProposalsLive.list
           :if={@route_spec.route_id == :proposals}
           page={@proposals}
+          actor={actor(@access_context)}
           launch_plans={@launch_plans}
         />
-        <ProposalsLive.detail :if={@route_spec.route_id == :proposal} page={@proposals} />
+        <ProposalsLive.detail
+          :if={@route_spec.route_id == :proposal}
+          page={@proposals}
+          actor={actor(@access_context)}
+        />
       </:content>
     </.shell>
     """
@@ -581,14 +583,14 @@ defmodule KeyfleetWeb.ShellLive do
           fleet_id: fleet_id,
           name: fleet.name,
           coming_soon?: false,
+          chain_id: fleet.chain_id,
           contract_address: fleet.contract_address,
           rewards_address: fleet.rewards_address,
           usdc_address: fleet.usdc_address,
           deployed?: deployed?,
           current?: current?,
           progress: progress,
-          buy: if(deployed?, do: buy_offer(fleet, progress)),
-          signed_in: signed_in_wallets(actor),
+          buy: if(deployed?, do: next_sale(fleet_id, progress)),
           rooms: Rooms.list_rooms!(fleet_id, actor: actor),
           no_keys?: page.results == [] and not paged?(params),
           pages: pages,
@@ -715,7 +717,7 @@ defmodule KeyfleetWeb.ShellLive do
       fleet
       | progress: progress,
         current?: Chain.fresh?(fleet_id),
-        buy: Map.merge(fleet.buy, next_sale(fleet_id, progress)),
+        buy: next_sale(fleet_id, progress),
         levels: KeyMap.levels(progress)
     })
   end
@@ -978,20 +980,6 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp post_to_key(socket, _body), do: socket
-
-  # What the wallet is asked to pay for the next key, read from the fleet's
-  # deployment and the latest reading of its sales. A reading that has fallen
-  # behind still offers the key: the purchase names this price as its most, so
-  # a key that has since cost more is refused by the contract and no USDC is taken.
-  defp buy_offer(fleet, progress) do
-    %{
-      chain_id: fleet.chain_id,
-      contract_address: fleet.contract_address,
-      usdc_address: fleet.usdc_address,
-      deadline_seconds: @purchase_deadline_seconds
-    }
-    |> Map.merge(next_sale(fleet.id, progress))
-  end
 
   # The key on offer now, which moves on with every sale.
   defp next_sale(fleet_id, progress) do
@@ -1478,12 +1466,11 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp read_proposals(socket) do
     params = socket.assigns.proposals_params
-    signed_in = signed_in_wallets(human_actor(socket))
 
     page =
       case socket.assigns.route_spec.route_id do
-        :proposals -> ProposalsPage.list(params["fleet_id"], params, signed_in)
-        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params, signed_in)
+        :proposals -> ProposalsPage.list(params["fleet_id"], params)
+        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params)
       end
 
     assign(socket, proposals: page)
@@ -1603,14 +1590,13 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  defp human_actor(%{assigns: %{access_context: %{principal: {:human, account}}}}),
-    do: %Human{human_account_id: account.id, wallet_addresses: account_wallets(account)}
-
+  defp human_actor(%{assigns: %{access_context: access_context}}), do: actor(access_context)
   defp human_actor(_socket), do: nil
 
-  # The wallets the wallet buttons name when the connected wallet is another.
-  defp signed_in_wallets(%Human{wallet_addresses: wallets}), do: wallets
-  defp signed_in_wallets(nil), do: []
+  defp actor(%{principal: {:human, account}}),
+    do: %Human{human_account_id: account.id, wallet_addresses: account_wallets(account)}
+
+  defp actor(_access_context), do: nil
 
   defp account_wallets(account) do
     [account.wallet_address | List.wrap(account.wallet_addresses)]

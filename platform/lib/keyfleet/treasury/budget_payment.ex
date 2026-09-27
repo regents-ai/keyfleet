@@ -1,6 +1,6 @@
 defmodule Keyfleet.Treasury.BudgetPayment do
   @moduledoc """
-  One `BudgetPaid` log: a passed payment paid out of the fleet's budget, with
+  One `BudgetPaid` log: an approved payment paid out of the fleet's budget, with
   the match it set aside: `share` for each key sold that did not vote yes,
   `matched` in all, which those keys collect from the vote contract. Amounts
   are in the asset's atomic units, any uint256. Only the chain reader writes

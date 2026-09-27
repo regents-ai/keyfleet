@@ -8,7 +8,8 @@ defmodule Keyfleet.Keeper.Calls do
   so nothing outside this module can put other bytes on the chain.
 
   It also encodes the views the keeper reads before it sends and decodes what
-  they return, strictly, with `Keyfleet.Chain.Abi`.
+  they return, strictly, with `Keyfleet.Chain.Abi`. Calldata is built by
+  `RegentChain.Call` and handed on as bytes, as the keeper signs it.
 
   Addresses are lowercase `0x` strings, as the chain reader keeps them.
   """
@@ -16,6 +17,7 @@ defmodule Keyfleet.Keeper.Calls do
   import Bitwise
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Event
 
   defmodule Call do
     @moduledoc "One call the keeper may send: the function, the contract and its one argument."
@@ -154,18 +156,11 @@ defmodule Keyfleet.Keeper.Calls do
 
   @subscription_fields [:balance, :native_balance, :request_count, :owner, :consumers]
 
-  @selectors Map.new(
-               Map.values(@functions) ++ Map.values(@views),
-               &{elem(&1, 0), binary_part(ExKeccak.hash_256(elem(&1, 0)), 0, 4)}
-             )
-
   # What a fleet's `requestReveal` logs: the coordinator took the request, or
   # refused it.
   @reveal_results %{
-    ("0x" <> Base.encode16(ExKeccak.hash_256("RevealRequested(uint256,uint256)"), case: :lower)) =>
-      "reveal_requested",
-    ("0x" <> Base.encode16(ExKeccak.hash_256("RevealRequestFailed(uint256)"), case: :lower)) =>
-      "reveal_refused"
+    Event.topic0("RevealRequested(uint256,uint256)") => "reveal_requested",
+    Event.topic0("RevealRequestFailed(uint256)") => "reveal_refused"
   }
 
   @doc "The functions the keeper may call."
@@ -278,36 +273,23 @@ defmodule Keyfleet.Keeper.Calls do
   end
 
   defp encode(signature, typed_args) do
-    typed_args
-    |> Enum.reduce_while({:ok, [@selectors[signature]]}, fn {type, arg}, {:ok, words} ->
-      case word(type, arg) do
-        {:ok, word} -> {:cont, {:ok, [words, word]}}
-        :error -> {:halt, {:error, :malformed_argument}}
-      end
-    end)
-    |> case do
-      {:ok, data} -> {:ok, IO.iodata_to_binary(data)}
-      error -> error
+    if Enum.all?(typed_args, fn {type, arg} -> valid?(type, arg) end) do
+      "0x" <> hex = RegentChain.Call.encode(signature, Enum.map(typed_args, &elem(&1, 1)))
+      {:ok, Base.decode16!(hex, case: :lower)}
+    else
+      {:error, :malformed_argument}
     end
   end
 
-  defp word(:uint256, value) when is_integer(value) and value >= 0 and value < 1 <<< 256,
-    do: {:ok, <<value::256>>}
+  defp valid?(:uint256, value), do: is_integer(value) and value >= 0 and value < 1 <<< 256
+  defp valid?(:address, value), do: nonzero_address?(value)
 
-  defp word(:address, value) do
-    with {:ok, address} <- address(value), do: {:ok, <<0::96, address::binary>>}
-  end
+  defp target(target),
+    do: if(nonzero_address?(target), do: :ok, else: {:error, :malformed_target})
 
-  defp word(_type, _value), do: :error
+  # A lowercase `0x` address other than zero, as the chain reader keeps them.
+  defp nonzero_address?("0x" <> hex = address) when byte_size(hex) == 40,
+    do: hex =~ ~r/\A[0-9a-f]+\z/ and address != "0x" <> String.duplicate("0", 40)
 
-  defp target(target) do
-    case address(target) do
-      {:ok, <<0::160>>} -> {:error, :malformed_target}
-      {:ok, _address} -> :ok
-      :error -> {:error, :malformed_target}
-    end
-  end
-
-  defp address("0x" <> hex) when byte_size(hex) == 40, do: Base.decode16(hex, case: :lower)
-  defp address(_value), do: :error
+  defp nonzero_address?(_value), do: false
 end

@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.AgentProposalController do
         not_found(conn, "proposal_unknown")
 
       proposal ->
-        status = Proposals.status(proposal)
+        status = Proposals.status(proposal, Proposals.failed_launch_block(fleet_id))
         {votes, more?} = Proposals.votes_after(proposal.id, after_seq, @votes_page)
 
         json(conn, %{

@@ -513,7 +513,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert lines(view, "#workspace-proposed > li") == [
                "Proposed as Proposal 2 (Launched), version 2",
-               "Proposed as Proposal 1 (Voting open), version 1"
+               "Proposed as Proposal 1 (Open), version 1"
              ]
 
       assert has_element?(
@@ -525,12 +525,40 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, view, _html} = live(conn, item_path(other))
 
       assert lines(view, "#workspace-proposed > li") == [
-               "Proposed as Proposal 3 (Voting open), version 1"
+               "Proposed as Proposal 3 (Open), version 1"
              ]
 
       task = create(@fleet, "task", %{"title" => "Draft", "progress" => "todo"})
       {:ok, view, _html} = live(conn, item_path(task))
       refute has_element?(view, "#workspace-proposed")
+    end
+
+    # A launch the fleet will refuse to start, since it was proposed before
+    # the fleet's last launch failed, is shown as such, not as open.
+    test "a launch proposed before the fleet's last failed launch says so", %{conn: conn} do
+      ChainHelpers.seed_cursor!(@fleet)
+      plan = create(@fleet, "launch_card", %{"title" => "Cascade Research"})
+
+      ProposalHelpers.proposal!(@fleet, 1,
+        kind: :autolaunch,
+        digest: digest(plan, 1),
+        opened_block: 10
+      )
+
+      ProposalHelpers.proposal!(@fleet, 2,
+        kind: :autolaunch,
+        digest: digest(plan, 1),
+        opened_block: 11
+      )
+
+      ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
+
+      {:ok, view, _html} = live(conn, item_path(plan))
+
+      assert lines(view, "#workspace-proposed > li") == [
+               "Proposed as Proposal 2 (Open), version 1",
+               "Proposed as Proposal 1 (Proposed before the last launch), version 1"
+             ]
     end
 
     test "links and history come fifty at a time", %{conn: conn} do

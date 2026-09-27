@@ -19,11 +19,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.WalletPanel
+  alias KeyfleetWeb.WalletWords
 
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
   attr :params, :map, required: true, doc: "the fleet page's address, which links keep"
   attr :thread, :any, required: true, doc: "the messages written to the key, oldest first"
+  attr :actor, :any, required: true, doc: "the signed-in person, or nil"
 
   def dialog(assigns) do
     ~H"""
@@ -59,6 +62,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
+          <.claim :if={@profile.yours?} profile={@profile} fleet={@fleet} actor={@actor} />
           <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
           <.recent_posts profile={@profile} params={@params} />
@@ -118,8 +122,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   attr :profile, :map, required: true
 
-  # Buy closes the profile and presses the fleet page's own Buy button, so
-  # every press goes to the wallet.
+  # Buy closes the profile and takes the reader to "Buying a key", where the
+  # fleet's own Approve and Buy buttons send the purchase from the wallet.
   defp next_key(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-next-title">
@@ -135,7 +139,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
       </dl>
       <form method="dialog">
-        <Regent.Primitives.button id="key-profile-buy" type="submit" value="buy-key-button">
+        <Regent.Primitives.button id="key-profile-buy" type="submit" value="fleet-get-key">
           Buy key {Rules.grouped(@profile.token_id)}
         </Regent.Primitives.button>
       </form>
@@ -215,6 +219,53 @@ defmodule KeyfleetWeb.KeyProfileLive do
     </section>
     """
   end
+
+  attr :profile, :map, required: true
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+
+  # What the key has earned and not yet been paid, each token claimed with its
+  # own button and paid to the wallet that holds the key.
+  defp claim(assigns) do
+    ~H"""
+    <section
+      id="key-profile-claim"
+      class="key-profile__section"
+      aria-labelledby="key-profile-claim-title"
+    >
+      <h3 id="key-profile-claim-title">Claim income</h3>
+      <.live_component
+        module={WalletPanel}
+        id="key-profile-claim-action"
+        flow={:claim}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+        token_id={@profile.token_id}
+        refresh={@profile.rewards}
+      >
+        <:notes>
+          <p class="key-profile-detail">
+            Income in USDC, REGENT or the fleet’s launched token waits here for the key until it is claimed.
+          </p>
+        </:notes>
+        <:buttons :let={panel}>
+          <Regent.Primitives.button
+            :for={waiting <- claimable(panel)}
+            id={"key-profile-claim-#{waiting.asset}"}
+            data-onchain-step={"claim-#{waiting.asset}"}
+          >
+            <span data-press-label>Claim {WalletWords.token_amount(waiting)}</span>
+          </Regent.Primitives.button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  defp claimable(%{built: %{figures: %{waiting: waiting}}}),
+    do: Enum.reject(waiting, &(&1.amount == 0))
+
+  defp claimable(_panel), do: []
 
   attr :profile, :map, required: true
   attr :params, :map, required: true

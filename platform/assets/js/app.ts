@@ -20,8 +20,6 @@ import {
   type ShellState,
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
-import {BuyKey} from "./hooks/buy_key"
-import {FleetAction} from "./hooks/fleet_action"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
@@ -29,6 +27,7 @@ import {ShellMotion} from "./hooks/shell_motion"
 import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog} from "./hooks/modal_dialog"
+import {OnchainSteps} from "./hooks/onchain_steps"
 import {Arrivals, Counter, Refusal} from "./hooks/motion/moments"
 import {Cascade} from "./hooks/motion/reveals"
 import {Sheet, Slides} from "./hooks/motion/slides"
@@ -317,16 +316,15 @@ const hooks = {
   ...showcaseHooks,
   ...colocatedHooks,
   Arrivals,
-  BuyKey,
   Cascade,
   Counter,
-  FleetAction,
   FleetPreview,
   HolographicCard,
   HomePrism,
   KeyMap,
   LaunchPlanPicker,
   ModalDialog: composeHooks(ModalDialog, Sheet),
+  OnchainSteps,
   OpenWhenWide,
   Refusal,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),

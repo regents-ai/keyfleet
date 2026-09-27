@@ -17,7 +17,7 @@ const OWN_MOTION = ".rg-theme-toggle"
 // squishes: the button itself never shrinks, so a quick second press near
 // its edge still lands on it.
 const WALLET =
-  "[data-buy-key], [data-fleet-action], [data-account-target='connect-wallet'], [data-demo-send]"
+  "[data-onchain-step], [data-account-target='connect-wallet'], [data-demo-send]"
 
 const live = (el: Element) => el.closest("[data-phx-session]") !== null
 

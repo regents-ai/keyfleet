@@ -946,7 +946,8 @@ defmodule Keyfleet.ProposalsChainTest do
       assert_received {:proposals_changed, @fleet}
 
       assert StubClient.call_requests() == [
-               {@votes, <<0xB3, 0xBC, 0xEA, 0xDB, 1::256>>, head(@deployed + 10).hash}
+               {@votes, "0xb3bceadb" <> String.duplicate("0", 63) <> "1",
+                head(@deployed + 10).hash}
              ]
 
       launch = Proposals.get_proposal!(@fleet, 1, load: :launch_envelope)

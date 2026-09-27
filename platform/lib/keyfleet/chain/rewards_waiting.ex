@@ -11,12 +11,10 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   use GenServer
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Call
 
   @table __MODULE__
   @kept_ms 30_000
-
-  # cast sig "accrued(address,uint256)"
-  @accrued <<0xBF, 0xE8, 0x7F, 0x4D>>
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
@@ -42,7 +40,7 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   end
 
   defp read_chain(fleet, token_id, client, key, now) do
-    data = @accrued <> address_word(fleet.usdc_address) <> <<token_id::256>>
+    data = Call.encode("accrued(address,uint256)", [fleet.usdc_address, token_id])
 
     with {:ok, head} <- client.head(),
          {:ok, returned} <- client.call(fleet.rewards_address, data, head.hash),
@@ -58,6 +56,4 @@ defmodule Keyfleet.Chain.RewardsWaiting do
       :error -> {:error, :unreadable_answer}
     end
   end
-
-  defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
 end

@@ -2245,17 +2245,21 @@ components:
       enum: [decision, autolaunch, pay]
       description: >-
         decision: text only. autolaunch: a token launch, whose exact terms are in launch. pay: a
-        payment from the fleet's budget, in pay.
+        payment from the fleet's shared money, in pay.
     ProposalStatus:
       type: string
-      enum: [voting, passed, executed]
+      enum: [open, approved, executed, stale]
       description: >-
-        A proposal has no deadline and stays open to votes until it is carried out. passed: more
-        than half of all the keys sold have yes as their latest vote, so it can be carried out now;
-        exactly half is not enough, and a key that has not voted counts against. voting: not
-        passed. executed: carried out on chain. A key sold after a proposal passed counts against
-        it too, so it can go back to voting; a sale arrives as no change record of a proposal, so a
-        client compares yes_votes with the fleet's keys sold, or reads the proposal again.
+        The contract's three states, and one the fleet adds. A proposal has no deadline and stays
+        open to votes until it is carried out. approved: more than half of all the keys sold have
+        yes as their latest vote, so it can be carried out now; exactly half is not enough, and a
+        key that has not voted counts against. open: not approved. executed: carried out on chain.
+        stale: a launch proposal, not carried out, that opened in or before the block the fleet's
+        last failed launch was created in; the fleet refuses to carry it out, so the launch is
+        proposed again instead. A key sold after a proposal was approved counts against it too, so
+        it can go back to open, and a failed launch makes earlier launch proposals stale; neither
+        arrives as a change record of the proposal, so a client compares yes_votes with the
+        fleet's keys sold, or reads the proposal again.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'

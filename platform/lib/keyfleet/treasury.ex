@@ -89,9 +89,11 @@ defmodule Keyfleet.Treasury do
   @doc """
   The tokens a payment can be proposed in, in the order the form lists them:
   the fleet's USDC, then each token of the latest reading of its balances.
-  Each is `%{address: address, symbol: symbol, decimals: decimals}`, symbol and
-  decimals nil when the token has not said. The fleet's USDC always has six
-  decimals: its contract refuses to be deployed with any other.
+  Each is `%{address: address, symbol: symbol, decimals: decimals, usdc?:
+  usdc?}`, symbol and decimals nil when the token has not said, and `usdc?`
+  true only for the fleet's own USDC, so a token calling itself USDC is never
+  taken for it. The fleet's USDC always has six decimals: its contract refuses
+  to be deployed with any other.
   """
   def payable_assets(fleet) do
     %{details: details} = assets(fleet)
@@ -104,15 +106,15 @@ defmodule Keyfleet.Treasury do
 
     Enum.map(listed, fn
       usdc when usdc == fleet.usdc_address ->
-        %{address: usdc, symbol: "USDC", decimals: @usdc_decimals}
+        %{address: usdc, symbol: "USDC", decimals: @usdc_decimals, usdc?: true}
 
       asset ->
         case details[asset] do
           {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-            %{address: asset, symbol: symbol, decimals: decimals}
+            %{address: asset, symbol: symbol, decimals: decimals, usdc?: false}
 
           _unknown ->
-            %{address: asset, symbol: nil, decimals: nil}
+            %{address: asset, symbol: nil, decimals: nil, usdc?: false}
         end
     end)
   end

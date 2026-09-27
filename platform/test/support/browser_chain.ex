@@ -34,8 +34,8 @@ defmodule Keyfleet.BrowserChain do
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
-  # cast sig "accrued(address,uint256)"
-  @accrued <<0xBF, 0xE8, 0x7F, 0x4D>>
+  # accrued(address,uint256)
+  @accrued "0xbfe87f4d"
   @operator %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
@@ -106,8 +106,12 @@ defmodule Keyfleet.BrowserChain do
 
   defp offered_rewards, do: :persistent_term.get(__MODULE__, %{})
 
-  defp answer_rewards(rewards, <<@accrued, _usdc::binary-size(32), token_id::256>>, _block_hash) do
-    case Map.fetch(offered_rewards(), {rewards, token_id}) do
+  defp answer_rewards(
+         rewards,
+         @accrued <> <<_usdc::binary-size(64), token_id::binary-size(64)>>,
+         _block_hash
+       ) do
+    case Map.fetch(offered_rewards(), {rewards, String.to_integer(token_id, 16)}) do
       {:ok, amount} -> {:ok, <<amount::256>>}
       :error -> {:error, :chain_unavailable}
     end

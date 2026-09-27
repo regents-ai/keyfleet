@@ -237,6 +237,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   # with where it stands and the version it points to.
   defp proposed(%{type: "launch_card", id: id}, fleet_id, opts) do
     {proposals, older?} = Proposals.launches_of_plan(fleet_id, id, @proposed_page)
+    failed_launch_block = Proposals.failed_launch_block(fleet_id)
 
     versions =
       fleet_id
@@ -250,7 +251,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           &%{
             number: &1.number,
             kind: &1.kind,
-            status: Proposals.status(&1),
+            status: Proposals.status(&1, failed_launch_block),
             version: Map.fetch!(versions, &1.digest)
           }
         ),

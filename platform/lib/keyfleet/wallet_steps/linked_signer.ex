@@ -11,7 +11,11 @@ defmodule Keyfleet.WalletSteps.LinkedSigner do
   def describe(_opts), do: "the signer is a wallet the signed-in person's account links"
 
   @impl true
-  def match?(%Human{wallet_addresses: wallets}, %{subject: %{arguments: %{signer: signer}}}, _opts)
+  def match?(
+        %Human{wallet_addresses: wallets},
+        %{subject: %{arguments: %{signer: signer}}},
+        _opts
+      )
       when is_binary(signer),
       do: String.downcase(signer) in wallets
 

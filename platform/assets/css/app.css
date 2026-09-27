@@ -8,6 +8,7 @@
 @import "./components/who_is_here.css";
 @import "./components/activity.css";
 @import "./components/send_agent.css";
+@import "./components/wallet_panel.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";
 @import "./pages/account.css";

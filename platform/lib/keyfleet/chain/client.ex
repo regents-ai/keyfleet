@@ -22,12 +22,13 @@ defmodule Keyfleet.Chain.Client do
   @callback get_block_hash(block :: non_neg_integer()) :: {:ok, String.t()} | {:error, term()}
 
   @doc """
-  Calls a contract's view function with `data` at the block whose hash is
-  `block_hash`, and returns what it returned. A call the contract refuses is
+  Calls a contract's view function with `data`, the `0x` calldata
+  `RegentChain.Call.encode/2` builds, at the block whose hash is
+  `block_hash`, and returns the bytes it returned. A call the contract refuses is
   `{:error, :reverted}`. A block that is no longer on the chain is an error,
   never another block's answer.
   """
-  @callback call(to :: String.t(), data :: binary(), block_hash :: String.t()) ::
+  @callback call(to :: String.t(), data :: String.t(), block_hash :: String.t()) ::
               {:ok, binary()} | {:error, term()}
 
   @doc """
@@ -36,7 +37,8 @@ defmodule Keyfleet.Chain.Client do
   server-built wallet step names, which is always the fleet's and so this
   node's; `RegentChain.Outcome` reads sent steps through this and `receipt/2`.
   """
-  @callback transaction(chain :: map(), hash :: String.t()) :: {:ok, map() | nil} | {:error, term()}
+  @callback transaction(chain :: map(), hash :: String.t()) ::
+              {:ok, map() | nil} | {:error, term()}
 
   @doc "The receipt of `hash` at `latest`, or `nil` while it has not landed."
   @callback receipt(chain :: map(), hash :: String.t()) :: {:ok, map() | nil} | {:error, term()}

@@ -85,7 +85,7 @@ it("a reader who asked for less motion gets no squish", () => {
 })
 
 it("a wallet button squishes only its label, so the button itself never shrinks", () => {
-  for (const wallet of ["data-buy-key", "data-fleet-action"]) {
+  for (const wallet of ["data-onchain-step", "data-demo-send"]) {
     const button = control({wallet})
     press(click(button, 1))
     expect(moved.squish).toEqual([button.label])

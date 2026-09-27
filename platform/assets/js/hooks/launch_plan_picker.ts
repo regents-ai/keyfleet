@@ -17,10 +17,7 @@ export type PlanOption = {value: string; dataset: Readonly<Record<string, string
 export type PlanChoice = {
   digest: string
   fields: Partial<Record<PlanField, string>>
-  status: string
 }
-
-export const noPlanWords = "This proposal won’t point to a launch plan."
 
 /**
  * What choosing `option` does to the launch form. A plan fills in its six
@@ -28,21 +25,21 @@ export const noPlanWords = "This proposal won’t point to a launch plan."
  * plan" makes it point nowhere and leaves the details as they are.
  */
 export function planChoice(option: PlanOption): PlanChoice {
-  if (option.value === "") return {digest: "", fields: {}, status: noPlanWords}
+  if (option.value === "") return {digest: "", fields: {}}
 
   const {dataset} = option
   return {
     digest: option.value,
     fields: Object.fromEntries(planFields.map(name => [name, dataset[name] ?? ""])),
-    status: `This proposal will point to ${dataset.title}, version ${dataset.version}.`,
   }
 }
 
 /**
  * The launch form's plan picker. Choosing a plan copies its launch details
  * into the form and its digest into the hidden field the proposal points
- * with. It never touches the Propose button: every press still goes to the
- * wallet, with whatever the form holds.
+ * with, before the form's change reaches the server, which builds the
+ * proposal from the form and says which plan it points to. It never touches
+ * the Propose button: every press still goes to the wallet.
  */
 export const LaunchPlanPicker: Hook = {
   mounted(this: LaunchPlanPickerHook) {
@@ -55,7 +52,6 @@ export const LaunchPlanPicker: Hook = {
       const choice = planChoice(select.options[select.selectedIndex])
       for (const [name, value] of Object.entries(choice.fields)) field(root, name).value = value
       field(root, "digest").value = choice.digest
-      root.querySelector<HTMLElement>("[data-launch-plan-status]")!.textContent = choice.status
     }
 
     root.addEventListener("change", change)

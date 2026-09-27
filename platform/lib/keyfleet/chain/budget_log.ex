@@ -7,23 +7,19 @@ defmodule Keyfleet.Chain.BudgetLog do
   the keys in full. The budget takes in `SharedMoneyRecognized`, any other
   token that arrived by bare transfer; `GraduationHoldingsBooked`, the REGENT
   the launch sent at graduation; and `VestingBooked`, launched tokens the
-  vesting escrow released. `BudgetPaid` is a passed payment paid out of the
+  vesting escrow released. `BudgetPaid` is an approved payment paid out of the
   budget, with the match it set aside for the keys that did not vote yes.
   Amounts are in the asset's own units, any uint256.
   """
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Event
 
-  # cast keccak "IncomeRecognized(address,address,uint256)"
-  @income_recognized "0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13"
-  # cast keccak "SharedMoneyRecognized(address,address,uint256)"
-  @shared_money_recognized "0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7"
-  # cast keccak "GraduationHoldingsBooked(address,uint256)"
-  @graduation_booked "0xd8c9a3e20faa52b5fa537458d4e055db2d5d91ef401d3120ec549f8724b42355"
-  # cast keccak "VestingBooked(address,uint256,uint256)"
-  @vesting_booked "0xee00fd5e75d11a67d01f1e2c820557fb28f1e211c8119f94759d4f5b470eeee2"
-  # cast keccak "BudgetPaid(address,address,uint256,uint256,uint256)"
-  @budget_paid "0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e"
+  @income_recognized Event.topic0("IncomeRecognized(address,address,uint256)")
+  @shared_money_recognized Event.topic0("SharedMoneyRecognized(address,address,uint256)")
+  @graduation_booked Event.topic0("GraduationHoldingsBooked(address,uint256)")
+  @vesting_booked Event.topic0("VestingBooked(address,uint256,uint256)")
+  @budget_paid Event.topic0("BudgetPaid(address,address,uint256,uint256,uint256)")
 
   @doc "The topic0 of every event read here."
   def topics,

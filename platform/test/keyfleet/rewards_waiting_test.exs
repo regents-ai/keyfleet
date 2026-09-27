@@ -22,12 +22,13 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
 
     assert RewardsWaiting.read(@fleet, 12, StubClient) == {:ok, 2_500_000}
 
-    <<selector::binary-size(4), _rest::binary>> = ExKeccak.hash_256("accrued(address,uint256)")
-    usdc = Base.decode16!("833589fcd6edb6e08f4c7c32d4f71b54bda02913", case: :lower)
+    # accrued(address,uint256) with the fleet's USDC and key 12.
+    calldata =
+      "0xbfe87f4d" <>
+        String.duplicate("0", 24) <>
+        "833589fcd6edb6e08f4c7c32d4f71b54bda02913" <> String.duplicate("0", 62) <> "0c"
 
-    assert StubClient.call_requests() == [
-             {@fleet.rewards_address, selector <> <<0::96>> <> usdc <> <<12::256>>, @head_hash}
-           ]
+    assert StubClient.call_requests() == [{@fleet.rewards_address, calldata, @head_hash}]
   end
 
   test "ten reads of one key within 30 seconds ask the chain once, and the next after asks again" do
@@ -44,8 +45,10 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
   end
 
   test "each key is read for itself" do
-    answering(fn _to, <<_selector::32, _usdc::256, token_id::256>>, _block_hash ->
-      {:ok, <<token_id * 1_000_000::256>>}
+    answering(fn _to,
+                 "0xbfe87f4d" <> <<_usdc::binary-size(64), token_id::binary-size(64)>>,
+                 _block_hash ->
+      {:ok, <<String.to_integer(token_id, 16) * 1_000_000::256>>}
     end)
 
     assert RewardsWaiting.read(@fleet, 3, StubClient) == {:ok, 3_000_000}

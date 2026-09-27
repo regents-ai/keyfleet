@@ -75,7 +75,7 @@ defmodule KeyfleetWeb.HomeLive do
   # fleet is doing right now is at /fleets/<id>.md.
   @about %{
     "fibonacci_syndicate" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared funds.",
+      "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared money.",
     "fibonacci_cascade" =>
       "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
         "the level before it are paid back.",

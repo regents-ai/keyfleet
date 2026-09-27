@@ -12,4 +12,19 @@ defmodule Keyfleet.WalletSteps do
       define :build_steps, action: :build, args: [:fleet_id, :flow, :signer, :component_id]
     end
   end
+
+  @doc """
+  The chain a fleet on `chain_id` sends to, as a wallet is shown it:
+  `%{chain_id: id, name: name, rpc_url: url}` from `:wallet_chains`, or nil
+  when the site sets none for it.
+  """
+  def chain(chain_id) do
+    case Application.fetch_env!(:keyfleet, :wallet_chains) do
+      %{^chain_id => %{name: name, rpc_url: rpc_url}} ->
+        %{chain_id: chain_id, name: name, rpc_url: rpc_url}
+
+      _unlisted ->
+        nil
+    end
+  end
 end

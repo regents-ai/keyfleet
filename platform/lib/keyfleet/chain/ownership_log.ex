@@ -6,9 +6,9 @@ defmodule Keyfleet.Chain.OwnershipLog do
   """
 
   alias Keyfleet.Chain.Abi
+  alias RegentChain.Event
 
-  # cast keccak "OwnershipEpoch(uint256,uint64,address,address)"
-  @topic "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
+  @topic Event.topic0("OwnershipEpoch(uint256,uint64,address,address)")
 
   @doc "The event's topic0."
   def topic, do: @topic

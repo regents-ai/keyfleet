@@ -3,15 +3,15 @@ defmodule KeyfleetWeb.ProposalsPage do
   What a fleet's proposal pages show, read from the proposals, votes and
   launches the chain reader recorded.
 
-  `list/3` is the fleet's proposals, newest first, twenty to a page, with
-  its budget once it is on chain: the latest reading of its balances, and
-  its latest launch income and payments. `detail/4` is one proposal with its votes, fifty to a
-  page, and for a launch the version of the fleet's launch plan it points to by its digest.
-  The form for a new launch starts from the fleet's launch plans. Once the fleet is on chain, each carries what its wallet buttons
-  need: the fleet's network, its two contracts, and the wallets of the
-  person signed in, which the buttons name when the connected wallet is
-  another. A page name that is not a proposal number is a page that doesn't
-  exist.
+  `list/2` is the fleet's proposals, newest first, twenty to a page, with
+  its shared money once it is on chain: the latest reading of its balances,
+  and its latest launch income and payments. `detail/3` is one proposal with
+  its votes, fifty to a page, and for a launch the version of the fleet's
+  launch plan it points to by its digest. The form for a new launch starts
+  from the fleet's launch plans. Once the fleet is on chain, each carries the
+  network its wallet buttons send on; the buttons' steps are built by
+  `Keyfleet.WalletSteps`. A page name that is
+  not a proposal number is a page that doesn't exist.
   """
 
   alias Keyfleet.Chain
@@ -28,11 +28,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   @votes_page 50
   @regent_decimals 18
   @text_cap 64 * 1024
-  # The fleet's USDC, which its contract refuses to be deployed with unless
-  # it has six decimals.
-  @usdc_decimals 6
 
-  @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from the budget"}
+  @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from shared money"}
 
   # A launch's details as a launch plan names them, and as the page words
   # them when they differ.
@@ -54,13 +51,12 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   @doc """
   The page of proposals below the one `params` names, if it names one, with
-  what the forms for new proposals start from. `signed_in` is the wallets of
-  the person signed in, primary first.
+  what the forms for new proposals start from.
   """
-  def list(fleet_id, params, signed_in) do
+  def list(fleet_id, params) do
     before = number!(params["before"])
 
-    with_fleet(fleet_id, signed_in, fn fleet, reading ->
+    with_fleet(fleet_id, fn fleet, reading ->
       {proposals, older?} = Proposals.list_page(fleet_id, before)
       balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
@@ -69,19 +65,18 @@ defmodule KeyfleetWeb.ProposalsPage do
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         treasury: reading.deployed? && treasury(fleet, balances),
-        propose: reading.deployed? && propose(fleet, balances)
+        propose: reading.deployed? && propose(fleet)
       })
     end)
   end
 
   @doc """
   Proposal `number` and a page of its votes, from the one `params` names.
-  `signed_in` is the wallets of the person signed in, primary first.
   """
-  def detail(fleet_id, number, params, signed_in) do
+  def detail(fleet_id, number, params) do
     votes_after = seq!(params["votes_after"])
 
-    with_fleet(fleet_id, signed_in, fn fleet, reading ->
+    with_fleet(fleet_id, fn fleet, reading ->
       case Proposals.get_by_number(fleet_id, String.to_integer(number)) do
         nil ->
           Map.merge(reading, %{number: number, proposal: nil})
@@ -144,7 +139,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   # REGENT, which has eighteen decimals.
   defp regent(atoms), do: "#{units(atoms, @regent_decimals)} REGENT"
 
-  defp with_fleet(fleet_id, signed_in, read) do
+  defp with_fleet(fleet_id, read) do
     case Fleets.get_fleet!(fleet_id) do
       nil ->
         %{fleet_id: fleet_id, fleet_name: nil}
@@ -156,28 +151,23 @@ defmodule KeyfleetWeb.ProposalsPage do
           fleet_id: fleet_id,
           fleet_name: fleet.name,
           deployed?: deployed?,
-          wallet: deployed? && wallet(fleet, signed_in),
+          chain_id: fleet.chain_id,
           catching_up?: deployed? and not Chain.fresh?(fleet_id)
         })
     end
   end
 
-  # What the wallet buttons need: the fleet's network, its vote contract,
-  # the fleet contract itself, and the signed-in person's wallets.
-  defp wallet(fleet, signed_in),
+  # The tokens the payment form lists by name: USDC, then the tokens of the
+  # latest reading (REGENT, the launched token and each token an open payment
+  # names). The form takes any other token by its address.
+  defp propose(fleet),
     do: %{
-      chain_id: fleet.chain_id,
-      votes: fleet.votes_address,
-      fleet: fleet.contract_address,
-      signed_in: signed_in
+      assets:
+        Enum.map(
+          Treasury.payable_assets(fleet),
+          &%{address: &1.address, name: pay_name(&1)}
+        )
     }
-
-  # The tokens the payment form offers: USDC, then the tokens of the latest
-  # reading (REGENT, the launched token and each token an open payment names).
-  defp propose(fleet, balances) do
-    known = Treasury.assets(fleet)
-    %{assets: fleet |> listed_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known))}
-  end
 
   @doc """
   Each launch plan of the fleet a launch can be proposed from, at its
@@ -220,53 +210,30 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  defp listed_assets(fleet, nil), do: [fleet.usdc_address]
+  # A token as the payment form names it: the fleet's own USDC by name, any
+  # other with its address beside its symbol, so a token calling itself USDC
+  # is never taken for it. One that hasn't said its decimals is paid in its
+  # smallest units.
+  defp pay_name(%{usdc?: true}), do: "USDC"
 
-  defp listed_assets(fleet, balances),
-    do: Enum.uniq([fleet.usdc_address | Enum.map(balances.assets, & &1.asset)])
+  defp pay_name(%{address: address, symbol: symbol, decimals: decimals})
+       when is_binary(symbol) and is_integer(decimals),
+       do: "#{symbol} #{FleetLive.short_wallet(address)}"
 
-  # An asset to pay in, with the decimals amounts typed in whole tokens are
-  # converted with and the words that name an amount of it. A token that
-  # hasn't said its decimals is paid in its smallest units.
-  defp pay_asset(usdc, %{usdc_address: usdc}, _assets),
-    do: %{address: usdc, decimals: @usdc_decimals, name: "USDC", unit: "USDC"}
-
-  defp pay_asset(asset, _fleet, %{details: details}) do
-    case details[asset] do
-      {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-        name = "#{symbol} #{FleetLive.short_wallet(asset)}"
-        %{address: asset, decimals: decimals, name: name, unit: name}
-
-      _unknown ->
-        %{
-          address: asset,
-          decimals: 0,
-          name: "Token #{FleetLive.short_wallet(asset)}, in its smallest units",
-          unit: "smallest units of token #{FleetLive.short_wallet(asset)}"
-        }
-    end
-  end
+  defp pay_name(%{address: address}),
+    do: "Token #{FleetLive.short_wallet(address)}, in its smallest units"
 
   defp summary(proposal, failed_launch_block) do
     %{
       number: proposal.number,
       kind: proposal.kind,
-      status: status(proposal, failed_launch_block),
+      status: Proposals.status(proposal, failed_launch_block),
       keys_sold: proposal.keys_sold,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
       gist: gist(proposal)
     }
   end
-
-  # `Proposals.status/1`, or `:stale` for a launch proposal not carried out
-  # that opened in or before the block the fleet's failed launch was created
-  # in, which the fleet refuses to carry out.
-  defp status(%{kind: :autolaunch, execution: nil, opened_block: opened}, failed)
-       when is_integer(failed) and opened <= failed,
-       do: :stale
-
-  defp status(proposal, _failed_launch_block), do: Proposals.status(proposal)
 
   # The block the latest reading says the fleet's failed launch was created
   # in, or nil.
@@ -283,6 +250,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       text: proposal.text && as_text(proposal.text),
       text_cut?: proposal.text_bytes != nil and proposal.text_bytes > @text_cap,
       pay: pay(proposal, fleet),
+      match: match(proposal, fleet),
       launch: launch(proposal),
       plan: plan(proposal),
       executor: proposal.execution && proposal.execution.executor
@@ -296,6 +264,24 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
 
   defp pay(_proposal, _fleet), do: nil
+
+  # What each key that didn't vote yes on a carried-out payment may collect,
+  # from the payment its execution made; unknown until the reader has
+  # recorded that payment.
+  defp match(%{kind: :pay, execution: %{transaction_hash: hash}}, fleet) do
+    case Treasury.payment_made_in(fleet.id, hash) do
+      nil ->
+        %{read?: false}
+
+      payment ->
+        %{
+          read?: true,
+          share: amount(Decimal.to_integer(payment.share), payment.asset, Treasury.assets(fleet))
+        }
+    end
+  end
+
+  defp match(_proposal, _fleet), do: nil
 
   defp launch(%{kind: :autolaunch, launch_envelope: nil}), do: %{read?: false}
 
@@ -451,9 +437,12 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp as_text(bytes), do: String.replace_invalid(bytes)
 
-  # Whole numbers throughout: an amount can be any uint256, more digits than
-  # decimal arithmetic keeps.
-  defp units(atoms, decimals) do
+  @doc """
+  `atoms` of a token with `decimals` places, in whole tokens, thousands
+  grouped. Whole numbers throughout: an amount can be any uint256, more
+  digits than decimal arithmetic keeps.
+  """
+  def units(atoms, decimals) do
     scale = Integer.pow(10, decimals)
 
     fraction =

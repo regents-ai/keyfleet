@@ -21,6 +21,7 @@ defmodule Keyfleet.WalletSteps.Build do
   alias Keyfleet.Chain.Abi
   alias Keyfleet.Fleets
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps
   alias Keyfleet.WalletSteps.Typed
   alias RegentChain.{Call, Review}
 
@@ -70,12 +71,9 @@ defmodule Keyfleet.WalletSteps.Build do
   end
 
   defp chain(chain_id) do
-    case Application.fetch_env!(:keyfleet, :wallet_chains) do
-      %{^chain_id => %{name: name, rpc_url: rpc_url}} ->
-        {:ok, %{chain_id: chain_id, name: name, rpc_url: rpc_url}}
-
-      _unlisted ->
-        {:error, "no wallet chain is set for chain #{chain_id}"}
+    case WalletSteps.chain(chain_id) do
+      nil -> {:error, "no wallet chain is set for chain #{chain_id}"}
+      chain -> {:ok, chain}
     end
   end
 
@@ -99,10 +97,10 @@ defmodule Keyfleet.WalletSteps.Build do
     client = Chain.Client.configured()
 
     with {:ok, head} <- client.head(),
-         {:ok, assets} <- read(client, fleet.rewards_address, "rewardAssets()", [], head,
-                            {:array, :address}),
+         {:ok, assets} <-
+           read(client, fleet.rewards_address, "rewardAssets()", [], head, {:array, :address}),
          {:ok, waiting} <- waiting(client, fleet, assets, token_id, head) do
-      figures = %{token_id: token_id, waiting: waiting}
+      figures = %{token_id: token_id, waiting: named(fleet, waiting)}
 
       case Enum.reject(waiting, &(&1.amount == 0)) do
         [] ->
@@ -274,8 +272,7 @@ defmodule Keyfleet.WalletSteps.Build do
 
   defp steps(:send_share, fleet, _signer, _inputs, _arguments),
     do:
-      {:ok,
-       [Review.step("send", fleet.contract_address, Call.encode("sendProtocolShare()", []))],
+      {:ok, [Review.step("send", fleet.contract_address, Call.encode("sendProtocolShare()", []))],
        %{}}
 
   defp buy(fleet, signer, progress) do
@@ -341,11 +338,22 @@ defmodule Keyfleet.WalletSteps.Build do
     end
   end
 
+  # Each amount with its token's symbol and decimals, as the fleet's
+  # balances name them; both nil for a token that hasn't said.
+  defp named(fleet, waiting) do
+    known = Map.new(Treasury.payable_assets(fleet), &{&1.address, &1})
+
+    Enum.map(waiting, fn %{asset: asset} = entry ->
+      known
+      |> Map.get(asset, %{symbol: nil, decimals: nil, usdc?: false})
+      |> Map.take([:symbol, :decimals, :usdc?])
+      |> Map.merge(entry)
+    end)
+  end
+
   # One view function's answer at the head block.
   defp read(client, to, signature, arguments, head, type) do
-    "0x" <> hex = Call.encode(signature, arguments)
-
-    with {:ok, returned} <- client.call(to, Base.decode16!(hex, case: :lower), head.hash),
+    with {:ok, returned} <- client.call(to, Call.encode(signature, arguments), head.hash),
          {:ok, [value]} <- Abi.decode(returned, [type]) do
       {:ok, value}
     else
@@ -368,7 +376,7 @@ defmodule Keyfleet.WalletSteps.Build do
                typed(inputs, "other_asset", &Typed.address(&1, :asset_unreadable), figures) do
           {:ok,
            Enum.find(listed, &(&1.address == address)) ||
-             %{address: address, symbol: nil, decimals: nil}}
+             %{address: address, symbol: nil, decimals: nil, usdc?: false}}
         end
 
       address ->

@@ -116,10 +116,12 @@ defmodule Keyfleet.Chain.StubClient do
   end
 
   @impl true
-  def transaction(_chain, hash), do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(0)}
+  def transaction(_chain, hash),
+    do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(0)}
 
   @impl true
-  def receipt(_chain, hash), do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(1)}
+  def receipt(_chain, hash),
+    do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(1)}
 
   defp chain do
     Enum.find_value([self() | Process.get(:"$callers", [])], &put_by/1) ||

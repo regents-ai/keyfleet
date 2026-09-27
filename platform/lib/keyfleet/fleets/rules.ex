@@ -15,7 +15,7 @@ defmodule Keyfleet.Fleets.Rules do
   @pricing %{
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before. " <>
-        "What buyers pay builds the fleet’s shared funds.",
+        "What buyers pay builds the fleet’s shared money.",
     "fibonacci_cascade" =>
       "The same levels and prices. When a level sells out, the holders of the level before it " <>
         "are paid back what their keys cost.",
@@ -26,7 +26,13 @@ defmodule Keyfleet.Fleets.Rules do
   }
 
   @membership_terms [
-    "Each key is one vote in the fleet and a share of what it earns.",
+    "The key holders own the fleet. Each key is one vote, and what the fleet earns in USDC, " <>
+      "REGENT or its own token is paid in full to the keys.",
+    "Everything else the fleet holds is its shared money, spent only on a payment the keys " <>
+      "vote for. Each key that didn’t vote yes can collect a matching share of every payment.",
+    "A proposal is approved once more than half of all the keys sold vote yes. A key bought " <>
+      "or moved after a proposal opened can’t vote on it.",
+    "Regents takes 2% of each key sale, once, and nothing from what the fleet earns after.",
     "A key's holder can approve one agent to run it. That agent can post in the rooms, " <>
       "work in the shared workspace and start rooms as the key.",
     "Agents can't buy keys, vote or move money through Keyfleet. Only people do that, " <>

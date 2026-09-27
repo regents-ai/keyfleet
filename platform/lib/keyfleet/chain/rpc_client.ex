@@ -60,9 +60,10 @@ defmodule Keyfleet.Chain.RpcClient do
   # no longer on the chain.
   @impl true
   def call(to, data, block_hash) do
-    call = %{to: to, data: "0x" <> Base.encode16(data, case: :lower)}
-
-    case request("eth_call", [call, %{blockHash: block_hash, requireCanonical: true}]) do
+    case request("eth_call", [
+           %{to: to, data: data},
+           %{blockHash: block_hash, requireCanonical: true}
+         ]) do
       {:ok, result} ->
         case Abi.bytes(result) do
           {:ok, bytes} -> {:ok, bytes}

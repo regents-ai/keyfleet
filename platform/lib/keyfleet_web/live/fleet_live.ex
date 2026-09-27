@@ -32,6 +32,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.Time
+  alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WorkspacePage
 
   # The panels beside the map, each with the button that opens it.
@@ -78,6 +79,7 @@ defmodule KeyfleetWeb.FleetLive do
     do: %{deployed?: true, current?: fleet.current?, keys: fleet.progress.total_minted}
 
   attr :fleet, :map, required: true
+  attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :params, :map, required: true, doc: "the page's address"
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
@@ -208,7 +210,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
           <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
           <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
-          <.about fleet={@fleet} />
+          <.about fleet={@fleet} actor={@actor} />
           <CheckIns.who_is_here
             fleet_id={@fleet.fleet_id}
             agents={@fleet.agents}
@@ -261,6 +263,7 @@ defmodule KeyfleetWeb.FleetLive do
         :if={@profile}
         profile={@profile}
         fleet={@fleet}
+        actor={@actor}
         params={@params}
         thread={@thread}
       />
@@ -612,6 +615,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(assigns), do: ~H"{@part}"
 
   attr :fleet, :map, required: true
+  attr :actor, :any, required: true
 
   # Opens beside the map: the fleet's pricing, the next key to buy, its sales
   # so far, and where its contract lives.
@@ -639,13 +643,7 @@ defmodule KeyfleetWeb.FleetLive do
 
       <p>{Rules.pricing(@fleet.fleet_id)}</p>
 
-      <.buy_key
-        :if={@fleet.buy}
-        fleet_id={@fleet.fleet_id}
-        buy={@fleet.buy}
-        current?={@fleet.current?}
-        signed_in={@fleet.signed_in}
-      />
+      <.buy_key :if={@fleet.buy} fleet={@fleet} buy={@fleet.buy} actor={@actor} />
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>
@@ -779,92 +777,107 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :fleet_id, :string, required: true
+  attr :fleet, :map, required: true
   attr :buy, :map, required: true
-  attr :current?, :boolean, required: true
-  attr :signed_in, :list, required: true, doc: "the signed-in person's wallets, primary first"
+  attr :actor, :any, required: true
 
-  # "Buying a key", in "How this fleet works": the key on offer with its price
-  # beside Buy, then what a buyer should know.
+  # "Buying a key", in "How this fleet works": the key on offer with its price,
+  # then Approve and Buy, and what a buyer should know.
   #
   # Every press of Buy goes to the wallet: the button is never disabled, and
   # nothing here decides on the buyer's behalf whether a purchase would succeed.
-  # A fleet that sells out while the page is open keeps the buyer's messages
-  # about the purchases they made. When the connected wallet isn't the
-  # signed-in person's, a note says so, and the press still goes to the
-  # connected wallet.
+  # Approve shows when the wallet's USDC allowance to the fleet is below the
+  # price; Buy shows once no approval is needed or one has been sent. The
+  # buttons stay in the page when the fleet sells out, so the buyer keeps the
+  # outcome of every purchase they sent.
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
       <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
 
-      <div
-        id="buy-key-order"
-        phx-hook="BuyKey"
-        data-chain-id={@buy.chain_id}
-        data-fleet={@buy.contract_address}
-        data-usdc={@buy.usdc_address}
-        data-price={@buy.price}
-        data-price-label={@buy.price && usdc(@buy.price)}
-        data-deadline-seconds={@buy.deadline_seconds}
-        data-signed-in={Jason.encode!(@signed_in)}
-      >
-        <p :if={is_nil(@buy.price)} id="buy-key-sold-out">
-          All {grouped(@buy.max_supply)} keys in this fleet have been sold.
-        </p>
+      <p id="buy-key-sold-out" hidden={@buy.price != nil}>
+        All {grouped(@buy.max_supply)} keys in this fleet have been sold. You can still get one
+        from someone who holds a key: it moves like any other token on Base, though a key that
+        moves can’t vote on proposals already open.
+      </p>
 
-        <div :if={@buy.price} id="buy-key-offer" class="fleet-buy-offer">
-          <dl class="fleet-buy-facts">
-            <div>
-              <dt>Key</dt>
-              <dd id="buy-key-number" phx-hook="Counter" data-variant={Motion.standard("count")}>
-                {grouped(@buy.token_id)}
-              </dd>
-            </div>
-            <div>
-              <dt>Price</dt>
-              <dd id="buy-key-price" phx-hook="Counter" data-variant={Motion.standard("count")}>
-                {usdc(@buy.price)}
-              </dd>
-            </div>
-            <div :if={@buy.level}>
-              <dt>Level</dt>
-              <dd id="buy-key-level">{@buy.level}</dd>
-            </div>
-          </dl>
-
-          <Regent.Primitives.button id="buy-key-button" type="button" data-buy-key>
-            <span data-press-label>Buy key {grouped(@buy.token_id)}</span>
-          </Regent.Primitives.button>
-        </div>
-
-        <p :if={@buy.price && not @current?} id="buy-key-price-may-move" class="fleet-detail">
-          Sales are still being counted, so this price may already have gone up. If it has,
-          the purchase is refused and no USDC is taken, though your wallet still pays the
-          Base network fee for trying.
-        </p>
-
-        <%!-- Nothing between the tags, so the note stays hidden until it has something to say. --%>
-        <p
-          id="buy-key-wallet-note"
-          class="fleet-detail fleet-wallet-note"
-          phx-update="ignore"
-          data-wallet-note
-          phx-no-format
-        ></p>
-        <ol id="buy-key-status" class="fleet-buy-status" phx-update="ignore" aria-live="polite"></ol>
+      <div id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
+        <dl class="fleet-buy-facts">
+          <div>
+            <dt>Key</dt>
+            <dd id="buy-key-number" phx-hook="Counter" data-variant={Motion.standard("count")}>
+              {@buy.token_id && grouped(@buy.token_id)}
+            </dd>
+          </div>
+          <div>
+            <dt>Price</dt>
+            <dd id="buy-key-price" phx-hook="Counter" data-variant={Motion.standard("count")}>
+              {@buy.price && usdc(@buy.price)}
+            </dd>
+          </div>
+          <div :if={@buy.level}>
+            <dt>Level</dt>
+            <dd id="buy-key-level">{@buy.level}</dd>
+          </div>
+        </dl>
       </div>
 
+      <p
+        id="buy-key-price-may-move"
+        class="fleet-detail"
+        hidden={is_nil(@buy.price) or @fleet.current?}
+      >
+        Sales are still being counted, so this price may already have gone up. If it has,
+        the purchase is refused and no USDC is taken, though your wallet still pays the
+        Base network fee for trying.
+      </p>
+
+      <.live_component
+        module={WalletPanel}
+        id="buy-key-order"
+        class="fleet-buy-order"
+        flow={:buy}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+        refresh={{@buy.token_id, @buy.price}}
+      >
+        <:buttons :let={panel}>
+          <Regent.Primitives.button
+            id="buy-key-approve"
+            data-onchain-step="approve"
+            hidden={not approve_shown?(panel)}
+          >
+            <span data-press-label>Approve {@buy.price && usdc(@buy.price)}</span>
+          </Regent.Primitives.button>
+          <Regent.Primitives.button
+            id="buy-key-button"
+            data-onchain-step="buy"
+            hidden={is_nil(@buy.price) or not buy_shown?(panel)}
+          >
+            <span data-press-label>Buy key {@buy.token_id && grouped(@buy.token_id)}</span>
+          </Regent.Primitives.button>
+        </:buttons>
+      </.live_component>
+
       <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Base from your connected wallet. If your wallet hasn’t already allowed
-        this much USDC, it first asks you to approve exactly {usdc(@buy.price)}.
+        Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
+        much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
       </p>
       <p :if={@buy.price && @buy.level} class="fleet-detail">
-        {Rules.holding_limit_sentence(@fleet_id, @buy.token_id)}
+        {Rules.holding_limit_sentence(@fleet.fleet_id, @buy.token_id)}
       </p>
     </section>
     """
   end
+
+  # Approve shows while the wallet the figures are for needs an approval.
+  defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
+  defp approve_shown?(_panel), do: false
+
+  # Buy shows when no approval is needed, or once one has been sent, so a
+  # press on it before the approval lands still reaches the wallet.
+  defp buy_shown?(panel),
+    do: not approve_shown?(panel) or WalletPanel.sent?(panel, "approve")
 
   @doc "A wallet shortened to its first six and last four characters."
   def short_wallet(wallet),

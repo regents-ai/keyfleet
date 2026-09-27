@@ -7,12 +7,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
-  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.WorkspacePage
+  alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -30,6 +30,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     ChainHelpers.open_cursor!(@fleet)
 
     for token_id <- 1..@issued, do: issue!(@fleet, token_id)
+    # A chain that answers no reads until a test says what it holds.
+    StubClient.put_chain(chain_head(1_000), [])
 
     %{conn: signed_in(conn)}
   end
@@ -226,32 +228,166 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#buy-key-level") == "9"
       assert text(view, "#buy-key") =~ "One wallet may hold 8 keys of level 9."
-      assert text(view, "#fleet-about #buy-key-offer #buy-key-button") == "Buy key 151"
-      refute has_element?(view, "#buy-key-sold-out")
+      assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy key 151"
+      assert has_element?(view, "#buy-key-sold-out[hidden]")
     end
 
-    # The wallet is handed the fleet's own deployment and the contract's own
-    # price in atomic USDC, and adds the ten minutes itself when it is pressed.
-    test "hands the wallet the fleet's deployment and the exact price", %{conn: conn} do
+    # The steps are built on the server for the wallet that sends them, and
+    # the page has them before anyone presses: an approval of exactly the
+    # price when the wallet hasn't allowed that much, then the purchase.
+    test "builds Approve and Buy for the signed-in wallet once it is the active one", %{
+      conn: conn
+    } do
       fleet = deploy!()
       ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
 
       {:ok, view, _html} = live(conn, @path)
+      active!(view, @owner)
 
-      assert order(view) == %{
-               "phx-hook" => "BuyKey",
-               "data-chain-id" => Integer.to_string(fleet.chain_id),
-               "data-fleet" => fleet.contract_address,
-               "data-usdc" => fleet.usdc_address,
-               "data-price" => Integer.to_string(Presets.progress(@fleet, @issued).next_price),
-               "data-price-label" => "42.99817 USDC",
-               "data-deadline-seconds" => "600",
-               "data-signed-in" => Jason.encode!([@owner])
-             }
+      assert_push_event(view, "onchain-steps:review", %{
+        component_id: "buy-key-order",
+        review: review
+      })
 
-      assert order(view)["data-price"] == "42998170"
-      assert fleet.usdc_address == @usdc
-      assert fleet.contract_address == @contract
+      assert review.signer == @owner
+      assert review.chain.chain_id == fleet.chain_id
+      assert Enum.map(review.steps, & &1.step) == ["approve", "buy"]
+
+      [approve, buy] = review.steps
+      assert approve.to == @usdc
+      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 42_998_170])
+      assert buy.to == @contract
+      assert "0x" <> _calldata = buy.data
+
+      assert text(view, "#buy-key-order-line") ==
+               "Key 151 costs 42.99817 USDC. First approve 42.99817 USDC for the fleet, then buy it."
+
+      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa…aaaa on Base."
+      refute has_element?(view, "#buy-key-approve[hidden]")
+      assert has_element?(view, "#buy-key-button[hidden]")
+    end
+
+    # "When the approval is sent, the next button shows at once": Buy is
+    # there to press while the approval is still on its way, and the steps
+    # are built again once it lands.
+    test "Buy shows as soon as the approval is sent, and the approval's outcome is shown", %{
+      conn: conn
+    } do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      active!(view, @owner)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        review: %{steps: [approve, _buy]} = review
+      })
+
+      hash = "0x" <> String.duplicate("1", 64)
+      chain!(allowance: 42_998_170, transactions: %{hash => landed(review, approve, "0x1")})
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "approve",
+        "transaction_hash" => hash
+      })
+
+      render_async(view)
+
+      assert has_element?(
+               view,
+               "#buy-key-order-sent li[data-state=confirmed] strong",
+               "Approve USDC"
+             )
+
+      assert text(view, "#buy-key-order-sent span") == "Approved. Now press Buy key."
+      refute has_element?(view, "#buy-key-button[hidden]")
+
+      # Built again for the allowance now in place: the purchase alone.
+      assert_push_event(view, "onchain-steps:review", %{review: %{steps: [%{step: "buy"}]}})
+      assert has_element?(view, "#buy-key-approve[hidden]")
+
+      assert text(view, "#buy-key-order-line") ==
+               "Key 151 costs 42.99817 USDC, paid from your wallet."
+    end
+
+    test "a purchase that doesn't go through says why it may not have", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 42_998_170)
+
+      {:ok, view, _html} = live(conn, @path)
+      active!(view, @owner)
+      assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
+
+      hash = "0x" <> String.duplicate("2", 64)
+      chain!(allowance: 42_998_170, transactions: %{hash => landed(review, buy, "0x0")})
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "buy",
+        "transaction_hash" => hash
+      })
+
+      render_async(view)
+      assert has_element?(view, "#buy-key-order-sent li[data-state=reverted] strong", "Buy key")
+
+      assert text(view, "#buy-key-order-sent span") =~
+               "The purchase didn’t go through and no USDC was taken."
+
+      refute has_element?(view, "#buy-key-button[hidden]")
+    end
+
+    # Skill rule 3: another wallet open in the wallet app keeps the figures
+    # on the account's own wallet, names both, and gets no steps to send.
+    test "a wallet the account doesn't link is named, and nothing is built for it", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      active!(view, @stranger)
+
+      refute_push_event(view, "onchain-steps:review", %{review: %{}})
+
+      assert text(view, "#buy-key-order-mismatch") ==
+               "You're signed in with 0xaaaa…aaaa, but your wallet app has 0xbbbb…bbbb open. " <>
+                 "Switch to a wallet on your account to send from here."
+
+      assert has_element?(view, "#buy-key-order-from[hidden]")
+      assert text(view, "#buy-key-order-line") =~ "First approve 42.99817 USDC"
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_failed", %{"step" => "buy", "reason" => "wallet_unavailable"})
+
+      assert text(view, "#buy-key-order-press-note") ==
+               "Switch to a wallet on your account in your wallet app, then press again. Nothing was sent."
+    end
+
+    test "signed out, nothing is built and a press says to sign in", %{conn: _conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(init_test_session(build_conn(), %{}), @path)
+      active!(view, @owner)
+
+      refute_push_event(view, "onchain-steps:review", %{review: %{}})
+      assert has_element?(view, "#buy-key-order-line[hidden]")
+      refute has_element?(view, "#buy-key-button[hidden]")
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_failed", %{"step" => "buy", "reason" => "wallet_unavailable"})
+
+      assert text(view, "#buy-key-order-press-note") == "Sign in to send this. Nothing was sent."
     end
 
     test "a fleet without levels offers its key with no level", %{conn: conn} do
@@ -262,7 +398,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-number") == "1"
       assert text(view, "#buy-key-price") == "10 USDC"
-      assert order(view)["data-price"] == "10000000"
       refute has_element?(view, "#buy-key-level")
       refute html =~ "One wallet may hold"
     end
@@ -274,27 +409,46 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
 
-      assert text(view, "#buy-key-sold-out") == "All 144 keys in this fleet have been sold."
-      refute has_element?(view, "#buy-key-offer")
-      refute has_element?(view, "#buy-key-button")
+      assert text(view, "#buy-key-sold-out") =~ "All 144 keys in this fleet have been sold."
+      refute has_element?(view, "#buy-key-sold-out[hidden]")
+      assert has_element?(view, "#buy-key-offer[hidden]")
+      assert has_element?(view, "#buy-key-approve[hidden]")
+      assert has_element?(view, "#buy-key-button[hidden]")
       refute has_element?(view, "#fleet-get-key")
     end
 
-    # The buyer's messages about their purchases stay when the last key sells
+    # The buyer's purchases and how each landed stay when the last key sells
     # while the page is open.
-    test "a fleet that sells out while open keeps the buyer's messages", %{conn: conn} do
+    test "a fleet that sells out while open keeps the buyer's purchases", %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..143, do: issue!("fleet_tech_classic", token_id)
+      chain!(allowance: 10_000_000)
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
       assert text(view, "#buy-key-number") == "144"
 
-      issue!("fleet_tech_classic", 144)
+      active!(view, @owner)
+      assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
+      hash = "0x" <> String.duplicate("3", 64)
+      chain!(allowance: 10_000_000, transactions: %{hash => landed(review, buy, "0x1")})
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "buy",
+        "transaction_hash" => hash
+      })
+
+      render_async(view)
+
+      issue!("fleet_tech_classic", 144, @owner)
       send(view.pid, {:keys_changed, "fleet_tech_classic", [144]})
 
-      assert text(view, "#buy-key-sold-out") == "All 144 keys in this fleet have been sold."
-      refute has_element?(view, "#buy-key-button")
-      assert has_element?(view, ~s(#buy-key-order[phx-hook="BuyKey"] > #buy-key-status))
+      assert text(view, "#buy-key-sold-out") =~ "All 144 keys in this fleet have been sold."
+      assert has_element?(view, "#buy-key-button[hidden]")
+      assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy key")
+      assert text(view, "#buy-key-order-sent span") =~ "Done. The key is yours"
     end
 
     # Stopping here would hold back a press the contract can answer: a key
@@ -610,32 +764,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, "#fleet-send-agent-dialog")
   end
 
-  # The page names the signed-in wallets so the button can say when the
-  # connected wallet is another; the press still goes to the connected one.
-  test "Buy carries the signed-in wallets for its wallet note, and none when signed out", %{
-    conn: conn
-  } do
-    deploy!()
-    ChainHelpers.seed_cursor!(@fleet)
-
-    {:ok, view, _html} = live(conn, @path)
-    assert order(view)["data-signed-in"] == Jason.encode!([@owner])
-    assert has_element?(view, "#buy-key-order #buy-key-wallet-note[data-wallet-note]")
-
-    # Nothing inside, not even a space, so the page's rule hides it until
-    # there is something to say.
-    assert view
-           |> render()
-           |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#buy-key-wallet-note")
-           |> LazyHTML.child_nodes()
-           |> Enum.empty?()
-
-    {:ok, view, _html} = live(init_test_session(build_conn(), %{}), @path)
-    assert order(view)["data-signed-in"] == "[]"
-    assert has_element?(view, "#buy-key-order #buy-key-wallet-note[data-wallet-note]")
-  end
-
   # The button's only job is to reach the wallet, whatever the page shows.
   test "the Buy button is never disabled", %{conn: conn} do
     deploy!()
@@ -662,6 +790,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute Map.has_key?(attributes, "disabled")
       refute Map.has_key?(attributes, "aria-disabled")
       refute Map.has_key?(attributes, "inert")
+      refute Map.has_key?(attributes, "phx-click")
+      assert attributes["data-onchain-step"] == "buy"
     end
   end
 
@@ -1075,16 +1205,41 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   defp word(value), do: "0x" <> String.pad_leading(Integer.to_string(value, 16), 64, "0")
 
-  # The attributes the page hands the Buy button's wallet hook.
-  defp order(view) do
+  # Privy's active wallet, as the page's wallet hook reports it.
+  defp active!(view, wallet) do
     view
-    |> render()
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#buy-key-order")
-    |> LazyHTML.attributes()
-    |> hd()
-    |> Map.new()
-    |> Map.drop(["id"])
+    |> with_target("#buy-key-order")
+    |> render_hook("onchain_active_wallet", %{"address" => wallet})
+
+    render_async(view)
+  end
+
+  # The chain the buy steps read: the wallet's USDC allowance to the fleet,
+  # and each sent transaction with its receipt.
+  defp chain!(opts) do
+    allowance = Call.selector("allowance(address,address)")
+
+    StubClient.put_chain(chain_head(1_000), [],
+      calls: fn _to, data, _hash -> answer(data, allowance, opts) end,
+      transactions: Keyword.get(opts, :transactions, %{})
+    )
+  end
+
+  defp answer(data, allowance, opts) do
+    if String.starts_with?(data, allowance),
+      do: {:ok, <<Keyword.fetch!(opts, :allowance)::256>>},
+      else: {:error, :no_answer}
+  end
+
+  # A step sent as the review built it, landed with `status`.
+  defp landed(review, step, status) do
+    {%{
+       "chainId" => "0x" <> Integer.to_string(review.chain.chain_id, 16),
+       "from" => review.signer,
+       "to" => step.to,
+       "input" => step.data,
+       "value" => step.value
+     }, %{"status" => status}}
   end
 
   defp text(view, selector) do

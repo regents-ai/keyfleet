@@ -20,9 +20,8 @@ defmodule Keyfleet.Chain.LaunchEnvelopes do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.Abi
   alias Keyfleet.Proposals
+  alias RegentChain.Call
 
-  # cast sig "launchEnvelope(uint256)"
-  @launch_envelope <<0xB3, 0xBC, 0xEA, 0xDB>>
   @texts [:name, :symbol, :description, :website, :image]
   @system %System{}
 
@@ -67,7 +66,7 @@ defmodule Keyfleet.Chain.LaunchEnvelopes do
     with {:ok, returned} <-
            client.call(
              fleet.votes_address,
-             @launch_envelope <> <<proposal.number::256>>,
+             Call.encode("launchEnvelope(uint256)", [proposal.number]),
              block_hash
            ),
          {:ok, envelope} <- decode(returned, proposal.envelope_hash),

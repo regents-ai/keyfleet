@@ -14,7 +14,11 @@ defmodule Keyfleet.WalletStepsTest do
   @signer "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
   @other "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
   @actor %Human{human_account_id: Ecto.UUID.generate(), wallet_addresses: [@signer]}
-  @head %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: ~U[2026-09-27 12:00:00Z]}
+  @head %{
+    number: 1_000,
+    hash: "0x" <> String.duplicate("c", 64),
+    timestamp: ~U[2026-09-27 12:00:00Z]
+  }
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 
   setup do
@@ -39,7 +43,14 @@ defmodule Keyfleet.WalletStepsTest do
       assert {:error, %Ash.Error.Forbidden{}} = build(:send_share, %{}, @actor, @other)
 
       # A linked wallet written in capitals is the same wallet.
-      assert {:ok, %{review: review}} = build(:send_share, %{}, @actor, "0x" <> String.upcase(String.slice(@signer, 2..-1//1)))
+      assert {:ok, %{review: review}} =
+               build(
+                 :send_share,
+                 %{},
+                 @actor,
+                 "0x" <> String.upcase(String.slice(@signer, 2..-1//1))
+               )
+
       assert review.signer == @signer
     end
 
@@ -59,7 +70,12 @@ defmodule Keyfleet.WalletStepsTest do
       assert {:ok, built} = build(:buy)
       assert built.problem == nil
       assert %{token_id: 1, price: 10_000_000, approve?: true} = built.figures
-      assert built.review.chain == %{chain_id: 8_453, name: "Base", rpc_url: "https://mainnet.base.org"}
+
+      assert built.review.chain == %{
+               chain_id: 8_453,
+               name: "Base",
+               rpc_url: "https://mainnet.base.org"
+             }
 
       deadline = DateTime.to_unix(@head.timestamp) + 600
 
@@ -85,7 +101,10 @@ defmodule Keyfleet.WalletStepsTest do
     end
 
     test "a chain that can't be read builds nothing and says so" do
-      StubClient.put_chain(@head, [], calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end)
+      StubClient.put_chain(@head, [],
+        calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end
+      )
+
       assert {:ok, %{problem: :unread, review: %{steps: []}}} = build(:buy)
     end
 
@@ -116,7 +135,10 @@ defmodule Keyfleet.WalletStepsTest do
                build(:vote, proposal: 4, inputs: %{"keys" => "3, seven"})
 
       assert {:ok, %{problem: :key_too_large}} =
-               build(:vote, proposal: 4, inputs: %{"keys" => Integer.to_string(Integer.pow(2, 256))})
+               build(:vote,
+                 proposal: 4,
+                 inputs: %{"keys" => Integer.to_string(Integer.pow(2, 256))}
+               )
     end
 
     test "a vote needs its proposal" do
@@ -194,7 +216,7 @@ defmodule Keyfleet.WalletStepsTest do
                  }
                )
 
-      assert built.figures.asset == %{address: token, symbol: nil, decimals: nil}
+      assert built.figures.asset == %{address: token, symbol: nil, decimals: nil, usdc?: false}
       assert built.figures.amount == 500
 
       assert {:ok, %{problem: {:too_many_decimals, 0}}} =
@@ -282,8 +304,8 @@ defmodule Keyfleet.WalletStepsTest do
       assert {:ok, built} = build(:claim, token_id: 5)
 
       assert built.figures.waiting == [
-               %{asset: @usdc, amount: 2_500_000},
-               %{asset: regent, amount: 0}
+               %{asset: @usdc, amount: 2_500_000, symbol: "USDC", decimals: 6, usdc?: true},
+               %{asset: regent, amount: 0, symbol: nil, decimals: nil, usdc?: false}
              ]
 
       assert [claim] = built.review.steps
@@ -296,37 +318,38 @@ defmodule Keyfleet.WalletStepsTest do
 
     test "nothing waiting builds nothing" do
       answering(reward_assets: [@usdc], accrued: %{@usdc => 0})
-      assert {:ok, %{problem: :nothing_waiting, review: %{steps: []}}} = build(:claim, token_id: 5)
+
+      assert {:ok, %{problem: :nothing_waiting, review: %{steps: []}}} =
+               build(:claim, token_id: 5)
     end
   end
 
   # The node answers the views the builder reads: USDC allowances, the
   # rewards contract's assets and what a key has accrued in each.
   defp answering(answers) do
-    allowance = selector("allowance(address,address)")
-    reward_assets = selector("rewardAssets()")
-    accrued = selector("accrued(address,uint256)")
+    allowance = Call.selector("allowance(address,address)")
+    reward_assets = Call.selector("rewardAssets()")
+    accrued = Call.selector("accrued(address,uint256)")
 
     StubClient.put_chain(@head, [],
       calls: fn _to, data, _hash ->
-        case data do
-          <<^allowance::binary-size(4), _rest::binary>> ->
+        case String.split_at(data, 10) do
+          {^allowance, _arguments} ->
             {:ok, <<Keyword.fetch!(answers, :allowance)::256>>}
 
-          <<^reward_assets::binary-size(4)>> ->
+          {^reward_assets, ""} ->
             assets = Keyword.fetch!(answers, :reward_assets)
 
             {:ok,
              <<32::256, length(assets)::256>> <>
                Enum.map_join(assets, &(<<0::96>> <> address(&1)))}
 
-          <<^accrued::binary-size(4), _pad::96, asset::binary-size(20), _token::256>> ->
-            {:ok, <<Map.fetch!(answers[:accrued], "0x" <> Base.encode16(asset, case: :lower))::256>>}
+          {^accrued, <<_pad::binary-size(24), asset::binary-size(40), _token::binary-size(64)>>} ->
+            {:ok, <<Map.fetch!(answers[:accrued], "0x" <> asset)::256>>}
         end
       end
     )
   end
 
-  defp selector(signature), do: signature |> Call.selector() |> address()
   defp address("0x" <> hex), do: Base.decode16!(hex, case: :lower)
 end

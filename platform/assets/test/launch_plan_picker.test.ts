@@ -1,19 +1,14 @@
 import {expect, it} from "vitest"
-import {decodeFunctionData, zeroHash} from "viem"
 
-import {LaunchPlanPicker, noPlanWords} from "../js/hooks/launch_plan_picker"
-import {encode, readAction, votesAbi} from "../js/wallet_actions/fleet_action"
+import {LaunchPlanPicker} from "../js/hooks/launch_plan_picker"
 
 // Vitest here runs without a document, so the launch form is the small
-// surface the hook touches: its inputs by name, its status line and its
-// change listener.
+// surface the hook touches: its inputs by name and its change listener.
 const planDigest = `0x${"c4".repeat(32)}`
 
 const plan = {
   value: planDigest,
   dataset: {
-    title: "Cascade Research",
-    version: "3",
     name: "Cascade Research",
     symbol: "CSR",
     description: "Research the fleet funds\nweekly",
@@ -30,13 +25,11 @@ function mountForm() {
     ["key", "name", "symbol", "description", "website", "image", "raise", "digest"].map(name => [name, {value: ""}]),
   )
   inputs.key.value = "4"
-  const status = {textContent: noPlanWords}
   const select = {dataset: {launchPlans: ""}, options: [noPlan, plan], selectedIndex: 0}
   let listener: ((event: Event) => void) | undefined
 
   const root = {
     querySelector: (selector: string) => {
-      if (selector === "[data-launch-plan-status]") return status
       const name = /^\[name="(\w+)"\]$/.exec(selector)?.[1]
       return name ? inputs[name] : null
     },
@@ -49,11 +42,9 @@ function mountForm() {
     select.selectedIndex = index
     listener!({target: select} as unknown as Event)
   }
-  // What the Propose button sends with the form as it stands.
-  const proposal = () =>
-    decodeFunctionData({abi: votesAbi, data: encode(readAction("propose_launch", {}, name => inputs[name].value))})
+  const values = () => Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, input.value]))
 
-  return {inputs, status, choose, proposal}
+  return {inputs, choose, values}
 }
 
 it("choosing a plan fills in its six launch details and points the proposal to its version", () => {
@@ -61,15 +52,15 @@ it("choosing a plan fills in its six launch details and points the proposal to i
 
   form.choose(1)
 
-  expect(form.status.textContent).toBe("This proposal will point to Cascade Research, version 3.")
-  expect(form.proposal().args[1]).toMatchObject({
+  expect(form.values()).toEqual({
+    key: "4",
     name: "Cascade Research",
     symbol: "CSR",
     description: "Research the fleet funds\nweekly",
     website: "https://example.test",
     image: "ipfs://cascade",
-    requiredRegentRaised: 250_000_500_000_000_000_000_000n,
-    narrativeDigest: planDigest,
+    raise: "250000.5",
+    digest: planDigest,
   })
 })
 
@@ -80,7 +71,5 @@ it("choosing not to use a plan points the proposal nowhere and keeps the details
 
   form.choose(0)
 
-  expect(form.status.textContent).toBe(noPlanWords)
-  expect(form.inputs.digest.value).toBe("")
-  expect(form.proposal().args[1]).toMatchObject({name: "Cascade Research Two", narrativeDigest: zeroHash})
+  expect(form.values()).toMatchObject({name: "Cascade Research Two", symbol: "CSR", digest: ""})
 })
