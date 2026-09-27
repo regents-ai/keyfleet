@@ -137,7 +137,7 @@ defmodule Keyfleet.Chain.Cursor do
     attribute :rescan_from, :integer, public?: true, constraints: [min: 0]
 
     # The last number given to one of the fleet's proposal, vote, execution,
-    # income split or budget payment records. It is moved only by `Keyfleet.Chain.take_proposal_seq!/1`.
+    # launch, receipt or payment records. It is moved only by `Keyfleet.Chain.take_proposal_seq!/1`.
     attribute :proposal_seq, :integer,
       allow_nil?: false,
       default: 0,

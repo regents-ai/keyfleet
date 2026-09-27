@@ -1076,8 +1076,7 @@ contract KeyfleetTest is Test {
     /// percent, rounded up to the nearest thousand. The first purchase after each
     /// `sendProtocolShare` pays the write of the owed share from zero again. That makes it a
     /// regression bound on the fleet's own work, not the figure to publish: real Base USDC is a
-    /// proxy and costs more per transfer, and the fork-measured totals in the contracts README are
-    /// the published ones.
+    /// proxy and costs more per transfer, so the figures to publish are measured on a fork of Base.
     /// The level-completing Cascade purchase is measured alongside it for information; it is cheaper,
     /// because by then the buckets it writes are warm.
     function test_firstPurchaseOnAFreshFleetIsTheWorstCase() public {

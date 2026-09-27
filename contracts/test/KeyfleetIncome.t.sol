@@ -783,8 +783,8 @@ contract KeyfleetIncomeGasTest is Test {
 
     /// @dev A send touches one fleet slot and one registration. It is measured with the fleet, USDC
     /// and the staking stand-in all cold, against the mock staking contract, whose own bookkeeping
-    /// is most of the figure, so this is a regression bound and the fork figure in the contracts
-    /// README is the one to publish.
+    /// is most of the figure, so this is a regression bound; the figure to publish is measured on
+    /// a fork of Base.
     function test_sendProtocolShareGas() public {
         uint256 owed = fleet.protocolShareOwed();
         assertGt(owed, 0, "the twenty purchases left a share owed");

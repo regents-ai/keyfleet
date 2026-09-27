@@ -220,8 +220,9 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeString(
             autolaunch,
             "readiness",
-            "A fleet may launch once, by vote, with itself as launcher and treasury, after it has sold"
-            " the last key of level 7 (Syndicate, Cascade) or 100 keys (Classic, Accelerant). Creation"
+            "A fleet launches by vote, one launch at a time, with itself as launcher and treasury, after"
+            " it has sold the last key of level 7 (Syndicate, Cascade) or 100 keys (Classic, Accelerant)."
+            " After a failed launch it may propose another; once one graduates, never again. Creation"
             " is not graduation: the app reads the strategy for the lifecycle. The launched token is"
             " an income token of the fleet from the moment the launch is created."
         );
