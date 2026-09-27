@@ -100,9 +100,9 @@ defmodule Keyfleet.Treasury.Reading do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
 
-    # USDC, then each reward asset in the order the reward ledger registered
-    # them, then every other asset the budget has held, as
-    # `Keyfleet.Treasury.budget_assets/2` lists them.
+    # The income tokens in the reward ledger's order (USDC, REGENT, then the
+    # launched token), then each token a payment proposal not yet carried out
+    # names, as `Keyfleet.Chain.TreasuryReader` reads them.
     attribute :assets, {:array, Keyfleet.Treasury.AssetBalance},
       allow_nil?: false,
       public?: true

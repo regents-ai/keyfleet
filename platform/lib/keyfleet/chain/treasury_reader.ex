@@ -4,12 +4,15 @@ defmodule Keyfleet.Chain.TreasuryReader do
   head, and keeps them as the fleet's `Keyfleet.Treasury.Reading`.
   `Keyfleet.Chain.Repeat` runs it once a minute.
 
-  Every figure of a reading comes from that one block: for each asset
-  `Keyfleet.Treasury.budget_assets/2` lists, the budget and the reward
-  backing, beside the Cascade reserve and the protocol share owed. A reading that fails in any part keeps
-  nothing and is tried again at the next one. A reading of a later block than
-  the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
-  on `Keyfleet.Proposals.topic/1`.
+  A reading covers the income tokens the reward ledger lists (USDC, REGENT
+  and the launched token once there is one) and each token a payment
+  proposal not yet carried out names, and no other: a token merely sent to
+  the fleet is never read or shown. Every figure of a reading comes from that
+  one block: for each of those tokens, the shared money and the reward
+  backing, beside the Cascade reserve and the protocol share owed. A reading
+  that fails in any part keeps nothing and is tried again at the next one. A
+  reading of a later block than the one kept replaces it and is announced as
+  `{:balances_changed, fleet_id}` on `Keyfleet.Proposals.topic/1`.
 
   Once a reading's balances are kept, token symbols and decimals are read at
   the same block; a reading that fails asks no token anything. A token that
@@ -18,13 +21,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
   kept as unknown. What a call that fails otherwise means depends on whose
   token it is:
 
-    * an asset of the reading kept is asked again at the next reading, with
-      a warning, since the node may have failed; and one whose symbol or decimals are kept as unknown is asked
-      again at every reading, so an earlier failure heals;
-    * an asset only a payment proposal names, which the budget cannot hold
-      or pay, is asked once: a call that fails keeps it as unknown for good.
-      If it later turns up in a reading, it is asked as the reading's assets
-      are.
+    * an income token is asked again at the next reading, with a warning,
+      since the node may have failed; and one whose symbol or decimals are
+      kept as unknown is asked again at every reading, so an earlier failure
+      heals;
+    * a token a payment proposal names, which anyone may write, is asked
+      once: a call that fails keeps it as unknown for good.
   """
 
   require Logger
@@ -47,17 +49,18 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @doc "Reads the fleet's balances at the node's head and keeps them, then any unread token details."
   def read(fleet, client) do
     with {:ok, head} <- client.head(),
-         {:ok, reading} <- read_balances(fleet, client, head) do
-      read_details(fleet, reading, client, head.hash)
+         {:ok, [rewards]} <-
+           call(client, fleet.rewards_address, {@reward_assets, [{:array, :address}]}, head.hash),
+         {:ok, reading} <- read_balances(fleet, rewards, client, head) do
+      read_details(fleet, rewards, client, head.hash)
       {:ok, reading}
     end
   end
 
-  defp read_balances(fleet, client, head) do
+  defp read_balances(fleet, rewards, client, head) do
     at = &call(client, &1, &2, head.hash)
 
-    with {:ok, [rewards]} <- at.(fleet.rewards_address, {@reward_assets, [{:array, :address}]}),
-         {:ok, balances} <- balances(fleet, Treasury.budget_assets(fleet, rewards), at),
+    with {:ok, balances} <- balances(fleet, read_assets(fleet, rewards), at),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
          {:ok, reading} <-
@@ -88,19 +91,23 @@ defmodule Keyfleet.Chain.TreasuryReader do
     end
   end
 
-  # The symbol and decimals of the reading's assets not yet read in full, and
-  # of the assets only payment proposals name not yet read at all.
-  defp read_details(fleet, reading, client, block_hash) do
-    known = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
-    held = Enum.map(reading.assets, & &1.asset)
+  # The income tokens in the reward ledger's order, then by address each token
+  # a payment proposal not yet carried out names.
+  defp read_assets(fleet, rewards),
+    do: Enum.uniq(rewards ++ Proposals.open_payment_assets(fleet.id))
 
-    held
+  # The symbol and decimals of the income tokens not yet read in full, and of
+  # the tokens only payment proposals name not yet read at all.
+  defp read_details(fleet, income, client, block_hash) do
+    known = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
+
+    income
     |> Enum.reject(&complete?(known[&1]))
     |> Enum.each(&read_held(fleet, &1, client, block_hash))
 
     fleet.id
     |> Proposals.payment_assets()
-    |> Enum.reject(&(&1 in held or Map.has_key?(known, &1)))
+    |> Enum.reject(&(&1 in income or Map.has_key?(known, &1)))
     |> Enum.each(&read_named(fleet, &1, client, block_hash))
   end
 
@@ -116,7 +123,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
     else
       {:error, reason} ->
         Logger.warning(
-          "Fleet #{fleet.id}: token #{asset} of the budget was not read " <>
+          "Fleet #{fleet.id}: income token #{asset} was not read " <>
             "(#{inspect(reason)}); it is asked again at the next reading."
         )
     end

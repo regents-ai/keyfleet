@@ -1,8 +1,8 @@
 defmodule Keyfleet.Treasury do
   @moduledoc """
   A fleet's money as its contract reports it: amounts its budget took in,
-  income paid to the keys, payments out of the budget, the latest reading of its balances, and the symbol and decimals of
-  each asset they name. Recorded from the fleet's contracts by the chain
+  income paid to the keys, payments out of the budget, the latest reading of
+  its balances, and the symbol and decimals of each asset they name. Recorded from the fleet's contracts by the chain
   reader and by nothing else. The chain is the authority; these records only
   mirror it.
   """
@@ -11,7 +11,7 @@ defmodule Keyfleet.Treasury do
   require Ash.Query
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
+  alias Keyfleet.Treasury.{BudgetPayment, IncomeReceipt}
 
   @latest 20
 
@@ -69,21 +69,6 @@ defmodule Keyfleet.Treasury do
   end
 
   @doc """
-  Every asset the fleet's budget can hold, as its history shows them: USDC,
-  which key sales pay in, then `reward_assets`, the reward ledger's assets in
-  its order, then, by address, each asset the budget took in or the keys
-  were paid as income.
-  """
-  def budget_assets(fleet, reward_assets) do
-    recorded =
-      [BudgetReceipt, IncomeReceipt]
-      |> Enum.flat_map(&assets_of(&1, fleet.id))
-      |> Enum.sort()
-
-    Enum.uniq([fleet.usdc_address | reward_assets] ++ recorded)
-  end
-
-  @doc """
   What an amount of the fleet's assets is shown with: `%{usdc: address,
   details: %{asset => {symbol, decimals}}}`, the fleet's USDC and each
   asset's symbol and decimals as its token reported them, either nil when
@@ -96,15 +81,6 @@ defmodule Keyfleet.Treasury do
 
   defp shown_with(fleet, details) do
     %{usdc: fleet.usdc_address, details: Map.new(details, &{&1.asset, {&1.symbol, &1.decimals}})}
-  end
-
-  defp assets_of(query, fleet_id) do
-    query
-    |> Ash.Query.filter(fleet_id == ^fleet_id)
-    |> Ash.Query.distinct(:asset)
-    |> Ash.Query.select([:asset])
-    |> Ash.read!()
-    |> Enum.map(& &1.asset)
   end
 
   @doc """

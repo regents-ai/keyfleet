@@ -96,6 +96,18 @@ defmodule Keyfleet.Proposals do
   def payment_assets(fleet_id) do
     Proposal
     |> Ash.Query.filter(fleet_id == ^fleet_id and kind == :pay)
+    |> assets()
+  end
+
+  @doc "Each asset the fleet's payment proposals not yet carried out name, by address."
+  def open_payment_assets(fleet_id) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and kind == :pay and not executed?)
+    |> assets()
+  end
+
+  defp assets(query) do
+    query
     |> Ash.Query.distinct(:asset)
     |> Ash.Query.select([:asset])
     |> Ash.read!()
