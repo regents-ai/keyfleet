@@ -27,7 +27,9 @@ defmodule Keyfleet.Chain.StubClient do
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
   `observations/0` returns, and `:calls`, a function answering each contract
-  read `call(to, data, block_hash)`, which by default answers none.
+  read `call(to, data, block_hash)`, which by default answers none, and
+  `:transactions`, a map from a transaction hash to `{transaction, receipt}`
+  as the node would answer them, `nil` for one it does not have yet.
   """
   def put_chain(head, logs, opts \\ []), do: Process.put(__MODULE__, new_chain(head, logs, opts))
 
@@ -47,6 +49,7 @@ defmodule Keyfleet.Chain.StubClient do
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),
       calls: Keyword.get(opts, :calls, fn _to, _data, _block_hash -> {:error, :no_answer} end),
+      transactions: Keyword.get(opts, :transactions, %{}),
       log_requests: [],
       call_requests: [],
       observations: []
@@ -111,6 +114,12 @@ defmodule Keyfleet.Chain.StubClient do
 
     chain.calls.(to, data, block_hash)
   end
+
+  @impl true
+  def transaction(_chain, hash), do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(0)}
+
+  @impl true
+  def receipt(_chain, hash), do: {:ok, chain().transactions |> Map.get(hash, {nil, nil}) |> elem(1)}
 
   defp chain do
     Enum.find_value([self() | Process.get(:"$callers", [])], &put_by/1) ||

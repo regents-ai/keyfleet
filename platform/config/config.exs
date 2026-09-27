@@ -19,6 +19,12 @@ config :ash, default_string_length_count: :codepoints
 # JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interval_ms: 4_000
 
+# The chain a fleet's wallet buttons send on, by the chain id its deployment
+# records: its name in the page's words, and the public node a wallet adds
+# it with when the wallet doesn't know it yet. The site's own node never
+# reaches a page.
+config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
+
 # The keeper sends through the same node, and looks for each receipt once a
 # second. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY` is set.
 config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.RpcNode, receipt_poll_ms: 1_000
@@ -37,7 +43,8 @@ config :keyfleet,
     Keyfleet.Proposals,
     Keyfleet.Treasury,
     Keyfleet.Graph,
-    Keyfleet.Keeper
+    Keyfleet.Keeper,
+    Keyfleet.WalletSteps
   ],
   generators: [timestamp_type: :utc_datetime]
 

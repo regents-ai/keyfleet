@@ -14,6 +14,9 @@ defmodule Keyfleet.Treasury do
   alias Keyfleet.Treasury.{BudgetPayment, IncomeReceipt}
 
   @latest 20
+  # The fleet's USDC, which its contract refuses to be deployed with unless
+  # it has six decimals.
+  @usdc_decimals 6
 
   resources do
     resource Keyfleet.Treasury.Reading do
@@ -81,6 +84,47 @@ defmodule Keyfleet.Treasury do
 
   defp shown_with(fleet, details) do
     %{usdc: fleet.usdc_address, details: Map.new(details, &{&1.asset, {&1.symbol, &1.decimals}})}
+  end
+
+  @doc """
+  The tokens a payment can be proposed in, in the order the form lists them:
+  the fleet's USDC, then each token of the latest reading of its balances.
+  Each is `%{address: address, symbol: symbol, decimals: decimals}`, symbol and
+  decimals nil when the token has not said. The fleet's USDC always has six
+  decimals: its contract refuses to be deployed with any other.
+  """
+  def payable_assets(fleet) do
+    %{details: details} = assets(fleet)
+
+    listed =
+      case get_reading!(fleet.id) do
+        nil -> [fleet.usdc_address]
+        reading -> Enum.uniq([fleet.usdc_address | Enum.map(reading.assets, & &1.asset)])
+      end
+
+    Enum.map(listed, fn
+      usdc when usdc == fleet.usdc_address ->
+        %{address: usdc, symbol: "USDC", decimals: @usdc_decimals}
+
+      asset ->
+        case details[asset] do
+          {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
+            %{address: asset, symbol: symbol, decimals: decimals}
+
+          _unknown ->
+            %{address: asset, symbol: nil, decimals: nil}
+        end
+    end)
+  end
+
+  @doc """
+  The payment out of the fleet's budget that the transaction `hash` made, as
+  recorded, or nil: carrying out a payment proposal makes exactly one.
+  """
+  def payment_made_in(fleet_id, hash) do
+    BudgetPayment
+    |> Ash.Query.filter(fleet_id == ^fleet_id and transaction_hash == ^hash)
+    |> Ash.read_one!()
   end
 
   @doc """
