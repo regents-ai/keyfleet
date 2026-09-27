@@ -54,6 +54,9 @@ config :keyfleet, Keyfleet.Repo, migration_default_prefix: "keyfleet_app"
 
 config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 
+# Rate limits key on the direct peer. Production turns on Fly's client header.
+config :keyfleet, :behind_fly_proxy, false
+
 config :keyfleet, :app_surfaces, true
 
 # Each fleet's work graph lives in a Python host run from graph_host/'s uv

@@ -13,5 +13,6 @@ the prepared local database. Shared dependencies (`design-system/regent_ui`,
 
 Every page's content security policy lives in
 `lib/keyfleet_web/content_security_policy.ex`; add an exact origin to the one
-profile that needs it, never a wildcard or `'unsafe-eval'`. The README's
-"Security profiles" section explains all three.
+profile that needs it, never a wildcard or `'unsafe-eval'`. Rate limits key
+on `KeyfleetWeb.ClientAddress`. The README's "Security profiles" section
+explains all three.

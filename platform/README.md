@@ -133,6 +133,12 @@ that needs it, as an exact origin with a comment saying why. Never add
 `test/browser/content_security_policy.spec.ts` loads the main pages, the
 closed page and the start of sign-in, and fails on any refusal.
 
+Rate limits key on the client address from `KeyfleetWeb.ClientAddress`. In
+production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
+`Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent;
+everywhere else it is the direct peer. `X-Forwarded-For` is never read. A site
+that puts another proxy in front of Fly must change this first.
+
 ## Repository layout
 
 ```text
