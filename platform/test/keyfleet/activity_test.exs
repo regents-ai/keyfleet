@@ -292,6 +292,22 @@ defmodule Keyfleet.ActivityTest do
              [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
   end
 
+  test "keys that withdrew their votes are counted apart from those that voted" do
+    proposal!(@fleet, 1, %{})
+    vote!(@fleet, 1, wallet("a"), true, [1, 2])
+    vote!(@fleet, 1, wallet("a"), false, [3])
+    vote!(@fleet, 1, wallet("a"), nil, [2, 3])
+
+    %{items: items} = Activity.page(@fleet, nil)
+
+    assert [%{number: 1, yes: yes, no: no, withdrawn: withdrawn}] =
+             for(%{kind: :votes, facts: facts} <- items, do: facts)
+
+    assert {yes, no, withdrawn} ==
+             {%{count: 2, token_ids: [1, 2]}, %{count: 1, token_ids: [3]},
+              %{count: 2, token_ids: [2, 3]}}
+  end
+
   describe "headline" do
     test "a contradiction from the last week comes before a later post", %{seen_at: seen_at} do
       goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
