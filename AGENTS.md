@@ -8,8 +8,8 @@ signed-in Overview. The [README](README.md) describes the product.
 - `platform/`: Phoenix/Ash application. Read its instructions for web changes.
 - `cli/`: pnpm workspace for the `keyfleet` command. Only `help` and
   `version` exist.
-- `contracts/`: Foundry workspace for the fleet, rewards, votes, asset registry
-  and directory contracts, with their deployment scripts.
+- `contracts/`: Foundry workspace for the fleet, rewards and votes contracts,
+  with their deployment scripts.
 - `plugins/`: home for standalone runtime plugin packages; none exist yet.
 - There is no `identity/` folder. The shared profile domain comes from
   `regents/identity`, pinned by git in `platform/mix.exs` with `design-system`

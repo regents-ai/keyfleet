@@ -50,3 +50,29 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   with real line breaks. Escaped `\n` text is no longer turned into line breaks.
 - The Terms, Privacy Policy, Contact page and site data now give one contact
   address, build@regents.sh. The Terms title says Keyfleet.
+
+## 2026-09-27 — Fully owned fleets
+
+- Fleets are fully owned by their key holders. Regents takes 2% of each key
+  purchase, once, for the Regents staking contract, and nothing from money a
+  fleet receives afterwards.
+- Income in USDC, REGENT or the fleet's launched token is paid 100% to the keys.
+  Everything else is shared money: what is left of key sales, the launched token
+  released from vesting, the REGENT held after graduation and any other token.
+- A proposal stays open until more than half of all keys sold vote yes, and then
+  anyone can carry it out. Keys bought or moved after a proposal opened cannot
+  vote on it, and votes can be changed or withdrawn. Every payment is matched:
+  every key that did not vote yes can collect the same amount per key.
+- A fleet runs one Autolaunch at a time and can propose another after a failed
+  one. A key asks for its traits once and can ask again only after a refused
+  request.
+- Removed referrals, the 2% fee on money a fleet receives, the 20/80 budget
+  split, the voting window, the pay cap and period, execution expiries and the
+  shared asset registry. The site reads and shows the new rules; its migrations
+  need empty payment and proposal tables in production, and `20260927072219`
+  cannot be rolled back.
+- The shared Regent libraries (`elixir-utils`, `design-system` and `regents`)
+  are pinned by git to one commit each in `platform/mix.exs`. `make check` also
+  runs `make check-required-fixes`, which fetches ash-template's list of
+  required fixes and its checker from GitHub, runs it against the platform, and
+  needs `gh auth login`.

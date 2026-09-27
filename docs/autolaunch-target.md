@@ -19,6 +19,10 @@ Autolaunch's `contracts/v1/deployments/base-mainnet/deployed-manifest.json`.
 Keyfleet takes the factory address as a deployment argument and reads the
 strategy from the factory.
 
+The Autolaunch v2 launch interface (per-launch settings within bounds the Regent
+Safe can adjust, with hard ceilings) is decided but not yet published. This
+document will be updated when it is.
+
 ## The call
 
 ```
@@ -66,7 +70,9 @@ and the splitter).
    `auction.isGraduated()` is the raise test. Failed is `Lifecycle.Failed`;
    there is no separate recovered flag.
 7. One launch per fleet: nothing on the factory side; retries after a revert
-   are free. Keyfleet enforces one created launch per fleet itself.
+   are free. Keyfleet itself allows one launch at a time. After a failed launch
+   the keys can carry out another launch proposal, as long as it opened after
+   the block the failed launch was created in; after graduation, never again.
 
 ## What the treasury receives and may do
 
@@ -92,11 +98,18 @@ and the splitter).
   upgrade. There is no fee vault.
 
 The treasury needs no interface: it only has to hold and move ERC-20 balances,
-and is never asked to sign or take ETH. In Keyfleet terms every SUBJECT, REGENT
-or USDC that arrives this way is an ordinary balance until the Safe admits the
-asset for the fleet and a surplus recognition charges the 2% and books the net
-as capital; the splitter's own 2% skim and Keyfleet's 2% are two separate
-deductions and the UI must say so.
+and is never asked to sign or take ETH. In Keyfleet terms the fleet sorts what
+arrives by token, and takes no fee on it:
+
+- The REGENT the strategy sends at graduation and the SUBJECT the escrow
+  releases are the fleet's shared money. The fleet books both from the
+  strategy's and the escrow's own records.
+- Any other USDC, REGENT or SUBJECT, such as what the splitter or the payment
+  receiver sends on, is income and goes 100% to the keys when anyone calls
+  `recognizeSurplus`.
+- Any other token is shared money.
+
+The splitter's 2% skim is Autolaunch's own, taken before the fleet is paid.
 
 ## Testing
 

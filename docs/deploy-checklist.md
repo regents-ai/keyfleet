@@ -1,10 +1,10 @@
 # Putting the Keyfleet site on Fly
 
 The steps, in order, for the first launch of the website at keyfleet.ai. Key
-sales stay off throughout: they need the key and treasury contracts finished
-and deployed on Base first (see "Before any key is sold"). Commands run from
-`platform/` unless a step says otherwise. Anything marked **not verified** was
-not tried before this list was written.
+sales stay off throughout: they need the founder's word, and not before the
+contracts are complete and deployed on Base (see "Before any key is sold").
+Commands run from `platform/` unless a step says otherwise. Anything marked
+**not verified** was not tried before this list was written.
 
 ## 1. Build the image
 
@@ -86,7 +86,7 @@ production.
 If `keyfleet_app` does not exist yet, skip to step 6: every migration below
 then runs on empty tables.
 
-If it does exist, five migrations need care, and one count goes to the founder:
+If it does exist, these migrations need care, and some counts go to the founder:
 
 - **Graph files** (and the migrations `20260923005641` and `20260925054716`).
   Both migrations empty `keyfleet_app.graph_cursors`, which also empties the
@@ -117,13 +117,37 @@ If it does exist, five migrations need care, and one count goes to the founder:
   SELECT count(*) FROM keyfleet_app.key_attachments WHERE ownership_epoch < 1;
   SELECT count(*) FROM keyfleet_app.key_pairings WHERE ownership_epoch < 1;
   ```
-- **Shared asset registry** (`20260926195935`). A recorded fleet now also
-  records its asset registry, so the migration stops if any fleet was recorded
-  before it. First run, and expect `0`:
+- **Shared asset registry** (`20260926195935`). It adds a required asset
+  registry to every recorded fleet, so it stops if any fleet was recorded
+  before it. (`20260927072219` removes the column again.) First run, and
+  expect `0`:
   ```sql
   SELECT count(*) FROM keyfleet_app.fleets WHERE contract_address IS NOT NULL;
   ```
   If it is above 0, stop and tell the founder; do not clear the recorded fleet.
+- **Fully owned fleet money** (`20260927072219`). It deletes the
+  `launch_income_splits` table and the `sender` and `net` columns of
+  `budget_receipts`, and allows only the kinds `recognized`, `graduation` and
+  `vesting`, so it stops on any older budget receipt. It cannot be rolled back:
+  what it deletes is gone. First run, and expect `0` for both:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.budget_receipts;
+  SELECT count(*) FROM keyfleet_app.launch_income_splits;
+  ```
+  If either is above 0, stop and tell the founder.
+- **Required new columns** (`20260927081902`). It adds `share` and `matched`
+  to `budget_payments` and `opened_block` to `proposals`, all required and with
+  no default, so it stops unless both tables are empty. It also deletes the old
+  pay-period, voting-window and expiry columns. First run, and expect `0` for
+  both:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.budget_payments;
+  SELECT count(*) FROM keyfleet_app.proposals;
+  ```
+  If either is above 0, stop and tell the founder.
+- **Failed launch block** (`20260927092503`). It adds the optional
+  `failed_launch_block` column to `treasury_readings`, approved for
+  production. Nothing to check.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are
@@ -175,33 +199,33 @@ Do not run it, or deploy the contracts, as part of this launch.
 
 ## Before any key is sold
 
-Key sales cannot start until the fleet contracts are finished and deployed on
-Base. The contracts are not finished yet. These must be done first, in order:
+Key sales stay off until the founder explicitly says so, and not before the
+fleet contracts are complete and deployed on Base. The fully owned fleet rules
+the founder decided on 27 September 2026 are built in `contracts/src`; the
+[contracts README](../contracts/README.md#status) lists them. These must still
+be done first, in order:
 
-1. **The key contract finished.** The founder decides when the key (NFT)
-   contract is complete, including the trait table and key art its deploy step
-   requires.
-2. **The treasury contract finished.** The contracts in `contracts/src` still
-   carry the earlier treasury design (a launch-income budget spent by Pay
-   votes), which the founder has moved away from. Treasury contract work is on
-   hold until the founder settles the new design. A deployed fleet can never be
-   changed, so no fleet may be deployed before this is built.
-3. **Deployed on Base** with the founder's approval, then recorded as below.
+1. **The contracts complete.** The founder decides when they are complete,
+   including the trait table and key art the deploy step requires. Deferred
+   until each fleet type is next: Fibonacci late-entry capture, the Cascade
+   reserve of a level that never completes, and a sensible Accelerant key cap.
+   A deployed fleet can never be changed.
+2. **A fork test against the real Autolaunch contracts on Base.**
+3. **An outside audit.**
+4. **Deployed on Base** with the founder's go, then recorded as below.
 
 ## Opening a fleet later
 
 Each fleet is deployed and recorded on its own, when the founder says so and
 only after everything in "Before any key is sold" is done;
-[deployment.md](deployment.md) has the contract steps: the shared asset
-registry once, before the first fleet, then each fleet with `KEYFLEET_FLEET`
-set to that one fleet. **Commit the registry's address into the manifest before
-anything else**: the registry step run again before that commit deploys a
-second registry. Recording its deployed manifest with
+[deployment.md](deployment.md) has the contract steps: each fleet is deployed
+with `KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest
+with
 `/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
 [chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
 puts its keys on sale, all at once: if the fleet cannot be opened, nothing is
-recorded. It refuses a fleet whose chain, USDC, asset registry or trait table
-differs from a fleet already recorded. A fleet shown as coming soon opens at that moment; every
+recorded. It refuses a fleet whose chain, USDC or trait table differs from a
+fleet already recorded. A fleet shown as coming soon opens at that moment; every
 other fleet is left as it is. Restart the app afterwards so the chain reader
 starts for it.
 

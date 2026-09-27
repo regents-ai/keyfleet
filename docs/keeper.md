@@ -5,8 +5,8 @@ the site on Base, from one wallet Regent keeps for nothing else, and sends only
 nine permissionless calls. None of them lets the caller choose where money
 goes:
 
-- every 30 seconds, `requestReveal(tokenId)` for keys that were sold but never
-  got their random seed;
+- every 30 seconds, `requestReveal(tokenId)` for keys with no seed whose
+  request the coordinator never accepted;
 - every hour, starting five minutes after the site starts, for each fleet whose
   launch has graduated: `release()` on its vesting escrow, `collect(lpTokenId)`
   on its LP locker, `sweep(token)` on its payment receiver,
