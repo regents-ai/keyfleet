@@ -172,7 +172,8 @@ MIX_TEST_PARTITION= make check
 The browser suite runs separately with `npm run test:browser`.
 
 `mix precommit` compiles with warnings as errors, checks unused dependency
-locks and formatting, runs Credo in strict mode and Sobelow, holds the
+locks, refuses Hex packages that are retired or carry a security advisory
+(`mix hex.audit`), checks formatting, runs Credo in strict mode and Sobelow, holds the
 compile-connected `xref` graph under its limit, runs the test suite with
 warnings as errors, and verifies the Ash codegen and route handoff are current.
 
