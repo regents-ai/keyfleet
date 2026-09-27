@@ -97,7 +97,8 @@ defmodule Keyfleet.RuntimeConfigTest do
                ]
              ],
              url: pooled,
-             socket_options: [:inet6]
+             socket_options: [:inet6],
+             pool_size: 5
            ]
 
     endpoint = get_in(config, [:keyfleet, KeyfleetWeb.Endpoint])
@@ -190,7 +191,8 @@ defmodule Keyfleet.RuntimeConfigTest do
                ]
              ],
              url: direct,
-             socket_options: [:inet6]
+             socket_options: [:inet6],
+             pool_size: 5
            ]
   end
 
@@ -285,7 +287,8 @@ defmodule Keyfleet.RuntimeConfigTest do
                ]
              ],
              url: direct,
-             socket_options: [:inet6]
+             socket_options: [:inet6],
+             pool_size: 5
            ]
 
     assert get_in(config, [:keyfleet, KeyfleetWeb.Endpoint]) == nil

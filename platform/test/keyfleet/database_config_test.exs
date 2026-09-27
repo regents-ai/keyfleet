@@ -8,6 +8,7 @@ defmodule Keyfleet.DatabaseConfigTest do
   @mpg_pooled "postgresql://pooled_user:pooled-secret@pgbouncer.dzx6qo6xqzvojpv5.flympg.net:5432/keyfleet"
   @mpg_direct "postgresql://direct_user:direct-secret@direct.dzx6qo6xqzvojpv5.flympg.net:5432/keyfleet"
   @socket_options [:inet6]
+  @pool_size 5
   @role "KEYFLEET_DEPLOYMENT_ROLE"
   @staging_flycast "postgresql://staging_user:staging-secret@regents-staging-db.flycast:5432/keyfleet"
   @staging_internal "postgresql://staging_user:staging-secret@regents-staging-db.internal:5432/keyfleet"
@@ -150,7 +151,7 @@ defmodule Keyfleet.DatabaseConfigTest do
                "DATABASE_POOLED_URL" => @pooled,
                "DATABASE_DIRECT_URL" => @direct
              })
-           ) == [url: @pooled, socket_options: @socket_options]
+           ) == [url: @pooled, socket_options: @socket_options, pool_size: @pool_size]
   end
 
   test "development rejects incomplete, wrong, production, and deployed-app targets" do
@@ -225,7 +226,7 @@ defmodule Keyfleet.DatabaseConfigTest do
   test "development non-MPG remote and local configurations remain unchanged" do
     remote = env(production_env(%{"DATABASE_POOLED_URL" => @pooled}))
     config = DatabaseConfig.runtime_config!(:dev, remote)
-    assert config == [url: @pooled, socket_options: @socket_options]
+    assert config == [url: @pooled, socket_options: @socket_options, pool_size: @pool_size]
     refute Keyword.has_key?(config, :ssl)
 
     local = DatabaseConfig.runtime_config!(:dev, env(%{"USER" => "local-user"}))
@@ -310,6 +311,26 @@ defmodule Keyfleet.DatabaseConfigTest do
     end
   end
 
+  test "every deployed venue connects with the same small pool" do
+    configs = [
+      DatabaseConfig.runtime_config!(:prod, env(%{"DATABASE_POOLED_URL" => @mpg_direct})),
+      DatabaseConfig.release_config!(
+        env(production_env(%{"DATABASE_DIRECT_URL" => @mpg_direct}))
+      ),
+      DatabaseConfig.runtime_config!(
+        :prod,
+        staging_env(%{"DATABASE_POOLED_URL" => @staging_flycast})
+      ),
+      DatabaseConfig.release_config!(staging_env(%{"DATABASE_DIRECT_URL" => @staging_internal})),
+      DatabaseConfig.runtime_config!(
+        :dev,
+        env(production_env(%{"DATABASE_POOLED_URL" => @mpg_pooled}))
+      )
+    ]
+
+    for config <- configs, do: assert(effective_repo_config(config)[:pool_size] == @pool_size)
+  end
+
   test "Fly MPG direct and PgBouncer URLs reject non-PostgreSQL ports without credentials" do
     cases = [
       {fn url ->
@@ -384,7 +405,7 @@ defmodule Keyfleet.DatabaseConfigTest do
       assert DatabaseConfig.runtime_config!(
                :dev,
                env(production_env(%{"DATABASE_POOLED_URL" => url}))
-             ) == [url: url, socket_options: @socket_options]
+             ) == [url: url, socket_options: @socket_options, pool_size: @pool_size]
     end
   end
 
@@ -468,8 +489,8 @@ defmodule Keyfleet.DatabaseConfigTest do
 
       release = DatabaseConfig.release_config!(staging_env(%{"DATABASE_DIRECT_URL" => url}))
 
-      assert runtime == [url: url, socket_options: @socket_options]
-      assert release == [url: url, socket_options: @socket_options]
+      assert runtime == [url: url, socket_options: @socket_options, pool_size: @pool_size]
+      assert release == [url: url, socket_options: @socket_options, pool_size: @pool_size]
     end
   end
 

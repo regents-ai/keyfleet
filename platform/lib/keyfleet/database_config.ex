@@ -145,7 +145,7 @@ defmodule Keyfleet.DatabaseConfig do
   defp bound_host?(_host), do: false
 
   defp connection_options(value, host) do
-    options = [url: value, socket_options: [:inet6]]
+    options = [url: value, socket_options: [:inet6], pool_size: 5]
 
     if fly_mpg_host?(host) do
       options =
