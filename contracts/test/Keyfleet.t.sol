@@ -137,7 +137,6 @@ contract ForwardingReceiver is IERC721Receiver {
 }
 
 contract KeyfleetTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     using stdStorage for StdStorage;
 
     /// @dev The reference price, 10 USDC in atomic units.
@@ -194,7 +193,6 @@ contract KeyfleetTest is Test {
             regent,
             staking,
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -294,7 +292,6 @@ contract KeyfleetTest is Test {
             regent_,
             staking_,
             factory_,
-            VOTING_WINDOW,
             Keyfleet.Metadata("n", "s", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -869,6 +866,25 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, carol);
         assertEq(fleet.ownershipEpoch(2), 1, "each key counts its own epochs");
+    }
+
+    /// @dev Invariant: a key records the block of its mint and of every transfer, which is what
+    /// decides whether it may vote on a proposal.
+    function test_lastMovedBlockIsTheBlockOfTheMintAndOfEveryTransfer() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        vm.roll(100);
+        _buy(fleet, alice);
+        assertEq(fleet.lastMovedBlock(1), 100, "minted in block 100");
+
+        vm.roll(250);
+        vm.prank(alice);
+        fleet.transferFrom(alice, bob, 1);
+        assertEq(fleet.lastMovedBlock(1), 250, "moved in block 250");
+
+        vm.roll(300);
+        _buy(fleet, carol);
+        assertEq(fleet.lastMovedBlock(1), 250, "another key's mint leaves it alone");
+        assertEq(fleet.lastMovedBlock(2), 300);
     }
 
     // --- 8. reentrancy and receiver hooks ---------------------------------

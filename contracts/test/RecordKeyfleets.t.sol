@@ -17,7 +17,6 @@ contract StandInStrategy {}
 contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant SAFE = address(0x5AFE);
     address private constant STAKING = address(0x57A1);
     uint256 private constant DEPLOYMENT_BLOCK = 7;
@@ -58,7 +57,6 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "Every first key costs 10 USDC");
         assertEq(vm.parseJsonAddress(json, ".staking"), STAKING, "Staking");
         assertEq(vm.parseJsonAddress(json, ".regentSafe"), SAFE, "Regents Safe");
-        assertEq(vm.parseJsonUint(json, ".votingWindow"), VOTING_WINDOW, "Voting window");
 
         assertEq(vm.parseJsonString(json, ".fleet.slot"), "classic", "The key the manifest names the fleet by");
         assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
@@ -195,10 +193,6 @@ contract RecordKeyfleetsTest is Test {
         manifest = _manifest();
         manifest.autolaunchFactory = address(regent);
         _expectRecordRefused(manifest, fleet, _released("autolaunchFactory"));
-
-        manifest = _manifest();
-        manifest.votingWindow = 2 hours;
-        _expectRecordRefused(manifest, fleet, _released("votingWindow"));
 
         manifest = _manifest();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(_otherCoordinatorKnowing(manifest)));
@@ -426,7 +420,6 @@ contract RecordKeyfleetsTest is Test {
         manifest.regentSafe = SAFE;
         manifest.autolaunchFactory = address(factory);
         manifest.autolaunchFactoryMayBeEmpty = false;
-        manifest.votingWindow = VOTING_WINDOW;
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

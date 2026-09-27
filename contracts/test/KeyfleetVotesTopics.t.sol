@@ -20,19 +20,19 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalCreatedTopic() public pure {
         assertEq(
-            KeyfleetVotes.ProposalCreated.selector, 0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9
+            KeyfleetVotes.ProposalCreated.selector, 0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647
         );
     }
 
     function test_autolaunchProposedTopic() public pure {
         assertEq(
             KeyfleetVotes.AutolaunchProposed.selector,
-            0xa395caec5e719dd09aa72025608546598e2f07d131ae8ca46b82bbaacfbe2846
+            0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513
         );
     }
 
     function test_payProposedTopic() public pure {
-        assertEq(KeyfleetVotes.PayProposed.selector, 0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85);
+        assertEq(KeyfleetVotes.PayProposed.selector, 0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be);
     }
 
     function test_voteCastTopic() public pure {
@@ -71,6 +71,10 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet.BudgetPaid.selector, 0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e);
     }
 
+    function test_collectedTopic() public pure {
+        assertEq(KeyfleetVotes.Collected.selector, 0xb0204fab5c5aa6ce90e169a2f115973605e0a5bd6acfa463f8550ebaf458c9b4);
+    }
+
     function test_launchEnvelopeSelector() public pure {
         assertEq(KeyfleetVotes.launchEnvelope.selector, bytes4(0xb3bceadb));
     }
@@ -82,10 +86,8 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetRewards.rewardAssets.selector, bytes4(0x880ec04e));
         assertEq(KeyfleetRewards(address(0)).backed.selector, bytes4(0x595b7f21));
         assertEq(Keyfleet(address(0)).freeCapital.selector, bytes4(0x2b84308e));
-        assertEq(Keyfleet(address(0)).payPeriod.selector, bytes4(0xe6ec9e56));
         assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
         assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
-        assertEq(Keyfleet.launchSettled.selector, bytes4(0x06e93dae));
     }
 
     function test_proposalExecutedTopic() public pure {

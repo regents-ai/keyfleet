@@ -11,12 +11,12 @@ import {IRegentLBPStrategy} from "../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
 import {IMintable, MockAutolaunchFactory, MockLBPStrategy} from "./mocks/MockAutolaunch.sol";
 
 contract KeyfleetAutolaunchTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
     uint256 private constant EXECUTION_GAS_CEILING = 1_750_000;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
@@ -33,7 +33,7 @@ contract KeyfleetAutolaunchTest is Test {
     address private alice = address(0xA11CE);
     address private mallory = address(0x4A11);
 
-    event AutolaunchProposed(uint256 indexed proposalId, bytes32 envelopeHash, uint64 executionExpiry);
+    event AutolaunchProposed(uint256 indexed proposalId, bytes32 envelopeHash);
     event AutolaunchExecuted(
         uint256 indexed proposalId, uint256 indexed launchId, address indexed subject, address auction, address escrow
     );
@@ -60,7 +60,6 @@ contract KeyfleetAutolaunchTest is Test {
             regent,
             staking,
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -119,7 +118,7 @@ contract KeyfleetAutolaunchTest is Test {
         }
     }
 
-    function _envelope() private view returns (Keyfleet.LaunchEnvelope memory) {
+    function _envelope() private pure returns (Keyfleet.LaunchEnvelope memory) {
         return Keyfleet.LaunchEnvelope({
             name: "Alpha Fleet Token",
             symbol: "ALPHA",
@@ -127,18 +126,19 @@ contract KeyfleetAutolaunchTest is Test {
             website: "https://regents.sh/alpha",
             image: "ipfs://alpha-image",
             requiredRegentRaised: RAISE,
-            narrativeDigest: keccak256("narrative"),
-            executionExpiry: uint64(block.timestamp) + VOTING_WINDOW + 7 days
+            narrativeDigest: keccak256("narrative")
         });
     }
 
+    /// @dev Proposes in a fresh block, so every key already sold may vote on it.
     function _propose(Keyfleet fleet, Keyfleet.LaunchEnvelope memory envelope) private returns (uint256 proposalId) {
         KeyfleetVotes votes = fleet.VOTES();
+        vm.roll(block.number + 1);
         vm.prank(alice);
         proposalId = votes.proposeAutolaunch(1, envelope);
     }
 
-    /// @dev Proposes, votes every key YES and warps to the moment execution opens.
+    /// @dev Proposes and votes every key YES.
     function _proposeAndPass(Keyfleet fleet, Keyfleet.LaunchEnvelope memory envelope)
         private
         returns (uint256 proposalId)
@@ -148,7 +148,6 @@ contract KeyfleetAutolaunchTest is Test {
         uint256[] memory ids = _ids(1, fleet.totalMinted());
         vm.prank(alice);
         votes.vote(proposalId, ids, true);
-        vm.warp(votes.proposal(proposalId).closesAt);
     }
 
     function _executeFor(Keyfleet fleet, Keyfleet.LaunchEnvelope memory envelope) private returns (uint256 proposalId) {
@@ -192,7 +191,6 @@ contract KeyfleetAutolaunchTest is Test {
             regent,
             staking,
             IRegentsAutolaunchFactoryV1(address(0)),
-            VOTING_WINDOW,
             Keyfleet.Metadata("n", "s", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -264,28 +262,6 @@ contract KeyfleetAutolaunchTest is Test {
         assertEq(_propose(fleet, atTheCeiling), 1, "the reachable ceiling itself is accepted");
     }
 
-    /// @dev Invariant: an envelope must outlive the vote on it. An expiry at or before the moment
-    /// voting closes could never be executed, so it is refused at proposal time rather than
-    /// discovered by a fleet that voted for nothing.
-    function test_proposalRefusesAnExpiryThatFallsAtOrBeforeTheVoteCloses() public {
-        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        uint64 closesAt = uint64(block.timestamp) + VOTING_WINDOW;
-
-        uint64[2] memory refused = [closesAt - 1, closesAt];
-        for (uint256 i = 0; i < refused.length; ++i) {
-            Keyfleet.LaunchEnvelope memory envelope = _envelope();
-            envelope.executionExpiry = refused[i];
-            vm.prank(alice);
-            vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ExpiryNotAfterClose.selector, refused[i], closesAt));
-            votes.proposeAutolaunch(1, envelope);
-        }
-
-        Keyfleet.LaunchEnvelope memory justEnough = _envelope();
-        justEnough.executionExpiry = closesAt + 1;
-        assertEq(_propose(fleet, justEnough), 1, "one second past the close is enough");
-    }
-
     /// @dev Invariant: proposing an Autolaunch takes the same standing as every other kind, and the
     /// envelope the proposal carries is exactly the one the caller supplied.
     function test_proposalTakesStandingAndStoresTheEnvelopeItWasGiven() public {
@@ -299,7 +275,7 @@ contract KeyfleetAutolaunchTest is Test {
 
         vm.prank(alice);
         vm.expectEmit(true, false, false, true, address(votes));
-        emit AutolaunchProposed(1, keccak256(abi.encode(envelope)), envelope.executionExpiry);
+        emit AutolaunchProposed(1, keccak256(abi.encode(envelope)));
         uint256 proposalId = votes.proposeAutolaunch(1, envelope);
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
@@ -319,22 +295,22 @@ contract KeyfleetAutolaunchTest is Test {
 
     /// @dev The fleet reader in platform/lib/keyfleet/chain/launch_envelopes.ex keeps a launch only
     /// when the bytes `launchEnvelope` returns hash to the proposal's envelope hash. This is the
-    /// launch platform/test/keyfleet/proposals_chain_test.exs encodes by hand, 1088 bytes long, and
+    /// launch platform/test/keyfleet/proposals_chain_test.exs encodes by hand, 1056 bytes long, and
     /// both sides pin the same digest: as emitted, and as the stored envelope is returned.
     function test_readerSampleLaunchHashesAlikeWhenEmittedAndReturned() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
-        bytes32 pinned = 0x9667be28058aae2ff99b278e27680af58ac13121852b76c68cd835cae7d0a30d;
+        bytes32 pinned = 0x2aca76a7e898ce8e57e3a2b570f5d8c44f8dcdebfec29e93de71e3421f328311;
 
         vm.prank(alice);
         vm.expectEmit(true, false, false, true, address(votes));
-        emit AutolaunchProposed(1, pinned, type(uint64).max);
+        emit AutolaunchProposed(1, pinned);
         uint256 proposalId = votes.proposeAutolaunch(1, _readerSample());
 
         (bool ok, bytes memory returned) =
             address(votes).staticcall(abi.encodeCall(KeyfleetVotes.launchEnvelope, (proposalId)));
         assertTrue(ok);
-        assertEq(returned.length, 8 * 136);
+        assertEq(returned.length, 8 * 132);
         assertEq(keccak256(returned), pinned);
     }
 
@@ -359,8 +335,7 @@ contract KeyfleetAutolaunchTest is Test {
             website: "https://example.test",
             image: string(image),
             requiredRegentRaised: 250_000,
-            narrativeDigest: bytes32(0),
-            executionExpiry: type(uint64).max
+            narrativeDigest: bytes32(0)
         });
     }
 
@@ -441,56 +416,70 @@ contract KeyfleetAutolaunchTest is Test {
         }
     }
 
-    /// @dev Invariant: one created launch per fleet. A second proposal is refused outright once a
-    /// launch exists, and a second proposal made before the first executed cannot execute after it.
-    function test_aFleetCreatesOneLaunchAndOnlyOne() public {
+    /// @dev Invariant: while a launch is running no other can be carried out, though one may be
+    /// proposed and approved. Once the strategy records the running launch as failed, the next
+    /// approved launch is carried out without anyone syncing first: it replaces the failed launch's
+    /// record, and its SUBJECT replaces the failed SUBJECT as the third income token.
+    function test_anotherLaunchCanFollowOnlyAFailedOne() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
+        KeyfleetRewards rewards = fleet.REWARDS();
 
         uint256 second = _proposeAndPass(fleet, _envelope());
-        uint256 first = _proposeAndPass(fleet, _envelope());
-        votes.execute(first);
+        uint256 first = _executeFor(fleet, _envelope());
+        Keyfleet.LaunchRecord memory failed = fleet.launchRecord();
+        assertEq(failed.proposalId, first);
 
         vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
         votes.execute(second);
-        assertFalse(votes.proposal(second).executed, "the failed execution left the proposal unexecuted");
+        assertFalse(votes.proposal(second).executed, "the refused attempt consumed nothing");
+        uint256 third = _proposeAndPass(fleet, _envelope());
+        assertEq(votes.proposal(third).openedBlock, block.number, "a launch can be proposed while one runs");
 
+        strategy.fail(failed.auction);
+        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "nobody synced");
+        votes.execute(second);
+
+        Keyfleet.LaunchRecord memory current = fleet.launchRecord();
+        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "a new launch runs");
+        assertEq(current.proposalId, second, "the record is the new launch's");
+        assertEq(current.launchId, failed.launchId + 1);
+        assertTrue(current.subject != failed.subject && current.auction != failed.auction, "with its own tokens");
+        assertEq(rewards.launchedToken(), current.subject, "its SUBJECT is the third income token");
+        assertFalse(rewards.isRewardAsset(failed.subject), "and the failed SUBJECT no longer is");
+
+        vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
+        votes.execute(third);
+        assertEq(factory.nextLaunchId(), 3, "the factory created exactly two launches for this fleet");
+    }
+
+    /// @dev Invariant: a graduated launch is the fleet's last. An approved launch cannot be carried
+    /// out after it, synced or not, and once the fleet knows, no launch can even be proposed.
+    function test_aGraduatedLaunchIsTheFleetsLast() public {
+        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 waiting = _proposeAndPass(fleet, _envelope());
+        _executeFor(fleet, _envelope());
+
+        strategy.graduate(fleet.launchRecord().auction, address(0x5), address(0x6), keccak256("pool"), 7, 10e18, 4e18);
+        vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
+        votes.execute(waiting);
+
+        fleet.syncLaunch();
+        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.Graduated));
+        vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
+        votes.execute(waiting);
+        vm.roll(block.number + 1);
         vm.prank(alice);
         vm.expectRevert(Keyfleet.LaunchAlreadyCreated.selector);
         votes.proposeAutolaunch(1, _envelope());
-
         assertEq(factory.nextLaunchId(), 2, "the factory created exactly one launch for this fleet");
     }
 
-    /// @dev Invariant: an approved launch that was not executed in time cannot be executed at all.
-    /// The proposal is not consumed by the attempt; it is simply out of date.
-    function test_anExpiredEnvelopeCannotExecuteAndConsumesNothing() public {
-        Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        Keyfleet.LaunchEnvelope memory envelope = _envelope();
-        uint256 proposalId = _proposeAndPass(fleet, envelope);
-
-        vm.warp(envelope.executionExpiry);
-        votes.execute(proposalId);
-        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "the last moment works");
-
-        Keyfleet fresh = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes freshVotes = fresh.VOTES();
-        Keyfleet.LaunchEnvelope memory late = _envelope();
-        uint256 lateId = _proposeAndPass(fresh, late);
-
-        vm.warp(late.executionExpiry + 1);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.ProposalExpired.selector, late.executionExpiry));
-        freshVotes.execute(lateId);
-
-        assertFalse(freshVotes.proposal(lateId).executed, "nothing was consumed");
-        assertEq(uint256(fresh.launchState()), uint256(Keyfleet.LaunchState.NotCreated), "and nothing was created");
-    }
-
     /// @dev Invariant: a factory that is refusing launches reverts the whole execution, so the
-    /// proposal stays executable and the fleet records nothing. This is the case the atomicity rule
-    /// exists for: a fleet can wait for the factory to open and execute the same approval
-    /// afterwards, as long as its envelope has not expired.
+    /// proposal stays open and the fleet records nothing. This is the case the atomicity rule exists
+    /// for: a fleet can wait for the factory to open and carry out the same approval afterwards,
+    /// however long that takes, because an approved launch never expires.
     function test_aPausedFactoryLeavesTheProposalExecutable() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -502,10 +491,12 @@ contract KeyfleetAutolaunchTest is Test {
         votes.execute(proposalId);
 
         assertFalse(votes.proposal(proposalId).executed, "the execution mark was rolled back with the revert");
-        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "it is still a passed proposal");
+        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Approved), "it is still approved");
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.NotCreated));
         assertEq(factory.nextLaunchId(), 1, "the factory consumed nothing");
 
+        vm.warp(block.timestamp + 700 days);
+        vm.roll(block.number + 1_000_000);
         factory.openLaunches();
         votes.execute(proposalId);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated), "the same approval lands");
@@ -790,12 +781,12 @@ contract KeyfleetAutolaunchTest is Test {
             KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
             assertEq(stored.yesVotes, 1, "a level-1 key is one vote");
             assertEq(stored.noVotes, 1, "and so is a level-7 key");
-            assertEq(stored.snapshotMinted, 86, "eighty-six keys are eighty-six votes");
+            assertEq(fleet.totalMinted(), 86, "eighty-six keys are eighty-six votes");
         }
     }
 
-    /// @dev Invariant: a launch passes only when more than half of all eligible keys vote YES.
-    /// Exactly half fails, one key more passes, and silence counts against. A Decision follows the
+    /// @dev Invariant: a launch is approved only when more than half of all keys sold vote YES.
+    /// Exactly half is not enough, one key more is, and silence counts against. A Decision follows the
     /// same rule, so the forty-three earliest keys carry neither.
     function test_aLaunchFailsAtExactlyHalfOfTheKeysAndPassesWithOneMore() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
@@ -810,14 +801,13 @@ contract KeyfleetAutolaunchTest is Test {
         votes.vote(majority, _ids(1, 44), true);
         votes.vote(decision, _ids(1, 43), true);
         vm.stopPrank();
-        vm.warp(votes.proposal(half).closesAt);
 
-        assertEq(uint256(votes.state(half)), uint256(KeyfleetVotes.State.Defeated), "43 of 86 is not a majority");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotPassed.selector, 43, 86));
+        assertEq(uint256(votes.state(half)), uint256(KeyfleetVotes.State.Open), "43 of 86 is not a majority");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 43, 86));
         votes.execute(half);
 
-        assertEq(uint256(votes.state(decision)), uint256(KeyfleetVotes.State.Defeated), "nor on a Decision");
-        assertEq(uint256(votes.state(majority)), uint256(KeyfleetVotes.State.Passed), "44 of 86 is");
+        assertEq(uint256(votes.state(decision)), uint256(KeyfleetVotes.State.Open), "nor on a Decision");
+        assertEq(uint256(votes.state(majority)), uint256(KeyfleetVotes.State.Approved), "44 of 86 is");
         votes.execute(majority);
         assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.AuctionCreated));
     }
@@ -825,8 +815,8 @@ contract KeyfleetAutolaunchTest is Test {
     // --- 9. fuzz invariant ---------------------------------------------------
 
     /// @dev Invariant: across random votes on either Fibonacci preset, every key adds exactly one
-    /// vote to a launch and to a Decision, whatever its level, and each passes exactly when more
-    /// than half of the eligible keys voted YES.
+    /// vote to a launch and to a Decision, whatever its level, and each is approved exactly when
+    /// more than half of all the keys sold voted YES.
     function testFuzz_aLaunchAndADecisionCountOneVotePerKey(uint256 seed) public {
         KeyfleetPresets.Preset preset =
             seed % 2 == 0 ? KeyfleetPresets.Preset.FibonacciSyndicate : KeyfleetPresets.Preset.FibonacciCascade;
@@ -855,16 +845,14 @@ contract KeyfleetAutolaunchTest is Test {
         }
 
         uint256[2] memory proposals = [launch, decision];
-        vm.warp(votes.proposal(launch).closesAt);
         for (uint256 i = 0; i < proposals.length; ++i) {
             KeyfleetVotes.Proposal memory stored = votes.proposal(proposals[i]);
-            assertEq(stored.snapshotMinted, 86);
             assertEq(stored.yesVotes, yesKeys, "one vote per YES key");
             assertEq(stored.yesVotes + stored.noVotes, cast, "one vote per key cast");
             assertEq(
-                votes.state(proposals[i]) == KeyfleetVotes.State.Passed,
+                votes.state(proposals[i]) == KeyfleetVotes.State.Approved,
                 yesKeys * 2 > 86,
-                "passes exactly above half the keys"
+                "approved exactly above half the keys"
             );
         }
     }

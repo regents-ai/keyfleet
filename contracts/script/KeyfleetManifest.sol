@@ -55,7 +55,6 @@ abstract contract KeyfleetManifest is Script {
     /// @param autolaunchFactory The one Autolaunch factory the fleets may ever launch through.
     /// @param autolaunchFactoryMayBeEmpty Whether the Autolaunch factory may have no code yet. It
     /// is ignored on Base, where the factory must already exist.
-    /// @param votingWindow Seconds a proposal stays open, the same for every fleet on the chain.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
     /// chain. On Base the coordinator and gas lane must be `BASE_VRF_COORDINATOR` and
     /// `BASE_VRF_KEY_HASH`.
@@ -72,7 +71,6 @@ abstract contract KeyfleetManifest is Script {
         address regentSafe;
         address autolaunchFactory;
         bool autolaunchFactoryMayBeEmpty;
-        uint64 votingWindow;
         Keyfleet.Randomness vrf;
         bytes32 traitTableHash;
         uint8 slot;
@@ -89,9 +87,6 @@ abstract contract KeyfleetManifest is Script {
     error RegentMissing(address regent);
     /// @notice The Autolaunch factory address holds no code and the manifest does not allow that.
     error AutolaunchFactoryMissing(address factory);
-    /// @notice The manifest's voting window does not fit the seconds a fleet is deployed with. The
-    /// controller bounds it far more tightly again, to one hour through thirty days.
-    error VotingWindowTooLarge(uint256 votingWindow);
     /// @notice A Base manifest names a VRF coordinator other than Base's.
     error VrfCoordinatorNotBase(address coordinator);
     /// @notice A Base manifest names a VRF gas lane other than Base's 2 gwei lane.
@@ -138,9 +133,6 @@ abstract contract KeyfleetManifest is Script {
         manifest.regentSafe = vm.parseJsonAddress(json, ".regentSafe");
         manifest.autolaunchFactory = vm.parseJsonAddress(json, ".autolaunchFactory");
         manifest.autolaunchFactoryMayBeEmpty = vm.parseJsonBool(json, ".autolaunchFactoryMayBeEmpty");
-        uint256 votingWindow = vm.parseJsonUint(json, ".votingWindow");
-        if (votingWindow > type(uint64).max) revert VotingWindowTooLarge(votingWindow);
-        manifest.votingWindow = uint64(votingWindow);
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(vm.parseJsonAddress(json, ".vrf.coordinator")),
             subscriptionId: vm.parseJsonUint(json, ".vrf.subscriptionId"),

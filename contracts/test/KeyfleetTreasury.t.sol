@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -21,10 +22,9 @@ import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 /// @dev The fleet's shared money. The launch's own receipts are shared money: the REGENT the
 /// strategy sends at graduation and every SUBJECT the escrow releases, each booked exactly once
 /// from the launch's own records whatever order the calls come in. Every other income-token receipt
-/// goes to the keys. Shared money is spent only by a passed Pay, once the launch has settled and
-/// within the fleet's pay cap per period.
+/// goes to the keys. Shared money is spent only by an approved Pay, at any time, and every payment is
+/// matched: it is at most the YES keys' share, and every other key sold collects the same per key.
 contract KeyfleetTreasuryTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     uint128 private constant RAISE = 1_000_000e18;
     /// @dev What the auction raised, what the pool took of it, and so what reaches the fleet.
     uint128 private constant RAISED = 1_200_000e18;
@@ -51,31 +51,23 @@ contract KeyfleetTreasuryTest is Test {
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private mallory = address(0x4A11);
+    address private carol = address(0xCA201);
 
     event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
     event SharedMoneyRecognized(address indexed asset, address indexed caller, uint256 amount);
     event GraduationHoldingsBooked(address indexed asset, uint256 amount);
     event VestingBooked(address indexed asset, uint256 amount, uint256 totalReleased);
-    event BudgetPaid(
-        address indexed asset, address indexed recipient, uint256 amount, uint256 periodStart, uint256 spentInPeriod
-    );
+    event BudgetPaid(address indexed asset, address indexed recipient, uint256 amount, uint256 share, uint256 matched);
+    event Collected(uint256 indexed proposalId, uint256 share, uint256[] tokenIds);
     event ProposalCreated(
         uint256 indexed proposalId,
         KeyfleetVotes.Kind indexed kind,
         address indexed proposer,
-        uint64 closesAt,
-        uint256 snapshotMinted,
+        uint64 openedBlock,
         bytes32 digest,
         string text
     );
-    event PayProposed(
-        uint256 indexed proposalId,
-        address indexed asset,
-        uint256 amount,
-        address indexed recipient,
-        uint64 executionExpiry
-    );
-    event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
+    event PayProposed(uint256 indexed proposalId, address indexed asset, uint256 amount, address indexed recipient);
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
     function setUp() public {
@@ -104,7 +96,6 @@ contract KeyfleetTreasuryTest is Test {
             regent,
             staking,
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -131,6 +122,7 @@ contract KeyfleetTreasuryTest is Test {
                 : KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS
         );
         KeyfleetVotes votes = fleet.VOTES();
+        vm.roll(block.number + 1);
         vm.prank(alice);
         uint256 proposalId = votes.proposeAutolaunch(1, _envelope());
         _passAll(fleet, proposalId);
@@ -162,7 +154,7 @@ contract KeyfleetTreasuryTest is Test {
         return tokenId == 1 ? address(0xA11CE) : address(uint160(0x100000 + tokenId));
     }
 
-    function _envelope() private view returns (Keyfleet.LaunchEnvelope memory) {
+    function _envelope() private pure returns (Keyfleet.LaunchEnvelope memory) {
         return Keyfleet.LaunchEnvelope({
             name: "Alpha Fleet Token",
             symbol: "ALPHA",
@@ -170,8 +162,7 @@ contract KeyfleetTreasuryTest is Test {
             website: "https://regents.sh/alpha",
             image: "ipfs://alpha-image",
             requiredRegentRaised: RAISE,
-            narrativeDigest: keccak256("narrative"),
-            executionExpiry: uint64(block.timestamp) + VOTING_WINDOW + 7 days
+            narrativeDigest: keccak256("narrative")
         });
     }
 
@@ -182,62 +173,25 @@ contract KeyfleetTreasuryTest is Test {
         }
     }
 
-    /// @dev Every key votes YES, and time moves to the moment execution opens.
+    /// @dev Every key votes YES. Every key was bought before the proposal opened.
     function _passAll(Keyfleet fleet, uint256 proposalId) private {
         KeyfleetVotes votes = fleet.VOTES();
-        uint256[] memory ids = _ids(1, votes.proposal(proposalId).snapshotMinted);
+        uint256[] memory ids = _ids(1, fleet.totalMinted());
         vm.prank(alice);
         votes.vote(proposalId, ids, true);
-        vm.warp(votes.proposal(proposalId).closesAt);
     }
 
-    /// @dev Proposes a Pay from `alice` without voting on it.
-    function _proposePay(Keyfleet fleet, address asset, uint256 amount, address recipient)
+    /// @dev Proposes a Pay from `alice` in a fresh block, so every key already sold may vote on
+    /// it, and passes it.
+    function _approvedPay(Keyfleet fleet, address asset, uint256 amount, address recipient)
         private
         returns (uint256 proposalId)
     {
+        vm.roll(block.number + 1);
         KeyfleetVotes votes = fleet.VOTES();
         vm.prank(alice);
         proposalId = votes.proposePay(1, asset, amount, recipient, "Pay for the audit", keccak256("invoice"));
-    }
-
-    /// @dev Proposes several Pay amounts of `asset` at once and passes them all in the same window,
-    /// so they can be executed later at chosen times. Leaves time at the window's close.
-    function _passPays(Keyfleet fleet, address asset, uint256[] memory amounts)
-        private
-        returns (uint256[] memory proposalIds)
-    {
-        KeyfleetVotes votes = fleet.VOTES();
-        proposalIds = new uint256[](amounts.length);
-        for (uint256 i = 0; i < amounts.length; ++i) {
-            proposalIds[i] = _proposePay(fleet, asset, amounts[i], bob);
-        }
-        uint256 keys = votes.proposal(proposalIds[0]).snapshotMinted;
-        vm.startPrank(alice);
-        for (uint256 i = 0; i < amounts.length; ++i) {
-            votes.vote(proposalIds[i], _ids(1, keys), true);
-        }
-        vm.stopPrank();
-        vm.warp(votes.proposal(proposalIds[amounts.length - 1]).closesAt);
-    }
-
-    function _one(uint256 a) private pure returns (uint256[] memory values) {
-        values = new uint256[](1);
-        values[0] = a;
-    }
-
-    function _two(uint256 a, uint256 b) private pure returns (uint256[] memory values) {
-        values = new uint256[](2);
-        (values[0], values[1]) = (a, b);
-    }
-
-    function _three(uint256 a, uint256 b, uint256 c) private pure returns (uint256[] memory values) {
-        values = new uint256[](3);
-        (values[0], values[1], values[2]) = (a, b, c);
-    }
-
-    function _period(Keyfleet fleet, address asset) private view returns (uint256 start, uint256 cap, uint256 spent) {
-        (start, cap, spent) = fleet.payPeriod(asset);
+        _passAll(fleet, proposalId);
     }
 
     /// @dev The strategy graduates the launch and sends the fleet the raised REGENT the pool did not
@@ -246,13 +200,6 @@ contract KeyfleetTreasuryTest is Test {
         strategy.graduate(
             fleet.launchRecord().auction, address(0x591177), address(0xEC1E), keccak256("pool"), 4242, RAISED, LP_REGENT
         );
-    }
-
-    /// @dev The strategy graduates the launch and a sync records it, so the fleet's shared money
-    /// may be paid out.
-    function _settle(Keyfleet fleet) private {
-        _graduate(fleet);
-        fleet.syncLaunch();
     }
 
     /// @dev Sends `amount` of `token` to the fleet by plain transfer and sorts it, as anyone may.
@@ -305,22 +252,26 @@ contract KeyfleetTreasuryTest is Test {
         assertEq(fib.launchRecord().splitter, address(0x591177), "the sync recorded the graduation");
     }
 
-    /// @dev Invariant: the graduation REGENT is shared money whichever call books it first: a sync
-    /// or a sort of REGENT. REGENT income that arrives beside it still goes to the keys in full, so
-    /// the call order never moves money from one class to the other.
+    /// @dev Invariant: the graduation REGENT is shared money whichever call books it first: a sync,
+    /// a sort of REGENT, or a Pay. REGENT income that arrives beside it still goes to the keys in
+    /// full, so the call order never moves money from one class to the other.
     function test_graduationRegentIsSharedMoneyWhicheverCallComesFirst() public {
         uint256 income = 7_000e18;
-        for (uint256 order = 0; order < 2; ++order) {
+        for (uint256 order = 0; order < 3; ++order) {
             Keyfleet fleet = _launchedFleet(KeyfleetPresets.Preset.FibonacciSyndicate);
+            uint256 payId = _approvedPay(fleet, address(regent), 1, bob);
             _graduate(fleet);
             regent.mint(address(fleet), income);
 
             if (order == 0) fleet.syncLaunch();
+            else if (order == 1) fleet.recognizeSurplus(address(regent));
+            else fleet.VOTES().execute(payId);
             fleet.recognizeSurplus(address(regent));
 
-            assertEq(fleet.freeCapital(address(regent)), HELD, "the graduation REGENT is shared money");
+            uint256 paid = order == 2 ? 1 : 0;
+            assertEq(fleet.freeCapital(address(regent)), HELD - paid, "the graduation REGENT is shared money");
             assertEq(fleet.REWARDS().backed(address(regent)), income, "and the income went to the keys");
-            assertEq(regent.balanceOf(address(fleet)), HELD, "the fleet holds exactly its shared money");
+            assertEq(regent.balanceOf(address(fleet)), HELD - paid, "the fleet holds exactly its shared money");
         }
     }
 
@@ -451,71 +402,68 @@ contract KeyfleetTreasuryTest is Test {
 
     // --- 4. Pay proposals ----------------------------------------------------
 
-    /// @dev Invariant: shared money is not the keys' to spend before the launch settles, so a Pay is
-    /// refused at proposal time on a fleet with no launch and on one whose launch is still open,
-    /// and the fleet refuses the payment itself too.
-    function test_payIsRefusedBeforeTheLaunchSettles() public {
-        Keyfleet unlaunched = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buyKeys(unlaunched, 1);
-        Keyfleet[2] memory fleets = [unlaunched, fib];
+    /// @dev Invariant: shared money can be spent before any launch, all of it at once, when every
+    /// key votes YES. There is no launch precondition, no cap and no period, and with no key left
+    /// out nothing is matched.
+    function test_payNeedsNoLaunchAndHasNoCap() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, 3);
+        _receive(fleet, other, 50_000);
+        assertEq(uint256(fleet.launchState()), uint256(Keyfleet.LaunchState.NotCreated));
 
-        for (uint256 i = 0; i < fleets.length; ++i) {
-            Keyfleet fleet = fleets[i];
-            KeyfleetVotes votes = fleet.VOTES();
-            vm.prank(alice);
-            vm.expectRevert(Keyfleet.LaunchNotSettled.selector);
-            votes.proposePay(1, address(usdc), 1, bob, "", bytes32(0));
+        uint256 proposalId = _approvedPay(fleet, address(other), 50_000, bob);
+        KeyfleetVotes votes = fleet.VOTES();
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit ProposalExecuted(proposalId, mallory);
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit BudgetPaid(address(other), bob, 50_000, 16_666, 0);
+        vm.prank(mallory);
+        votes.execute(proposalId);
 
-            vm.prank(address(votes));
-            vm.expectRevert(Keyfleet.LaunchNotSettled.selector);
-            fleet.payFromBudget(address(usdc), 1, bob);
-        }
+        assertEq(other.balanceOf(bob), 50_000, "the whole of the shared money was paid");
+        assertEq(fleet.freeCapital(address(other)), 0);
     }
 
     /// @dev Invariant: a Pay names a real asset, a nonzero amount and a real recipient, needs the
     /// same standing as any proposal, carries its reason in the creation event only, and stores
-    /// exactly what it was given as kind 2 with an expiry thirty days after its vote closes.
+    /// exactly what it was given as kind 2 with the block it opened in.
     function test_proposePayChecksAndStoresItsPayload() public {
-        _settle(fib);
         KeyfleetVotes votes = fib.VOTES();
 
         vm.startPrank(alice);
         vm.expectRevert(KeyfleetVotes.ZeroAddress.selector);
         votes.proposePay(1, address(0), 1, bob, "", bytes32(0));
         vm.expectRevert(KeyfleetVotes.ZeroAmount.selector);
-        votes.proposePay(1, address(other), 0, bob, "", bytes32(0));
+        votes.proposePay(1, address(subject), 0, bob, "", bytes32(0));
         vm.stopPrank();
 
         vm.prank(mallory);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, alice));
-        votes.proposePay(1, address(other), 1, bob, "", bytes32(0));
+        votes.proposePay(1, address(subject), 1, bob, "", bytes32(0));
 
         bytes32 digest = keccak256("invoice");
         string memory text = "Pay the auditor for the October review";
         uint256 expectedId = votes.proposalCount() + 1;
-        uint64 closesAt = uint64(block.timestamp) + VOTING_WINDOW;
-        assertEq(votes.PAY_EXECUTION_WINDOW(), 30 days);
         vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalCreated(expectedId, KeyfleetVotes.Kind.Pay, alice, closesAt, 86, digest, text);
+        emit ProposalCreated(expectedId, KeyfleetVotes.Kind.Pay, alice, uint64(block.number), digest, text);
         vm.expectEmit(true, true, true, true, address(votes));
-        emit PayProposed(expectedId, address(other), 5_000, bob, closesAt + 30 days);
+        emit PayProposed(expectedId, address(subject), 5_000, bob);
         vm.prank(alice);
-        uint256 proposalId = votes.proposePay(1, address(other), 5_000, bob, text, digest);
+        uint256 proposalId = votes.proposePay(1, address(subject), 5_000, bob, text, digest);
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         assertEq(uint256(stored.kind), 2, "Pay is kind 2");
-        assertEq(stored.asset, address(other));
+        assertEq(stored.asset, address(subject));
         assertEq(stored.amount, 5_000);
         assertEq(stored.recipient, bob);
         assertEq(stored.digest, digest);
-        assertEq(stored.snapshotMinted, 86);
+        assertEq(stored.openedBlock, block.number);
     }
 
     /// @dev Invariant: a payment can never be sent where it would be stuck for good: zero, the
     /// fleet itself, its voting controller and its ledger are refused when the Pay is proposed,
     /// before any vote.
     function test_aPayCannotNameTheFleetItsControllerItsLedgerOrZeroAsRecipient() public {
-        _settle(fib);
         KeyfleetVotes votes = fib.VOTES();
         address[4] memory refused = [address(0), address(fib), address(votes), address(fib.REWARDS())];
         uint256 before = votes.proposalCount();
@@ -523,204 +471,69 @@ contract KeyfleetTreasuryTest is Test {
         for (uint256 i = 0; i < refused.length; ++i) {
             vm.prank(alice);
             vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.RecipientNotAllowed.selector, refused[i]));
-            votes.proposePay(1, address(other), 1, refused[i], "", bytes32(0));
+            votes.proposePay(1, address(subject), 1, refused[i], "", bytes32(0));
         }
         assertEq(votes.proposalCount(), before, "no proposal was created");
     }
 
-    /// @dev Invariant: a passed Pay can execute until exactly thirty days after its vote closes, the
-    /// last second included, and never after. An expired Pay stays Passed and moves nothing. The
-    /// window is the Pay's alone: a Decision passed alongside it still records afterwards.
-    function test_aPassedPayExpiresThirtyDaysAfterItsVoteCloses() public {
-        _settle(fib);
-        _receive(fib, other, 196_000);
+    /// @dev Invariant: a Pay above the YES keys' share is refused when carried out, consumes nothing
+    /// and stays open, and the same approval pays once enough shared money has arrived. With every
+    /// key voting YES their share is all of it.
+    function test_aPayAboveTheSharedMoneyHeldWaitsForTheMoney() public {
+        _receive(fib, other, 10_000);
         KeyfleetVotes votes = fib.VOTES();
-        vm.startPrank(alice);
-        uint256 decisionId = votes.proposeDecision(1, "Thank the auditor", bytes32(0));
-        votes.vote(decisionId, _ids(1, 86), true);
-        vm.stopPrank();
-        uint256[] memory ids = _passPays(fib, address(other), _two(10_000, 10_000));
-        uint64 closesAt = votes.proposal(ids[0]).closesAt;
-        assertEq(votes.proposal(decisionId).closesAt, closesAt, "all three votes close together");
-        uint64 expiry = closesAt + 30 days;
+        uint256 proposalId = _approvedPay(fib, address(other), 15_000, bob);
 
-        vm.warp(expiry);
-        votes.execute(ids[0]);
-        assertEq(other.balanceOf(bob), 10_000, "the last second still pays");
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), 15_000, 10_000));
+        votes.execute(proposalId);
+        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Approved), "it is still open");
+        assertFalse(votes.proposal(proposalId).executed, "and nothing was consumed");
 
-        vm.warp(expiry + 1);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.ProposalExpired.selector, expiry));
-        votes.execute(ids[1]);
-        assertEq(uint256(votes.state(ids[1])), uint256(KeyfleetVotes.State.Passed), "nothing was consumed");
-        assertEq(other.balanceOf(bob), 10_000, "and nothing moved");
-
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit DecisionRecorded(decisionId, bytes32(0));
-        votes.execute(decisionId);
+        _receive(fib, other, 5_000);
+        votes.execute(proposalId);
+        assertEq(other.balanceOf(bob), 15_000, "the same approval paid");
+        assertEq(fib.freeCapital(address(other)), 0);
     }
 
-    /// @dev Invariant: a Pay a past majority approved cannot wait for shared money to grow and be
-    /// taken long after those keys have changed hands. Passed while it did not fit, it is refused
-    /// 700 days later even though shared money now covers it many times over.
-    function test_aStalePayIsRefusedSevenHundredDaysLater() public {
-        _settle(fib);
-        _receive(fib, other, 196_000); // cap at a first payment 39,200.
+    /// @dev Invariant: an approved Pay never expires. Seven hundred days later it still pays.
+    function test_anApprovedPayStaysOpenUntilItIsCarriedOut() public {
+        _receive(fib, other, 10_000);
         KeyfleetVotes votes = fib.VOTES();
-        uint256[] memory ids = _passPays(fib, address(other), _one(500_000));
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PayCapExceeded.selector, address(other), 500_000, 39_200));
-        votes.execute(ids[0]);
+        uint256 first = _approvedPay(fib, address(other), 4_000, bob);
+        uint256 second = _approvedPay(fib, address(other), 6_000, bob);
 
-        for (uint256 tokenId = 1; tokenId <= 86; ++tokenId) {
-            address holder = _holder(tokenId);
-            vm.prank(holder);
-            fib.transferFrom(holder, address(uint160(0xCAFE0000 + tokenId)), tokenId);
-        }
-
+        votes.execute(first);
         vm.warp(block.timestamp + 700 days);
-        _receive(fib, other, 3_920_000); // shared money 4,116,000, cap at a first payment 823,200.
-        uint64 expiry = votes.proposal(ids[0]).closesAt + 30 days;
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.ProposalExpired.selector, expiry));
-        votes.execute(ids[0]);
-        assertEq(other.balanceOf(bob), 0, "the stale payment never moves");
-        assertEq(fib.freeCapital(address(other)), 4_116_000, "and shared money is whole");
+        vm.roll(block.number + 1_000_000);
+        votes.execute(second);
+        assertEq(other.balanceOf(bob), 10_000, "both paid, back to back and seven hundred days apart");
     }
 
-    /// @dev Invariant: a passed Pay moves exactly its amount of shared money to its recipient, opens
-    /// the asset's pay period at that moment, and touches nothing the keys are owed.
-    function test_aPassedPayMovesSharedMoneyToTheRecipient() public {
-        _settle(fib);
-        _receive(fib, other, 196_000);
-        KeyfleetVotes votes = fib.VOTES();
-
-        uint256[] memory ids = _passPays(fib, address(other), _one(39_200));
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalExecuted(ids[0], mallory);
-        vm.expectEmit(true, true, true, true, address(fib));
-        emit BudgetPaid(address(other), bob, 39_200, block.timestamp, 39_200);
-        vm.prank(mallory);
-        votes.execute(ids[0]);
-
-        assertEq(other.balanceOf(bob), 39_200, "the recipient was paid");
-        assertEq(fib.freeCapital(address(other)), 156_800, "from shared money");
-        assertEq(uint256(votes.state(ids[0])), uint256(KeyfleetVotes.State.Executed));
-        (uint256 start, uint256 cap, uint256 spent) = _period(fib, address(other));
-        assertEq(start, block.timestamp);
-        assertEq(cap, 39_200, "twenty percent of shared money at the first payment");
-        assertEq(spent, 39_200);
-    }
-
-    /// @dev Invariant: payments passed side by side cannot together take more than the period's
-    /// cap. The one that would go over reverts at execution with what is left, consumes nothing,
-    /// and stays executable in a later period.
-    function test_severalPaysInOnePeriodCannotTogetherExceedTheCap() public {
-        _settle(fib);
-        _receive(fib, other, 196_000); // cap at the first payment 39,200.
-        KeyfleetVotes votes = fib.VOTES();
-
-        uint256[] memory ids = _passPays(fib, address(other), _three(15_000, 15_000, 15_000));
-        votes.execute(ids[0]);
-        votes.execute(ids[1]);
-
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PayCapExceeded.selector, address(other), 15_000, 9_200));
-        votes.execute(ids[2]);
-        assertEq(uint256(votes.state(ids[2])), uint256(KeyfleetVotes.State.Passed), "it is still waiting");
-        assertEq(fib.freeCapital(address(other)), 166_000, "only the two that fit were paid");
-        (,, uint256 spent) = _period(fib, address(other));
-        assertEq(spent, 30_000);
-
-        (uint256 start,,) = _period(fib, address(other));
-        vm.warp(start + fib.PAY_PERIOD());
-        votes.execute(ids[2]);
-        assertEq(other.balanceOf(bob), 45_000, "the third was paid in the next period");
-    }
-
-    /// @dev Invariant: a pay period lasts exactly thirty days from its first payment. One second
-    /// before that the old cap still binds; at thirty days a new period opens with a new cap. A
-    /// period opens only at a payment, so after a quiet stretch the next one starts when the next
-    /// payment is made, not thirty days after the last period ended.
-    function test_thePayPeriodRollsOverAtExactlyThirtyDays() public {
-        _settle(fib);
-        _receive(fib, other, 196_000);
-        KeyfleetVotes votes = fib.VOTES();
-        uint256 period = fib.PAY_PERIOD();
-        assertEq(period, 30 days);
-
-        uint256[] memory ids = _passPays(fib, address(other), _two(39_200, 10_000));
-        uint256 t0 = block.timestamp;
-        votes.execute(ids[0]); // the whole cap of the first period.
-
-        vm.warp(t0 + period - 1);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PayCapExceeded.selector, address(other), 10_000, 0));
-        votes.execute(ids[1]);
-
-        vm.warp(t0 + period);
-        vm.expectEmit(true, true, true, true, address(fib));
-        emit BudgetPaid(address(other), bob, 10_000, t0 + period, 10_000);
-        votes.execute(ids[1]);
-        (uint256 start, uint256 cap, uint256 spent) = _period(fib, address(other));
-        assertEq(start, t0 + period, "a new period opened at exactly thirty days");
-        assertEq(cap, (156_800 * 2_000) / 10_000, "with a cap measured from the shared money left then");
-        assertEq(spent, 10_000);
-
-        // Forty-five quiet days after the second period opened, a newly passed payment opens the third.
-        vm.warp(t0 + period + 45 days);
-        uint256[] memory later = _passPays(fib, address(other), _one(10_000));
-        votes.execute(later[0]);
-        (start,,) = _period(fib, address(other));
-        assertEq(start, block.timestamp, "the period starts at the payment, not on a calendar");
-        assertGt(start, t0 + 2 * period);
-    }
-
-    /// @dev Invariant: the cap is 20% of shared money as it stands at the period's first payment.
-    /// Money received between proposing and that payment counts; money received after it does not
-    /// raise the cap until the next period.
-    function test_theCapIsMeasuredAtThePeriodsFirstPayment() public {
-        _settle(fib);
-        _receive(fib, other, 196_000);
-        KeyfleetVotes votes = fib.VOTES();
-        uint256[] memory ids = _passPays(fib, address(other), _three(10_000, 68_401, 68_400));
-
-        _receive(fib, other, 196_000); // 392,000 before the first payment.
-        votes.execute(ids[0]);
-        (, uint256 cap,) = _period(fib, address(other));
-        assertEq(cap, 78_400, "twenty percent of shared money at the first payment, not at the proposal");
-
-        _receive(fib, other, 196_000); // shared money grows again mid-period.
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PayCapExceeded.selector, address(other), 68_401, 68_400));
-        votes.execute(ids[1]);
-        (, cap,) = _period(fib, address(other));
-        assertEq(cap, 78_400, "the cap did not grow with the new money");
-
-        votes.execute(ids[2]);
-        (,, uint256 spent) = _period(fib, address(other));
-        assertEq(spent, cap, "the period's cap is used exactly");
-    }
-
-    /// @dev Invariant: only the fleet's own voting controller can spend shared money. No holder and
-    /// not the fleet itself can call the payment directly.
+    /// @dev Invariant: only the fleet's own voting controller can spend shared money. No holder,
+    /// no passer-by and not the fleet itself can call the payment directly.
     function test_onlyTheVotingControllerMayPay() public {
-        _settle(fib);
-        _receive(fib, other, 196_000);
+        _receive(fib, other, 1_000);
 
+        uint256 keys = fib.totalMinted();
         address[3] memory callers = [alice, mallory, address(fib)];
         for (uint256 i = 0; i < callers.length; ++i) {
             vm.prank(callers[i]);
             vm.expectRevert(Keyfleet.OnlyVotes.selector);
-            fib.payFromBudget(address(other), 1, callers[i]);
+            fib.payFromBudget(address(other), 1, callers[i], keys);
         }
 
         vm.prank(address(fib.VOTES()));
-        fib.payFromBudget(address(other), 1, bob);
+        fib.payFromBudget(address(other), 1, bob, keys);
         assertEq(other.balanceOf(bob), 1, "the controller can");
     }
 
     /// @dev Invariant: a USDC payment draws on shared money alone. The Cascade completion reserve,
-    /// the owed protocol share and the keys' USDC rewards are separate figures a payment never
-    /// touches, and nothing is left over as surplus afterwards.
+    /// the owed protocol share and the keys' USDC are separate figures a payment never touches,
+    /// even when the fleet's balance would cover more.
     function test_aUsdcPaySpendsOnlySharedMoney() public {
         Keyfleet cascade = _launchedFleet(KeyfleetPresets.Preset.FibonacciCascade);
         _buyKeys(cascade, 1); // opens level 8, so the completion reserve is holding USDC.
-        _settle(cascade);
+        _receive(cascade, usdc, 1_000e6);
         KeyfleetVotes votes = cascade.VOTES();
 
         uint256 capital = cascade.freeCapital(address(usdc));
@@ -728,15 +541,17 @@ contract KeyfleetTreasuryTest is Test {
         uint256 owed = cascade.protocolShareOwed();
         uint256 backed = cascade.REWARDS().backed(address(usdc));
         assertGt(reserve, 0, "the reserve holds USDC");
-        uint256 amount = (capital * 2_000) / 10_000;
+        assertGt(usdc.balanceOf(address(cascade)), capital, "the balance would cover more");
 
-        vm.prank(alice);
-        uint256 proposalId = votes.proposePay(1, address(usdc), amount, bob, "", bytes32(0));
-        _passAll(cascade, proposalId);
-        votes.execute(proposalId);
+        uint256 tooMuch = _approvedPay(cascade, address(usdc), capital + 1, bob);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(usdc), capital + 1, capital));
+        votes.execute(tooMuch);
 
-        assertEq(usdc.balanceOf(bob), amount);
-        assertEq(cascade.freeCapital(address(usdc)), capital - amount, "only shared money moved");
+        uint256 exact = _approvedPay(cascade, address(usdc), capital, bob);
+        votes.execute(exact);
+
+        assertEq(usdc.balanceOf(bob), capital);
+        assertEq(cascade.freeCapital(address(usdc)), 0, "only shared money moved");
         assertEq(cascade.cascadeReserve(), reserve, "the reserve is untouched");
         assertEq(cascade.protocolShareOwed(), owed, "the owed share is untouched");
         assertEq(cascade.REWARDS().backed(address(usdc)), backed, "the keys' USDC is untouched");
@@ -744,42 +559,339 @@ contract KeyfleetTreasuryTest is Test {
     }
 
     /// @dev Invariant: a Pay of the launched token spends released SUBJECT only, never what the keys
-    /// were paid, and books a release nobody has booked yet before it measures the cap.
+    /// were paid, and books a release nobody has booked yet before it checks.
     function test_aPayOfTheLaunchedTokenSpendsOnlyReleasedSubject() public {
-        _settle(fib);
+        _graduate(fib);
         subject.mint(address(fib), 300e18);
         fib.recognizeSurplus(address(subject));
-        KeyfleetVotes votes = fib.VOTES();
-        uint256[] memory ids = _passPays(fib, address(subject), _two(200e18 + 1, 200e18));
         escrow.release(1_000e18);
+        KeyfleetVotes votes = fib.VOTES();
 
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PayCapExceeded.selector, address(subject), 200e18 + 1, 200e18));
-        votes.execute(ids[0]);
+        uint256 tooMuch = _approvedPay(fib, address(subject), 1_000e18 + 1, bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(subject), 1_000e18 + 1, 1_000e18)
+        );
+        votes.execute(tooMuch);
 
-        votes.execute(ids[1]);
-        assertEq(subject.balanceOf(bob), 200e18, "a fifth of the release was paid out");
-        assertEq(fib.freeCapital(address(subject)), 800e18, "the rest of the release is still shared money");
+        uint256 exact = _approvedPay(fib, address(subject), 1_000e18, bob);
+        votes.execute(exact);
+        assertEq(subject.balanceOf(bob), 1_000e18, "the release was paid out");
         assertEq(fib.REWARDS().backed(address(subject)), 300e18, "and the keys' SUBJECT is untouched");
     }
 
     /// @dev Invariant: a paid asset that calls back into the fleet from inside the payment finds
-    /// the fleet's guard held, so the whole execution reverts and the proposal stays unexecuted.
+    /// the fleet's guard held, so the whole execution reverts and the proposal stays open.
     function test_aPaidAssetThatCallsBackCannotReenterTheFleet() public {
-        _settle(fib);
         ReenteringToken token = new ReenteringToken();
         token.mint(address(fib), 1_000_000);
         fib.recognizeSurplus(address(token));
         assertEq(fib.freeCapital(address(token)), 1_000_000, "any other token is shared money");
         KeyfleetVotes votes = fib.VOTES();
 
-        vm.prank(alice);
-        uint256 proposalId = votes.proposePay(1, address(token), 1_000, bob, "", bytes32(0));
-        _passAll(fib, proposalId);
+        uint256 proposalId = _approvedPay(fib, address(token), 1_000, bob);
         token.arm(fib, Keyfleet.recognizeSurplus.selector);
 
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
         votes.execute(proposalId);
-        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Passed), "nothing was consumed");
+        assertEq(uint256(votes.state(proposalId)), uint256(KeyfleetVotes.State.Approved), "nothing was consumed");
         assertEq(token.balanceOf(bob), 0);
+    }
+
+    // --- 5. matched payments ----------------------------------------------------
+
+    /// @dev Proposes a Pay from `alice` in a fresh block and has `alice`, who votes every key, vote
+    /// YES with `yes` and NO with `no`. Every other key stays silent.
+    function _pay(Keyfleet fleet, address asset, uint256 amount, uint256[] memory yes, uint256[] memory no)
+        private
+        returns (uint256 proposalId)
+    {
+        vm.roll(block.number + 1);
+        KeyfleetVotes votes = fleet.VOTES();
+        vm.startPrank(alice);
+        proposalId = votes.proposePay(1, asset, amount, bob, "Pay for the audit", bytes32(0));
+        if (yes.length != 0) votes.vote(proposalId, yes, true);
+        if (no.length != 0) votes.vote(proposalId, no, false);
+        vm.stopPrank();
+    }
+
+    function _none() private pure returns (uint256[] memory) {
+        return new uint256[](0);
+    }
+
+    function _one(uint256 tokenId) private pure returns (uint256[] memory ids) {
+        ids = new uint256[](1);
+        ids[0] = tokenId;
+    }
+
+    /// @dev Invariant, the worked example: a Fleet Tech Classic fleet sells all 144 keys and holds
+    /// 1,411.20 USDC of shared money. With 73 keys voting YES a payment can take at most 73/144 of
+    /// it, 715.40, and 72 YES keys cannot approve anything. The payment sets aside 9.80 for each of
+    /// the other 71 keys, whether they voted NO or stayed silent, and each collects exactly that,
+    /// paid to whoever holds it, which leaves no shared money and nothing held for anyone.
+    function test_classicSeventyThreeOfOneFortyFourMatchesEveryOtherKey() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, KeyfleetPresets.CLASSIC_SUPPLY);
+        KeyfleetVotes votes = fleet.VOTES();
+        assertEq(fleet.freeCapital(address(usdc)), 1_411_200_000, "1,411.20 USDC of shared money");
+
+        uint256 tooMuch = _pay(fleet, address(usdc), 715_400_001, _ids(1, 72), _ids(74, 30));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 72, 144));
+        votes.execute(tooMuch);
+        vm.prank(alice);
+        votes.vote(tooMuch, _one(73), true);
+        vm.expectRevert(
+            abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(usdc), 715_400_001, 715_400_000)
+        );
+        votes.execute(tooMuch);
+
+        uint256 proposalId = _pay(fleet, address(usdc), 715_400_000, _ids(1, 73), _ids(74, 30));
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit BudgetPaid(address(usdc), bob, 715_400_000, 9_800_000, 695_800_000);
+        votes.execute(proposalId);
+
+        assertEq(usdc.balanceOf(bob), 715_400_000, "715.40 paid");
+        assertEq(usdc.balanceOf(address(votes)), 695_800_000, "9.80 set aside for each of the 71 other keys");
+        assertEq(fleet.freeCapital(address(usdc)), 0, "and no shared money is left");
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(stored.share, 9_800_000);
+        assertEq(stored.keysSold, 144);
+
+        uint256[] memory others = _ids(74, 71);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit Collected(proposalId, 9_800_000, others);
+        vm.prank(mallory);
+        votes.collect(proposalId, others);
+
+        for (uint256 tokenId = 74; tokenId <= 144; ++tokenId) {
+            assertEq(usdc.balanceOf(_holder(tokenId)), 9_800_000, "each other key collected 9.80");
+        }
+        assertEq(usdc.balanceOf(mallory), 0, "the caller is paid nothing");
+        assertEq(usdc.balanceOf(address(votes)), 0, "and nothing is left held");
+        assertEq(fleet.surplus(address(usdc)), 0, "the fleet's books still balance");
+    }
+
+    /// @dev Invariant: however many payments pass, with whichever keys voting YES, every key ends
+    /// up with the same share of the shared money it started with, to within one atomic unit per
+    /// payment. A key's share is what is left divided evenly, plus what it collected, plus what it
+    /// spent: its equal part of each payment it voted YES on. Nothing is created or lost: the
+    /// recipient, the keys and what is left add up to the starting money exactly.
+    function testFuzz_everyKeyKeepsAnEqualShareAcrossRepeatedPayments(
+        uint256 keys,
+        uint256 start,
+        uint256[3] memory yesCounts,
+        uint256[3] memory offsets,
+        uint256[3] memory amounts
+    ) public {
+        keys = bound(keys, 3, 21);
+        start = bound(start, 1, 1e30);
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, keys);
+        _receive(fleet, other, start);
+
+        uint256[] memory spent = new uint256[](keys + 1);
+        uint256[3] memory proposals;
+        for (uint256 j = 0; j < 3; ++j) {
+            proposals[j] = _fuzzPay(fleet, yesCounts[j], offsets[j], amounts[j], spent);
+        }
+        for (uint256 j = 0; j < 3; ++j) {
+            _collectAll(fleet, proposals[j]);
+        }
+
+        assertEq(other.balanceOf(address(fleet.VOTES())), 0, "every match was collected");
+        assertEq(fleet.surplus(address(other)), 0);
+        _assertEqualShares(fleet, start, spent);
+    }
+
+    /// @dev One payment of the fuzz: YES from a run of keys starting at `offset`, wrapping round,
+    /// more than half of them; an amount up to the YES keys' share. Adds each YES key's equal part
+    /// of the payment, times 1e18, to `spent`. Returns zero when there is too little to pay.
+    function _fuzzPay(Keyfleet fleet, uint256 yesCount, uint256 offset, uint256 amount, uint256[] memory spent)
+        private
+        returns (uint256 proposalId)
+    {
+        uint256 keys = fleet.totalMinted();
+        uint256 yesVotes = bound(yesCount, keys / 2 + 1, keys);
+        uint256 most = Math.mulDiv(fleet.freeCapital(address(other)), yesVotes, keys);
+        if (most == 0) return 0;
+        amount = bound(amount, 1, most);
+
+        uint256[] memory yes = new uint256[](yesVotes);
+        for (uint256 i = 0; i < yesVotes; ++i) {
+            yes[i] = (offset % keys + i) % keys + 1;
+            spent[yes[i]] += amount * 1e18 / yesVotes;
+        }
+        proposalId = _pay(fleet, address(other), amount, yes, _none());
+        fleet.VOTES().execute(proposalId);
+        assertEq(fleet.VOTES().proposal(proposalId).share, amount / yesVotes, "every other key is matched alike");
+    }
+
+    /// @dev Every key that may collect on `proposalId` does, one call each.
+    function _collectAll(Keyfleet fleet, uint256 proposalId) private {
+        KeyfleetVotes votes = fleet.VOTES();
+        if (proposalId == 0 || votes.proposal(proposalId).share == 0) return;
+        for (uint256 tokenId = 1; tokenId <= fleet.totalMinted(); ++tokenId) {
+            if (votes.voteOf(proposalId, tokenId) != KeyfleetVotes.Choice.Yes) {
+                votes.collect(proposalId, _one(tokenId));
+            }
+        }
+    }
+
+    /// @dev Each key's share, times the keys sold and 1e18, against the starting money times 1e18:
+    /// what is left, plus the key's collected money and its spent parts each times the keys sold.
+    /// Each payment can leave a key less than one atomic unit off, and each 1e18 floor less than
+    /// one more at that scale. Then the money adds up exactly.
+    function _assertEqualShares(Keyfleet fleet, uint256 start, uint256[] memory spent) private view {
+        uint256 keys = fleet.totalMinted();
+        uint256 left = fleet.freeCapital(address(other));
+        uint256 collectedTotal;
+        for (uint256 tokenId = 1; tokenId <= keys; ++tokenId) {
+            uint256 collected = other.balanceOf(_holder(tokenId));
+            collectedTotal += collected;
+            uint256 value = keys * (collected * 1e18 + spent[tokenId]) + left * 1e18;
+            uint256 gap = value > start * 1e18 ? value - start * 1e18 : start * 1e18 - value;
+            assertLe(gap, keys * 3 * (1e18 + 1), "each key's share stayed equal");
+        }
+        assertEq(other.balanceOf(bob) + collectedTotal + left, start, "nothing created or lost");
+    }
+
+    /// @dev Invariant: a key that did not vote YES collects its match once, paid to whoever holds it
+    /// when it collects, whoever calls. A key that voted YES never collects, even after it moves to
+    /// a new holder, and neither does a key sold after the payment was carried out. Any refused id
+    /// reverts the whole call, so no key in it is paid or marked.
+    function test_aKeyCollectsItsMatchOnceAndOnlyIfItDidNotVoteYes() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, 5);
+        _receive(fleet, other, 1_000);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        uint256 proposalId = _pay(fleet, address(other), 300, _ids(1, 3), _one(4));
+        votes.execute(proposalId);
+        assertEq(other.balanceOf(address(votes)), 200, "100 set aside for each of keys 4 and 5");
+
+        vm.prank(mallory);
+        votes.collect(proposalId, _one(4));
+        assertEq(other.balanceOf(_holder(4)), 100, "the NO key's holder was paid");
+        assertEq(other.balanceOf(mallory), 0, "not the caller");
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyCollected.selector, 4));
+        votes.collect(proposalId, _one(4));
+
+        uint256[] memory twice = new uint256[](2);
+        twice[0] = 5;
+        twice[1] = 5;
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyCollected.selector, 5));
+        votes.collect(proposalId, twice);
+        assertFalse(votes.collected(proposalId, 5), "the refused call marked nothing");
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.VotedYes.selector, 1));
+        votes.collect(proposalId, _one(1));
+        vm.prank(alice);
+        fleet.transferFrom(alice, carol, 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.VotedYes.selector, 1));
+        votes.collect(proposalId, _one(1));
+
+        _buyKeys(fleet, 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 6));
+        votes.collect(proposalId, _one(6));
+        vm.expectRevert(KeyfleetVotes.NoKeys.selector);
+        votes.collect(proposalId, _none());
+
+        vm.prank(_holder(5));
+        fleet.transferFrom(_holder(5), carol, 5);
+        votes.collect(proposalId, _one(5));
+        assertEq(other.balanceOf(carol), 100, "the silent key's match went to its holder now");
+        assertEq(other.balanceOf(_holder(5)), 0, "not the one it had when the payment passed");
+        assertEq(other.balanceOf(address(votes)), 0);
+    }
+
+    /// @dev Invariant: only a carried-out payment with a nonzero match can be collected. A payment
+    /// not yet carried out, a decision, and a payment too small to split across its YES keys all
+    /// have nothing to collect.
+    function test_onlyACarriedOutPaymentWithAMatchHasAnythingToCollect() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, 5);
+        _receive(fleet, other, 1_000);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        uint256 waiting = _pay(fleet, address(other), 300, _ids(1, 3), _none());
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, waiting));
+        votes.collect(waiting, _one(4));
+
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        uint256 decision = votes.proposeDecision(1, "Adopt the logo", bytes32(0));
+        _passAll(fleet, decision);
+        votes.execute(decision);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, decision));
+        votes.collect(decision, _one(4));
+
+        uint256 tiny = _pay(fleet, address(other), 2, _ids(1, 3), _none());
+        votes.execute(tiny);
+        assertEq(other.balanceOf(bob), 2, "the payment went through");
+        assertEq(fleet.freeCapital(address(other)), 998, "and nothing was set aside");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, tiny));
+        votes.collect(tiny, _one(4));
+    }
+
+    /// @dev Invariant: money set aside for matches is never shared money. While matches wait to be
+    /// collected the controller holds exactly what is still owed, the fleet's books still balance,
+    /// and a later payment can only draw on what is left.
+    function test_matchesWaitingToBeCollectedAreNeverSharedMoney() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        _buyKeys(fleet, 7);
+        _receive(fleet, other, 7_000);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        uint256 first = _pay(fleet, address(other), 2_000, _ids(1, 4), _none());
+        votes.execute(first);
+        uint256 second = _pay(fleet, address(other), 1_000, _ids(3, 5), _ids(1, 2));
+        votes.execute(second);
+        votes.collect(first, _ids(5, 2));
+
+        // The first set aside 500 for each of keys 5 to 7, and keys 5 and 6 have collected. The
+        // second set aside 200 for each of keys 1 and 2, and neither has.
+        uint256 owed = 500 + 2 * 200;
+        assertEq(other.balanceOf(address(votes)), owed, "the controller holds exactly what is owed");
+        uint256 left = 7_000 - 2_000 - 3 * 500 - 1_000 - 2 * 200;
+        assertEq(fleet.freeCapital(address(other)), left, "shared money excludes every match");
+        assertEq(other.balanceOf(address(fleet)), left, "and the fleet holds only shared money");
+        assertEq(fleet.surplus(address(other)), 0, "so its books balance");
+
+        uint256 tooMuch = _pay(fleet, address(other), left + 1, _ids(1, 7), _none());
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.AboveYesShare.selector, address(other), left + 1, left));
+        votes.execute(tooMuch);
+
+        votes.collect(first, _one(7));
+        votes.collect(second, _ids(1, 2));
+        assertEq(other.balanceOf(address(votes)), 0, "every match was paid in full");
+    }
+
+    /// @dev Invariant: a launch that follows a failed one is booked exactly as the first would have
+    /// been. Its graduation REGENT is shared money, its SUBJECT is income, and the failed launch's
+    /// SUBJECT, no longer an income token, is shared money like any other token.
+    function test_aLaunchAfterAFailedOneIsBookedAsItsOwn() public {
+        address failedSubject = address(subject);
+        strategy.fail(fib.launchRecord().auction);
+        KeyfleetVotes votes = fib.VOTES();
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        uint256 relaunch = votes.proposeAutolaunch(1, _envelope());
+        _passAll(fib, relaunch);
+        votes.execute(relaunch);
+        MockLaunchToken current = MockLaunchToken(fib.launchRecord().subject);
+
+        _graduate(fib);
+        fib.syncLaunch();
+        assertEq(uint256(fib.launchState()), uint256(Keyfleet.LaunchState.Graduated));
+        assertEq(fib.freeCapital(address(regent)), HELD, "its graduation REGENT is shared money");
+
+        current.mint(address(fib), 500e18);
+        fib.recognizeSurplus(address(current));
+        assertEq(fib.REWARDS().backed(address(current)), 500e18, "its SUBJECT is income");
+
+        MockLaunchToken(failedSubject).mint(address(fib), 40e18);
+        fib.recognizeSurplus(failedSubject);
+        assertEq(fib.freeCapital(failedSubject), 40e18, "the failed SUBJECT is shared money");
+        assertEq(fib.REWARDS().backed(failedSubject), 0);
     }
 }

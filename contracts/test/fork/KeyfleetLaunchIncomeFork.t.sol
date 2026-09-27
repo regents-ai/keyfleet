@@ -60,7 +60,6 @@ interface IForkSplitter {
 /// deployed on the fork, because the lab chain need not carry Chainlink's; reveals are not what
 /// this test covers.
 contract KeyfleetLaunchIncomeForkTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address private constant REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
     address private constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -96,7 +95,6 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             IERC20(REGENT),
             new MockStaking(IERC20(USDC)),
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Fork", "KFF", "https://keys.regents.sh/fork/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -169,9 +167,9 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             website: "https://regents.sh/fork",
             image: "ipfs://fork-image",
             requiredRegentRaised: RAISE,
-            narrativeDigest: keccak256("fork narrative"),
-            executionExpiry: uint64(block.timestamp) + VOTING_WINDOW + 7 days
+            narrativeDigest: keccak256("fork narrative")
         });
+        vm.roll(block.number + 1);
         vm.prank(alice);
         uint256 proposalId = votes.proposeAutolaunch(1, envelope);
         _passAll(proposalId);
@@ -249,18 +247,17 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         assertEq(IERC20(asset).balanceOf(holder) - before, paid, "the holder received the claim");
     }
 
-    /// @dev The keys vote to pay a contributor the most of the SUBJECT shared money one pay period
-    /// allows.
+    /// @dev The keys vote to pay a contributor all of the SUBJECT shared money.
     function _payFromSharedMoney(address subject) private {
-        uint256 shared = fleet.freeCapital(subject);
-        uint256 amount = (shared * fleet.PAY_CAP_BPS()) / KeyfleetPresets.BPS_DENOMINATOR;
+        uint256 amount = fleet.freeCapital(subject);
+        vm.roll(block.number + 1);
         vm.prank(alice);
         uint256 proposalId =
             votes.proposePay(1, subject, amount, contributor, "Pay the contributor", keccak256("fork invoice"));
         _passAll(proposalId);
         votes.execute(proposalId);
         assertEq(IERC20(subject).balanceOf(contributor), amount, "the contributor was paid from shared money");
-        assertEq(fleet.freeCapital(subject), shared - amount, "and only that");
+        assertEq(fleet.freeCapital(subject), 0, "all of it");
     }
 
     // --- helpers -------------------------------------------------------------
@@ -275,14 +272,13 @@ contract KeyfleetLaunchIncomeForkTest is Test {
     }
 
     function _passAll(uint256 proposalId) private {
-        uint256 keys = votes.proposal(proposalId).snapshotMinted;
+        uint256 keys = fleet.totalMinted();
         uint256[] memory ids = new uint256[](keys);
         for (uint256 i = 0; i < keys; ++i) {
             ids[i] = i + 1;
         }
         vm.prank(alice);
         votes.vote(proposalId, ids, true);
-        vm.warp(votes.proposal(proposalId).closesAt);
     }
 
     function _holder(uint256 tokenId) private view returns (address) {

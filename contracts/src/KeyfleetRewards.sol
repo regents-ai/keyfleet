@@ -20,7 +20,6 @@ contract KeyfleetRewards is ReentrancyGuard {
 
     error ZeroAddress();
     error OnlyFleet();
-    error LaunchedTokenAlreadySet();
     error UnknownAsset();
     error CohortOutOfBounds();
     error KeyAlreadyEnrolled();
@@ -42,7 +41,8 @@ contract KeyfleetRewards is ReentrancyGuard {
     address public immutable USDC;
     /// @notice REGENT, an income token from deployment.
     address public immutable REGENT;
-    /// @notice The fleet's launched token, an income token once the fleet records its launch; zero before.
+    /// @notice The launched token of the fleet's current launch, an income token once the fleet
+    /// records that launch; zero before.
     address public launchedToken;
 
     /// @notice Tokens reserved for credits, unsettled index accruals, and retained rounding dust.
@@ -94,12 +94,14 @@ contract KeyfleetRewards is ReentrancyGuard {
         if (launched != address(0)) assets[2] = launched;
     }
 
-    /// @notice Records the fleet's launched token as its third income token. Happens once.
-    /// @dev No allocation in this token can exist before this call, so every key's watermark
-    /// and every cohort index start together at zero.
+    /// @notice Records the launched token of the fleet's current launch as its third income token.
+    /// @dev The fleet calls this for its first launch and again for a launch that follows a failed
+    /// one. Each launch creates its SUBJECT, so no allocation in it can exist before this call and
+    /// every key's watermark and every cohort index start together at zero. The failed SUBJECT it
+    /// replaces never had an allocation either: the whole of a failed launch's supply is retired
+    /// without any of it reaching the fleet.
     function setLaunchedToken(address asset) external onlyFleet {
         if (asset == address(0)) revert ZeroAddress();
-        if (launchedToken != address(0)) revert LaunchedTokenAlreadySet();
         launchedToken = asset;
         emit LaunchedTokenSet(asset);
     }

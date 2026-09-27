@@ -49,7 +49,6 @@ contract DeployKeyfleets is KeyfleetManifest {
             IERC20(manifest.regent),
             IRegentRevenueStaking(manifest.staking),
             IRegentsAutolaunchFactoryV1(manifest.autolaunchFactory),
-            manifest.votingWindow,
             Keyfleet.Metadata({
                 name: manifest.fleet.name, symbol: manifest.fleet.symbol, baseTokenURI: manifest.fleet.baseTokenURI
             }),

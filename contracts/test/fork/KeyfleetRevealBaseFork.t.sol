@@ -63,7 +63,6 @@ contract KeyfleetRevealBaseForkTest is Test {
             IERC20(script.BASE_REGENT()),
             IRegentRevenueStaking(address(0x57A1)),
             IRegentsAutolaunchFactoryV1(address(0xFAC7)),
-            24 hours,
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({coordinator: coordinator, subscriptionId: subscriptionId, keyHash: keyHash}),
             TRAIT_TABLE

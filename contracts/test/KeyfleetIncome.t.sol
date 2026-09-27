@@ -135,7 +135,6 @@ contract ReenteringToken is ERC20 {
 /// token are income, and all of it goes to the keys; every other token is shared money. The owed
 /// protocol share, the Cascade reserve and reward backing are never surplus.
 contract KeyfleetIncomeTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     MockToken private regent;
@@ -177,7 +176,6 @@ contract KeyfleetIncomeTest is Test {
             regentToken,
             staking,
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -727,7 +725,6 @@ contract KeyfleetIncomeTest is Test {
 /// cohort indexes move and every slot it touches is cold. The state is built in `setUp`, which runs
 /// as its own transaction, and the measured call additionally cools every account it reads.
 contract KeyfleetIncomeGasTest is Test {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     using stdStorage for StdStorage;
 
     /// @dev Each ceiling is the measured execution gas plus twenty percent, rounded up to the
@@ -760,7 +757,6 @@ contract KeyfleetIncomeGasTest is Test {
             regent,
             staking,
             factory,
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             _randomness(),
             keccak256("trait table")

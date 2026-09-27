@@ -36,7 +36,6 @@ contract StrategyPublishingFactory {
 contract DeployKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    uint64 private constant VOTING_WINDOW = 24 hours;
     address private constant SAFE = address(0x5AFE);
     address private constant STAKING = address(0x57A1);
     address private constant STRATEGY = address(0x574A);
@@ -92,7 +91,6 @@ contract DeployKeyfleetsTest is Test {
             assertEq(address(fleet.REGENT()), address(regent), "REGENT");
             assertEq(address(fleet.STAKING()), STAKING, "Staking");
             assertEq(address(fleet.FACTORY()), address(factory), "Autolaunch factory");
-            assertEq(fleet.VOTES().VOTING_WINDOW(), VOTING_WINDOW, "Voting window");
             assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
             assertEq(address(fleet.VRF_COORDINATOR()), address(vrf), "VRF coordinator");
@@ -229,27 +227,9 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    function test_manifestVotingWindowWiderThanAFleetCanHoldIsRefused() public {
-        string memory json = string.concat(
-            '{"chainId": 31337,',
-            ' "regent": "0x0000000000000000000000000000000000000001",',
-            ' "usdc": "0x0000000000000000000000000000000000000002",',
-            ' "staking": "0x0000000000000000000000000000000000000004",',
-            ' "regentSafe": "0x0000000000000000000000000000000000000005",',
-            ' "autolaunchFactory": "0x0000000000000000000000000000000000000006",',
-            ' "autolaunchFactoryMayBeEmpty": true,',
-            ' "votingWindow": 18446744073709551616}'
-        );
-
-        vm.expectRevert(
-            abi.encodeWithSelector(KeyfleetManifest.VotingWindowTooLarge.selector, uint256(type(uint64).max) + 1)
-        );
-        script.parseManifest(json, "classic");
-    }
-
     function test_manifestIsReadFieldByFieldForTheNamedFleetWhateverItsKeyOrder() public {
         string memory json = string.concat(
-            '{"votingWindow": 7200, "autolaunchFactoryMayBeEmpty": true, "chainId": 31337,',
+            '{"autolaunchFactoryMayBeEmpty": true, "chainId": 31337,',
             ' "usdc": "0x00000000000000000000000000000000000000a2",',
             ' "regent": "0x00000000000000000000000000000000000000a1",',
             ' "staking": "0x00000000000000000000000000000000000000a4",',
@@ -276,7 +256,6 @@ contract DeployKeyfleetsTest is Test {
         assertEq(manifest.regentSafe, address(0xA5), "regentSafe");
         assertEq(manifest.autolaunchFactory, address(0xA6), "autolaunchFactory");
         assertTrue(manifest.autolaunchFactoryMayBeEmpty, "autolaunchFactoryMayBeEmpty");
-        assertEq(manifest.votingWindow, 7200, "votingWindow");
         assertEq(address(manifest.vrf.coordinator), address(0xC1), "vrf.coordinator");
         assertEq(manifest.vrf.subscriptionId, type(uint256).max, "vrf.subscriptionId, all 78 digits");
         assertEq(manifest.vrf.keyHash, bytes32(uint256(0xC3)), "vrf.keyHash");
@@ -364,7 +343,6 @@ contract DeployKeyfleetsTest is Test {
         manifest.regentSafe = SAFE;
         manifest.autolaunchFactory = address(factory);
         manifest.autolaunchFactoryMayBeEmpty = false;
-        manifest.votingWindow = VOTING_WINDOW;
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

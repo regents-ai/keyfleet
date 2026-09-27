@@ -6,7 +6,6 @@
   "regentSafe": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
   "autolaunchFactory": "0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e",
   "autolaunchFactoryMayBeEmpty": true,
-  "votingWindow": 86400,
   "vrf": {
     "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
     "subscriptionId": "0",

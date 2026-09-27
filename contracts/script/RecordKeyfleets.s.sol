@@ -11,8 +11,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// the chain, checks it against the input manifest, and writes that fleet's published deployment
 /// manifest.
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
-/// the fleet and the blocks the transactions landed in. Every address and value, the vote window,
-/// the income tokens and the reward-ledger bound are read from the chain through that fleet. The supply, USDC price
+/// the fleet and the blocks the transactions landed in. Every address and value, the income tokens
+/// and the reward-ledger bound are read from the chain through that fleet. The supply, USDC price
 /// and split constants are the ones this script was compiled with from `KeyfleetPresets`, and the
 /// fleet's runtime code hash is recorded so it can be re-verified against the deployed code.
 /// `factoryMayBeEmpty` is the manifest's waiver as it applies on this chain. A receipt that
@@ -111,7 +111,6 @@ contract RecordKeyfleets is KeyfleetManifest {
         if (address(fleet.REGENT()) != manifest.regent) revert RecordedMismatch("regent");
         if (address(fleet.STAKING()) != manifest.staking) revert RecordedMismatch("staking");
         if (address(fleet.FACTORY()) != manifest.autolaunchFactory) revert RecordedMismatch("autolaunchFactory");
-        if (fleet.VOTES().VOTING_WINDOW() != manifest.votingWindow) revert RecordedMismatch("votingWindow");
         _requireRandomnessMatches(manifest.vrf, fleet);
         if (fleet.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
         if (!_equal(fleet.name(), manifest.fleet.name)) revert RecordedMismatch("name");
@@ -133,7 +132,6 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
         vm.serializeAddress(root, "staking", address(fleet.STAKING()));
         vm.serializeAddress(root, "regentSafe", manifest.regentSafe);
-        vm.serializeUint(root, "votingWindow", fleet.VOTES().VOTING_WINDOW());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
         vm.serializeString(root, "bounds", _boundsJson(fleet.REWARDS()));
         vm.serializeString(root, "fees", _feesJson());
@@ -248,7 +246,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeString(
             disclosures,
             "safeAuthority",
-            "The Regents Safe owns the randomness subscription only, and no fleet vote, claim, price or money."
+            "The Regents Safe owns the randomness subscription only, and no fleet vote, claim, price or" " money."
         );
     }
 

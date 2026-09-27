@@ -184,7 +184,7 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 2. the income tokens are fixed -----------------------------------
 
-    function test_incomeTokensAreUsdcAndRegentThenTheLaunchedTokenOnce() public {
+    function test_incomeTokensAreUsdcAndRegentThenTheCurrentLaunchedToken() public {
         address[] memory before = rewards.rewardAssets();
         assertEq(before.length, 2, "two income tokens from deployment");
         assertEq(before[0], address(usdc), "USDC first");
@@ -198,15 +198,20 @@ contract KeyfleetRewardsTest is Test {
         vm.expectEmit(true, true, true, true, address(rewards));
         emit LaunchedTokenSet(address(0xFEED));
         rewards.setLaunchedToken(address(0xFEED));
-        vm.expectRevert(KeyfleetRewards.LaunchedTokenAlreadySet.selector);
-        rewards.setLaunchedToken(address(0xBEEF));
         vm.stopPrank();
 
         address[] memory later = rewards.rewardAssets();
-        assertEq(later.length, 3, "the launched token joins once");
+        assertEq(later.length, 3, "the launched token joins");
         assertEq(later[2], address(0xFEED), "launched token third");
         assertTrue(rewards.isRewardAsset(address(0xFEED)), "launched token is an income token");
-        assertFalse(rewards.isRewardAsset(address(0xBEEF)), "a second launched token never is");
+
+        // A launch that follows a failed one brings its own token, which takes the third place.
+        vm.prank(address(fleet));
+        rewards.setLaunchedToken(address(0xBEEF));
+        address[] memory relaunched = rewards.rewardAssets();
+        assertEq(relaunched.length, 3, "still three income tokens");
+        assertEq(relaunched[2], address(0xBEEF), "the new launched token third");
+        assertFalse(rewards.isRewardAsset(address(0xFEED)), "the failed launch's token no longer is one");
     }
 
     function test_theLedgerRefusesEveryTokenThatIsNotAnIncomeToken() public {

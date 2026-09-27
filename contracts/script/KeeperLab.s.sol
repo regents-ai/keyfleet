@@ -39,7 +39,6 @@ contract KeeperLabRegent is ERC20 {
 /// buyer holds and has approved the USDC for a third key, for the test to buy. The fleet's
 /// Autolaunch factory holds no code, since the fleet never launches here.
 contract KeeperLab is Script {
-    uint64 private constant VOTING_WINDOW = 24 hours;
     bytes32 private constant KEY_HASH = keccak256("keeper lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("keeper lab trait table");
 
@@ -59,7 +58,6 @@ contract KeeperLab is Script {
             new KeeperLabRegent(),
             mockStaking,
             IRegentsAutolaunchFactoryV1(address(0xFAC7)),
-            VOTING_WINDOW,
             Keyfleet.Metadata("Keeper Lab Classic", "KLC", "https://keyfleet.ai/metadata/keeper-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
