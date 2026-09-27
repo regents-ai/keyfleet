@@ -1,20 +1,37 @@
-defmodule KeyfleetWeb.MetricsControllerTest do
+defmodule KeyfleetWeb.MetricsTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  test "exposes the bounded Privy browser failure counter", %{conn: conn} do
+  # The listener as the site starts it, on loopback at a port the system picks.
+  setup do
+    {:ok, {ip, port}} =
+      KeyfleetWeb.Metrics |> start_supervised!() |> ThousandIsland.listener_info()
+
+    %{ip: ip, url: "http://127.0.0.1:#{port}"}
+  end
+
+  test "the private listener answers on loopback only", %{ip: ip, url: url} do
+    assert ip == {127, 0, 0, 1}
+    assert Req.get!(url <> "/metrics", retry: false).status == 200
+    assert Req.get!(url <> "/", retry: false).status == 404
+    assert Req.post!(url <> "/metrics", retry: false).status == 404
+  end
+
+  test "the public site has no metrics page", %{conn: conn} do
+    assert get(conn, "/metrics").status == 404
+  end
+
+  test "exposes the bounded Privy browser failure counter", %{url: url} do
     :telemetry.execute([:keyfleet, :privy, :browser_failure], %{count: 1}, %{
       reason: "provider_error"
     })
 
-    conn = get(conn, "/metrics")
+    response = Req.get!(url <> "/metrics", retry: false)
 
-    assert response(conn, 200) =~
-             ~s(keyfleet_privy_browser_failure_total{reason="provider_error"})
-
-    assert get_resp_header(conn, "content-type") == ["text/plain; charset=utf-8"]
+    assert response.body =~ ~s(keyfleet_privy_browser_failure_total{reason="provider_error"})
+    assert Req.Response.get_header(response, "content-type") == ["text/plain; charset=utf-8"]
   end
 
-  test "exposes the keeper's transactions, pauses, balance, spending and reveals", %{conn: conn} do
+  test "exposes the keeper's transactions, pauses, balance, spending and reveals", %{url: url} do
     :telemetry.execute([:keyfleet, :keeper, :tx], %{count: 1}, %{
       function: :request_reveal,
       outcome: :reverted
@@ -35,7 +52,7 @@ defmodule KeyfleetWeb.MetricsControllerTest do
       fleet: "fleet_tech_classic"
     })
 
-    body = conn |> get("/metrics") |> response(200)
+    body = Req.get!(url <> "/metrics", retry: false).body
 
     assert body =~ ~s(keyfleet_keeper_tx_total{function="request_reveal",outcome="reverted"})
     assert body =~ ~s(keyfleet_keeper_paused_total{job="income",reason="spend_ceiling"})

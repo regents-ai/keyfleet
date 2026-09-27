@@ -107,7 +107,6 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | Route | Method | Purpose |
 | --- | --- | --- |
 | `/healthz` | GET | Liveness check; plain text `ok`. |
-| `/metrics` | GET | Prometheus metrics. |
 | `/api/v1/profile`, `/api/v1/profile/sync` | GET, PATCH, POST | The signed-in person's shared profile, served by the `regent_identity` package with paired Privy proofs. |
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
@@ -138,6 +137,13 @@ production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
 `Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent;
 everywhere else it is the direct peer. `X-Forwarded-For` is never read. A site
 that puts another proxy in front of Fly must change this first.
+
+Prometheus metrics are served only by `KeyfleetWeb.Metrics` on port 9091
+(`/metrics`), which `fly.toml` and `fly.staging.toml` declare under
+`[metrics]`. Fly sends public traffic only to the `[http_service]` port, so the
+metrics port is reachable from the app's private network, where Fly's scraper
+reads it, and not from the internet. Locally it listens on loopback, on a port
+the system picks. `/healthz` stays public on the site's own port.
 
 ## Repository layout
 

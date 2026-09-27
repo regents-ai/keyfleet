@@ -95,7 +95,8 @@ fleet, nonce, outcome and hash. A round is recorded only when it sent something
 or a pause began or ended, so a quiet keeper shows old rounds. Each hash can be
 looked up on [Basescan](https://basescan.org).
 
-The site's `/metrics` page carries the keeper's figures:
+The site's metrics, served at `/metrics` on the private metrics port (9091 on
+Fly), carry the keeper's figures:
 
 | Metric | Meaning |
 |---|---|

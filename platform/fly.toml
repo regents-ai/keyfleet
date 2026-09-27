@@ -10,7 +10,7 @@ primary_region = "iad"
   KEYFLEET_SIWA_URL = "https://siwa-server.fly.dev"
 
 [metrics]
-  port = 4000
+  port = 9091
   path = "/metrics"
 
 # Each fleet's work graph is a file on this volume, so the app runs on exactly

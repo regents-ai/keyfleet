@@ -24,7 +24,8 @@ defmodule Keyfleet.Application do
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
         # {Keyfleet.Worker, arg},
         # Start to serve requests, typically the last entry
-        KeyfleetWeb.Endpoint
+        KeyfleetWeb.Endpoint,
+        metrics_child()
       ]
       |> List.flatten()
       |> Enum.reject(&is_nil/1)
@@ -38,6 +39,12 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
+  end
+
+  # Metrics are served beside the site, never by a process that only runs a task.
+  defp metrics_child do
+    if Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint),
+      do: KeyfleetWeb.Metrics
   end
 
   # Fleets are read from the chain only where a node is configured, which the

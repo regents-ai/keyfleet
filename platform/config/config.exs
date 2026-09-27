@@ -57,6 +57,10 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
 
+# Metrics listen on loopback, on a port the system picks, so this site runs beside the
+# other sites' local servers without taking the one port they all name in production.
+config :keyfleet, :metrics_listener, ip: {127, 0, 0, 1}, port: 0
+
 config :keyfleet, :app_surfaces, true
 
 # Each fleet's work graph lives in a Python host run from graph_host/'s uv

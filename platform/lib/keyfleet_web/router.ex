@@ -92,7 +92,6 @@ defmodule KeyfleetWeb.Router do
 
   scope "/", KeyfleetWeb do
     get "/healthz", HealthController, :show
-    get "/metrics", MetricsController, :show
     get "/developers", PublicPagesController, :developers
     get "/openapi.json", PublicPagesController, :openapi
     get "/sitemap.xml", PublicPagesController, :sitemap

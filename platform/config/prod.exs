@@ -5,6 +5,9 @@ config :keyfleet, KeyfleetWeb.Endpoint, cache_static_manifest: "priv/static/cach
 # Every request reaches production through Fly's proxy, which sets Fly-Client-IP.
 config :keyfleet, :behind_fly_proxy, true
 
+# The private port fly.toml names under [metrics]; Fly routes no public traffic to it.
+config :keyfleet, :metrics_listener, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 9091
+
 # The graph files sit on the machine's volume; the image carries the host.
 config :keyfleet, :graph,
   enabled: true,
