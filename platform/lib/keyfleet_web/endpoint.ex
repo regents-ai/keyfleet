@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.Endpoint do
     websocket: [connect_info: [:peer_data, :uri, session: @session_options]],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
+  plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 
   # Serve at "/" the static files from "priv/static" directory.
