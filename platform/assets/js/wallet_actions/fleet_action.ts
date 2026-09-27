@@ -30,7 +30,7 @@ import {shortAddress} from "./signed_in"
 
 /** The parts of `contracts/src/KeyfleetVotes.sol` the proposal buttons call. */
 export const votesAbi = parseAbi([
-  "struct LaunchEnvelope { string name; string symbol; string description; string website; string image; uint128 requiredRegentRaised; bytes32 narrativeDigest; uint64 executionExpiry; }",
+  "struct LaunchEnvelope { string name; string symbol; string description; string website; string image; uint128 requiredRegentRaised; bytes32 narrativeDigest; }",
   "function vote(uint256 proposalId, uint256[] tokenIds, bool support)",
   "function execute(uint256 proposalId)",
   "function proposeDecision(uint256 tokenId, string text, bytes32 digest) returns (uint256 proposalId)",
@@ -54,18 +54,13 @@ const refusalAbi = parseAbi([
   "error NotAuthorizedForKey(uint256 tokenId, address owner)",
   "error AlreadyVoted(uint256 tokenId)",
   "error NoKeys()",
-  "error VotingClosed(uint64 closesAt)",
-  "error VotingOpen(uint64 closesAt)",
   "error AlreadyExecuted()",
-  "error NotPassed(uint256 yesVotes, uint256 snapshotMinted)",
+  "error NotApproved(uint256 yesVotes, uint256 totalMinted)",
   "error EmptyMetadataField(uint256 field)",
   "error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found)",
   "error RaiseOutOfBounds(uint128 requiredRegentRaised)",
-  "error ExpiryNotAfterClose(uint64 executionExpiry, uint64 closesAt)",
   "error LaunchAlreadyCreated()",
-  "error LaunchNotSettled()",
-  "error PayCapExceeded(address asset, uint256 amount, uint256 remaining)",
-  "error ProposalExpired(uint64 executionExpiry)",
+  "error AboveYesShare(address asset, uint256 amount, uint256 most)",
   "error StakingRegistrationFailed(uint256 amount, uint256 received)",
 ])
 
@@ -77,7 +72,6 @@ export type LaunchEnvelope = {
   image: string
   requiredRegentRaised: bigint
   narrativeDigest: Hex
-  executionExpiry: bigint
 }
 
 /**
@@ -108,21 +102,16 @@ export type Target = Readonly<{chainId: number; to: Address}>
 export type Refusal =
   | {
       reason:
-        | "voting_closed"
         | "no_keys"
         | "unknown_proposal"
-        | "voting_open"
         | "already_executed"
         | "not_passed"
-        | "expired"
-        | "pay_cap"
-        | "launch_not_settled"
+        | "above_yes_share"
         | "launch_exists"
         | "zero_asset"
         | "zero_amount"
         | "recipient_not_allowed"
         | "raise_out_of_bounds"
-        | "expiry_before_close"
         | "staking_refused"
     }
   | {reason: "key_not_eligible" | "already_voted"; key: bigint}
@@ -209,7 +198,6 @@ export function readAction(
           image: field("image"),
           requiredRegentRaised: raise,
           narrativeDigest: documentCode(field("digest")),
-          executionExpiry: lastSecond(field("until")),
         },
         raiseWords: `${units(raise, regentDecimals)} REGENT`,
       }
@@ -335,13 +323,9 @@ function contractRefusal(data: Hex): Refusal | null {
       return {reason: "already_voted", key: decoded.args[0]}
     case "NoKeys":
       return {reason: "no_keys"}
-    case "VotingClosed":
-      return {reason: "voting_closed"}
-    case "VotingOpen":
-      return {reason: "voting_open"}
     case "AlreadyExecuted":
       return {reason: "already_executed"}
-    case "NotPassed":
+    case "NotApproved":
       return {reason: "not_passed"}
     case "EmptyMetadataField":
       return {reason: "empty_field", field: decoded.args[0]}
@@ -349,16 +333,10 @@ function contractRefusal(data: Hex): Refusal | null {
       return {reason: "field_too_long", field: decoded.args[0], maximum: decoded.args[1], found: decoded.args[2]}
     case "RaiseOutOfBounds":
       return {reason: "raise_out_of_bounds"}
-    case "ExpiryNotAfterClose":
-      return {reason: "expiry_before_close"}
     case "LaunchAlreadyCreated":
       return {reason: "launch_exists"}
-    case "LaunchNotSettled":
-      return {reason: "launch_not_settled"}
-    case "PayCapExceeded":
-      return {reason: "pay_cap"}
-    case "ProposalExpired":
-      return {reason: "expired"}
+    case "AboveYesShare":
+      return {reason: "above_yes_share"}
     case "StakingRegistrationFailed":
       return {reason: "staking_refused"}
   }
@@ -427,26 +405,18 @@ function doneWords(action: Press): string {
 
 function refusalWords(refusal: Refusal, action: Press): string {
   switch (refusal.reason) {
-    case "voting_closed":
-      return "Voting on this proposal has closed, so the vote wasn’t counted."
     case "no_keys":
       return "Name at least one key to vote with."
     case "unknown_proposal":
       return "Base doesn’t have this proposal yet."
-    case "voting_open":
-      return "Voting is still open. A proposal can be carried out once voting closes."
     case "already_executed":
       return "This proposal has already been carried out."
     case "not_passed":
-      return "This proposal didn’t pass, so it can’t be carried out."
-    case "expired":
-      return "The time to carry this out has passed."
-    case "pay_cap":
-      return "This payment is more than the budget can still pay out this month. It can be carried out in a later month, up to its last day."
-    case "launch_not_settled":
-      return "Payments from the budget open once the launch has finished."
+      return "More than half of all the keys sold have to vote yes before this can be carried out."
+    case "above_yes_share":
+      return "This payment is more than the yes votes’ share of the budget. It can be carried out once more keys vote yes or more money arrives."
     case "launch_exists":
-      return "This fleet has already launched, and a fleet launches only once."
+      return "This fleet’s launch is still running or has already succeeded. Another launch can only follow one that didn’t succeed."
     case "zero_asset":
       return "Choose the token to pay."
     case "zero_amount":
@@ -457,16 +427,14 @@ function refusalWords(refusal: Refusal, action: Press): string {
       return "The budget can’t pay the fleet itself, its voting or its key holders’ rewards. Choose another wallet to pay."
     case "raise_out_of_bounds":
       return "The REGENT to raise has to be more than zero and no more than an auction can reach."
-    case "expiry_before_close":
-      return "The last day to launch has to come after voting on it closes."
     case "staking_refused":
       return "REGENT staking didn’t take the share, so it stays set aside. Try again later."
     case "key_not_eligible":
       return action.kind === "vote"
-        ? `Key ${refusal.key} can’t vote on this proposal: it was sold after the proposal was made, or hasn’t been sold yet.`
+        ? `Key ${refusal.key} can’t vote on this proposal: it was sold or changed hands after the proposal was made, or hasn’t been sold yet.`
         : `Key ${refusal.key} hasn’t been sold yet.`
     case "already_voted":
-      return `Key ${refusal.key} has already voted on this proposal, so none of these votes were counted.`
+      return `Key ${refusal.key} already has this vote on this proposal, so none of these votes were counted.`
     case "not_authorized":
       return `Key ${refusal.key} is held by ${shortAddress(refusal.owner)}, who hasn’t let this wallet vote for them.`
     case "launch_not_yet":
@@ -587,35 +555,6 @@ function documentCode(text: string): Hex {
     throw new Unreadable("A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one.")
   }
   return `0x${match[1]}`
-}
-
-const chooseLastDay = "Choose the last day and time, in UTC, the launch can be carried out."
-
-// The last second a launch can be carried out, from a date and time in UTC.
-// A date that doesn't exist, such as 30 February, is refused rather than
-// moved to another day. One before 1970 can't be sent at all; a later one
-// that has passed is sent, and the contract refuses it.
-function lastSecond(text: string): bigint {
-  const entry = text.trim()
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(entry)
-  if (!match) throw new Unreadable(chooseLastDay)
-  const [year, month, day, hour, minute, second = 0] = match.slice(1).filter(part => part !== undefined).map(Number)
-  // Set field by field, so a year below 100 stays that year.
-  const date = new Date(0)
-  date.setUTCFullYear(year, month - 1, day)
-  date.setUTCHours(hour, minute, second, 0)
-  const same =
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day &&
-    date.getUTCHours() === hour &&
-    date.getUTCMinutes() === minute &&
-    date.getUTCSeconds() === second
-  if (!same) throw new Unreadable(`That day or time doesn’t exist. ${chooseLastDay}`)
-  if (date.getTime() < 0) {
-    throw new Unreadable("That date has already passed. The last day has to come after voting on the launch closes.")
-  }
-  return BigInt(date.getTime() / 1_000)
 }
 
 function keyWords(keys: bigint[]): string {

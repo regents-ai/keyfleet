@@ -45,9 +45,9 @@ defmodule Keyfleet.Chain.Scanner do
   missing from a block whose hash still matches is the node answering
   inconsistently, so the pass fails and is retried instead.
 
-  A pass that reaches the head also notes the head's time, which is how far
-  votes are known to be counted. A pass that made a new proposal or budget
-  record says so on `Keyfleet.Proposals.topic/1`. One that recorded keys
+  A pass that made a new proposal or budget record, or sold a key, says so on
+  `Keyfleet.Proposals.topic/1`: a key sold adds to the keys a proposal needs
+  more than half of. One that recorded keys
   revealed, sold or changing hands names them all in one notice on
   `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
   even if the pass then failed or stopped the fleet, and each is only a hint
@@ -111,18 +111,13 @@ defmodule Keyfleet.Chain.Scanner do
     result
   end
 
-  # Only a pass that reached the head knows the votes are counted up to its time.
   defp advance(next_block, head) do
-    moved = %{
+    %{
       next_block: next_block,
       head_block: head.number,
       head_block_hash: head.hash,
       observed_at: DateTime.utc_now()
     }
-
-    if next_block == head.number + 1,
-      do: Map.put(moved, :read_through_at, head.timestamp),
-      else: moved
   end
 
   # Each piece is checked against what is recorded before anything new in it
@@ -288,17 +283,11 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
-  # Every key revealed, sold or changing hands in the pass is named once.
+  # Every key revealed, sold or changing hands in the pass is named once. A
+  # key sold changes how every open proposal stands, since passing takes
+  # more than half of all the keys sold.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
-
-    if now.proposal_seq > before.proposal_seq do
-      Phoenix.PubSub.broadcast(
-        Keyfleet.PubSub,
-        Proposals.topic(fleet_id),
-        {:proposals_changed, fleet_id}
-      )
-    end
 
     revealed =
       if now.reveal_seq > before.reveal_seq,
@@ -309,6 +298,14 @@ defmodule Keyfleet.Chain.Scanner do
       if now.ownership_seq > before.ownership_seq,
         do: Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system),
         else: []
+
+    if now.proposal_seq > before.proposal_seq or Enum.any?(owned, &(&1.ownership_epoch == 1)) do
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        Proposals.topic(fleet_id),
+        {:proposals_changed, fleet_id}
+      )
+    end
 
     case Enum.uniq_by(revealed ++ owned, & &1.token_id) do
       [] ->

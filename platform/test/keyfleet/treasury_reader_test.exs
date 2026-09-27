@@ -21,17 +21,14 @@ defmodule Keyfleet.TreasuryReaderTest do
   @named "0x" <> String.duplicate("4", 40)
   @max_uint256 2 ** 256 - 1
   @head_hash "0x" <> String.duplicate("f", 64)
-  @period_start 1_700_000_000
 
   # Pinned from `cast sig` of each view function, and against the contracts
   # in contracts/test/KeyfleetVotesTopics.t.sol.
   @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
   @free_capital <<0x2B, 0x84, 0x30, 0x8E>>
-  @pay_period <<0xE6, 0xEC, 0x9E, 0x56>>
   @backed <<0x59, 0x5B, 0x7F, 0x21>>
   @cascade_reserve <<0xFC, 0x4E, 0x89, 0x64>>
   @protocol_share_owed <<0xC4, 0x90, 0xB9, 0xC7>>
-  @launch_settled <<0x06, 0xE9, 0x3D, 0xAE>>
   @decimals <<0x31, 0x3C, 0xE5, 0x67>>
   @symbol <<0x95, 0xD8, 0x9B, 0x41>>
 
@@ -76,16 +73,16 @@ defmodule Keyfleet.TreasuryReaderTest do
     refute_received {:proposals_changed, _fleet}
 
     requests = StubClient.call_requests()
-    assert length(requests) == 21
+    assert length(requests) == 17
     assert Enum.all?(requests, fn {_to, _data, block_hash} -> block_hash == @head_hash end)
 
-    {balances, details} = Enum.split(requests, 13)
-    assert List.last(balances) == {@contract, @launch_settled, @head_hash}
+    {balances, details} = Enum.split(requests, 9)
+    assert List.last(balances) == {@contract, @protocol_share_owed, @head_hash}
     assert Enum.all?(details, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
 
-    assert %{block_number: 40, block_hash: @head_hash, launch_settled: true} = reading
+    assert %{block_number: 40, block_hash: @head_hash} = reading
     assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @booked]
     [usdc, other, booked] = reading.assets
 
@@ -93,11 +90,8 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert Decimal.equal?(reading.cascade_reserve, 700)
     assert Decimal.equal?(reading.protocol_share_owed, 800)
 
-    assert %{asset: @usdc, pay_period_start: nil} = usdc
-    assert %{free_capital: 100_000_000, backed: 30_000_000, pay_cap: 0, pay_spent: 0} = usdc
-
-    assert DateTime.compare(other.pay_period_start, DateTime.from_unix!(@period_start)) == :eq
-    assert %{free_capital: 5_000, pay_cap: 1_000, pay_spent: 400, backed: 60} = other
+    assert %{asset: @usdc, free_capital: 100_000_000, backed: 30_000_000} = usdc
+    assert %{free_capital: 5_000, backed: 60} = other
 
     # Every digit of the largest amount the contract can hold is kept.
     assert booked.free_capital == @max_uint256
@@ -133,7 +127,7 @@ defmodule Keyfleet.TreasuryReaderTest do
     for {key, answer, reason} <- [
           {{@rewards, @backed <> word(@other)}, {:error, :chain_unavailable},
            {@rewards, :chain_unavailable}},
-          {{@contract, @launch_settled}, {:ok, <<2::256>>}, {@contract, :unreadable_answer}}
+          {{@contract, @cascade_reserve}, {:ok, <<1, 2>>}, {@contract, :unreadable_answer}}
         ] do
       StubClient.put_chain(head(40), [], calls: answers(Map.put(chain(), key, answer)))
 
@@ -333,27 +327,21 @@ defmodule Keyfleet.TreasuryReaderTest do
       {@booked, @symbol} => {:ok, text("DEP")},
       {@booked, @decimals} => {:error, :reverted},
       {@contract, @free_capital <> word(@booked)} => {:ok, <<@max_uint256::256>>},
-      {@contract, @pay_period <> word(@booked)} => {:ok, <<0::256, 0::256, 0::256>>},
       {@rewards, @backed <> word(@booked)} => {:ok, <<0::256>>},
       {@named, @symbol} => {:error, :reverted},
       {@named, @decimals} => {:ok, <<256::256>>},
       {@contract, @free_capital <> word(@named)} => {:ok, <<0::256>>},
-      {@contract, @pay_period <> word(@named)} => {:ok, <<0::256, 0::256, 0::256>>},
       {@rewards, @backed <> word(@named)} => {:ok, <<0::256>>},
       {@usdc, @symbol} => {:ok, text("USDC")},
       {@usdc, @decimals} => {:ok, <<6::256>>},
       {@contract, @free_capital <> word(@usdc)} => {:ok, <<100_000_000::256>>},
-      {@contract, @pay_period <> word(@usdc)} => {:ok, <<0::256, 0::256, 0::256>>},
       {@rewards, @backed <> word(@usdc)} => {:ok, <<30_000_000::256>>},
       {@other, @symbol} => {:ok, text("WETH")},
       {@other, @decimals} => {:ok, <<18::256>>},
       {@contract, @free_capital <> word(@other)} => {:ok, <<5_000::256>>},
-      {@contract, @pay_period <> word(@other)} =>
-        {:ok, <<@period_start::256, 1_000::256, 400::256>>},
       {@rewards, @backed <> word(@other)} => {:ok, <<60::256>>},
       {@contract, @cascade_reserve} => {:ok, <<700::256>>},
-      {@contract, @protocol_share_owed} => {:ok, <<800::256>>},
-      {@contract, @launch_settled} => {:ok, <<1::256>>}
+      {@contract, @protocol_share_owed} => {:ok, <<800::256>>}
     }
   end
 

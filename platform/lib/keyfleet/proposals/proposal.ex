@@ -4,7 +4,10 @@ defmodule Keyfleet.Proposals.Proposal do
   launch or a payment, the payload log beside it. Only the chain reader
   writes it, and nothing ever changes it.
 
-  Every key is one vote, so `yes_keys` and `no_keys` are the tally.
+  Every key is one vote, and a key's latest vote is the one that counts, so
+  `yes_keys` and `no_keys` count the keys whose latest vote is yes or no.
+  `keys_sold` is how many keys the fleet has sold, as far as its key history
+  has been read.
 
   Its place on the chain is the `ProposalCreated` log's. `record_seq` is the
   fleet's count of proposal records when it was made.
@@ -42,23 +45,11 @@ defmodule Keyfleet.Proposals.Proposal do
         check: "num_nonnulls(asset, amount, recipient) = CASE kind WHEN 'pay' THEN 3 ELSE 0 END"
       )
 
-      check_constraint(:execution_expiry, "proposals_execution_expiry_fields",
-        check: "num_nonnulls(execution_expiry) = CASE kind WHEN 'decision' THEN 0 ELSE 1 END"
-      )
-
       check_constraint(:text, "proposals_text_cap",
         check: "octet_length(text) = least(text_bytes, #{@text_cap})"
       )
 
-      check_constraint(:eligible_keys, "proposals_nonnegative_eligible_keys",
-        check: "eligible_keys >= 0"
-      )
-
       check_constraint(:amount, "proposals_nonnegative_amount", check: "amount >= 0")
-
-      check_constraint(:execution_expiry, "proposals_nonnegative_execution_expiry",
-        check: "execution_expiry >= 0"
-      )
 
       for field <- [:proposer, :asset, :recipient] do
         check_constraint(field, "proposals_#{field}_shape",
@@ -72,7 +63,7 @@ defmodule Keyfleet.Proposals.Proposal do
         )
       end
 
-      for field <- [:block_number, :log_index] do
+      for field <- [:opened_block, :block_number, :log_index] do
         check_constraint(field, "proposals_nonnegative_#{field}", check: "#{field} >= 0")
       end
 
@@ -84,8 +75,6 @@ defmodule Keyfleet.Proposals.Proposal do
       index([:fleet_id, :block_number])
       index([:fleet_id, :digest])
       index([:fleet_id, :envelope_hash])
-      # The fleet's proposals by when their votes close, latest first.
-      index(["fleet_id", "closes_at DESC"], name: "proposals_closes_index")
     end
 
     custom_statements do
@@ -134,8 +123,7 @@ defmodule Keyfleet.Proposals.Proposal do
         :number,
         :kind,
         :proposer,
-        :closes_at,
-        :eligible_keys,
+        :opened_block,
         :digest,
         :text,
         :text_bytes,
@@ -144,7 +132,6 @@ defmodule Keyfleet.Proposals.Proposal do
         :asset,
         :amount,
         :recipient,
-        :execution_expiry,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -200,34 +187,6 @@ defmodule Keyfleet.Proposals.Proposal do
         ])
         |> Ash.Query.load([:text_start, launch_envelope: launch_name()])
       end
-    end
-
-    # The fleet's proposals whose votes closed before the one closing at
-    # `before_at` numbered `before_number` (strictly before `before_at` when
-    # nil), latest closing first, `limit` at most, as
-    # `Keyfleet.Proposals.status/3` needs them.
-    read :closed_before do
-      argument :fleet_id, :string, allow_nil?: false
-      argument :before_at, :utc_datetime_usec, allow_nil?: false
-      argument :before_number, :integer, constraints: [min: 1, max: @max_bigint]
-      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
-      filter expr(fleet_id == ^arg(:fleet_id))
-
-      prepare {Keyfleet.Preparations.NewestFirst,
-               sort: [closes_at: :desc, number: :asc], before: [:before_at, :before_number]}
-
-      prepare build(
-                select: [
-                  :id,
-                  :fleet_id,
-                  :number,
-                  :kind,
-                  :closes_at,
-                  :eligible_keys,
-                  :execution_expiry
-                ],
-                load: [:yes_keys, :no_keys, :execution, :fleet_launched?]
-              )
     end
 
     # The fleet's launch proposals whose launch has not been read yet.
@@ -286,10 +245,9 @@ defmodule Keyfleet.Proposals.Proposal do
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    attribute :closes_at, :utc_datetime_usec, allow_nil?: false, public?: true
-
-    # The keys sold when it was proposed: keys 1 to this many may vote on it.
-    attribute :eligible_keys, :integer,
+    # The block it was proposed in: a key that last moved before this block
+    # may vote on it.
+    attribute :opened_block, :integer,
       allow_nil?: false,
       public?: true,
       constraints: [min: 0, max: @max_bigint]
@@ -314,10 +272,6 @@ defmodule Keyfleet.Proposals.Proposal do
     end
 
     attribute :amount, :decimal, public?: true, constraints: [min: 0]
-
-    # The last second a passed launch or payment may execute, in seconds since
-    # 1970, as the contract holds it: any uint64 is valid.
-    attribute :execution_expiry, :decimal, public?: true, constraints: [min: 0]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,
@@ -355,37 +309,31 @@ defmodule Keyfleet.Proposals.Proposal do
     has_many :votes, Keyfleet.Proposals.Vote, public?: true
     has_one :execution, Keyfleet.Proposals.Execution, public?: true
     has_one :launch_envelope, Keyfleet.Proposals.LaunchEnvelope, public?: true
-
-    # The launches carried out in the fleet: one at most, since the fleet
-    # contract launches once.
-    has_many :fleet_launches, Keyfleet.Proposals.Execution do
-      source_attribute :fleet_id
-      destination_attribute :fleet_id
-      filter expr(proposal.kind == :autolaunch)
-    end
   end
 
   aggregates do
-    sum :yes_keys, :votes, :key_count do
-      filter expr(support)
-      default 0
-      public? true
-    end
-
-    sum :no_keys, :votes, :key_count do
-      filter expr(not support)
-      default 0
-      public? true
-    end
-
     exists :executed?, :execution, public?: true
-
-    # Whether one of the fleet's launch proposals has been carried out: the
-    # fleet contract then refuses every other.
-    exists :fleet_launched?, :fleet_launches, public?: true
   end
 
   calculations do
+    # The fleet's highest key number read: the contract numbers keys from 1
+    # in the order it sells them and never burns one.
+    calculate :keys_sold,
+              :integer,
+              expr(
+                fragment(
+                  "(SELECT coalesce(max(key.token_id), 0) FROM keyfleet_app.key_attachments AS key WHERE key.fleet_id = ?)",
+                  fleet_id
+                )
+              ),
+              public?: true
+
+    calculate :yes_keys, :integer, {Keyfleet.Proposals.Calculations.LatestVotes, support: true},
+      public?: true
+
+    calculate :no_keys, :integer, {Keyfleet.Proposals.Calculations.LatestVotes, support: false},
+      public?: true
+
     # The first bytes of a decision's or payment's text, enough for 160
     # characters, cut in the database so a page never loads whole texts.
     calculate :text_start, :binary, expr(fragment("substring(? from 1 for 640)", text)),

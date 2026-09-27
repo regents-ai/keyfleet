@@ -2248,17 +2248,14 @@ components:
         payment from the fleet's budget, in pay.
     ProposalStatus:
       type: string
-      enum: [voting, counting, passed, failed, executed, closed, expired]
+      enum: [voting, passed, executed]
       description: >-
-        voting: open until closes_at. counting: closed, and the site has not yet read the chain past
-        closes_at. passed: more than half of the keys that could vote voted yes; exactly half fails,
-        and a key that did not vote counts against. failed: it did not pass. executed: carried out on
-        chain. closed: a launch that passed, but another launch of the fleet was carried out, and a
-        fleet launches once. expired: a payment or a launch that passed and is past the last second
-        it could be carried out. Neither closed nor expired arrives as a change record of its own:
-        a recorded launch execution closes every other passed launch of the fleet, and a proposal
-        that passed expires once the time is past its execution_expiry, so a client works both out
-        from what it already holds, or reads the proposal again.
+        A proposal has no deadline and stays open to votes until it is carried out. passed: more
+        than half of all the keys sold have yes as their latest vote, so it can be carried out now;
+        exactly half is not enough, and a key that has not voted counts against. voting: not
+        passed. executed: carried out on chain. A key sold after a proposal passed counts against
+        it too, so it can go back to voting; a sale arrives as no change record of a proposal, so a
+        client compares yes_votes with the fleet's keys sold, or reads the proposal again.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'
@@ -2267,7 +2264,7 @@ components:
     ProposalPay:
       type: [object, "null"]
       additionalProperties: false
-      required: [asset, amount, recipient, execution_expiry]
+      required: [asset, amount, recipient]
       description: For a payment, what it pays; null otherwise
       properties:
         asset: {$ref: "#/components/schemas/AgentWallet"}
@@ -2275,21 +2272,15 @@ components:
           $ref: "#/components/schemas/UintString"
           description: In the asset's smallest units
         recipient: {$ref: "#/components/schemas/AgentWallet"}
-        execution_expiry:
-          $ref: "#/components/schemas/UintString"
-          description: The last second, in seconds since 1970, it may be paid
     ProposalLaunch:
       type: [object, "null"]
       additionalProperties: false
-      required: [envelope_hash, execution_expiry, envelope]
+      required: [envelope_hash, envelope]
       description: For a launch, what it approves; null otherwise
       properties:
         envelope_hash:
           $ref: "#/components/schemas/ChainHash"
           description: keccak256 of the ABI-encoded launch envelope
-        execution_expiry:
-          $ref: "#/components/schemas/UintString"
-          description: The last second, in seconds since 1970, it may be launched
         envelope:
           type: [object, "null"]
           additionalProperties: false
@@ -2319,20 +2310,30 @@ components:
     ProposalSummary:
       type: object
       additionalProperties: false
-      required: [number, kind, status, proposer, closes_at, eligible_keys, yes_votes, no_votes, digest, text_preview, text_bytes, pay, launch, executed, transaction_hash, block_number, changed_seq]
+      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text_preview, text_bytes, pay, launch, executed, transaction_hash, block_number, changed_seq]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         kind: {$ref: "#/components/schemas/ProposalKind"}
         status: {$ref: "#/components/schemas/ProposalStatus"}
         proposer: {$ref: "#/components/schemas/AgentWallet"}
-        closes_at: {type: string, format: date-time, description: Voting is open strictly before this time}
-        eligible_keys:
+        opened_block:
+          $ref: "#/components/schemas/RoomSeq"
+          description: The block it was proposed in; a key that last changed hands before this block may vote, one vote each
+        keys_sold:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys sold when it was proposed; keys 1 to this many may vote, one vote each
-        yes_votes: {type: integer, minimum: 0, maximum: 9223372036854775807}
-        no_votes: {type: integer, minimum: 0, maximum: 9223372036854775807}
+          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them
+        yes_votes:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          description: The keys whose latest vote is yes
+        no_votes:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          description: The keys whose latest vote is no
         digest:
           type: [string, "null"]
           pattern: '^0x[0-9a-f]{64}$'
@@ -2357,20 +2358,30 @@ components:
     ProposalDetail:
       type: object
       additionalProperties: false
-      required: [number, kind, status, proposer, closes_at, eligible_keys, yes_votes, no_votes, digest, text, text_bytes, text_sha256, pay, launch, executed, transaction_hash, block_number]
+      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text, text_bytes, text_sha256, pay, launch, executed, transaction_hash, block_number]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         kind: {$ref: "#/components/schemas/ProposalKind"}
         status: {$ref: "#/components/schemas/ProposalStatus"}
         proposer: {$ref: "#/components/schemas/AgentWallet"}
-        closes_at: {type: string, format: date-time, description: Voting is open strictly before this time}
-        eligible_keys:
+        opened_block:
+          $ref: "#/components/schemas/RoomSeq"
+          description: The block it was proposed in; a key that last changed hands before this block may vote, one vote each
+        keys_sold:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys sold when it was proposed; keys 1 to this many may vote, one vote each
-        yes_votes: {type: integer, minimum: 0, maximum: 9223372036854775807}
-        no_votes: {type: integer, minimum: 0, maximum: 9223372036854775807}
+          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them
+        yes_votes:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          description: The keys whose latest vote is yes
+        no_votes:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          description: The keys whose latest vote is no
         digest:
           type: [string, "null"]
           pattern: '^0x[0-9a-f]{64}$'
@@ -2404,7 +2415,9 @@ components:
         votes: {type: integer, minimum: 1, maximum: 9223372036854775807, description: One per key}
         keys:
           type: array
-          description: The keys that voted, by token id
+          description: >-
+            The keys that voted, by token id. A key may vote again until the proposal is carried
+            out, and its latest vote is the one that counts
           items: {type: integer, minimum: 1, maximum: 9223372036854775807}
         transaction_hash: {$ref: "#/components/schemas/ChainHash"}
         block_number: {$ref: "#/components/schemas/RoomSeq"}

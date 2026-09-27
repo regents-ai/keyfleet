@@ -1,7 +1,6 @@
 defmodule KeyfleetWeb.AgentProposalController do
   use KeyfleetWeb, :controller
 
-  alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Proposals
   alias KeyfleetWeb.ProposalJSON
@@ -21,7 +20,7 @@ defmodule KeyfleetWeb.AgentProposalController do
         not_found(conn, "proposal_unknown")
 
       proposal ->
-        status = Proposals.status(proposal, Chain.get_cursor!(fleet_id), DateTime.utc_now())
+        status = Proposals.status(proposal)
         {votes, more?} = Proposals.votes_after(proposal.id, after_seq, @votes_page)
 
         json(conn, %{

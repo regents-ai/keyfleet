@@ -10,11 +10,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   The form for a new launch starts from the fleet's launch plans. Once the fleet is on chain, each carries what its wallet buttons
   need: the fleet's network, its two contracts, and the wallets of the
   person signed in, which the buttons name when the connected wallet is
-  another. Each answers
-  `check_in`, how long the page may wait before its proposals could read
-  differently without anything new being recorded: a proposal closing, a
-  closed one being counted, or a passed one running out of time. A page name that is not a proposal number is a
-  page that doesn't exist.
+  another. A page name that is not a proposal number is a page that doesn't
+  exist.
   """
 
   alias Keyfleet.Chain
@@ -29,22 +26,11 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50
-  # A closed proposal's votes are counted by the chain reader's next pass.
-  @after_closing 5_000
-  @while_counting 10_000
-  @day 24 * 60 * 60 * 1_000
   @regent_decimals 18
   @text_cap 64 * 1024
-  # A month of payments, and the part of the budget it can pay out.
-  @pay_period 30 * 24 * 60 * 60
-  @pay_cap_bps 2_000
-  @bps 10_000
   # The fleet's USDC, which its contract refuses to be deployed with unless
   # it has six decimals.
   @usdc_decimals 6
-  # How long a proposed launch can be carried out for, unless its proposer
-  # changes it.
-  @launch_window_days 30
 
   @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from the budget"}
 
@@ -76,17 +62,14 @@ defmodule KeyfleetWeb.ProposalsPage do
 
     with_fleet(fleet_id, signed_in, fn fleet, reading ->
       {proposals, older?} = Proposals.list_page(fleet_id, before)
-      now = DateTime.utc_now()
-      shown = Enum.map(proposals, &summary(&1, reading.cursor, now))
       balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
-        proposals: shown,
+        proposals: Enum.map(proposals, &summary/1),
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
-        check_in: check_in(shown, now),
         treasury: reading.deployed? && treasury(fleet, balances),
-        propose: reading.deployed? && propose(fleet, balances, now)
+        propose: reading.deployed? && propose(fleet, balances)
       })
     end)
   end
@@ -99,24 +82,20 @@ defmodule KeyfleetWeb.ProposalsPage do
     votes_after = seq!(params["votes_after"])
 
     with_fleet(fleet_id, signed_in, fn fleet, reading ->
-      now = DateTime.utc_now()
-
       case Proposals.get_by_number(fleet_id, String.to_integer(number)) do
         nil ->
-          Map.merge(reading, %{number: number, proposal: nil, check_in: nil})
+          Map.merge(reading, %{number: number, proposal: nil})
 
         proposal ->
-          shown = summary(proposal, reading.cursor, now)
           {votes, more?} = Proposals.votes_after(proposal.id, votes_after, @votes_page)
           path = &detail_path(fleet_id, proposal.number, &1)
 
           Map.merge(reading, %{
             number: number,
-            proposal: Map.merge(shown, details(proposal, fleet)),
+            proposal: Map.merge(summary(proposal), details(proposal, fleet)),
             votes: Enum.map(votes, &vote/1),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
-            first_votes: if(votes_after > 0, do: path.([])),
-            check_in: check_in([shown], now)
+            first_votes: if(votes_after > 0, do: path.([]))
           })
       end
     end)
@@ -167,7 +146,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp with_fleet(fleet_id, signed_in, read) do
     case Fleets.get_fleet!(fleet_id) do
       nil ->
-        %{fleet_id: fleet_id, fleet_name: nil, check_in: nil}
+        %{fleet_id: fleet_id, fleet_name: nil}
 
       fleet ->
         deployed? = fleet.contract_address != nil
@@ -177,7 +156,6 @@ defmodule KeyfleetWeb.ProposalsPage do
           fleet_name: fleet.name,
           deployed?: deployed?,
           wallet: deployed? && wallet(fleet, signed_in),
-          cursor: Chain.get_cursor!(fleet_id),
           catching_up?: deployed? and not Chain.fresh?(fleet_id)
         })
     end
@@ -193,16 +171,10 @@ defmodule KeyfleetWeb.ProposalsPage do
       signed_in: signed_in
     }
 
-  # What the forms for new proposals start from: each asset the budget
-  # holds and a launch that can be carried out for 30 days.
-  defp propose(fleet, balances, now) do
+  # What the form for a new payment starts from: each asset the budget holds.
+  defp propose(fleet, balances) do
     known = Treasury.assets(fleet)
-
-    %{
-      assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known)),
-      launch_until:
-        now |> DateTime.add(@launch_window_days, :day) |> Calendar.strftime("%Y-%m-%dT%H:%M")
-    }
+    %{assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known))}
   end
 
   @doc """
@@ -273,25 +245,17 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  defp summary(proposal, cursor, now) do
-    status = Proposals.status(proposal, cursor, now)
-
+  defp summary(proposal) do
     %{
       number: proposal.number,
       kind: proposal.kind,
-      status: status,
-      closes_at: proposal.closes_at,
-      eligible_keys: proposal.eligible_keys,
+      status: Proposals.status(proposal),
+      keys_sold: proposal.keys_sold,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
-      gist: gist(proposal),
-      last_day: last_day(status, proposal.execution_expiry)
+      gist: gist(proposal)
     }
   end
-
-  # The last second a passed proposal can still be carried out in.
-  defp last_day(:passed, %Decimal{} = expiry), do: expiry(expiry)
-  defp last_day(_status, _expiry), do: nil
 
   defp gist(%{kind: :autolaunch, launch_envelope: %{name: name}}), do: as_text(name)
   defp gist(%{kind: :autolaunch}), do: nil
@@ -421,49 +385,22 @@ defmodule KeyfleetWeb.ProposalsPage do
     |> Map.merge(%{
       read?: true,
       as_of: balances.block_time,
-      payments_open?: balances.launch_settled,
-      balances: Enum.map(balances.assets, &balance(&1, balances.block_time, assets)),
+      balances: Enum.map(balances.assets, &balance(&1, assets)),
       reserve: if(Decimal.gt?(balances.cascade_reserve, 0), do: usdc.(balances.cascade_reserve)),
       owed: usdc.(balances.protocol_share_owed),
       nothing_owed?: Decimal.eq?(balances.protocol_share_owed, 0)
     })
   end
 
-  defp balance(balance, as_of, assets) do
+  defp balance(balance, assets) do
     shown = &amount(&1, balance.asset, assets)
 
-    Map.merge(
-      %{
-        asset: balance.asset,
-        budget: shown.(balance.free_capital),
-        set_aside: shown.(balance.backed)
-      },
-      month(balance, as_of, shown)
-    )
+    %{
+      asset: balance.asset,
+      budget: shown.(balance.free_capital),
+      set_aside: shown.(balance.backed)
+    }
   end
-
-  # A month of payments begins with its first payment and can pay out up to
-  # a fifth of the budget as it stood then. Until one begins, a fifth of the
-  # budget as it stands is what the next month could pay.
-  defp month(balance, as_of, shown) do
-    if open_month?(balance, as_of) do
-      %{
-        available: shown.(balance.pay_cap - balance.pay_spent),
-        paid: %{spent: shown.(balance.pay_spent), cap: shown.(balance.pay_cap)},
-        month_ends: month_end(balance.pay_period_start)
-      }
-    else
-      fifth = div(balance.free_capital * @pay_cap_bps, @bps)
-      %{available: shown.(fifth), paid: nil, month_ends: nil}
-    end
-  end
-
-  defp open_month?(%{pay_period_start: nil}, _as_of), do: false
-
-  defp open_month?(%{pay_period_start: start}, as_of),
-    do: DateTime.before?(as_of, month_end(start))
-
-  defp month_end(start), do: DateTime.add(start, @pay_period)
 
   defp history(fleet_id, assets) do
     %{income: income, payments: payments} = Treasury.latest(fleet_id)
@@ -483,33 +420,6 @@ defmodule KeyfleetWeb.ProposalsPage do
         ),
       earlier_payments?: payments.earlier?
     }
-  end
-
-  # A proposal on show reads differently once it closes, and a closed one
-  # once its votes are counted.
-  defp check_in(proposals, now) do
-    closing =
-      for %{status: :voting, closes_at: closes_at} <- proposals,
-          do: DateTime.diff(closes_at, now, :millisecond) + @after_closing
-
-    counting = for %{status: :counting} <- proposals, do: @while_counting
-
-    # The second after the last one it can be carried out in, looked at
-    # again at least daily until then.
-    running_out =
-      for %{status: :passed, last_day: %DateTime{} = last_day} <- proposals,
-          do: min(DateTime.diff(last_day, now, :millisecond) + 1_000, @day)
-
-    Enum.min(closing ++ counting ++ running_out, fn -> nil end)
-  end
-
-  # The contract holds the last second as any uint64; one past what a date
-  # can show is shown as never ending.
-  defp expiry(seconds) do
-    case DateTime.from_unix(Decimal.to_integer(seconds)) do
-      {:ok, datetime} -> datetime
-      {:error, _beyond} -> nil
-    end
   end
 
   defp number!(nil), do: nil

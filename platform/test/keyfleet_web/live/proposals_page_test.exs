@@ -41,31 +41,20 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   test "anyone can read every proposal and where each one stands", %{conn: conn} do
-    now = DateTime.utc_now()
-    closed = DateTime.add(now, -3600)
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, 1..7)
 
     ProposalHelpers.proposal!(@fleet, 1, text: "Hire a designer", text_bytes: 15)
-    ProposalHelpers.proposal!(@fleet, 2, closes_at: closed, eligible_keys: 7)
+    ProposalHelpers.proposal!(@fleet, 2)
     votes!(2, true: [1, 2, 3, 4])
-    ProposalHelpers.proposal!(@fleet, 3, closes_at: closed, eligible_keys: 6)
+    ProposalHelpers.proposal!(@fleet, 3)
     votes!(3, true: [1, 2, 3], false: [4])
-    ProposalHelpers.proposal!(@fleet, 4, closes_at: DateTime.add(now, -30))
-    ProposalHelpers.proposal!(@fleet, 5, kind: :pay, closes_at: closed, eligible_keys: 1)
-    votes!(5, true: [1])
+    ProposalHelpers.proposal!(@fleet, 4, kind: :pay)
+    votes!(4, true: [1, 2, 3, 4])
+    ProposalHelpers.execution!(@fleet, 4, @voter)
+    ProposalHelpers.proposal!(@fleet, 5, kind: :autolaunch)
+    votes!(5, true: [1, 2, 3, 4])
     ProposalHelpers.execution!(@fleet, 5, @voter)
-
-    ProposalHelpers.proposal!(@fleet, 6,
-      kind: :pay,
-      closes_at: closed,
-      eligible_keys: 1,
-      execution_expiry: Decimal.new(DateTime.to_unix(now) - 1)
-    )
-
-    votes!(6, true: [1])
-    ProposalHelpers.proposal!(@fleet, 7, kind: :autolaunch, closes_at: closed, eligible_keys: 1)
-    votes!(7, true: [1])
-    ProposalHelpers.execution!(@fleet, 7, @voter)
 
     {:ok, view, html} = live(conn, @list)
 
@@ -73,26 +62,58 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     refute html =~ "Vote counts are catching up."
 
     assert cards(view) == [
-             {"7", "Launch", "Launched"},
-             {"6", "Payment from the budget", "Expired"},
-             {"5", "Payment from the budget", "Paid"},
-             {"4", "Decision", "Counting votes"},
-             {"3", "Decision", "Did not pass"},
+             {"5", "Launch", "Launched"},
+             {"4", "Payment from the budget", "Paid"},
+             {"3", "Decision", "Voting open"},
              {"2", "Decision", "Passed"},
              {"1", "Decision", "Voting open"}
            ]
 
     assert has_element?(view, ~s([data-proposal="1"]), "Hire a designer")
-    assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 6 keys that could vote")
+    assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 7 keys sold")
 
     view |> element(~s([data-proposal="2"] a)) |> render_click()
     assert_redirect(view, "/app/fleets/#{@fleet}/proposals/2")
+  end
+
+  # A key may vote again, and only its latest vote counts; a key sold later
+  # adds to the keys a proposal needs more than half of.
+  test "a key's latest vote counts, and a key sold later can take a passed proposal back to voting",
+       %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, 1..3)
+    ProposalHelpers.proposal!(@fleet, 1)
+    votes!(1, true: [1], false: [2])
+    votes!(1, true: [2])
+
+    {:ok, view, _html} = live(conn, "#{@list}/1")
+    {:ok, list, _html} = live(conn, @list)
+    assert has_element?(view, "#proposal-status", "Passed")
+    assert has_element?(view, "#proposal-yes", "2 keys")
+    assert has_element?(view, "#proposal-no", "0 keys")
+    assert has_element?(view, "#proposal-keys-sold", "3 keys")
+
+    ProposalHelpers.keys_sold!(@fleet, [4])
+
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Proposals.topic(@fleet),
+      {:proposals_changed, @fleet}
+    )
+
+    assert shows?(fn -> has_element?(view, "#proposal-status", "Voting open") end)
+    assert has_element?(view, "#proposal-keys-sold", "4 keys")
+
+    assert shows?(fn ->
+             has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no, of 4 keys sold")
+           end)
   end
 
   test "a proposal's page shows its text, its outcome and every vote, fifty at a time", %{
     conn: conn
   } do
     ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, 1..120)
     ProposalHelpers.proposal!(@fleet, 1, text: "Hire a designer\nfor the launch", text_bytes: 30)
     for token_id <- 1..51, do: ProposalHelpers.vote!(@fleet, 1, @voter, true, [token_id])
 
@@ -120,21 +141,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert length(votes(view)) == 50
   end
 
-  test "a payment names what it pays, to whom and until when", %{conn: conn} do
-    now = DateTime.utc_now()
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+  test "a payment names what it pays and to whom", %{conn: conn} do
+    ChainHelpers.seed_cursor!(@fleet)
     ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     ProposalHelpers.proposal!(@fleet, 1,
       kind: :pay,
       asset: @usdc,
-      amount: Decimal.new(12_500_000),
-      closes_at: DateTime.add(now, -3600),
-      eligible_keys: 1,
-      execution_expiry: Decimal.new(DateTime.to_unix(~U[2126-11-01 09:30:00Z]))
+      amount: Decimal.new(12_500_000)
     )
-
-    votes!(1, true: [1])
 
     ProposalHelpers.proposal!(@fleet, 2,
       kind: :pay,
@@ -150,12 +165,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            ]
 
     refute has_element?(view, "#proposal-payment .proposals-token")
-
-    assert has_element?(
-             view,
-             "#proposal-last-day",
-             "Can be paid until 1 November 2126 at 09:30 UTC"
-           )
 
     # An asset whose token has not been asked yet is shown as the chain
     # holds it, with the token's address.
@@ -204,13 +213,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "[data-asset='#{fake}'] div") == [
              {"Budget", "1 USDC 0xdddd…dddd"},
-             {"Available this month", "0.2 USDC 0xdddd…dddd"},
              {"Set aside for key holders", "3 USDC 0xdddd…dddd"}
            ]
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Budget", "1 USDC"},
-             {"Available this month", "0.2 USDC"},
              {"Set aside for key holders", "0 USDC"}
            ]
 
@@ -224,60 +231,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
 
     assert tokens == List.duplicate({"0xdddd…dddd", fake}, 2)
-  end
-
-  # How long a proposal can be carried out for matters only while it has
-  # passed and waits to be.
-  test "the last day to carry a proposal out shows only while it waits to be", %{conn: conn} do
-    now = DateTime.utc_now()
-    closed = DateTime.add(now, -3600)
-    later = Decimal.new(DateTime.to_unix(now) + 86_400)
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
-
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, execution_expiry: later)
-
-    ProposalHelpers.proposal!(@fleet, 2,
-      kind: :pay,
-      closes_at: closed,
-      eligible_keys: 2,
-      execution_expiry: later
-    )
-
-    votes!(2, true: [1])
-
-    for number <- 3..4 do
-      ProposalHelpers.proposal!(@fleet, number,
-        kind: :pay,
-        closes_at: closed,
-        eligible_keys: 1,
-        execution_expiry: later
-      )
-
-      votes!(number, true: [1])
-    end
-
-    ProposalHelpers.execution!(@fleet, 4, @voter)
-
-    ProposalHelpers.proposal!(@fleet, 5,
-      kind: :pay,
-      closes_at: closed,
-      eligible_keys: 1,
-      execution_expiry: Decimal.new(DateTime.to_unix(now) - 1)
-    )
-
-    votes!(5, true: [1])
-
-    for {number, status, shown?} <- [
-          {1, "Voting open", false},
-          {2, "Did not pass", false},
-          {3, "Passed", true},
-          {4, "Paid", false},
-          {5, "Expired", false}
-        ] do
-      {:ok, view, _html} = live(conn, "#{@list}/#{number}")
-      assert has_element?(view, "#proposal-status", status)
-      assert has_element?(view, "#proposal-last-day") == shown?, "proposal #{number}"
-    end
   end
 
   # A token that will not tell its symbol or its decimals is never guessed at.
@@ -322,10 +275,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       "115,792,089,237,316,195,423,570,985,008,687,907,853,269,984,665,640,564,039,457,584," <>
         "007,913,129.639935 USDC"
 
-    fifth =
-      "23,158,417,847,463,239,084,714,197,001,737,581,570,653,996,933,128,112,807,891,516," <>
-        "801,582,625.927987 USDC"
-
     {:ok, view, _html} = live(conn, "#{@list}/1")
     assert has_element?(view, "#proposal-payment", whole)
 
@@ -333,7 +282,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(list, "[data-asset='#{@usdc}'] div") == [
              {"Budget", whole},
-             {"Available this month", fifth},
              {"Set aside for key holders", whole}
            ]
   end
@@ -341,18 +289,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   test "a launch shows its five fields exactly as proposed, once they have been read", %{
     conn: conn
   } do
-    now = DateTime.utc_now()
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
-
-    proposal =
-      ProposalHelpers.proposal!(@fleet, 1,
-        kind: :autolaunch,
-        closes_at: DateTime.add(now, -3600),
-        eligible_keys: 1,
-        execution_expiry: Decimal.new(DateTime.to_unix(~U[2126-10-07 18:00:00Z]))
-      )
-
-    votes!(1, true: [1])
+    ChainHelpers.seed_cursor!(@fleet)
+    proposal = ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch)
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
     assert has_element?(view, "#proposal-launch-pending", "Launch details are still being read.")
@@ -374,12 +312,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              {"Image", "ipfs://cascade"},
              {"REGENT to raise", "250,000.5 REGENT"}
            ]
-
-    assert has_element?(
-             view,
-             "#proposal-last-day",
-             "Can be launched until 7 October 2126 at 18:00 UTC"
-           )
   end
 
   describe "a launch's plan" do
@@ -516,50 +448,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     end
   end
 
-  # A launch that passed can be carried out until its last second, and a
-  # fleet launches once: after one launch goes ahead, the contract refuses
-  # every other.
-  test "a passed launch runs out of time, and closes once another launch goes ahead", %{
-    conn: conn
-  } do
-    now = DateTime.utc_now()
-    closed = DateTime.add(now, -3600)
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
-
-    for {number, last_second} <- [{1, -1}, {2, 86_400}, {3, 2}, {4, 86_400}] do
-      ProposalHelpers.proposal!(@fleet, number,
-        kind: :autolaunch,
-        closes_at: closed,
-        eligible_keys: 1,
-        execution_expiry: Decimal.new(DateTime.to_unix(now) + last_second)
-      )
-
-      votes!(number, true: [1])
-    end
-
-    {:ok, view, _html} = live(conn, @list)
-
-    assert cards(view) == [
-             {"4", "Launch", "Passed"},
-             {"3", "Launch", "Passed"},
-             {"2", "Launch", "Passed"},
-             {"1", "Launch", "Expired"}
-           ]
-
-    # The page itself notices the last second passing.
-    assert shows?(fn -> has_element?(view, ~s([data-proposal="3"]), "Expired") end, 80)
-
-    ProposalHelpers.execution!(@fleet, 4, @voter)
-    {:ok, view, _html} = live(conn, @list)
-
-    assert cards(view) == [
-             {"4", "Launch", "Launched"},
-             {"3", "Launch", "Closed: another launch went ahead"},
-             {"2", "Launch", "Closed: another launch went ahead"},
-             {"1", "Launch", "Closed: another launch went ahead"}
-           ]
-  end
-
   test "while votes are still being read the page says so", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     ProposalHelpers.proposal!(@fleet, 1)
@@ -656,18 +544,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert shows?(fn -> has_element?(view, "[data-asset='#{@usdc}']", "3 USDC") end)
   end
 
-  test "a proposal on show that closes is shown being counted without anything new recorded",
-       %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.proposal!(@fleet, 1, closes_at: DateTime.add(DateTime.utc_now(), 1))
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert has_element?(view, "#proposal-status", "Voting open")
-
-    assert shows?(fn -> has_element?(view, "#proposal-status", "Counting votes") end, 80)
-  end
-
-  test "the budget shows what the fleet holds and what it can pay this month", %{conn: conn} do
+  test "the budget shows what the fleet holds", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
     weth = ProposalHelpers.wallet("c")
     as_of = ~U[2026-09-20 12:00:00Z]
@@ -677,13 +554,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.treasury_reading!(
       @fleet,
       [
-        balance(@usdc,
-          free_capital: 100_000_000,
-          backed: 30_000_000,
-          pay_period_start: ~U[2026-09-01 08:00:00Z],
-          pay_cap: 20_000_000,
-          pay_spent: 5_000_000
-        ),
+        balance(@usdc, free_capital: 100_000_000, backed: 30_000_000),
         balance(weth, free_capital: 2_000_000_000_000_000_000)
       ],
       block_time: as_of,
@@ -697,14 +568,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Budget", "100 USDC"},
-             {"Available this month", "15 USDC"},
-             {"Paid this month", "5 USDC of 20 USDC, until 1 October 2026 at 08:00 UTC"},
              {"Set aside for key holders", "30 USDC"}
            ]
 
     assert fields(view, "[data-asset='#{weth}'] div") == [
              {"Budget", "2 WETH 0xcccc…cccc"},
-             {"Available this month", "0.4 WETH 0xcccc…cccc"},
              {"Set aside for key holders", "0 WETH 0xcccc…cccc"}
            ]
 
@@ -716,17 +584,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "Figures as of 20 September 2026 at 12:00 UTC."
            )
 
-    refute has_element?(view, "#proposals-payments-closed")
-
     assert has_element?(view, "#proposals-income li", "10 USDC paid to key holders")
 
     assert has_element?(view, "#proposals-payments li", "5 USDC")
     assert has_element?(view, "#proposals-payments li", "to #{ProposalHelpers.wallet("b")}")
   end
 
-  test "the budget says what it doesn't know yet, and when payments can't be made", %{
-    conn: conn
-  } do
+  test "the budget says what it doesn't know yet", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
     ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
@@ -740,31 +604,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "Nothing has been paid from the budget yet."
            )
 
-    # A month that has ended leaves a fifth of the budget as it stands.
     ProposalHelpers.treasury_reading!(
       @fleet,
-      [
-        balance(@usdc,
-          free_capital: 50_000_000,
-          pay_period_start: ~U[2026-08-01 08:00:00Z],
-          pay_cap: 20_000_000,
-          pay_spent: 20_000_000
-        )
-      ],
+      [balance(@usdc, free_capital: 50_000_000)],
       block_time: ~U[2026-09-20 12:00:00Z],
-      launch_settled: false,
       cascade_reserve: Decimal.new(7_000_000)
     )
 
     for _payment <- 1..21, do: ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
 
     {:ok, view, _html} = live(conn, @list)
-
-    assert has_element?(
-             view,
-             "#proposals-payments-closed",
-             "Payments from the budget open once the launch has finished."
-           )
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Budget", "50 USDC"},
@@ -783,27 +632,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            |> Enum.count() == 20
 
     assert render(view) =~ "Earlier payments are not shown here."
-
-    ProposalHelpers.treasury_reading!(
-      @fleet,
-      [
-        balance(@usdc,
-          free_capital: 50_000_000,
-          pay_period_start: ~U[2026-08-01 08:00:00Z],
-          pay_cap: 20_000_000,
-          pay_spent: 20_000_000
-        )
-      ],
-      block_time: ~U[2026-09-20 12:00:00Z]
-    )
-
-    {:ok, view, _html} = live(conn, @list)
-
-    assert fields(view, "[data-asset='#{@usdc}'] div") == [
-             {"Budget", "50 USDC"},
-             {"Available this month", "10 USDC"},
-             {"Set aside for key holders", "0 USDC"}
-           ]
   end
 
   # Until a fleet is on chain it has no budget, and its page says nothing
@@ -825,23 +653,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   # Every wallet button reaches the wallet whatever the page shows: what the
   # page knows is said beside it, and the contract decides.
   test "the vote buttons take every press, however the vote stands", %{conn: conn} do
-    now = DateTime.utc_now()
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, 1..3)
 
     ProposalHelpers.proposal!(@fleet, 1)
     ProposalHelpers.vote!(@fleet, 1, @holder, true, [2])
-    ProposalHelpers.proposal!(@fleet, 2, closes_at: DateTime.add(now, -3600), eligible_keys: 3)
-    votes!(2, true: [1])
-    ProposalHelpers.vote!(@fleet, 2, @holder, false, [2, 3])
-
-    ProposalHelpers.proposal!(@fleet, 3,
-      kind: :pay,
-      closes_at: DateTime.add(now, -3600),
-      eligible_keys: 1,
-      execution_expiry: Decimal.new(DateTime.to_unix(now) - 1)
-    )
-
-    votes!(3, true: [1])
+    ProposalHelpers.proposal!(@fleet, 2)
+    votes!(2, true: [1, 2])
+    ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
+    votes!(3, true: [1, 2])
+    ProposalHelpers.execution!(@fleet, 3, @voter)
     holder = signed_in_as(conn, @holder)
 
     # Open, by someone who has voted already.
@@ -849,16 +670,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert pressable?(view, "vote", ["#proposal-vote-yes", "#proposal-vote-no"])
     refute has_element?(view, "#proposal-vote-closed")
 
-    # Closed.
+    # Passed: a key can still change its vote until it is carried out.
     {:ok, view, _html} = live(holder, "#{@list}/2")
-    assert has_element?(view, "#proposal-status", "Did not pass")
+    assert has_element?(view, "#proposal-status", "Passed")
     assert pressable?(view, "vote", ["#proposal-vote-yes", "#proposal-vote-no"])
-    assert has_element?(view, "#proposal-vote-closed", "Voting has closed")
+    refute has_element?(view, "#proposal-vote-closed")
 
-    # Past the last second it could be carried out.
+    # Carried out.
     {:ok, view, _html} = live(holder, "#{@list}/3")
-    assert has_element?(view, "#proposal-status", "Expired")
+    assert has_element?(view, "#proposal-status", "Paid")
     assert pressable?(view, "vote", ["#proposal-vote-yes", "#proposal-vote-no"])
+    assert has_element?(view, "#proposal-vote-closed", "It has already been carried out")
 
     # Signed out.
     {:ok, view, _html} = live(conn, "#{@list}/1")
@@ -876,51 +698,24 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   test "carrying a proposal out takes every press, whatever it says about the outcome", %{
     conn: conn
   } do
-    now = DateTime.utc_now()
-    closed = DateTime.add(now, -3600)
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
-    expired = Decimal.new(DateTime.to_unix(now) - 1)
+    ChainHelpers.seed_cursor!(@fleet)
+    ProposalHelpers.keys_sold!(@fleet, [1])
 
     ProposalHelpers.proposal!(@fleet, 1)
-    ProposalHelpers.proposal!(@fleet, 2, closes_at: DateTime.add(now, -30))
-    ProposalHelpers.proposal!(@fleet, 3, closes_at: closed, eligible_keys: 1)
-    votes!(3, true: [1])
-    ProposalHelpers.proposal!(@fleet, 4, closes_at: closed, eligible_keys: 2)
-    votes!(4, true: [1])
-    ProposalHelpers.proposal!(@fleet, 5, kind: :pay, closes_at: closed, eligible_keys: 1)
-    votes!(5, true: [1])
-
-    ProposalHelpers.proposal!(@fleet, 6,
-      kind: :pay,
-      closes_at: closed,
-      eligible_keys: 1,
-      execution_expiry: expired
-    )
-
-    votes!(6, true: [1])
-
-    for number <- 7..8 do
-      ProposalHelpers.proposal!(@fleet, number,
-        kind: :autolaunch,
-        closes_at: closed,
-        eligible_keys: 1
-      )
-
-      votes!(number, true: [1])
-    end
-
+    ProposalHelpers.proposal!(@fleet, 2)
+    ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
+    ProposalHelpers.proposal!(@fleet, 4, kind: :autolaunch)
+    ProposalHelpers.proposal!(@fleet, 5, kind: :autolaunch)
+    for number <- 2..5, do: votes!(number, true: [1])
+    ProposalHelpers.execution!(@fleet, 3, @voter)
     ProposalHelpers.execution!(@fleet, 5, @voter)
-    ProposalHelpers.execution!(@fleet, 8, @voter)
 
     for {number, status, word, note} <- [
-          {1, "Voting open", "Record the decision", "Voting is still open"},
-          {2, "Counting votes", "Record the decision", "Votes are still being counted"},
-          {3, "Passed", "Record the decision", nil},
-          {4, "Did not pass", "Record the decision", "It didn’t pass"},
-          {5, "Paid", "Make the payment", "It has already been carried out"},
-          {6, "Expired", "Make the payment", "Its time to be carried out has passed"},
-          {7, "Closed: another launch went ahead", "Start the launch", "Another launch"},
-          {8, "Launched", "Start the launch", "It has already been carried out"}
+          {1, "Voting open", "Record the decision", "More than half of all the keys sold"},
+          {2, "Passed", "Record the decision", nil},
+          {3, "Paid", "Make the payment", "It has already been carried out"},
+          {4, "Passed", "Start the launch", nil},
+          {5, "Launched", "Start the launch", "It has already been carried out"}
         ] do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
       assert has_element?(view, "#proposal-status", status), "proposal #{number}"
@@ -948,12 +743,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     odd = ProposalHelpers.wallet("d")
     ProposalHelpers.asset_details!(@fleet, weth, "WETH", 18)
 
-    # Payments can't be made until the launch has finished.
-    ProposalHelpers.treasury_reading!(
-      @fleet,
-      [balance(@usdc, free_capital: 1), balance(weth, free_capital: 1), balance(odd, [])],
-      launch_settled: false
-    )
+    ProposalHelpers.treasury_reading!(@fleet, [
+      balance(@usdc, free_capital: 1),
+      balance(weth, free_capital: 1),
+      balance(odd, [])
+    ])
 
     buttons = [
       {"propose_decision", "#propose-decision-button"},
@@ -964,7 +758,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ]
 
     {:ok, view, _html} = live(conn, @list)
-    assert has_element?(view, "#proposals-payments-closed")
 
     for {action, button} <- buttons, do: assert(pressable?(view, action, [button]), button)
 
@@ -1098,14 +891,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
   defp balance(asset, figures) do
     Map.merge(
-      %{
-        asset: asset,
-        free_capital: 0,
-        backed: 0,
-        pay_period_start: nil,
-        pay_cap: 0,
-        pay_spent: 0
-      },
+      %{asset: asset, free_capital: 0, backed: 0},
       Map.new(figures)
     )
   end

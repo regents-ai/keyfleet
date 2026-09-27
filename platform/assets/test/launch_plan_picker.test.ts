@@ -27,13 +27,9 @@ const noPlan = {value: "", dataset: {}}
 
 function mountForm() {
   const inputs: Record<string, {value: string}> = Object.fromEntries(
-    ["key", "name", "symbol", "description", "website", "image", "raise", "until", "digest"].map(name => [
-      name,
-      {value: ""},
-    ]),
+    ["key", "name", "symbol", "description", "website", "image", "raise", "digest"].map(name => [name, {value: ""}]),
   )
   inputs.key.value = "4"
-  inputs.until.value = "2026-10-23T18:30"
   const status = {textContent: noPlanWords}
   const select = {dataset: {launchPlans: ""}, options: [noPlan, plan], selectedIndex: 0}
   let listener: ((event: Event) => void) | undefined

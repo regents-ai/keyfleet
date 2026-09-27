@@ -169,21 +169,6 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :executed, facts: %{kind: :autolaunch} = f}),
     do: ["The fleet launched its token (", proposal(f), ")."]
 
-  def parts(%{kind: :outcome, facts: f}) do
-    tally =
-      "#{Rules.grouped(f.yes)} yes, #{Rules.grouped(f.no)} no, of #{Rules.keys(f.eligible)}"
-
-    outcome =
-      case f.status do
-        status when status in [:passed, :executed] -> " passed: #{tally}."
-        :failed -> " didn’t pass: #{tally}."
-        :expired -> " passed (#{tally}) but wasn’t carried out in time."
-        :closed -> " passed (#{tally}), but another launch went ahead."
-      end
-
-    [proposal(f), outcome]
-  end
-
   def parts(%{kind: :open_question, facts: f}),
     do: ["For ", item(f.goal), ": ", words(f.question)]
 

@@ -277,10 +277,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                %{
                  "number" => 1,
                  "kind" => "decision",
-                 "status" => "voting",
+                 "status" => "passed",
                  "yes_votes" => 1,
                  "no_votes" => 0,
-                 "eligible_keys" => 7,
+                 "keys_sold" => 1,
                  "text_preview" => "Proposal 1",
                  "changed_seq" => 2
                }

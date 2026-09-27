@@ -1,0 +1,188 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "block_number",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "block_hash",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "block_time",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "cascade_reserve",
+      "type": "decimal"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "protocol_share_owed",
+      "type": "decimal"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "assets",
+      "type": [
+        "array",
+        "map"
+      ]
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "treasury_readings_fleet_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "fleets"
+      },
+      "scale": null,
+      "size": null,
+      "source": "fleet_id",
+      "type": "text"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "block_hash"
+      ],
+      "base_filter": null,
+      "check": "block_hash ~ '^0x[0-9a-f]{64}$'",
+      "name": "treasury_readings_block_hash_shape"
+    },
+    {
+      "attribute": [
+        "block_number"
+      ],
+      "base_filter": null,
+      "check": "block_number >= 0",
+      "name": "treasury_readings_nonnegative_block_number"
+    },
+    {
+      "attribute": [
+        "cascade_reserve"
+      ],
+      "base_filter": null,
+      "check": "cascade_reserve >= 0",
+      "name": "treasury_readings_nonnegative_cascade_reserve"
+    },
+    {
+      "attribute": [
+        "protocol_share_owed"
+      ],
+      "base_filter": null,
+      "check": "protocol_share_owed >= 0",
+      "name": "treasury_readings_nonnegative_protocol_share_owed"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [],
+  "custom_statements": [],
+  "has_create_action": true,
+  "hash": "3A867C593E7F4B59431860CBAFDB5F367D643DDE46E307A525EA3EB244DAD19E",
+  "identities": [
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "treasury_readings_unique_fleet_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        }
+      ],
+      "name": "unique_fleet",
+      "nils_distinct?": true,
+      "where": null
+    }
+  ],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.Keyfleet.Repo",
+  "schema": null,
+  "table": "treasury_readings"
+}

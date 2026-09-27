@@ -1,9 +1,8 @@
 defmodule Keyfleet.Treasury.Reading do
   @moduledoc """
-  A fleet's balances as its contracts held them at one block: the budget,
-  reward backing and pay period of each asset the budget or the reward
-  ledger has held, the Cascade completion reserve, the protocol share owed
-  and whether the launch has settled.
+  A fleet's balances as its contracts held them at one block: the budget and
+  reward backing of each asset the budget or the reward ledger has held, the
+  Cascade completion reserve and the protocol share owed.
 
   `Keyfleet.Chain.TreasuryReader` reads them about once a minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
@@ -47,7 +46,6 @@ defmodule Keyfleet.Treasury.Reading do
         :block_number,
         :block_hash,
         :block_time,
-        :launch_settled,
         :cascade_reserve,
         :protocol_share_owed,
         :assets
@@ -60,7 +58,6 @@ defmodule Keyfleet.Treasury.Reading do
         :block_number,
         :block_hash,
         :block_time,
-        :launch_settled,
         :cascade_reserve,
         :protocol_share_owed,
         :assets
@@ -96,8 +93,6 @@ defmodule Keyfleet.Treasury.Reading do
       constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
 
     attribute :block_time, :utc_datetime_usec, allow_nil?: false, public?: true
-
-    attribute :launch_settled, :boolean, allow_nil?: false, public?: true
 
     # USDC, in atomic units: held back for the next Cascade level, and owed to
     # the REGENT stakers.

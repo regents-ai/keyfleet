@@ -206,7 +206,7 @@ defmodule KeyfleetWeb.HomeLive do
   # feature, the card features its latest item.
   defp read(fleet_id, now) do
     latest =
-      fleet_id |> Activity.page(nil, limit: 1, now: now) |> Map.fetch!(:items) |> List.first()
+      fleet_id |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
 
     %{
       sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),

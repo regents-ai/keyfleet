@@ -9,9 +9,7 @@ defmodule Keyfleet.Chain.Cursor do
   has corrected the record by hand.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
-  its key reveals (`reveal_seq`) and its ownership epochs (`ownership_seq`),
-  and keeps the time of the last block read while the reading was at the head
-  (`read_through_at`), which is how far votes are known to be counted.
+  its key reveals (`reveal_seq`) and its ownership epochs (`ownership_seq`).
   """
   use Ash.Resource,
     domain: Keyfleet.Chain,
@@ -78,10 +76,9 @@ defmodule Keyfleet.Chain.Cursor do
              )
     end
 
-    # `read_through_at` is given only by a pass that read up to the head.
     update :advance do
       public? false
-      accept [:next_block, :head_block, :head_block_hash, :observed_at, :read_through_at]
+      accept [:next_block, :head_block, :head_block_hash, :observed_at]
       require_attributes [:next_block, :head_block, :head_block_hash, :observed_at]
     end
 
@@ -110,7 +107,6 @@ defmodule Keyfleet.Chain.Cursor do
       change set_attribute(:rescan_from, nil)
       # Fresh again only once a new pass has read the chain.
       change set_attribute(:observed_at, nil)
-      change set_attribute(:read_through_at, nil)
     end
   end
 
@@ -163,9 +159,6 @@ defmodule Keyfleet.Chain.Cursor do
       default: 0,
       public?: true,
       constraints: [min: 0]
-
-    # The time of the last block read by a pass that reached the head.
-    attribute :read_through_at, :utc_datetime_usec, public?: true
   end
 
   relationships do

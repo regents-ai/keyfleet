@@ -1,12 +1,13 @@
 defmodule Keyfleet.ProposalHelpers do
   @moduledoc """
-  Records proposals, votes, executions, launches, budget receipts, launch
-  income, budget payments, balance readings and asset details as the chain
-  reader would, without a chain. Each record gets a chain event of its own. The
+  Records key sales, proposals, votes, executions, launches, budget receipts,
+  launch income, budget payments, balance readings and asset details as the
+  chain reader would, without a chain. Each record gets a chain event of its own. The
   fleet needs a cursor first, as `Keyfleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
 
@@ -14,9 +15,8 @@ defmodule Keyfleet.ProposalHelpers do
   @block_hash "0x" <> String.duplicate("b", 64)
 
   @doc """
-  Proposal `number` of the fleet: a decision closing in an hour that seven
-  keys may vote on, unless `attrs` says otherwise. A payment and a launch
-  get the fields their kind carries.
+  Proposal `number` of the fleet: a decision, unless `attrs` says otherwise.
+  A payment and a launch get the fields their kind carries.
   """
   def proposal!(fleet_id, number, attrs \\ %{}) do
     attrs = Map.new(attrs)
@@ -27,14 +27,22 @@ defmodule Keyfleet.ProposalHelpers do
       number: number,
       kind: kind,
       proposer: wallet("f"),
-      closes_at: DateTime.add(DateTime.utc_now(), 3600),
-      eligible_keys: 7,
+      opened_block: 1,
       digest: "0x" <> String.duplicate("d", 64)
     }
     |> Map.merge(kind_fields(kind, number))
     |> Map.merge(event())
     |> Map.merge(attrs)
     |> Proposals.record_proposal!(actor: @system)
+  end
+
+  @doc "Keys `token_ids` of the fleet sold, each to `owner`."
+  def keys_sold!(fleet_id, token_ids, owner \\ wallet("1")) do
+    for token_id <- token_ids do
+      %{fleet_id: fleet_id, token_id: token_id, ownership_epoch: 1, owner_wallet: owner}
+      |> Map.merge(event())
+      |> Keys.record_epoch!(actor: @system)
+    end
   end
 
   @doc "A vote on proposal `number` by `voter` with `token_ids`, one vote per key."
@@ -109,8 +117,8 @@ defmodule Keyfleet.ProposalHelpers do
       asset: wallet("a"),
       recipient: wallet("b"),
       amount: Decimal.new(5_000_000),
-      spent_in_period: Decimal.new(5_000_000),
-      period_start: DateTime.utc_now()
+      share: Decimal.new(0),
+      matched: Decimal.new(0)
     }
     |> Map.merge(event())
     |> Map.merge(Map.new(attrs))
@@ -125,7 +133,6 @@ defmodule Keyfleet.ProposalHelpers do
       block_number: :erlang.unique_integer([:positive, :monotonic]),
       block_hash: @block_hash,
       block_time: DateTime.utc_now(),
-      launch_settled: true,
       cascade_reserve: Decimal.new(0),
       protocol_share_owed: Decimal.new(0),
       assets: assets
@@ -137,10 +144,7 @@ defmodule Keyfleet.ProposalHelpers do
   def wallet(character), do: "0x" <> String.duplicate(character, 40)
 
   defp kind_fields(:autolaunch, _number) do
-    %{
-      envelope_hash: "0x" <> String.duplicate("a1", 32),
-      execution_expiry: Decimal.new(DateTime.to_unix(DateTime.utc_now()) + 86_400 * 7)
-    }
+    %{envelope_hash: "0x" <> String.duplicate("a1", 32)}
   end
 
   defp kind_fields(kind, number) do
@@ -156,8 +160,7 @@ defmodule Keyfleet.ProposalHelpers do
       Map.merge(text_fields, %{
         asset: wallet("a"),
         amount: Decimal.new(5_000_000),
-        recipient: wallet("b"),
-        execution_expiry: Decimal.new(DateTime.to_unix(DateTime.utc_now()) + 3600 + 2_592_000)
+        recipient: wallet("b")
       })
     else
       text_fields
@@ -166,7 +169,7 @@ defmodule Keyfleet.ProposalHelpers do
 
   # A chain event no other record has.
   defp event do
-    id = :erlang.unique_integer([:positive])
+    id = :erlang.unique_integer([:positive, :monotonic])
 
     %{
       block_number: id,

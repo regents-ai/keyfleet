@@ -5,9 +5,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
   `Keyfleet.Chain.Repeat` runs it once a minute.
 
   Every figure of a reading comes from that one block: for each asset
-  `Keyfleet.Treasury.budget_assets/2` lists, the budget, the reward backing
-  and the pay period, beside the Cascade reserve, the protocol share owed and
-  whether the launch has settled. A reading that fails in any part keeps
+  `Keyfleet.Treasury.budget_assets/2` lists, the budget and the reward
+  backing, beside the Cascade reserve and the protocol share owed. A reading that fails in any part keeps
   nothing and is tried again at the next one. A reading of a later block than
   the one kept replaces it and is announced as `{:balances_changed, fleet_id}`
   on `Keyfleet.Proposals.topic/1`.
@@ -38,11 +37,9 @@ defmodule Keyfleet.Chain.TreasuryReader do
   # cast sig of each view function read.
   @reward_assets <<0x88, 0x0E, 0xC0, 0x4E>>
   @free_capital <<0x2B, 0x84, 0x30, 0x8E>>
-  @pay_period <<0xE6, 0xEC, 0x9E, 0x56>>
   @backed <<0x59, 0x5B, 0x7F, 0x21>>
   @cascade_reserve <<0xFC, 0x4E, 0x89, 0x64>>
   @protocol_share_owed <<0xC4, 0x90, 0xB9, 0xC7>>
-  @launch_settled <<0x06, 0xE9, 0x3D, 0xAE>>
   @decimals <<0x31, 0x3C, 0xE5, 0x67>>
   @symbol <<0x95, 0xD8, 0x9B, 0x41>>
   @system %System{}
@@ -63,7 +60,6 @@ defmodule Keyfleet.Chain.TreasuryReader do
          {:ok, balances} <- balances(fleet, Treasury.budget_assets(fleet, rewards), at),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
-         {:ok, [settled]} <- at.(fleet.contract_address, {@launch_settled, [:bool]}),
          {:ok, reading} <-
            Treasury.record_reading(
              %{
@@ -71,7 +67,6 @@ defmodule Keyfleet.Chain.TreasuryReader do
                block_number: head.number,
                block_hash: head.hash,
                block_time: head.timestamp,
-               launch_settled: settled,
                cascade_reserve: Decimal.new(reserve),
                protocol_share_owed: Decimal.new(owed),
                assets: balances
@@ -191,28 +186,10 @@ defmodule Keyfleet.Chain.TreasuryReader do
     word = address_word(asset)
 
     with {:ok, [free]} <- at.(fleet.contract_address, {@free_capital <> word, [{:uint, 256}]}),
-         {:ok, [start, cap, spent]} <-
-           at.(
-             fleet.contract_address,
-             {@pay_period <> word, [{:uint, 64}, {:uint, 256}, {:uint, 256}]}
-           ),
-         {:ok, [backed]} <- at.(fleet.rewards_address, {@backed <> word, [{:uint, 256}]}),
-         {:ok, start} <- period_start(start) do
-      {:ok,
-       %{
-         asset: asset,
-         free_capital: free,
-         backed: backed,
-         pay_period_start: start,
-         pay_cap: cap,
-         pay_spent: spent
-       }}
+         {:ok, [backed]} <- at.(fleet.rewards_address, {@backed <> word, [{:uint, 256}]}) do
+      {:ok, %{asset: asset, free_capital: free, backed: backed}}
     end
   end
-
-  # A period's start is zero before the asset's first payment.
-  defp period_start(0), do: {:ok, nil}
-  defp period_start(seconds), do: DateTime.from_unix(seconds)
 
   defp call(client, to, {data, types}, block_hash) do
     with {:ok, returned} <- client.call(to, data, block_hash),

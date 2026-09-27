@@ -20,14 +20,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
-  @status_words %{
-    voting: "Voting open",
-    counting: "Counting votes",
-    passed: "Passed",
-    failed: "Did not pass",
-    closed: "Closed: another launch went ahead",
-    expired: "Expired"
-  }
+  @status_words %{voting: "Voting open", passed: "Passed"}
 
   @executed_words %{decision: "Passed and recorded", autolaunch: "Launched", pay: "Paid"}
 
@@ -40,12 +33,9 @@ defmodule KeyfleetWeb.ProposalsLive do
   # What the page knows that the contract will likely refuse, said beside the
   # button that carries a proposal out.
   @carry_out_notes %{
-    voting: "Voting is still open, so carrying it out now will be refused.",
-    counting: "Votes are still being counted. It can be carried out if it passed.",
+    voting:
+      "More than half of all the keys sold haven’t voted yes yet, so carrying it out now will be refused.",
     passed: nil,
-    failed: "It didn’t pass, so carrying it out will be refused.",
-    closed: "Another launch already went ahead, so this one will be refused.",
-    expired: "Its time to be carried out has passed, so it will be refused.",
     executed: "It has already been carried out, so doing it again will be refused."
   }
 
@@ -101,7 +91,6 @@ defmodule KeyfleetWeb.ProposalsLive do
             <p :if={proposal.gist} class="proposals-gist">{proposal.gist}</p>
             <p class="proposals-detail">
               <span>{tally(proposal)}</span>
-              <span>{closing(proposal)}</span>
             </p>
           </li>
         </ol>
@@ -174,11 +163,10 @@ defmodule KeyfleetWeb.ProposalsLive do
               <dd id="proposal-no">{keys(@page.proposal.no)}</dd>
             </div>
             <div>
-              <dt>Keys that could vote</dt>
-              <dd>{keys(@page.proposal.eligible_keys)}</dd>
+              <dt>Keys sold</dt>
+              <dd id="proposal-keys-sold">{keys(@page.proposal.keys_sold)}</dd>
             </div>
           </dl>
-          <p class="proposals-detail">{closing(@page.proposal)}</p>
           <.pass_rule />
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
             Carried out by <.wallet address={@page.proposal.executor} />
@@ -210,10 +198,6 @@ defmodule KeyfleetWeb.ProposalsLive do
           </dl>
 
           <.launch :if={@page.proposal.launch} launch={@page.proposal.launch} />
-
-          <p :if={@page.proposal.last_day} id="proposal-last-day" class="proposals-detail">
-            {last_day_words(@page.proposal)}
-          </p>
 
           <.text :if={@page.proposal.text} text={@page.proposal.text} />
           <p :if={@page.proposal.text_cut?} class="proposals-detail">
@@ -284,8 +268,8 @@ defmodule KeyfleetWeb.ProposalsLive do
           </div>
         </:fields>
         <:notes>
-          <p :if={@proposal.status != :voting} id="proposal-vote-closed" class="proposals-detail">
-            Voting has closed, so a vote now will be refused.
+          <p :if={@proposal.status == :executed} id="proposal-vote-closed" class="proposals-detail">
+            It has already been carried out, so a vote now will be refused.
           </p>
           <p class="proposals-detail">
             Type the numbers of the keys you’re voting with: your own, or those of someone who has let your wallet vote for them.
@@ -318,7 +302,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :wallet, :map, required: true
   attr :proposal, :map, required: true
 
-  # Anyone may carry out a proposal that passed, once its vote has closed.
+  # Anyone may carry out a proposal once more than half of all the keys sold
+  # have voted yes.
   defp carry_out(assigns) do
     assigns = assign(assigns, :note, carry_out_note(assigns.proposal))
 
@@ -332,7 +317,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <.action id="proposal-carry-out-action" to={@wallet.votes} wallet={@wallet}>
         <:notes>
           <p class="proposals-detail">
-            Anyone can carry out a proposal that passed, once voting has closed.
+            Anyone can carry out a proposal once more than half of all the keys sold have voted yes.
           </p>
           <p :if={@note} id="proposal-carry-out-note" class="proposals-detail">{@note}</p>
         </:notes>
@@ -359,7 +344,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-decision" class="proposals-panel" aria-labelledby="propose-decision-title">
       <h2 id="propose-decision-title">Propose a decision</h2>
       <p class="proposals-detail">
-        Records what the key holders agree to if more than half of the keys vote yes. Nothing is paid or launched by it.
+        Records what the key holders agree to once more than half of all the keys sold vote yes. Nothing is paid or launched by it.
       </p>
       <.action id="propose-decision-action" to={@wallet.votes} wallet={@wallet}>
         <:fields>
@@ -391,7 +376,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-payment" class="proposals-panel" aria-labelledby="propose-payment-title">
       <h2 id="propose-payment-title">Propose a payment</h2>
       <p class="proposals-detail">
-        Pays from the budget if more than half of the keys vote yes. Payments open once the launch has finished.
+        Pays from the budget once more than half of all the keys sold vote yes, up to the yes votes’ share of it. For each key that didn’t vote yes, the payment divided by the number of yes votes is set aside for it to collect.
       </p>
       <.action
         id="propose-payment-action"
@@ -450,7 +435,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-launch" class="proposals-panel" aria-labelledby="propose-launch-title">
       <h2 id="propose-launch-title">Propose a launch</h2>
       <p class="proposals-detail">
-        Launches this fleet’s token if more than half of the keys vote yes. A fleet can launch only once.
+        Launches this fleet’s token once more than half of all the keys sold vote yes. Another launch can only follow one that didn’t succeed.
       </p>
       <.action id="propose-launch-action" to={@wallet.votes} wallet={@wallet}>
         <:fields>
@@ -484,20 +469,6 @@ defmodule KeyfleetWeb.ProposalsLive do
             >
               In whole REGENT, like 250000.
             </.text_field>
-            <Regent.Primitives.field
-              :let={field}
-              id="propose-launch-until"
-              label="Can be launched until (UTC)"
-            >
-              <input
-                id={field.id}
-                name="until"
-                type="datetime-local"
-                value={@propose.launch_until}
-                aria-describedby={field.described_by}
-              />
-              <:hint>It has to come after voting on it closes.</:hint>
-            </Regent.Primitives.field>
           </div>
         </:fields>
         <:buttons>
@@ -753,10 +724,6 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp balances(assigns) do
     ~H"""
-    <p :if={not @treasury.payments_open?} id="proposals-payments-closed" class="proposals-detail">
-      Payments from the budget open once the launch has finished.
-    </p>
-
     <dl
       :for={balance <- @treasury.balances}
       class="proposals-facts proposals-balance"
@@ -766,23 +733,12 @@ defmodule KeyfleetWeb.ProposalsLive do
         <dt>Budget</dt>
         <dd><.amount value={balance.budget} /></dd>
       </div>
-      <div :if={@treasury.payments_open?}>
-        <dt>Available this month</dt>
-        <dd><.amount value={balance.available} /></dd>
-      </div>
-      <div :if={balance.paid}>
-        <dt>Paid this month</dt>
-        <dd><.paid paid={balance.paid} until={balance.month_ends} /></dd>
-      </div>
       <div>
         <dt>Set aside for key holders</dt>
         <dd><.amount value={balance.set_aside} /></dd>
       </div>
     </dl>
 
-    <p class="proposals-rule">
-      A month of payments starts with its first payment, and can pay out up to a fifth of the budget as it stood then.
-    </p>
     <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
 
     <dl id="proposals-held" class="proposals-facts">
@@ -808,12 +764,6 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp amount(assigns),
     do: ~H|<span class="proposals-amount">{@value.text} <.token address={@value.token} /></span>|
-
-  attr :paid, :map, required: true
-  attr :until, DateTime, required: true
-
-  defp paid(assigns),
-    do: ~H|<.amount value={@paid.spent} /> of <.amount value={@paid.cap} />, until {at(@until)}|
 
   attr :address, :string, required: true
 
@@ -932,8 +882,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   @doc "How a proposal passes, as the pages say it."
   def pass_rule,
     do:
-      "Each key is one vote. A proposal passes when more than half of the keys that could " <>
-        "vote on it vote yes, so a key that doesn’t vote counts against it."
+      "Each key is one vote. A proposal passes once more than half of all the keys sold " <>
+        "vote yes, so a key that doesn’t vote counts against it."
 
   attr :id, :string, required: true
 
@@ -967,16 +917,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   def status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
   defp tally(proposal),
-    do:
-      "#{proposal.yes} yes, #{proposal.no} no, of #{keys(proposal.eligible_keys)} that could vote"
-
-  defp closing(%{status: :voting, closes_at: closes_at}), do: "Voting closes #{at(closes_at)}"
-  defp closing(%{closes_at: closes_at}), do: "Voting closed #{at(closes_at)}"
-
-  defp last_day_words(%{kind: :pay, last_day: last_day}), do: "Can be paid until #{at(last_day)}"
-
-  defp last_day_words(%{kind: :autolaunch, last_day: last_day}),
-    do: "Can be launched until #{at(last_day)}"
+    do: "#{proposal.yes} yes, #{proposal.no} no, of #{keys(proposal.keys_sold)} sold"
 
   defp keys(1), do: "1 key"
   defp keys(count), do: "#{count} keys"

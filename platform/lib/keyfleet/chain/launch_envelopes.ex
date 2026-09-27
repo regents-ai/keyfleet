@@ -84,10 +84,10 @@ defmodule Keyfleet.Chain.LaunchEnvelopes do
   # The function returns one dynamic struct: its offset, then the struct.
   # `keccak256(abi.encode(envelope))` is those same bytes.
   defp decode(<<32::256, body::binary>> = returned, envelope_hash) do
-    types = List.duplicate(:bytes, 5) ++ [{:uint, 128}, :bytes32, {:uint, 64}]
+    types = List.duplicate(:bytes, 5) ++ [{:uint, 128}, :bytes32]
 
     with true <- hash(returned) == envelope_hash,
-         {:ok, [name, symbol, description, website, image, raise | _digest_and_expiry]} <-
+         {:ok, [name, symbol, description, website, image, raise, _digest]} <-
            Abi.decode(body, types) do
       {:ok,
        @texts

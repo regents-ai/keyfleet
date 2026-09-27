@@ -72,7 +72,7 @@ defmodule Keyfleet.Rooms do
 
   `proposals_after_seq` says how far the caller has read the fleet's proposal
   records. Proposals answer with the ones changed after that point, as
-  `Keyfleet.Proposals.changes/3` does.
+  `Keyfleet.Proposals.changes/2` does.
 
   `next_poll_seconds` is when to ask again: at once while anything has more
   waiting, otherwise between 15 and 30 seconds, spread so callers do not all
@@ -91,7 +91,7 @@ defmodule Keyfleet.Rooms do
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
-      proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq, DateTime.utc_now())
+      proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq)
 
       {:ok,
        %{

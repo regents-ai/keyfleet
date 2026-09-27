@@ -35,7 +35,7 @@ defmodule Keyfleet.ActivityTest do
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
-    ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.utc_now())
+    ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     Workspace.open_log(@fleet)
     # Chain records are stamped with the time the reader saw them: in a test,
@@ -50,7 +50,7 @@ defmodule Keyfleet.ActivityTest do
       Enum.each(2..4, &epoch!(&1, 1, "a"))
       epoch!(2, 2, "b")
 
-      proposal!(@fleet, 1, closes_at: DateTime.add(seen_at, -60))
+      proposal!(@fleet, 1, %{})
       vote!(@fleet, 1, wallet("a"), true, [1, 3])
       vote!(@fleet, 1, wallet("b"), false, [2])
       proposal!(@fleet, 2, kind: :pay)
@@ -83,7 +83,6 @@ defmodule Keyfleet.ActivityTest do
       %{items: items, cursor: nil} = Activity.page(@fleet, nil)
 
       assert Enum.map(items, & &1.kind) |> Enum.frequencies() == %{
-               outcome: 1,
                proposed: 3,
                votes: 1,
                executed: 1,
@@ -161,15 +160,14 @@ defmodule Keyfleet.ActivityTest do
                [{:sale, nil} | List.duplicate({:posts, 45}, 12)]
     end
 
-    test "what happens after the first page is read stays out of the pages after it",
-         %{seen_at: seen_at} do
+    test "what happens after the first page is read stays out of the pages after it" do
       owner = human("a")
       Enum.each(2..3, &epoch!(&1, 1, "a"))
       post!(owner, "general", "Morning")
       post!(owner, "coding", "Pushed the survey script")
       Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
-      proposal!(@fleet, 1, closes_at: DateTime.add(seen_at, -60))
+      proposal!(@fleet, 1, %{})
       runner = agent("c")
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
       pairing = Keys.request_pairing!(@fleet, 2, %{}, actor: runner)
@@ -202,13 +200,6 @@ defmodule Keyfleet.ActivityTest do
       assert walk(cursor, 1, [first]) == whole
       assert length(Activity.page(@fleet, nil).items) > length(whole)
     end
-  end
-
-  test "a fleet whose votes have not been counted yet shows no outcomes" do
-    ChainHelpers.seed_cursor!(@other_fleet)
-    proposal!(@other_fleet, 1, closes_at: DateTime.add(DateTime.utc_now(), -3600))
-
-    assert %{items: [%{kind: :proposed}], cursor: nil} = Activity.page(@other_fleet, nil)
   end
 
   test "key threads and edits to an item's words stay out; claims, progress and links show" do

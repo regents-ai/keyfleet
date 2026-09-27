@@ -47,8 +47,8 @@ defmodule KeyfleetWeb.ProposalJSON do
       kind: proposal.kind,
       status: status,
       proposer: proposal.proposer,
-      closes_at: proposal.closes_at,
-      eligible_keys: proposal.eligible_keys,
+      opened_block: proposal.opened_block,
+      keys_sold: proposal.keys_sold,
       yes_votes: proposal.yes_keys,
       no_votes: proposal.no_keys,
       digest: proposal.digest,
@@ -65,8 +65,7 @@ defmodule KeyfleetWeb.ProposalJSON do
     %{
       asset: proposal.asset,
       amount: decimal(proposal.amount),
-      recipient: proposal.recipient,
-      execution_expiry: decimal(proposal.execution_expiry)
+      recipient: proposal.recipient
     }
   end
 
@@ -75,7 +74,6 @@ defmodule KeyfleetWeb.ProposalJSON do
   defp launch(%{kind: :autolaunch} = proposal) do
     %{
       envelope_hash: proposal.envelope_hash,
-      execution_expiry: decimal(proposal.execution_expiry),
       envelope: envelope(proposal.launch_envelope)
     }
   end

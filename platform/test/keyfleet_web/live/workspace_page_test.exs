@@ -495,20 +495,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "a launch plan names the launch proposals that point to it, and where each stands", %{
       conn: conn
     } do
-      now = DateTime.utc_now()
-      ChainHelpers.seed_cursor!(@fleet, read_through_at: DateTime.add(now, -60))
+      ChainHelpers.seed_cursor!(@fleet)
       plan = create(@fleet, "launch_card", %{"title" => "Cascade Research", "name" => "CSR"})
       edit(@fleet, plan, %{"symbol" => "CSR"})
       other = create(@fleet, "launch_card", %{"title" => "Another plan"})
 
       ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch, digest: digest(plan, 1))
 
-      ProposalHelpers.proposal!(@fleet, 2,
-        kind: :autolaunch,
-        digest: digest(plan, 2),
-        closes_at: DateTime.add(now, -3600),
-        eligible_keys: 1
-      )
+      ProposalHelpers.proposal!(@fleet, 2, kind: :autolaunch, digest: digest(plan, 2))
 
       ProposalHelpers.vote!(@fleet, 2, ProposalHelpers.wallet("e"), true, [1])
       ProposalHelpers.execution!(@fleet, 2, ProposalHelpers.wallet("e"))

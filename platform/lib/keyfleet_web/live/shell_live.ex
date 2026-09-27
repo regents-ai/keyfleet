@@ -118,7 +118,6 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
-       proposals_check: nil,
        launch_plans: nil,
        check_ins_timer: nil,
        send_agent_open: false
@@ -456,12 +455,6 @@ defmodule KeyfleetWeb.ShellLive do
       do: {:noreply, socket |> assign(:activity_refresh, nil) |> reread_activity()}
 
   def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
-
-  # Only the check the page last set reads; one a later read replaced is dropped.
-  def handle_info({:check_proposals, ref}, %{assigns: %{proposals_check: ref}} = socket),
-    do: {:noreply, read_proposals(socket)}
-
-  def handle_info({:check_proposals, _ref}, socket), do: {:noreply, socket}
 
   # A read for a key no longer open is dropped.
   @impl true
@@ -1480,12 +1473,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_proposals(socket, _route_spec, _params) do
     socket
     |> follow_proposals(fleet_on_show(socket))
-    |> assign(proposals: nil, proposals_params: nil, proposals_check: nil, launch_plans: nil)
+    |> assign(proposals: nil, proposals_params: nil, launch_plans: nil)
   end
 
-  # Each read sets the one check that comes when a proposal on show could
-  # next read differently by itself: when it closes, while it is counted, or
-  # when it runs out of time.
   defp read_proposals(socket) do
     params = socket.assigns.proposals_params
     signed_in = signed_in_wallets(human_actor(socket))
@@ -1496,18 +1486,8 @@ defmodule KeyfleetWeb.ShellLive do
         :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params, signed_in)
       end
 
-    assign(socket, proposals: page, proposals_check: check_proposals(socket, page.check_in))
+    assign(socket, proposals: page)
   end
-
-  defp check_proposals(socket, after_ms) when is_integer(after_ms) do
-    if connected?(socket) do
-      ref = make_ref()
-      Process.send_after(self(), {:check_proposals, ref}, after_ms)
-      ref
-    end
-  end
-
-  defp check_proposals(_socket, nil), do: nil
 
   defp follow_proposals(socket, fleet_id) do
     topic = fleet_id && Proposals.topic(fleet_id)

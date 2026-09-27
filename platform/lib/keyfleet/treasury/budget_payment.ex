@@ -1,10 +1,10 @@
 defmodule Keyfleet.Treasury.BudgetPayment do
   @moduledoc """
   One `BudgetPaid` log: a passed payment paid out of the fleet's budget, with
-  the start of the 30-day period it counts against and how much that period
-  has paid so far, this payment included. Amounts are in the asset's atomic
-  units, any uint256. Only the chain reader writes it, and nothing ever
-  changes it.
+  the match it set aside: `share` for each key sold that did not vote yes,
+  `matched` in all, which those keys collect from the vote contract. Amounts
+  are in the asset's atomic units, any uint256. Only the chain reader writes
+  it, and nothing ever changes it.
 
   `record_seq` is the fleet's count of proposal and budget records when it
   was made.
@@ -28,11 +28,9 @@ defmodule Keyfleet.Treasury.BudgetPayment do
         )
       end
 
-      check_constraint(:amount, "budget_payments_nonnegative_amount", check: "amount >= 0")
-
-      check_constraint(:spent_in_period, "budget_payments_spent_covers_amount",
-        check: "spent_in_period >= amount"
-      )
+      for field <- [:amount, :share, :matched] do
+        check_constraint(field, "budget_payments_nonnegative_#{field}", check: "#{field} >= 0")
+      end
 
       for field <- [:block_hash, :transaction_hash] do
         check_constraint(field, "budget_payments_#{field}_shape",
@@ -86,8 +84,8 @@ defmodule Keyfleet.Treasury.BudgetPayment do
         :asset,
         :recipient,
         :amount,
-        :period_start,
-        :spent_in_period,
+        :share,
+        :matched,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -141,11 +139,9 @@ defmodule Keyfleet.Treasury.BudgetPayment do
         constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
     end
 
-    for field <- [:amount, :spent_in_period] do
+    for field <- [:amount, :share, :matched] do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
-
-    attribute :period_start, :utc_datetime_usec, allow_nil?: false, public?: true
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,

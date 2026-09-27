@@ -153,7 +153,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
       argument :fleet_id, :string, allow_nil?: false
       argument :after_seq, :integer, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
-      prepare build(select: [:token_id], sort: [record_seq: :asc])
+      prepare build(select: [:token_id, :ownership_epoch], sort: [record_seq: :asc])
     end
 
     # The fleet's epochs recorded before its epoch number `before_seq` (from

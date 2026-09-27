@@ -29,9 +29,9 @@ defmodule Keyfleet.ProposalsChainTest do
   # contracts in contracts/test/KeyfleetVotesTopics.t.sol.
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
   @revealed "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
-  @created "0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9"
-  @autolaunch "0xa395caec5e719dd09aa72025608546598e2f07d131ae8ca46b82bbaacfbe2846"
-  @pay "0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85"
+  @created "0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647"
+  @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
+  @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
   @income_recognized "0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13"
@@ -101,7 +101,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert %{
                kind: :decision,
                proposer: proposer,
-               eligible_keys: 7,
+               opened_block: opened_block,
                digest: nil,
                text: "Ship the docs",
                text_bytes: 13,
@@ -109,7 +109,6 @@ defmodule Keyfleet.ProposalsChainTest do
                asset: nil,
                amount: nil,
                recipient: nil,
-               execution_expiry: nil,
                block_number: block,
                log_index: 0,
                record_seq: 1
@@ -117,7 +116,7 @@ defmodule Keyfleet.ProposalsChainTest do
 
       assert proposer == wallet("f")
       assert block == @deployed + 1
-      assert DateTime.compare(decision.closes_at, DateTime.from_unix!(1_800_000_001)) == :eq
+      assert opened_block == @deployed + 1
       assert decision.text_sha256 == sha256("Ship the docs")
       assert decision.transaction_hash == String.downcase(transaction(@deployed + 1))
 
@@ -127,7 +126,6 @@ defmodule Keyfleet.ProposalsChainTest do
       assert %{text: nil, text_bytes: nil, text_sha256: nil} = launch
       assert %{asset: nil, amount: nil, recipient: nil} = launch
       assert %{log_index: 3, record_seq: 2} = launch
-      assert Decimal.equal?(launch.execution_expiry, 18_446_744_073_709_551_615)
 
       assert [yes, no] =
                @fleet
@@ -157,7 +155,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Chain.get_cursor!(@fleet).proposal_seq == 5
     end
 
-    # A payment keeps its asset, amount, recipient, expiry and reason, and its
+    # A payment keeps its asset, amount, recipient and reason, and its
     # tally counts one vote per key.
     test "a payment proposal is recorded with everything it pays and its reason", %{
       fleet: fleet
@@ -182,7 +180,6 @@ defmodule Keyfleet.ProposalsChainTest do
                text: "Pay the auditor",
                text_bytes: 15,
                envelope_hash: nil,
-               eligible_keys: 7,
                log_index: 0,
                record_seq: 1
              } = paid
@@ -191,7 +188,6 @@ defmodule Keyfleet.ProposalsChainTest do
       assert paid.recipient == wallet("b")
       assert paid.text_sha256 == sha256("Pay the auditor")
       assert Decimal.equal?(paid.amount, @max_uint256)
-      assert Decimal.equal?(paid.execution_expiry, 1_800_000_001 + 2_592_000)
 
       assert %{yes_keys: 3, no_keys: 4} = Ash.load!(paid, [:yes_keys, :no_keys])
     end
@@ -238,8 +234,8 @@ defmodule Keyfleet.ProposalsChainTest do
       assert %{record_seq: 6, log_index: 1} = payment
       assert payment.asset == wallet("a") and payment.recipient == wallet("c")
       assert Decimal.equal?(payment.amount, 700)
-      assert Decimal.equal?(payment.spent_in_period, 1_000)
-      assert DateTime.compare(payment.period_start, DateTime.from_unix!(1_800_000_000)) == :eq
+      assert Decimal.equal?(payment.share, 350)
+      assert Decimal.equal?(payment.matched, 1_050)
 
       assert Chain.get_cursor!(@fleet).proposal_seq == 6
 
@@ -256,14 +252,13 @@ defmodule Keyfleet.ProposalsChainTest do
       fleet: fleet
     } do
       income = income("a", @deployed + 2, 0, 10)
-      paid = budget_paid("a", "c", @deployed + 4, 0, [1, 1_800_000_000, 1])
+      paid = budget_paid("a", "c", @deployed + 4, 0, [1, 1, 0])
       StubClient.put_chain(head(@deployed + 10), [income, paid])
       assert Scanner.step(fleet, StubClient) == :ok
 
       for {logs, opts, block} <- [
             {[income("a", @deployed + 2, 0, 9), paid], [], @deployed + 2},
-            {[income, budget_paid("a", "d", @deployed + 4, 0, [1, 1_800_000_000, 1])], [],
-             @deployed + 4},
+            {[income, budget_paid("a", "d", @deployed + 4, 0, [1, 1, 0])], [], @deployed + 4},
             {[income], [block_hashes: %{(@deployed + 4) => @new_hash}], @deployed + 4}
           ] do
         StubClient.put_chain(head(@deployed + 12), logs, opts)
@@ -392,12 +387,9 @@ defmodule Keyfleet.ProposalsChainTest do
                ~w(proposals key_attachments proposal_votes proposal_executions)
     end
 
-    # A single pass never asks for more than 10,000 blocks, the next starts
-    # exactly where the last ended, and the time of the head is noted only
-    # by the pass that reaches it.
-    test "passes of 10,000 blocks skip nothing and only the one at the head notes its time", %{
-      fleet: fleet
-    } do
+    # A single pass never asks for more than 10,000 blocks, and the next starts
+    # exactly where the last ended.
+    test "passes of 10,000 blocks skip nothing", %{fleet: fleet} do
       StubClient.put_chain(head(@deployed + 25_000), [
         decision(1, @deployed + 9_999),
         decision(2, @deployed + 10_000),
@@ -405,22 +397,18 @@ defmodule Keyfleet.ProposalsChainTest do
       ])
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert %{next_block: first_end, read_through_at: nil} = Chain.get_cursor!(@fleet)
+      assert %{next_block: first_end} = Chain.get_cursor!(@fleet)
       assert first_end == @deployed + 10_000
       assert Proposals.highest_number!(@fleet) == 1
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert %{next_block: second_end, read_through_at: nil} = Chain.get_cursor!(@fleet)
+      assert %{next_block: second_end} = Chain.get_cursor!(@fleet)
       assert second_end == @deployed + 20_000
       assert Proposals.highest_number!(@fleet) == 2
       assert Chain.get_cursor!(@fleet).proposal_seq == 3
 
       assert Scanner.step(fleet, StubClient) == :ok
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 25_000).timestamp
-             ) == :eq
+      assert Chain.get_cursor!(@fleet).next_block == @deployed + 25_001
 
       assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
                [
@@ -432,74 +420,27 @@ defmodule Keyfleet.ProposalsChainTest do
                ]
     end
 
-    test "the head's time is kept while the node is behind and cleared with a stop", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 10).timestamp
-             ) == :eq
-
-      StubClient.put_chain(head(@deployed + 5), [decision(1, @deployed + 3)])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 10).timestamp
-             ) == :eq
-
-      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 10).timestamp
-             ) == :eq
-
-      StubClient.put_chain(head(@deployed + 11), [],
-        block_hashes: %{(@deployed + 3) => @new_hash}
-      )
-
-      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 3} end)
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 10).timestamp
-             ) == :eq
-
-      Chain.clear_divergence!(@fleet)
-      assert Chain.get_cursor!(@fleet).read_through_at == nil
-      refute Chain.fresh?(@fleet)
-
-      # A pass with no new block to read still notes the head it read.
-      StubClient.put_chain(head(@deployed + 10), [decision(1, @deployed + 3)])
-      assert Scanner.step(fleet, StubClient) == :ok
-      assert Chain.fresh?(@fleet)
-
-      assert DateTime.compare(
-               Chain.get_cursor!(@fleet).read_through_at,
-               head(@deployed + 10).timestamp
-             ) == :eq
-    end
-
-    test "a pass that makes a new record says so, and one that makes none does not", %{
-      fleet: fleet
-    } do
+    # A key sold adds to the keys a proposal needs more than half of, so it
+    # can take a passed proposal back to voting; a key changing hands cannot.
+    test "a pass that makes a new record or sells a key says so, and one that makes none does not",
+         %{fleet: fleet} do
       Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
 
       mint = ownership(1, "a", @deployed + 1, 0)
       StubClient.put_chain(head(@deployed + 10), [mint])
       assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:proposals_changed, @fleet}
+
+      moved = %{ownership(1, "b", @deployed + 11, 0) | "data" => hex(<<2::256>>)}
+      StubClient.put_chain(head(@deployed + 12), [mint, moved])
+      assert Scanner.step(fleet, StubClient) == :ok
       refute_received {:proposals_changed, _fleet}
 
-      StubClient.put_chain(head(@deployed + 12), [mint, decision(1, @deployed + 11)])
+      StubClient.put_chain(head(@deployed + 14), [mint, moved, decision(1, @deployed + 13)])
       assert Scanner.step(fleet, StubClient) == :ok
       assert_received {:proposals_changed, @fleet}
 
-      StubClient.put_chain(head(@deployed + 14), [mint, decision(1, @deployed + 11)])
+      StubClient.put_chain(head(@deployed + 16), [mint, moved, decision(1, @deployed + 13)])
       assert Scanner.step(fleet, StubClient) == :ok
       refute_received {:proposals_changed, _fleet}
     end
@@ -1028,7 +969,7 @@ defmodule Keyfleet.ProposalsChainTest do
     # contracts/test/KeyfleetAutolaunch.t.sol from the same launch proposed,
     # as its event carries it and as `launchEnvelope` returns it.
     test "a launch that fills the hash's blocks exactly is kept", %{fleet: fleet} do
-      description = "A fleet's launch. " |> String.duplicate(27) |> binary_part(0, 480)
+      description = "A fleet's launch. " |> String.duplicate(29) |> binary_part(0, 512)
 
       texts = [
         "Cascade Research",
@@ -1044,7 +985,7 @@ defmodule Keyfleet.ProposalsChainTest do
       StubClient.put_chain(
         head(@deployed + 10),
         autolaunch(1, @deployed + 2, 0,
-          envelope_hash: "0x9667be28058aae2ff99b278e27680af58ac13121852b76c68cd835cae7d0a30d"
+          envelope_hash: "0x9d2685a27d497a7918a1a17b76177782499261be330345e630bcc08ef34bf285"
         ),
         calls: fn _to, _data, _block_hash -> {:ok, returned} end
       )
@@ -1118,7 +1059,7 @@ defmodule Keyfleet.ProposalsChainTest do
       budget = [
         shared_money("e", @deployed + 6, 1, 10),
         income("a", @deployed + 6, 2, 10),
-        budget_paid("a", "c", @deployed + 7, 0, [1, 1_800_000_000, 1])
+        budget_paid("a", "c", @deployed + 7, 0, [1, 1, 0])
       ]
 
       StubClient.put_chain(head(@deployed + 10), history() ++ budget)
@@ -1163,7 +1104,6 @@ defmodule Keyfleet.ProposalsChainTest do
       assert %{kind: :pay, number: 3, text: "Pay 3", digest: nil} = paid
       assert paid.asset == wallet("a") and paid.recipient == wallet("b")
       assert Decimal.equal?(paid.amount, @max_uint256)
-      assert Decimal.equal?(paid.execution_expiry, 1_800_000_003 + 2_592_000)
 
       data = &(&1["data"] |> String.trim_leading("0x") |> Base.decode16!(case: :lower))
       topic = &List.replace_at(&1["topics"], &2, &3)
@@ -1183,12 +1123,10 @@ defmodule Keyfleet.ProposalsChainTest do
             {0, %{decision | "data" => hex(data.(decision) <> <<0::256>>)}},
             {0, %{decision | "data" => hex(binary_part(data.(decision), 0, 127))}},
             {0, %{decision | "data" => "0x0"}},
-            {0, %{decision | "data" => hex(patch(data.(decision), 96, <<160::256>>))}},
-            {0, %{decision | "data" => hex(patch(data.(decision), 128, <<33::256>>))}},
-            {0, %{decision | "data" => hex(patch(data.(decision), 163, <<1>>))}},
-            {0, %{decision | "data" => hex(patch(data.(decision), 0, <<1::192, 0::64>>))}},
-            {0,
-             %{decision | "data" => hex(patch(data.(decision), 32, <<@max_bigint + 1::256>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 64, <<128::256>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 96, <<33::256>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 131, <<1>>))}},
+            {0, %{decision | "data" => hex(patch(data.(decision), 0, <<@max_bigint + 1::256>>))}},
             {0, %{decision | "blockNumber" => quantity(@deployed + 11)}},
             {0, %{decision | "blockNumber" => "0x-1"}},
             {0, %{decision | "logIndex" => "0x"}},
@@ -1207,13 +1145,13 @@ defmodule Keyfleet.ProposalsChainTest do
             {1, %{vote | "data" => hex(patch(data.(vote), 96, <<1::1, 0::255>>))}},
             {1, %{vote | "data" => hex(patch(data.(vote), 64, <<3::256>>))}},
             {1, %{vote | "data" => hex(data.(vote) <> <<0::256>>)}},
-            {3, %{payload | "data" => hex(patch(data.(payload), 32, <<1::1, 0::255>>))}},
+            {3, %{payload | "data" => hex(data.(payload) <> <<0::256>>)}},
+            {3, %{payload | "data" => hex(binary_part(data.(payload), 0, 31))}},
             {5, %{pay_payload | "topics" => topic.(pay_payload, 2, hex(<<1::96, 0::160>>))}},
             {5, %{pay_payload | "topics" => topic.(pay_payload, 3, hex(<<1::96, 0::160>>))}},
             {5, %{pay_payload | "topics" => Enum.drop(pay_payload["topics"], -1)}},
-            {5, %{pay_payload | "data" => hex(patch(data.(pay_payload), 32, <<1::1, 0::255>>))}},
             {5, %{pay_payload | "data" => hex(data.(pay_payload) <> <<0::256>>)}},
-            {5, %{pay_payload | "data" => hex(binary_part(data.(pay_payload), 0, 32))}}
+            {5, %{pay_payload | "data" => hex(binary_part(data.(pay_payload), 0, 31))}}
           ] do
         assert Logs.decode(
                  List.replace_at(valid, index, broken),
@@ -1253,7 +1191,7 @@ defmodule Keyfleet.ProposalsChainTest do
       end
 
       income = income("a", @deployed + 5, 0, 10)
-      paid = budget_paid("a", "c", @deployed + 5, 1, [1, 1_800_000_000, 1])
+      paid = budget_paid("a", "c", @deployed + 5, 1, [1, 1, 0])
 
       assert {:ok, [{:income, _income}, {:budget_paid, _paid}]} =
                Logs.decode([income, paid], fleet, @deployed, @deployed + 10)
@@ -1265,8 +1203,8 @@ defmodule Keyfleet.ProposalsChainTest do
             {0, %{income | "topics" => topic.(income, 1, hex(<<1::96, 0::160>>))}},
             {0, %{income | "topics" => Enum.drop(income["topics"], -1)}},
             {1, %{paid | "address" => @votes}},
-            {1, %{paid | "data" => hex(<<1::256, 1::1, 0::255, 1::256>>)}},
-            {1, %{paid | "data" => hex(<<1::256, 1_800_000_000::256, 1::256, 0::256>>)}},
+            {1, %{paid | "data" => hex(<<1::256, 1::256>>)}},
+            {1, %{paid | "data" => hex(<<1::256, 1::256, 0::256, 0::256>>)}},
             {1, %{paid | "topics" => topic.(paid, 2, hex(<<1::96, 0::160>>))}}
           ] do
         assert Logs.decode(
@@ -1332,28 +1270,20 @@ defmodule Keyfleet.ProposalsChainTest do
 
     [
       created(number, 1, block, log_index, "", digest),
-      log(
-        @votes,
-        [@autolaunch, <<number::256>>],
-        envelope <> <<18_446_744_073_709_551_615::256>>,
-        block,
-        log_index + 1
-      )
+      log(@votes, [@autolaunch, <<number::256>>], envelope, block, log_index + 1)
     ]
   end
 
-  # A payment of `amount` of asset 0xaa… to 0xbb…, executable until thirty
-  # days after its vote closes.
+  # A payment of `amount` of asset 0xaa… to 0xbb….
   defp pay(number, block, log_index, opts \\ []) do
     amount = Keyword.get(opts, :amount, 5_000)
-    closes_at = 1_800_000_000 + number
 
     [
       created(number, 2, block, log_index, Keyword.get(opts, :text, "Pay #{number}"), <<0::256>>),
       log(
         @votes,
         [@pay, <<number::256>>, address_word_bytes("a"), address_word_bytes("b")],
-        <<amount::256, closes_at + 2_592_000::256>>,
+        <<amount::256>>,
         block,
         log_index + 1
       )
@@ -1364,9 +1294,9 @@ defmodule Keyfleet.ProposalsChainTest do
     padded = 32 * div(byte_size(text) + 31, 32)
 
     data =
-      <<1_800_000_000 + number::256, 7::256>> <>
+      <<block::256>> <>
         digest <>
-        <<128::256, byte_size(text)::256>> <>
+        <<96::256, byte_size(text)::256>> <>
         text <> <<0::size(8 * (padded - byte_size(text)))>>
 
     log(
@@ -1403,7 +1333,7 @@ defmodule Keyfleet.ProposalsChainTest do
       graduation("9", @deployed + 1, 2, 100),
       income("a", @deployed + 2, 0, @max_uint256),
       vesting("b", @deployed + 2, 1, 5, 25),
-      budget_paid("a", "c", @deployed + 3, 1, [700, 1_800_000_000, 1_000]),
+      budget_paid("a", "c", @deployed + 3, 1, [700, 350, 1_050]),
       ownership(1, "d", @deployed + 3, 0)
     ])
   end
@@ -1449,8 +1379,8 @@ defmodule Keyfleet.ProposalsChainTest do
     )
   end
 
-  # A payment of asset 0x`asset`… to 0x`recipient`…, as [amount,
-  # period_start, spent_in_period].
+  # A payment of asset 0x`asset`… to 0x`recipient`…, as [amount, share,
+  # matched].
   defp budget_paid(asset, recipient, block, log_index, fields) do
     log(
       @contract,
@@ -1470,12 +1400,12 @@ defmodule Keyfleet.ProposalsChainTest do
         <<byte_size(text)::256>> <> text <> <<0::size(8 * (padded - byte_size(text)))>>
       end)
 
-    {offsets, _end} = Enum.map_reduce(tails, 256, &{<<&2::256>>, &2 + byte_size(&1)})
+    {offsets, _end} = Enum.map_reduce(tails, 224, &{<<&2::256>>, &2 + byte_size(&1)})
 
     <<32::256>> <>
       Enum.join(offsets) <>
       <<raise::256>> <>
-      narrative_digest <> <<18_446_744_073_709_551_615::256>> <> Enum.join(tails)
+      narrative_digest <> Enum.join(tails)
   end
 
   defp keccak(bytes), do: hex(ExKeccak.hash_256(bytes))

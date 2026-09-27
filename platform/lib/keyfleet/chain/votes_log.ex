@@ -9,7 +9,8 @@ defmodule Keyfleet.Chain.VotesLog do
   n, payload: fields}}` or `{:pay, %{number: n, payload: fields}}`;
   `Keyfleet.Chain.Logs` joins them.
 
-  Every key is one vote, so a vote carries its keys and nothing else.
+  Every key is one vote, so a vote carries its keys and nothing else. A key
+  may vote again, and its latest vote is the one that counts.
 
   A Decision's or payment's text is kept up to its first 64 KiB, as raw bytes
   that need not be valid text, beside its full length and its SHA-256. A
@@ -18,12 +19,12 @@ defmodule Keyfleet.Chain.VotesLog do
 
   alias Keyfleet.Chain.Abi
 
-  # cast keccak "ProposalCreated(uint256,uint8,address,uint64,uint256,bytes32,string)"
-  @created "0x3981631dc33adabae5ab9de3f23bf01207ffc383d894a4f777ee115e75dee3a9"
-  # cast keccak "AutolaunchProposed(uint256,bytes32,uint64)"
-  @autolaunch "0xa395caec5e719dd09aa72025608546598e2f07d131ae8ca46b82bbaacfbe2846"
-  # cast keccak "PayProposed(uint256,address,uint256,address,uint64)"
-  @pay "0xdf6e4791f55c0c086cb1d3527b5f4f92e4b3d3142e3899a7b5a4af3e75b7cd85"
+  # cast keccak "ProposalCreated(uint256,uint8,address,uint64,bytes32,string)"
+  @created "0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647"
+  # cast keccak "AutolaunchProposed(uint256,bytes32)"
+  @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
+  # cast keccak "PayProposed(uint256,address,uint256,address)"
+  @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
   # cast keccak "VoteCast(uint256,address,bool,uint256[])"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
   # cast keccak "ProposalExecuted(uint256,address)"
@@ -45,9 +46,8 @@ defmodule Keyfleet.Chain.VotesLog do
     with {:ok, number} <- number(id),
          {:ok, kind} <- kind(kind),
          {:ok, proposer} <- Abi.word(proposer, :address),
-         {:ok, [closes_at, eligible_keys, digest, text]} <-
-           Abi.decode(data, [{:uint, 64}, {:uint, 63}, :bytes32, :bytes]),
-         {:ok, closes_at} <- DateTime.from_unix(closes_at) do
+         {:ok, [opened_block, digest, text]} <-
+           Abi.decode(data, [{:uint, 63}, :bytes32, :bytes]) do
       {:ok,
        {:proposal,
         Map.merge(
@@ -55,8 +55,7 @@ defmodule Keyfleet.Chain.VotesLog do
             number: number,
             kind: kind,
             proposer: proposer,
-            closes_at: closes_at,
-            eligible_keys: eligible_keys,
+            opened_block: opened_block,
             digest: if(digest != @zero_digest, do: digest)
           },
           text(kind, text)
@@ -68,16 +67,8 @@ defmodule Keyfleet.Chain.VotesLog do
 
   def decode(@autolaunch, [id], data) do
     with {:ok, number} <- number(id),
-         {:ok, [envelope_hash, execution_expiry]} <- Abi.decode(data, [:bytes32, {:uint, 64}]) do
-      {:ok,
-       {:autolaunch,
-        %{
-          number: number,
-          payload: %{
-            envelope_hash: envelope_hash,
-            execution_expiry: Decimal.new(execution_expiry)
-          }
-        }}}
+         {:ok, [envelope_hash]} <- Abi.decode(data, [:bytes32]) do
+      {:ok, {:autolaunch, %{number: number, payload: %{envelope_hash: envelope_hash}}}}
     else
       _malformed -> :error
     end
@@ -87,17 +78,12 @@ defmodule Keyfleet.Chain.VotesLog do
     with {:ok, number} <- number(id),
          {:ok, asset} <- Abi.word(asset, :address),
          {:ok, recipient} <- Abi.word(recipient, :address),
-         {:ok, [amount, execution_expiry]} <- Abi.decode(data, [{:uint, 256}, {:uint, 64}]) do
+         {:ok, [amount]} <- Abi.decode(data, [{:uint, 256}]) do
       {:ok,
        {:pay,
         %{
           number: number,
-          payload: %{
-            asset: asset,
-            amount: Decimal.new(amount),
-            recipient: recipient,
-            execution_expiry: Decimal.new(execution_expiry)
-          }
+          payload: %{asset: asset, amount: Decimal.new(amount), recipient: recipient}
         }}}
     else
       _malformed -> :error

@@ -62,10 +62,6 @@ defmodule Keyfleet.Activity do
     * `:votes`: consecutive votes on one proposal: `number`, and `yes` and
       `no`, each `%{count: keys, token_ids: up to three, lowest first}`.
     * `:executed`: `number`, `kind`, `payment` and `launch` as for `:proposed`.
-    * `:outcome`: a proposal whose vote has closed and been counted:
-      `number`, `kind`, `status` (as `Keyfleet.Proposals.status/3`: `:passed`,
-      `:failed`, `:executed`, `:expired` or `:closed`), `yes`, `no` and
-      `eligible` (keys). Its `at` is when the vote closed.
     * `:open_question` (from `headline/2` only): `goal` (an item) and
       `question`, as `Keyfleet.Graph.open_question/1` finds them.
 
@@ -90,15 +86,10 @@ defmodule Keyfleet.Activity do
   The first page fixes where the walk begins for every source: the time it
   was read for posts (by the database's clock, which stamps them) and for
   agents starting and stopping (by this server's clock, which stamps them),
-  how far votes had been counted for outcomes (none to read when no vote
-  had), and one past the newest record it read for the workspace, keys and
+  and one past the newest record it read for the workspace, keys and
   proposals. Everything recorded after the first page is left to a fresh
   read, so walking the pages with the cursors answered gives every item
   once, in the same order as one larger read made when the first page was.
-
-  An outcome shows once the chain has been read past the vote's close. One
-  counted after the first page was read appears on a fresh read, never in the
-  history a walk has already passed, even when its vote closed earlier.
 
   The cursor holds atoms, tuples and times, and `page/3` trusts its shape: it
   must never leave the server. Keep it in the process that read the page (a
@@ -112,7 +103,6 @@ defmodule Keyfleet.Activity do
   """
 
   alias Keyfleet.Agents
-  alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -128,13 +118,12 @@ defmodule Keyfleet.Activity do
           keys: position(),
           arrivals: position(),
           departures: position(),
-          proposals: position(),
-          outcomes: position()
+          proposals: position()
         }
   @type item :: %{id: String.t(), at: DateTime.t(), kind: atom(), facts: map()}
 
   # The sources, in the order they come in when their items share a time.
-  @sources [:outcomes, :proposals, :keys, :departures, :arrivals, :graph, :posts]
+  @sources [:proposals, :keys, :departures, :arrivals, :graph, :posts]
   @page 30
   # Grouped sources read more rows than a page holds, and a group is capped
   # below the rows read, so a full read always holds a whole group to keep.
@@ -155,27 +144,25 @@ defmodule Keyfleet.Activity do
   A page of the fleet's activity, newest first: `%{items: items, cursor: cursor}`.
 
   `cursor` is nil for the newest page, or the cursor a page answered to read
-  the one after it. Options: `:limit`, the most items a page holds (1 to
-  #{@page}, #{@page} by default), and `:now`, the time outcomes are counted up to.
+  the one after it. Option: `:limit`, the most items a page holds (1 to
+  #{@page}, #{@page} by default).
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}
   def page(fleet_id, cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, @page)
-    now = Keyword.get(opts, :now, DateTime.utc_now())
     true = limit in 1..@page
     # One database session for the whole page: the clock the first page
     # reads is the one that stamped the posts it reads.
-    Repo.checkout(fn -> read_page(fleet_id, cursor, limit, now) end)
+    Repo.checkout(fn -> read_page(fleet_id, cursor, limit) end)
   end
 
-  defp read_page(fleet_id, cursor, limit, now) do
-    chain = Chain.get_cursor!(fleet_id)
-    positions = cursor || start(chain, now)
+  defp read_page(fleet_id, cursor, limit) do
+    positions = cursor || start()
 
     # A read that came back full leaves out its last entry, which may be the
     # start of a group it did not read to the end.
     fetch = fn source, position, reads ->
-      {entries, more?, top} = read(source, fleet_id, position, limit, chain, now)
+      {entries, more?, top} = read(source, fleet_id, position, limit)
       entries = if more?, do: Enum.drop(entries, -1), else: entries
       %{entries: entries, more?: more?, position: position || top, reads: reads + 1}
     end
@@ -188,12 +175,10 @@ defmodule Keyfleet.Activity do
 
   # Where a walk begins in each source. The sources kept in time order are
   # read up to now by the clock that stamps them (the database's for posts,
-  # this server's for agents starting and stopping) and outcomes up to what
-  # has been counted, each place one microsecond past so that the time itself
-  # is included; nil outcomes means none have been counted, so there are none
-  # to read. The sources kept in record order begin just past the newest
-  # record their first read finds.
-  defp start(chain, now) do
+  # this server's for agents starting and stopping), each place one
+  # microsecond past so that the time itself is included. The sources kept in
+  # record order begin just past the newest record their first read finds.
+  defp start do
     %Postgrex.Result{rows: [[written]]} = Repo.query!("SELECT clock_timestamp()")
     stamped = DateTime.utc_now()
 
@@ -203,19 +188,11 @@ defmodule Keyfleet.Activity do
       keys: nil,
       arrivals: just_after(stamped),
       departures: just_after(stamped),
-      proposals: nil,
-      outcomes: chain |> through(now) |> just_after()
+      proposals: nil
     }
   end
 
-  defp just_after(nil), do: nil
   defp just_after(at), do: {DateTime.add(at, 1, :microsecond), nil}
-
-  # Votes are counted up to where the chain has been read, and never past now.
-  defp through(%{read_through_at: %DateTime{} = read_through_at}, now),
-    do: Enum.min_by([now, read_through_at], &stamp/1)
-
-  defp through(_chain, _now), do: nil
 
   @doc """
   The item a fleet features at `now`, by the first rule that finds one:
@@ -340,22 +317,22 @@ defmodule Keyfleet.Activity do
   # more beyond them, and, for a source kept in record order, the place just
   # past the newest record read, where a walk begins. Each entry carries the
   # place in its source just past it.
-  defp read(:posts, fleet_id, {at, id}, _limit, _chain, _now) do
+  defp read(:posts, fleet_id, {at, id}, _limit) do
     lines = Rooms.fleet_lines_before!(fleet_id, at, id, @posts_read)
     {group_lines(lines), length(lines) == @posts_read, nil}
   end
 
-  defp read(:graph, fleet_id, seq, limit, _chain, _now) do
+  defp read(:graph, fleet_id, seq, limit) do
     events = Graph.notable_before!(fleet_id, seq, limit + 1)
     {Enum.map(events, &graph_entry/1), length(events) > limit, top(events, :seq)}
   end
 
-  defp read(:keys, fleet_id, seq, _limit, _chain, _now) do
+  defp read(:keys, fleet_id, seq, _limit) do
     epochs = Keys.epochs_recorded_before!(fleet_id, seq, @keys_read)
     {group_epochs(epochs), length(epochs) == @keys_read, top(epochs, :record_seq)}
   end
 
-  defp read(:arrivals, fleet_id, {at, id}, limit, _chain, _now) do
+  defp read(:arrivals, fleet_id, {at, id}, limit) do
     pairings = Keys.arrivals_before!(fleet_id, at, id, limit + 1)
 
     entries =
@@ -372,7 +349,7 @@ defmodule Keyfleet.Activity do
     {entries, length(pairings) > limit, nil}
   end
 
-  defp read(:departures, fleet_id, {at, id}, limit, _chain, _now) do
+  defp read(:departures, fleet_id, {at, id}, limit) do
     pairings = Keys.departures_before!(fleet_id, at, id, limit + 1)
 
     entries =
@@ -394,7 +371,7 @@ defmodule Keyfleet.Activity do
     {entries, length(pairings) > limit, nil}
   end
 
-  defp read(:proposals, fleet_id, seq, limit, _chain, _now) do
+  defp read(:proposals, fleet_id, seq, limit) do
     reads = [
       {Proposals.proposals_recorded_before!(fleet_id, seq, limit + 1), limit + 1},
       {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read), @votes_read},
@@ -414,32 +391,6 @@ defmodule Keyfleet.Activity do
     complete = Enum.filter(records, &(&1.record_seq >= floor))
 
     {group_records(complete), floor > 0, top(records, :record_seq)}
-  end
-
-  defp read(:outcomes, _fleet_id, nil, _limit, _chain, _now), do: {[], false, nil}
-
-  defp read(:outcomes, fleet_id, {at, number}, limit, chain, now) do
-    proposals = Proposals.proposals_closed_before!(fleet_id, at, number, limit + 1)
-
-    entries =
-      Enum.map(proposals, fn proposal ->
-        entry(
-          "outcome:#{proposal.number}",
-          proposal.closes_at,
-          :outcome,
-          {proposal.closes_at, proposal.number},
-          %{
-            number: proposal.number,
-            kind: proposal.kind,
-            status: Proposals.status(proposal, chain, now),
-            yes: proposal.yes_keys,
-            no: proposal.no_keys,
-            eligible: proposal.eligible_keys
-          }
-        )
-      end)
-
-    {entries, length(proposals) > limit, nil}
   end
 
   defp top([], _field), do: 1

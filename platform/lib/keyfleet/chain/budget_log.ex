@@ -8,7 +8,8 @@ defmodule Keyfleet.Chain.BudgetLog do
   token that arrived by bare transfer; `GraduationHoldingsBooked`, the REGENT
   the launch sent at graduation; and `VestingBooked`, launched tokens the
   vesting escrow released. `BudgetPaid` is a passed payment paid out of the
-  budget. Amounts are in the asset's own units, any uint256.
+  budget, with the match it set aside for the keys that did not vote yes.
+  Amounts are in the asset's own units, any uint256.
   """
 
   alias Keyfleet.Chain.Abi
@@ -60,17 +61,16 @@ defmodule Keyfleet.Chain.BudgetLog do
   def decode(@budget_paid, [asset, recipient], data) do
     with {:ok, asset} <- Abi.word(asset, :address),
          {:ok, recipient} <- Abi.word(recipient, :address),
-         {:ok, [amount, period_start, spent_in_period]} <-
-           Abi.decode(data, [{:uint, 256}, {:uint, 64}, {:uint, 256}]),
-         {:ok, period_start} <- DateTime.from_unix(period_start) do
+         {:ok, [amount, share, matched]} <-
+           Abi.decode(data, [{:uint, 256}, {:uint, 256}, {:uint, 256}]) do
       {:ok,
        {:budget_paid,
         %{
           asset: asset,
           recipient: recipient,
           amount: Decimal.new(amount),
-          period_start: period_start,
-          spent_in_period: Decimal.new(spent_in_period)
+          share: Decimal.new(share),
+          matched: Decimal.new(matched)
         }}}
     else
       _malformed -> :error

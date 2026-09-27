@@ -16,9 +16,9 @@ defmodule Keyfleet.Proposals do
 
   @page 20
   @changes_page 50
-  # What a proposal is shown with: its tally, its execution and its launch,
-  # and whether its fleet's launch has gone ahead.
-  @summary [:yes_keys, :no_keys, :execution, :launch_envelope, :fleet_launched?]
+  # What a proposal is shown with: its tally, the keys sold, its execution and
+  # its launch.
+  @summary [:yes_keys, :no_keys, :keys_sold, :execution, :launch_envelope]
 
   resources do
     resource Keyfleet.Proposals.Proposal do
@@ -39,10 +39,6 @@ defmodule Keyfleet.Proposals do
       define :proposals_recorded_before,
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
-
-      define :proposals_closed_before,
-        action: :closed_before,
-        args: [:fleet_id, :before_at, :before_number, :limit]
     end
 
     resource Keyfleet.Proposals.LaunchEnvelope do
@@ -78,47 +74,23 @@ defmodule Keyfleet.Proposals do
   def topic(fleet_id), do: "fleet:#{fleet_id}:proposals"
 
   @doc """
-  Where a proposal stands at `now`, as far as the fleet's history has been
-  read (`cursor`, or nil before any reading), loaded with `#{inspect(@summary)}`:
+  Where a proposal stands, as far as the fleet's history has been read,
+  loaded with `#{inspect(@summary)}`. A proposal has no deadline: it stays
+  open to votes until it is carried out.
 
     * `:executed` once its execution is recorded;
-    * `:voting` before it closes;
-    * `:counting` after it closes, until the reading has passed its closing
-      time, since a vote cast before then may not have been read yet;
-    * `:failed` unless more than half of the keys that could vote on it voted
-      yes: exactly half fails, and a key that did not vote counts against it;
-    * `:closed` for a launch that passed after another launch of the fleet
-      was carried out, since the fleet contract refuses a second launch;
-    * `:expired` for a payment or a launch that passed and is past the last
-      second it could be carried out;
-    * `:passed` otherwise.
+    * `:passed` while more than half of all the keys sold have yes as their
+      latest vote, so it can be carried out now;
+    * `:voting` otherwise. A key that has not voted counts against it, and
+      so does every key sold later.
   """
-  def status(%Proposal{} = proposal, cursor, %DateTime{} = now) do
+  def status(%Proposal{} = proposal) do
     cond do
       proposal.execution -> :executed
-      DateTime.before?(now, proposal.closes_at) -> :voting
-      not read_past?(cursor, proposal.closes_at) -> :counting
-      true -> outcome(proposal, now)
+      proposal.yes_keys * 2 > proposal.keys_sold -> :passed
+      true -> :voting
     end
   end
-
-  # Where a proposal stands once every vote on it has been read.
-  defp outcome(proposal, now) do
-    cond do
-      proposal.yes_keys * 2 <= proposal.eligible_keys -> :failed
-      proposal.kind == :autolaunch and proposal.fleet_launched? -> :closed
-      proposal.kind != :decision and expired?(proposal, now) -> :expired
-      true -> :passed
-    end
-  end
-
-  defp read_past?(%{read_through_at: %DateTime{} = read_through_at}, closes_at),
-    do: not DateTime.before?(read_through_at, closes_at)
-
-  defp read_past?(_cursor, _closes_at), do: false
-
-  defp expired?(proposal, now),
-    do: Decimal.gt?(DateTime.to_unix(now), proposal.execution_expiry)
 
   @doc "Each asset the fleet's payment proposals name, by address."
   def payment_assets(fleet_id) do
@@ -131,13 +103,13 @@ defmodule Keyfleet.Proposals do
     |> Enum.sort()
   end
 
-  @doc "The fleet's proposal `number`, as `status/3` needs it, or nil."
+  @doc "The fleet's proposal `number`, as `status/1` needs it, or nil."
   def get_by_number(fleet_id, number),
     do: get_proposal!(fleet_id, number, load: @summary)
 
   @doc """
   The fleet's proposals below `before_number` (all of them for nil), newest
-  first, #{@page} at most, as `status/3` needs them, and whether older ones remain.
+  first, #{@page} at most, as `status/1` needs them, and whether older ones remain.
   """
   def list_page(fleet_id, before_number \\ nil) do
     Proposal
@@ -153,7 +125,7 @@ defmodule Keyfleet.Proposals do
 
   @doc """
   The fleet's launch proposals that point to a version of its launch plan
-  `object_id` by their digest, newest first, `limit` at most, as `status/3`
+  `object_id` by their digest, newest first, `limit` at most, as `status/1`
   needs them, and whether older ones remain.
   """
   def launches_of_plan(fleet_id, object_id, limit) do
@@ -195,14 +167,14 @@ defmodule Keyfleet.Proposals do
   What changed in the fleet's proposals after its record number `after_seq`.
 
   The first #{@changes_page} records after it, of every kind the reader numbers,
-  are read. `items` holds each proposal they touch, as it stands at `now`, with
+  are read. `items` holds each proposal they touch, as it stands now, with
   `changed_seq`, the last of them that touched it, and in that order.
   `next_cursor` is the last record read, to send as `after_seq` next time;
   `head_seq` the fleet's last record number, and `has_more` whether records
   after `next_cursor` are waiting. Budget records are counted but touch no
   proposal.
   """
-  def changes(fleet_id, after_seq, %DateTime{} = now) do
+  def changes(fleet_id, after_seq) do
     # The head is read first and bounds every query: a record numbered after
     # it may be saved between the queries below, and reading it from one kind
     # but not from another would move the next cursor past the one missed.
@@ -222,9 +194,7 @@ defmodule Keyfleet.Proposals do
       |> Ash.Query.filter(id in ^Map.keys(changed))
       |> Ash.Query.load(@summary)
       |> Ash.read!()
-      |> Enum.map(
-        &%{proposal: &1, status: status(&1, cursor, now), changed_seq: Map.fetch!(changed, &1.id)}
-      )
+      |> Enum.map(&%{proposal: &1, status: status(&1), changed_seq: Map.fetch!(changed, &1.id)})
       |> Enum.sort_by(& &1.changed_seq)
 
     %{

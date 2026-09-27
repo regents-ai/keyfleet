@@ -53,7 +53,8 @@ const refusals = parseAbi([
   "error AlreadyVoted(uint256 tokenId)",
   "error KeyNotEligible(uint256 tokenId)",
   "error NotAuthorizedForKey(uint256 tokenId, address owner)",
-  "error VotingClosed(uint64 closesAt)",
+  "error NotApproved(uint256 yesVotes, uint256 totalMinted)",
+  "error AboveYesShare(address asset, uint256 amount, uint256 most)",
   "error ZeroAmount()",
   "error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found)",
   "error Error(string reason)",
@@ -72,7 +73,6 @@ const forms: Record<string, Record<string, string>> = {
     website: "https://example.test",
     image: "ipfs://cascade",
     raise: "250000.5",
-    until: "2026-10-23T18:30",
     digest: "",
   },
   delegate: {delegate: recipient.toLowerCase()},
@@ -211,20 +211,6 @@ group("what each button asks the contract", () => {
     )
   })
 
-  it("sends a last day that has passed since 1970, for the contract to refuse", () => {
-    expect(press("propose_launch", {...forms.propose_launch, until: "1999-06-01T00:00"})).toMatchObject({
-      envelope: {executionExpiry: BigInt(Date.UTC(1999, 5, 1) / 1000)},
-    })
-    expect(press("propose_launch", {...forms.propose_launch, until: "1970-01-01T00:00"})).toMatchObject({
-      envelope: {executionExpiry: 0n},
-    })
-  })
-
-  it("reads a launch's last day to the second when seconds are given", () => {
-    const launch = press("propose_launch", {...forms.propose_launch, until: "2028-02-29T23:59:59"})
-    expect(launch).toMatchObject({envelope: {executionExpiry: BigInt(Date.UTC(2028, 1, 29, 23, 59, 59) / 1000)}})
-  })
-
   it("calls a vote whose side the page doesn't say out of date, not the voter's mistake", () => {
     let thrown: unknown
     try {
@@ -236,7 +222,7 @@ group("what each button asks the contract", () => {
     expect(thrown).not.toBeInstanceOf(Unreadable)
   })
 
-  it("proposes a launch with its fields as written and its last second in UTC", () => {
+  it("proposes a launch with its fields as written", () => {
     expect(decodeFunctionData({abi: votesAbi, data: encode(press("propose_launch"))})).toEqual({
       functionName: "proposeAutolaunch",
       args: [
@@ -249,7 +235,6 @@ group("what each button asks the contract", () => {
           image: "ipfs://cascade",
           requiredRegentRaised: 250_000_500_000_000_000_000_000n,
           narrativeDigest: zeroHash,
-          executionExpiry: BigInt(Date.UTC(2026, 9, 23, 18, 30) / 1000),
         },
       ],
     })
@@ -286,13 +271,7 @@ group("what each button asks the contract", () => {
     ["propose_pay", {...forms.propose_pay, amount: "twelve"}, "Write the amount as a number, like 12.5."],
     ["propose_pay", {...forms.propose_pay, recipient: "0x12"}, "The wallet to pay isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."],
     ["propose_pay", {...forms.propose_pay, digest: "0x12"}, "A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one."],
-    ["propose_launch", {...forms.propose_launch, until: ""}, "Choose the last day and time, in UTC, the launch can be carried out."],
     ["propose_launch", {...forms.propose_launch, raise: `${2n ** 128n}`}, "That amount is too large."],
-    ["propose_launch", {...forms.propose_launch, until: "2026-02-30T18:30"}, "That day or time doesn’t exist. Choose the last day and time, in UTC, the launch can be carried out."],
-    ["propose_launch", {...forms.propose_launch, until: "2026-10-23T24:30"}, "That day or time doesn’t exist. Choose the last day and time, in UTC, the launch can be carried out."],
-    ["propose_launch", {...forms.propose_launch, until: "0026-10-23T18:30"}, "That date has already passed. The last day has to come after voting on the launch closes."],
-    ["propose_launch", {...forms.propose_launch, until: "1969-12-31T23:59"}, "That date has already passed. The last day has to come after voting on the launch closes."],
-    ["propose_launch", {...forms.propose_launch, until: "0026-02-29T18:30"}, "That day or time doesn’t exist. Choose the last day and time, in UTC, the launch can be carried out."],
     ["vote", {keys: `3, ${maxUint256 + 1n}`}, "That key number is larger than any key number can be."],
     ["propose_decision", {key: `${maxUint256 + 1n}`}, "That key number is larger than any key number can be."],
     ["delegate", {delegate: "someone"}, "The wallet to vote for you isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."],
@@ -365,12 +344,13 @@ group("sending a press", () => {
 
     expect(wallet.requests.find(request => request.method === "eth_call")?.params?.[1]).toBe("0x10")
     expect(describe(updates.at(-1)!, press("vote"))).toBe(
-      "Key 7 has already voted on this proposal, so none of these votes were counted.",
+      "Key 7 already has this vote on this proposal, so none of these votes were counted.",
     )
   })
 
   it.each([
-    ["vote", refusals, "VotingClosed", [1n], "Voting on this proposal has closed, so the vote wasn’t counted."],
+    ["execute", refusals, "NotApproved", [4n, 8n], "More than half of all the keys sold have to vote yes before this can be carried out."],
+    ["execute", refusals, "AboveYesShare", [usdc, 10n, 5n], "This payment is more than the yes votes’ share of the budget. It can be carried out once more keys vote yes or more money arrives."],
     ["vote", refusals, "NotAuthorizedForKey", [4n, recipient], "Key 4 is held by 0x2222…2222, who hasn’t let this wallet vote for them."],
     ["propose_decision", refusals, "KeyNotEligible", [9n], "Key 9 hasn’t been sold yet."],
     ["send_share", refusals, "ZeroAmount", [], "Nothing is set aside for REGENT stakers right now, so there was nothing to send."],
@@ -585,7 +565,7 @@ group("the proposal pages' wallet buttons", () => {
     expect(hook.entries[0].dataset.tone).toBe("info")
 
     hook.reports[0]({kind: "failed", reason: "not_passed"})
-    expect(hook.entries[0].textContent).toBe("This proposal didn’t pass, so it can’t be carried out.")
+    expect(hook.entries[0].textContent).toBe("More than half of all the keys sold have to vote yes before this can be carried out.")
     expect(hook.entries[0].dataset.tone).toBe("error")
   })
 
