@@ -18,31 +18,20 @@ transactions (see [the keeper guide](../docs/keeper.md)).
 
 ## Shared dependencies
 
-From a directory that will hold the sibling repositories, acquire the shared
-libraries:
+The shared Regent libraries are pinned by git in `mix.exs`, one commit per
+repository: elixir-utils `b8691b1` (`privy`, `agent_access`, `siwa`,
+`credo_ash`), design-system `a64ec86` (`regent_ui`) and regents `0d5d18c`
+(`identity`). `mix deps.get` fetches them with everything else, and the release
+image is built from the same commits.
 
-```sh
-git clone https://github.com/regents-ai/design-system.git
-git clone https://github.com/regents-ai/elixir-utils.git
-git clone https://github.com/regents-ai/regents.git
-```
-
-The expected layout is `<workspace>/<product>/platform`,
-`<workspace>/design-system/regent_ui`, `<workspace>/elixir-utils/` and
-`<workspace>/regents/identity`. `REGENT_DEPS_ROOT` may point at `<workspace>`
-when it is elsewhere.
-
-Develop against the commits in `shared-libs.lock`, the same ones the release
-image is built from: elixir-utils `3e78215`, regents `81dcfed` and
-design-system `a64ec86`. Any checkout or worktree will do as long as the
-folders Keyfleet uses match those commits; `scripts/check-shared-libs.sh`
-checks this, and `mix precommit` runs it first. To move to newer shared
-libraries, change the commits in `shared-libs.lock`, then run
-`mix keyfleet.sync_agent_clients` and the checks.
+To move a pin, change its ref in `mix.exs`, run `mix deps.update <name>` for each
+library from that repository, then `mix keyfleet.sync_agent_clients` and the
+checks. `make check-required-fixes` (from the repository root, needs
+`gh auth login`) checks the pins against ash-template's list of required fixes.
 
 ## Quickstart
 
-Run these from `platform/` after acquiring the shared dependencies. You need
+Run these from `platform/`. You need
 Erlang, Elixir, Node and PostgreSQL at the versions pinned in `.tool-versions`.
 
 ```sh
@@ -156,13 +145,11 @@ npm run typecheck
 npm test
 ```
 
-These need `MIX_TEST_PARTITION` set, even to an empty value, and
-`REGENT_DEPS_ROOT` when the shared dependencies live outside the sibling layout
-(see [Shared dependencies](#shared-dependencies)). For example, with the test
-database `keyfleet_test`:
+These need `MIX_TEST_PARTITION` set, even to an empty value. For example, with
+the test database `keyfleet_test`:
 
 ```sh
-MIX_TEST_PARTITION= REGENT_DEPS_ROOT=<workspace> make check
+MIX_TEST_PARTITION= make check
 ```
 
 The browser suite runs separately with `npm run test:browser`.
@@ -201,9 +188,9 @@ hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
 image disagree about, without applying anything.
 
 The image is built from `Dockerfile`; `scripts/build-release-context.sh`
-assembles its build context from this repository's last commit and the
-shared libraries at the commits `shared-libs.lock` pins, plus the graph host's sealed Python supply, which it checks
-against its checksums. The build fetches Mix and npm packages from `mix.lock`
+assembles its build context from this repository's last commit plus the graph
+host's sealed Python supply, which it checks against its checksums. The build
+fetches Mix and npm packages, the shared libraries among them, from `mix.lock`
 and `package-lock.json`. The Fly configuration lives in `fly.toml` and
 `fly.staging.toml`, and [the deploy checklist](../docs/deploy-checklist.md)
 lists the launch steps in order.

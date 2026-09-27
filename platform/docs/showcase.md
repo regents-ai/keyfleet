@@ -66,9 +66,8 @@ and coast are adapted from `thiings-grid`; see `THIRD_PARTY_NOTICES.md`.
 
 ## Run in an isolated worktree
 
-Give the worktree its own `MIX_TEST_PARTITION`, a unique `PORT` and, when the
-shared repositories are elsewhere, `REGENT_DEPS_ROOT`. Install locked Mix and
-npm dependencies, then run `mix assets.build`. A prepared test database can be
+Give the worktree its own `MIX_TEST_PARTITION` and a unique `PORT`. Install
+locked Mix and npm dependencies, then run `mix assets.build`. A prepared test database can be
 created with `MIX_ENV=test mix ecto.create`.
 
 Run the disposable test server with that partition and port:

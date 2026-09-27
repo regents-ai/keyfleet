@@ -4,20 +4,14 @@
 #
 #   <context>/
 #     platform/                    this platform at its checked-out commit
-#     elixir-utils/privy/          the shared libraries mix.exs resolves by path,
-#     elixir-utils/agent_access/   each taken from its repository at the commit
-#     elixir-utils/siwa/siwa-elixir/apps/siwa/   shared-libs.lock pins
-#     regents/identity/
-#     design-system/regent_ui/
 #     uv-cache/                    the graph host's locked packages, as a uv cache
 #     python-cache/                the standalone CPython archive uv installs from
 #     BUILD-INPUTS.txt             the commits and supply the context was made from
 #
-# Every source tree is exported from a commit with git archive, never copied
-# from a working tree, so the same pins always give the same context. This
-# platform is exported at its last commit: uncommitted changes are left out. Mix and
-# npm packages are not in the context: the image build fetches them from
-# mix.lock and package-lock.json, which hold every package's checksum. The graph
+# The platform is exported from its last commit with git archive, never copied
+# from a working tree, so uncommitted changes are left out. Mix and npm packages,
+# the shared Regent libraries among them, are not in the context: the image build
+# fetches them from mix.lock and package-lock.json, which pin every package. The graph
 # host's Python supply is sealed ahead of time by seal-graph-host-supply.sh and
 # is checked against its manifest here before anything is assembled.
 #
@@ -49,7 +43,6 @@ destination="$1"
 arch="$2"
 supply_root="${3:-$DEFAULT_SUPPLY_ROOT}"
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-siblings="${REGENT_DEPS_ROOT:-$(cd -- "$repo_root/../.." && pwd)}"
 
 case "$arch" in
   arm64)
@@ -74,18 +67,6 @@ if [ -n "$(git -C "$repo_root" status --porcelain -- .)" ]; then
   printf 'warning: uncommitted changes are left out; the context is built from %s\n' \
     "$platform_revision" >&2
 fi
-
-# mix.lock cannot pin a path dependency, so the shared libraries' commits are
-# pinned in shared-libs.lock, read here as committed. Each repository must hold
-# its pinned commit; any checkout or worktree of it will do, whatever it has
-# checked out.
-pins="$(git -C "$repo_root" show "$platform_revision:./shared-libs.lock" | grep -v '^#')" ||
-  die "shared-libs.lock is not committed at $platform_revision"
-
-while read -r repository revision _folders; do
-  git -C "$siblings/$repository" cat-file -e "$revision^{commit}" 2>/dev/null ||
-    die "$siblings/$repository does not hold commit $revision"
-done <<<"$pins"
 
 sha256_of() {
   shasum -a 256 "$1" | cut -d' ' -f1
@@ -159,13 +140,6 @@ export_tree() {
 }
 
 export_tree "$repo_root" "$platform_revision" "$staging/platform" .
-build_inputs="keyfleet=$platform_revision"
-
-while read -r repository revision folders; do
-  read -ra paths <<<"$folders"
-  export_tree "$siblings/$repository" "$revision" "$staging/$repository" "${paths[@]}"
-  build_inputs+=$'\n'"$repository=$revision"
-done <<<"$pins"
 
 # These archives carry the uv-cache/ and python-cache/ prefixes.
 tar -xf "$graph_host_supply/UV-CACHE.tar" -C "$staging"
@@ -179,7 +153,7 @@ install -m 0644 "$staging/platform/Dockerfile.dockerignore" "$staging/Dockerfile
 
 cat >"$staging/BUILD-INPUTS.txt" <<EOF
 arch=$arch
-$build_inputs
+keyfleet=$platform_revision
 graph-host-supply=$graph_host_supply_dir
 EOF
 

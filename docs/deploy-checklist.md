@@ -9,9 +9,10 @@ not tried before this list was written.
 ## 1. Build the image
 
 The image is built from a context folder that `scripts/build-release-context.sh`
-assembles from Keyfleet's last commit and the shared libraries at the commits
-`shared-libs.lock` pins, plus the sealed Python supply for the graph host. The
-image can only be built from that folder, never from `platform/` itself.
+assembles from Keyfleet's last commit plus the sealed Python supply for the
+graph host. The build fetches the shared libraries from GitHub at the commits
+`mix.lock` pins. The image can only be built from that folder, never from
+`platform/` itself.
 
 1. The sealed supplies live in `/Users/sean/Documents/regent/archive/release-supply`:
    `regent-graph-host-arm64-20260926` and `regent-graph-host-amd64-20260926`.
@@ -20,8 +21,7 @@ image can only be built from that folder, never from `platform/` itself.
 2. Commit everything first: uncommitted changes are left out, and the script
    warns when there are any.
 3. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
-   if a supply does not match its checksums or a shared repository does not
-   hold its pinned commit. Fly's remote builder builds the image from this
+   if a supply does not match its checksums. Fly's remote builder builds the image from this
    folder in step 6; nothing is built on this computer.
 
 ## 2. Create the app and its volume

@@ -14,12 +14,10 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # Dependencies are fetched from mix.lock, which holds every package's checksum,
 # and native dependencies are built or fetched for the target architecture.
-# The shared Regent libraries arrive in the context at the commits
-# scripts/build-release-context.sh pins.
+# Shared Regent libraries arrive here from GitHub at the commits mix.lock pins.
 FROM native AS build
 
 ENV MIX_ENV=prod
-ENV REGENT_DEPS_ROOT=/workspace
 ENV HOME=/root
 WORKDIR /workspace/platform
 
@@ -35,11 +33,6 @@ RUN mix local.hex 2.5.1 --force && \
     --sha512 992fd755b7926fae455e5e07d9d195f4d3e7f181609eed1b9cabfe548624df10d148cd4b59bda40bebb185d3d68f9a9fd68a70b294101c8ad9cf0fadcc683d24 \
     --force
 COPY platform/mix.exs platform/mix.lock ./
-COPY elixir-utils/privy /workspace/elixir-utils/privy
-COPY elixir-utils/agent_access /workspace/elixir-utils/agent_access
-COPY elixir-utils/siwa/siwa-elixir/apps/siwa /workspace/elixir-utils/siwa/siwa-elixir/apps/siwa
-COPY regents/identity /workspace/regents/identity
-COPY design-system/regent_ui /workspace/design-system/regent_ui
 COPY platform/config config
 RUN mix deps.get --only prod --check-locked && mix deps.compile
 

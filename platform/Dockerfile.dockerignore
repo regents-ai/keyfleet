@@ -16,22 +16,6 @@
 !platform/graph_host/.python-version
 !platform/graph_host/src/**
 !platform/graph_host/third_party/**
-# The RegentUI source enters as narrowly as the build uses it: the project file
-# and modules Mix compiles, the stylesheets and scripts platform/assets imports,
-# and the images and fonts they reference. Its own tests, lockfile, tooling
-# files and digested priv/static output are not build inputs and stay out.
-!design-system/regent_ui/mix.exs
-!design-system/regent_ui/lib/**
-!design-system/regent_ui/assets/css/**
-!design-system/regent_ui/assets/js/**
-!design-system/regent_ui/assets/images/**
-!design-system/regent_ui/priv/static/images/**
-!design-system/regent_ui/priv/static/fonts/**
-!elixir-utils/privy/**
-!elixir-utils/agent_access/mix.exs
-!elixir-utils/agent_access/lib/**
-!elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs
-!elixir-utils/siwa/siwa-elixir/apps/siwa/lib/**
 !uv-cache/**
 !python-cache/**
 
@@ -42,8 +26,3 @@
 **/.env
 **/.env.*
 **/.envrc
-
-!regents/identity/**
-regents/identity/**/.env*
-regents/identity/**/_build/
-regents/identity/**/deps/

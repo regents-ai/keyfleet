@@ -21,10 +21,10 @@ person's keys are on the Account page.
 | [cli/](cli/README.md) | A pnpm workspace with one package, `@keyfleet/cli`, publishing the `keyfleet` command. It only prints usage and version today. | `make check-cli` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
 
-`make check` runs every component's check in turn. The platform check reads
-`REGENT_DEPS_ROOT` when the shared dependencies live outside the sibling layout,
-and `MIX_TEST_PARTITION` must be set for its test database; the
-[platform README](platform/README.md#checks) explains both.
+`make check` runs every component's check in turn, plus `make check-required-fixes`,
+which checks the shared libraries against ash-template's list of required fixes
+and needs `gh auth login`. The platform check needs `MIX_TEST_PARTITION` set for
+its test database; the [platform README](platform/README.md#checks) explains it.
 
 [docs/](docs/) explains deploying the fleets, reading them from the chain,
 running the keeper and the Autolaunch contracts Keyfleet uses.
@@ -40,11 +40,11 @@ running the keeper and the Autolaunch contracts Keyfleet uses.
 
 ## Shared dependencies
 
-The platform depends on three sibling repositories resolved through
-`REGENT_DEPS_ROOT`: `design-system` (the shared UI), `elixir-utils` (Privy
-verification, agent sign-in, agent access and lint checks) and
-`regents/identity` (the shared profile domain served at `/api/v1/profile`). The
-[platform README](platform/README.md#shared-dependencies) explains the layout.
+The platform uses shared libraries from three Regent repositories, each pinned
+to one commit in `platform/mix.exs`: `design-system` (the shared UI),
+`elixir-utils` (Privy verification, agent sign-in, agent access and lint checks)
+and `regents` (the shared profile domain served at `/api/v1/profile`). The
+[platform README](platform/README.md#shared-dependencies) explains how to move a pin.
 
 ## License
 

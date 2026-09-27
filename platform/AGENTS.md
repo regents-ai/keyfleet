@@ -8,5 +8,5 @@ with `mix keyfleet.sync_api_contract`.
 Follow the root instructions and the workspace's `regent-workflow`. Use the
 assignment's acceptance and applicable focused checks. Browser fixtures belong to
 the prepared local database. Shared dependencies (`design-system/regent_ui`,
-`elixir-utils/privy`, `elixir-utils/agent_access`, `elixir-utils/credo_ash`,
-`regents/identity`) resolve through `REGENT_DEPS_ROOT`.
+`elixir-utils/privy`, `elixir-utils/agent_access`, `elixir-utils/siwa`,
+`elixir-utils/credo_ash`, `regents/identity`) are git pins in `mix.exs`.

@@ -38,11 +38,9 @@ defmodule Keyfleet.ReleasePackageTest do
     output = temporary_directory("release-context-out")
 
     # A miniature stand-in for the real parent context, holding one file for
-    # every rule: package sources, the shared libraries' sources, the narrow
-    # slice of the RegentUI source the build compiles, styles and bundles from,
-    # the sealed Python supply, and the things that must never enter -- a
-    # sibling's tests, lockfile, tooling files and digested output, environment
-    # files, host build output, and everything outside the declared allowlist.
+    # every rule: package sources, the sealed Python supply, and the things that
+    # must never enter -- tests, environment files, host build output, and
+    # everything outside the declared allowlist.
     write_files(context, [
       {"platform/lib/app.ex", "defmodule App do\nend\n"},
       {"platform/config/config.exs", "import Config\n"},
@@ -72,30 +70,6 @@ defmodule Keyfleet.ReleasePackageTest do
       {"platform/.env.production", "SECRET=nope\n"},
       {"platform/.envrc", "export SECRET=nope\n"},
       {"platform/config/.env", "SECRET=nope\n"},
-      {"elixir-utils/privy/lib/privy.ex", "defmodule Privy do\nend\n"},
-      {"elixir-utils/agent_access/mix.exs", "defmodule AgentAccess.MixProject do\nend\n"},
-      {"elixir-utils/agent_access/lib/agent_access.ex", "defmodule AgentAccess do\nend\n"},
-      {"elixir-utils/agent_access/test/agent_access_test.exs", "defmodule T do\nend\n"},
-      {"elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs", "defmodule Siwa.MixProject do\nend\n"},
-      {"elixir-utils/siwa/siwa-elixir/apps/siwa/lib/siwa.ex", "defmodule Siwa do\nend\n"},
-      {"elixir-utils/siwa/siwa-elixir/apps/siwa/test/siwa_test.exs", "defmodule T do\nend\n"},
-      {"elixir-utils/siwa/siwa-elixir/apps/siwa_keyring/lib/keyring.ex", "defmodule K do\nend\n"},
-      {"elixir-utils/unrelated/lib/unrelated.ex", "defmodule Unrelated do\nend\n"},
-      {"regents/identity/lib/identity.ex", "defmodule Identity do\nend\n"},
-      {"regents/identity/.env", "SECRET=nope\n"},
-      {"regents/identity/_build/prod/lib/identity.beam", "host build output\n"},
-      {"regents/cli/lib/cli.ex", "defmodule Cli do\nend\n"},
-      {"design-system/regent_ui/mix.exs", "defmodule RegentUi.MixProject do\nend\n"},
-      {"design-system/regent_ui/lib/regent_ui.ex", "defmodule RegentUi do\nend\n"},
-      {"design-system/regent_ui/assets/css/regent.css", ":root{}\n"},
-      {"design-system/regent_ui/assets/js/regent.ts", "export const regent = 1\n"},
-      {"design-system/regent_ui/priv/static/regent/sigil-3f9a.svg", "<svg/>\n"},
-      {"design-system/regent_ui/test/regent/components_test.exs", "defmodule T do\nend\n"},
-      {"design-system/regent_ui/deps/dependency/priv/nif.so", "host build output\n"},
-      {"design-system/regent_ui/.claude/settings.json", "{}\n"},
-      {"design-system/regent_ui/mix.lock", "%{}\n"},
-      {"design-system/regent_ui/.formatter.exs", "[]\n"},
-      {"design-system/unrelated/lib/unrelated.ex", "defmodule Unrelated do\nend\n"},
       {"uv-cache/archive-v0/pydantic", "cache payload\n"},
       {"python-cache/cpython.tar.gz", "interpreter archive\n"},
       {"BUILD-INPUTS.txt", "arch=arm64\n"},
@@ -126,15 +100,6 @@ defmodule Keyfleet.ReleasePackageTest do
     assert status == 0, out
 
     assert admitted_files(output) == [
-             "design-system/regent_ui/assets/css/regent.css",
-             "design-system/regent_ui/assets/js/regent.ts",
-             "design-system/regent_ui/lib/regent_ui.ex",
-             "design-system/regent_ui/mix.exs",
-             "elixir-utils/agent_access/lib/agent_access.ex",
-             "elixir-utils/agent_access/mix.exs",
-             "elixir-utils/privy/lib/privy.ex",
-             "elixir-utils/siwa/siwa-elixir/apps/siwa/lib/siwa.ex",
-             "elixir-utils/siwa/siwa-elixir/apps/siwa/mix.exs",
              "platform/assets/js/app.ts",
              "platform/config/config.exs",
              "platform/contracts/base-mainnet.json",
@@ -151,7 +116,6 @@ defmodule Keyfleet.ReleasePackageTest do
              "platform/priv/static/app.css",
              "platform/rel/overlays/bin/migrate",
              "python-cache/cpython.tar.gz",
-             "regents/identity/lib/identity.ex",
              "uv-cache/archive-v0/pydantic"
            ]
   end

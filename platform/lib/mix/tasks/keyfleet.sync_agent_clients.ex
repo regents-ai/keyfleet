@@ -3,23 +3,21 @@ defmodule Mix.Tasks.Keyfleet.SyncAgentClients do
 
   @moduledoc """
   Keyfleet serves the SIWA agent client at `/agent/siwa_agent.py`, a
-  byte-identical copy of the file in the sibling `elixir-utils` repository at
-  the commit `shared-libs.lock` pins, the one the image is built from.
-  `priv/agent/clients.lock` records the served file's digest.
+  byte-identical copy of the file in `elixir-utils` at the commit `mix.lock` pins
+  for `siwa`, the one the image is built from. `priv/agent/clients.lock` records
+  the served file's digest.
 
       mix keyfleet.sync_agent_clients           # copy the file and record its digest
       mix keyfleet.sync_agent_clients --check   # the served file matches the lock and the commit
 
-  The repository is found the way `mix.exs` finds shared dependencies: under
-  `REGENT_DEPS_ROOT`, or else two directories above this project. Nothing is
-  fetched from the network. To upgrade, change the elixir-utils commit in
-  `shared-libs.lock`, run the task and review the diff.
+  The file is read from the `siwa` dependency's own clone, which `mix deps.get`
+  fetched. To upgrade, move the elixir-utils pin in `mix.exs`, run
+  `mix deps.update siwa`, run the task and review the diff.
   """
 
   use Mix.Task
 
   @lock_path "priv/agent/clients.lock"
-  @pins_path "shared-libs.lock"
   @files ~w(siwa_agent.py)
   @source_dir "siwa/siwa-elixir/agent"
 
@@ -67,7 +65,7 @@ defmodule Mix.Tasks.Keyfleet.SyncAgentClients do
   end
 
   defp pinned_bytes!(commit, file) do
-    repo = Path.join(deps_root(), "elixir-utils")
+    repo = Mix.Project.deps_paths() |> Map.fetch!(:siwa)
 
     # Only the file's bytes are read; git says on stderr why it couldn't.
     case System.cmd("git", ["-C", repo, "show", "#{commit}:#{@source_dir}/#{file}"]) do
@@ -77,22 +75,9 @@ defmodule Mix.Tasks.Keyfleet.SyncAgentClients do
   end
 
   defp elixir_utils_commit! do
-    pinned =
-      @pins_path
-      |> File.read!()
-      |> String.split("\n")
-      |> Enum.find_value(fn line ->
-        case String.split(line) do
-          ["elixir-utils", commit | _folders] -> commit
-          _other -> nil
-        end
-      end)
-
-    pinned || Mix.raise("#{@pins_path} pins no elixir-utils commit")
+    {:git, _url, commit, _opts} = Map.fetch!(Mix.Dep.Lock.read(), :siwa)
+    commit
   end
-
-  defp deps_root,
-    do: System.get_env("REGENT_DEPS_ROOT", Path.expand("../..", File.cwd!()))
 
   defp served_path(file), do: Path.join(Path.dirname(@lock_path), file)
 
