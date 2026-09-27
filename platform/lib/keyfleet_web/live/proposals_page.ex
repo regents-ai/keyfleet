@@ -172,10 +172,11 @@ defmodule KeyfleetWeb.ProposalsPage do
       signed_in: signed_in
     }
 
-  # What the form for a new payment starts from: each asset the budget holds.
+  # The tokens the payment form offers: USDC, then the tokens of the latest
+  # reading (REGENT, the launched token and each token an open payment names).
   defp propose(fleet, balances) do
     known = Treasury.assets(fleet)
-    %{assets: fleet |> budget_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known))}
+    %{assets: fleet |> listed_assets(balances) |> Enum.map(&pay_asset(&1, fleet, known))}
   end
 
   @doc """
@@ -219,9 +220,9 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  defp budget_assets(fleet, nil), do: [fleet.usdc_address]
+  defp listed_assets(fleet, nil), do: [fleet.usdc_address]
 
-  defp budget_assets(fleet, balances),
+  defp listed_assets(fleet, balances),
     do: Enum.uniq([fleet.usdc_address | Enum.map(balances.assets, & &1.asset)])
 
   # An asset to pay in, with the decimals amounts typed in whole tokens are
