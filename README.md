@@ -55,8 +55,8 @@ On hold or not yet done:
 - Deferred until each fleet type is next: Fibonacci late-entry capture, the
   Cascade reserve of a level that never completes, and a sensible Accelerant key
   cap.
-- Wallet buttons are built in the browser today. Moving that work to the server
-  is approved and in progress on another branch.
+- Every wallet button sends a step the server built before anyone pressed, and
+  the server follows each sent step until the chain answers.
 - There is no Fly app yet; it is created at launch.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
 - The `failed_launch_block` column on treasury readings is approved for
