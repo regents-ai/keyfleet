@@ -16,6 +16,7 @@ export default defineConfig({
     "fleet_motion.spec.ts",
     "wallet_buttons.spec.ts",
     "copy_buttons.spec.ts",
+    "content_security_policy.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

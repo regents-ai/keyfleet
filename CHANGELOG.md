@@ -76,3 +76,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   runs `make check-required-fixes`, which fetches ash-template's list of
   required fixes and its checker from GitHub, runs it against the platform, and
   needs `gh auth login`.
+
+## 2026-09-27 — Pages carry a content security policy
+
+- Every page now carries one of the template's three content security policies,
+  from `KeyfleetWeb.ContentSecurityPolicy`: the pages with the account button
+  allow what Privy's wallet sign-in loads; the public documents, the fleet
+  directory's Markdown and the "not open yet" answers get the strict reading
+  policy; the local showcase may frame its own preview. Keyfleet's pages load
+  nothing from another site beyond Privy's sign-in, so no origin was added.
+- A browser check loads the home, fleet, proposals, key and Account pages, the
+  closed page and the start of sign-in, and fails on any refusal. Privy's window
+  itself was not opened here: this machine has no Privy app to sign in to.
+- The ignore line for Regent UI images is gone; nothing produces them.

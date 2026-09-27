@@ -116,6 +116,23 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/`, `/docs`, `/about`, `/contact`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. |
 | `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
 
+## Security profiles
+
+`lib/keyfleet_web/content_security_policy.ex` holds every page's content
+security policy; the router's pipelines choose one.
+
+| Profile | Pipelines | What it allows |
+| --- | --- | --- |
+| `reading` | `:public_documents`, `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
+| `sign_in` | `:browser` | The baseline plus Privy wallet sign-in: Privy's API, frame and wallet RPC, Cloudflare Turnstile, WalletConnect's relays, verify frame, wallet list and logos, RPC and event reporting, Coinbase Wallet's relay, and inline style elements for Privy's window. |
+| `showcase` | `:local_showcase` | `sign_in` that may frame its own preview page. Local development only. |
+
+Anything else a page loads goes into the one directive of the one profile
+that needs it, as an exact origin with a comment saying why. Never add
+`https:`, `*`, a whole-domain wildcard or `'unsafe-eval'`.
+`test/browser/content_security_policy.spec.ts` loads the main pages, the
+closed page and the start of sign-in, and fails on any refusal.
+
 ## Repository layout
 
 ```text
@@ -164,7 +181,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
 | `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
-| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, against a test server and database of their own. Every run starts from the same unsold fleets. |
+| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, and that load the main pages, the closed page and the start of sign-in with nothing refused by their security policy, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs the tests that need tools outside the hermetic suite: the keeper, rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
 

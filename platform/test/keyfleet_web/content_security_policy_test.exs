@@ -1,0 +1,65 @@
+defmodule KeyfleetWeb.ContentSecurityPolicyTest do
+  use KeyfleetWeb.ConnCase, async: false
+
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors.System
+  alias KeyfleetWeb.ContentSecurityPolicy
+
+  test "a signed-in page carries the sign-in policy", %{conn: conn} do
+    assert {:ok, account} =
+             Accounts.register_verified(
+               "did:privy:csp-signed-in",
+               "0x3333333333333333333333333333333333333333",
+               ["0x3333333333333333333333333333333333333333"],
+               actor: %System{}
+             )
+
+    conn = conn |> init_test_session(%{human_account_id: account.id}) |> get("/account")
+
+    assert html_response(conn, 200) =~ ~s(id="app-shell")
+    assert policy(conn) == ContentSecurityPolicy.sign_in()
+  end
+
+  test "every page with the account button carries the sign-in policy" do
+    for path <- ~w(/ /account /app/fleets/fibonacci_syndicate /privacy /terms) do
+      conn = get(build_conn(), path)
+
+      assert conn.status == 200, "#{path} answered #{conn.status}"
+      assert policy(conn) == ContentSecurityPolicy.sign_in(), "#{path} has another policy"
+    end
+  end
+
+  test "reading pages and the fleet directory's Markdown carry the reading policy" do
+    for path <- ~w(/docs /about /contact /opportunities /fleets.md) do
+      conn = get(build_conn(), path)
+
+      assert conn.status == 200, "#{path} answered #{conn.status}"
+      assert policy(conn) == ContentSecurityPolicy.reading(), "#{path} has another policy"
+    end
+  end
+
+  test "the reading policy names no other site, and sign-in adds only Privy's sources" do
+    refute ContentSecurityPolicy.reading() =~ "://"
+    refute ContentSecurityPolicy.reading() =~ "'unsafe-eval'"
+
+    sign_in = directives(ContentSecurityPolicy.sign_in())
+    assert "https://auth.privy.io" in sign_in["connect-src"]
+    assert "https://auth.privy.io" in sign_in["frame-src"]
+    assert sign_in["frame-ancestors"] == ["'none'"]
+    refute ContentSecurityPolicy.sign_in() =~ "'unsafe-eval'"
+  end
+
+  defp policy(conn) do
+    [policy] = get_resp_header(conn, "content-security-policy")
+    policy
+  end
+
+  defp directives(policy) do
+    policy
+    |> String.split("; ")
+    |> Map.new(fn directive ->
+      [name | sources] = String.split(directive, " ")
+      {name, sources}
+    end)
+  end
+end

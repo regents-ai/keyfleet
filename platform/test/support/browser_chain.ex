@@ -195,6 +195,9 @@ defmodule Keyfleet.BrowserChain do
     :ok
   end
 
+  @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
+  def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
+
   defp last_of_level?(token_id, level),
     do:
       not Presets.fibonacci_token?(token_id + 1) or

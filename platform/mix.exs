@@ -131,7 +131,8 @@ defmodule Keyfleet.MixProject do
         # The launch plan revisions table adds two: its domain and the SystemActor check.
         # Agents' check-in records add two: their domain and the OwnProfile check.
         # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
-        "xref graph --label compile-connected --fail-above 69",
+        # The router adds one: its pipelines read the content security policies as they compile.
+        "xref graph --label compile-connected --fail-above 70",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

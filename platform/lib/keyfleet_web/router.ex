@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.Router do
   use KeyfleetWeb, :router
 
+  alias KeyfleetWeb.ContentSecurityPolicy
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -10,7 +12,11 @@ defmodule KeyfleetWeb.Router do
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug KeyfleetWeb.Plugs.LaunchGate
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    # These pages can start wallet sign-in.
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.sign_in()
+    }
   end
 
   pipeline :api do
@@ -27,7 +33,11 @@ defmodule KeyfleetWeb.Router do
   pipeline :directory do
     plug :put_format, "md"
     plug KeyfleetWeb.Plugs.LaunchGate
-    plug :put_secure_browser_headers
+
+    # Reading only: Markdown never starts sign-in.
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.reading()
+    }
   end
 
   pipeline :public_documents do
@@ -36,7 +46,11 @@ defmodule KeyfleetWeb.Router do
     plug KeyfleetWeb.Plugs.Theme
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    # Reading only: these pages never start sign-in.
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.reading()
+    }
   end
 
   def enforce_session_authority(conn, _opts) do
@@ -53,7 +67,11 @@ defmodule KeyfleetWeb.Router do
       plug KeyfleetWeb.Plugs.Theme
       plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
       plug :protect_from_forgery
-      plug :put_secure_browser_headers
+
+      # The showcase includes the sign-in window and frames its own preview.
+      plug :put_secure_browser_headers, %{
+        "content-security-policy" => ContentSecurityPolicy.showcase()
+      }
     end
 
     scope "/showcase", KeyfleetWeb do

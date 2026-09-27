@@ -63,6 +63,9 @@ export const pairKey = (fleet: string, key: number) => void call("pair!", [fleet
 /** `owner` has allowed every fleet `atoms` USDC from now on. */
 export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
 
+/** Opens the product pages, or closes them behind the launch gate. */
+export const setSurfaces = (open: boolean) => void call("surfaces!", [open])
+
 /** A transaction a page's wallet sent, as the page sent it. */
 export type SentTransaction = {from: string; to: string; data: string; value: string}
 

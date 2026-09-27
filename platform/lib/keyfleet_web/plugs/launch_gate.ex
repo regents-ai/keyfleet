@@ -7,10 +7,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   in either state. The Privacy Policy and Terms of Use stay open with them.
   """
 
-  import Phoenix.Controller, only: [get_format: 1, json: 2, put_secure_browser_headers: 1]
+  import Phoenix.Controller, only: [get_format: 1, json: 2, put_secure_browser_headers: 2]
   import Plug.Conn
 
-  alias KeyfleetWeb.HoldingController
+  alias KeyfleetWeb.{ContentSecurityPolicy, HoldingController}
 
   @doc "True while the product surfaces are open."
   def app_surfaces_enabled?, do: Application.get_env(:keyfleet, :app_surfaces, true)
@@ -36,25 +36,21 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   defp response_format(conn), do: get_format(conn)
 
   defp closed(conn, "json"),
-    do:
-      conn
-      |> put_secure_browser_headers()
-      |> unavailable()
-      |> json(%{error: "This part of the site isn't open yet."})
+    do: conn |> unavailable() |> json(%{error: "This part of the site isn't open yet."})
 
   defp closed(conn, "md"),
     do:
       conn
-      |> put_secure_browser_headers()
       |> unavailable()
       |> put_resp_content_type("text/markdown")
       |> send_resp(503, "This part of the site isn't open yet.\n")
 
-  defp closed(conn, "html"),
-    do: conn |> put_secure_browser_headers() |> unavailable() |> HoldingController.call(:show)
+  defp closed(conn, "html"), do: conn |> unavailable() |> HoldingController.call(:show)
 
+  # The closed page is a plain reading page, so it gets the strict policy.
   defp unavailable(conn) do
     conn
+    |> put_secure_browser_headers(%{"content-security-policy" => ContentSecurityPolicy.reading()})
     |> put_status(:service_unavailable)
     |> put_resp_header("retry-after", "3600")
     |> put_resp_header("cache-control", "no-store")

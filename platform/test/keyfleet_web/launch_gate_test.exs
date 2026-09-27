@@ -3,6 +3,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
   import ExUnit.CaptureLog
 
+  alias KeyfleetWeb.ContentSecurityPolicy
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
@@ -72,14 +73,22 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
   end
 
-  test "gated pages and JSON answers carry the same browser security headers as an open page" do
+  test "closed answers carry the strict reading policy and the open page's other headers" do
     open = get(build_conn(), "/account")
     close_surfaces()
 
-    assert secure_headers(get(build_conn(), "/account")) == secure_headers(open)
+    for closed <- [
+          get(build_conn(), "/account"),
+          get(build_conn(), "/auth/session"),
+          get(build_conn(), "/fleets.md")
+        ] do
+      assert get_resp_header(closed, "content-security-policy") ==
+               [ContentSecurityPolicy.reading()]
 
-    assert secure_headers(get(build_conn(), "/auth/session")) == secure_headers(open)
+      assert secure_headers(closed) == secure_headers(open)
+    end
 
+    assert get_resp_header(open, "content-security-policy") == [ContentSecurityPolicy.sign_in()]
     assert secure_headers(open) != %{}
   end
 
@@ -178,7 +187,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   defp secure_headers(conn) do
     conn.resp_headers
     |> Map.new()
-    |> Map.take(~w(content-security-policy referrer-policy x-content-type-options
-       x-permitted-cross-domain-policies x-frame-options))
+    |> Map.take(~w(referrer-policy x-content-type-options x-permitted-cross-domain-policies
+       x-frame-options))
   end
 end

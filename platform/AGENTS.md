@@ -10,3 +10,8 @@ assignment's acceptance and applicable focused checks. Browser fixtures belong t
 the prepared local database. Shared dependencies (`design-system/regent_ui`,
 `elixir-utils/privy`, `elixir-utils/agent_access`, `elixir-utils/siwa`,
 `elixir-utils/credo_ash`, `regents/identity`) are git pins in `mix.exs`.
+
+Every page's content security policy lives in
+`lib/keyfleet_web/content_security_policy.ex`; add an exact origin to the one
+profile that needs it, never a wildcard or `'unsafe-eval'`. The README's
+"Security profiles" section explains all three.
