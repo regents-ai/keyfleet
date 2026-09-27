@@ -30,8 +30,8 @@ person's keys are on the Account page.
 - A proposal stays open until more than half of all keys sold vote yes; then
   anyone can carry it out. There is no voting window, deadline or cap. A key
   bought or moved after a proposal opened cannot vote on it; a vote cast before
-  the key moved stays until someone withdraws it. Votes can be changed or
-  withdrawn.
+  the key moved stays until the key's current holder withdraws it. Votes can be
+  changed or withdrawn.
 - Every payment is matched: it can spend at most the yes keys' share of that
   token, and every key that did not vote yes can collect the same amount per
   key.
