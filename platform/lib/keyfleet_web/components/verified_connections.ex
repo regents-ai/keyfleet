@@ -6,7 +6,12 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
   alias Keyfleet.Accounts.LinkedIdentity.Providers
 
   attr :id, :string, required: true
-  attr :identities, :list, default: []
+  attr :identities, :list, default: [], doc: "nil until the account's connections are read"
+
+  attr :read_state, :atom,
+    default: :ready,
+    values: [:idle, :loading, :ready, :empty, :stale, :error]
+
   attr :notice, :map, default: nil
   attr :authenticated, :boolean, default: true
   attr :title, :string, default: "Verified connections"
@@ -17,7 +22,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
     assigns =
       assigns
       |> assign(:providers, Providers.all())
-      |> assign(:identities_by_provider, Map.new(assigns.identities, &{&1.provider, &1}))
+      |> assign(:identities_by_provider, by_provider(assigns.identities))
 
     ~H"""
     <section
@@ -42,9 +47,22 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
         >
           {@notice.message}
         </p>
+        <p :if={@read_state in [:idle, :loading] and is_nil(@identities)} role="status">
+          Loading your connections…
+        </p>
+        <p :if={@read_state == :stale} class="verified-connections__notice" role="status">
+          Your connections couldn’t be refreshed. This is what they were last time.
+        </p>
+        <p
+          :if={@read_state == :error}
+          class="verified-connections__notice verified-connections__notice--error"
+          role="alert"
+        >
+          Your connections couldn’t be loaded. Refresh the page to try again.
+        </p>
       </div>
 
-      <ul class="verified-connections__list">
+      <ul :if={@identities_by_provider} class="verified-connections__list">
         <li :for={entry <- @providers} id={"#{@id}-#{entry.provider}"}>
           <div>
             <strong>{entry.label}</strong>
@@ -83,6 +101,9 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
     </section>
     """
   end
+
+  defp by_provider(nil), do: nil
+  defp by_provider(identities), do: Map.new(identities, &{&1.provider, &1})
 
   attr :identity, :map, default: nil
 

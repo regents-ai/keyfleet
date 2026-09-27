@@ -157,7 +157,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
   test "Account owns its own page rather than relabeling the whole shell" do
     html =
       render_component(&KeyfleetWeb.AccountLive.page/1, %{
-        account_control: %AccountControl{kind: :sign_in, label: "Sign In"}
+        account_control: %AccountControl{kind: :sign_in, label: "Sign In"},
+        verified_connections: %KeyfleetWeb.Read{}
       })
 
     assert html =~ ~s(id="account-page")
@@ -221,6 +222,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-verified-connections [role=status]", "Disconnecting X")
 
     render_hook(view, "refresh_verified_connections", %{"error" => "already-connected"})
+    render_async(view)
 
     assert has_element?(
              view,
@@ -309,6 +311,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       "provider" => "github"
     })
 
+    render_async(view)
+
     assert has_element?(
              view,
              "#account-verified-connections [role=alert]",
@@ -317,6 +321,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     # A finished disconnect whose record is still there is not a disconnection.
     render_hook(view, "refresh_verified_connections", %{"action" => "unlink", "provider" => "x"})
+    render_async(view)
 
     assert has_element?(
              view,
@@ -329,12 +334,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     :ok = Accounts.remove_linked_identity(identity, actor: %System{})
     render_hook(view, "refresh_verified_connections", %{"action" => "unlink", "provider" => "x"})
+    render_async(view)
 
     assert has_element?(view, "#account-verified-connections [role=status]", "X disconnected.")
     assert has_element?(view, "#account-verified-connections-x button", "Connect")
 
     # A refresh that names no request (a plain sign-in refresh) re-reads quietly.
     render_hook(view, "refresh_verified_connections", %{"error" => nil})
+    render_async(view)
     refute has_element?(view, "#account-verified-connections [role=status]")
     refute has_element?(view, "#account-verified-connections [role=alert]")
 
@@ -344,6 +351,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       "action" => "link",
       "provider" => "x"
     })
+
+    render_async(view)
 
     assert has_element?(
              view,
@@ -368,12 +377,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
   end
 
   defp open_account(conn, account) do
-    {:ok, view, html} =
+    {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    {view, html}
+    {view, render_async(view)}
   end
 
   defp keys_listed(html),
