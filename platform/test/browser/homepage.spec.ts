@@ -129,7 +129,7 @@ test("Copy puts the instruction shown on the clipboard", async ({browser}) => {
   const shown = await page.locator("#home-instruction").evaluate(element => element.textContent!.replace(/\s+/g, " ").trim())
   await page.getByRole("button", {name: "Copy the instruction"}).click()
 
-  await expect(page.locator("#home-instruction-copied")).toHaveText("Copied")
+  await expect(page.locator("#home-instruction-copy-status")).toHaveText("Copied")
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown)
   await context.close()
 })
@@ -470,7 +470,8 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
       if (!element?.closest(".rl-hero, .rl-fleets, .rl-opportunities") || !element.matches(":focus-visible")) return null
       const style = getComputedStyle(element)
       return {
-        name: element.querySelector("h3")?.textContent?.trim() ?? element.textContent?.trim() ?? "",
+        // A fleet by its heading, a copy button by the label it shows at rest.
+        name: element.querySelector("h3, .rg-copy__idle")?.textContent?.trim() ?? element.textContent?.trim() ?? "",
         width: parseFloat(style.outlineWidth),
         outline: style.outlineStyle,
         opacity: style.opacity,

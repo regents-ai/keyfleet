@@ -19,8 +19,8 @@ import {
   shellDestinationChanged,
   type ShellState,
 } from "./shell_state"
+import {installCopyButtons} from "./copy_buttons"
 import {BuyKey} from "./hooks/buy_key"
-import {CopyText} from "./hooks/copy_text"
 import {FleetAction} from "./hooks/fleet_action"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
@@ -319,7 +319,6 @@ const hooks = {
   Arrivals,
   BuyKey,
   Cascade,
-  CopyText,
   Counter,
   FleetAction,
   FleetPreview,
@@ -354,5 +353,6 @@ void retireRefusedSession()
 liveSocket.connect()
 installAccountAuthLazyLoader()
 installCrossTabCsrf()
+installCopyButtons()
 window.liveSocket = liveSocket
 mountMotion()

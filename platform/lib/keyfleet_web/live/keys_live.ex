@@ -305,16 +305,13 @@ defmodule KeyfleetWeb.KeysLive do
     ~H"""
     <p class="key-address">
       <code>{@wallet}</code>
-      <Regent.Primitives.button
+      <Regent.Primitives.copy_button
         id={@id}
-        type="button"
-        variant="secondary"
-        phx-hook="CopyText"
-        data-copy-text={@wallet}
+        text={@wallet}
         aria-label={"Copy #{@agent}’s address"}
       >
         Copy address
-      </Regent.Primitives.button>
+      </Regent.Primitives.copy_button>
     </p>
     """
   end

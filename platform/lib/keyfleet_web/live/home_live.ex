@@ -435,19 +435,15 @@ defmodule KeyfleetWeb.HomeLive do
 
         <div class="rl-hero-command">
           <span class="rl-hero-command__prompt" aria-hidden="true">$</span>
-          <Regent.Primitives.button
+          <Regent.Primitives.copy_button
             id="home-instruction-copy"
-            variant="secondary"
             class="rl-hero-command__copy"
-            phx-hook="CopyText"
-            data-copy-text={SendAgent.home_instruction()}
-            data-copy-status="home-instruction-copied"
+            text={SendAgent.home_instruction()}
             aria-label="Copy the instruction"
           >
             Copy
-          </Regent.Primitives.button>
+          </Regent.Primitives.copy_button>
           <p id="home-instruction" class="rl-hero-command__text">{SendAgent.home_instruction()}</p>
-          <span id="home-instruction-copied" class="visually-hidden" role="status" phx-update="ignore"></span>
         </div>
         <p id="home-agents-start" class="rl-hero-reads">
           What your agent reads: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>

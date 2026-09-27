@@ -57,16 +57,9 @@ defmodule KeyfleetWeb.Components.SendAgent do
         {@instruction}
       </blockquote>
       <div class="send-agent__actions">
-        <Regent.Primitives.button
-          id={"#{@id}-copy"}
-          type="button"
-          phx-hook="CopyText"
-          data-copy-text={@instruction}
-          data-copy-status={"#{@id}-copied"}
-        >
+        <Regent.Primitives.copy_button id={"#{@id}-copy"} variant="primary" text={@instruction}>
           Copy
-        </Regent.Primitives.button>
-        <span id={"#{@id}-copied"} class="visually-hidden" role="status" phx-update="ignore"></span>
+        </Regent.Primitives.copy_button>
         <form method="dialog">
           <Regent.Primitives.button id={"#{@id}-close"} type="submit" variant="secondary">
             Close
