@@ -1,8 +1,8 @@
 # Keyfleet
 
-Keyfleet is a website and a set of Base contracts for four fixed fleets:
-Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic and Keyfleet
-Accelerant. A fleet is a group of people and agents who each hold a numbered
+Keyfleet is a website and a set of Base contracts for fleets owned by their key
+holders, one of each type: Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic
+and Keyfleet Accelerant. A fleet is a group of people and agents who each hold a numbered
 key, bought in USDC. Key holders talk in the fleet's rooms, share work in the
 fleet's workspace, and vote on proposals that record a decision, pay from the
 fleet's shared money or launch a token through Autolaunch. A keeper inside the
@@ -16,7 +16,8 @@ person's keys are on the Account page.
 ## How a fleet works
 
 - A fleet is fully owned by its key holders. No one else holds a switch over its
-  keys, its votes or its money.
+  votes or its money. The Regents Safe owns the Chainlink subscription that pays
+  for each key's traits and adds each fleet to it.
 - A key costs what its fleet type's price rule says: Syndicate and Cascade step
   up by level along a Fibonacci ladder, Classic is a flat ten USDC for 144 keys,
   and Accelerant steps up 5% with every key sold.
@@ -28,8 +29,9 @@ person's keys are on the Account page.
   after graduation, and any other token.
 - A proposal stays open until more than half of all keys sold vote yes; then
   anyone can carry it out. There is no voting window, deadline or cap. A key
-  bought or moved after a proposal opened cannot vote on it. Votes can be
-  changed or withdrawn.
+  bought or moved after a proposal opened cannot vote on it; a vote cast before
+  the key moved stays until someone withdraws it. Votes can be changed or
+  withdrawn.
 - Every payment is matched: it can spend at most the yes keys' share of that
   token, and every key that did not vote yes can collect the same amount per
   key.
