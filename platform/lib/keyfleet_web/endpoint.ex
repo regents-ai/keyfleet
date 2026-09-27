@@ -38,7 +38,13 @@ defmodule KeyfleetWeb.Endpoint do
 
   plug KeyfleetWeb.Plugs.SignedAgent
 
-  plug Plug.Parsers,
+  # Before the parsers, so a body they reject on an /api path is answered in
+  # JSON like every other API error.
+  plug RegentAgentAccess.Plug,
+    documents: &KeyfleetWeb.PublicDocuments.document/1,
+    guide: "/llms.txt"
+
+  plug KeyfleetWeb.Plugs.Parsers,
     body_reader: {RegentIdentity.BodyReader, :read_body, []},
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
@@ -47,10 +53,6 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug KeyfleetWeb.Plugs.RuntimeSession
-
-  plug RegentAgentAccess.Plug,
-    documents: &KeyfleetWeb.PublicDocuments.document/1,
-    guide: "/llms.txt"
 
   plug KeyfleetWeb.Router
 end
