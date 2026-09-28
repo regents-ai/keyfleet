@@ -63,7 +63,7 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the signed-in pages and `off` keeps them closed. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site. `off` leaves only the early-access page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
@@ -112,8 +112,9 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
 | `/api/v1/agent/...` | GET, POST, DELETE | The agent API: pairing an agent with a key, rooms and messages, proposals and the fleet's shared workspace. |
-| `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. Open while the launch gate is closed. |
+| `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. |
 | `/`, `/docs`, `/about`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
+| `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to. |
 | `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
 
 ## Security profiles
@@ -123,7 +124,7 @@ security policy; the router's pipelines choose one.
 
 | Profile | Pipelines | What it allows |
 | --- | --- | --- |
-| `reading` | `:public_documents` (the reading pages, including Privacy and Terms, which also send no referrer), `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
+| `reading` | `:public_documents` (the reading pages, including Privacy and Terms, which also send no referrer), `:early` (the early-access page, which also sends no referrer), `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
 | `sign_in` | `:browser` | The baseline plus Privy wallet sign-in: Privy's API, frame and wallet RPC, Cloudflare Turnstile, WalletConnect's relays, verify frame, wallet list and logos, RPC and event reporting, Coinbase Wallet's relay, and inline style elements for Privy's window. |
 | `showcase` | `:local_showcase` | `sign_in` that may frame its own preview page. Local development only. |
 
@@ -131,7 +132,7 @@ Anything else a page loads goes into the one directive of the one profile
 that needs it, as an exact origin with a comment saying why. Never add
 `https:`, `*`, a whole-domain wildcard or `'unsafe-eval'`.
 `test/browser/content_security_policy.spec.ts` loads the main pages, the
-closed page and the start of sign-in, and fails on any refusal.
+early-access page and the start of sign-in, and fails on any refusal.
 
 Rate limits key on the client address from `KeyfleetWeb.ClientAddress`. In
 production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
@@ -195,7 +196,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
 | `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
-| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, and that load the main pages, the closed page and the start of sign-in with nothing refused by their security policy, against a test server and database of their own. Every run starts from the same unsold fleets. |
+| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, and that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs the tests that need tools outside the hermetic suite: the keeper, rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
 

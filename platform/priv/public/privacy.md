@@ -1,7 +1,7 @@
 # Keyfleet Privacy Policy
 
-**Effective date:** September 25, 2026  
-**Version:** 1.1
+**Effective date:** September 28, 2026  
+**Version:** 1.2
 
 This Privacy Policy explains how **Regents Labs, Inc.** ("Regents Labs," "we," "us," or "our") collects, uses, discloses, and protects personal information when you use the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").
 
@@ -59,6 +59,10 @@ We do not use this information for cross-context behavioral advertising.
 ### D. Information from third parties
 
 We may receive information from Privy and other authentication or wallet providers, identity providers you connect, fraud, abuse, sanctions, and security services, and public sources.
+
+### E. Email you leave on the early-access page
+
+If you leave your email address on our early-access page, we keep it only to tell you when Keyfleet opens. We don't share or sell it. To have it removed, write to **[build@regents.sh](mailto:build@regents.sh)**.
 
 ## 4. How we use information
 

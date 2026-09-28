@@ -242,3 +242,24 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   device, a light-device visitor would land on it.
 - Each tone now has its on-sale colour mixed from the tone's own two colours,
   the same colour in light and within an unseen step of it in dark.
+
+## 2026-09-28 — Early-access page while Keyfleet is closed
+
+- New page `/early`: what Keyfleet is, and one field to leave an email address
+  and hear when it opens. It is a plain page with the site's stylesheet and no
+  scripts, so nothing of sign-in loads. An address already on the list gets the
+  same answer as a new one; a form a program filled in stores nothing; each
+  client address gets five tries in ten minutes.
+- Addresses are kept in the new `early_signups` table (migration
+  `20260928201737_early_signups`), trimmed and lowercased, once each.
+- With `KEYFLEET_APP_SURFACES=off` the site is now that page and nothing else.
+  `/early`, `/privacy`, `/terms`, `/healthz`, `/robots.txt`, `/sitemap.xml`
+  (listing only the three pages) and `/.well-known/security.txt` stay open,
+  with the static files. Every other page, the homepage included, sends
+  visitors to `/early`; every other address answers 503, among them the API,
+  sign-in and signing out, key metadata, the agent guides, the fleet directory
+  and the HTTP contract. The rule lives in one place, the launch gate in the
+  endpoint; the router's pipelines no longer carry it, and the "Not open yet"
+  page is gone.
+- The Privacy Policy (version 1.2, effective September 28, 2026) says what the
+  early-access email is kept for and how to have it removed.
