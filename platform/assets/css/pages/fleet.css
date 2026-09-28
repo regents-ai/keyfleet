@@ -111,7 +111,8 @@
 
 .fleet-menu__list[hidden],
 .fleet-about[hidden],
-.fleet-now[hidden] {
+.fleet-now[hidden],
+.fleet-buy-offer[hidden] {
   display: none;
 }
 
