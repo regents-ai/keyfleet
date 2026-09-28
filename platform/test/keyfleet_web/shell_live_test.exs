@@ -6,7 +6,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
+  alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.Proposals
+  alias Keyfleet.Rooms
   alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.RouteCatalog
 
@@ -375,6 +378,25 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#route-content h1", "Account")
   end
+
+  test "a patch to another fleet's page stops hearing the fleet it left", %{conn: conn} do
+    Fleets.bootstrap_catalog!()
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic/rooms/general")
+    assert topics(view) == [Rooms.fleet_topic("fleet_tech_classic")]
+
+    render_patch(view, "/app/fleets/fibonacci_cascade")
+
+    assert topics(view) ==
+             Enum.sort([
+               Keys.topic("fibonacci_cascade"),
+               Rooms.fleet_topic("fibonacci_cascade"),
+               Graph.head_topic("fibonacci_cascade"),
+               Proposals.topic("fibonacci_cascade")
+             ])
+  end
+
+  defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
 
   defp open_account(conn, account) do
     {:ok, view, _html} =

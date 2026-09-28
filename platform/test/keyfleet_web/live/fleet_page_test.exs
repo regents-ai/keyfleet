@@ -194,8 +194,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "its rooms, workspace and proposals lead back to its page", %{conn: conn} do
       Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
+      {:ok, view, _html} = live(conn, @path)
+
       for page <- ~w(/rooms/general /workspace /workspace/task%231 /proposals /proposals/1) do
         assert {:error, {:live_redirect, %{to: @path}}} = live(conn, @path <> page)
+
+        # Reached from inside the shell, the same page patches back.
+        render_patch(view, @path <> page)
+        assert_patch(view, @path)
+        assert has_element?(view, "#fleet-soon-title", "Coming soon")
       end
     end
 

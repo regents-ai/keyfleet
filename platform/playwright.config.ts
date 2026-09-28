@@ -17,6 +17,7 @@ export default defineConfig({
     "wallet_buttons.spec.ts",
     "copy_buttons.spec.ts",
     "content_security_policy.spec.ts",
+    "shell_links.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

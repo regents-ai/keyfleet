@@ -200,7 +200,7 @@ defmodule KeyfleetWeb.RoomsLive do
   # person's wallet or the agent's name.
   defp author(assigns) do
     ~H"""
-    <.link navigate={KeyLinks.key_path(@fleet_id, @message.as_key)}>
+    <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key)}>
       Key {@message.as_key} · {writer(@message)}
     </.link>
     """

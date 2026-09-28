@@ -174,7 +174,7 @@ defmodule KeyfleetWeb.FleetLive do
                 hidden
               >
                 <li :for={room <- @fleet.rooms}>
-                  <.link navigate={"/app/fleets/#{@fleet.fleet_id}/rooms/#{room.slug}"}>
+                  <.link patch={"/app/fleets/#{@fleet.fleet_id}/rooms/#{room.slug}"}>
                     {RoomsLive.room_label(room)}
                   </.link>
                 </li>
@@ -184,14 +184,14 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-workspace-link"
               class="rg-button rg-button--secondary"
-              navigate={"/app/fleets/#{@fleet.fleet_id}/workspace"}
+              patch={"/app/fleets/#{@fleet.fleet_id}/workspace"}
             >
               Workspace
             </.link>
             <.link
               id="fleet-proposals-link"
               class="rg-button rg-button--secondary"
-              navigate={"/app/fleets/#{@fleet.fleet_id}/proposals"}
+              patch={"/app/fleets/#{@fleet.fleet_id}/proposals"}
             >
               Proposals
             </.link>
@@ -426,9 +426,9 @@ defmodule KeyfleetWeb.FleetLive do
           Show earlier
         </Regent.Primitives.button>
         <p :if={@now.earlier == :elsewhere} id="fleet-now-elsewhere" class="fleet-detail">
-          See everything in the <.link navigate={"/app/fleets/#{@fleet.fleet_id}/rooms/general"}>rooms</.link>,
-          <.link navigate={"/app/fleets/#{@fleet.fleet_id}/workspace"}>workspace</.link>
-          and <.link navigate={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
+          See everything in the <.link patch={"/app/fleets/#{@fleet.fleet_id}/rooms/general"}>rooms</.link>,
+          <.link patch={"/app/fleets/#{@fleet.fleet_id}/workspace"}>workspace</.link>
+          and <.link patch={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
         </p>
       </section>
     </aside>
@@ -507,7 +507,7 @@ defmodule KeyfleetWeb.FleetLive do
         </ul>
       </section>
 
-      <.link id="fleet-trying-workspace" navigate={"/app/fleets/#{@fleet_id}/workspace"}>
+      <.link id="fleet-trying-workspace" patch={"/app/fleets/#{@fleet_id}/workspace"}>
         Open the workspace
       </.link>
     </section>
@@ -538,7 +538,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp trying_item(%{part: {:item, id, title}} = assigns) do
     assigns = assign(assigns, id: id, title: title)
 
-    ~H|<.link navigate={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
+    ~H|<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
   end
 
   attr :id, :string, required: true
@@ -597,7 +597,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:item, id, title}} = assigns) when is_binary(title) do
     assigns = assign(assigns, id: id, title: title)
 
-    ~H|“<.link navigate={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>”|
+    ~H|“<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>”|
   end
 
   defp activity_part(%{part: {:item, _id, nil}, first?: true} = assigns), do: ~H"An item"
@@ -606,7 +606,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:room, slug, name}} = assigns) do
     assigns = assign(assigns, slug: slug, name: name)
 
-    ~H|<.link navigate={"/app/fleets/#{@fleet_id}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
+    ~H|<.link patch={"/app/fleets/#{@fleet_id}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
   end
 
   defp activity_part(%{part: {:agent, name}} = assigns) do
@@ -622,7 +622,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:proposal, number}} = assigns) do
     assigns = assign(assigns, :number, number)
 
-    ~H|<.link navigate={ProposalsPage.detail_path(@fleet_id, @number)} data-proposal={@number}>{ActivityLines.proposal_name(
+    ~H|<.link patch={ProposalsPage.detail_path(@fleet_id, @number)} data-proposal={@number}>{ActivityLines.proposal_name(
   @number
 )}</.link>|
   end

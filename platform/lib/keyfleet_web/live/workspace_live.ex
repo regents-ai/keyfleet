@@ -31,7 +31,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <article id="workspace-page" class="workspace-page">
       <header class="workspace-heading">
         <p class="workspace-kicker">
-          <.link navigate={"/app/fleets/#{@board.fleet_id}"}>{@board.fleet_name}</.link>
+          <.link patch={"/app/fleets/#{@board.fleet_id}"}>{@board.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Workspace</h1>
         <p class="workspace-lede">
@@ -154,7 +154,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <.link :if={@item.ready?} patch={"/app/fleets/#{@item.fleet_id}/workspace"}>
             {@item.fleet_name} workspace
           </.link>
-          <.link :if={not @item.ready?} navigate={"/app/fleets/#{@item.fleet_id}"}>
+          <.link :if={not @item.ready?} patch={"/app/fleets/#{@item.fleet_id}"}>
             {@item.fleet_name}
           </.link>
         </p>
@@ -233,7 +233,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <p :if={@item.object.discussion == []}>No room messages point here yet.</p>
           <ul :if={@item.object.discussion != []} id="workspace-discussion" class="workspace-lines">
             <li :for={message <- @item.object.discussion}>
-              <.link :if={message.path} navigate={message.path}>
+              <.link :if={message.path} patch={message.path}>
                 Message {message.seq} in {message.room}
               </.link>
               <span :if={is_nil(message.path)}>Message {message.seq} in {message.room}</span>
@@ -281,14 +281,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <li :for={proposal <- @proposed.proposals} data-proposal={proposal.number}>
         <span>
           Proposed as
-          <.link navigate={ProposalsPage.detail_path(@fleet_id, proposal.number)}>Proposal {proposal.number}</.link>
+          <.link patch={ProposalsPage.detail_path(@fleet_id, proposal.number)}>Proposal {proposal.number}</.link>
           ({ProposalsLive.status_word(proposal)}), version {proposal.version}
         </span>
       </li>
     </ul>
     <p :if={@proposed.older?} id="workspace-proposed-older">
       Earlier proposals point to this plan too.
-      <.link navigate={ProposalsPage.list_path(@fleet_id)}>See every proposal</.link>
+      <.link patch={ProposalsPage.list_path(@fleet_id)}>See every proposal</.link>
     </p>
     """
   end
@@ -362,7 +362,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   # A key's page is named by its number, eighteen digits at most.
   defp key(%{token_id: token_id} = assigns) when token_id in 1..999_999_999_999_999_999,
-    do: ~H|<.link navigate={"/app/keys/#{@fleet_id}/#{@token_id}"}>Key {@token_id}</.link>|
+    do: ~H|<.link patch={"/app/keys/#{@fleet_id}/#{@token_id}"}>Key {@token_id}</.link>|
 
   defp key(assigns), do: ~H|<span>Key {@token_id}</span>|
 

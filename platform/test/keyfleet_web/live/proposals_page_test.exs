@@ -80,7 +80,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 7 keys sold")
 
     view |> element(~s([data-proposal="2"] a)) |> render_click()
-    assert_redirect(view, "/app/fleets/#{@fleet}/proposals/2")
+    assert_patch(view, "/app/fleets/#{@fleet}/proposals/2")
   end
 
   # A key may vote again, and only its latest vote counts; a key sold later

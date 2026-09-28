@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <article id="proposals-page" class="proposals-page">
       <header class="proposals-heading">
         <p class="proposals-kicker">
-          <.link navigate={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
+          <.link patch={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Proposals</h1>
         <p :if={@page.treasury} class="proposals-lede">
@@ -95,7 +95,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               </span>
             </p>
             <h3>
-              <.link navigate={ProposalsPage.detail_path(@page.fleet_id, proposal.number)}>
+              <.link patch={ProposalsPage.detail_path(@page.fleet_id, proposal.number)}>
                 Proposal {proposal.number}
               </.link>
             </h3>
@@ -146,7 +146,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <.detail_heading page={@page} />
       <section id="proposal-missing" class="proposals-panel">
         <h2>There is no proposal {@page.number} in this fleet yet.</h2>
-        <.link navigate={ProposalsPage.list_path(@page.fleet_id)}>See every proposal</.link>
+        <.link patch={ProposalsPage.list_path(@page.fleet_id)}>See every proposal</.link>
       </section>
     </article>
     """
@@ -982,7 +982,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     ~H"""
     <header class="proposals-heading">
       <p class="proposals-kicker">
-        <.link navigate={ProposalsPage.list_path(@page.fleet_id)}>
+        <.link patch={ProposalsPage.list_path(@page.fleet_id)}>
           {@page.fleet_name} proposals
         </.link>
       </p>
@@ -1031,11 +1031,11 @@ defmodule KeyfleetWeb.ProposalsLive do
       </p>
       <div :if={@plan.found?} class="proposals-plan">
         <p id="proposal-plan-version">
-          This launch points to <.link navigate={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>{@plan.title}</.link>, version {@plan.version}.
+          This launch points to <.link patch={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>{@plan.title}</.link>, version {@plan.version}.
         </p>
         <p :if={@plan.changed?} id="proposal-plan-changed" class="proposals-detail">
           The plan has changed since; this proposal carries version {@plan.version}.
-          <.link navigate={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>
+          <.link patch={WorkspacePage.item_path(@fleet_id, @plan.object_id)}>
             See the plan as it is now
           </.link>
         </p>

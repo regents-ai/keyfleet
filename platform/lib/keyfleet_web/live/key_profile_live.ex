@@ -221,7 +221,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <.link
         :if={@profile.yours?}
         id="key-profile-manage"
-        navigate={"/app/keys/#{@profile.fleet_id}/#{@profile.token_id}"}
+        patch={"/app/keys/#{@profile.fleet_id}/#{@profile.token_id}"}
       >
         Manage agents
       </.link>
@@ -419,7 +419,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>
           <p class="rooms-detail">
             In
-            <.link navigate={"/app/fleets/#{@profile.fleet_id}/rooms/#{post.room.slug}"}>
+            <.link patch={"/app/fleets/#{@profile.fleet_id}/rooms/#{post.room.slug}"}>
               {RoomsLive.room_label(post.room)}
             </.link>
             on {RoomsLive.stamp(post.inserted_at)}

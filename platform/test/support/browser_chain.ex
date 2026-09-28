@@ -31,8 +31,12 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
+  alias Keyfleet.Rooms
+  alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
 
   @system %System{}
@@ -193,6 +197,50 @@ defmodule Keyfleet.BrowserChain do
     owner = %Human{human_account_id: 1, wallet_addresses: [request.owner_wallet]}
     Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
     :ok
+  end
+
+  @doc """
+  Gives a deployed fleet something on each of its pages to link to the
+  others: a key sold to `owner` says something in the General room, the
+  workspace holds a launch plan that discusses that message and a task
+  assigned to the key, and launch proposal 1 points to the plan. Returns the
+  key's number.
+  """
+  def furnish!(fleet_id, owner) do
+    Rooms.bootstrap_rooms!([fleet_id])
+    token_id = sell!(fleet_id, owner)
+
+    message =
+      Rooms.send_message!(
+        %{
+          fleet_id: fleet_id,
+          slug: "general",
+          body: "The plan is in the workspace.",
+          idempotency_key: Ash.UUID.generate()
+        },
+        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
+      )
+
+    WorkspaceFixtures.open_log(fleet_id)
+
+    plan =
+      WorkspaceFixtures.create(fleet_id, "launch_card", %{
+        "title" => "Research plan",
+        "discussion" => [%{"room" => "general", "seq" => message.seq}]
+      })
+
+    WorkspaceFixtures.create(fleet_id, "task", %{
+      "title" => "Draft the brief",
+      "assignee_key" => token_id
+    })
+
+    [revision] = Graph.current_launch_plan_revisions!(fleet_id, [%{object_id: plan, version: 1}])
+
+    fleet_id
+    |> ProposalHelpers.proposal!(1, kind: :autolaunch, digest: revision.digest)
+    |> ProposalHelpers.launch_envelope!()
+
+    token_id
   end
 
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."

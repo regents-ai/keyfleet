@@ -63,6 +63,13 @@ export const pairKey = (fleet: string, key: number) => void call("pair!", [fleet
 /** `owner` has allowed every fleet `atoms` USDC from now on. */
 export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
 
+/**
+ * Gives a deployed fleet a key sold to `owner` that says something in the
+ * General room, a launch plan discussing it and a task assigned to the key in
+ * the workspace, and launch proposal 1 pointing to the plan. Returns the key.
+ */
+export const furnishFleet = (fleet: string, owner: string) => Number(call("furnish!", [fleet, owner]))
+
 /** Opens the product pages, or closes them behind the launch gate. */
 export const setSurfaces = (open: boolean) => void call("surfaces!", [open])
 
