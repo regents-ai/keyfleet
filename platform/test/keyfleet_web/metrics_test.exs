@@ -31,6 +31,20 @@ defmodule KeyfleetWeb.MetricsTest do
     assert Req.Response.get_header(response, "content-type") == ["text/plain; charset=utf-8"]
   end
 
+  test "exposes the chain requests that got no answer", %{url: url} do
+    :telemetry.execute([:keyfleet, :chain, :failure], %{count: 1}, %{
+      method: "eth_getTransactionReceipt",
+      class: "timeout",
+      chain_id: 8_453,
+      scope: "wallet"
+    })
+
+    body = Req.get!(url <> "/metrics", retry: false).body
+
+    assert body =~
+             ~s(keyfleet_chain_failure_total{chain_id="8453",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
+  end
+
   test "exposes the keeper's transactions, pauses, balance, spending and reveals", %{url: url} do
     :telemetry.execute([:keyfleet, :keeper, :tx], %{count: 1}, %{
       function: :request_reveal,

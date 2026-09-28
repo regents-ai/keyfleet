@@ -25,6 +25,12 @@ config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interva
 # reaches a page.
 config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
 
+# The node the server reads each chain through, by chain id: the steps a
+# page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
+# the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
+# such as a private node or a lab fork, and this address never reaches a page.
+config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
+
 # The keeper sends through the same node, and looks for each receipt once a
 # second. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY` is set.
 config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.RpcNode, receipt_poll_ms: 1_000

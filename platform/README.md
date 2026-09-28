@@ -67,6 +67,7 @@ production.
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
+| `KEYFLEET_RPC_URL` | For the fleet reader | The Base node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets are still given Base's public address. Unset, the fleet reader does not run and sent steps are read from Base's public node. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | No | Error reporting. Unset means no reporting. |
 | `KEYFLEET_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |

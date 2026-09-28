@@ -21,6 +21,10 @@ config :keyfleet, :privy_verifier, Keyfleet.TestPrivyVerifier
 # point this at it; a browser test server may name a local one.
 config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://127.0.0.1:4100")
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
+
+# Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,
+# or a lab chain's anvil (`Keyfleet.AnvilLab`).
+config :keyfleet, :chain_nodes, %{}
 config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.StubNode, receipt_poll_ms: 0
 
 config :keyfleet, Keyfleet.Traits,

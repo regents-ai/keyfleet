@@ -1,0 +1,55 @@
+defmodule Keyfleet.ChainClient do
+  @moduledoc """
+  JSON-RPC reads at the latest block of the chain a review names.
+
+  `RegentChain.Outcome` reads sent steps through `transaction/2` and `receipt/2`.
+  Every read is at `latest`: never count confirmations and never wait for `safe`
+  or `finalized`. The node is the site's own for the chain (`:chain_nodes`), never
+  the public address a wallet adds the chain with, and never from the browser, so a
+  private node or a lab fork reads what the site's steps sent.
+  """
+
+  @doc "The transaction sent as `hash`, or `nil` while the chain does not know it."
+  def transaction(chain, hash), do: rpc(chain, "eth_getTransactionByHash", [hash])
+
+  @doc "The receipt for `hash`, or `nil` while it has not landed."
+  def receipt(chain, hash), do: rpc(chain, "eth_getTransactionReceipt", [hash])
+
+  @doc """
+  One JSON-RPC request to the chain's node. Every request that gets no answer
+  is counted in `keyfleet.chain.failure.total` (`KeyfleetWeb.Telemetry`).
+  """
+  def rpc(%{chain_id: chain_id} = chain, method, params) do
+    url = :keyfleet |> Application.fetch_env!(:chain_nodes) |> Map.fetch!(chain_id)
+
+    case Req.post(url,
+           json: %{jsonrpc: "2.0", id: 1, method: method, params: params},
+           retry: false,
+           receive_timeout: 5_000
+         ) do
+      {:ok, %{status: 200, body: %{"result" => result}}} -> {:ok, result}
+      {:ok, %{body: %{"error" => error}}} -> failed(chain, method, {:rpc, error})
+      {:ok, %{status: status}} -> failed(chain, method, {:http, status})
+      {:error, error} -> failed(chain, method, error)
+    end
+  end
+
+  defp failed(chain, method, reason) do
+    :telemetry.execute([:keyfleet, :chain, :failure], %{count: 1}, %{
+      method: method,
+      class: class(reason),
+      chain_id: chain.chain_id,
+      scope: "wallet"
+    })
+
+    {:error, reason}
+  end
+
+  defp class({:rpc, _error}), do: "rpc"
+  defp class({:http, status}), do: "http_#{status}"
+
+  defp class(%Req.TransportError{reason: reason}) when reason in [:timeout, :connect_timeout],
+    do: "timeout"
+
+  defp class(_transport), do: "transport"
+end

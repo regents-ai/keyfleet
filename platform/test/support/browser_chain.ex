@@ -18,7 +18,7 @@ defmodule Keyfleet.BrowserChain do
   (`offer_rewards!/3`) has them waiting, and for any other key the node
   fails. A wallet has allowed a fleet the USDC `allow!/2` names, and none
   until then. A step a page's wallet sent is on the chain once `land!/3`
-  puts it there.
+  puts it on the server's `Keyfleet.TestChainNode`.
   """
 
   alias Keyfleet.Actors.Agent
@@ -36,6 +36,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
 
@@ -123,7 +124,7 @@ defmodule Keyfleet.BrowserChain do
   it asked when `succeeded`.
   """
   def land!(hash, transaction, succeeded) do
-    StubClient.share_transaction(
+    TestChainNode.land(
       hash,
       %{
         "chainId" => quantity(@chain_id),

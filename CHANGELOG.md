@@ -198,3 +198,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `{"error": {"code"}}` until that library changes.
 - The YAML contract, `openapi.json`, `/docs`, `/skill.md`, `/llms.txt` and the
   tests describe and check only this shape.
+
+## 2026-09-28 — Sent steps read through the site's own node
+
+- `Keyfleet.ChainClient`, from the template at `97df7c9`, reads what a page's
+  wallet sent through the site's own node for the chain (`:chain_nodes`), never
+  the public address a wallet adds the chain with. `KEYFLEET_RPC_URL` sets
+  Base's node in development and production, so a press on a Base-fork lab
+  shows done; unset, Base's public node is read.
+- `Keyfleet.Chain.Client` and `Keyfleet.Chain.RpcClient` serve the fleet reader
+  alone; they no longer read transactions or receipts.
+- A chain request that gets no answer is counted in
+  `keyfleet.chain.failure.total`.
+- Tests land sent steps on `Keyfleet.TestChainNode`, a local node the suite and
+  the browser test server start; a lab anvil is the node for its own chain.

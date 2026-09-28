@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.OnchainSteps do
   import Phoenix.Component, only: [assign: 2]
   import Phoenix.LiveView, only: [push_event: 3, start_async: 3]
 
-  alias Keyfleet.Chain
+  alias Keyfleet.ChainClient
   alias RegentChain.{Outcome, Presses}
 
   @recheck_ms 2_000
@@ -183,11 +183,9 @@ defmodule KeyfleetWeb.OnchainSteps do
   defp check(socket, %{step: nil}), do: socket
 
   defp check(socket, %{hash: hash, reads: reads, review: review, step: step}) do
-    client = Chain.Client.configured()
-
     start_async(socket, {:onchain_step, hash}, fn ->
       if reads > 0, do: Process.sleep(@recheck_ms)
-      Outcome.of(client, review, step, hash)
+      Outcome.of(ChainClient, review, step, hash)
     end)
   end
 

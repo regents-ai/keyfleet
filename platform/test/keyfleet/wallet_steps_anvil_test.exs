@@ -11,7 +11,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   use ExUnit.Case, async: false
 
   alias Keyfleet.Actors.{Human, System}
-  alias Keyfleet.{AnvilLab, ChainHelpers, Fleets, ProposalHelpers, Repo, WalletSteps}
+  alias Keyfleet.{AnvilLab, ChainClient, ChainHelpers, Fleets, ProposalHelpers, Repo, WalletSteps}
   alias Keyfleet.Chain.RpcClient
   alias RegentChain.{Call, Outcome, Review}
 
@@ -334,7 +334,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   defp outcome(review, name, hash),
-    do: Outcome.of(RpcClient, review, Review.find(review, name), hash)
+    do: Outcome.of(ChainClient, review, Review.find(review, name), hash)
 
   # --- reading the lab -------------------------------------------------
 

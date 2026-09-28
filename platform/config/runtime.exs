@@ -54,6 +54,14 @@ if config_env() != :test do
   config :keyfleet, Keyfleet.Chain, rpc_url: rpc_url
 end
 
+# The fleets live on the one wallet chain, and the server reads what a page's
+# wallet sent through the same node as the fleets, so a lab fork sees it.
+if config_env() != :test and rpc_url do
+  [chain_id] = :keyfleet |> Application.fetch_env!(:wallet_chains) |> Map.keys()
+  nodes = Application.fetch_env!(:keyfleet, :chain_nodes)
+  config :keyfleet, :chain_nodes, Map.put(nodes, chain_id, rpc_url)
+end
+
 # Only production reads the keeper's key, and signs through the same node;
 # development and tests never start the keeper. The key is never printed,
 # not even when it is malformed.

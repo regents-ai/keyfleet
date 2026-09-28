@@ -54,6 +54,8 @@ an operator fixes the record by hand, as below.
 
    With no `KEYFLEET_RPC_URL` the reader does not run. A node on any chain other
    than the one the manifest names is refused and logged, and nothing is read.
+   The site also reads what a page's wallet buttons sent through this node
+   (`:chain_nodes`); unset, it reads them from Base's public node.
 
 2. Bind the fleet to its deployment. Each fleet is deployed and recorded on its
    own, so this runs once per fleet. Copy the deployed manifest that

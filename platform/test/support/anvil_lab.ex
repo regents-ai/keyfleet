@@ -17,10 +17,12 @@ defmodule Keyfleet.AnvilLab do
   @contracts Path.expand("../../../contracts", __DIR__)
   @script "script/KeeperLab.s.sol:KeeperLab"
   @base_fee "10000000"
+  # Anvil's own chain id.
+  @chain_id 31_337
 
   @doc """
-  Starts an anvil, waits until it answers, and points the keeper's node at
-  it. Returns its URL.
+  Starts an anvil, waits until it answers, and points the keeper's node and
+  the site's node for the lab chain (`:chain_nodes`) at it. Returns its URL.
   """
   def start! do
     port = free_port()
@@ -36,14 +38,17 @@ defmodule Keyfleet.AnvilLab do
 
     {:os_pid, os_pid} = Port.info(anvil, :os_pid)
     chain = Application.fetch_env!(:keyfleet, Keyfleet.Chain)
+    nodes = Application.fetch_env!(:keyfleet, :chain_nodes)
 
     on_exit(fn ->
       System.cmd("kill", ["#{os_pid}"])
       Application.put_env(:keyfleet, Keyfleet.Chain, chain)
+      Application.put_env(:keyfleet, :chain_nodes, nodes)
     end)
 
     answering!(url, 150)
     Application.put_env(:keyfleet, Keyfleet.Chain, Keyword.put(chain, :rpc_url, url))
+    Application.put_env(:keyfleet, :chain_nodes, Map.put(nodes, @chain_id, url))
     url
   end
 

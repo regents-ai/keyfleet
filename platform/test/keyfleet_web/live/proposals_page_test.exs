@@ -3,12 +3,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
-  alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals
+  alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
 
@@ -20,11 +20,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   @votes "0x" <> String.duplicate("9", 40)
   @fleet_contract "0x" <> String.duplicate("7", 40)
   @rule KeyfleetWeb.ProposalsLive.approval_rule()
-  @head %{
-    number: 1_000,
-    hash: "0x" <> String.duplicate("c", 64),
-    timestamp: ~U[2026-09-27 12:00:00Z]
-  }
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -772,7 +767,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert_push_event(view, "onchain-steps:review", %{review: %{steps: [yes | _]} = review})
 
     hash = "0x" <> String.duplicate("4", 64)
-    StubClient.put_chain(@head, [], transactions: %{hash => landed(review, yes, "0x0")})
+    TestChainNode.land!(hash, review, yes, "0x0")
 
     view
     |> with_target("#proposal-vote-action")
@@ -1298,17 +1293,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   defp active!(view, panel, wallet) do
     view |> with_target(panel) |> render_hook("onchain_active_wallet", %{"address" => wallet})
     render_async(view)
-  end
-
-  # A step sent as the review built it, landed with `status`.
-  defp landed(review, step, status) do
-    {%{
-       "chainId" => "0x" <> Integer.to_string(review.chain.chain_id, 16),
-       "from" => review.signer,
-       "to" => step.to,
-       "input" => step.data,
-       "value" => step.value
-     }, %{"status" => status}}
   end
 
   defp options(html) do

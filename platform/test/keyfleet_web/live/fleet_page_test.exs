@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Keys
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
+  alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.WorkspacePage
   alias RegentChain.Call
@@ -293,7 +294,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       })
 
       hash = "0x" <> String.duplicate("1", 64)
-      chain!(allowance: 42_998_170, transactions: %{hash => landed(review, approve, "0x1")})
+      chain!(allowance: 42_998_170)
+      TestChainNode.land!(hash, review, approve, "0x1")
 
       view
       |> with_target("#buy-key-order")
@@ -332,7 +334,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
 
       hash = "0x" <> String.duplicate("2", 64)
-      chain!(allowance: 42_998_170, transactions: %{hash => landed(review, buy, "0x0")})
+      chain!(allowance: 42_998_170)
+      TestChainNode.land!(hash, review, buy, "0x0")
 
       view
       |> with_target("#buy-key-order")
@@ -459,7 +462,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
       hash = "0x" <> String.duplicate("3", 64)
-      chain!(allowance: 10_000_000, transactions: %{hash => landed(review, buy, "0x1")})
+      chain!(allowance: 10_000_000)
+      TestChainNode.land!(hash, review, buy, "0x1")
 
       view
       |> with_target("#buy-key-order")
@@ -1243,14 +1247,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     render_async(view)
   end
 
-  # The chain the buy steps read: the wallet's USDC allowance to the fleet,
-  # and each sent transaction with its receipt.
+  # The chain the buy steps read: the wallet's USDC allowance to the fleet.
   defp chain!(opts) do
     allowance = Call.selector("allowance(address,address)")
 
     StubClient.put_chain(chain_head(1_000), [],
-      calls: fn _to, data, _hash -> answer(data, allowance, opts) end,
-      transactions: Keyword.get(opts, :transactions, %{})
+      calls: fn _to, data, _hash -> answer(data, allowance, opts) end
     )
   end
 
@@ -1258,17 +1260,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     if String.starts_with?(data, allowance),
       do: {:ok, <<Keyword.fetch!(opts, :allowance)::256>>},
       else: {:error, :no_answer}
-  end
-
-  # A step sent as the review built it, landed with `status`.
-  defp landed(review, step, status) do
-    {%{
-       "chainId" => "0x" <> Integer.to_string(review.chain.chain_id, 16),
-       "from" => review.signer,
-       "to" => step.to,
-       "input" => step.data,
-       "value" => step.value
-     }, %{"status" => status}}
   end
 
   defp text(view, selector) do

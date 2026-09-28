@@ -75,20 +75,6 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  @impl true
-  def transaction(_chain, hash), do: found("eth_getTransactionByHash", hash)
-
-  @impl true
-  def receipt(_chain, hash), do: found("eth_getTransactionReceipt", hash)
-
-  defp found(method, hash) do
-    case request(method, [hash]) do
-      {:ok, found} when is_map(found) or is_nil(found) -> {:ok, found}
-      {:ok, _other} -> {:error, :invalid_answer}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
   defp block(tag) do
     case request("eth_getBlockByNumber", [tag, false]) do
       {:ok, %{"hash" => "0x" <> digits = hash} = header} when byte_size(digits) == 64 ->

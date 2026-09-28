@@ -44,7 +44,7 @@ export default defineConfig({
     command: [
       `${env} mix ecto.create --quiet`,
       `${env} mix run -e 'Keyfleet.LocalDatabaseFixture.ensure_human_accounts!()'`,
-      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!()'`,
+      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!(); Keyfleet.TestChainNode.start!()'`,
     ].join(" && "),
     url: `${baseURL}/`,
     reuseExistingServer: false,

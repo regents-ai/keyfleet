@@ -24,6 +24,8 @@ defmodule KeyfleetWeb.Telemetry do
   def prometheus_metrics do
     [
       counter("keyfleet.privy.browser_failure.total", tags: [:reason]),
+      # Each chain request `Keyfleet.ChainClient` sent that got no answer.
+      counter("keyfleet.chain.failure.total", tags: [:method, :class, :chain_id, :scope]),
       # Each keeper transaction's outcome, each time the keeper stopped or
       # paused sending, its wallet's balance and last 24 hours' spending, and
       # for each fleet its VRF subscription's balance and how many of the

@@ -31,18 +31,6 @@ defmodule Keyfleet.Chain.Client do
   @callback call(to :: String.t(), data :: String.t(), block_hash :: String.t()) ::
               {:ok, binary()} | {:error, term()}
 
-  @doc """
-  The transaction sent as `hash`, as `eth_getTransactionByHash` answers at
-  `latest`, or `nil` while the node does not know it. `chain` is the chain a
-  server-built wallet step names, which is always the fleet's and so this
-  node's; `RegentChain.Outcome` reads sent steps through this and `receipt/2`.
-  """
-  @callback transaction(chain :: map(), hash :: String.t()) ::
-              {:ok, map() | nil} | {:error, term()}
-
-  @doc "The receipt of `hash` at `latest`, or `nil` while it has not landed."
-  @callback receipt(chain :: map(), hash :: String.t()) :: {:ok, map() | nil} | {:error, term()}
-
   @doc "The client this application is configured with."
   def configured, do: Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:client]
 end
