@@ -12,6 +12,26 @@
   line-height: 1.55;
 }
 
+/* The first stop for a keyboard: out of sight until it has focus. */
+.shell-skip {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-start: 0.5rem;
+  z-index: 20;
+  padding: 0.5rem 0.75rem;
+  background: var(--ash-ground);
+  color: var(--ash-ink);
+  transform: translateY(-200%);
+}
+
+.shell-skip:focus {
+  transform: none;
+}
+
+#route-content:focus {
+  outline: none;
+}
+
 #shell-header,
 #shell-sidebar,
 #app-shell-scroller {

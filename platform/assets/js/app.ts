@@ -298,8 +298,11 @@ const shellBehavior: Hook = {
       })
     }
     this.el.dataset.behaviorReady = "true"
+    // A new page starts at its top, with focus on its heading, so a screen
+    // reader announces where the person has arrived.
     if (shouldScroll) {
       this.el.querySelector<HTMLElement>("#app-shell-scroller")?.scrollTo({top: 0})
+      this.el.querySelector<HTMLElement>("#route-content h1")?.focus({preventScroll: true})
     }
   },
 
