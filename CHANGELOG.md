@@ -232,3 +232,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   theme-color tags follow the device, and the server no longer passes a theme
   through the LiveView session, the shell or the showcase pages. The shell mark
   and KeyFleet's colour-scheme rules cover the no-choice case.
+
+## 2026-09-28 — key map: Safari no longer stops on a light page
+
+- In light, Safari stopped drawing a fleet's key map (and the whole page) when
+  a level was on sale: the on-sale tint mixed the light accent with a tone, and
+  Safari's engine gives up when one colour mix takes two mixed colours. Light
+  was reachable before only by choosing it; with pages now following the
+  device, a light-device visitor would land on it.
+- Each tone now has its on-sale colour mixed from the tone's own two colours,
+  the same colour in light and within an unseen step of it in dark.
