@@ -1,41 +1,46 @@
 # The Autolaunch target Keyfleet pins
 
-Updated 2026-09-27 for Autolaunch v2, checked against the source. The v1 pin
-this replaces is in git history (the previous version of this file, at
-`985dc31`).
+Updated 2026-09-28 for Autolaunch v2, checked against the source at `4271c25`.
+The v1 pin this replaces is in git history (the previous version of this file,
+at `985dc31`).
 
 ## Status
 
 - **v2 is the target.** It is the Revstake package `contracts/revstake-v2` on
-  the Autolaunch branch `feat/contracts-v2` at `da2519b` (worktree
-  `worktrees/autolaunch/contracts-v2`). It is a candidate: not pushed, not
-  deployed on Base, not audited, and it has no addresses yet. Its interface
-  can still change until it is deployed. The lane's `5effdb1` (local, not
-  pushed) corrects the page, README, SECURITY notes and one code comment after
-  this document's review; the interface and behaviour are those of `da2519b`.
+  the Autolaunch branch `feat/contracts-v2` at `4271c25`, pushed to GitHub. It
+  is not deployed on Base and not audited, and it has no Base addresses yet.
+  Its interface can still change until it is deployed. Since `da2519b`, the
+  pin this document was first written against, v2 dropped the unsold
+  share-out, changed `LaunchSettled` and the distribution struct to match, and
+  set the swap fees to the founder's 28 September split (below).
 - **The founder's terms** are in that branch's `contracts/docs/launch-profiles.md`,
-  "Founder decisions, 27 September 2026". They replace the Safe-adjustable
-  ranges and hard ceilings this document used to expect: no v2 contract has
-  any.
-- **Keyfleet's code keeps building against v1** until v2 is deployed and the
-  founder says to switch. The switch is a hard cutover: a fleet's factory is
-  fixed when the fleet is deployed, and no Keyfleet code will speak both
-  versions.
+  "Founder decisions, 27 September 2026" and "Founder decisions, 28 September
+  2026". They replace the Safe-adjustable ranges and hard ceilings this
+  document used to expect: no v2 contract has any.
+- **Practice chains.** The Autolaunch lane deployed `4271c25` on an Anvil copy
+  of Base at `127.0.0.1:58705` (chain id 31337) on 2026-09-28; the addresses
+  are in `docs/handoffs/autolaunch-v2-practice-chains-2026-09-28.md` at the
+  workspace root. That chain is shared: Keyfleet forks it and never sends it a
+  transaction.
+- **Keyfleet's switch is built on the branch `codex/autolaunch-v2`** and
+  tested against the practice chain. It merges and goes live only when v2 is
+  deployed and the founder says to switch. The switch is a hard cutover: a
+  fleet's factory is fixed when the fleet is deployed, and no Keyfleet code
+  speaks both versions.
 
-## What the code builds against today
+## What `main` builds against today
 
 `RegentsAutolaunchFactoryV1` at `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`,
 with the shared strategy `RegentLBPStrategy` at
 `0x69c13CCd9312e21d66fd162896E39bFC5f886F95`, as named in Autolaunch's
 `contracts/v1/deployments/base-mainnet/deployed-manifest.json` (branch
 `feat/autolaunch-robinhood-stocks`). Its `launch` takes a
-`uint128 requiredRegentRaised` and sells 10%, pools 5% and vests 85%.
-`contracts/src/interfaces/` copies that interface, and the Anvil lab
-`contracts/v1/bin/local-base-lab.py` in the Autolaunch worktree runs it.
+`uint128 requiredRegentRaised` and sells 10%, pools 5% and vests 85%. The
+branch `codex/autolaunch-v2` replaces all of it with v2.
 
 ## The contracts
 
-All paths are under `contracts/revstake-v2` at `da2519b`.
+All paths are under `contracts/revstake-v2` at `4271c25`.
 
 | Contract | Source | Frozen ABI |
 | --- | --- | --- |
@@ -44,8 +49,12 @@ All paths are under `contracts/revstake-v2` at `da2519b`.
 | `ConditionalVestingEscrowV2` | `src/escrow/ConditionalVestingEscrowV2.sol` | `abi/ConditionalVestingEscrowV2.json` |
 | `RegentFeeHook`, `SubjectSplitterV1`, `PaymentReceiverV1`, `RevstakeLPLocker` | `src/hook/`, `src/revenue/` | `abi/` |
 
-The hook, splitter, receiver and locker are the v1 sources; a v2 deployment
-creates new instances bound to the new factory and strategy. The factory
+The splitter, receiver and locker are the v1 sources. The hook is not: v2 set
+its fee to the founder's 28 September split (the fee table below), and its
+`SwapFeeSettled` event now carries `regentLane` and `stakerLane` instead of one
+`lane`. v2's README still calls all four the v1 sources; the hook's source is
+the authority. A v2 deployment creates new instances bound to the new factory
+and strategy. The factory
 deploys the strategy and the hook in its own constructor, so the factory
 address is the only one Keyfleet needs: it takes the factory as a deployment
 argument and reads the strategy from `factory.strategy()`, as today.
@@ -70,7 +79,11 @@ function launchIdOfSubject(address subject) returns (uint256)
   below the auction's minimum, `2^32 + 1` (`FloorPriceTooLow`); a floor that is
   not a multiple of 100 (`FloorPriceNotOnGrid`); a bid tick under 2
   (`TickSpacingTooSmall`); a minimum above what the auction could ever raise
-  (`UnreachableRequiredRaise`); a CCA factory that charges a protocol fee.
+  (`UnreachableRequiredRaise`); a CCA factory that charges a protocol fee;
+- in the auction: a floor whose next bid tick is above the auction's highest
+  allowed bid price. The strategy's `requiredRegentRaisedFor` does not check
+  this, so only an absurdly high floor passes a proposal and then fails at
+  launch.
 
 The caller pays gas only: no REGENT moves, no allowance, no signature, no
 launch fee. The caller is recorded as launcher for provenance and holds no
@@ -102,9 +115,8 @@ The Autolaunch site's default floor is 0.000001 REGENT. That is not a whole
 number on the grid: `0.000001 × 2^96` is 79,228,162,514,264,337,593,543.95…
 Rounded down to a multiple of 100 it is `79228162514264337593500`, whose floor
 minimum is 19,999.999999999999999989 REGENT. So the default floor means a
-minimum raise of about 20,000 REGENT. From `5effdb1`, `launch-profiles.md`
-states the grid and that the Autolaunch site rounds an entered floor down to
-it.
+minimum raise of about 20,000 REGENT. `launch-profiles.md` states the grid and
+that a site rounds an entered floor down to it.
 
 **Rounding at the minimum.** The pinned auction counts a bid placed in its
 first block in full and a bid placed later up to one REGENT base unit short. A
@@ -312,9 +324,10 @@ today:
 
 ## What Keyfleet changes to adopt v2
 
-None of this is done yet. It waits for v2 to be deployed and for the founder
-to say to switch (see the questions below). Each change replaces the v1 shape
-outright.
+Founder, 2026-09-28: "yes build towards it". These changes are built on the
+branch `codex/autolaunch-v2` and tested against the practice chain; the branch
+merges only when v2 is deployed and the founder says to switch. Each change
+replaces the v1 shape outright.
 
 **Contracts**
 
@@ -353,8 +366,11 @@ outright.
 8. Scripts: `RecordKeyfleets.AUTOLAUNCH_FACTORY_ABI` becomes
    `"RegentsAutolaunchFactoryV2"`; `DeployKeyfleets.s.sol` and
    `KeeperLab.s.sol` use the new interface; the Base manifest's
-   `autolaunchFactory` becomes the v2 address once it exists. Why: the
-   deployment records which ABI a fleet speaks.
+   `autolaunchFactory` becomes the v2 address once it exists; until then it is
+   the zero address, so the Base deployment refuses to run, and the Anvil
+   manifest names the practice chain's v2 factory. Why: the deployment records
+   which ABI a fleet speaks, and a fleet pinned to the v1 factory could never
+   launch.
 
 **Keeper** (`platform/lib/keyfleet/keeper`, `docs/keeper.md`)
 
@@ -434,7 +450,8 @@ outright.
     `KeyfleetVotesTopics.t.sol`, `Keyfleet.t.sol`, `DeployKeyfleets.t.sol` and
     `RecordKeyfleets.t.sol` follow. The fork test
     `test/fork/KeyfleetLaunchIncomeFork.t.sol` runs against v2 on a Base fork,
-    with its own auction and strategy declarations updated.
+    with its own auction and strategy declarations updated, against a private
+    Anvil fork of the practice chain at `127.0.0.1:58705`.
 19. Platform: `wallet_steps_test.exs`, `wallet_steps_anvil_test.exs`,
     `proposals_chain_test.exs`, `proposals_test.exs`,
     `graph/launch_plan_digest_test.exs`, `graph/projection_test.exs`,
@@ -465,24 +482,24 @@ outright.
    wallets and tokens are theirs, as a person's are in a DAO. Only the fleet's
    contract address, and later any sub-addresses the fleet's admin address
    owns and assigns to agents or groups of agents, belong to the fleet.
-5. **Where is v2 tested on a Base fork?** Answered by the Autolaunch UI lane
-   on 2026-09-27: there is no v2 fork or lab tooling yet. The Base fork suite
-   and the deployment ceremony stay in `contracts/v1` and are a separately
-   authorised step before any deployment. Founder, 2026-09-28: the Autolaunch
-   lane builds a v2 lab on a Base fork before the v2 deployment ceremony, and
-   sends Keyfleet its ports and addresses when it is up. Until then Keyfleet
-   builds against `revstake-v2`'s hermetic suite and its ABIs in
-   `revstake-v2/abi`, and the fork test waits for that lab.
-6. **When does the Keyfleet change start?** Founder, 2026-09-27: wait. The
-   change starts once v2 is pushed and its ABIs are frozen, and merges only
-   after v2 is deployed and the founder says to switch.
+5. **Where is v2 tested on a Base fork?** Founder, 2026-09-28: the
+   Autolaunch lane builds a v2 lab on a Base fork before the v2 deployment
+   ceremony. It did so the same day: `4271c25` runs on the practice chain at
+   `127.0.0.1:58705`, a copy of Base. Keyfleet starts its own Anvil fork of
+   that chain for its fork test and lab runs, and never sends a transaction to
+   the shared chain, which mines only when sent one and would move its live
+   auctions. The deployment ceremony stays a separately authorised step.
+6. **When does the Keyfleet change start?** Founder, 2026-09-28: "yes build
+   towards it". The change is built on `codex/autolaunch-v2` against
+   `4271c25` and merges only after v2 is deployed and the founder says to
+   switch.
 
 ## Testing
 
 No Base Sepolia deployment exists or can, because the bindings are Base
-mainnet addresses. Until v2 is deployed, Keyfleet's contract tests run against
-the v2-shaped mock, and a fork test needs the v2 graph deployed on an Anvil
-fork of Base (question 5 below). The v2 package's own proof is its hermetic
-suite, `bin/gate.sh` in `contracts/revstake-v2`, against real PoolManager,
-PositionManager, CCA factory and UERC20 bytecode. After the v2 ceremony a Base
-fork carries the real factory.
+mainnet addresses. Keyfleet's contract tests run against the v2-shaped mock.
+The fork test and the platform's lab runs use the real v2 graph on a private
+Anvil fork of the practice chain (question 5). The v2 package's own proof is
+its hermetic suite, `bin/gate.sh` in `contracts/revstake-v2`, against real
+PoolManager, PositionManager, CCA factory and UERC20 bytecode. After the v2
+ceremony a Base fork carries the real factory.
