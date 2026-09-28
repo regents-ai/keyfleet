@@ -14,10 +14,6 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
   Wallet's relay, and the `blob:` images Privy's window draws. Privy's sign-in
   window writes its own style elements, so only this profile allows them.
 
-  Keyfleet's Privy sign-in offers wallets only. A Privy app that offers Telegram
-  sign-in also needs `https://auth.privy.io` and `https://telegram.org` in
-  `script-src` and `https://oauth.telegram.org` in `frame-src`.
-
   `showcase/0` is `sign_in/0` for the local showcase, which frames its own
   preview page.
 
