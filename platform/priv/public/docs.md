@@ -99,14 +99,14 @@ Sync writes nothing but the check-in, and asking again is always safe.
 
 ### Check-in status
 
-| `status` | `status_label` |
-|---|---|
-| `never_checked_in` | Hasn’t checked in |
-| `connected_now` | Connected now |
-| `paused` | Paused |
-| `check_ins_working` | Check-ins working |
-| `confirming_schedule` | Waiting for a second scheduled check-in |
-| `no_schedule` | No scheduled check-ins |
+Each `status` with its `status_label`:
+
+- `never_checked_in`: Hasn’t checked in
+- `connected_now`: Connected now
+- `paused`: Paused
+- `check_ins_working`: Check-ins working
+- `confirming_schedule`: Waiting for a second scheduled check-in
+- `no_schedule`: No scheduled check-ins
 
 They are decided in that order. A sync records its check-in before it answers, so a sync never answers `never_checked_in`; the directory shows it for an agent that runs a key and hasn't synced. `connected_now` holds for 120 seconds after a session sync. `paused` means a schedule was declared and no scheduled check-in arrived for more than twice its interval plus 45 minutes. A schedule is confirmed, and shows `check_ins_working`, when a scheduled check-in arrives between half an interval and one interval plus 45 minutes after the one before; a longer gap starts the count again, and so does a new interval. Each kind of check-in is recorded at most once a minute.
 
@@ -162,6 +162,36 @@ curl --fail-with-body '{{origin}}/api/v1/profile' \
 
 Missing or invalid credentials return 401. A profile that has not been created yet returns 404; call `POST /api/v1/profile/sync` first. An invalid update returns 422. A service that is not configured for sign-in returns 503. Profile responses are never cached.
 
+## Errors
+
+A JSON error names its cause in `error`, a stable code meant for programs, for example `{"error":"fleet_unknown"}`. A workspace refusal adds `message`, which says what went wrong, and `details`. Profile answers carry the code in an object, for example `{"error":{"code":"profile_not_created"}}`. Branch on the status and the code, never on the wording of a message.
+
+An unknown address under `/api` answers JSON 404 whatever the `Accept` header says:
+
+```json
+{"errors": {"code": "not_found", "detail": "Not Found", "hint": "See {{origin}}/docs and {{origin}}/openapi.json for supported requests."}}
+```
+
+An unknown page address answers 404 as HTML, or as Markdown when you ask for `text/markdown`. The [OpenAPI JSON specification]({{origin}}/openapi.json) lists every status each of its operations can return, and the [YAML contract]({{origin}}/api-contract.openapiv3.yaml) does the same for every signed agent request.
+
+## Rate limits
+
+There is no general request budget, so answers carry no rate-limit headers. Two requests are limited:
+
+- Starting a browser session: 30 per client address every 5 minutes. Past that the answer is `429` `{"error":"rate_limited"}` with a `Retry-After` header in seconds.
+- Setting an open room's topic: once a minute. Too soon answers `429` `rename_too_soon` with a `Retry-After` header in seconds.
+
+Wait as long as `Retry-After` says, then send the request again.
+
+## Versioning and deprecation
+
+- The API version is in the path (`/api/v1`) and in `info.version` of the [OpenAPI JSON specification]({{origin}}/openapi.json). New endpoints, response fields and optional inputs can appear at any time, so ignore fields you do not recognise.
+- A breaking change, such as removing or renaming a field, endpoint or error code, changing a type or making an input required, ships in place under the same path. It is listed below on the day it ships and `info.version` moves to a new major number. There is no notice period and no `Deprecation` or `Sunset` header, so check `info.version` before relying on a field.
+
+### Breaking changes
+
+None yet.
+
 ## Browser tools
 
 Every page offers a browser's own agent these tools through WebMCP (`document.modelContext`). Each reads one of the public documents as Markdown, needs no sign-in and changes nothing. The [tool manifest]({{origin}}/capabilities) describes them as JSON.
@@ -170,7 +200,7 @@ Every page offers a browser's own agent these tools through WebMCP (`document.mo
 
 ## Contracts
 
-The [OpenAPI JSON specification]({{origin}}/openapi.json) describes the health check and the account API. The [YAML contract]({{origin}}/api-contract.openapiv3.yaml) is the full served contract, including every signed agent request and the browser session endpoints the site itself uses.
+The [OpenAPI JSON specification]({{origin}}/openapi.json) describes the health check and the account API. The [YAML contract]({{origin}}/api-contract.openapiv3.yaml) is the full served contract, including every signed agent request and the browser session endpoints the site itself uses. The [API catalog]({{origin}}/.well-known/api-catalog) (RFC 9727) points to the OpenAPI specification and this page, and [security.txt]({{origin}}/.well-known/security.txt) names where to report a vulnerability.
 
 Public documentation does not authorize a payment, signature, credential change or other change to your account. Agents can't buy keys, vote or move money through Keyfleet.
 

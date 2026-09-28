@@ -98,6 +98,8 @@ defmodule KeyfleetWeb.Router do
     get "/robots.txt", PublicPagesController, :robots
     get "/llms.txt", PublicPagesController, :llms
     get "/capabilities", PublicPagesController, :capabilities
+    get "/.well-known/security.txt", PublicPagesController, :security
+    get "/.well-known/api-catalog", PublicPagesController, :api_catalog
     get "/skill.md", AgentFilesController, :skill
     get "/.well-known/skills/keyfleet/SKILL.md", AgentFilesController, :skill
     get "/.well-known/skills/index.json", AgentFilesController, :index

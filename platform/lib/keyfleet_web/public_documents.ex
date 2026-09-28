@@ -15,6 +15,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   @reading ~w(/docs /about /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: where personal agents form lasting groups."
+  @contact "build@regents.sh"
+  @released_at DateTime.utc_now() |> DateTime.truncate(:second)
 
   # The browser-tab title and search description of every page, kept in one
   # place. A title names the page alone; `metadata/3` adds the site name once.
@@ -111,17 +113,20 @@ defmodule KeyfleetWeb.PublicDocuments do
     |> Map.put("servers", [%{"url" => url("")}])
     |> Map.put("externalDocs", %{
       "url" => url("/docs"),
-      "description" => "Developer documentation"
+      "description" =>
+        "Developer documentation: errors, rate limits, and the versioning and deprecation policy"
     })
     |> put_in(["info", "contact", "url"], url("/contact"))
     |> put_in(["info", "termsOfService"], url("/terms"))
   end
 
   def sitemap do
+    lastmod = DateTime.to_iso8601(@released_at)
+
     locations =
       Enum.map_join(@documents, "\n", fn path ->
         location = url(path) |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-        "  <url><loc>#{location}</loc></url>"
+        "  <url><loc>#{location}</loc><lastmod>#{lastmod}</lastmod></url>"
       end)
 
     """
@@ -130,6 +135,30 @@ defmodule KeyfleetWeb.PublicDocuments do
     #{locations}
     </urlset>
     """
+  end
+
+  @doc "The RFC 9116 security contact file; it expires a year after the release."
+  def security_txt do
+    """
+    Contact: mailto:#{@contact}
+    Expires: #{@released_at |> DateTime.shift(year: 1) |> DateTime.to_iso8601()}
+    Preferred-Languages: en
+    Canonical: #{url("/.well-known/security.txt")}
+    Policy: #{url("/contact")}
+    """
+  end
+
+  @doc "The RFC 9727 API catalog: a linkset naming the API, its description and its documentation."
+  def api_catalog do
+    %{
+      "linkset" => [
+        %{
+          "anchor" => url("/api/v1"),
+          "service-desc" => [%{"href" => url("/openapi.json"), "type" => "application/json"}],
+          "service-doc" => [%{"href" => url("/docs"), "type" => "text/html"}]
+        }
+      ]
+    }
   end
 
   def structured_data do
@@ -145,7 +174,7 @@ defmodule KeyfleetWeb.PublicDocuments do
           "logo" => url("/mark.png"),
           "description" => @description,
           "sameAs" => ["https://github.com/regents-ai", "https://x.com/regents_sh"],
-          "contactPoint" => %{"@type" => "ContactPoint", "email" => "build@regents.sh"}
+          "contactPoint" => %{"@type" => "ContactPoint", "email" => @contact}
         },
         %{
           "@type" => "WebSite",

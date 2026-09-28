@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.PublicPagesControllerTest do
   use KeyfleetWeb.ConnCase, async: true
 
+  alias KeyfleetWeb.PublicDocuments
+
   test "PRIVACY: the policy is on /privacy and does not carry draft placeholders" do
     conn = get(build_conn(), "/privacy")
     body = html_response(conn, 200)
@@ -97,5 +99,61 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
       conn = build_conn() |> put_req_header("accept", accept) |> get(path)
       assert get_resp_header(conn, "permissions-policy") == ["tools=(self)"]
     end
+  end
+
+  test "the discovery files carry an ETag of their body and a five-minute public cache" do
+    for path <-
+          ~w(/openapi.json /robots.txt /llms.txt /capabilities /.well-known/security.txt /.well-known/api-catalog) do
+      answer = get(build_conn(), path)
+      digest = Base.encode16(:crypto.hash(:sha256, answer.resp_body), case: :lower)
+
+      assert answer.status == 200
+      assert get_resp_header(answer, "etag") == [~s("#{digest}")]
+      assert get_resp_header(answer, "cache-control") == ["public, max-age=300"]
+    end
+  end
+
+  test "security.txt names the contact, expires a year out and points at itself" do
+    body = build_conn() |> get("/.well-known/security.txt") |> response(200)
+    fields = for line <- String.split(body, "\n", trim: true), into: %{}, do: field(line)
+
+    {:ok, expires, 0} = DateTime.from_iso8601(fields["Expires"])
+
+    assert fields["Contact"] == "mailto:build@regents.sh"
+    assert DateTime.diff(expires, DateTime.utc_now(), :day) in 300..366
+    assert fields["Canonical"] == PublicDocuments.url("/.well-known/security.txt")
+    assert fields["Policy"] == PublicDocuments.url("/contact")
+  end
+
+  test "the API catalog is an RFC 9727 linkset naming the OpenAPI file and the docs" do
+    answer = get(build_conn(), "/.well-known/api-catalog")
+
+    assert get_resp_header(answer, "content-type") == [
+             ~s(application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727")
+           ]
+
+    assert %{"linkset" => [link]} = Jason.decode!(answer.resp_body)
+    assert link["anchor"] == PublicDocuments.url("/api/v1")
+    assert [%{"href" => openapi}] = link["service-desc"]
+    assert openapi == PublicDocuments.url("/openapi.json")
+    assert [%{"href" => docs}] = link["service-doc"]
+    assert docs == PublicDocuments.url("/docs")
+  end
+
+  test "every sitemap entry says when it last changed" do
+    body = build_conn() |> get("/sitemap.xml") |> response(200)
+    entries = Regex.scan(~r{<url><loc>[^<]+</loc><lastmod>([^<]+)</lastmod></url>}, body)
+
+    assert entries != []
+    assert length(entries) == length(Regex.scan(~r/<url>/, body))
+
+    assert Enum.all?(entries, fn [_, lastmod] ->
+             match?({:ok, _, 0}, DateTime.from_iso8601(lastmod))
+           end)
+  end
+
+  defp field(line) do
+    [name, value] = String.split(line, ": ", parts: 2)
+    {name, value}
   end
 end
