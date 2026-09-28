@@ -167,10 +167,11 @@ If the auction raised its minimum, it graduates, in one transaction:
 1. The strategy sweeps the raise and the SUBJECT the auction did not sell.
 2. The official SUBJECT/REGENT pool opens at the raise divided by the 20B sale
    allocation.
-3. One full-range position pairs the whole 15% reserve with about three
-   quarters of the raise and is locked in the LP locker for good.
-4. The rest of the raise, `raise − lpRegentUsed`, goes to the treasury
-   (`LaunchSettled.regentToTreasury`). The tests hold the pool's part to three
+3. One full-range position pairs the whole 15% reserve with up to three
+   quarters of the raise, taking what it can pair from a three-quarter budget,
+   and is locked in the LP locker for good.
+4. The rest of the raise, `raise − lpRegentUsed`, at least a quarter, goes to
+   the treasury (`LaunchSettled.regentToTreasury`). The tests hold the pool's part to three
    quarters within one part in a million.
 5. Every SUBJECT still held for this launch goes to the escrow
    (`LaunchSettled.subjectToEscrow`), as in v1, and vests to the treasury on
@@ -209,9 +210,9 @@ Fixed by the factory and the strategy:
 | Claim / migration | 64 / 128 blocks after the auction ends |
 | Bid tick | floor ÷ 100 |
 | Pool price | raise ÷ 20B |
-| Raise into the pool | about three quarters; the rest to the treasury |
+| Raise into the pool | up to three quarters; the rest, at least a quarter, to the treasury |
 | Pool | 0.30% LP fee, tick spacing 60, `RegentFeeHook` |
-| Hook lanes | two 1% lanes on every swap: one to the Regent Safe, one through the launch's splitter |
+| Hook fee | 2% on every swap, on top of the LP fee: 1% to Regent (to REGENT staking when the fee is in REGENT, to the Regent Safe when it is in the launched token) and 1% to stakers through the launch's splitter; none below 50 base units |
 | Splitter skim | 2% (USDC to live staking, REGENT and SUBJECT to the Regent Safe) |
 | Custom receiver referral cap | 2.5% |
 
@@ -260,7 +261,7 @@ Every timing value is in blocks, and Base makes one every 2 seconds.
     the fleet it is a gift (question 4 below), sorted as income to the keys
     (rule 5 sorts by token alone). No keeper job claims for it.
 11. **The fleet as treasury.** At graduation the fleet receives
-    `raise − lpRegentUsed` in REGENT, about a quarter of the raise (v1 sent
+    `raise − lpRegentUsed` in REGENT, at least a quarter of the raise (v1 sent
     only what the position did not use), and the escrow vests 65% of the
     supply to it over 365 days. Both stay shared money, booked from the
     strategy's, the auction's and the escrow's own records. The formula
@@ -281,7 +282,7 @@ Every timing value is in blocks, and Base makes one every 2 seconds.
   treasury; `escrow.release()` is permissionless and cannot be redirected. On
   failure the whole supply is retired, bidders are refunded by the auction,
   and the treasury gets nothing.
-- Graduation: `raise − lpRegentUsed` in REGENT, about a quarter of the raise.
+- Graduation: `raise − lpRegentUsed` in REGENT, at least a quarter of the raise.
 - Splitter (created at graduation): as in v1. It recognizes USDC, REGENT and
   SUBJECT revenue, skims 2%, pays stakers the fraction of the net equal to the
   staked share of total supply, and sends the rest to the treasury. `stake`,
@@ -394,7 +395,7 @@ outright.
     (REGENT per token)", filled in with 0.000001, plus "Higher minimum raise
     (optional)", and the page shows the raise that follows. The proposal page
     shows the floor, the minimum and the required raise. The "Who benefits"
-    line says the fleet's shared money keeps about a quarter of the REGENT the
+    line says the fleet's shared money keeps at least a quarter of the REGENT the
     auction raises, and the launched tokens as they vest. Why: new inputs and
     new money.
 14. Launch plan: the workspace `launch_card` field, the graph pack's
@@ -411,7 +412,7 @@ outright.
 16. `platform/priv/public/opportunities.md`, Autolaunch: 20% sold, 15% into
     the pool, 65% released evenly over a year; bidders receive the whole 20%;
     the pool opens at the raise divided by the tokens sold; the fleet receives
-    about a quarter of the raise; the minimum raise is the whole 20% at the
+    at least a quarter of the raise; the minimum raise is the whole 20% at the
     floor, or the proposal's higher minimum; the proposal fixes the floor and
     the minimum. "About 48 hours" and "about 10 minutes" stay. Why: the page
     states the contracts' money rules.
