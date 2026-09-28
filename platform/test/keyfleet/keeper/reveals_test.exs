@@ -1,5 +1,7 @@
 defmodule Keyfleet.Keeper.RevealsTest do
-  use ExUnit.Case, async: true
+  # Checks what the keeper did not log, and a captured log holds every
+  # process's lines, so no other test may log alongside it.
+  use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
   import Keyfleet.KeeperHelpers
