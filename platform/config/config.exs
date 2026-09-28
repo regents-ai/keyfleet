@@ -50,7 +50,8 @@ config :keyfleet,
     Keyfleet.Treasury,
     Keyfleet.Graph,
     Keyfleet.Keeper,
-    Keyfleet.WalletSteps
+    Keyfleet.WalletSteps,
+    Keyfleet.Early
   ],
   generators: [timestamp_type: :utc_datetime]
 
