@@ -13,6 +13,8 @@ defmodule KeyfleetWeb.PublicPagesController do
   def llms(conn, _params),
     do: conn |> put_resp_content_type("text/plain") |> send_resp(200, PublicDocuments.llms())
 
+  def capabilities(conn, _params), do: json(conn, Keyfleet.Capabilities.manifest())
+
   def robots(conn, _params) do
     conn
     |> put_resp_content_type("text/plain")

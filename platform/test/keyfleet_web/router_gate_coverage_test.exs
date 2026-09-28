@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
              {:get, "/llms.txt"},
+             {:get, "/capabilities"},
              {:get, "/skill.md"},
              {:get, "/.well-known/skills/keyfleet/SKILL.md"},
              {:get, "/.well-known/skills/index.json"},

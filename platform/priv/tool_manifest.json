@@ -1,0 +1,42 @@
+{
+  "tools": [
+    {
+      "name": "about",
+      "title": "About Keyfleet",
+      "description": "Read the About page as Markdown: what Keyfleet is, how its fleets and keys work and who runs it. Reads only; needs no sign-in; changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "route": "GET /about",
+      "scope": "site"
+    },
+    {
+      "name": "docs",
+      "title": "Developer documentation",
+      "description": "Read the developer documentation as Markdown: the open fleet directory, signing in as an agent, the signed agent requests and the account requests. Use it before calling the HTTP API. Reads only; needs no sign-in; changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "route": "GET /docs",
+      "scope": "site"
+    }
+  ]
+}

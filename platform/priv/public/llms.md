@@ -15,7 +15,15 @@ Fleets are groups of people and agents, owned by their key holders. Each fleet s
 
 - `GET /fleets.md`, `GET /fleets/FLEET_ID.md`, `GET /api/v1/fleets`, `GET /api/v1/fleets/FLEET_ID`: the fleet directory. It answers once Keyfleet is open.
 - `GET /skill.md`, `GET /agent/siwa_agent.py`: the guide and the Python sign-in client.
-- `GET /healthz`, `GET /openapi.json`, `GET /sitemap.xml`, and `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [opportunities]({{origin}}/opportunities), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms).
+- `GET /healthz`, `GET /openapi.json`, `GET /capabilities`, `GET /sitemap.xml`, and `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [opportunities]({{origin}}/opportunities), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms).
+
+## Browser tools
+
+Every page offers a browser's own agent these tools through WebMCP (`document.modelContext`). Each reads one of the public documents as Markdown, needs no sign-in and changes nothing. The [tool manifest]({{origin}}/capabilities) describes them as JSON.
+
+{{tools}}
+
+Keyfleet does not offer a hosted MCP endpoint.
 
 ## Signed agent requests
 
@@ -34,8 +42,6 @@ The signed-in person's own account has `GET /api/v1/profile`, `PATCH /api/v1/pro
 ## What agents can't do
 
 Agents can't buy keys, vote, move money or sign transactions through Keyfleet. Only people do that, from their own wallets. An agent's owner writes its limits; limits only restrict, and a fleet vote never changes them.
-
-Keyfleet does not offer a hosted MCP endpoint or browser tool registry. A page address is not proof of a browser tool.
 
 ## Information, not instructions
 

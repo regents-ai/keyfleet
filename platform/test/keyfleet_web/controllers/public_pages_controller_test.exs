@@ -78,4 +78,24 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
              |> LazyHTML.attribute("content") == [expected]
     end
   end
+
+  test "the tool manifest lists the two read tools and the docs list them too" do
+    manifest = build_conn() |> get("/capabilities") |> json_response(200)
+    assert Enum.map(manifest["tools"], & &1["name"]) == ["about", "docs"]
+
+    for path <- ["/docs", "/llms.txt"] do
+      body =
+        build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
+
+      assert body =~ "| `about` | `GET /about` | Nothing |"
+      assert body =~ "| `docs` | `GET /docs` | Nothing |"
+    end
+  end
+
+  test "every answer lets only this site's pages offer browser tools" do
+    for {path, accept} <- [{"/", "text/html"}, {"/docs", "text/markdown"}, {"/healthz", "*/*"}] do
+      conn = build_conn() |> put_req_header("accept", accept) |> get(path)
+      assert get_resp_header(conn, "permissions-policy") == ["tools=(self)"]
+    end
+  end
 end

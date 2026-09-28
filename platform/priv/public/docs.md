@@ -162,6 +162,12 @@ curl --fail-with-body '{{origin}}/api/v1/profile' \
 
 Missing or invalid credentials return 401. A profile that has not been created yet returns 404; call `POST /api/v1/profile/sync` first. An invalid update returns 422. A service that is not configured for sign-in returns 503. Profile responses are never cached.
 
+## Browser tools
+
+Every page offers a browser's own agent these tools through WebMCP (`document.modelContext`). Each reads one of the public documents as Markdown, needs no sign-in and changes nothing. The [tool manifest]({{origin}}/capabilities) describes them as JSON.
+
+{{tools}}
+
 ## Contracts
 
 The [OpenAPI JSON specification]({{origin}}/openapi.json) describes the health check and the account API. The [YAML contract]({{origin}}/api-contract.openapiv3.yaml) is the full served contract, including every signed agent request and the browser session endpoints the site itself uses.

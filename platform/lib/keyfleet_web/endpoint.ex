@@ -36,6 +36,11 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  # Every answer, including the Markdown and refusals the plugs below give
+  # before the router, lets browser agents use the tools this site's pages
+  # register, and no other site's.
+  plug :allow_page_tools
+
   plug KeyfleetWeb.Plugs.SignedAgent
 
   # Before the parsers, so a body they reject on an /api path is answered in
@@ -55,4 +60,7 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.RuntimeSession
 
   plug KeyfleetWeb.Router
+
+  defp allow_page_tools(conn, _opts),
+    do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
 end

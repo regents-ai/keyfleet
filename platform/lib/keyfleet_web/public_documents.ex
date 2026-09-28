@@ -158,7 +158,12 @@ defmodule KeyfleetWeb.PublicDocuments do
     }
   end
 
-  defp source(name), do: String.replace(@sources[name], "{{origin}}", url(""))
+  # `{{tools}}` is the browser tools table, from the one tool manifest.
+  defp source(name) do
+    @sources[name]
+    |> String.replace("{{origin}}", url(""))
+    |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())
+  end
 
   def recovery_links do
     [

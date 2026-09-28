@@ -97,6 +97,7 @@ defmodule KeyfleetWeb.Router do
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots
     get "/llms.txt", PublicPagesController, :llms
+    get "/capabilities", PublicPagesController, :capabilities
     get "/skill.md", AgentFilesController, :skill
     get "/.well-known/skills/keyfleet/SKILL.md", AgentFilesController, :skill
     get "/.well-known/skills/index.json", AgentFilesController, :index

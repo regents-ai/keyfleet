@@ -20,6 +20,7 @@ import {
   type ShellState,
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
+import {installPublicTools} from "./public_tools"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
@@ -125,6 +126,10 @@ window.addEventListener("phx:page-loading-stop", syncTheme)
 window.addEventListener("popstate", syncTheme)
 window.addEventListener("pageshow", syncTheme)
 syncTheme()
+
+// Before the lazy imports below can hold this module, so the page's first
+// pageshow registers the browser tools.
+installPublicTools()
 
 const shellBehavior: Hook = {
   mounted(this: ShellHook) {

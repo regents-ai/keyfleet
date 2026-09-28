@@ -25,6 +25,26 @@ declare module "node:zlib" {
   export function gzipSync(input: Uint8Array): Uint8Array
 }
 
+// The WebMCP draft's document.modelContext. Browsers without it have no such
+// property; public_tools.ts checks `"modelContext" in document` before use.
+type ModelContextTool = {
+  name: string
+  title: string
+  description: string
+  inputSchema: object
+  annotations: object
+  execute(input: unknown, client: {signal?: AbortSignal}): Promise<unknown>
+}
+
+interface ModelContext {
+  registerTool(tool: ModelContextTool, options: {signal: AbortSignal}): Promise<void>
+  getTools(): Promise<Array<{name: string}>>
+}
+
+interface Document {
+  readonly modelContext: ModelContext
+}
+
 interface Window {
   liveSocket: import("phoenix_live_view").LiveSocket
 }
