@@ -308,14 +308,18 @@
   }
 }
 
+/* Phones: a sheet against the bottom edge, with a strip of the fleet's page
+   left showing above it, so it reads as a layer over the map. */
 @media (max-width: 599px) {
-  .key-profile {
+  .key-profile,
+  .key-profile[open]:not(:modal) {
     width: 100vw;
-    height: 100dvh;
+    height: calc(100dvh - 3rem);
     max-width: 100vw;
-    max-height: 100dvh;
-    margin: 0;
+    max-height: none;
+    margin: auto 0 0;
     border: 0;
+    border-block-start: 1px solid var(--ash-line-strong);
     padding-block-end: env(safe-area-inset-bottom);
   }
 

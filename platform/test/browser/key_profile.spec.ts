@@ -291,7 +291,7 @@ test.describe("a key's profile", () => {
   test.describe("on a phone", () => {
     test.use({viewport: {width: 375, height: 812}})
 
-    test("fills the screen, never scrolls sideways, and the box to write in is reached by keyboard", async ({
+    test("sits as a sheet over the fleet's page, never scrolls sideways, and the box to write in is reached by keyboard", async ({
       page,
     }) => {
       const key = sellKey(fleet, me)
@@ -300,7 +300,8 @@ test.describe("a key's profile", () => {
       await expect(profile(page)).toBeVisible()
 
       const box = await profile(page).boundingBox()
-      expect(box).toEqual({x: 0, y: 0, width: 375, height: 812})
+      // Against the bottom edge, with a strip of the fleet's page showing above.
+      expect(box).toEqual({x: 0, y: 48, width: 375, height: 764})
       const sideways = await profile(page).evaluate(dialog => dialog.scrollWidth - dialog.clientWidth)
       expect(sideways).toBeLessThanOrEqual(0)
 
