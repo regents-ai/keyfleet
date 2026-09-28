@@ -375,7 +375,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert text(view, "#proposal-plan-benefits") ==
                "Who benefits: the fleet’s keys receive all of the launch’s income, and its shared money " <>
-                 "keeps the REGENT the auction raises beyond what goes into the pool, and the " <>
+                 "keeps at least a quarter of the REGENT the auction raises, and the " <>
                  "launched tokens as they vest."
 
       refute has_element?(view, "#proposal-plan-mismatch")

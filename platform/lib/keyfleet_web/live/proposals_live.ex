@@ -1083,7 +1083,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </div>
         </dl>
         <p id="proposal-plan-benefits" class="proposals-rule">
-          Who benefits: the fleet’s keys receive all of the launch’s income, and its shared money keeps the REGENT the auction raises beyond what goes into the pool, and the launched tokens as they vest.
+          Who benefits: the fleet’s keys receive all of the launch’s income, and its shared money keeps at least a quarter of the REGENT the auction raises, and the launched tokens as they vest.
         </p>
       </div>
     </section>
