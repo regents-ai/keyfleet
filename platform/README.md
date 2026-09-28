@@ -106,7 +106,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/healthz` | GET | Liveness check; plain text `ok`. |
+| `/healthz` | GET | Readiness check: plain text `ok` once the site reads its own database table, otherwise 503 `unavailable`. |
 | `/api/v1/profile`, `/api/v1/profile/sync` | GET, PATCH, POST | The signed-in person's shared profile, served by the `regent_identity` package with paired Privy proofs. |
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
