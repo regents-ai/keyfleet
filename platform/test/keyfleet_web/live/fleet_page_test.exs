@@ -236,7 +236,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-level") == "9"
       assert text(view, "#buy-key") =~ "One wallet may hold 8 keys of level 9."
       assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy key 151"
-      assert has_element?(view, "#buy-key-sold-out[hidden]")
+      refute has_element?(view, "#buy-key-sold-out")
     end
 
     # The steps are built on the server for the wallet that sends them, and
@@ -409,19 +409,41 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute html =~ "One wallet may hold"
     end
 
-    test "a sold-out fleet says so and offers nothing to buy", %{conn: conn} do
+    # A purchase from a sold-out fleet is certain to fail, so Buy stays in
+    # view but can't be pressed, and the count beside it says why.
+    test "a sold-out fleet keeps Buy in view, not pressable, with the count sold beside it",
+         %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..144, do: issue!("fleet_tech_classic", token_id)
 
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
+      active!(view, @owner)
 
-      assert text(view, "#buy-key-sold-out") =~ "All 144 keys in this fleet have been sold."
-      refute has_element?(view, "#buy-key-sold-out[hidden]")
+      assert text(view, "#buy-key-sold-out") == "144/144 keys sold"
+      assert text(view, "#buy-key-elsewhere") =~ "You can still get a key from someone"
       assert has_element?(view, "#buy-key-offer[hidden]")
       assert has_element?(view, "#buy-key-approve[hidden]")
-      assert has_element?(view, "#buy-key-button[hidden]")
+      refute has_element?(view, "#buy-key-button[hidden]")
+
+      assert has_element?(
+               view,
+               "#buy-key-button[disabled][aria-describedby=buy-key-sold-out]",
+               "Buy key"
+             )
+
       refute has_element?(view, "#fleet-get-key")
+    end
+
+    test "a fleet with keys left has no sold-out line and Buy can be pressed", %{conn: conn} do
+      deploy!("fleet_tech_classic")
+      ChainHelpers.seed_cursor!("fleet_tech_classic")
+
+      {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
+
+      refute has_element?(view, "#buy-key-sold-out")
+      refute has_element?(view, "#buy-key-elsewhere")
+      refute has_element?(view, "#buy-key-button[disabled]")
     end
 
     # The buyer's purchases and how each landed stay when the last key sells
@@ -452,8 +474,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       issue!("fleet_tech_classic", 144, @owner)
       send(view.pid, {:keys_changed, "fleet_tech_classic", [144]})
 
-      assert text(view, "#buy-key-sold-out") =~ "All 144 keys in this fleet have been sold."
-      assert has_element?(view, "#buy-key-button[hidden]")
+      assert text(view, "#buy-key-sold-out") == "144/144 keys sold"
+      assert has_element?(view, "#buy-key-button[disabled]")
       assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy key")
       assert text(view, "#buy-key-order-sent span") =~ "Done. The key is yours"
     end

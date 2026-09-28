@@ -796,8 +796,10 @@ defmodule KeyfleetWeb.FleetLive do
   # "Buying a key", in "How this fleet works": the key on offer with its price,
   # then Approve and Buy, and what a buyer should know.
   #
-  # Every press of Buy goes to the wallet: the button is never disabled, and
-  # nothing here decides on the buyer's behalf whether a purchase would succeed.
+  # Every press of Buy goes to the wallet, pending purchases or not. The one
+  # exception is a sold-out fleet, read from the chain by the server: a
+  # purchase is then certain to fail, so Buy stays in view but can't be
+  # pressed, with the count of keys sold beside it saying why.
   # Approve shows when the wallet's USDC allowance to the fleet is below the
   # price; Buy shows once no approval is needed or one has been sent. The
   # buttons stay in the page when the fleet sells out, so the buyer keeps the
@@ -806,12 +808,6 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
       <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
-
-      <p id="buy-key-sold-out" hidden={@buy.price != nil}>
-        All {grouped(@buy.max_supply)} keys in this fleet have been sold. You can still get one
-        from someone who holds a key: it moves like any other token on Base, though a key that
-        moves can’t vote on proposals already open.
-      </p>
 
       <div id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
         <dl class="fleet-buy-facts">
@@ -864,12 +860,22 @@ defmodule KeyfleetWeb.FleetLive do
           <Regent.Primitives.button
             id="buy-key-button"
             data-onchain-step="buy"
-            hidden={is_nil(@buy.price) or not buy_shown?(panel)}
+            hidden={not buy_shown?(panel)}
+            disabled={is_nil(@buy.price)}
+            aria-describedby={is_nil(@buy.price) && "buy-key-sold-out"}
           >
             <span data-press-label>Buy key {@buy.token_id && grouped(@buy.token_id)}</span>
           </Regent.Primitives.button>
+          <span :if={is_nil(@buy.price)} id="buy-key-sold-out" class="wallet-panel-note">
+            {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} keys sold
+          </span>
         </:buttons>
       </.live_component>
+
+      <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
+        You can still get a key from someone who holds one: it moves like any other token on
+        Base, though a key that moves can’t vote on proposals already open.
+      </p>
 
       <p :if={@buy.price} class="fleet-detail">
         Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
