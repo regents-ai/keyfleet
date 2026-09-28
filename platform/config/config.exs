@@ -54,6 +54,9 @@ config :keyfleet, Keyfleet.Repo, migration_default_prefix: "keyfleet_app"
 
 config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 
+# One budget per client address for the health check and every /api path.
+config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
+
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
 

@@ -41,6 +41,12 @@ defmodule KeyfleetWeb.Endpoint do
   # register, and no other site's.
   plug :allow_page_tools
 
+  # One budget per client address, shared by the health check and every /api
+  # path, answered or not. Every answer, including a signed agent request
+  # refused before the router, says what is left of it; past it the answer is
+  # 429 with Retry-After.
+  plug :limit_rate
+
   plug KeyfleetWeb.Plugs.SignedAgent
 
   # Before the parsers, so a body they reject on an /api path is answered in
@@ -60,6 +66,28 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.RuntimeSession
 
   plug KeyfleetWeb.Router
+
+  defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
+    do: RegentAgentAccess.RateLimit.call(conn, rate_limit())
+
+  defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
+    do: RegentAgentAccess.RateLimit.call(conn, rate_limit())
+
+  defp limit_rate(conn, _opts), do: conn
+
+  # Read on each request, as the session budget is, so the test suite can run
+  # on a larger one and a focused test can put the release budget back.
+  defp rate_limit do
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+
+    RegentAgentAccess.RateLimit.init(
+      policy: "default",
+      limit: Keyword.fetch!(budget, :limit),
+      window: Keyword.fetch!(budget, :window_seconds),
+      admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
+      key: &KeyfleetWeb.ClientAddress.key/1
+    )
+  end
 
   defp allow_page_tools(conn, _opts),
     do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")

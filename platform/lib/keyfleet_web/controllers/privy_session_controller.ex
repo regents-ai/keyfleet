@@ -105,8 +105,8 @@ defmodule KeyfleetWeb.PrivySessionController do
            Keyword.fetch!(budget, :limit),
            window
          ) do
-      :ok -> renew(conn, nil)
-      {:error, :rate_limited} -> rate_limited(conn, source, window)
+      {:ok, _budget} -> renew(conn, nil)
+      {:error, :rate_limited, _budget} -> rate_limited(conn, source, window)
     end
   end
 
@@ -168,12 +168,13 @@ defmodule KeyfleetWeb.PrivySessionController do
   defp report_bounded_sign_in_failure(conn, reason) do
     {key, _source} = ClientAddress.key(conn)
 
-    if RequestRateLimiter.admit(
-         {:privy_browser_failure, browser_failure_bucket(reason), key},
-         @browser_failure_limit,
-         @browser_failure_window_seconds
-       ) == :ok do
-      report_sign_in_failure(reason)
+    case RequestRateLimiter.admit(
+           {:privy_browser_failure, browser_failure_bucket(reason), key},
+           @browser_failure_limit,
+           @browser_failure_window_seconds
+         ) do
+      {:ok, _budget} -> report_sign_in_failure(reason)
+      {:error, :rate_limited, _budget} -> :ok
     end
   end
 

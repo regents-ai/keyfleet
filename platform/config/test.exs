@@ -34,6 +34,10 @@ config :keyfleet, :database_startup_enabled, true
 # controller tests restore the release 30/300 themselves.
 config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
 
+# The same holds for the API budget: every case and the agent contract's own
+# server share the loopback address. The rate-limit tests put 120/60 back.
+config :keyfleet, :api_rate_limit, limit: 100_000, window_seconds: 60
+
 # Tests key rate limits as production does, behind Fly's proxy.
 config :keyfleet, :behind_fly_proxy, true
 

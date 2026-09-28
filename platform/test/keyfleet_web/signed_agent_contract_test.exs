@@ -163,6 +163,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     secret = :crypto.strong_rand_bytes(32)
     old = Application.get_env(:keyfleet, :siwa_broker_url)
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
     broker = server(:broker, &broker(&1, &2, secret))
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
@@ -504,6 +506,17 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     for {method, template} <- routes(),
         do: answer(c, c.signer, method, template, @address, empty_or_minimal(template), 503)
+
+    # Every route past the client's budget: one request an hour, spent first
+    # on the health check.
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+    Req.get!(c.app <> "/healthz", retry: false)
+
+    for {method, template} <- routes() do
+      too_many = answer_raw(c, method, template, "{}", 429)
+      assert too_many.body["error"]["code"] == "too_many_requests"
+      assert [_seconds] = Req.Response.get_header(too_many, "retry-after")
+    end
 
     answered =
       Enum.filter(answered(), fn {method, template, _status} ->

@@ -164,19 +164,30 @@ Missing or invalid credentials return 401. A profile that has not been created y
 
 ## Errors
 
-A JSON error names its cause in `error`, a stable code meant for programs, for example `{"error":"fleet_unknown"}`. A workspace refusal adds `message`, which says what went wrong, and `details`. Profile answers carry the code in an object, for example `{"error":{"code":"profile_not_created"}}`. Branch on the status and the code, never on the wording of a message.
+A route's own refusal names its cause in `error`, a stable code meant for programs, for example `{"error":"fleet_unknown"}`. A workspace refusal adds `message`, which says what went wrong, and `details`. Profile answers carry the code in an object, for example `{"error":{"code":"profile_not_created"}}`.
 
-An unknown address under `/api` answers JSON 404 whatever the `Accept` header says:
+Every other JSON error, such as an unknown address, a body that is not JSON or too many requests, has one shape:
 
 ```json
-{"errors": {"code": "not_found", "detail": "Not Found", "hint": "See {{origin}}/docs and {{origin}}/openapi.json for supported requests."}}
+{"error": {"code": "not_found", "message": "Not Found", "hint": "See {{origin}}/docs and {{origin}}/openapi.json for supported requests."}}
 ```
 
-An unknown page address answers 404 as HTML, or as Markdown when you ask for `text/markdown`. The [OpenAPI JSON specification]({{origin}}/openapi.json) lists every status each of its operations can return, and the [YAML contract]({{origin}}/api-contract.openapiv3.yaml) does the same for every signed agent request.
+`code` is stable and meant for programs, `message` says what went wrong and `hint` says what to do next. Branch on the status and the code, never on the wording of a message.
+
+An unknown address under `/api` answers JSON 404 whatever the `Accept` header says. An unknown page address answers 404 as HTML, or as Markdown when you ask for `text/markdown`. The [OpenAPI JSON specification]({{origin}}/openapi.json) lists every status each of its operations can return, and the [YAML contract]({{origin}}/api-contract.openapiv3.yaml) does the same for every signed agent request.
 
 ## Rate limits
 
-There is no general request budget, so answers carry no rate-limit headers. Two requests are limited:
+Each client address has 120 requests per 60 seconds, shared by `/healthz` and every address under `/api`, signed agent requests included. Every answer there says where you stand:
+
+```http
+RateLimit-Policy: "default";q=120;w=60
+RateLimit: "default";r=119;t=42
+```
+
+`q` is the number of requests allowed in a window of `w` seconds, `r` is how many remain and `t` is the number of seconds until the window resets. Past the limit the answer is `429` with the code `too_many_requests` and a `Retry-After` header in seconds.
+
+Two requests also have a limit of their own:
 
 - Starting a browser session: 30 per client address every 5 minutes. Past that the answer is `429` `{"error":"rate_limited"}` with a `Retry-After` header in seconds.
 - Setting an open room's topic: once a minute. Too soon answers `429` `rename_too_soon` with a `Retry-After` header in seconds.
@@ -190,7 +201,7 @@ Wait as long as `Retry-After` says, then send the request again.
 
 ### Breaking changes
 
-None yet.
+- 2026-09-28, `info.version` 2.0.0: an error that is not a route's own refusal, such as an unknown address or a body that is not JSON, is `{"error": {"code", "message", "hint"}}`. It was `{"errors": {"code", "detail", "hint"}}`.
 
 ## Browser tools
 

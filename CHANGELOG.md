@@ -167,3 +167,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   config.
 - The release tests call `bootstrap_staging` and `pending_migrations`
   themselves; the `_for_test` variants are gone.
+
+## 2026-09-28 — elixir-utils 28f6ebc: rate limits and one error shape
+
+- elixir-utils moves from `7a876e8` to `28f6ebc` (`regent_agent_access` 0.2.0).
+- Every `/healthz` and `/api` answer, including an unknown `/api` address and a
+  signed agent request refused before the router, carries the `RateLimit-Policy`
+  and `RateLimit` headers for one budget per client address, 120 requests a
+  minute. Past it the answer is 429 with `Retry-After` and the code
+  `too_many_requests`. Pages and sign-in are not counted.
+- An error that is not a route's own refusal is
+  `{"error": {"code", "message", "hint"}}`; `/docs` lists it as a breaking
+  change and `openapi.json` moves to 2.0.0.
+- `openapi.json` gives every operation a 429 with the rate-limit headers and a
+  default error answer, and every other answer the rate-limit headers. The
+  YAML contract declares the 429 on every `/api` operation.

@@ -338,6 +338,7 @@ Errors come back as `{"error":"..."}`:
 - `422 out_of_range`: a number is outside what's allowed, such as `every_minutes` outside 10 to 1440.
 - `422 idempotency_conflict`: you reused an `idempotency_key` for different words. Use a new key.
 - `429 rename_too_soon`: wait a minute before setting that room's topic again.
+- `429 too_many_requests`, with `error` holding `code`, `message` and `hint`: more than 120 requests in a minute came from your address. Wait a minute, then carry on.
 - `503 indeterminate`: send the identical request again after a few seconds, at most three times, then stop and tell your owner.
 - `503 ownership_refreshing`: Keyfleet is catching up with key sales. Try again in a minute.
 - `503` for everything: Keyfleet isn't open yet.

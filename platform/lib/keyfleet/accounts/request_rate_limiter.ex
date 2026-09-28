@@ -1,7 +1,9 @@
 defmodule Keyfleet.Accounts.RequestRateLimiter do
   @moduledoc """
-  Per-client budgets for the anonymous sign-in endpoints: session bootstrap and
-  browser failure reports.
+  Per-client fixed-window budgets: the public API and health check, session
+  bootstrap and browser failure reports. Every answer carries what is left of
+  the window, so a response can tell the caller how many requests remain and
+  when the window resets.
 
   This is a per-instance best-effort bound, not a global hard cap. With N
   application instances, a client can spend up to N × limit in one window.
@@ -12,17 +14,35 @@ defmodule Keyfleet.Accounts.RequestRateLimiter do
 
   @table __MODULE__
 
+  @type budget :: %{
+          limit: pos_integer(),
+          remaining: non_neg_integer(),
+          reset: pos_integer(),
+          window: pos_integer()
+        }
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
 
-  @spec admit(term(), pos_integer(), pos_integer()) :: :ok | {:error, :rate_limited}
+  @spec admit(term(), pos_integer(), pos_integer()) ::
+          {:ok, budget()} | {:error, :rate_limited, budget()}
   def admit(key, limit, window_seconds) do
     table = ensure_table()
-    bucket = System.monotonic_time(:second) |> div(window_seconds)
+    now = System.monotonic_time(:second)
+    bucket = Integer.floor_div(now, window_seconds)
     sweep_expired(table, bucket, window_seconds)
-    increment(table, {window_seconds, key}, bucket, limit)
+    count = increment(table, {window_seconds, key}, bucket)
+
+    budget = %{
+      limit: limit,
+      remaining: max(limit - count, 0),
+      reset: (bucket + 1) * window_seconds - now,
+      window: window_seconds
+    }
+
+    if count <= limit, do: {:ok, budget}, else: {:error, :rate_limited, budget}
   end
 
   @doc false
@@ -34,37 +54,26 @@ defmodule Keyfleet.Accounts.RequestRateLimiter do
     end
   end
 
-  defp increment(table, key, bucket, limit) do
+  defp increment(table, key, bucket) do
     case :ets.lookup(table, key) do
-      [] ->
-        insert_first(table, key, bucket, limit)
-
-      [{^key, ^bucket, _count}] ->
-        increment_current(table, key, limit)
-
-      [{^key, old_bucket, count}] ->
-        reset_expired(table, key, old_bucket, count, bucket, limit)
+      [] -> insert_first(table, key, bucket)
+      [{^key, ^bucket, _count}] -> :ets.update_counter(table, key, {3, 1})
+      [{^key, old_bucket, count}] -> reset_expired(table, key, old_bucket, count, bucket)
     end
   end
 
-  defp insert_first(table, key, bucket, limit) do
+  defp insert_first(table, key, bucket) do
     if :ets.insert_new(table, {key, bucket, 1}),
-      do: :ok,
-      else: increment(table, key, bucket, limit)
+      do: 1,
+      else: increment(table, key, bucket)
   end
 
-  defp increment_current(table, key, limit) do
-    if :ets.update_counter(table, key, {3, 1}) <= limit,
-      do: :ok,
-      else: {:error, :rate_limited}
-  end
-
-  defp reset_expired(table, key, old_bucket, count, bucket, limit) do
+  defp reset_expired(table, key, old_bucket, count, bucket) do
     replacement = [{{key, old_bucket, count}, [], [{{key, bucket, 1}}]}]
 
     if :ets.select_replace(table, replacement) == 1,
-      do: :ok,
-      else: increment(table, key, bucket, limit)
+      do: 1,
+      else: increment(table, key, bucket)
   end
 
   defp sweep_expired(table, bucket, window_seconds) do

@@ -39,6 +39,8 @@ An agent signs in with a key it makes itself, through SIWA with the audience `ke
 
 The signed-in person's own account has `GET /api/v1/profile`, `PATCH /api/v1/profile` and `POST /api/v1/profile/sync`, described in the [developer documentation]({{origin}}/docs).
 
+Every `/healthz` and `/api` answer carries `RateLimit-Policy` and `RateLimit` headers for one budget per client address, 120 requests a minute; past it the answer is 429 with `Retry-After`. See [errors, rate limits and the versioning and deprecation policy]({{origin}}/docs).
+
 ## What agents can't do
 
 Agents can't buy keys, vote, move money or sign transactions through Keyfleet. Only people do that, from their own wallets. An agent's owner writes its limits; limits only restrict, and a fleet vote never changes them.
