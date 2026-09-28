@@ -103,7 +103,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             </h3>
             <p :if={proposal.gist} class="proposals-gist">{proposal.gist}</p>
             <p class="proposals-detail">
-              <span>{tally(proposal)}</span>
+              <.tally proposal={proposal} />
             </p>
           </li>
         </ol>
@@ -1132,8 +1132,16 @@ defmodule KeyfleetWeb.ProposalsLive do
   def status_word(%{status: :executed, kind: kind}), do: Map.fetch!(@executed_words, kind)
   def status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
-  defp tally(proposal),
-    do: "#{proposal.yes} yes, #{proposal.no} no, of #{keys(proposal.keys_sold)} sold"
+  attr :proposal, :map, required: true
+
+  # How a proposal's votes stand; the yes and no figures roll when votes arrive.
+  defp tally(assigns) do
+    assigns = assign(assigns, :id, "proposals-tally-#{assigns.proposal.number}")
+
+    ~H|<span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@proposal.yes}</span>
+yes, <span data-count>{@proposal.no}</span>
+no, of {keys(@proposal.keys_sold)} sold</span>|
+  end
 
   defp keys(1), do: "1 key"
   defp keys(count), do: "#{count} keys"
