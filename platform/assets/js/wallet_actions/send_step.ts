@@ -6,7 +6,12 @@ import type {EthereumProvider, SelectedWallet} from "./connected_wallet"
 export type StepChain = {chain_id: number; name: string; rpc_url: string}
 
 /** One transaction a button sends, built on the server. */
-export type Step = {kind: "transaction"; step: string; to: Address; data: Hex; value: Hex}
+export type TransactionStep = {kind: "transaction"; step: string; to: Address; data: Hex; value: Hex}
+
+/** One EIP-712 signature a button asks for, built on the server. */
+export type SignatureStep = {kind: "signature"; step: string; typed_data: Record<string, unknown>}
+
+export type Step = TransactionStep | SignatureStep
 
 /** Nothing reached the wallet's send; the reason picks the words the server shows. */
 export class NothingSent extends Error {
@@ -25,7 +30,7 @@ export type Failure = NothingSent["reason"] | "wallet_declined" | "insufficient_
 export async function sendStep(
   chain: StepChain,
   signer: Address,
-  step: Step,
+  step: TransactionStep,
   wallet: () => SelectedWallet | null,
   sending: () => void,
 ): Promise<Hash> {
@@ -40,6 +45,31 @@ export async function sendStep(
     throw new Error("The wallet did not return a transaction hash.")
   }
   return hash as Hash
+}
+
+/**
+ * Asks the signed-in wallet to sign the server's typed data, after the same
+ * chain and account reads as a send. Returns the signature only; the server
+ * keeps the typed data it built.
+ */
+export async function signStep(
+  chain: StepChain,
+  signer: Address,
+  step: SignatureStep,
+  wallet: () => SelectedWallet | null,
+  sending: () => void,
+): Promise<Hex> {
+  const provider = await ready(chain, signer, wallet)
+
+  sending()
+  const signature = await provider.request({
+    method: "eth_signTypedData_v4",
+    params: [getAddress(signer), JSON.stringify(step.typed_data)],
+  })
+  if (typeof signature !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+    throw new Error("The wallet did not return a signature.")
+  }
+  return signature as Hex
 }
 
 /** Why a press ended without a hash. After `sending`, the wallet may have sent it. */

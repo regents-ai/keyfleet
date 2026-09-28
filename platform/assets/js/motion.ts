@@ -2,7 +2,7 @@
  * The standard motion on every page: a squish when something is pressed, a
  * shake when the answer is no, panels that slide or pop open, and on pages the
  * server draws once, the headline rising in word by word and the cards
- * settling into place. The version of each is named in `AshTemplateWeb.Motion`
+ * settling into place. The version of each is named in `KeyfleetWeb.Motion`
  * and every version that was tried is kept in the template's motion lab at
  * /animations.
  *

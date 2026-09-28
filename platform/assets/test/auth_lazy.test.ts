@@ -657,21 +657,6 @@ describe("lazy browser authentication", () => {
     expect(warning).toHaveBeenLastCalledWith("Privy sign-in failure", "session_exchange")
   })
 
-  it("loads Privy for the first anonymous wallet connection without starting sign in", async () => {
-    const page = accountDocument()
-    const handleRequest = vi.fn(async () => undefined)
-    const startPrivyBridge = vi.fn(async () => ({request: handleRequest}))
-    const importer = vi.fn(async () => ({startPrivyBridge}))
-
-    installAccountAuthLazyLoader(page.documentRoot, importer)
-    page.dispatch("ash:wallet-connect")
-
-    await vi.waitFor(() => expect(handleRequest).toHaveBeenCalledWith("connect-wallet"))
-    expect(importer).toHaveBeenCalledOnce()
-    expect(startPrivyBridge).toHaveBeenCalledOnce()
-    expect(handleRequest).not.toHaveBeenCalledWith("sign-in")
-  })
-
   it("routes a signed-in wallet button to connection without sign-in or document reload", async () => {
     vi.stubGlobal("Element", AccountElement)
     const page = accountDocument({signedIn: true})
@@ -720,7 +705,8 @@ describe("lazy browser authentication", () => {
     expect(page.status.hidden).toBe(true)
   })
 
-  it("announces an anonymous wallet connection failure to the active route", async () => {
+  it("announces a wallet connection failure to the active route", async () => {
+    vi.stubGlobal("Element", AccountElement)
     const page = accountDocument()
     const failed = vi.fn()
     page.documentRoot.addEventListener("ash:wallet-connect-failed", failed)
@@ -731,7 +717,7 @@ describe("lazy browser authentication", () => {
         throw new Error("chunk unavailable")
       }),
     )
-    page.dispatch("ash:wallet-connect")
+    page.click("connect-wallet")
 
     await vi.waitFor(() => expect(failed).toHaveBeenCalledOnce())
     expect(page.status.textContent).toBe("Wallet connection couldn’t start. Try again.")

@@ -67,14 +67,8 @@ function memoryStorage() {
   }
 }
 
-let dispatched: string[]
-
 beforeEach(() => {
-  dispatched = []
-  vi.stubGlobal("window", {
-    localStorage: memoryStorage(),
-    dispatchEvent: (event: Event) => void dispatched.push(event.type),
-  })
+  vi.stubGlobal("window", {localStorage: memoryStorage(), dispatchEvent: () => true})
   forgetWalletDisconnected()
   replaceActiveEthereumWallet(null)
 })
@@ -92,8 +86,9 @@ describe("a press sends the server's step from the wallet it was built for", () 
     replaceActiveEthereumWallet({address: signer, provider: active.provider})
     const {pushed, push} = pushes()
 
-    await Promise.all([press(review, "buy", push), press(review, "buy", push)])
+    const answers = await Promise.all([press(review, "buy", push), press(review, "buy", push)])
 
+    expect(answers).toEqual([{transaction_hash: hash}, {transaction_hash: hash}])
     expect(active.sent).toHaveLength(2)
     expect(active.sent[0]).toEqual([{from: signer, to: fleet, data: "0x1234", value: "0x0"}])
     expect(pushed).toEqual([
@@ -118,8 +113,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
     replaceActiveEthereumWallet({address: signer, provider: active.provider})
     const {pushed, push} = pushes()
 
-    await press(review, "buy", push)
-
+    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
 
@@ -156,12 +150,11 @@ describe("a press sends the server's step from the wallet it was built for", () 
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
   })
 
-  it("opens the wallet step when no wallet is active, and sends nothing", async () => {
+  it("sends nothing when no wallet is active", async () => {
     const {pushed, push} = pushes()
 
     await press(review, "buy", push)
 
-    expect(dispatched).toContain("ash:wallet-connect")
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
   })
 

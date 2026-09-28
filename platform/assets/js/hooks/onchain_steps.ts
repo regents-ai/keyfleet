@@ -1,8 +1,16 @@
-import type {Address} from "viem"
+import type {Address, Hash, Hex} from "viem"
 
 import type {Hook} from "../hook_composition"
 import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
-import {failure, NothingSent, sendStep, type Step, type StepChain} from "../wallet_actions/send_step"
+import {
+  failure,
+  NothingSent,
+  sendStep,
+  signStep,
+  type Failure,
+  type Step,
+  type StepChain,
+} from "../wallet_actions/send_step"
 
 /**
  * Who sends, on which chain, the steps the buttons name, and the on-screen
@@ -17,6 +25,9 @@ export type Review = {
   steps: Step[]
   inputs: Record<string, string>
 }
+
+/** What the wallet answered one press: the hash or signature, or why nothing was sent. */
+export type Pressed = {transaction_hash: Hash} | {signature: Hex} | {reason: Failure}
 
 type Push = (event: string, payload: unknown) => void
 
@@ -50,24 +61,28 @@ export const OnchainSteps: Hook = {
     })
 
     // Every press runs on its own and reaches the wallet, even while an earlier
-    // one is still there. A press whose review no longer matches the form on
-    // screen asks the server for the matching review and sends what comes back.
+    // one is still there. On a component with review inputs, a press with no
+    // review yet, or whose review no longer matches the form on screen, asks the
+    // server for the matching review and sends what comes back.
     this.clicked = event => {
       const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
       const name = button?.dataset.onchainStep
       if (!button || !name || !this.el.contains(button)) return
       const release = mark(button)
       const form = formInputs(this.el)
+      const asks = Object.keys(form).length > 0 && (!this.review || !sameInputs(this.review.inputs, form))
+      lost(this.el, false)
 
-      if (activeEthereumWallet() && this.review && !sameInputs(this.review.inputs, form)) {
+      if (activeEthereumWallet() && asks) {
         void this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
-          .then(([result]) => {
-            const reply = result?.status === "fulfilled" ? result.value.reply as {review?: Review; send?: string} : {}
-            if (reply.review && reply.send) return press(reply.review, reply.send, push)
-            push("step_failed", {step: name, reason: "step_unknown"})
+          .then(async ([result]) => {
+            // The server never heard the press, so it cannot say why; the page does.
+            if (result?.status !== "fulfilled") return lost(this.el, true)
+            const reply = result.value.reply as {review?: Review; send?: string}
+            if (reply.review && reply.send) await press(reply.review, reply.send, push)
+            else push("step_failed", {step: name, reason: "step_unknown"})
           })
-          // A lost connection drops the question; the button comes back to press again.
-          .catch(() => {})
+          .catch(() => lost(this.el, true))
           .finally(release)
       } else {
         void press(this.review, name, push).finally(release)
@@ -90,13 +105,14 @@ export const OnchainSteps: Hook = {
 }
 
 /**
- * Sends the named step from Privy's active wallet, the only wallet that acts,
- * when it is the signer the server built the review for. With no wallet active,
- * the press opens the connect step and sends nothing. Reports only what the
- * wallet answered, against the review it sent from: the hash, or why nothing
- * was sent. The server decides what the hash did.
+ * Sends or signs the named step from Privy's active wallet, the only wallet that
+ * acts, when it is the signer the server built the review for. With no wallet
+ * active, the press sends nothing and the server's note says why. Reports only
+ * what the wallet answered, against the review it sent from: the hash or
+ * signature, or why nothing was sent, and returns the same answer. The server
+ * decides what the hash did.
  */
-export async function press(review: Review | undefined, name: string, push: Push): Promise<void> {
+export async function press(review: Review | undefined, name: string, push: Push): Promise<Pressed> {
   const step = review?.steps.find(candidate => candidate.step === name)
   let sending = false
   const started = () => {
@@ -104,10 +120,7 @@ export async function press(review: Review | undefined, name: string, push: Push
   }
 
   try {
-    if (!activeEthereumWallet()) {
-      window.dispatchEvent(new CustomEvent("ash:wallet-connect"))
-      throw new NothingSent("wallet_unavailable")
-    }
+    if (!activeEthereumWallet()) throw new NothingSent("wallet_unavailable")
     if (!review || !step) throw new NothingSent("step_unknown")
     const wallet = () => {
       const active = activeEthereumWallet()
@@ -115,22 +128,35 @@ export async function press(review: Review | undefined, name: string, push: Push
     }
     if (!wallet()) throw new NothingSent("wallet_unavailable")
 
+    if (step.kind === "signature") {
+      const signature = await signStep(review.chain, review.signer, step, wallet, started)
+      push("step_signed", {review_id: review.id, step: name, signature})
+      return {signature}
+    }
     const transaction_hash = await sendStep(review.chain, review.signer, step, wallet, started)
     push("step_sent", {review_id: review.id, step: name, transaction_hash})
+    return {transaction_hash}
   } catch (error) {
-    push("step_failed", {step: name, reason: failure(sending, error)})
+    const reason = failure(sending, error)
+    push("step_failed", {step: name, reason})
+    return {reason}
   }
 }
 
-/** The review's inputs as they are on screen now: text as typed, boxes as "true" or "false". */
+/**
+ * The review's inputs as they are on screen now: text as typed, a box as
+ * "true" or "false", and a group of choices as the one chosen.
+ */
 export function formInputs(root: HTMLElement): Record<string, string> {
   const inputs: Record<string, string> = {}
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-onchain-input]").forEach(input => {
     const name = input.dataset.onchainInput
     if (!name) return
-    inputs[name] = input instanceof HTMLInputElement && (input.type === "checkbox" || input.type === "radio")
-      ? String(input.checked)
-      : input.value
+    if (input instanceof HTMLInputElement && input.type === "radio") {
+      if (input.checked) inputs[name] = input.value
+    } else {
+      inputs[name] = input instanceof HTMLInputElement && input.type === "checkbox" ? String(input.checked) : input.value
+    }
   })
   return inputs
 }
@@ -138,6 +164,13 @@ export function formInputs(root: HTMLElement): Record<string, string> {
 function sameInputs(review: Record<string, string>, form: Record<string, string>): boolean {
   const names = new Set([...Object.keys(review), ...Object.keys(form)])
   return [...names].every(name => review[name] === form[name])
+}
+
+// The component's `data-onchain-lost` line, shown when a press could not reach
+// the server. The next render from the server hides it again.
+function lost(root: HTMLElement, shown: boolean): void {
+  const line = root.querySelector<HTMLElement>("[data-onchain-lost]")
+  if (line) line.hidden = !shown
 }
 
 // Marked with a data attribute and CSS only: the button keeps taking presses.

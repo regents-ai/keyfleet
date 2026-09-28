@@ -304,6 +304,9 @@ defmodule KeyfleetWeb.WalletPanel do
       <p :if={@press_note} id={"#{@id}-press-note"} class="wallet-panel-note" role="status">
         {@press_note}
       </p>
+      <p class="wallet-panel-note" role="status" data-onchain-lost hidden>
+        This page lost its connection, so nothing was sent. Press again once it's back.
+      </p>
 
       <ol
         :if={@presses.sent != []}
