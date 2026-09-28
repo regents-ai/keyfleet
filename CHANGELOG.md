@@ -120,3 +120,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   now", "3 minutes ago", "2 days ago"); past that they read in weeks, months
   (thirty days) and years ("2 weeks ago", "3 months ago") instead of days.
 - `KeyfleetWeb.Time.ago/2` is gone; `KeyfleetWeb.Time` keeps `moment/2`.
+
+## 2026-09-27 — Autolaunch v2 is the launch target
+
+- `docs/autolaunch-target.md` now pins Autolaunch v2, the Revstake package on
+  the Autolaunch branch `feat/contracts-v2` at `da2519b`. It is a candidate:
+  not pushed, not deployed on Base, no addresses yet. The code keeps building
+  against the deployed v1 factory until v2 is deployed and the founder says to
+  switch.
+- The document records v2's call (a floor price and an optional higher minimum
+  instead of a required raise), its events and views, the fixed terms (20%
+  sold, 15% pooled, 65% vesting over 365 days, a 48-hour auction), graduation
+  and the bids' share-out, how each of Keyfleet's gaps resolves, what Keyfleet
+  changes to adopt v2, and six open questions. No code, contract or test
+  changed.
