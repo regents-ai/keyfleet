@@ -271,9 +271,9 @@ Every timing value is in blocks, and Base makes one every 2 seconds.
     fleet as owner, though, and the auction and the strategy pay a bid's
     tokens, refund and share to its owner whoever sends the call. So the fleet
     need do nothing, and anyone may claim for it. What such a bid brings in
-    arrives in REGENT or the launched token, which the fleet sorts as income to
-    the keys (rule 5 sorts by token alone). The share is crumbs, so no keeper
-    job claims it.
+    arrives in REGENT or the launched token; to the fleet it is a gift
+    (question 4 below), sorted as income to the keys (rule 5 sorts by token
+    alone). The share is crumbs, so no keeper job claims it.
 11. **The fleet as treasury.** At graduation the fleet receives
     `raise − lpRegentUsed` in REGENT, about a quarter of the raise (v1 sent
     only what the position did not use), and the escrow vests 65% of the
@@ -327,7 +327,7 @@ today:
 ## What Keyfleet changes to adopt v2
 
 None of this is done yet. It waits for v2 to be deployed and for the founder
-to say to switch (see the open questions). Each change replaces the v1 shape
+to say to switch (see the questions below). Each change replaces the v1 shape
 outright.
 
 **Contracts**
@@ -455,13 +455,11 @@ outright.
     `keeper/calls_test.exs`, `activity_test.exs`, the proposals and workspace
     page tests, the fixtures in `test/support` and the browser specs.
 
-## Open questions
+## Questions, answered
 
-1. **Should fleet launches offer the higher minimum?** (founder)
-   a. The launch form asks for a floor and an optional higher minimum.
-   b. The floor only; the minimum is always zero.
-   Recommendation: a. A fleet's plan says what the money is for, and today's
-   form already asks how much REGENT to raise.
+1. **Should fleet launches offer the higher minimum?** Founder, 2026-09-27:
+   yes. Both the minimum raise and the floor price are set in the launch
+   proposal before launch.
 2. **How is the entered floor rounded?** Answered by `launch-profiles.md` at
    `5effdb1`: down to a multiple of 100 in Q96, as the Autolaunch site does, and
    no lower than `2^32 + 1`. Keyfleet rounds the same way, so the same price
@@ -472,12 +470,15 @@ outright.
    with `MigrationNotYetAllowed`, and once one call has settled the launch
    every later call reverts with `LaunchNotActive` and changes nothing. The
    worst case is one reverted call.
-4. **What a bid in the fleet's name brings in.** (founder)
-   a. Income to the keys, sorted by token as today.
-   b. Shared money; this needs the fleet to know its bids, which sorting by
-      token cannot do.
-   Recommendation: a. It is rare, it is someone else's REGENT, and it keeps
-   rule 5 as it is.
+4. **What a bid in the fleet's name brings in.** Founder, 2026-09-27: a
+   fleet does not bid, and what it holds reaches it only at its own contract
+   address, sent, gifted or bought there. The pinned auction takes any
+   nonzero owner and v2 sets no validation hook, so a stranger's bid naming
+   the fleet as owner is possible; to the fleet it is a gift, sorted by token
+   under rule 5 like any other. Agents always act on their own: their
+   wallets and tokens are theirs, as a person's are in a DAO. Only the fleet's
+   contract address, and later any sub-addresses the fleet's admin address
+   owns and assigns to agents or groups of agents, belong to the fleet.
 5. **Where is v2 tested on a Base fork?** Answered by the Autolaunch UI lane
    on 2026-09-27: there is no v2 fork or lab tooling yet. The Base fork suite
    and the deployment ceremony stay in `contracts/v1` and are a separately
@@ -485,20 +486,16 @@ outright.
    whether to build a v2 lab. Until then Keyfleet builds against
    `revstake-v2`'s hermetic suite and its ABIs in `revstake-v2/abi`, and the
    fork test waits for that lab.
-6. **When does the Keyfleet change start?** (founder)
-   a. Now, on a branch against `da2519b`.
-   b. Once v2 is pushed and its ABIs are frozen; merge only after it is
-      deployed and you say to switch.
-   c. After v2 is deployed.
-   Recommendation: b. The candidate can still change, and the work is ready to
-   merge the day the addresses exist.
+6. **When does the Keyfleet change start?** Founder, 2026-09-27: wait. The
+   change starts once v2 is pushed and its ABIs are frozen, and merges only
+   after v2 is deployed and the founder says to switch.
 
 ## Testing
 
 No Base Sepolia deployment exists or can, because the bindings are Base
 mainnet addresses. Until v2 is deployed, Keyfleet's contract tests run against
 the v2-shaped mock, and a fork test needs the v2 graph deployed on an Anvil
-fork of Base (open question 5). The v2 package's own proof is its hermetic
+fork of Base (question 5 below). The v2 package's own proof is its hermetic
 suite, `bin/gate.sh` in `contracts/revstake-v2`, against real PoolManager,
 PositionManager, CCA factory and UERC20 bytecode. After the v2 ceremony a Base
 fork carries the real factory.
