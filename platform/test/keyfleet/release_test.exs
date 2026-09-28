@@ -200,6 +200,7 @@ defmodule Keyfleet.ReleaseTest do
              "budget_payments",
              "budget_receipts",
              "chain_cursors",
+             "early_signups",
              "fleets",
              "graph_cursors",
              "graph_events",
