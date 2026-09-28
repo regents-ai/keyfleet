@@ -107,8 +107,6 @@ defmodule KeyfleetWeb.FleetLive do
         id="fleet-view"
         class="fleet-view"
         phx-hook="Slides"
-        data-drawer={Motion.standard("drawer")}
-        data-menu={Motion.standard("menu")}
       >
         <header class="fleet-bar">
           <div class="fleet-bar__title">

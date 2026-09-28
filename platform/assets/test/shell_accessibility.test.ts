@@ -19,8 +19,7 @@ vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({Arrivals: {}, Counter: {}, Refusal: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({Cascade: {}}))
-vi.mock("../js/hooks/motion/slides", () => ({Sheet: {}, Slides: {}}))
-vi.mock("../js/hooks/motion/shared", () => ({pressedControl: vi.fn()}))
+vi.mock("../js/hooks/motion/slides", () => ({Slides: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(

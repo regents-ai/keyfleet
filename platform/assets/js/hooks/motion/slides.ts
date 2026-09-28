@@ -1,88 +1,70 @@
 /**
- * Panels that slide in: a drawer from the side, a menu under its button and a
- * dialog rising like a sheet. The page opens and closes them itself, so these
- * islands only move a panel as it opens, and only when a pointer press opened
- * it. Closing is instant, as the page already hid the panel.
+ * Panels that open over the page: the phone menu slides out as a drawer, a
+ * dialog rises as a sheet and a header menu pops under its button. The page
+ * opens and closes them itself; this only moves a panel from where it starts
+ * to where it rests, then hands it back to its stylesheet. Closing is
+ * immediate.
+ *
+ * Moves in percent name both ends, so they stay a share of the panel's own
+ * size instead of being converted to pixels.
  */
-import {spring, type AnimationParams} from "animejs"
-import {play, rest, SLOW, still, stop, takePointerPress} from "./shared"
+import {spring} from "animejs"
+import {BASE, EASE_OUT, SLOW, lastInputByPointer, play, still} from "./shared"
 import type {Hook} from "../../hook_composition"
 
-// Each panel moves from where it waits while closed to where the stylesheet
-// puts it. Moves in percent name both ends, so they stay a share of the
-// panel's own size.
-const PANELS: Record<string, Record<string, AnimationParams>> = {
-  drawer: {
-    spring: {x: ["100%", "0%"], ease: spring({bounce: 0.3, duration: 380})},
-  },
-  sheet: {
-    spring: {y: ["100%", "0%"], ease: spring({bounce: 0.35, duration: 400})},
-  },
-  menu: {
-    pop: {y: [-6, 0], scale: [0.9, 1], opacity: [0, 1], duration: SLOW, ease: "outBack(2.2)"},
-  },
-}
+// The phone menu sits against the left edge, so its drawer comes from there.
+export const drawer = (el: Element) =>
+  play(el, {x: ["-100%", "0%"], ease: spring({bounce: 0.3, duration: 380})})
 
-// Showing: not hidden, and not inside a closed disclosure.
-const shown = (el: HTMLElement) => !el.hidden && el.closest("details:not([open])") === null
+export const sheet = (el: Element) =>
+  play(el, {y: ["100%", "0%"], ease: spring({bounce: 0.35, duration: 400})})
+
+export const menu = (el: Element) =>
+  play(el, {
+    y: {from: -6},
+    scale: {from: 0.9},
+    opacity: {from: 0},
+    duration: SLOW,
+    ease: "outBack(2.2)",
+  })
+
+export const backdrop = (el: Element) =>
+  play(el, {opacity: {from: 0}, duration: BASE, ease: EASE_OUT})
+
+// Keyfleet's own. Its panels beside the fleet map sit against the right edge,
+// so a drawer here comes from there.
+const sideDrawer = (el: Element) =>
+  play(el, {x: ["100%", "0%"], ease: spring({bounce: 0.3, duration: 380})})
 
 type SlidesHook = {el: HTMLElement; watch?: MutationObserver}
 
 /**
- * An island holding panels marked `data-panel="drawer"` or `"menu"`, each
- * moving as `data-drawer` or `data-menu` on the island says. A panel opens
- * when its `hidden` goes, or when the disclosure around it opens. The page
- * puts both back after every update, so a panel that is open before and after
- * an update is left alone. A panel closed mid-move is put back at rest; what
- * moves inside it carries on and ends on its own.
+ * Keyfleet's own: an island whose drawers and menus, each marked
+ * `data-panel`, are opened by LiveView commands. A command acts on a press
+ * only after it has passed the document, so rather than the press, this
+ * watches each panel's `hidden` go and moves it then, when the reader was last
+ * using a mouse or a finger. A menu here is opened by a button, not a summary,
+ * and pops as a header menu does.
  */
 export const Slides: Hook = {
   mounted(this: SlidesHook) {
-    const island = this.el
-    const panels = () => [...island.querySelectorAll<HTMLElement>("[data-panel]")]
-    const open = new Set(panels().filter(shown))
-
-    const slide = (el: HTMLElement) => {
-      const kind = el.dataset.panel as string
-      play(el, PANELS[kind][island.dataset[kind] as string])
-    }
+    const panels = () => [...this.el.querySelectorAll<HTMLElement>("[data-panel]")]
+    const open = new Set(panels().filter(el => !el.hidden))
 
     this.watch = new MutationObserver(() => {
-      const opened = []
       for (const el of panels()) {
-        if (shown(el) === open.has(el)) continue
-        if (shown(el)) {
-          open.add(el)
-          opened.push(el)
-        } else {
-          open.delete(el)
-          rest(el)
-        }
+        if (el.hidden) open.delete(el)
+        if (el.hidden || open.has(el)) continue
+        open.add(el)
+        if (!lastInputByPointer() || still(el)) continue
+        if (el.dataset.panel === "menu") menu(el)
+        else sideDrawer(el)
       }
-      if (opened.length > 0 && takePointerPress() && !still()) opened.forEach(slide)
     })
-    this.watch.observe(island, {subtree: true, attributes: true, attributeFilter: ["hidden", "open"]})
+    this.watch.observe(this.el, {subtree: true, attributes: true, attributeFilter: ["hidden"]})
   },
 
   destroyed(this: SlidesHook) {
     this.watch?.disconnect()
-    stop(this.el)
-  },
-}
-
-type SheetHook = {el: HTMLDialogElement}
-
-/**
- * A dialog the page opens by adding it, composed after `ModalDialog` so it is
- * already open. It rises as `data-variant` says when a pointer press opened it.
- */
-export const Sheet: Hook = {
-  mounted(this: SheetHook) {
-    const dialog = this.el
-    if (takePointerPress() && !still()) play(dialog, PANELS.sheet[dialog.dataset.variant as string])
-  },
-
-  destroyed(this: SheetHook) {
-    stop(this.el)
   },
 }

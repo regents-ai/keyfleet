@@ -1,5 +1,5 @@
 import {animate, type AnimationParams} from "animejs"
-import {lastPressByPointer, still} from "./motion/shared"
+import {lastInputByPointer, still} from "./motion/shared"
 
 export const APP_ENTRY_DURATION = 270
 export const APP_EXIT_DURATION = 180
@@ -268,8 +268,8 @@ type ShellMotionHookState = {
 }
 
 type MotionSnapshot = {
-  // How the press that changed the page was made, asked before the update
-  // mounts anything that could use the press up, such as a dialog it opens.
+  // Whether the reader was last using a mouse or finger, or the keyboard,
+  // when the page changed.
   source: "pointer" | "keyboard"
   app?: string
   destination?: string
@@ -309,7 +309,7 @@ const capture = (root: HTMLElement): MotionSnapshot => {
   const background = current<HTMLElement>(root, MOTION_SELECTORS.background)[0]
 
   return {
-    source: lastPressByPointer() ? "pointer" : "keyboard",
+    source: lastInputByPointer() ? "pointer" : "keyboard",
     app: root.dataset.motionApp,
     destination: root.dataset.destination,
     regions,
@@ -332,8 +332,8 @@ export const ShellMotion = {
     if (incomingSurfaces.length > 0) {
       this.motion.transition({
         kind: "content",
-        source: lastPressByPointer() ? "pointer" : "keyboard",
-        reducedMotion: still(),
+        source: lastInputByPointer() ? "pointer" : "keyboard",
+        reducedMotion: still(this.el),
         incoming: [],
         incomingSurfaces,
       })
@@ -374,7 +374,7 @@ export const ShellMotion = {
     this.motion.transition({
       kind: snapshot.app && nextApp && snapshot.app !== nextApp ? "app" : "content",
       source: snapshot.source,
-      reducedMotion: still(),
+      reducedMotion: still(this.el),
       outgoing: snapshot.regions,
       incoming,
       outgoingSurfaces: snapshot.surfaces,

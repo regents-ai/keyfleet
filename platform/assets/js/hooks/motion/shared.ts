@@ -1,55 +1,47 @@
 /**
- * What all of Keyfleet's motion shares: the timing, the two questions asked
- * before anything moves, the last press, and the one way a move is played.
+ * What all of the product's motion shares: the design system's timings and
+ * curves, and the questions asked before anything moves.
  */
-import {animate, utils, type AnimationParams, type JSAnimation} from "animejs"
+import {animate, cubicBezier, utils, type AnimationParams, type JSAnimation} from "animejs"
 
+export const FAST = 140
+export const BASE = 200
 export const SLOW = 280
 
-// The reader asked for less motion in their system settings.
-export function still() {
-  return matchMedia("(prefers-reduced-motion: reduce)").matches
-}
+export const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1)
+export const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1)
+
+// Words and digits that rise into view each sit inside a box that clips them,
+// `.split-clip` in components/motion.css. The box is named by a class because a
+// page's security policy may refuse styles written into markup, which is what
+// splitText's own `wrap` writes.
+export const CLIPPED_WORD = "<span class='split-clip'><span data-word='{i}'>{value}</span></span>"
+export const CLIPPED_CHAR = "<span class='split-clip'><span data-char='{i}'>{value}</span></span>"
+
+// The reader asked for less motion, in their system settings or with a
+// switch on the page around the element.
+export const still = (el: Element) =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches || el.closest("[data-motion='reduced']") !== null
 
 // A click from Enter or Space reports no pointer presses. Keyboard-driven UI
 // answers at once rather than animating.
-export function byPointer(event: MouseEvent) {
-  return event.detail > 0
-}
+export const byPointer = (event: MouseEvent) => event.detail > 0
 
-// The last press: the control it reached, when that control has an id, and
-// whether a pointer made it. Whatever the press opens asks how it was made,
-// and a dialog it opens hands focus back to that control when it closes.
-// Safari doesn't focus a link or button when it is clicked, so what has focus
-// can't say which control that was.
-let last: {control?: string; pointer: boolean} = {pointer: false}
+// Menus and dialogs can open without a click of their own, from a hover or
+// from the server. They move only when the reader was last using a mouse or a
+// finger. Keyfleet's own: going back or forward starts afresh, as a key press
+// does, so what that reopens is simply there.
+let pointer = false
 
-export function notePress(event: MouseEvent) {
-  const control = (event.target as Element | null)?.closest?.("a[id], button[id], [tabindex][id]")
-  last = {control: control?.id, pointer: byPointer(event)}
-}
+export const lastInputByPointer = () => pointer
 
-// A key press, or going back or forward, starts afresh: what opens next
-// wasn't opened by the last press.
-export function forgetPress() {
-  last = {pointer: false}
-}
-
-export function pressedControl() {
-  return last.control
-}
-
-// Whether the last press was a pointer's, without taking the answer: a page
-// change asks, and what the new page opens may ask again.
-export function lastPressByPointer() {
-  return last.pointer
-}
-
-// Whether the last press was a pointer's, asked once by whatever it opened.
-export function takePointerPress() {
-  const {pointer} = last
-  last = {...last, pointer: false}
-  return pointer
+export function watchInput(doc: Document) {
+  const byHand = () => { pointer = true }
+  const byKey = () => { pointer = false }
+  doc.addEventListener("pointerdown", byHand, true)
+  doc.addEventListener("pointermove", byHand, true)
+  doc.addEventListener("keydown", byKey, true)
+  doc.defaultView?.addEventListener("popstate", byKey)
 }
 
 // Anime.js hands an element back to its stylesheet by restoring the inline
@@ -58,7 +50,6 @@ export function takePointerPress() {
 // elements back as they were before the last run on them began. Every run
 // then starts from rest, and ends there with no inline style left behind.
 // A finished run is forgotten, so nothing later puts back its old snapshot.
-// `play` owns `onComplete`; anything to do afterwards chains on `.then()`.
 const playing = new WeakMap<Element, JSAnimation>()
 
 export function play(targets: Element | Element[], params: AnimationParams) {
@@ -73,16 +64,4 @@ export function play(targets: Element | Element[], params: AnimationParams) {
   })
   for (const el of els) playing.set(el, animation)
   return animation
-}
-
-// Puts one element back at rest, if a move is still running on it.
-export function rest(el: Element) {
-  playing.get(el)?.revert()
-  playing.delete(el)
-}
-
-// An island's moves stop when it goes: whatever still moves inside its
-// element is put back at rest.
-export function stop(root: Element) {
-  for (const el of [root, ...root.querySelectorAll("*")]) rest(el)
 }

@@ -26,11 +26,11 @@ import {HomePrism} from "./hooks/home_prism"
 import {ShellMotion} from "./hooks/shell_motion"
 import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
-import {ModalDialog} from "./hooks/modal_dialog"
+import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {Arrivals, Counter, Refusal} from "./hooks/motion/moments"
 import {Cascade} from "./hooks/motion/reveals"
-import {Sheet, Slides} from "./hooks/motion/slides"
+import {Slides} from "./hooks/motion/slides"
 import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
@@ -323,7 +323,7 @@ const hooks = {
   HomePrism,
   KeyMap,
   LaunchPlanPicker,
-  ModalDialog: composeHooks(ModalDialog, Sheet),
+  ModalDialog,
   OnchainSteps,
   OpenWhenWide,
   Refusal,
@@ -352,5 +352,6 @@ liveSocket.connect()
 installAccountAuthLazyLoader()
 installCrossTabCsrf()
 installCopyButtons()
+watchPresses(document)
+mountMotion(document)
 window.liveSocket = liveSocket
-mountMotion()

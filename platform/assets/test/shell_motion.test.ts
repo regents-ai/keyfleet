@@ -13,7 +13,7 @@ import {
   type MotionAnimation,
   type MotionDriver,
 } from "../js/hooks/shell_motion"
-import {forgetPress, notePress, takePointerPress} from "../js/hooks/motion/shared"
+import {watchInput} from "../js/hooks/motion/shared"
 
 // Inline styles as the browser keeps them: a removed property reads as "", and
 // the length counts only the properties still set.
@@ -34,6 +34,7 @@ const element = (left = 0) =>
     style: inlineStyle(),
     dataset: {},
     removeAttribute: vi.fn(),
+    closest: () => null,
     getBoundingClientRect: () => ({left, width: 20}),
   }) as unknown as HTMLElement
 
@@ -58,8 +59,11 @@ const harness = () => {
 // The reader here hasn't asked for less motion; the hook asks as each page changes.
 vi.stubGlobal("matchMedia", () => ({matches: false}))
 
-// The press that changed the page, as the page-wide listener notes it.
-const pointerPress = () => notePress({target: null, detail: 1} as unknown as MouseEvent)
+// How the reader last gave input, as the page-wide listeners note it.
+const input = new Map<string, () => void>()
+watchInput({addEventListener: (type: string, listener: () => void) => input.set(type, listener)} as unknown as Document)
+const pointerPress = () => input.get("pointerdown")!()
+const keyPress = () => input.get("keydown")!()
 
 describe("shell motion", () => {
   it("renders a direct load immediately without fabricating travel", () => {
@@ -226,7 +230,7 @@ describe("shell motion", () => {
 
     pointerPress()
     ShellMotion.mounted.call(state)
-    forgetPress()
+    keyPress()
 
     expect(animations).toHaveLength(2)
     expect(animations.every(({options}) => options.ease === "outQuart")).toBe(true)
@@ -325,8 +329,6 @@ describe("shell motion", () => {
     ShellMotion.mounted.call(state)
     expect(animations).toHaveLength(0)
     ShellMotion.beforeUpdate.call(state)
-    // A dialog the same press opens mounts during the update and uses the press up.
-    takePointerPress()
     current = [node("region", 80), node("background")]
     root.current = current
     root.dataset.motionApp = "product"
@@ -348,7 +350,7 @@ describe("shell motion", () => {
     expect(removed.length).toBe(2)
 
     ShellMotion.destroyed.call(state)
-    forgetPress()
+    keyPress()
     expect(removed.length).toBe(4)
   })
 

@@ -1,7 +1,6 @@
 import {afterEach, expect, it, vi} from "vitest"
 
-import {ModalDialog, openerOf, stepTab} from "../js/hooks/modal_dialog"
-import {forgetPress, notePress} from "../js/hooks/motion/shared"
+import {ModalDialog, openerOf, stepTab, watchPresses} from "../js/hooks/modal_dialog"
 
 // Vitest here runs without a document, so the page and the dialog are the
 // small surfaces the hook touches.
@@ -56,9 +55,15 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
   return {dialog, hook, title, pushEvent, back, closeBy, fire}
 }
 
+// The page-wide listeners that note each press, as `watchPresses` adds them.
+const presses = new Map<string, (event?: unknown) => void>()
+const listen = (type: string, listener: (event?: unknown) => void) => presses.set(type, listener)
+watchPresses({addEventListener: listen, defaultView: {addEventListener: listen}} as unknown as Document)
+const press = (id: string) => presses.get("click")!({target: {closest: () => ({id})}, detail: 1})
+
 afterEach(() => {
   vi.unstubAllGlobals()
-  forgetPress()
+  presses.get("keydown")!()
 })
 
 it("opens as a modal with its title focused", () => {
@@ -172,11 +177,19 @@ it("steps Tab and Shift+Tab through the dialog's controls, going round at either
 it("names the control just pressed as the opener, and else the one with focus", () => {
   const body = {}
   const map = {id: "key-map-fibonacci_cascade"} as Element
-  notePress({target: {closest: () => ({id: "fleet-key-link-7"})}, detail: 1} as unknown as MouseEvent)
+  press("fleet-key-link-7")
 
   expect(openerOf(map, body as Element)).toBe("fleet-key-link-7")
 
-  forgetPress()
+  presses.get("keydown")!()
   expect(openerOf(map, body as Element)).toBe("key-map-fibonacci_cascade")
   expect(openerOf(body as Element, body as Element)).toBeUndefined()
+})
+
+it("forgets the control just pressed on going back or forward", () => {
+  const map = {id: "key-map-fibonacci_cascade"} as Element
+  press("fleet-key-link-7")
+  presses.get("popstate")!()
+
+  expect(openerOf(map, {} as Element)).toBe("key-map-fibonacci_cascade")
 })

@@ -35,7 +35,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
       class="key-profile"
       phx-hook="ModalDialog"
       phx-mounted={JS.ignore_attributes(["open", "style"])}
-      data-variant={Motion.standard("sheet")}
       data-close={@profile.close}
       data-close-event="close_key"
       data-shown={@profile.token_id}
