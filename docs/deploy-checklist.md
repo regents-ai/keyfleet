@@ -43,14 +43,19 @@ the values from their owners.
 | `PHX_HOST` | `keyfleet.ai` |
 | `SECRET_KEY_BASE` | A fresh random secret of at least 64 bytes (`mix phx.gen.secret`). |
 | `KEYFLEET_APP_SURFACES` | `on` opens the signed-in pages; `off` keeps them closed. The site will not start without it, or with any other value. |
-| `DATABASE_POOLED_URL` | The shared production database. Its host must be `direct.dzx6qo6xqzvojpv5.flympg.net`, with no port other than 5432 and nothing after `?`. |
-| `DATABASE_DIRECT_URL` | The same database, used by the migration step. Same host rule. |
+| `DATABASE_POOLED_URL` | The shared production database, as the running site signs in to it: the login `keyfleet-runtime`, which has the `writer` role. Its host must be `direct.dzx6qo6xqzvojpv5.flympg.net`, with no port other than 5432 and nothing after `?`. |
+| `DATABASE_DIRECT_URL` | The same database, as the release command `/app/bin/migrate` signs in to it: the login `keyfleet-migrate`, which has the `schema_admin` role. Same host rule. |
 | `KEYFLEET_DATABASE_TARGET_MODE` | `production` |
 | `KEYFLEET_DATABASE_CLUSTER_ID` | `dzx6qo6xqzvojpv5` |
 | `KEYFLEET_DATABASE_CLUSTER_NAME` | `regents-platform-prod` |
 | `PRIVY_APP_ID` | The Privy app shared by the Regent sites. |
 | `PRIVY_VERIFICATION_KEY` | Privy's ES256 verification **public** key, not the app secret. Paste the whole PEM with its real line breaks: `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | Optional error reporting. |
+
+Sean creates both database logins at launch; neither exists before then.
+`keyfleet-runtime` reads and changes records but cannot create, change or drop
+tables. `keyfleet-migrate` is used only while a release goes out, and the
+running site never reads it.
 
 The three `KEYFLEET_DATABASE_*` values are not secret; the migration step
 refuses to run without exactly these. `KEYFLEET_DEPLOYMENT_ROLE`, `KEYFLEET_SIWA_URL`
@@ -79,10 +84,11 @@ the chain side, which has nothing to do until a deployment is recorded.
 
 The first deploy's migration step creates the `keyfleet_app` schema on the
 shared production database. It also needs the table
-`regent_names.platform_human_users` to exist already, and the database user
-needs the right to create a schema. A few shared helper functions
-(`ash_elixir_or`, `ash_elixir_and`, `ash_trim_whitespace` and similar) are
-created or replaced in the database user's default schema, normally `public`,
+`regent_names.platform_human_users` to exist already. It signs in as
+`keyfleet-migrate`, whose `schema_admin` role lets it create the schema. A few
+shared helper functions (`ash_elixir_or`, `ash_elixir_and`,
+`ash_trim_whitespace` and similar) are created or replaced in
+`keyfleet-migrate`'s default schema, normally `public`,
 where other Regent sites keep the same functions. **Not verified** against
 production.
 
