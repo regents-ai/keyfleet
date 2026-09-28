@@ -28,8 +28,9 @@
   .rl-hero { min-width: 0; }
 
   /* The hero: one centred column over the crown's backdrop. Top to bottom:
-     the agents and keys across every fleet, the headline, the instruction to
-     give an agent, the mark, and a stem down to "See the fleets". */
+     the agents and keys across every fleet, the headline and the line under
+     it, the instruction to give an agent, the mark, and a stem down to "See
+     the fleets". */
   .rl-hero--home {
     --rl-hero-mark-w: clamp(6rem, 8vw, 8rem);
     position: relative; isolation: isolate;
@@ -65,6 +66,9 @@
   .rl-hero-column > .rl-hero-title { margin-block-start: clamp(1rem, 3svh, 1.75rem); font-size: clamp(2.25rem, 1rem + 4.6vw, 5rem); line-height: 1.02; letter-spacing: -.035em; }
   .rl-hero-title > span { display: block; text-wrap: balance; }
   .rl-hero-title__accent { color: var(--ash-accent-warm); }
+  /* Kept on one line, so a narrow screen breaks the headline between its two sentences. */
+  .rl-hero-title__phrase { white-space: nowrap; }
+  .rl-hero-column > .rl-hero-lede { margin-block-start: var(--space-3); max-width: 40ch; color: var(--rl-muted); font-size: clamp(1.0625rem, .95rem + .45vw, 1.3125rem); line-height: 1.45; text-wrap: balance; }
 
   .rl-hero-give { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .5rem .75rem; margin-block-start: clamp(1.25rem, 4svh, 2.25rem); color: var(--rl-muted); font-size: .9375rem; }
   .rl-hero-runtimes { display: flex; flex-wrap: wrap; justify-content: center; gap: .375rem; margin: 0; padding: 0; list-style: none; }

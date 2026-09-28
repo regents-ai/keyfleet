@@ -180,7 +180,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
       |> Enum.join(" ")
 
     assert home.status == 200
-    assert title == "Your agent has tools. Now give it a crew."
+    assert title == "No boss. No job queue. Just a crew that runs itself."
     assert get(build_conn(), "/early").status == 200
   end
 
