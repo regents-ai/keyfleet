@@ -19,7 +19,7 @@ defmodule Keyfleet.Fleets.Rules do
     "fibonacci_cascade" =>
       "The same levels and prices. When a level sells out, the holders of the level before it " <>
         "are paid back what their keys cost.",
-    "fleet_tech_classic" => "144 keys, every one at 10 USDC.",
+    "fleet_tech_classic" => "1,024 keys, from 8 USDC for the first to 80 USDC for the last.",
     "fleet_tech_accelerant" =>
       "Each key costs 5% more than the one before, and most of each sale goes to whoever holds " <>
         "the key before it."

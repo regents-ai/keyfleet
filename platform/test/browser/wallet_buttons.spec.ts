@@ -67,7 +67,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
 
   // The first approval lands; the steps are built again from the allowance
   // it gave, which leaves only the purchase.
-  const price = 10_000_000
+  const price = 8_000_000
   allowUsdc(me, price)
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")

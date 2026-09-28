@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     assert ("1 of 46,365 keys sold · 46,364 left · next key: Key 2 for 10 USDC. " <>
               "One wallet may hold 1 key of level 1.") in lines
 
-    assert ("0 of 144 keys sold · 144 left · next key: Key 1 for 10 USDC. " <>
+    assert ("0 of 1,024 keys sold · 1,024 left · next key: Key 1 for 8 USDC. " <>
               "No limit on keys per wallet.") in lines
   end
 

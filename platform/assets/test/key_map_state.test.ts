@@ -134,7 +134,7 @@ describe("key map levels", () => {
     expect(drawnKeys("fibonacci", fibonacci(46_365))).toBe(46_365)
     // A fleet without levels is drawn whole.
     expect(drawnKeys("accelerant", accelerant(10, bits()))).toBe(2_000)
-    expect(drawnKeys("classic", {...accelerant(0, bits()), maxSupply: 144})).toBe(144)
+    expect(drawnKeys("classic", {...accelerant(0, bits()), maxSupply: 1_024})).toBe(1_024)
   })
 
   it("marks keys not sold yet, other than the next, and says so", () => {

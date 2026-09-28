@@ -7,16 +7,29 @@ defmodule Keyfleet.Fleets.Presets do
   applied one level or one mint at a time, so a ladder computed here rounds
   exactly where the contract's does.
 
+  Classic's 1,024 prices, 8 USDC for the first key to 80 USDC for the last,
+  are read from `priv/classic_key_prices.txt`, which
+  `scripts/classic_prices.py` writes together with the contract's own table.
+
   Prices are in atomic USDC, millionths of one USDC, and are exactly what a
-  purchase pays: every fleet starts at the contract's `Q_USDC`, 10 USDC, and
-  follows its preset's ladder from there.
+  purchase pays: the Fibonacci and Accelerant fleets start at the contract's
+  `Q_USDC`, 10 USDC, and follow their preset's ladder from there.
   """
 
   @q_usdc 10_000_000
 
   @fibonacci_levels 20
-  @classic_supply 144
   @accelerant_max_keys 2_000
+
+  # Classic's price table: one whole number of US cents per key, key 1 first.
+  @classic_prices_path Path.expand("../../../priv/classic_key_prices.txt", __DIR__)
+  @external_resource @classic_prices_path
+  @classic_prices @classic_prices_path
+                  |> File.read!()
+                  |> String.split("\n", trim: true)
+                  |> Enum.map(&(String.to_integer(&1) * 10_000))
+                  |> List.to_tuple()
+  @classic_supply tuple_size(@classic_prices)
 
   # Level supplies 2, 3, 5, 8, … and the last token id of each level.
   @fibonacci_level_ends 2..@fibonacci_levels
@@ -106,7 +119,7 @@ defmodule Keyfleet.Fleets.Presets do
     do: step(@q_usdc, mint_index, 105)
 
   defp next_price(:fibonacci, minted), do: fibonacci_level_price(fibonacci_level_of(minted + 1))
-  defp next_price(:classic, _minted), do: @q_usdc
+  defp next_price(:classic, minted), do: elem(@classic_prices, minted)
   defp next_price(:accelerant, minted), do: accelerant_price(minted)
 
   defp max_supply(:fibonacci), do: @fibonacci_max_token_id

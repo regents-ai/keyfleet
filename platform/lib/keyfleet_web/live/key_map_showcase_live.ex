@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
 
   @fleets [
     %{layout: "fibonacci", name: "Fibonacci", max_supply: 46_365, minted: 17_768},
-    %{layout: "classic", name: "Classic", max_supply: 144, minted: 143},
+    %{layout: "classic", name: "Classic", max_supply: 1_024, minted: 1_023},
     %{layout: "accelerant", name: "Accelerant", max_supply: 2_000, minted: 1_999}
   ]
 

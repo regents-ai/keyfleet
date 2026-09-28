@@ -43,7 +43,7 @@ configuration as proof of real Privy sign-in.
 
 `/showcase/key-map` runs the fleet key map on made-up data, with no chain or
 database behind it. Buttons switch between the three fleet shapes at full size:
-Fibonacci (46,365 keys), Classic (144) and Accelerant (2,000), each sold out but
+Fibonacci (46,365 keys), Classic (1,024) and Accelerant (2,000), each sold out but
 for its last key. Every 97th key is marked as yours and every 7th as having an
 agent. Choosing a key, by click or by Enter, only updates the line under the map.
 

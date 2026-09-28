@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.KeyMapTest do
     assert Base.decode64!(KeyMap.bitset(16, [1, 12])) == <<0b00000001, 0b00001000>>
     # The browser's map reads this one back in assets/test/key_map_state.test.ts.
     assert KeyMap.bitset(10, [2, 10]) == "AgI="
-    assert Base.decode64!(KeyMap.bitset(144, [])) == <<0::size(18 * 8)>>
+    assert Base.decode64!(KeyMap.bitset(1_024, [])) == <<0::size(128 * 8)>>
   end
 
   test "a bitset takes 5,796 bytes at the largest fleet's size" do
@@ -27,9 +27,9 @@ defmodule KeyfleetWeb.KeyMapTest do
     refute KeyMap.choosable?(progress, 152)
     refute KeyMap.choosable?(progress, "7")
 
-    sold_out = %{total_minted: 144, max_supply: 144}
-    assert KeyMap.choosable?(sold_out, 144)
-    refute KeyMap.choosable?(sold_out, 145)
+    sold_out = %{total_minted: 1_024, max_supply: 1_024}
+    assert KeyMap.choosable?(sold_out, 1_024)
+    refute KeyMap.choosable?(sold_out, 1_025)
   end
 
   test "the map goes to each level with a key sold or on sale, and the level after" do

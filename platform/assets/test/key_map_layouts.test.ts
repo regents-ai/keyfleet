@@ -25,7 +25,7 @@ const fleets: [string, LayoutKind][] = [
   ["fleet_tech_classic", "classic"],
   ["fleet_tech_accelerant", "accelerant"],
 ]
-const shownCounts = [1, 2, 7, 55, 143, 144, 150, 1_999, 2_000, 20_000, 46_364, 46_365]
+const shownCounts = [1, 2, 7, 55, 150, 1_023, 1_024, 1_999, 2_000, 20_000, 46_364, 46_365]
 
 // A small deterministic generator, so sampled cells repeat run to run.
 function random(seed: number) {
@@ -56,7 +56,7 @@ describe("key map layouts", () => {
 
   it("matches the four fleets' supplies", () => {
     expect(fibonacciLevelSupplies.slice(0, 8)).toEqual([2, 3, 5, 8, 13, 21, 34, 55])
-    expect(maxSupply).toEqual({fibonacci: 46_365, classic: 144, accelerant: 2_000})
+    expect(maxSupply).toEqual({fibonacci: 46_365, classic: 1_024, accelerant: 2_000})
   })
 
   it.each(fleets)("round-trips every key of %s through its cell at every size", (_fleet, kind) => {
@@ -164,12 +164,12 @@ describe("key map layouts", () => {
     }
   })
 
-  it("closes the Classic rhombus at exactly 144 keys on 12 × 12", () => {
+  it("closes the Classic rhombus at exactly 1,024 keys on 32 × 32", () => {
     const grid = buildMap("classic", maxSupply.classic)
-    const cells = new Set(Array.from({length: 144}, (_, index) => grid.home(index + 1).join(",")))
-    const rhombus = new Set(Array.from({length: 144}, (_, index) => `${index % 12},${Math.floor(index / 12)}`))
+    const cells = new Set(Array.from({length: 1_024}, (_, index) => grid.home(index + 1).join(",")))
+    const rhombus = new Set(Array.from({length: 1_024}, (_, index) => `${index % 32},${Math.floor(index / 32)}`))
     expect(cells).toEqual(rhombus)
-    for (const shown of [1, 4, 9, 16, 121]) {
+    for (const shown of [1, 4, 9, 16, 121, 961]) {
       const side = Math.sqrt(shown)
       for (let key = 1; key <= shown; key++) {
         const [q, r] = grid.home(key)
@@ -184,7 +184,7 @@ describe("key map layouts", () => {
     const size = width / SQRT3
     for (const kind of ["fibonacci", "classic", "accelerant"] as const) {
       const grid = buildMap(kind, maxSupply[kind])
-      for (const key of [1, 2, 55, 144, maxSupply[kind]]) {
+      for (const key of [1, 2, 55, 1_024, maxSupply[kind]]) {
         const home = grid.home(key)
         const [cx, cy] = axialToPixel(...home, size)
         const hit = (distance: number, angle: number) =>
@@ -207,7 +207,7 @@ describe("key map layouts", () => {
     const next = random(7)
     const size = 96 / SQRT3
     for (const kind of ["fibonacci", "classic", "accelerant"] as const) {
-      for (const shown of [3, 144, 2_000, 46_365].filter(count => count <= maxSupply[kind])) {
+      for (const shown of [3, 1_024, 2_000, 46_365].filter(count => count <= maxSupply[kind])) {
         const grid = buildMap(kind, shown)
         const a = axialToPixel(...grid.periodA, size)
         const b = axialToPixel(...grid.periodB, size)

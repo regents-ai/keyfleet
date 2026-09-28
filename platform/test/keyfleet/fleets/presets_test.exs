@@ -71,12 +71,36 @@ defmodule Keyfleet.Fleets.PresetsTest do
              ["fibonacci_syndicate", "fibonacci_cascade"]
   end
 
-  test "Classic holds 10 USDC and Accelerant climbs 5% a key from 10 USDC" do
-    assert %{next_price: 10_000_000, max_supply: 144, completed_levels: nil} =
-             Presets.progress("fleet_tech_classic", 143)
-
+  test "Accelerant climbs 5% a key from 10 USDC" do
     assert %{next_price: 11_025_000, next_token_id: 3} =
              Presets.progress("fleet_tech_accelerant", 2)
+  end
+
+  # Pinned to contracts/test/KeyfleetPresets.t.sol. The formula is worked out
+  # here in double precision, which is exact enough: no key's exact price lies
+  # within a billionth of a cent of a half cent.
+  test "every Classic key costs 8 USDC times 10^((n - 1) / 1023), rounded to the cent" do
+    prices = Enum.map(1..1_024, &Presets.issue_price("fleet_tech_classic", &1))
+
+    assert prices ==
+             Enum.map(1..1_024, fn n ->
+               round(800 * :math.pow(10, (n - 1) / 1023)) * 10_000
+             end)
+
+    assert Enum.map([1, 144, 512, 1_024], &Enum.at(prices, &1 - 1)) ==
+             [8_000_000, 11_040_000, 25_270_000, 80_000_000]
+
+    assert Enum.sum(prices) == 32_032_450_000
+
+    assert %{
+             next_price: 80_000_000,
+             next_token_id: 1_024,
+             max_supply: 1_024,
+             completed_levels: nil
+           } =
+             Presets.progress("fleet_tech_classic", 1_023)
+
+    assert %{next_price: nil, next_token_id: nil} = Presets.progress("fleet_tech_classic", 1_024)
   end
 
   # A key's price is what the fleet asked for it once the key before it sold.
@@ -91,7 +115,7 @@ defmodule Keyfleet.Fleets.PresetsTest do
 
     cases =
       Enum.map([1 | edges] ++ [46_365], &{"fibonacci_cascade", &1}) ++
-        Enum.map([1, 2, 144], &{"fleet_tech_classic", &1}) ++
+        Enum.map([1, 2, 1_024], &{"fleet_tech_classic", &1}) ++
         Enum.map([1, 2, 2_000], &{"fleet_tech_accelerant", &1})
 
     for {fleet_id, token_id} <- cases do

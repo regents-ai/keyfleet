@@ -149,8 +149,8 @@ defmodule KeyfleetWeb.ShowcaseTest do
     html = view |> element("button", "Classic") |> render_click()
     assert html =~ ~s(id="key-map-classic") and html =~ "No key chosen yet."
     render_hook(view, "keymap_ready", %{})
-    assert_reply(view, %{minted: 143, max_supply: 144, mine: mine})
-    assert byte_size(Base.decode64!(mine)) == 18
+    assert_reply(view, %{minted: 1_023, max_supply: 1_024, mine: mine})
+    assert byte_size(Base.decode64!(mine)) == 128
   end
 
   defp held?(bits, id),

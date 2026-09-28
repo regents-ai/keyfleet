@@ -40,7 +40,7 @@ export const fibonacciLevelSupplies: readonly number[] = (() => {
 
 export const maxSupply: Record<LayoutKind, number> = {
   fibonacci: fibonacciLevelSupplies.reduce((total, supply) => total + supply, 0),
-  classic: 144,
+  classic: 1_024,
   accelerant: 2_000,
 }
 
@@ -94,7 +94,7 @@ const accelerantSeats = () =>
   })
 
 // Axial rhombus shells: shell k is the far edge of a (k+1)×(k+1) rhombus, so
-// the fleet closes at exactly 12 × 12 = 144.
+// the fleet closes at exactly 32 × 32 = 1,024.
 const classicSeats = (): Seats => {
   const count = maxSupply.classic
   const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint8Array(count)}

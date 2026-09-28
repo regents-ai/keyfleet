@@ -407,7 +407,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
       assert text(view, "#buy-key-number") == "1"
-      assert text(view, "#buy-key-price") == "10 USDC"
+      assert text(view, "#buy-key-price") == "8 USDC"
       refute has_element?(view, "#buy-key-level")
       refute html =~ "One wallet may hold"
     end
@@ -418,12 +418,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
          %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
-      for token_id <- 1..144, do: issue!("fleet_tech_classic", token_id)
+      for token_id <- 1..1_024, do: issue!("fleet_tech_classic", token_id)
 
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
       active!(view, @owner)
 
-      assert text(view, "#buy-key-sold-out") == "144/144 keys sold"
+      assert text(view, "#buy-key-sold-out") == "1,024/1,024 keys sold"
       assert text(view, "#buy-key-elsewhere") =~ "You can still get a key from someone"
       assert has_element?(view, "#buy-key-offer[hidden]")
       assert has_element?(view, "#buy-key-approve[hidden]")
@@ -454,15 +454,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "a fleet that sells out while open keeps the buyer's purchases", %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
-      for token_id <- 1..143, do: issue!("fleet_tech_classic", token_id)
-      chain!(allowance: 10_000_000)
+      for token_id <- 1..1_023, do: issue!("fleet_tech_classic", token_id)
+      chain!(allowance: 80_000_000)
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
-      assert text(view, "#buy-key-number") == "144"
+      assert text(view, "#buy-key-number") == "1,024"
+      assert text(view, "#buy-key-price") == "80 USDC"
 
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
       hash = "0x" <> String.duplicate("3", 64)
-      chain!(allowance: 10_000_000)
+      chain!(allowance: 80_000_000)
       TestChainNode.land!(hash, review, buy, "0x1")
 
       view
@@ -475,10 +476,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       render_async(view)
 
-      issue!("fleet_tech_classic", 144, @owner)
-      send(view.pid, {:keys_changed, "fleet_tech_classic", [144]})
+      issue!("fleet_tech_classic", 1_024, @owner)
+      send(view.pid, {:keys_changed, "fleet_tech_classic", [1_024]})
 
-      assert text(view, "#buy-key-sold-out") == "144/144 keys sold"
+      assert text(view, "#buy-key-sold-out") == "1,024/1,024 keys sold"
       assert has_element?(view, "#buy-key-button[disabled]")
       assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy key")
       assert text(view, "#buy-key-order-sent span") =~ "Done. The key is yours"
