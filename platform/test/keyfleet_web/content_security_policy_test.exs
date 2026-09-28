@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
   end
 
   test "every page with the account button carries the sign-in policy" do
-    for path <- ~w(/ /account /app/fleets/fibonacci_syndicate /privacy /terms) do
+    for path <- ~w(/ /account /app/fleets/fibonacci_syndicate) do
       conn = get(build_conn(), path)
 
       assert conn.status == 200, "#{path} answered #{conn.status}"
@@ -30,12 +30,23 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
   end
 
   test "reading pages and the fleet directory's Markdown carry the reading policy" do
-    for path <- ~w(/docs /about /contact /opportunities /fleets.md) do
+    for path <- ~w(/docs /about /contact /opportunities /privacy /terms /fleets.md) do
       conn = get(build_conn(), path)
 
       assert conn.status == 200, "#{path} answered #{conn.status}"
       assert policy(conn) == ContentSecurityPolicy.reading(), "#{path} has another policy"
     end
+  end
+
+  test "reading pages send no referrer, and pages that can start sign-in keep the default" do
+    for path <- ~w(/docs /about /contact /opportunities /privacy /terms) do
+      conn = get(build_conn(), path)
+      assert get_resp_header(conn, "referrer-policy") == ["no-referrer"], path
+    end
+
+    assert get_resp_header(get(build_conn(), "/"), "referrer-policy") == [
+             "strict-origin-when-cross-origin"
+           ]
   end
 
   test "the reading policy names no other site, and sign-in adds only Privy's sources" do

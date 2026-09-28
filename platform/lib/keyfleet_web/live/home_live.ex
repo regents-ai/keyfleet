@@ -139,7 +139,9 @@ defmodule KeyfleetWeb.HomeLive do
     recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
     socket =
-      assign(socket,
+      socket
+      |> assign(PublicDocuments.page("/"))
+      |> assign(
         route_spec: RouteCatalog.fetch!(:home),
         fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
         agents: nil,

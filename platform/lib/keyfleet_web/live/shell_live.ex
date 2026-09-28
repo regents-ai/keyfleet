@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
-  alias KeyfleetWeb.RouteCatalog
+  alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   # The events each area's page sends, which that area's module answers.
@@ -97,6 +97,7 @@ defmodule KeyfleetWeb.ShellLive do
       {:noreply,
        socket
        |> assign(route_spec: route_spec, send_agent_open: false)
+       |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
        |> load_held_keys(route_spec)
        |> load_fleet(route_spec, params)

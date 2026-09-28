@@ -417,7 +417,7 @@ outright.
     the minimum. "About 48 hours" and "about 10 minutes" stay. Why: the page
     states the contracts' money rules.
 
-**Terms** (`platform/priv/legal/terms.md`)
+**Terms** (`platform/priv/public/terms.md`)
 
 17. "the REGENT raised when the launch succeeds" becomes "the part of the
     REGENT raised that the launch sends it when it succeeds". The rest of the

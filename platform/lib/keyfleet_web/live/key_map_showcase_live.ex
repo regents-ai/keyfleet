@@ -18,8 +18,9 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
 
   def mount(_params, _session, socket) do
     {:ok,
-     assign(socket, page_title: "Key map", fleets: @fleets, fleet: hd(@fleets), selected: nil),
-     layout: false}
+     socket
+     |> assign(KeyfleetWeb.PublicDocuments.page("/showcase/key-map"))
+     |> assign(fleets: @fleets, fleet: hd(@fleets), selected: nil), layout: false}
   end
 
   def render(assigns) do

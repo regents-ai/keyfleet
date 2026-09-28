@@ -5,10 +5,9 @@ defmodule KeyfleetWeb.PublicPagesController do
 
   def show(conn, _params) do
     document = PublicDocuments.document(conn.request_path)
-    render(conn, :show, page_title: document.title, document: document)
+    render(conn, :show, [document: document] ++ PublicDocuments.page(conn.request_path))
   end
 
-  def developers(conn, _params), do: conn |> put_status(301) |> redirect(to: "/docs")
   def openapi(conn, _params), do: json(conn, PublicDocuments.openapi())
 
   def llms(conn, _params),
@@ -39,14 +38,16 @@ defmodule KeyfleetWeb.PublicPagesHTML do
     <div class="rl-root legal-root rg-sheet rg-frame public-document">
       <header class="legal-header">
         <a href={~p"/"} class="legal-home">Keyfleet</a>
-        <nav class="legal-nav" aria-label="Information">
+        <nav class="legal-nav" aria-label="Pages">
           <a
             :for={
               {label, path} <- [
                 {"Opportunities", "/opportunities"},
                 {"Docs", "/docs"},
                 {"About", "/about"},
-                {"Contact", "/contact"}
+                {"Contact", "/contact"},
+                {"Privacy", "/privacy"},
+                {"Terms", "/terms"}
               ]
             }
             href={path}

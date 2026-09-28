@@ -25,7 +25,6 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
 
     assert still_open == [
              {:get, "/healthz"},
-             {:get, "/developers"},
              {:get, "/openapi.json"},
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
@@ -39,9 +38,9 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/about"},
              {:get, "/contact"},
              {:get, "/opportunities"},
-             {:get, "/"},
              {:get, "/privacy"},
              {:get, "/terms"},
+             {:get, "/"},
              {:delete, "/auth/privy/session"}
            ]
   end

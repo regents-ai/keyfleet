@@ -17,8 +17,9 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
 
   def mount(_params, session, socket) do
     {:ok,
-     assign(socket,
-       page_title: "Privy integration",
+     socket
+     |> assign(KeyfleetWeb.PublicDocuments.page("/showcase/privy"))
+     |> assign(
        theme: session["theme"] || "dark",
        mode: ShowcaseLive.privy_mode(),
        wallet: nil

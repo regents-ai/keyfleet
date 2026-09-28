@@ -47,9 +47,10 @@ defmodule KeyfleetWeb.Router do
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
 
-    # Reading only: these pages never start sign-in.
+    # Reading only: these pages never start sign-in, so they send no referrer.
     plug :put_secure_browser_headers, %{
-      "content-security-policy" => ContentSecurityPolicy.reading()
+      "content-security-policy" => ContentSecurityPolicy.reading(),
+      "referrer-policy" => "no-referrer"
     }
   end
 
@@ -92,7 +93,6 @@ defmodule KeyfleetWeb.Router do
 
   scope "/", KeyfleetWeb do
     get "/healthz", HealthController, :show
-    get "/developers", PublicPagesController, :developers
     get "/openapi.json", PublicPagesController, :openapi
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots
@@ -110,6 +110,8 @@ defmodule KeyfleetWeb.Router do
     get "/about", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
     get "/opportunities", PublicPagesController, :show
+    get "/privacy", PublicPagesController, :show
+    get "/terms", PublicPagesController, :show
   end
 
   scope "/", KeyfleetWeb do
@@ -159,8 +161,6 @@ defmodule KeyfleetWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :home
-    get "/privacy", LegalController, :privacy
-    get "/terms", LegalController, :terms
 
     get "/auth/csrf", PrivySessionController, :csrf
     post "/auth/privy/failure", PrivySessionController, :failure
