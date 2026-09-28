@@ -9,7 +9,17 @@ defmodule KeyfleetWeb.KeysLive do
 
   use KeyfleetWeb, :html
 
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Chain
   alias Keyfleet.Keys
+  alias KeyfleetWeb.ShellLive
+
+  @refused "That didn’t go through."
+  @refreshing "Key ownership is being refreshed; try again in a moment."
+  @answered "This request was already answered."
+  @key_moved_on "This key has already changed; here it is now."
+  @limits_unwritten "Write each limit, in no more than 500 characters."
+  @limit_fields [:money, :information, :outside, :check_first]
 
   attr :key, :map, required: true
   attr :notice, :map, default: nil
@@ -317,4 +327,126 @@ defmodule KeyfleetWeb.KeysLive do
   end
 
   defp date(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
+
+  @doc "What the key's page does with the owner's decisions on who runs the key."
+  def handle_event("approve_pairing", %{"pairing" => id, "limits" => limits}, socket) do
+    limits = written(limits)
+
+    {:noreply,
+     socket
+     |> decide(id, &Keys.approve_pairing/3, limits, "That agent now runs this key.", @answered)
+     |> keep_draft(id, limits)}
+  end
+
+  def handle_event("set_limits", %{"pairing" => id, "limits" => limits}, socket) do
+    limits = written(limits)
+
+    {:noreply,
+     socket
+     |> decide(id, &Keys.set_limits/3, limits, "Limits saved.", @key_moved_on)
+     |> keep_draft(id, limits)}
+  end
+
+  def handle_event("decline_pairing", %{"id" => id}, socket),
+    do:
+      {:noreply,
+       decide(socket, id, &Keys.decline_pairing/3, %{}, "Request turned down.", @answered)}
+
+  def handle_event("detach_operator", %{"id" => id}, socket),
+    do:
+      {:noreply,
+       decide(socket, id, &Keys.detach_operator/3, %{}, "Agent removed.", @key_moved_on)}
+
+  @doc """
+  What someone is told when a change waits on the fleet's key ownership being
+  read again from the chain.
+  """
+  def refreshing, do: @refreshing
+
+  @doc "What the key's page shows of the key, as the visitor may see it."
+  def key_view(socket, fleet_id, token_id) do
+    actor = ShellLive.human_actor(socket)
+    key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
+
+    %{
+      fleet_id: fleet_id,
+      token_id: token_id,
+      fleet_name: key && key.fleet.name,
+      owner_wallet: key && key.owner_wallet,
+      current_epoch: key && key.ownership_epoch,
+      owner?: owns_key?(actor, key),
+      refreshing?: not Chain.fresh?(fleet_id),
+      operator: Keys.current_operator!(fleet_id, token_id, actor: actor),
+      requests: Keys.list_pairing_requests!(fleet_id, token_id, actor: actor),
+      history: Keys.pairing_history!(fleet_id, token_id, actor: actor)
+    }
+  end
+
+  defp owns_key?(%Human{wallet_addresses: wallets}, %{owner_wallet: owner}),
+    do: owner in wallets
+
+  defp owns_key?(_actor, _key), do: false
+
+  # The buttons act on what the page is showing; the key itself decides whether
+  # the decision still applies, and the page is redrawn from the answer either
+  # way, so a page left open on a key that has moved on catches up. `stale` is
+  # what the owner is told when the key had already decided before the press.
+  defp decide(socket, id, decision, input, message, stale) do
+    with %Human{} = actor <- ShellLive.human_actor(socket),
+         %{} = pairing <- Enum.find(shown_pairings(socket), &(&1.id == id)),
+         {:ok, _decided} <- decision.(pairing, input, actor: actor) do
+      redraw_key(socket, %{tone: :success, message: message})
+    else
+      refusal ->
+        redraw_key(socket, %{tone: :error, message: refusal_message(refusal, stale, socket)})
+    end
+  end
+
+  defp refusal_message(
+         {:error, %Ash.Error.Forbidden{}},
+         _stale,
+         %{assigns: %{key: %{fleet_id: fleet_id}}}
+       ) do
+    if Chain.fresh?(fleet_id), do: @refused, else: @refreshing
+  end
+
+  defp refusal_message({:error, %Ash.Error.Invalid{errors: errors}}, stale, _socket) do
+    cond do
+      Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)) -> stale
+      Enum.any?(errors, &limit_error?/1) -> @limits_unwritten
+      true -> @refused
+    end
+  end
+
+  defp refusal_message(_refusal, _stale, _socket), do: @refused
+
+  # The four limits as the owner typed them, by name.
+  defp written(limits),
+    do: Map.new(@limit_fields, &{&1, Map.get(limits, Atom.to_string(&1), "")})
+
+  # A refused save leaves the owner's words in the form they typed them in, so
+  # they fix one limit instead of writing all four again; a saved one is gone.
+  defp keep_draft(%{assigns: %{key_notice: %{tone: :error}}} = socket, id, limits),
+    do: update(socket, :key_drafts, &Map.put(&1, id, limits))
+
+  defp keep_draft(socket, id, _limits), do: update(socket, :key_drafts, &Map.delete(&1, id))
+
+  defp limit_error?(%error{field: field})
+       when error in [Ash.Error.Changes.Required, Ash.Error.Changes.InvalidArgument],
+       do: field in @limit_fields
+
+  defp limit_error?(_error), do: false
+
+  defp redraw_key(%{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket, notice) do
+    socket
+    |> assign(:key, key_view(socket, fleet_id, token_id))
+    |> assign(:key_notice, notice)
+  end
+
+  defp redraw_key(socket, notice), do: assign(socket, :key_notice, notice)
+
+  defp shown_pairings(%{assigns: %{key: %{operator: operator, requests: requests}}}),
+    do: [operator | requests] |> Enum.reject(&is_nil/1)
+
+  defp shown_pairings(_socket), do: []
 end
