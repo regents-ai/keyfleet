@@ -10,7 +10,9 @@ this replaces is in git history (the previous version of this file, at
   the Autolaunch branch `feat/contracts-v2` at `da2519b` (worktree
   `worktrees/autolaunch/contracts-v2`). It is a candidate: not pushed, not
   deployed on Base, not audited, and it has no addresses yet. Its interface
-  can still change until it is deployed.
+  can still change until it is deployed. The lane's `5effdb1` (local, not
+  pushed) corrects the page, README, SECURITY notes and one code comment after
+  this document's review; the interface and behaviour are those of `da2519b`.
 - **The founder's terms** are in that branch's `contracts/docs/launch-profiles.md`,
   "Founder decisions, 27 September 2026". They replace the Safe-adjustable
   ranges and hard ceilings this document used to expect: no v2 contract has
@@ -100,7 +102,9 @@ The Autolaunch site's default floor is 0.000001 REGENT. That is not a whole
 number on the grid: `0.000001 × 2^96` is 79,228,162,514,264,337,593,543.95…
 Rounded down to a multiple of 100 it is `79228162514264337593500`, whose floor
 minimum is 19,999.999999999999999989 REGENT. So the default floor means a
-minimum raise of about 20,000 REGENT.
+minimum raise of about 20,000 REGENT. From `5effdb1`, `launch-profiles.md`
+states the grid and that the Autolaunch site rounds an entered floor down to
+it.
 
 **Rounding at the minimum.** The pinned auction counts a bid placed in its
 first block in full and a bid placed later up to one REGENT base unit short. A
@@ -458,34 +462,29 @@ outright.
    b. The floor only; the minimum is always zero.
    Recommendation: a. A fleet's plan says what the money is for, and today's
    form already asks how much REGENT to raise.
-2. **How is the entered floor rounded?** (Autolaunch UI lane)
-   a. Rounded down to a multiple of 100 in Q96, and no lower than `2^32 + 1`,
-      as Autolaunch's own review rounds a Memestake floor.
-   b. Rounded to the nearest multiple of 100.
-   Recommendation: a, if Autolaunch's Revstake form does the same, so the same
-   price gives the same floor on both sites.
-3. **Does Keyfleet's keeper still send `migrate`?** (founder, with the
-   Autolaunch UI lane)
-   a. Keep it as a backstop to the Regent bot.
-   b. Remove it and rely on the bot.
-   c. Keep it, but wait a set number of blocks after the migration block.
-   Recommendation: a. It checks the lifecycle first; the worst case is one
-   reverted call. The fleet's REGENT and its vesting start only at graduation.
+2. **How is the entered floor rounded?** Answered by `launch-profiles.md` at
+   `5effdb1`: down to a multiple of 100 in Q96, as the Autolaunch site does, and
+   no lower than `2^32 + 1`. Keyfleet rounds the same way, so the same price
+   gives the same floor on both sites.
+3. **Does Keyfleet's keeper still send `migrate`?** Answered by the
+   Autolaunch UI lane on 2026-09-27: yes, as a backstop to the Regent bot.
+   `migrate(auction)` is open to anyone; before the migration block it reverts
+   with `MigrationNotYetAllowed`, and once one call has settled the launch
+   every later call reverts with `LaunchNotActive` and changes nothing. The
+   worst case is one reverted call.
 4. **What a bid in the fleet's name brings in.** (founder)
    a. Income to the keys, sorted by token as today.
    b. Shared money; this needs the fleet to know its bids, which sorting by
       token cannot do.
    Recommendation: a. It is rare, it is someone else's REGENT, and it keeps
    rule 5 as it is.
-5. **Where is v2 tested on a Base fork?** (Autolaunch UI lane) The v2 package
-   has no fork suite or lab tooling yet; its README says those stay in
-   `contracts/v1`.
-   a. Autolaunch adds v2 to its lab (`local-base-lab.py` or a v2 lab) before
-      Keyfleet's fork test.
-   b. Keyfleet deploys the v2 graph on its own Anvil fork with
-      `script/DeployRevstakeV2.s.sol`.
-   Recommendation: a. One lab both sites use, owned by the lane that owns the
-   contracts.
+5. **Where is v2 tested on a Base fork?** Answered by the Autolaunch UI lane
+   on 2026-09-27: there is no v2 fork or lab tooling yet. The Base fork suite
+   and the deployment ceremony stay in `contracts/v1` and are a separately
+   authorised step before any deployment, and the lane has asked the founder
+   whether to build a v2 lab. Until then Keyfleet builds against
+   `revstake-v2`'s hermetic suite and its ABIs in `revstake-v2/abi`, and the
+   fork test waits for that lab.
 6. **When does the Keyfleet change start?** (founder)
    a. Now, on a branch against `da2519b`.
    b. Once v2 is pushed and its ABIs are frozen; merge only after it is
