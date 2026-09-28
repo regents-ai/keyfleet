@@ -203,6 +203,7 @@ defmodule Keyfleet.DirectoryTest do
     assert Directory.fleet("fibonacci_cascade") == {:ok, soon}
 
     assert {:ok, fleets} = Directory.list()
+
     assert Enum.map(fleets, &{&1.id, &1.coming_soon}) == [
              {"fleet_tech_classic", false},
              {@fleet, false},

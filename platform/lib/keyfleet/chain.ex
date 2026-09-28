@@ -60,7 +60,7 @@ defmodule Keyfleet.Chain do
   def take_proposal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(
-        "UPDATE keyfleet_app.chain_cursors SET proposal_seq = proposal_seq + 1 " <>
+        "UPDATE #{Keyfleet.Repo.default_prefix()}.chain_cursors SET proposal_seq = proposal_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING proposal_seq",
         [fleet_id]
       )
@@ -72,7 +72,7 @@ defmodule Keyfleet.Chain do
   def take_reveal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(
-        "UPDATE keyfleet_app.chain_cursors SET reveal_seq = reveal_seq + 1 " <>
+        "UPDATE #{Keyfleet.Repo.default_prefix()}.chain_cursors SET reveal_seq = reveal_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING reveal_seq",
         [fleet_id]
       )
@@ -84,7 +84,7 @@ defmodule Keyfleet.Chain do
   def take_ownership_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(
-        "UPDATE keyfleet_app.chain_cursors SET ownership_seq = ownership_seq + 1 " <>
+        "UPDATE #{Keyfleet.Repo.default_prefix()}.chain_cursors SET ownership_seq = ownership_seq + 1 " <>
           "WHERE fleet_id = $1 RETURNING ownership_seq",
         [fleet_id]
       )

@@ -154,7 +154,7 @@ defmodule Keyfleet.Keys do
            SELECT key.token_id FROM generate_series(1, $2::bigint) AS key(token_id)
            WHERE key.token_id <> ALL($3::bigint[])
              AND NOT EXISTS (
-               SELECT 1 FROM keyfleet_app.key_reveals AS reveal
+               SELECT 1 FROM #{Keyfleet.Repo.default_prefix()}.key_reveals AS reveal
                WHERE reveal.fleet_id = $1 AND reveal.token_id = key.token_id
              )
            ORDER BY key.token_id
