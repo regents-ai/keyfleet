@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
 /// @notice Step two of two: after `DeployKeyfleets` has broadcast one fleet, reads it back from
@@ -26,7 +26,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// environment.
 contract RecordKeyfleets is KeyfleetManifest {
     /// @notice The name of the frozen ABI the fleet's Autolaunch factory is called through.
-    string public constant AUTOLAUNCH_FACTORY_ABI = "RegentsAutolaunchFactoryV1";
+    string public constant AUTOLAUNCH_FACTORY_ABI = "RegentsAutolaunchFactoryV2";
 
     /// @notice What the deployment step's broadcast establishes.
     /// @param fleet The fleet the broadcast created.
@@ -208,7 +208,7 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// `factoryMayBeEmpty` is the waiver as it applied here, so it is never true on Base.
     function _autolaunchJson(Manifest memory manifest, address factory) private returns (string memory) {
         address strategy =
-            factory.code.length == 0 ? address(0) : address(IRegentsAutolaunchFactoryV1(factory).strategy());
+            factory.code.length == 0 ? address(0) : address(IRegentsAutolaunchFactoryV2(factory).strategy());
 
         string memory autolaunch = "autolaunch";
         vm.serializeString(autolaunch, "abi", AUTOLAUNCH_FACTORY_ABI);

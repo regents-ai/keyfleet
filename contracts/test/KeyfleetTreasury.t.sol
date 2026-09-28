@@ -26,9 +26,12 @@ import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 /// matched: it is at most the YES keys' share, and every other key sold collects the same per key.
 contract KeyfleetTreasuryTest is Test {
     uint128 private constant RAISE = 1_000_000e18;
-    /// @dev What the auction raised, what the pool took of it, and so what reaches the fleet.
+    /// @dev 0.000001 REGENT per token in Q96, rounded down to the grid: the Autolaunch site's default.
+    uint256 private constant FLOOR = 79_228_162_514_264_337_593_500;
+    /// @dev What the auction raised, what the pool took of it (three quarters), and so what reaches
+    /// the fleet (the other quarter).
     uint128 private constant RAISED = 1_200_000e18;
-    uint128 private constant LP_REGENT = 700_000e18;
+    uint128 private constant LP_REGENT = 900_000e18;
     uint256 private constant HELD = RAISED - LP_REGENT;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
@@ -161,7 +164,8 @@ contract KeyfleetTreasuryTest is Test {
             description: "The token the alpha fleet voted to launch.",
             website: "https://regents.sh/alpha",
             image: "ipfs://alpha-image",
-            requiredRegentRaised: RAISE,
+            floorPriceQ96: FLOOR,
+            minimumRegentRaised: RAISE,
             narrativeDigest: keccak256("narrative")
         });
     }
@@ -364,9 +368,9 @@ contract KeyfleetTreasuryTest is Test {
         // Seven levels are complete, so income below seven units cannot be divided and waits.
         subjectIncome = subjectIncome < 7 ? 0 : subjectIncome;
         regentIncome = regentIncome < 7 ? 0 : regentIncome;
-        // The escrow holds 85 billion SUBJECT; each release takes at most 40 billion of it.
-        firstRelease = uint96(bound(firstRelease, 0, 40_000_000_000e18));
-        laterRelease = uint96(bound(laterRelease, 0, 40_000_000_000e18));
+        // The escrow holds 65 billion SUBJECT; each release takes at most 30 billion of it.
+        firstRelease = uint96(bound(firstRelease, 0, 30_000_000_000e18));
+        laterRelease = uint96(bound(laterRelease, 0, 30_000_000_000e18));
         _graduate(fib);
 
         uint256[7] memory steps = [uint256(0), 1, 2, 3, 4, 5, 6];

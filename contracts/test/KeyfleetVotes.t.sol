@@ -9,7 +9,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
@@ -29,7 +29,7 @@ contract KeyfleetVotesTest is Test {
     /// @dev Purchases never call the staking contract, and these suites never send the owed share.
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
+    IRegentsAutolaunchFactoryV2 private factory = IRegentsAutolaunchFactoryV2(address(0xFAC7));
 
     address private buyer = address(0xB0B0B0);
     address private bob = address(0xB0B);

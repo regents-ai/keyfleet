@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
 /// @notice Step one of two: deploys one fleet, and writes nothing.
@@ -48,7 +48,7 @@ contract DeployKeyfleets is KeyfleetManifest {
             IERC20(manifest.usdc),
             IERC20(manifest.regent),
             IRegentRevenueStaking(manifest.staking),
-            IRegentsAutolaunchFactoryV1(manifest.autolaunchFactory),
+            IRegentsAutolaunchFactoryV2(manifest.autolaunchFactory),
             Keyfleet.Metadata({
                 name: manifest.fleet.name, symbol: manifest.fleet.symbol, baseTokenURI: manifest.fleet.baseTokenURI
             }),

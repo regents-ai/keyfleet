@@ -13,7 +13,7 @@ import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
@@ -144,7 +144,7 @@ contract KeyfleetIncomeTest is Test {
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
+    IRegentsAutolaunchFactoryV2 private factory = IRegentsAutolaunchFactoryV2(address(0xFAC7));
 
     address private buyer = address(0xB0B0B0);
     address private alice = address(0xA11CE);
@@ -740,7 +740,7 @@ contract KeyfleetIncomeGasTest is Test {
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
+    IRegentsAutolaunchFactoryV2 private factory = IRegentsAutolaunchFactoryV2(address(0xFAC7));
     Keyfleet private fleet;
 
     address private payer = address(0xDEDE);

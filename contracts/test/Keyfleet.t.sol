@@ -13,7 +13,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 
@@ -157,7 +157,7 @@ contract KeyfleetTest is Test {
     address private buyer = address(0xB0B0B0);
     IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
     /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
+    IRegentsAutolaunchFactoryV2 private factory = IRegentsAutolaunchFactoryV2(address(0xFAC7));
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
@@ -277,14 +277,14 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         _construct(usdc, regent, IRegentRevenueStaking(address(0)), factory);
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, regent, staking, IRegentsAutolaunchFactoryV1(address(0)));
+        _construct(usdc, regent, staking, IRegentsAutolaunchFactoryV2(address(0)));
     }
 
     function _construct(
         IERC20 usdc_,
         IERC20 regent_,
         IRegentRevenueStaking staking_,
-        IRegentsAutolaunchFactoryV1 factory_
+        IRegentsAutolaunchFactoryV2 factory_
     ) private returns (Keyfleet) {
         return new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,

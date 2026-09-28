@@ -13,7 +13,7 @@ import {IAutolaunchAuction} from "./interfaces/IAutolaunchAuction.sol";
 import {IAutolaunchEscrow} from "./interfaces/IAutolaunchEscrow.sol";
 import {IRegentLBPStrategy} from "./interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
@@ -42,6 +42,9 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 ///   tokens: the REGENT the strategy sends the fleet at graduation, and every SUBJECT the vesting
 ///   escrow releases. Both are booked from the strategy's and the escrow's own records before any
 ///   money is sorted or paid, so each is booked exactly once whatever the order of calls.
+/// Anything else that arrives in an income token is income, including what a stranger's bid naming
+/// this fleet as its owner brings in when anyone claims it from the auction: the fleet never bids,
+/// and to the fleet such a bid is a gift like any other.
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
 /// itself in its constructor. It is the only caller of `executeAutolaunch` and `payFromBudget`. The
@@ -53,7 +56,7 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// whoever holds that key when it is collected. Payments assume an asset that moves exactly the
 /// amount asked; a token that takes a fee when it moves, or rebases, is not supported.
 ///
-/// An approved Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1`, with this fleet as
+/// An approved Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV2`, with this fleet as
 /// both launcher and treasury, and records what the factory says it created. That call moves no
 /// tokens and grants no allowance. A launch whose auction failed can be followed by another; a
 /// graduated launch is the fleet's last.
@@ -90,16 +93,20 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// else. The chain, the factory and the schedule are not here either — the factory and the
     /// strategy fix all three, and pretending they were per-launch choices would be a lie the vote
     /// could not enforce.
-    /// The five metadata strings and the raise are bounded by the factory and the strategy, which
-    /// publish those figures; the voting controller reads them from the target when a proposal is
-    /// made rather than holding a copy of them.
+    /// The five metadata strings, the floor and the minimum are bounded by the factory and the
+    /// strategy, which publish those rules; the voting controller asks the target when a proposal
+    /// is made rather than holding a copy of them.
     /// @param name SUBJECT name, nonempty and within the factory's `MAX_NAME_BYTES`.
     /// @param symbol SUBJECT symbol, nonempty and within the factory's `MAX_SYMBOL_BYTES`.
     /// @param description SUBJECT description, nonempty and within `MAX_DESCRIPTION_BYTES`.
     /// @param website SUBJECT website, nonempty and within the factory's `MAX_WEBSITE_BYTES`.
     /// @param image SUBJECT image reference, nonempty and within the factory's `MAX_IMAGE_BYTES`.
-    /// @param requiredRegentRaised The REGENT raise the auction must reach to graduate, positive and
-    /// within the strategy's `MAX_REACHABLE_RAISE`.
+    /// @param floorPriceQ96 The auction's floor, REGENT base units per SUBJECT base unit times
+    /// `2^96`, which the strategy requires to be a whole number of its hundred bid ticks and at
+    /// least the auction's minimum.
+    /// @param minimumRegentRaised The keys' own minimum raise in REGENT base units, zero for none.
+    /// The auction must raise the larger of it and the whole sale at the floor, as the strategy's
+    /// `requiredRegentRaisedFor` computes, and the strategy refuses a minimum no auction could raise.
     /// @param narrativeDigest Digest of the content-addressed narrative behind the launch; it also
     /// becomes the proposal's digest, and zero means none.
     struct LaunchEnvelope {
@@ -108,7 +115,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         string description;
         string website;
         string image;
-        uint128 requiredRegentRaised;
+        uint256 floorPriceQ96;
+        uint128 minimumRegentRaised;
         bytes32 narrativeDigest;
     }
 
@@ -328,7 +336,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice The one Autolaunch factory this fleet may ever launch through. The strategy is read
     /// from it on every call rather than stored, so a fleet can never disagree with its factory
     /// about which strategy is canonical.
-    IRegentsAutolaunchFactoryV1 public immutable FACTORY;
+    IRegentsAutolaunchFactoryV2 public immutable FACTORY;
     /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On Base
     /// the deployment scripts require `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`.
     IVRFCoordinatorV2Plus public immutable VRF_COORDINATOR;
@@ -398,7 +406,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         IERC20 usdc,
         IERC20 regent,
         IRegentRevenueStaking staking,
-        IRegentsAutolaunchFactoryV1 factory,
+        IRegentsAutolaunchFactoryV2 factory,
         Metadata memory metadata,
         Randomness memory randomness,
         bytes32 traitTableHash
@@ -803,7 +811,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// the factory must map the SUBJECT back to the same launch id. Anything else reverts the whole
     /// execution.
     ///
-    /// Every revert here — a launch that already exists, a paused factory, a raise the strategy
+    /// Every revert here — a launch that already exists, a paused factory, a floor the auction
     /// refuses — reverts the controller's execution with it, including the mark that the proposal
     /// was carried out. The proposal therefore stays open and consumes nothing, which is what lets a
     /// fleet wait for the factory to open and try again. The first approved Autolaunch carried out
@@ -829,18 +837,19 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         }
 
         (uint256 launchId, address subject, address auction, address escrow) = FACTORY.launch(
-            IRegentsAutolaunchFactoryV1.LaunchParams({
+            IRegentsAutolaunchFactoryV2.LaunchParams({
                 name: envelope.name,
                 symbol: envelope.symbol,
                 description: envelope.description,
                 website: envelope.website,
                 image: envelope.image,
                 treasury: address(this),
-                requiredRegentRaised: envelope.requiredRegentRaised
+                floorPriceQ96: envelope.floorPriceQ96,
+                minimumRegentRaised: envelope.minimumRegentRaised
             })
         );
 
-        IRegentsAutolaunchFactoryV1.Launch memory recorded = FACTORY.launches(launchId);
+        IRegentsAutolaunchFactoryV2.Launch memory recorded = FACTORY.launches(launchId);
         if (
             recorded.launcher != address(this) || recorded.treasury != address(this) || recorded.subject != subject
                 || recorded.auction != auction || recorded.escrow != escrow
@@ -910,9 +919,11 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     /// @dev Moves an `AuctionCreated` launch to the strategy's terminal verdict, when there is one,
     /// and returns the state after it. At graduation the strategy sweeps exactly the auction's
-    /// `currencyRaised` of REGENT, puts `lpRegentUsed` of it into the pool and sends the rest to
-    /// this fleet in the same transaction, so that difference is booked as shared money here. The
-    /// strategy sends this fleet no SUBJECT at graduation: every unused unit goes to the escrow.
+    /// `currencyRaised` of REGENT, puts `lpRegentUsed` of it, at most three quarters, into the pool
+    /// and sends the rest, at least a quarter, to this fleet in the same transaction; that
+    /// difference is its `LaunchSettled.regentToTreasury`, and it is booked as shared money here.
+    /// The strategy sends this fleet no SUBJECT at graduation: every unused unit goes to the escrow
+    /// and vests to the fleet with the 65%.
     function _syncLaunch() private returns (LaunchState state) {
         IRegentLBPStrategy.Distribution memory distribution = FACTORY.strategy().distribution(_launch.auction);
         if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Graduated) {

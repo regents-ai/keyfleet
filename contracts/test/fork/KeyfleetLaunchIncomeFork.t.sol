@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {IAutolaunchAuction} from "../../src/interfaces/IAutolaunchAuction.sol";
 import {IRegentLBPStrategy} from "../../src/interfaces/IRegentLBPStrategy.sol";
-import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
@@ -26,11 +26,10 @@ interface IForkAuction {
         returns (uint256 bidId);
 }
 
-/// @dev The shared strategy's calls this flow needs beyond what the fleet reads.
+/// @dev The calls on `RegentLBPStrategyV2` this flow needs beyond what the fleet reads.
 interface IForkStrategy {
     function MIGRATION_DELAY_BLOCKS() external view returns (uint64);
-    function FLOOR_PRICE_Q96() external view returns (uint256);
-    function BID_TICK_Q96() external view returns (uint256);
+    function bidTickSpacingFor(uint256 floorPriceQ96) external pure returns (uint256);
     function migrate(address auction) external;
 }
 
@@ -48,12 +47,13 @@ interface IForkSplitter {
     function usdc() external view returns (address);
 }
 
-/// @notice The whole post-launch path of one fleet against a running Autolaunch lab: the keys vote
-/// a launch through the lab's own factory and one bidder graduates it. The REGENT the auction raised
-/// that the pool did not use and the SUBJECT the escrow releases become shared money; USDC and REGENT
-/// the launch's splitter pays on reach the keys whole; keys claim, and a Pay vote spends shared
-/// money.
-/// @dev Runs only when `KEYFLEET_FORK_RPC_URL` names a Base-shaped chain with the Autolaunch graph
+/// @notice The whole post-launch path of one fleet against a running Autolaunch v2 lab: the keys
+/// vote a launch at the Autolaunch site's default floor, with a higher minimum, through the lab's
+/// own `RegentsAutolaunchFactoryV2`, and one bidder graduates it. The REGENT the auction raised that
+/// the pool did not use, at least a quarter of the raise, and the SUBJECT the escrow releases become
+/// shared money; USDC and REGENT the launch's splitter pays on reach the keys whole; keys claim, and
+/// a Pay vote spends shared money.
+/// @dev Runs only when `KEYFLEET_FORK_RPC_URL` names a Base-shaped chain with the Autolaunch v2 graph
 /// deployed and `KEYFLEET_FORK_FACTORY` names its factory; without them the test skips. Everything
 /// happens on a local fork of that chain, so nothing is written to the chain itself. `deal` funds
 /// ordinary wallets with USDC and REGENT, and `prank` acts as ordinary holders, a bidder and a
@@ -64,8 +64,14 @@ contract KeyfleetLaunchIncomeForkTest is Test {
     address private constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address private constant REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
     address private constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    uint128 private constant RAISE = 1_000e18;
-    uint128 private constant BID = 4_000e18;
+    /// @dev 0.000001 REGENT per token in Q96, rounded down to the grid: the Autolaunch site's
+    /// default, whose floor minimum is just under 20,000 REGENT.
+    uint256 private constant FLOOR = 79_228_162_514_264_337_593_500;
+    /// @dev The keys' own higher minimum, above the floor minimum.
+    uint128 private constant MINIMUM = 21_000e18;
+    /// @dev One bid, placed in the auction's first block and priced well above where it clears,
+    /// buys the whole 20% for more than the minimum.
+    uint128 private constant BID = 22_000e18;
 
     address private buyer = makeAddr("keyfleet-fork-buyer");
     address private alice = makeAddr("keyfleet-fork-alice");
@@ -84,7 +90,7 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         string memory rpc = vm.envOr("KEYFLEET_FORK_RPC_URL", string(""));
         if (bytes(rpc).length == 0) vm.skip(true);
         vm.createSelectFork(rpc);
-        IRegentsAutolaunchFactoryV1 factory = IRegentsAutolaunchFactoryV1(vm.envAddress("KEYFLEET_FORK_FACTORY"));
+        IRegentsAutolaunchFactoryV2 factory = IRegentsAutolaunchFactoryV2(vm.envAddress("KEYFLEET_FORK_FACTORY"));
         strategy = IForkStrategy(address(factory.strategy()));
         assertFalse(factory.launchesPaused(), "the lab's factory is not taking launches");
 
@@ -167,7 +173,8 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             description: "The token a fork-test fleet voted to launch.",
             website: "https://regents.sh/fork",
             image: "ipfs://fork-image",
-            requiredRegentRaised: RAISE,
+            floorPriceQ96: FLOOR,
+            minimumRegentRaised: MINIMUM,
             narrativeDigest: keccak256("fork narrative")
         });
         vm.roll(block.number + 1);
@@ -176,6 +183,10 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         _passAll(proposalId);
         votes.execute(proposalId);
         auction = fleet.launchRecord().auction;
+
+        IRegentLBPStrategy.Distribution memory opened = fleet.launchDistribution();
+        assertEq(opened.floorPriceQ96, FLOOR, "the strategy recorded the floor the keys approved");
+        assertEq(opened.requiredRegentRaised, MINIMUM, "and the keys' minimum, above the floor minimum");
     }
 
     /// @dev One bid from an ordinary wallet, the way a connected wallet makes it: approve Permit2,
@@ -184,16 +195,16 @@ contract KeyfleetLaunchIncomeForkTest is Test {
         IForkAuction cca = IForkAuction(auction);
         vm.roll(cca.startBlock());
         cca.checkpoint();
-        uint256 tick = strategy.BID_TICK_Q96();
+        uint256 tick = strategy.bidTickSpacingFor(FLOOR);
         uint256 base = cca.clearingPrice();
-        if (base < strategy.FLOOR_PRICE_Q96()) base = strategy.FLOOR_PRICE_Q96();
-        uint256 price = base - (base % tick) + 11 * tick;
+        if (base < FLOOR) base = FLOOR;
+        uint256 price = base - (base % tick) + 100 * tick;
 
         deal(REGENT, bidder, BID);
         vm.startPrank(bidder);
         IERC20(REGENT).approve(PERMIT2, BID);
         IForkPermit2(PERMIT2).approve(REGENT, auction, uint160(BID), uint48(block.timestamp + 1 days));
-        cca.submitBid(price, BID, bidder, strategy.FLOOR_PRICE_Q96(), "");
+        cca.submitBid(price, BID, bidder, FLOOR, "");
         vm.stopPrank();
 
         vm.roll(uint256(cca.endBlock()) + strategy.MIGRATION_DELAY_BLOCKS());
@@ -211,12 +222,17 @@ contract KeyfleetLaunchIncomeForkTest is Test {
             "as the strategy reports it"
         );
         uint256 raised = IAutolaunchAuction(auction).lbpInitializationParams().currencyRaised;
+        assertGe(raised, MINIMUM, "the raise reached the keys' minimum");
         assertEq(
             fleet.freeCapital(REGENT),
             raised - distribution.lpRegentUsed,
             "exactly the REGENT the auction raised that the pool did not use is shared money"
         );
-        console2.log("raised", raised, "pool", distribution.lpRegentUsed);
+        assertGe(fleet.freeCapital(REGENT) * 4, raised, "the fleet received at least a quarter of the raise");
+        assertEq(IERC20(fleet.launchRecord().subject).balanceOf(address(fleet)), 0, "and no SUBJECT at graduation");
+        console2.log("raised", raised);
+        console2.log("pool", distribution.lpRegentUsed);
+        console2.log("to the fleet", fleet.freeCapital(REGENT));
     }
 
     /// @dev Recognizes the fleet's whole surplus in an income token and checks that all of it went

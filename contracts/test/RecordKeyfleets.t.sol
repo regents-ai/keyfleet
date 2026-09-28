@@ -89,7 +89,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".fees.accelerantCapitalBps"), 1000, "Accelerant capital bps");
         assertEq(vm.parseJsonUint(json, ".fees.bpsDenominator"), 10_000, "Bps denominator");
 
-        assertEq(vm.parseJsonString(json, ".autolaunch.abi"), "RegentsAutolaunchFactoryV1", "Factory ABI");
+        assertEq(vm.parseJsonString(json, ".autolaunch.abi"), "RegentsAutolaunchFactoryV2", "Factory ABI");
         assertEq(vm.parseJsonAddress(json, ".autolaunch.factory"), address(factory), "Autolaunch factory");
         assertEq(vm.parseJsonBytes32(json, ".autolaunch.factoryCodeHash"), address(factory).codehash, "Factory code");
         assertEq(vm.parseJsonAddress(json, ".autolaunch.strategy"), address(strategy), "Strategy read off the factory");

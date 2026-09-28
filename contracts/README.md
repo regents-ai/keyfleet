@@ -238,9 +238,10 @@ anything is sorted or paid, so each is booked exactly once whatever the order of
 calls:
 
 - At graduation the strategy sends the fleet the REGENT the auction raised that
-  the pool did not use (`currencyRaised - lpRegentUsed`), booked with
-  `GraduationHoldingsBooked(REGENT, amount)`. The strategy sends the fleet no
-  launched token at graduation.
+  the pool did not use (`currencyRaised - lpRegentUsed`, at least a quarter of
+  the raise), booked with `GraduationHoldingsBooked(REGENT, amount)`. The
+  strategy sends the fleet no launched token at graduation: what it has left
+  goes to the escrow and vests to the fleet with the 65%.
 - After graduation, every launched token the vesting escrow releases, booked from
   the growth of the escrow's `totalReleased` with
   `VestingBooked(subject, amount, totalReleased)`.
@@ -326,7 +327,7 @@ on any size of fleet.
 ## Autolaunch
 
 An `Autolaunch` proposal creates a launch through the pinned
-`RegentsAutolaunchFactoryV1`, with the fleet itself as launcher and treasury.
+`RegentsAutolaunchFactoryV2`, with the fleet itself as launcher and treasury.
 The factory is fixed when the fleet is deployed. The strategy is never stored:
 the fleet reads it from the factory on every call. Only minimal interfaces are
 declared for either, so nothing of the factory's governance surface is reachable
@@ -334,18 +335,22 @@ from a fleet. [../docs/autolaunch-target.md](../docs/autolaunch-target.md)
 describes the target.
 
 The envelope carries the launched token's name, symbol, description, website and
-image, the required REGENT raise and a digest of the narrative behind the launch.
+image, the auction's floor price (`floorPriceQ96`, REGENT per token times
+`2^96`), the keys' own minimum raise in REGENT (zero for none) and a digest of
+the narrative behind the launch.
 There is no treasury field and no expiry. The envelope is stored whole and never
 edited; `keccak256(abi.encode(envelope))` is emitted in `AutolaunchProposed` and
 recorded again on the fleet when it launches.
 
 `proposeAutolaunch` refuses a fleet that has not sold its preset's launch
 threshold (`LaunchNotYetEligible`), an empty metadata field or one over the
-factory's byte cap, a raise of zero or above the strategy's
-`MAX_REACHABLE_RAISE`, and a fleet whose launch has graduated. The caps and the
-raise ceiling are read from the factory and strategy in the proposing call. A
-launch may be proposed while another is running, because it can be carried out
-if that one fails.
+factory's byte cap, a floor or minimum the strategy's
+`requiredRegentRaisedFor` refuses (a floor below the auction's lowest or off the
+grid of a hundred bid ticks, or a minimum no auction could raise, with the
+strategy's own errors), and a fleet whose launch has graduated. The caps are
+read from the factory, and the floor and minimum are put to the strategy, in the
+proposing call. A launch may be proposed while another is running, because it
+can be carried out if that one fails.
 
 Carrying it out calls `Keyfleet.executeAutolaunch(proposalId, openedBlock,
 envelope)`, which only the fleet's controller may call. It first books the
@@ -481,11 +486,18 @@ may be downloaded on first use. Tests need no RPC, apart from the two in
 `test/fork`, which skip themselves unless their environment is set:
 
 - `test/fork/KeyfleetLaunchIncomeFork.t.sol` needs `KEYFLEET_FORK_RPC_URL`
-  naming a chain with the Autolaunch contracts deployed and
+  naming a chain with the Autolaunch v2 contracts deployed and
   `KEYFLEET_FORK_FACTORY` naming its factory. On a local fork it runs the whole
-  path: the keys vote a launch, a bidder graduates it, the unused REGENT and the
-  vested launched token become shared money, USDC and REGENT from the splitter
-  reach the keys, keys claim, and a Pay vote spends shared money.
+  path: the keys vote a launch at the default floor with a higher minimum, a
+  bidder graduates it, the unused REGENT (at least a quarter of the raise) and
+  the vested launched token become shared money, USDC and REGENT from the
+  splitter reach the keys, keys claim, and a Pay vote spends shared money. Run
+  it against your own Anvil fork of the v2 practice chain, never the practice
+  chain itself:
+  `anvil --port 58741 --fork-url http://127.0.0.1:58705 --prune-history --silent`,
+  then `KEYFLEET_FORK_RPC_URL=http://127.0.0.1:58741
+  KEYFLEET_FORK_FACTORY=0xcc0dF8493B348bFD7C58730A2c5e97b3A73aCb00 forge test
+  --match-path test/fork/KeyfleetLaunchIncomeFork.t.sol -vv`.
 - `test/fork/KeyfleetRevealBaseFork.t.sol` needs `BASE_RPC_URL` and runs a
   fleet against the real Chainlink coordinator on a fork of Base.
 

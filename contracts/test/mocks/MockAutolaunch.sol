@@ -2,10 +2,12 @@
 pragma solidity 0.8.26;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IAutolaunchAuction} from "../../src/interfaces/IAutolaunchAuction.sol";
 import {IAutolaunchEscrow} from "../../src/interfaces/IAutolaunchEscrow.sol";
 import {IRegentLBPStrategy} from "../../src/interfaces/IRegentLBPStrategy.sol";
-import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @dev Anything the mock strategy can mint REGENT from.
 interface IMintable {
@@ -35,7 +37,7 @@ contract MockAuction is IAutolaunchAuction {
     }
 }
 
-/// @dev Stands in for `ConditionalVestingEscrowV1`. It holds the launch's pending SUBJECT and
+/// @dev Stands in for `ConditionalVestingEscrowV2`. It holds the launch's pending SUBJECT and
 /// releases it to the one fixed treasury, counting every unit in `totalReleased` exactly as the
 /// real escrow does. Anyone may release, as on the real one.
 contract MockEscrow is IAutolaunchEscrow {
@@ -54,13 +56,26 @@ contract MockEscrow is IAutolaunchEscrow {
     }
 }
 
-/// @dev Stands in for the shared `RegentLBPStrategy`. It holds the one bound it publishes and the
-/// per-auction record the fleet reads, and lets a test put an auction into any lifecycle the real
-/// strategy can reach. Graduation does what the real strategy does to the treasury in the same
-/// transaction: the auction reports what it raised, the pool takes `lpRegentUsed` of it, and the
-/// rest of the raised REGENT is sent to the treasury.
+/// @dev Stands in for the shared `RegentLBPStrategyV2`. It applies the strategy's floor and minimum
+/// rules with the same errors, holds the per-auction record the fleet reads, and lets a test put an
+/// auction into any lifecycle the real strategy can reach. Graduation does what the real strategy
+/// does to the treasury in the same transaction: the auction reports what it raised, the pool takes
+/// `lpRegentUsed` of it, at most three quarters, and the rest is sent to the treasury. The treasury
+/// receives no SUBJECT at graduation; the real strategy sends every leftover unit to the escrow.
 contract MockLBPStrategy is IRegentLBPStrategy {
-    uint128 public constant MAX_REACHABLE_RAISE = 658_201_822_928_399_999_999_999_581_824_872_526;
+    error FloorPriceTooLow(uint256 floorPriceQ96);
+    error FloorPriceNotOnGrid(uint256 floorPriceQ96);
+    error UnreachableRequiredRaise(uint128 requiredRegentRaised);
+
+    /// @dev The pinned auction's lowest floor, `2^32 + 1` in Q96.
+    uint256 public constant MIN_FLOOR_PRICE = 4_294_967_297;
+    uint256 public constant BID_TICK_DIVISOR = 100;
+    uint128 public constant AUCTION_ALLOCATION = 20_000_000_000e18;
+    uint128 public constant RESERVE_ALLOCATION = 15_000_000_000e18;
+    /// @dev The real strategy's `maxReachableRaiseFor` at the default floor's tick, read from
+    /// `RegentLBPStrategyV2` on the v2 practice chain. The real figure moves a little with the tick;
+    /// one figure is enough for a mock.
+    uint256 public constant MAX_REACHABLE_RAISE = 329_100_911_464_241_199_999_817_437_446_764_519;
 
     IMintable public immutable REGENT;
 
@@ -70,14 +85,37 @@ contract MockLBPStrategy is IRegentLBPStrategy {
         REGENT = regent;
     }
 
-    function open(address auction, uint256 launchId, address subject, address escrow, address treasury, uint128 raise)
-        external
+    function requiredRegentRaisedFor(uint256 floorPriceQ96, uint128 minimumRegentRaised)
+        public
+        pure
+        returns (uint128 requiredRegentRaised)
     {
+        if (floorPriceQ96 < MIN_FLOOR_PRICE) revert FloorPriceTooLow(floorPriceQ96);
+        if (floorPriceQ96 % BID_TICK_DIVISOR != 0) revert FloorPriceNotOnGrid(floorPriceQ96);
+        uint128 floorMinimum =
+            SafeCast.toUint128(Math.mulDiv(AUCTION_ALLOCATION, floorPriceQ96, 2 ** 96, Math.Rounding.Ceil));
+        if (minimumRegentRaised > MAX_REACHABLE_RAISE) revert UnreachableRequiredRaise(minimumRegentRaised);
+        requiredRegentRaised = minimumRegentRaised > floorMinimum ? minimumRegentRaised : floorMinimum;
+    }
+
+    function open(
+        address auction,
+        uint256 launchId,
+        address subject,
+        address escrow,
+        address treasury,
+        uint256 floorPriceQ96,
+        uint128 minimumRegentRaised
+    ) external {
         Distribution storage d = _distributions[auction];
         d.lifecycle = Lifecycle.Active;
         d.startBlock = uint64(block.number) + 300;
         d.endBlock = d.startBlock + 86_401;
-        d.requiredRegentRaised = raise;
+        d.claimBlock = d.endBlock + 64;
+        d.migrationBlock = d.endBlock + 128;
+        d.requiredRegentRaised = requiredRegentRaisedFor(floorPriceQ96, minimumRegentRaised);
+        d.reserve = RESERVE_ALLOCATION;
+        d.floorPriceQ96 = floorPriceQ96;
         d.launchId = launchId;
         d.subject = subject;
         d.escrow = escrow;
@@ -93,6 +131,7 @@ contract MockLBPStrategy is IRegentLBPStrategy {
         uint128 raised,
         uint128 lpRegentUsed
     ) external {
+        require(uint256(lpRegentUsed) * 4 <= uint256(raised) * 3, "the pool takes at most three quarters");
         Distribution storage d = _distributions[auction];
         d.lifecycle = Lifecycle.Graduated;
         d.splitter = splitter;
@@ -113,11 +152,10 @@ contract MockLBPStrategy is IRegentLBPStrategy {
     }
 }
 
-/// @dev Stands in for `RegentsAutolaunchFactoryV1`. It applies the checks the real factory applies,
+/// @dev Stands in for `RegentsAutolaunchFactoryV2`. It applies the checks the real factory applies,
 /// in the same order and with the same error shapes: launches are refused while paused, the five
 /// metadata strings must be nonempty and within their byte caps, the treasury must be nonzero and
-/// outside the system set, and the required raise must be positive and within the strategy's
-/// ceiling. It records `msg.sender` as launcher, keeps the same `launches` and `launchIdOfSubject`
+/// outside the system set, and the strategy must accept the floor and the minimum. It records `msg.sender` as launcher, keeps the same `launches` and `launchIdOfSubject`
 /// provenance, deploys a real SUBJECT, auction and escrow, puts the pending SUBJECT in the escrow,
 /// and opens the strategy's record for the new auction.
 ///
@@ -126,20 +164,19 @@ contract MockLBPStrategy is IRegentLBPStrategy {
 /// condition of the fleet's provenance check can be exercised on its own against a factory that
 /// lies; and it can call anywhere from inside `launch`, which is where a real launch artifact would
 /// get its chance to re-enter.
-contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
+contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV2 {
     error LaunchesArePaused();
     error EmptyMetadataField(uint256 field);
     error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found);
     error RefusedTreasury(address treasury);
-    error UnreachableRequiredRaise(uint128 requiredRegentRaised);
 
     uint256 public constant MAX_NAME_BYTES = 64;
     uint256 public constant MAX_SYMBOL_BYTES = 16;
     uint256 public constant MAX_DESCRIPTION_BYTES = 512;
     uint256 public constant MAX_WEBSITE_BYTES = 256;
     uint256 public constant MAX_IMAGE_BYTES = 256;
-    /// @dev The escrow's pending allocation, 85% of the real launch's supply.
-    uint256 public constant PENDING_ALLOCATION = 85_000_000_000e18;
+    /// @dev The escrow's pending allocation, 65% of the real launch's supply.
+    uint256 public constant PENDING_ALLOCATION = 65_000_000_000e18;
 
     /// @notice Every factory is born paused, exactly as the real one is.
     bool public launchesPaused = true;
@@ -221,9 +258,6 @@ contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
         _requireBytes(3, bytes(params.website).length, MAX_WEBSITE_BYTES);
         _requireBytes(4, bytes(params.image).length, MAX_IMAGE_BYTES);
         if (params.treasury == address(0) || refusedTreasury[params.treasury]) revert RefusedTreasury(params.treasury);
-        if (params.requiredRegentRaised == 0 || params.requiredRegentRaised > strategy.MAX_REACHABLE_RAISE()) {
-            revert UnreachableRequiredRaise(params.requiredRegentRaised);
-        }
 
         lastParams = params;
         launchId = nextLaunchId;
@@ -244,7 +278,7 @@ contract MockAutolaunchFactory is IRegentsAutolaunchFactoryV1 {
         );
         _launchIdOfSubject[subject] = launchId;
         MockLBPStrategy(address(strategy))
-            .open(auction, launchId, subject, escrow, params.treasury, params.requiredRegentRaised);
+            .open(auction, launchId, subject, escrow, params.treasury, params.floorPriceQ96, params.minimumRegentRaised);
 
         if (_reentryTarget != address(0) && !reentryFired) {
             reentryFired = true;

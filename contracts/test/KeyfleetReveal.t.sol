@@ -12,7 +12,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "../src/vendor/chainlink/libraries/VRFV2PlusClient.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
@@ -81,7 +81,7 @@ abstract contract RevealFixture is Test {
             usdc,
             IERC20(address(regent)),
             IRegentRevenueStaking(address(0x57A1)),
-            IRegentsAutolaunchFactoryV1(address(0xFAC7)),
+            IRegentsAutolaunchFactoryV2(address(0xFAC7)),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             randomness,
             traitTableHash

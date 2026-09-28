@@ -278,8 +278,10 @@ contract DeployKeyfleetsTest is Test {
 
     /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a zero
     /// subscription and a zero trait table until the operator writes in the subscription the Safe
-    /// owns and the final trait table's hash. Until then no fleet can be deployed; with both written
-    /// in, every other refusal passes for Classic, the fleet that opens first.
+    /// owns and the final trait table's hash. The Base manifest also names no Autolaunch factory
+    /// until `RegentsAutolaunchFactoryV2` is deployed on Base, and the lab manifest names the v2
+    /// practice chain's factory. Until those are written in no fleet can be deployed on Base; with
+    /// them written in, every other refusal passes for Classic, the fleet that opens first.
     function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
         vm.etch(anvil.usdc, address(usdc).code);
@@ -299,7 +301,9 @@ contract DeployKeyfleetsTest is Test {
 
         KeyfleetManifest.Manifest memory base = script.readManifest("base", "classic");
         vm.chainId(BASE_CHAIN_ID);
-        vm.etch(base.autolaunchFactory, address(factory).code);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AutolaunchFactoryMissing.selector, address(0)));
+        script.deploy(base);
+        base.autolaunchFactory = address(factory);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
         script.deploy(base);
         base.vrf.subscriptionId = labSubscription;

@@ -62,8 +62,10 @@ Each fleet carries its own `baseTokenURI`: all four mint token ids from 1, so a
 single shared base would make `tokenURI` ambiguous across the release.
 
 Every address in the two manifests is recorded, not derived. The Autolaunch
-factory address is the Base factory named in
-[autolaunch-target.md](autolaunch-target.md).
+factory is `RegentsAutolaunchFactoryV2`, described in
+[autolaunch-target.md](autolaunch-target.md). It is not deployed on Base yet, so
+the Base manifest names the zero address and the deployment step refuses it; the
+anvil manifest names the factory on the Autolaunch v2 practice chain.
 
 Both committed manifests carry `"subscriptionId": "0"` and a zero
 `traitTableHash` until the subscription below exists and the trait table is
@@ -226,19 +228,21 @@ paths on purpose: the Base broadcast log and each `base.<fleet>.deployed.json`
 are the evidence of the real deployment and are committed with it, while
 everything a chain-31337 lab rehearsal writes is ignored.
 
-**The Autolaunch Base lab, for the anvil manifest.** The lab in the Autolaunch
-worktree is started from `contracts/v1` with
-`REGENT_BASE_RPC_URL=<Base RPC> python3 bin/local-base-lab.py start`, optionally
-with `--fork-block <block>`. It takes no other option: it always runs on chain id
-31337, picks its own port and prints the RPC URL to use. It deploys its own
-Autolaunch factory at a fresh address, so the factory address in `anvil.json`
-holds no code there. The anvil manifest permits that, which means fleets
-deployed to the lab are pinned to an address with no factory behind it and can
-never launch. The lab rehearses deployment, recording, purchases and votes; it
-cannot rehearse an Autolaunch. It starts anvil without a gas limit of its own, so
-blocks keep the forked Base block's gas limit. Its `fund` command hands out
-REGENT only; a wallet gets USDC for a purchase the same way as on the plain fork
-below.
+**The Autolaunch v2 practice chain, for the anvil manifest.** The Autolaunch
+lane runs v2 on an Anvil copy of Base at `127.0.0.1:58705` (chain id 31337); its
+addresses are in `docs/handoffs/autolaunch-v2-practice-chains-2026-09-28.md` at
+the workspace root. That chain is shared and mines only when sent a
+transaction, so never send it one: start your own fork of it and deploy there.
+
+```sh
+anvil --port 58741 --fork-url http://127.0.0.1:58705 --prune-history --silent
+```
+
+The factory address in `anvil.json` is the practice chain's
+`RegentsAutolaunchFactoryV2`, so fleets deployed to that fork can carry out a
+launch. The fork rehearses deployment, recording, purchases, votes and a whole
+Autolaunch. Stop the fork when done and delete its history directory under
+`~/.foundry/anvil/tmp`.
 
 **A plain fork on chain 31337, for the anvil manifest without the lab.**
 
@@ -259,7 +263,7 @@ on a Base fork account 1 carries delegated code whose NFT callback reverts, so a
 key minted to it fails.
 
 REGENT, USDC and the staking contract are Base's own on either fork; the
-Autolaunch factory has no code on this one either. A fleet run deploys three
+Autolaunch factory has no code on this one. A fleet run deploys three
 contracts: the fleet (20,638 bytes of deployed code), its reward ledger (5,981)
 and its voting controller (11,295), by `forge build --sizes`. Each byte of
 deployed code costs 200 gas. The gas a whole run takes has not been measured on
@@ -330,7 +334,7 @@ deployed code is the code those constants came from. It carries:
   Accelerant key limit, the two launch thresholds and the cohort limit) and the
   fee basis points (the 2% protocol share and the Accelerant 10% capital
   share);
-- the Autolaunch binding: the ABI name `RegentsAutolaunchFactoryV1`, the factory
+- the Autolaunch binding: the ABI name `RegentsAutolaunchFactoryV2`, the factory
   and the strategy it publishes, and the code hash of each, so the binding can be
   checked against the Autolaunch ceremony's own manifest, and whether the lab
   waiver for a missing factory applied, which is never the case on Base;

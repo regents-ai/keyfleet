@@ -6,7 +6,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockStaking} from "../test/KeyfleetIncome.t.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
@@ -57,7 +57,7 @@ contract KeeperLab is Script {
             usdc,
             new KeeperLabRegent(),
             mockStaking,
-            IRegentsAutolaunchFactoryV1(address(0xFAC7)),
+            IRegentsAutolaunchFactoryV2(address(0xFAC7)),
             Keyfleet.Metadata("Keeper Lab Classic", "KLC", "https://keyfleet.ai/metadata/keeper-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH

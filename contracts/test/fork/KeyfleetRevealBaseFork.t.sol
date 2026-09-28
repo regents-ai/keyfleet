@@ -11,7 +11,7 @@ import {IVRFProvingKeys} from "../../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 
 /// @notice The coordinator's public table of accepted requests, which the vendored interface does
@@ -62,7 +62,7 @@ contract KeyfleetRevealBaseForkTest is Test {
             usdc,
             IERC20(script.BASE_REGENT()),
             IRegentRevenueStaking(address(0x57A1)),
-            IRegentsAutolaunchFactoryV1(address(0xFAC7)),
+            IRegentsAutolaunchFactoryV2(address(0xFAC7)),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({coordinator: coordinator, subscriptionId: subscriptionId, keyHash: keyHash}),
             TRAIT_TABLE

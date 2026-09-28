@@ -464,7 +464,7 @@ replaces the v1 shape outright.
    yes. Both the minimum raise and the floor price are set in the launch
    proposal before launch.
 2. **How is the entered floor rounded?** Answered by `launch-profiles.md` at
-   `5effdb1`: down to a multiple of 100 in Q96, as the Autolaunch site does, and
+   `4271c25`: down to a multiple of 100 in Q96, as the Autolaunch site does, and
    no lower than `2^32 + 1`. Keyfleet rounds the same way, so the same price
    gives the same floor on both sites.
 3. **Does Keyfleet's keeper still send `migrate`?** Answered by the

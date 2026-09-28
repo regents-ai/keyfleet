@@ -9,7 +9,7 @@ import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoor
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {IRegentLBPStrategy} from "../src/interfaces/IRegentLBPStrategy.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
@@ -18,6 +18,8 @@ import {IMintable, MockAutolaunchFactory, MockLBPStrategy} from "./mocks/MockAut
 
 contract KeyfleetAutolaunchTest is Test {
     uint128 private constant RAISE = 1_000_000e18;
+    /// @dev 0.000001 REGENT per token in Q96, rounded down to the grid: the Autolaunch site's default.
+    uint256 private constant FLOOR = 79_228_162_514_264_337_593_500;
     uint256 private constant EXECUTION_GAS_CEILING = 1_750_000;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
@@ -125,7 +127,8 @@ contract KeyfleetAutolaunchTest is Test {
             description: "The token the alpha fleet voted to launch.",
             website: "https://regents.sh/alpha",
             image: "ipfs://alpha-image",
-            requiredRegentRaised: RAISE,
+            floorPriceQ96: FLOOR,
+            minimumRegentRaised: RAISE,
             narrativeDigest: keccak256("narrative")
         });
     }
@@ -190,7 +193,7 @@ contract KeyfleetAutolaunchTest is Test {
             usdc,
             regent,
             staking,
-            IRegentsAutolaunchFactoryV1(address(0)),
+            IRegentsAutolaunchFactoryV2(address(0)),
             Keyfleet.Metadata("n", "s", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -237,29 +240,44 @@ contract KeyfleetAutolaunchTest is Test {
         assertEq(_propose(fleet, atTheCaps), 1, "a field of exactly its cap is accepted");
     }
 
-    /// @dev Invariant: a raise no auction could ever settle on, and a raise of nothing, are both
-    /// refused at proposal time, against the ceiling the strategy itself publishes. The ceiling is
-    /// reachable and is accepted.
-    function test_proposalRefusesARaiseOfZeroOrAboveTheReachableCeiling() public {
+    /// @dev Invariant: a floor or a minimum the strategy would refuse is refused at proposal time by
+    /// the strategy's own `requiredRegentRaisedFor`, with the strategy's own errors: a floor below the
+    /// auction's lowest, a floor off the grid of a hundred bid ticks, and a minimum no auction could
+    /// raise. The lowest floor on the grid, no minimum, and the highest reachable minimum are all
+    /// accepted.
+    function test_proposalRefusesAFloorOrMinimumTheStrategyRefuses() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
-        uint128 ceiling = strategy.MAX_REACHABLE_RAISE();
+        uint256 lowest = strategy.MIN_FLOOR_PRICE();
+        uint256 lowestOnGrid = lowest + (100 - lowest % 100);
 
-        Keyfleet.LaunchEnvelope memory nothing = _envelope();
-        nothing.requiredRegentRaised = 0;
+        Keyfleet.LaunchEnvelope memory tooLow = _envelope();
+        tooLow.floorPriceQ96 = lowest - 1;
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.RaiseOutOfBounds.selector, uint128(0)));
-        votes.proposeAutolaunch(1, nothing);
+        vm.expectRevert(abi.encodeWithSelector(MockLBPStrategy.FloorPriceTooLow.selector, lowest - 1));
+        votes.proposeAutolaunch(1, tooLow);
 
+        Keyfleet.LaunchEnvelope memory offGrid = _envelope();
+        offGrid.floorPriceQ96 = FLOOR + 1;
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(MockLBPStrategy.FloorPriceNotOnGrid.selector, FLOOR + 1));
+        votes.proposeAutolaunch(1, offGrid);
+
+        uint128 ceiling = uint128(strategy.MAX_REACHABLE_RAISE());
         Keyfleet.LaunchEnvelope memory unreachable = _envelope();
-        unreachable.requiredRegentRaised = ceiling + 1;
+        unreachable.minimumRegentRaised = ceiling + 1;
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.RaiseOutOfBounds.selector, ceiling + 1));
+        vm.expectRevert(abi.encodeWithSelector(MockLBPStrategy.UnreachableRequiredRaise.selector, ceiling + 1));
         votes.proposeAutolaunch(1, unreachable);
 
+        Keyfleet.LaunchEnvelope memory lowestFloor = _envelope();
+        lowestFloor.floorPriceQ96 = lowestOnGrid;
+        lowestFloor.minimumRegentRaised = 0;
+        assertEq(_propose(fleet, lowestFloor), 1, "the lowest floor on the grid, with no minimum, is accepted");
+
         Keyfleet.LaunchEnvelope memory atTheCeiling = _envelope();
-        atTheCeiling.requiredRegentRaised = ceiling;
-        assertEq(_propose(fleet, atTheCeiling), 1, "the reachable ceiling itself is accepted");
+        atTheCeiling.minimumRegentRaised = ceiling;
+        assertEq(_propose(fleet, atTheCeiling), 2, "the highest reachable minimum is accepted");
     }
 
     /// @dev Invariant: proposing an Autolaunch takes the same standing as every other kind, and the
@@ -285,7 +303,8 @@ contract KeyfleetAutolaunchTest is Test {
         Keyfleet.LaunchEnvelope memory read = votes.launchEnvelope(proposalId);
         assertEq(keccak256(abi.encode(read)), keccak256(abi.encode(envelope)), "stored whole and unedited");
         assertEq(read.symbol, envelope.symbol);
-        assertEq(read.requiredRegentRaised, envelope.requiredRegentRaised);
+        assertEq(read.floorPriceQ96, envelope.floorPriceQ96);
+        assertEq(read.minimumRegentRaised, envelope.minimumRegentRaised);
 
         vm.prank(alice);
         uint256 decisionId = votes.proposeDecision(1, "record it", bytes32(0));
@@ -295,12 +314,12 @@ contract KeyfleetAutolaunchTest is Test {
 
     /// @dev The fleet reader in platform/lib/keyfleet/chain/launch_envelopes.ex keeps a launch only
     /// when the bytes `launchEnvelope` returns hash to the proposal's envelope hash. This is the
-    /// launch platform/test/keyfleet/proposals_chain_test.exs encodes by hand, 1056 bytes long, and
+    /// launch platform/test/keyfleet/proposals_chain_test.exs encodes by hand, 1088 bytes long, and
     /// both sides pin the same digest: as emitted, and as the stored envelope is returned.
     function test_readerSampleLaunchHashesAlikeWhenEmittedAndReturned() public {
         Keyfleet fleet = _launchReadyFleet(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
-        bytes32 pinned = 0x2aca76a7e898ce8e57e3a2b570f5d8c44f8dcdebfec29e93de71e3421f328311;
+        bytes32 pinned = 0x60274428179a0926af5c9011659e4dcf2832043870bfb085028973c2cf3ea31e;
 
         vm.prank(alice);
         vm.expectEmit(true, false, false, true, address(votes));
@@ -310,7 +329,7 @@ contract KeyfleetAutolaunchTest is Test {
         (bool ok, bytes memory returned) =
             address(votes).staticcall(abi.encodeCall(KeyfleetVotes.launchEnvelope, (proposalId)));
         assertTrue(ok);
-        assertEq(returned.length, 8 * 132);
+        assertEq(returned.length, 1088);
         assertEq(keccak256(returned), pinned);
     }
 
@@ -334,7 +353,8 @@ contract KeyfleetAutolaunchTest is Test {
             description: string(description),
             website: "https://example.test",
             image: string(image),
-            requiredRegentRaised: 250_000,
+            floorPriceQ96: FLOOR,
+            minimumRegentRaised: 25_000e18,
             narrativeDigest: bytes32(0)
         });
     }
@@ -354,14 +374,15 @@ contract KeyfleetAutolaunchTest is Test {
         vm.recordLogs();
         fleet.VOTES().execute(proposalId);
 
-        IRegentsAutolaunchFactoryV1.Launch memory recorded = factory.launches(1);
+        IRegentsAutolaunchFactoryV2.Launch memory recorded = factory.launches(1);
         _expectExecutedLog(address(fleet), proposalId, recorded);
         assertEq(recorded.launcher, address(fleet), "the factory recorded the fleet itself as launcher");
         assertEq(recorded.treasury, address(fleet), "and the fleet itself as treasury");
 
-        (,,,,, address suppliedTreasury, uint128 suppliedRaise) = factory.lastParams();
+        (,,,,, address suppliedTreasury, uint256 suppliedFloor, uint128 suppliedMinimum) = factory.lastParams();
         assertEq(suppliedTreasury, address(fleet), "the fleet forced the treasury, there is no field for anyone else");
-        assertEq(suppliedRaise, envelope.requiredRegentRaised);
+        assertEq(suppliedFloor, envelope.floorPriceQ96);
+        assertEq(suppliedMinimum, envelope.minimumRegentRaised);
 
         Keyfleet.LaunchRecord memory record = fleet.launchRecord();
         assertEq(record.launchId, 1);
@@ -579,12 +600,12 @@ contract KeyfleetAutolaunchTest is Test {
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _proposeAndPass(fleet, _envelope());
 
-        IRegentsAutolaunchFactoryV1.Launch[5] memory lies = [
-            IRegentsAutolaunchFactoryV1.Launch(mallory, address(0), address(0), address(0), address(0)),
-            IRegentsAutolaunchFactoryV1.Launch(address(0), mallory, address(0), address(0), address(0)),
-            IRegentsAutolaunchFactoryV1.Launch(address(0), address(0), mallory, address(0), address(0)),
-            IRegentsAutolaunchFactoryV1.Launch(address(0), address(0), address(0), mallory, address(0)),
-            IRegentsAutolaunchFactoryV1.Launch(address(0), address(0), address(0), address(0), mallory)
+        IRegentsAutolaunchFactoryV2.Launch[5] memory lies = [
+            IRegentsAutolaunchFactoryV2.Launch(mallory, address(0), address(0), address(0), address(0)),
+            IRegentsAutolaunchFactoryV2.Launch(address(0), mallory, address(0), address(0), address(0)),
+            IRegentsAutolaunchFactoryV2.Launch(address(0), address(0), mallory, address(0), address(0)),
+            IRegentsAutolaunchFactoryV2.Launch(address(0), address(0), address(0), mallory, address(0)),
+            IRegentsAutolaunchFactoryV2.Launch(address(0), address(0), address(0), address(0), mallory)
         ];
         for (uint256 field = 0; field < lies.length; ++field) {
             factory.setForcedRecord(lies[field]);
@@ -594,7 +615,7 @@ contract KeyfleetAutolaunchTest is Test {
         }
 
         factory.setForcedRecord(
-            IRegentsAutolaunchFactoryV1.Launch(address(0), address(0), address(0), address(0), address(0))
+            IRegentsAutolaunchFactoryV2.Launch(address(0), address(0), address(0), address(0), address(0))
         );
         factory.setBreakSubjectIndex(true);
         vm.expectRevert(Keyfleet.LaunchProvenanceMismatch.selector);
@@ -908,7 +929,7 @@ contract KeyfleetAutolaunchTest is Test {
 
     /// @dev The fleet's `AutolaunchExecuted` log from the last recorded call names exactly what the
     /// factory recorded.
-    function _expectExecutedLog(address fleet, uint256 proposalId, IRegentsAutolaunchFactoryV1.Launch memory recorded)
+    function _expectExecutedLog(address fleet, uint256 proposalId, IRegentsAutolaunchFactoryV2.Launch memory recorded)
         private
     {
         Vm.Log[] memory logs = vm.getRecordedLogs();

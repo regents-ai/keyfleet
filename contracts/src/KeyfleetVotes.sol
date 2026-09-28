@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
+import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
@@ -140,9 +140,6 @@ contract KeyfleetVotes is ReentrancyGuard {
     error EmptyMetadataField(uint256 field);
     /// @notice One of the launch envelope's five metadata strings was over its byte cap.
     error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found);
-    /// @notice The required raise was zero or above the largest raise the strategy says an auction
-    /// can reach.
-    error RaiseOutOfBounds(uint128 requiredRegentRaised);
     /// @notice This proposal is not an Autolaunch, so it carries no launch envelope.
     error NotAnAutolaunch(uint256 proposalId);
     /// @notice Nothing can be collected from this proposal: it is not a carried-out payment.
@@ -280,15 +277,18 @@ contract KeyfleetVotes is ReentrancyGuard {
     ///
     /// Everything that could make the approved call impossible on its own terms is checked
     /// here, so the keys are never asked to vote on a launch that could never happen: the five
-    /// metadata strings against the byte caps, the raise against the largest one an auction can
-    /// reach, and a fleet whose launch has graduated, which can never launch again. A launch may be
-    /// proposed while another is running, because it can be carried out if that one fails.
+    /// metadata strings against the byte caps, the floor and the minimum against the strategy's
+    /// `requiredRegentRaisedFor`, and a fleet whose launch has graduated, which can never launch
+    /// again. A launch may be proposed while another is running, because it can be carried out if
+    /// that one fails.
     ///
-    /// The caps and the raise ceiling are not copied into this repository. They are read from the
-    /// pinned factory and from the strategy it is bound to, in this call, so the figures a proposal
-    /// is judged by are always the ones the target itself publishes and this controller can never
-    /// hold a stale opinion of what the target will accept. The factory and the strategy check
-    /// their own rules again on the call itself and remain the authority on both of theirs.
+    /// The caps and the floor and minimum rules are not copied into this repository. The caps are
+    /// read from the pinned factory, and the floor and minimum are put to the strategy it is bound
+    /// to, in this call, whose own errors refuse a floor below the auction's minimum or off its grid
+    /// and a minimum no auction could raise. So a proposal is always judged by the target's own
+    /// rules and this controller can never hold a stale opinion of what the target will accept. The
+    /// factory and the strategy check their rules again on the call itself and remain the authority
+    /// on both of theirs.
     ///
     /// Nothing about the factory's own state is checked here, because it is not this fleet's to
     /// predict: a factory that is paused when the proposal is made may well be open when it
@@ -310,18 +310,13 @@ contract KeyfleetVotes is ReentrancyGuard {
             : KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS;
         if (minted < required) revert LaunchNotYetEligible(minted, required);
 
-        IRegentsAutolaunchFactoryV1 factory = FLEET.FACTORY();
+        IRegentsAutolaunchFactoryV2 factory = FLEET.FACTORY();
         _requireBytes(0, bytes(envelope.name).length, factory.MAX_NAME_BYTES());
         _requireBytes(1, bytes(envelope.symbol).length, factory.MAX_SYMBOL_BYTES());
         _requireBytes(2, bytes(envelope.description).length, factory.MAX_DESCRIPTION_BYTES());
         _requireBytes(3, bytes(envelope.website).length, factory.MAX_WEBSITE_BYTES());
         _requireBytes(4, bytes(envelope.image).length, factory.MAX_IMAGE_BYTES());
-        if (
-            envelope.requiredRegentRaised == 0
-                || envelope.requiredRegentRaised > factory.strategy().MAX_REACHABLE_RAISE()
-        ) {
-            revert RaiseOutOfBounds(envelope.requiredRegentRaised);
-        }
+        factory.strategy().requiredRegentRaisedFor(envelope.floorPriceQ96, envelope.minimumRegentRaised);
         if (FLEET.launchState() == Keyfleet.LaunchState.Graduated) revert Keyfleet.LaunchAlreadyCreated();
 
         proposalId = _propose(tokenId, Kind.Autolaunch, "", envelope.narrativeDigest);
@@ -452,7 +447,7 @@ contract KeyfleetVotes is ReentrancyGuard {
     ///
     /// The proposal is marked carried out before the fleet is called, so a launch artifact or a
     /// paid asset that calls back can never carry it out twice. Any revert inside the fleet or the
-    /// factory — a paused factory, a raise the strategy refuses, a running or graduated launch, a
+    /// factory — a paused factory, a floor the auction refuses, a running or graduated launch, a
     /// launch proposal that opened in or before the block a failed launch was created in, a payment
     /// whose matches do not fit — undoes the mark with everything else, so the attempt consumes
     /// nothing and the proposal stays open.
