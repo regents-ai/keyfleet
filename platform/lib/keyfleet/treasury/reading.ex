@@ -6,7 +6,7 @@ defmodule Keyfleet.Treasury.Reading do
   the block the fleet's latest launch was created in when that launch
   failed.
 
-  `Keyfleet.Chain.TreasuryReader` reads them every five minutes at the
+  `Keyfleet.Chain.TreasuryReader` reads them every minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
   the block kept, or of an earlier one, is ignored, and comes back marked
   `upsert_skipped` in its metadata.

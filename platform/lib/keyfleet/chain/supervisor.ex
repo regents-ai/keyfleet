@@ -2,13 +2,13 @@ defmodule Keyfleet.Chain.Supervisor do
   @moduledoc """
   For each deployed fleet, one `Keyfleet.Chain.Poller` reading its history,
   and apart from it, the launches its launch proposals approve, read every
-  few seconds, and its balances and rewards, read every five minutes.
+  few seconds, and its balances and rewards, read every minute.
   """
   use Supervisor
 
   alias Keyfleet.Chain.Repeat
 
-  @balances_every 300_000
+  @balances_every 60_000
 
   def start_link(opts), do: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
 
