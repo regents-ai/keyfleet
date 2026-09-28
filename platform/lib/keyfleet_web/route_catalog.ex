@@ -88,26 +88,19 @@ defmodule KeyfleetWeb.RouteCatalog do
   ]
 
   @specs %{
-    home: {:home, nil, nil, "Keyfleet", "/", [], :home, :landing, %{}},
-    account:
-      {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, :detail, %{}},
-    fleet:
-      {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, :detail, %{}},
-    keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, :detail, %{}},
-    rooms:
-      {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, :detail, %{}},
+    home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
+    account: {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, %{}},
+    fleet: {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, %{}},
+    keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
+    rooms: {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, %{}},
     workspace:
-      {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, :detail,
-       %{}},
+      {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     workspace_item:
-      {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product,
-       :detail, %{}},
+      {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     proposals:
-      {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, :detail,
-       %{}},
+      {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, %{}},
     proposal:
-      {:proposal, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, :detail,
-       %{}}
+      {:proposal, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, %{}}
   }
 
   def entries, do: @entries
@@ -147,7 +140,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     do: is_binary(value) and Regex.match?(@object_id, value)
 
   defp build_spec(route_spec_id, destination) do
-    {route_id, app_id, app_label, page_label, root, controls, background, transition, local_state} =
+    {route_id, app_id, app_label, page_label, root, controls, background, local_state} =
       Map.fetch!(@specs, route_spec_id)
 
     %Spec{
@@ -160,7 +153,6 @@ defmodule KeyfleetWeb.RouteCatalog do
       sidebar_model: sidebar_model(app_id),
       header_controls: controls,
       background_slot: background,
-      content_transition_kind: transition,
       scroll_policy: :top,
       local_state: local_state
     }
@@ -190,7 +182,6 @@ defmodule KeyfleetWeb.RouteCatalog do
       "app_id" => spec.app_id,
       "background_slot" => spec.background_slot,
       "canonical_root" => spec.canonical_root,
-      "content_transition_kind" => spec.content_transition_kind,
       "destination" => spec.destination,
       "header_controls" => spec.header_controls,
       "live_action" => entry.live_action,

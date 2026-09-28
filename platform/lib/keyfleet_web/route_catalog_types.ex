@@ -34,7 +34,6 @@ defmodule KeyfleetWeb.RouteCatalog.Spec do
     :sidebar_model,
     :header_controls,
     :background_slot,
-    :content_transition_kind,
     :scroll_policy,
     :local_state
   ]

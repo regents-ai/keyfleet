@@ -54,7 +54,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert home.canonical_root == "/"
     assert home.header_controls == []
     assert home.background_slot == :home
-    assert home.content_transition_kind == :landing
     assert home.sidebar_model.id == :public
     assert home.sidebar_model.targets == []
   end
@@ -66,7 +65,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert key.destination == "/app/keys/fibonacci_syndicate/7"
     assert key.page_display_label == "Key"
     assert key.canonical_root == "/"
-    assert key.content_transition_kind == :detail
 
     for params <- [
           %{"fleet_id" => "Fibonacci_syndicate", "token_id" => "7"},
@@ -145,7 +143,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.canonical_root == "/"
     assert account.header_controls == [:profile_actions]
     assert account.background_slot == :product
-    assert account.content_transition_kind == :detail
     assert account.local_state == %{}
   end
 
