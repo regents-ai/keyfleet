@@ -29,8 +29,8 @@ export const byPointer = (event: MouseEvent) => event.detail > 0
 
 // Menus and dialogs can open without a click of their own, from a hover or
 // from the server. They move only when the reader was last using a mouse or a
-// finger. Keyfleet's own: going back or forward starts afresh, as a key press
-// does, so what that reopens is simply there.
+// finger. Going back or forward starts afresh, as a key press does, so what
+// that reopens is simply there.
 let pointer = false
 
 export const lastInputByPointer = () => pointer
