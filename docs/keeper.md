@@ -14,7 +14,11 @@ goes:
   on the fleet, each only when the chain says it would move something; and for
   each fleet whose launch is still at auction, `migrate(auction)` on the
   Autolaunch strategy once the auction may be settled and nobody has settled
-  it, then `syncLaunch()` on the fleet once the strategy has its result;
+  it, then `syncLaunch()` on the fleet once the strategy has its result. The
+  Regent bot normally settles every Autolaunch auction first, so the keeper's
+  `migrate` is a backstop: it reads the strategy before sending, sees the
+  settlement and skips, and if both land in the same block its call reverts
+  and costs a little gas;
 - once a day for each fleet, `sendProtocolShare()` while the fleet owes any.
 
 It holds itself to these limits, which are fixed in the code:

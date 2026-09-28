@@ -157,6 +157,7 @@ defmodule Keyfleet.KeeperHelpers do
         7,
         8,
         9,
+        10,
         1,
         a.subject,
         a.escrow,

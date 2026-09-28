@@ -77,6 +77,7 @@ defmodule Keyfleet.Keeper.Calls do
          {:uint, 128},
          {:uint, 160},
          {:uint, 256},
+         {:uint, 256},
          :address,
          :address,
          :address,
@@ -95,7 +96,7 @@ defmodule Keyfleet.Keeper.Calls do
     # Autolaunch factory and strategy
     strategy: {"strategy()", [], [:address]},
     lp_locker: {"lpLocker()", [], [:address]},
-    # ConditionalVestingEscrowV1.sol
+    # ConditionalVestingEscrowV2.sol
     lifecycle: {"lifecycle()", [], [{:uint, 8}]},
     total_released: {"totalReleased()", [], [{:uint, 256}]},
     vesting_start: {"vestingStart()", [], [{:uint, 64}]},
@@ -144,6 +145,7 @@ defmodule Keyfleet.Keeper.Calls do
     :lp_regent_used,
     :lp_subject_used,
     :final_sqrt_price_x96,
+    :floor_price_q96,
     :launch_id,
     :subject,
     :escrow,
