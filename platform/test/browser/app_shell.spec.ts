@@ -273,7 +273,7 @@ test("navigation keeps brand, document, shell identity, and starts at the top", 
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
 })
 
-test("rapid page switches settle only the latest scene and remove motion copies", async ({page}) => {
+test("rapid page switches leave the latest page at rest", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
@@ -282,9 +282,7 @@ test("rapid page switches settle only the latest scene and remove motion copies"
   await patchTo(page, fleetPath)
 
   await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
-  await expect(page.locator("#app-shell")).toHaveAttribute("data-motion-app", "product")
   await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
-  await expect(page.locator("[data-motion-copy]"), "outgoing copies are disposable").toHaveCount(0)
   await expect(page.locator("#route-content")).toHaveCSS("opacity", "1")
   for (const region of ["#route-content", "#shell-sidebar"]) {
     await expect(page.locator(region), `${region} is left to the stylesheet`).not.toHaveAttribute("style")

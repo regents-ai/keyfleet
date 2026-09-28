@@ -14,11 +14,10 @@ vi.mock("../js/auth_lazy", () => ({
   installCrossTabCsrf: vi.fn(),
   retireRefusedSession: vi.fn(),
 }))
-vi.mock("../js/hooks/shell_motion", () => ({ShellMotion: {}}))
 vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
-vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}}))
+vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {

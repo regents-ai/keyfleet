@@ -3,7 +3,7 @@ import type {Page} from "@playwright/test"
 // From the first paint the page records every inline transform or opacity any
 // element takes, every number split into pieces to roll and whether the
 // headline moved, so a test can ask what moved and whether it ended clean.
-// The shell's page-change motion is recorded apart, as the regions it moved.
+// The shell's page-change motion, the page arriving, is recorded apart.
 // Each time a number or the headline splits, it records whether every piece
 // sits in a box clipped by its class (`.split-clip`) rather than by a style of
 // its own, which a policy refusing style attributes would refuse.
@@ -39,10 +39,7 @@ function recordMotion() {
         }
         const style = el.getAttribute("style") ?? ""
         if (!/transform|opacity/.test(style)) continue
-        // The copies of the page being left fade out whatever the reader asked for;
-        // only the page arriving tells whether the change moved.
-        if (el.closest("[data-motion-copy]")) continue
-        if (el.matches("[data-motion-region], [data-motion-surface], [data-motion-background]")) {
+        if (el.id === "route-content") {
           pageMoves.add(el.id)
           continue
         }

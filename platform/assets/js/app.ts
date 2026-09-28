@@ -23,13 +23,12 @@ import {installCopyButtons} from "./copy_buttons"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
-import {ShellMotion} from "./hooks/shell_motion"
 import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
-import {MotionCascade} from "./hooks/motion/reveals"
+import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
 import {MotionPanels} from "./hooks/motion/slides"
 import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
@@ -328,7 +327,7 @@ const hooks = {
   MotionRefusal,
   OnchainSteps,
   OpenWhenWide,
-  ShellBehavior: composeHooks(shellBehavior, ShellMotion),
+  ShellBehavior: composeHooks(shellBehavior, ShellViews),
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")

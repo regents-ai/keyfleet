@@ -82,14 +82,17 @@ test("a move played again and again over its own half-way frame ends at rest", a
   }
 })
 
-test("a panel button pressed again and again mid-move leaves the button and its panel at rest", async ({page}) => {
+test("a phone's menu button pressed again and again mid-move leaves the button and its drawer at rest", async ({
+  page,
+}) => {
+  await page.setViewportSize({width: 390, height: 844})
   await openFleet(page)
 
-  await pressRapidly(page, "#fleet-about-toggle")
+  await pressRapidly(page, "#mobile-menu-button")
   await settle(page)
 
-  expect(await moved(page, "#fleet-about-toggle")).toBe(true)
-  expect(await moved(page, "#fleet-about")).toBe(true)
+  expect(await moved(page, "#mobile-menu-button")).toBe(true)
+  expect(await moved(page, "#shell-sidebar")).toBe(true)
   expect(await leftovers(page)).toEqual([])
 })
 
