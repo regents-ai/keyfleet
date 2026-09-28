@@ -189,7 +189,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Votes cast</dt>
-          <dd id="key-profile-votes">{Rules.grouped(@profile.votes_cast)}</dd>
+          <dd id="key-profile-votes" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+            <span data-count>{Rules.grouped(@profile.votes_cast)}</span>
+          </dd>
         </div>
         <div>
           <dt>Posts</dt>
@@ -296,8 +298,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Votes</dt>
-          <dd id="key-profile-holder-votes">
-            {count(@profile.holder_votes, "vote")} on {count(@profile.holder_proposals, "proposal")}
+          <dd
+            id="key-profile-holder-votes"
+            phx-hook="MotionCount"
+            data-variant={Motion.standard("count")}
+          >
+            <.count value={@profile.holder_votes} noun="vote" /> on
+            <.count
+              value={@profile.holder_proposals}
+              noun="proposal"
+            />
           </dd>
         </div>
         <div>
@@ -343,9 +353,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-hook="MotionList"
         data-variant={Motion.standard("list")}
         data-layout-id="key-profile-thread"
-        data-children="[data-layout-id]"
+        data-children="[data-post]"
       >
-        <li :for={{dom_id, message} <- @thread} id={dom_id} data-layout-id={dom_id}>
+        <li :for={{dom_id, message} <- @thread} id={dom_id} data-post data-layout-id={dom_id}>
           <p class="rooms-author">
             <.author fleet_id={@profile.fleet_id} message={message} params={@params} />
           </p>
@@ -462,8 +472,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp times(1), do: "Once"
   defp times(count), do: "#{Rules.grouped(count)} times"
 
-  defp count(1, noun), do: "1 #{noun}"
-  defp count(count, noun), do: "#{Rules.grouped(count)} #{noun}s"
+  attr :value, :integer, required: true
+  attr :noun, :string, required: true
+
+  # A figure that rolls when it changes, then its noun.
+  defp count(assigns),
+    do:
+      ~H|<span data-count>{Rules.grouped(@value)}</span> {if @value == 1, do: @noun, else: "#{@noun}s"}|
 
   defp day(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
 

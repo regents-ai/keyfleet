@@ -135,11 +135,12 @@ defmodule KeyfleetWeb.RoomsLive do
             phx-hook="MotionList"
             data-variant={Motion.standard("list")}
             data-layout-id="rooms-thread-list"
-            data-children="[data-layout-id]"
+            data-children="[data-post]"
           >
             <li
               :for={{dom_id, message} <- @posts}
               id={dom_id}
+              data-post
               data-layout-id={dom_id}
               class={message.kind == :room_named && "rooms-naming"}
             >

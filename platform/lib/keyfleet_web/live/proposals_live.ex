@@ -16,6 +16,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.Components.Count
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WorkspacePage
@@ -168,15 +170,26 @@ defmodule KeyfleetWeb.ProposalsLive do
           <dl class="proposals-facts">
             <div>
               <dt>Yes</dt>
-              <dd id="proposal-yes">{keys(@page.proposal.yes)}</dd>
+              <dd id="proposal-yes">
+                <Count.count id="proposal-yes-count" value={@page.proposal.yes} one="key" many="keys" />
+              </dd>
             </div>
             <div>
               <dt>No</dt>
-              <dd id="proposal-no">{keys(@page.proposal.no)}</dd>
+              <dd id="proposal-no">
+                <Count.count id="proposal-no-count" value={@page.proposal.no} one="key" many="keys" />
+              </dd>
             </div>
             <div>
               <dt>Keys sold</dt>
-              <dd id="proposal-keys-sold">{keys(@page.proposal.keys_sold)}</dd>
+              <dd id="proposal-keys-sold">
+                <Count.count
+                  id="proposal-keys-sold-count"
+                  value={@page.proposal.keys_sold}
+                  one="key"
+                  many="keys"
+                />
+              </dd>
             </div>
           </dl>
           <.approval_rule />
@@ -923,46 +936,52 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp balances(assigns) do
     ~H"""
-    <dl
-      :for={balance <- @treasury.balances}
-      class="proposals-facts proposals-balance"
-      data-asset={balance.asset}
-    >
-      <div>
-        <dt>Shared money</dt>
-        <dd><.amount value={balance.budget} /></dd>
-      </div>
-      <div>
-        <dt>Set aside for key holders</dt>
-        <dd><.amount value={balance.set_aside} /></dd>
-      </div>
-    </dl>
+    <div id="proposals-figures" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+      <dl
+        :for={balance <- @treasury.balances}
+        class="proposals-facts proposals-balance"
+        data-asset={balance.asset}
+      >
+        <div>
+          <dt>Shared money</dt>
+          <dd><.amount value={balance.budget} count /></dd>
+        </div>
+        <div>
+          <dt>Set aside for key holders</dt>
+          <dd><.amount value={balance.set_aside} count /></dd>
+        </div>
+      </dl>
 
-    <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
+      <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
 
-    <dl id="proposals-held" class="proposals-facts">
-      <div :if={@treasury.reserve}>
-        <dt>Held for the next level</dt>
-        <dd><.amount value={@treasury.reserve} /></dd>
-      </div>
-      <div>
-        <dt>Set aside for REGENT stakers</dt>
-        <dd><.amount value={@treasury.owed} /></dd>
-      </div>
-    </dl>
+      <dl id="proposals-held" class="proposals-facts">
+        <div :if={@treasury.reserve}>
+          <dt>Held for the next level</dt>
+          <dd><.amount value={@treasury.reserve} count /></dd>
+        </div>
+        <div>
+          <dt>Set aside for REGENT stakers</dt>
+          <dd><.amount value={@treasury.owed} count /></dd>
+        </div>
+      </dl>
+    </div>
     """
   end
 
   attr :value, :map, required: true
+  attr :count, :boolean, default: false, doc: "whether the amount rolls when it changes"
 
   # An amount, with its token's address beside it, shortened and in full on
   # hover, unless it is the fleet's own USDC. Kept on one line, since it sits
   # inside text.
   defp amount(%{value: %{token: nil}} = assigns),
-    do: ~H|<span class="proposals-amount">{@value.text}</span>|
+    do: ~H|<span class="proposals-amount" data-count={@count}>{@value.text}</span>|
 
-  defp amount(assigns),
-    do: ~H|<span class="proposals-amount">{@value.text} <.token address={@value.token} /></span>|
+  defp amount(assigns) do
+    ~H"""
+    <span class="proposals-amount" data-count={@count}>{@value.text} <.token address={@value.token} /></span>
+    """
+  end
 
   attr :address, :string, required: true
 

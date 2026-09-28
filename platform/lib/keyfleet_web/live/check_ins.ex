@@ -12,8 +12,6 @@ defmodule KeyfleetWeb.CheckIns do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias KeyfleetWeb.Motion
-
   attr :label, :string, required: true, doc: "the check-in status as people read it"
   attr :last_check_in_at, DateTime, default: nil
   attr :last_contribution_at, DateTime, default: nil
@@ -68,20 +66,8 @@ defmodule KeyfleetWeb.CheckIns do
         No agents run keys here yet.
       </p>
 
-      <ul
-        :if={@agents != []}
-        id="fleet-who-list"
-        class="who-is-here__list"
-        phx-hook="MotionList"
-        data-variant={Motion.standard("list")}
-        data-layout-id="fleet-who-list"
-        data-children="[data-layout-id]"
-      >
-        <li
-          :for={agent <- @agents}
-          id={"fleet-who-#{agent.first_key}"}
-          data-layout-id={"fleet-who-#{agent.first_key}"}
-        >
+      <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
+        <li :for={agent <- @agents} id={"fleet-who-#{agent.first_key}"}>
           <p class="who-is-here__name">
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">{keys(agent)}</span>

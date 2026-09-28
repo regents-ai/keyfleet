@@ -199,8 +199,10 @@
   max-width: 100%;
 }
 
+/* A token's address never breaks, so a rolling amount wraps as it does at rest. */
 .proposals-token {
   font-size: 0.85em;
+  white-space: nowrap;
 }
 
 .proposals-lines li {
