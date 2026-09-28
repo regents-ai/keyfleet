@@ -10,7 +10,6 @@ defmodule KeyfleetWeb.Components.Shell do
   attr(:route_spec, :map, required: true)
   attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
   attr(:shell_instance, :integer, required: true)
-  attr(:theme, :string, required: true)
   slot(:content, required: true)
 
   def shell(assigns) do
@@ -57,7 +56,7 @@ defmodule KeyfleetWeb.Components.Shell do
         </Regent.Primitives.button>
 
         <span class="shell-spacer" />
-        <.theme_toggle id="theme-control" theme={@theme} />
+        <.theme_toggle id="theme-control" />
         <div class="rl-header-links">
           <RegentLinks.header_links id="shell-token-menu" />
         </div>
@@ -177,21 +176,19 @@ defmodule KeyfleetWeb.Components.Shell do
   end
 
   attr(:id, :string, required: true)
-  attr(:theme, :string, required: true)
 
   @doc """
   The colour theme switch: one control that flips between the two themes.
 
-  The browser owns its state. It writes the theme cookie the server reads on the
-  next render, and restates the current theme here on load and after every live
-  navigation, so the control is left out of LiveView's patching. The server
-  renders the theme it just served, so the control reads correctly before any
-  script runs and for anyone browsing without one.
+  It names the theme showing by itself, from the page's theme or the device's
+  setting, so the server passes no theme. The browser owns the press: it writes
+  the theme cookie the server reads on the next render and restyles the page, so
+  the control is left out of LiveView's patching.
   """
   def theme_toggle(assigns) do
     ~H"""
     <div id={@id} class="theme-control" phx-update="ignore">
-      <Regent.ThemeToggle.button id={"#{@id}-button"} theme={@theme} data-theme-toggle />
+      <Regent.ThemeToggle.button id={"#{@id}-button"} data-theme-toggle />
     </div>
     """
   end

@@ -37,10 +37,13 @@ function readFamily(page: Page) {
   })
 }
 
+// A press chooses the opposite of the theme showing, and before any choice the device
+// decides what shows, so it may take a second press to land on the theme wanted.
 async function chooseTheme(page: Page, choice: "light" | "dark") {
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  if ((await page.locator("html").getAttribute("data-theme")) !== choice) {
+  for (let press = 0; press < 2; press++) {
+    if ((await page.locator("html").getAttribute("data-theme")) === choice) break
     await page.locator("#theme-control [data-theme-toggle]").click()
   }
   await expect(page.locator("html")).toHaveAttribute("data-theme", choice)
@@ -81,7 +84,8 @@ test("direct page loads seed the canonical RegentUI brand", async ({
   ] as const) {
     const served = await (await request.get(route)).text()
     expect(served).toContain(`data-brand="${brand}"`)
-    expect(served).toContain('data-theme="dark"')
+    // Nothing chosen yet, so the page carries no theme and follows the device.
+    expect(served).not.toMatch(/<html[^>]*\sdata-theme=/)
 
     await page.goto(route)
     await expect(page.locator("html")).toHaveAttribute("data-brand", brand)
@@ -188,7 +192,9 @@ test("a signed-in account shows its account menu", async ({page}) => {
   )
   await expect(account.getByRole("button", {name: "Disconnect"})).toBeVisible()
 
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
+  // Nothing chosen and a device that asks for dark: dark shows, so a press chooses light.
+  await page.emulateMedia({colorScheme: "dark"})
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/)
   await page.locator("#theme-control [data-theme-toggle]").click()
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light")
   expect(await page.evaluate(() => document.cookie)).toContain("regent_theme=light")
@@ -289,35 +295,48 @@ test("rapid page switches leave the latest page at rest", async ({page}) => {
   }
 })
 
-test("the theme preference applies immediately", async ({page}) => {
-  await page.goto("/account")
-  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+// Before any choice the page carries no theme and follows the device, dark unless it asks
+// for light; the switch names the theme showing either way. A press chooses the opposite,
+// and the choice then wins over the device on every later page.
+for (const device of ["dark", "light"] as const) {
+  test(`with nothing chosen a ${device} device decides, and a choice sticks`, async ({page}) => {
+    const other = device === "dark" ? "light" : "dark"
+    const named = {
+      dark: "Dark theme on. Switch to light theme.",
+      light: "Light theme on. Switch to dark theme.",
+    }
+    const html = page.locator("html")
+    const toggle = page.locator("#theme-control [data-theme-toggle]")
 
-  // With nothing saved the server renders the dark theme, and the switch says so
-  // before it is touched.
-  const toggle = page.locator("#theme-control [data-theme-toggle]")
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
-  await expect(toggle).toHaveAttribute("aria-pressed", "false")
-  await expect(toggle).toHaveAttribute(
-    "aria-label",
-    "Color theme: Dark. Activate Light theme.",
-  )
-  await expect(toggle.locator("[data-theme-toggle-state]")).toHaveText("Dark theme active")
+    await page.emulateMedia({colorScheme: device})
+    await page.goto("/account")
+    await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
-  await toggle.click()
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light")
-  await expect(toggle).toHaveAttribute("aria-pressed", "true")
-  await expect(toggle.locator("[data-theme-toggle-state]")).toHaveText("Light theme active")
+    await expect(html).not.toHaveAttribute("data-theme", /.*/)
+    await expect(toggle).toHaveAccessibleName(named[device])
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(device)
+    const unchosen = await readFamily(page)
 
-  await page.reload()
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light")
-  await expect(toggle).toHaveAttribute("aria-pressed", "true")
+    await toggle.click()
+    await expect(html).toHaveAttribute("data-theme", other)
+    await expect(toggle).toHaveAccessibleName(named[other])
+    expect(await page.evaluate(() => document.cookie)).toContain(`regent_theme=${other}`)
 
-  await toggle.click()
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
-  await page.reload()
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
-})
+    await page.reload()
+    await expect(html).toHaveAttribute("data-theme", other)
+    await expect(toggle).toHaveAccessibleName(named[other])
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(other)
+    expect(await readFamily(page)).not.toEqual(unchosen)
+
+    await toggle.click()
+    await expect(html).toHaveAttribute("data-theme", device)
+    await page.reload()
+    await expect(html).toHaveAttribute("data-theme", device)
+    await expect(toggle).toHaveAccessibleName(named[device])
+    // The device's own theme, once chosen, is the same palette it showed unchosen.
+    expect(await readFamily(page)).toEqual(unchosen)
+  })
+}
 
 for (const width of [320, 390]) {
   test(`${width}px drawer contains focus and cleans up every close path`, async ({page}) => {

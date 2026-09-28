@@ -11,7 +11,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
      |> assign(KeyfleetWeb.PublicDocuments.page("/showcase"))
      |> assign(
        privy_mode: privy_mode(),
-       theme: "dark",
        catalog: Catalog.snapshot(),
        capabilities: capability_samples(),
        form: to_form(%{"title" => "First launch", "quantity" => "1"}, as: :sample),
@@ -44,7 +43,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
       route_spec={@route_spec}
       account_control={@account}
       shell_instance={0}
-      theme={@theme}
     >
       <:content>
         <div style="padding: 32px">

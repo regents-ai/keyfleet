@@ -81,6 +81,35 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     end
   end
 
+  test "before any choice a reading page carries no theme and follows the device" do
+    document =
+      build_conn()
+      |> get("/privacy")
+      |> html_response(200)
+      |> LazyHTML.from_document()
+
+    assert document |> LazyHTML.query("html[data-theme]") |> Enum.count() == 0
+
+    assert document
+           |> LazyHTML.query("meta[name=color-scheme]")
+           |> LazyHTML.attribute("content") == ["dark light"]
+
+    assert document
+           |> LazyHTML.query("meta[name=theme-color]")
+           |> LazyHTML.attribute("media") == [
+             "(prefers-color-scheme: light)",
+             "(prefers-color-scheme: dark)"
+           ]
+
+    home =
+      build_conn()
+      |> get("/")
+      |> html_response(200)
+      |> LazyHTML.from_document()
+
+    assert home |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["dark"]
+  end
+
   test "the tool manifest lists the two read tools and the docs list them too" do
     manifest = build_conn() |> get("/capabilities") |> json_response(200)
     assert Enum.map(manifest["tools"], & &1["name"]) == ["about", "docs"]

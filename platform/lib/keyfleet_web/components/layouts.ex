@@ -22,13 +22,11 @@ defmodule KeyfleetWeb.Layouts do
     """
   end
 
-  attr(:theme, :string, default: "dark")
-
   @doc "Product and source discovery without loading a browser integration."
   def product_links(assigns) do
     ~H"""
     <footer aria-label="Project links" class="product-links">
-      <KeyfleetWeb.Components.Shell.theme_toggle id="footer-theme-control" theme={@theme} />
+      <KeyfleetWeb.Components.Shell.theme_toggle id="footer-theme-control" />
       <div class="rl-header-links">
         <KeyfleetWeb.Components.RegentLinks.header_links id="footer-token-menu" />
       </div>

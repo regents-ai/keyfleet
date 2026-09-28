@@ -220,3 +220,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `RegentChain.Abi`; `Keyfleet.Chain.Abi`, which it was taken from, is gone.
 - "Stop any wallet voting for me" names no wallet (the zero address) instead of
   the holder's own wallet. Either way only the holder votes their keys.
+
+## 2026-09-28 — design-system 42a439b: pages follow the device until a theme is chosen
+
+- design-system moves from `4239c53` to `42a439b`.
+- Until someone picks a theme, pages follow their device: dark, or light when the
+  device asks for light. A theme chosen on the site always wins, and the
+  homepage stays dark. The theme switch names the theme showing by itself.
+- As the template does: the theme plug reads no choice as none, the root layout
+  and error page carry no `data-theme` until a choice, the colour-scheme and
+  theme-color tags follow the device, and the server no longer passes a theme
+  through the LiveView session, the shell or the showcase pages. The shell mark
+  and KeyFleet's colour-scheme rules cover the no-choice case.

@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.ShellLive do
   @key_profile_events ~w(post_to_key close_key)
 
   @impl true
-  def mount(params, session, socket) do
+  def mount(params, _session, socket) do
     {:ok,
      socket
      |> stream_configure(:posts, dom_id: &"post-#{&1.id}")
@@ -52,7 +52,6 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream_configure(:activity, dom_id: &FleetLive.activity_dom_id/1)
      |> stream(:activity, [])
      |> assign(
-       theme: session["theme"],
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: %Read{},
@@ -295,7 +294,6 @@ defmodule KeyfleetWeb.ShellLive do
       route_spec={@route_spec}
       account_control={@account_control}
       shell_instance={@shell_instance}
-      theme={@theme}
     >
       <:content>
         <AccountLive.page

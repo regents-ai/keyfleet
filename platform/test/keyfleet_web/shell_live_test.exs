@@ -36,30 +36,28 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute_push_event(view, "verified-connections:request", _payload)
   end
 
-  test "the switch states the theme the server just served", %{conn: conn} do
-    {:ok, dark, _html} = live(conn, "/account")
+  test "the switch carries a sentence for each theme, whatever was served", %{conn: conn} do
+    for cookie <- [nil, "light", "dark"] do
+      conn = if cookie, do: Plug.Test.put_req_cookie(conn, "regent_theme", cookie), else: conn
+      {:ok, view, _html} = live(conn, "/account")
 
-    assert has_element?(
-             dark,
-             ~s(#theme-control button.theme-toggle[aria-pressed=false][title="Switch to Light"]),
-             "Dark theme active"
-           )
+      assert has_element?(
+               view,
+               ~s(#theme-control button.theme-toggle[title="Switch between light and dark"])
+             )
 
-    {:ok, light, _html} =
-      conn
-      |> Plug.Test.put_req_cookie("regent_theme", "light")
-      |> live("/account")
+      assert has_element?(
+               view,
+               "#theme-control .rg-theme-toggle__state--dark",
+               "Dark theme on. Switch to light theme."
+             )
 
-    assert has_element?(
-             light,
-             ~s(#theme-control button.theme-toggle[aria-pressed=true][title="Switch to Dark"]),
-             "Light theme active"
-           )
-
-    assert has_element?(
-             light,
-             ~s(button.theme-toggle[aria-label="Color theme: Light. Activate Dark theme."])
-           )
+      assert has_element?(
+               view,
+               "#theme-control .rg-theme-toggle__state--light",
+               "Light theme on. Switch to dark theme."
+             )
+    end
   end
 
   test "anonymous account control renders Sign In separately from the brand link", %{conn: conn} do
@@ -445,7 +443,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
       route_spec: route_spec,
       account_control: account_control,
       shell_instance: 1,
-      theme: "dark",
       content: [%{inner_block: fn _, _ -> "Fixture content" end}]
     )
   end

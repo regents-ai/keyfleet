@@ -15,12 +15,11 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
 
   @wallet ~r/\A0x[0-9a-fA-F]{40}\z/
 
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(KeyfleetWeb.PublicDocuments.page("/showcase/privy"))
      |> assign(
-       theme: session["theme"] || "dark",
        mode: ShowcaseLive.privy_mode(),
        wallet: nil
      ), layout: false}
@@ -40,7 +39,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
         <span class="sc-local">Local only · read-only wallet data</span>
         <%!-- Same markup and event markers as the site header. No second auth handler. --%>
         <Shell.account_control account_control={@account_control} enabled={@mode == :configured} />
-        <Shell.theme_toggle id="privy-reference-theme" theme={@theme} />
+        <Shell.theme_toggle id="privy-reference-theme" />
       </header>
 
       <div class="privy-reference-content">
