@@ -1,0 +1,281 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "name",
+      "type": "binary"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "symbol",
+      "type": "binary"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "description",
+      "type": "binary"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "website",
+      "type": "binary"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "image",
+      "type": "binary"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "floor_price_q96",
+      "type": "decimal"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "minimum_regent_raised",
+      "type": "decimal"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "record_seq",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": true,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "observed_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "proposal_launch_envelopes_fleet_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "fleets"
+      },
+      "scale": null,
+      "size": null,
+      "source": "fleet_id",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "proposal_launch_envelopes_proposal_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "proposals"
+      },
+      "scale": null,
+      "size": null,
+      "source": "proposal_id",
+      "type": "uuid"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "floor_price_q96"
+      ],
+      "base_filter": null,
+      "check": "floor_price_q96 > 0",
+      "name": "proposal_launch_envelopes_positive_floor"
+    },
+    {
+      "attribute": [
+        "minimum_regent_raised"
+      ],
+      "base_filter": null,
+      "check": "minimum_regent_raised >= 0",
+      "name": "proposal_launch_envelopes_minimum_not_negative"
+    },
+    {
+      "attribute": [
+        "record_seq"
+      ],
+      "base_filter": null,
+      "check": "record_seq > 0",
+      "name": "proposal_launch_envelopes_positive_record_seq"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER immutable_proposal_launch_envelopes ON keyfleet_app.proposal_launch_envelopes;",
+      "global?": false,
+      "name": "immutable_proposal_launch_envelopes_trigger",
+      "up": "CREATE TRIGGER immutable_proposal_launch_envelopes BEFORE UPDATE OR DELETE ON keyfleet_app.proposal_launch_envelopes\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER untruncatable_proposal_launch_envelopes ON keyfleet_app.proposal_launch_envelopes;",
+      "global?": false,
+      "name": "untruncatable_proposal_launch_envelopes_trigger",
+      "up": "CREATE TRIGGER untruncatable_proposal_launch_envelopes BEFORE TRUNCATE ON keyfleet_app.proposal_launch_envelopes\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+    }
+  ],
+  "has_create_action": true,
+  "hash": "83EE4A0AC1678027ACF31DEC7852EF3865404C6CAC08C1680D22D4D1DDC30B65",
+  "identities": [
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "proposal_launch_envelopes_unique_proposal_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "proposal_id"
+        }
+      ],
+      "name": "unique_proposal",
+      "nils_distinct?": true,
+      "where": null
+    },
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "proposal_launch_envelopes_unique_record_seq_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        },
+        {
+          "type": "atom",
+          "value": "record_seq"
+        }
+      ],
+      "name": "unique_record_seq",
+      "nils_distinct?": true,
+      "where": null
+    }
+  ],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.Keyfleet.Repo",
+  "schema": null,
+  "table": "proposal_launch_envelopes"
+}

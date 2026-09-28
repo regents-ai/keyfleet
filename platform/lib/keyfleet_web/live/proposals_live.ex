@@ -1030,10 +1030,6 @@ defmodule KeyfleetWeb.ProposalsLive do
         <dt>{label}</dt>
         <dd>{value}</dd>
       </div>
-      <div>
-        <dt>REGENT to raise</dt>
-        <dd>{@launch.raise}</dd>
-      </div>
     </dl>
     """
   end

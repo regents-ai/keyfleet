@@ -20,6 +20,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Graph
   alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.LaunchPrice
   alias Keyfleet.Treasury
   alias KeyfleetWeb.NotFoundError
 
@@ -285,6 +286,9 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp launch(%{kind: :autolaunch, launch_envelope: nil}), do: %{read?: false}
 
   defp launch(%{kind: :autolaunch, launch_envelope: envelope}) do
+    floor = Decimal.to_integer(envelope.floor_price_q96)
+    minimum = Decimal.to_integer(envelope.minimum_regent_raised)
+
     %{
       read?: true,
       fields: [
@@ -292,9 +296,12 @@ defmodule KeyfleetWeb.ProposalsPage do
         {"Symbol", as_text(envelope.symbol)},
         {"Description", as_text(envelope.description)},
         {"Website", as_text(envelope.website)},
-        {"Image", as_text(envelope.image)}
-      ],
-      raise: regent(Decimal.to_integer(envelope.required_regent_raised))
+        {"Image", as_text(envelope.image)},
+        {"Floor price", "#{floor_price(floor)} REGENT per token"},
+        {"Higher minimum raise", if(minimum == 0, do: "None", else: regent(minimum))},
+        {"REGENT to raise",
+         "At least #{regent_at_least(LaunchPrice.required_regent_raised(floor, minimum))} REGENT"}
+      ]
     }
   end
 
@@ -345,7 +352,13 @@ defmodule KeyfleetWeb.ProposalsPage do
           Map.fetch!(envelope, field) != data[key],
           do: key
 
-    raise? = Decimal.to_integer(envelope.required_regent_raised) != regent_atoms(data)
+    required =
+      LaunchPrice.required_regent_raised(
+        Decimal.to_integer(envelope.floor_price_q96),
+        Decimal.to_integer(envelope.minimum_regent_raised)
+      )
+
+    raise? = required != regent_atoms(data)
     if raise?, do: texts ++ ["the REGENT to raise"], else: texts
   end
 
@@ -454,6 +467,37 @@ defmodule KeyfleetWeb.ProposalsPage do
     case fraction do
       "" -> Rules.grouped(div(atoms, scale))
       fraction -> "#{Rules.grouped(div(atoms, scale))}.#{fraction}"
+    end
+  end
+
+  @doc """
+  A floor price, REGENT per token times 2^96, in REGENT per token to six
+  significant figures, like `0.000001`.
+  """
+  def floor_price(floor_price_q96),
+    do: significant(floor_price_q96, LaunchPrice.q96(), :half_up)
+
+  @doc """
+  `atoms` of REGENT in whole REGENT, rounded up to six decimal places,
+  thousands grouped: what a launch must raise "at least", so raising the
+  amount shown is always enough.
+  """
+  def regent_at_least(atoms) do
+    step = Integer.pow(10, @regent_decimals - 6)
+    units(div(atoms + step - 1, step) * step, @regent_decimals)
+  end
+
+  defp significant(numerator, denominator, rounding) do
+    shown =
+      Decimal.Context.with(%Decimal.Context{precision: 6, rounding: rounding}, fn ->
+        Decimal.div(numerator, denominator)
+      end)
+      |> Decimal.normalize()
+      |> Decimal.to_string(:normal)
+
+    case String.split(shown, ".") do
+      [whole] -> Rules.grouped(String.to_integer(whole))
+      [whole, fraction] -> "#{Rules.grouped(String.to_integer(whole))}.#{fraction}"
     end
   end
 end

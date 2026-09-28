@@ -23,8 +23,12 @@ defmodule Keyfleet.Proposals.LaunchEnvelope do
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      check_constraint(:required_regent_raised, "proposal_launch_envelopes_positive_raise",
-        check: "required_regent_raised > 0"
+      check_constraint(:floor_price_q96, "proposal_launch_envelopes_positive_floor",
+        check: "floor_price_q96 > 0"
+      )
+
+      check_constraint(:minimum_regent_raised, "proposal_launch_envelopes_minimum_not_negative",
+        check: "minimum_regent_raised >= 0"
       )
 
       check_constraint(:record_seq, "proposal_launch_envelopes_positive_record_seq",
@@ -62,7 +66,7 @@ defmodule Keyfleet.Proposals.LaunchEnvelope do
 
     create :record do
       public? false
-      accept [:fleet_id, :proposal_id, :required_regent_raised | @texts]
+      accept [:fleet_id, :proposal_id, :floor_price_q96, :minimum_regent_raised | @texts]
       upsert? true
       upsert_identity :unique_proposal
       upsert_fields []
@@ -89,11 +93,18 @@ defmodule Keyfleet.Proposals.LaunchEnvelope do
       attribute field, :binary, allow_nil?: false, public?: true
     end
 
-    # The REGENT the launch's auction must raise to graduate, in atomic units.
-    attribute :required_regent_raised, :decimal,
+    # The auction's floor price, REGENT per launched token times 2^96.
+    attribute :floor_price_q96, :decimal,
       allow_nil?: false,
       public?: true,
       constraints: [min: 1]
+
+    # The keys' own minimum raise in REGENT's smallest units; zero when they
+    # named none, and the floor alone sets the raise.
+    attribute :minimum_regent_raised, :decimal,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 0]
 
     attribute :record_seq, :integer,
       allow_nil?: false,

@@ -2507,7 +2507,7 @@ components:
         envelope:
           type: [object, "null"]
           additionalProperties: false
-          required: [name, symbol, description, website, image, required_regent_raised]
+          required: [name, symbol, description, website, image, floor_price_q96, minimum_regent_raised, required_regent_raised]
           description: >-
             The launch's exact terms, read from the vote contract and checked against
             envelope_hash; null until they have been read. Bytes that are not valid text are
@@ -2518,9 +2518,21 @@ components:
             description: {type: string}
             website: {type: string}
             image: {type: string}
+            floor_price_q96:
+              $ref: "#/components/schemas/UintString"
+              description: >-
+                The auction's floor price: REGENT per launched token times 2^96, a whole number
+                of bid ticks (divisible by 100)
+            minimum_regent_raised:
+              $ref: "#/components/schemas/UintString"
+              description: >-
+                The keys' own minimum raise, in REGENT's smallest units; "0" when they named
+                none
             required_regent_raised:
               $ref: "#/components/schemas/UintString"
-              description: The REGENT the launch must raise, in its smallest units
+              description: >-
+                The REGENT the launch must raise to succeed, in its smallest units: the 20
+                billion tokens sold at the floor price, rounded up, or the minimum when higher
     ProposalExecuted:
       type: [object, "null"]
       additionalProperties: false

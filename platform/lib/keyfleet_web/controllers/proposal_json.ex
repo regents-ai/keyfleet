@@ -5,6 +5,8 @@ defmodule KeyfleetWeb.ProposalJSON do
   answered as text, with any bytes that are not valid text replaced.
   """
 
+  alias Keyfleet.Proposals.LaunchPrice
+
   @preview_chars 500
 
   @doc "One proposal as a sync lists it."
@@ -89,7 +91,15 @@ defmodule KeyfleetWeb.ProposalJSON do
       description: as_text(envelope.description),
       website: as_text(envelope.website),
       image: as_text(envelope.image),
-      required_regent_raised: decimal(envelope.required_regent_raised)
+      floor_price_q96: decimal(envelope.floor_price_q96),
+      minimum_regent_raised: decimal(envelope.minimum_regent_raised),
+      required_regent_raised:
+        Integer.to_string(
+          LaunchPrice.required_regent_raised(
+            Decimal.to_integer(envelope.floor_price_q96),
+            Decimal.to_integer(envelope.minimum_regent_raised)
+          )
+        )
     }
   end
 

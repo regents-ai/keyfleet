@@ -319,7 +319,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.launch_envelope!(proposal,
       name: "Cascade  Research",
       description: "Line one\nLine <two>",
-      required_regent_raised: Decimal.new("250000500000000000000000")
+      minimum_regent_raised: Decimal.new("250000500000000000000000")
     )
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
@@ -330,8 +330,18 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              {"Description", "Line one\nLine <two>"},
              {"Website", "https://example.test"},
              {"Image", "ipfs://cascade"},
-             {"REGENT to raise", "250,000.5 REGENT"}
+             {"Floor price", "0.000001 REGENT per token"},
+             {"Higher minimum raise", "250,000.5 REGENT"},
+             {"REGENT to raise", "At least 250,000.5 REGENT"}
            ]
+
+    # With no minimum of the keys' own, the floor sets the raise: the 20
+    # billion tokens sold at the floor, shown rounded up.
+    ProposalHelpers.launch_envelope!(ProposalHelpers.proposal!(@fleet, 2, kind: :autolaunch))
+    {:ok, view, _html} = live(conn, "#{@list}/2")
+
+    assert {"Higher minimum raise", "None"} in fields(view, "#proposal-launch div")
+    assert {"REGENT to raise", "At least 20,000 REGENT"} in fields(view, "#proposal-launch div")
   end
 
   describe "a launch's plan" do
@@ -401,7 +411,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       launch!(1, digest(plan, 1),
         name: "Cascade Research Two",
-        required_regent_raised: Decimal.new("250000000000000000000000")
+        minimum_regent_raised: Decimal.new("250000000000000000000000")
       )
 
       {:ok, view, _html} = live(conn, "#{@list}/1")
@@ -1201,7 +1211,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       Keyword.merge(
         [
           description: "Research the fleet funds",
-          required_regent_raised: Decimal.new("250000500000000000000000")
+          minimum_regent_raised: Decimal.new("250000500000000000000000")
         ],
         envelope
       )

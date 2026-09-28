@@ -216,8 +216,12 @@ defmodule Keyfleet.ProposalsTest do
 
     assert json(ProposalJSON.summary(by_number[3]))["launch"]["envelope"] == nil
 
-    assert %{"name" => "Cascade �", "required_regent_raised" => "250000000000000000000000"} =
-             json(ProposalJSON.summary(by_number[4]))["launch"]["envelope"]
+    assert %{
+             "name" => "Cascade �",
+             "floor_price_q96" => "79228162514264337593500",
+             "minimum_regent_raised" => "0",
+             "required_regent_raised" => "19999999999999999999989"
+           } = json(ProposalJSON.summary(by_number[4]))["launch"]["envelope"]
 
     assert %{"status" => "executed", "executed" => %{"executor" => @owner}} =
              json(ProposalJSON.summary(by_number[5]))

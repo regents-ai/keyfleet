@@ -75,7 +75,8 @@ defmodule Keyfleet.ProposalHelpers do
       description: "Research the fleet funds",
       website: "https://example.test",
       image: "ipfs://cascade",
-      required_regent_raised: Decimal.new("250000000000000000000000")
+      floor_price_q96: Decimal.new("79228162514264337593500"),
+      minimum_regent_raised: Decimal.new(0)
     }
     |> Map.merge(Map.new(attrs))
     |> Proposals.record_launch_envelope!(actor: @system)

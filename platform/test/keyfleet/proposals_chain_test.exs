@@ -30,6 +30,9 @@ defmodule Keyfleet.ProposalsChainTest do
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
   @revealed "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
   @created "0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647"
+  # A launch's floor price at 0.000001 REGENT per token, and one REGENT.
+  @floor 79_228_162_514_264_337_593_500
+  @regent 1_000_000_000_000_000_000
   @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
   @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
@@ -907,7 +910,7 @@ defmodule Keyfleet.ProposalsChainTest do
         Graph.current_launch_plan_revisions!(@fleet, [%{object_id: plan, version: 2}], actor: nil)
 
       texts = ["Research Fund", "RSF", "A fleet's research", "https://example.test", "ipfs://r"]
-      returned = encoded_envelope(texts, 250_000, bytes(digest))
+      returned = encoded_envelope(texts, @floor, 0, bytes(digest))
 
       StubClient.put_chain(
         head(@deployed + 10),
@@ -929,7 +932,7 @@ defmodule Keyfleet.ProposalsChainTest do
     # byte, text that is not valid text included, and only once.
     test "a launch proposal's launch is read at the head and kept exactly", %{fleet: fleet} do
       texts = ["Cascade", "CSC", "A fleet's launch", "https://example.test", <<0xFF, 0xFE>>]
-      returned = encoded_envelope(texts, 250_000)
+      returned = encoded_envelope(texts, @floor, 25_000 * @regent)
 
       StubClient.put_chain(
         head(@deployed + 10),
@@ -961,7 +964,8 @@ defmodule Keyfleet.ProposalsChainTest do
                record_seq: 2
              } = launch.launch_envelope
 
-      assert Decimal.equal?(launch.launch_envelope.required_regent_raised, 250_000)
+      assert Decimal.equal?(launch.launch_envelope.floor_price_q96, @floor)
+      assert Decimal.equal?(launch.launch_envelope.minimum_regent_raised, 25_000 * @regent)
       assert Chain.get_cursor!(@fleet).proposal_seq == 2
 
       # Kept, it is not asked for again.
@@ -987,7 +991,8 @@ defmodule Keyfleet.ProposalsChainTest do
                    description: "A fleet's launch",
                    website: "https://example.test",
                    image: <<0xFF, 0xFE>>,
-                   required_regent_raised: Decimal.new(250_000)
+                   floor_price_q96: Decimal.new(@floor),
+                   minimum_regent_raised: Decimal.new(25_000 * @regent)
                  },
                  actor: %System{}
                )
@@ -1012,7 +1017,7 @@ defmodule Keyfleet.ProposalsChainTest do
     # contracts/test/KeyfleetAutolaunch.t.sol from the same launch proposed,
     # as its event carries it and as `launchEnvelope` returns it.
     test "a launch that fills the hash's blocks exactly is kept", %{fleet: fleet} do
-      description = "A fleet's launch. " |> String.duplicate(29) |> binary_part(0, 512)
+      description = "A fleet's launch. " |> String.duplicate(27) |> binary_part(0, 480)
 
       texts = [
         "Cascade Research",
@@ -1022,13 +1027,13 @@ defmodule Keyfleet.ProposalsChainTest do
         "ipfs://" <> String.duplicate("c", 50)
       ]
 
-      returned = encoded_envelope(texts, 250_000)
+      returned = encoded_envelope(texts, @floor, 25_000 * @regent)
       assert byte_size(returned) == 8 * 136
 
       StubClient.put_chain(
         head(@deployed + 10),
         autolaunch(1, @deployed + 2, 0,
-          envelope_hash: "0x9d2685a27d497a7918a1a17b76177782499261be330345e630bcc08ef34bf285"
+          envelope_hash: "0x60274428179a0926af5c9011659e4dcf2832043870bfb085028973c2cf3ea31e"
         ),
         calls: fn _to, _data, _block_hash -> {:ok, returned} end
       )
@@ -1044,9 +1049,9 @@ defmodule Keyfleet.ProposalsChainTest do
     # nothing and holds up nothing; the next read tries again. A head that
     # cannot be read is the read failing.
     test "a launch that cannot be read keeps nothing and is tried again", %{fleet: fleet} do
-      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
+      returned = encoded_envelope(["N", "S", "D", "W", "I"], @floor, 0)
       logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
-      other = encoded_envelope(["N", "S", "D", "W", "J"], 1)
+      other = encoded_envelope(["N", "S", "D", "W", "J"], @floor, 0)
       StubClient.put_chain(head(@deployed + 10), logs)
       assert Scanner.step(fleet, StubClient) == :ok
 
@@ -1078,7 +1083,7 @@ defmodule Keyfleet.ProposalsChainTest do
     end
 
     test "a stopped fleet's launches are not read", %{fleet: fleet} do
-      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
+      returned = encoded_envelope(["N", "S", "D", "W", "I"], @floor, 0)
       logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
       StubClient.put_chain(head(@deployed + 10), logs)
       assert Scanner.step(fleet, StubClient) == :ok
@@ -1441,20 +1446,21 @@ defmodule Keyfleet.ProposalsChainTest do
     )
   end
 
-  # What `launchEnvelope` returns for a launch of these five texts, raise and
-  # narrative digest (none unless given): the struct's offset, then the struct.
-  defp encoded_envelope(texts, raise, narrative_digest \\ <<0::256>>) do
+  # What `launchEnvelope` returns for a launch of these five texts, floor
+  # price, minimum raise and narrative digest (none unless given): the
+  # struct's offset, then the struct.
+  defp encoded_envelope(texts, floor, minimum, narrative_digest \\ <<0::256>>) do
     tails =
       Enum.map(texts, fn text ->
         padded = 32 * div(byte_size(text) + 31, 32)
         <<byte_size(text)::256>> <> text <> <<0::size(8 * (padded - byte_size(text)))>>
       end)
 
-    {offsets, _end} = Enum.map_reduce(tails, 224, &{<<&2::256>>, &2 + byte_size(&1)})
+    {offsets, _end} = Enum.map_reduce(tails, 256, &{<<&2::256>>, &2 + byte_size(&1)})
 
     <<32::256>> <>
       Enum.join(offsets) <>
-      <<raise::256>> <>
+      <<floor::256, minimum::256>> <>
       narrative_digest <> Enum.join(tails)
   end
 
