@@ -20,6 +20,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WorkspacePage
 
+  # How long a proposals page waits after a notice that the fleet's proposal
+  # records or balances changed before it reads them, so a burst is read once.
+  @proposals_refresh_after 1_000
+
   @status_words %{
     open: "Open",
     approved: "Approved",
@@ -1119,4 +1123,34 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp key_list(token_ids), do: "keys #{Enum.join(token_ids, ", ")}"
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+
+  @doc "A wait begun for a proposals page the page has since left reads nothing."
+  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket),
+    do: {:noreply, socket |> assign(:proposals_refresh?, false) |> read_proposals()}
+
+  def handle_info(:refresh_proposals, socket),
+    do: {:noreply, assign(socket, :proposals_refresh?, false)}
+
+  @doc "One read, a moment later, for a burst of notices about the fleet's proposals."
+  def refresh_soon(socket) do
+    if socket.assigns.proposals_refresh? do
+      socket
+    else
+      Process.send_after(self(), :refresh_proposals, @proposals_refresh_after)
+      assign(socket, :proposals_refresh?, true)
+    end
+  end
+
+  @doc "The proposals page the address names, read afresh."
+  def read_proposals(socket) do
+    params = socket.assigns.proposals_params
+
+    page =
+      case socket.assigns.route_spec.route_id do
+        :proposals -> ProposalsPage.list(params["fleet_id"], params)
+        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params)
+      end
+
+    assign(socket, proposals: page)
+  end
 end

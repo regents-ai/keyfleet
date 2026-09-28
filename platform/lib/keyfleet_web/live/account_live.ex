@@ -12,6 +12,9 @@ defmodule KeyfleetWeb.AccountLive do
 
   import KeyfleetWeb.Components.VerifiedConnections
 
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
 
@@ -159,4 +162,17 @@ defmodule KeyfleetWeb.AccountLive do
     do: PublicIdentity.short_wallet(wallet)
 
   defp short_wallet(_account), do: nil
+
+  @doc """
+  Every key the signed-in person's wallets hold, fleet by fleet in catalog
+  order, leaving out fleets where they hold none.
+  """
+  def held_keys(nil), do: []
+
+  def held_keys(%Human{wallet_addresses: wallets} = actor) do
+    for %{id: fleet_id, name: name} <- Fleets.catalog(),
+        keys = Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor),
+        keys != [],
+        do: %{fleet_id: fleet_id, name: name, token_ids: Enum.map(keys, & &1.token_id)}
+  end
 end

@@ -14,7 +14,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
+  alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
+
+  # How long a workspace page waits after a notice of changes before it reads
+  # them, so a burst of writes is read once.
+  @workspace_refresh_after 1_000
 
   attr :board, :map, required: true
 
@@ -401,4 +406,51 @@ defmodule KeyfleetWeb.WorkspaceLive do
     {_singular, plural} = WorkspacePage.type_name(type)
     "No #{String.downcase(plural)} yet."
   end
+
+  @doc "A wait begun for a workspace the page has since left reads nothing."
+  def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket),
+    do: {:noreply, socket |> assign(:workspace_refresh?, false) |> read_workspace()}
+
+  def handle_info(:refresh_workspace, socket),
+    do: {:noreply, assign(socket, :workspace_refresh?, false)}
+
+  @doc "One read, a moment later, when the log has moved past what the page last read."
+  def refresh_soon(socket, seen, run_id, watermark) do
+    if moved?(seen, run_id, watermark) and not socket.assigns.workspace_refresh? do
+      Process.send_after(self(), :refresh_workspace, @workspace_refresh_after)
+      assign(socket, :workspace_refresh?, true)
+    else
+      socket
+    end
+  end
+
+  @doc "The workspace page the address names, read afresh."
+  def read_workspace(%{assigns: %{route_spec: %{route_id: :workspace}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    assign(
+      socket,
+      :workspace,
+      WorkspacePage.board(params["fleet_id"], params, ShellLive.human_actor(socket))
+    )
+  end
+
+  def read_workspace(%{assigns: %{route_spec: %{route_id: :workspace_item}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    assign(
+      socket,
+      :workspace,
+      WorkspacePage.item(
+        params["fleet_id"],
+        params["object_id"],
+        params,
+        ShellLive.human_actor(socket)
+      )
+    )
+  end
+
+  # A copy of another log, or a place further on in the same one.
+  defp moved?({run_id, seen_seq}, run_id, watermark), do: watermark > seen_seq
+  defp moved?(_seen, _run_id, _watermark), do: true
 end
