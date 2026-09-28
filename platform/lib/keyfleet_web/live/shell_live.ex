@@ -632,15 +632,6 @@ defmodule KeyfleetWeb.ShellLive do
   def human_actor(%{assigns: %{access_context: access_context}}), do: actor(access_context)
   def human_actor(_socket), do: nil
 
-  defp actor(%{principal: {:human, account}}),
-    do: %Human{human_account_id: account.id, wallet_addresses: account_wallets(account)}
-
+  defp actor(%{principal: {:human, account}}), do: Human.for_account(account)
   defp actor(_access_context), do: nil
-
-  defp account_wallets(account) do
-    [account.wallet_address | List.wrap(account.wallet_addresses)]
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&String.downcase/1)
-    |> Enum.uniq()
-  end
 end

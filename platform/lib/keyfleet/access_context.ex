@@ -11,6 +11,15 @@ defmodule Keyfleet.AccessContext do
 
   def human(account), do: %__MODULE__{principal: {:human, account}, capabilities: [:view_public]}
 
+  @doc """
+  The signed-in account's own wallets, lowercase and each once: the only wallets
+  that may act for it. `nil` when signed out.
+  """
+  def linked_wallets(%__MODULE__{principal: {:human, account}}),
+    do: account.wallet_addresses |> Enum.map(&String.downcase/1) |> Enum.uniq()
+
+  def linked_wallets(%__MODULE__{principal: :anonymous}), do: nil
+
   def account_control(%__MODULE__{principal: :anonymous}) do
     %AccountControl{kind: :sign_in, label: "Sign In"}
   end
