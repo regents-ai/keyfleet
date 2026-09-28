@@ -96,6 +96,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       note = create(@fleet, "note", %{"title" => "Standup", "body" => "Ship it."})
 
+      dead_end =
+        create(@fleet, "dead_end", %{
+          "title" => "Scraping the forum",
+          "what_was_tried" => "Paged through the archive.",
+          "why_it_failed" => "It needs a login."
+        })
+
       {:ok, view, html} = live(conn, @board)
 
       assert html =~ @notice
@@ -106,7 +113,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Keyfleet Syndicate"
              )
 
-      assert cards(view) == [note, launch, service, evidence, finding, task, goal]
+      assert cards(view) == [dead_end, note, launch, service, evidence, finding, task, goal]
 
       assert card_text(view, goal) =~ "Goal"
       assert {"Status", "Open"} in facts(view, goal)
@@ -127,6 +134,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert card_text(view, launch) =~ "Launch plan"
       assert facts(view, launch) == [{"Name", "Brief Co"}, {"Symbol", "BRIEF"}]
       assert card_text(view, note) =~ "Ship it."
+      assert card_text(view, dead_end) =~ "Dead end"
+      assert card_text(view, dead_end) =~ "It needs a login."
 
       # Who added each item, as the site names keys, and when it last changed.
       assert has_element?(view, ~s(#{card(launch)} a[href="/app/keys/#{@fleet}/5"]), "Key 5")
@@ -219,6 +228,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       view |> element(~s([data-type-filter="launch_card"])) |> render_click()
       assert has_element?(view, "#workspace-empty", "No launch plans yet.")
+
+      view |> element(~s([data-type-filter="dead_end"])) |> render_click()
+      assert has_element?(view, "#workspace-empty", "No dead ends yet.")
 
       view |> element(~s([data-type-filter="all"])) |> render_click()
       assert length(cards(view)) == 3
@@ -473,6 +485,50 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert has_element?(goal_view, "p", "No room messages point here yet.")
+    end
+
+    test "a dead end says what was tried and why it didn't work, and the task it came from",
+         %{conn: conn} do
+      task =
+        create(@fleet, "task", %{"title" => "Find the forum's members", "progress" => "doing"})
+
+      dead_end =
+        create(@fleet, "dead_end", %{
+          "title" => "Scraping the forum",
+          "what_was_tried" => "Paged through the archive.",
+          "why_it_failed" => "It needs a login."
+        })
+
+      produced = link(@fleet, task, dead_end, "produces")
+
+      {:ok, view, _html} = live(conn, item_path(dead_end))
+
+      assert has_element?(view, "h1", "Scraping the forum")
+
+      fields =
+        view
+        |> workspace()
+        |> LazyHTML.query("#workspace-fields div")
+        |> Enum.map(fn field ->
+          {field |> LazyHTML.query("dt") |> LazyHTML.text(),
+           field |> LazyHTML.query("dd") |> LazyHTML.text() |> squish()}
+        end)
+
+      assert fields == [
+               {"What was tried", "Paged through the archive."},
+               {"Why it didn’t work", "It needs a login."}
+             ]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-links [data-relation="#{produced}"][data-direction="to"]),
+               "produces this dead end"
+             )
+
+      assert history(view) == [
+               "Key 17 linked “Find the forum's members” to “Scraping the forum”, which it produces.",
+               "Key 17 added the dead end “Scraping the forum”."
+             ]
     end
 
     test "a removed link leaves the page and stays in its history", %{conn: conn} do

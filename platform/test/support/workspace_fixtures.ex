@@ -65,7 +65,8 @@ defmodule Keyfleet.WorkspaceFixtures do
       "required_regent_raised" => nil,
       "discussion" => []
     },
-    "note" => %{"discussion" => []}
+    "note" => %{"discussion" => []},
+    "dead_end" => %{"discussion" => []}
   }
 
   @doc "Starts the fleet's copy of a log; the fleet then reads as an empty workspace."

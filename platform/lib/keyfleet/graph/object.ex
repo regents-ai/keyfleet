@@ -243,6 +243,7 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'service' THEN ? ->> 'problem'
                       WHEN 'launch_card' THEN COALESCE(? ->> 'what_we_sell', ? ->> 'narrative')
                       WHEN 'note' THEN ? ->> 'body'
+                      WHEN 'dead_end' THEN ? ->> 'why_it_failed'
                     END, 240)))
                   """,
                   data,
@@ -256,6 +257,7 @@ defmodule Keyfleet.Graph.Object do
                   data,
                   data,
                   type,
+                  data,
                   data,
                   data,
                   data,

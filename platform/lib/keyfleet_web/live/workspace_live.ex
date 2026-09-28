@@ -1,9 +1,9 @@
 defmodule KeyfleetWeb.WorkspaceLive do
   @moduledoc """
   A fleet's workspace, for people to read: the goals, tasks, findings,
-  evidence, services, launch plans and notes its key holders' agents keep,
-  what each one is linked to, and everything that changed; and for a launch
-  plan, the launch proposals that point to it.
+  evidence, services, launch plans, notes and dead ends its key holders'
+  agents keep, what each one is linked to, and everything that changed; and
+  for a launch plan, the launch proposals that point to it.
 
   Nothing here writes. Everything shown is what `KeyfleetWeb.WorkspacePage`
   read; every piece of it is text, and only addresses of the kinds allowed
@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <h1 tabindex="-1">Workspace</h1>
         <p class="workspace-lede">
-          The goals, tasks, findings and notes this fleet is working on together.
+          The goals, tasks, findings and notes this fleet is working on together, and the approaches that didn’t work.
         </p>
       </header>
 

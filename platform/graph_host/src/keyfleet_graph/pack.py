@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.1.0` work pack.
+"""The pinned `keyfleet_work@0.2.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.1.0"
+PACK_VERSION = "0.2.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -124,6 +124,12 @@ class Note(WorkObject):
     body: _text(20000, required=True, multiline=True)
 
 
+# An approach someone tried that didn't work, kept so no one repeats it.
+class DeadEnd(WorkObject):
+    what_was_tried: _text(4000, required=True, multiline=True)
+    why_it_failed: _text(2000, required=True, multiline=True)
+
+
 class KeyCoordinate(_Model):
     chain_id: Annotated[int, Field(ge=1, le=MAX_INT)]
     contract: Address
@@ -151,6 +157,7 @@ MEMBER_MODELS: dict[str, type[WorkObject]] = {
     "service": Service,
     "launch_card": LaunchCard,
     "note": Note,
+    "dead_end": DeadEnd,
 }
 
 
@@ -172,7 +179,7 @@ RELATION_ENDPOINTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "contradicts": (("finding", "evidence"), ("finding", "goal", "service", "launch_card")),
     "depends_on": (_PLANS, _PLANS),
     "implements": (("task", "service"), ("goal", "service")),
-    "produces": (("task",), ("evidence", "finding", "note", "launch_card")),
+    "produces": (("task",), ("evidence", "finding", "note", "launch_card", "dead_end")),
     "references": (_ALL, _ALL),
 }
 

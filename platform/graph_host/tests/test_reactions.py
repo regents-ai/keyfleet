@@ -246,9 +246,14 @@ def test_evidence_newly_linked_for_or_against_an_object_asks_for_its_review(flee
     assert asked(fleet.link(evidence, target, relation)) == []
 
 
-@pytest.mark.parametrize("output", ["evidence", "finding", "note", "launch_card"])
+@pytest.mark.parametrize("output", ["evidence", "finding", "note", "launch_card", "dead_end"])
 def test_a_task_producing_something_asks_for_a_review_of_what_it_produced(fleet, output):
-    data = {"evidence": EVIDENCE, "finding": {"statement": "s"}, "note": {"body": "b"}}.get(output, {})
+    data = {
+        "evidence": EVIDENCE,
+        "finding": {"statement": "s"},
+        "note": {"body": "b"},
+        "dead_end": {"what_was_tried": "t", "why_it_failed": "w"},
+    }.get(output, {})
     task, produced = fleet.create("task"), fleet.create(output, **data)
 
     assert asked(fleet.link(task, produced, "produces")) == [("needs_review", produced)]

@@ -1293,7 +1293,7 @@ components:
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
-        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note]}
+        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note, dead_end]}
         scope: {$ref: "#/components/schemas/WorkspaceScope"}
         data:
           type: object
@@ -1457,7 +1457,7 @@ components:
       required: [id, type, data, sys, version]
       properties:
         id: {$ref: "#/components/schemas/WorkspaceId"}
-        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note]}
+        type: {type: string, enum: [goal, task, finding, evidence, service, launch_card, note, dead_end]}
         data: {type: object}
         version: {$ref: "#/components/schemas/WorkspaceVersion"}
         sys:

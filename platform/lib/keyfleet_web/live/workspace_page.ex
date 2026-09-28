@@ -24,7 +24,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
-  @types ~w(goal task finding evidence service launch_card note)
+  @types ~w(goal task finding evidence service launch_card note dead_end)
 
   # The launch proposals a launch plan's page lists, newest first.
   @proposed_page 20
@@ -36,7 +36,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
     "launch_card" => {"launch plan", "Launch plans"},
-    "note" => {"note", "Notes"}
+    "note" => {"note", "Notes"},
+    "dead_end" => {"dead end", "Dead ends"}
   }
 
   # Each type's fields in the order they are shown, with their names; any
@@ -88,7 +89,11 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"narrative", "The story"},
       {"required_regent_raised", "REGENT to raise"}
     ],
-    "note" => [{"body", "Note"}]
+    "note" => [{"body", "Note"}],
+    "dead_end" => [
+      {"what_was_tried", "What was tried"},
+      {"why_it_failed", "Why it didn’t work"}
+    ]
   }
 
   @choices %{

@@ -1,7 +1,8 @@
 defmodule Keyfleet.Graph.Workspace do
   @moduledoc """
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
-  launch cards and notes its members keep, and the links between them.
+  launch cards, notes and dead ends its members keep, and the links between
+  them.
 
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's

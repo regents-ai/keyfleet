@@ -43,7 +43,8 @@ defmodule KeyfleetWeb.ActivityLines do
     "evidence" => " added evidence: ",
     "service" => " proposed a service: ",
     "launch_card" => " started a launch plan: ",
-    "note" => " wrote a note: "
+    "note" => " wrote a note: ",
+    "dead_end" => " recorded a dead end: "
   }
 
   # How long words the site didn't write may run in Markdown, by what they

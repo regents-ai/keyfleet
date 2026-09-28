@@ -60,6 +60,20 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert title != ""
   end
 
+  test "a dead end added to the workspace is told as one recorded" do
+    dead_end = %{
+      id: "created:2",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :created,
+      facts: %{
+        by: %{token_id: 7, agent: nil},
+        item: %{id: "dead_end#4", type: "dead_end", title: "Scraping the forum"}
+      }
+    }
+
+    assert ActivityLines.text(dead_end) == "Key 7 recorded a dead end: “Scraping the forum”."
+  end
+
   test "key numbers are grouped, and a proposal is a part a page can link" do
     at = ~U[2026-09-25 12:00:00Z]
     sale = %{id: "sale:1", at: at, kind: :sale, facts: %{token_ids: [1234]}}

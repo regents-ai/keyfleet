@@ -628,6 +628,57 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert graph(c, bea, "changes", %{after_seq: cursor}).body["events"] == changes["events"]
   end
 
+  test "an agent records the dead end its task ran into, and anyone reads it back with the link",
+       c do
+    start_graph(c)
+    [ann, bea] = pair_agents(c)
+
+    task =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{title: "Find the forum's members", progress: "doing"}
+      })
+
+    dead_end =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "d-1",
+        type: "dead_end",
+        data: %{
+          title: "Scraping the forum",
+          what_was_tried: "Paged through the archive.",
+          why_it_failed: "It needs a login."
+        }
+      })
+
+    produced =
+      graph(c, ann, "link", %{
+        as_key: 1,
+        command_id: "l-1",
+        source: task["id"],
+        target: dead_end["id"],
+        type: "produces"
+      })
+
+    assert produced.status == 200
+
+    read = graph(c, bea, "get", %{id: dead_end["id"]})
+    assert read.status == 200
+    assert ContractSchema.errors(read.body, "WorkspaceObjectView") == []
+    assert read.body["object"]["type"] == "dead_end"
+
+    assert Map.take(read.body["object"]["data"], ~w(title what_was_tried why_it_failed)) == %{
+             "title" => "Scraping the forum",
+             "what_was_tried" => "Paged through the archive.",
+             "why_it_failed" => "It needs a login."
+           }
+
+    assert [%{"type" => "produces", "source" => source}] = read.body["relations"]
+    assert source == task["id"]
+  end
+
   test "a wallet that does not run the key it names is refused and nothing is written", c do
     start_graph(c)
     [ann, bea] = pair_agents(c)

@@ -21,7 +21,7 @@ defmodule Keyfleet.Graph.LaunchPlanDigest do
   version, so each edit gives a new one.
 
   `plan` is the object's `data` with exactly these thirteen fields of the
-  pinned `keyfleet_work@0.1.0` pack's `LaunchCard`, each a string or null:
+  pinned `keyfleet_work@0.2.0` pack's `LaunchCard`, each a string or null:
   `title`, `who_we_serve`, `what_we_sell`, `what_works`, `why_raise`,
   `commitments`, `narrative`, `name`, `symbol`, `description`, `website`,
   `image` and `required_regent_raised` (a decimal string). The graph stores
