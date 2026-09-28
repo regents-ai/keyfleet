@@ -271,8 +271,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   11.04 for key 144, 25.27 for key 512 and 80.00 for the last, each key about
   0.2253% dearer than the one before, and 32,032.45 USDC for all 1,024.
 - `scripts/classic_prices.py` writes the 1,024 prices once, as the contract's
-  cent table `KeyfleetClassicPrices` and as `platform/priv/classic_key_prices.txt`
-  for the site, so both always charge and show the same price.
+  cent table `KeyfleetClassicPrices` and, for the site, as
+  `platform/lib/keyfleet/fleets/classic_key_prices.txt`, so both always charge
+  and show the same price.
 - The fleet page, the fleet directory and the Markdown homepage describe
   Classic's new range, and the next key's price comes from the same table. The
   Classic key map closes at 32 × 32.

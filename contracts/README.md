@@ -77,8 +77,9 @@ never as a closed-form power, and every step rounds up:
   `classicPrice(tokenId)` reads the price from `KeyfleetClassicPrices.CENTS`, a
   table of 1,024 two-byte cent values, and multiplies it by `CENT_USDC`
   (10,000). The table is written by `scripts/classic_prices.py` at the
-  repository root, which also writes `platform/priv/classic_key_prices.txt`, the
-  same prices the site shows; change the script and run
+  repository root, which also writes
+  `platform/lib/keyfleet/fleets/classic_key_prices.txt`, the same prices the
+  site shows; change the script and run
   `uv run scripts/classic_prices.py`, never either file. The table adds about
   2.2 KB to the fleet's code and about 1,100 gas to a Classic purchase. The
   preset test walks the curve one key at a time in 36-decimal fixed point and

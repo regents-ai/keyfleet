@@ -8,7 +8,7 @@ defmodule Keyfleet.Fleets.Presets do
   exactly where the contract's does.
 
   Classic's 1,024 prices, 8 USDC for the first key to 80 USDC for the last,
-  are read from `priv/classic_key_prices.txt`, which
+  are read from `classic_key_prices.txt` beside this module, which
   `scripts/classic_prices.py` writes together with the contract's own table.
 
   Prices are in atomic USDC, millionths of one USDC, and are exactly what a
@@ -22,7 +22,7 @@ defmodule Keyfleet.Fleets.Presets do
   @accelerant_max_keys 2_000
 
   # Classic's price table: one whole number of US cents per key, key 1 first.
-  @classic_prices_path Path.expand("../../../priv/classic_key_prices.txt", __DIR__)
+  @classic_prices_path Path.expand("classic_key_prices.txt", __DIR__)
   @external_resource @classic_prices_path
   @classic_prices @classic_prices_path
                   |> File.read!()

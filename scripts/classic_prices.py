@@ -9,7 +9,7 @@ exactly 8.00 USDC, key 1,024 exactly 80.00 USDC, and each key the same percentag
 one before. The prices are worked out here to 60 significant digits and written as whole cents to:
 
 - contracts/src/KeyfleetClassicPrices.sol, a table of 1,024 two-byte big-endian cent values;
-- platform/priv/classic_key_prices.txt, one cent value per line, key 1 first.
+- platform/lib/keyfleet/fleets/classic_key_prices.txt, one cent value per line, key 1 first.
 
 Run from anywhere with `uv run scripts/classic_prices.py`.
 """
@@ -23,7 +23,7 @@ LAST_CENTS = 8000
 
 ROOT = Path(__file__).resolve().parent.parent
 SOLIDITY = ROOT / "contracts/src/KeyfleetClassicPrices.sol"
-SITE = ROOT / "platform/priv/classic_key_prices.txt"
+SITE = ROOT / "platform/lib/keyfleet/fleets/classic_key_prices.txt"
 
 
 def exact_cents(key: int) -> Decimal:
