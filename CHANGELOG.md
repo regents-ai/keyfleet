@@ -242,3 +242,31 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   device, a light-device visitor would land on it.
 - Each tone now has its on-sale colour mixed from the tone's own two colours,
   the same colour in light and within an unseen step of it in dark.
+
+## 2026-09-28 — Autolaunch v2, on the codex/autolaunch-v2 branch until the founder switches
+
+- The target is Autolaunch v2 at `4271c25`: `RegentsAutolaunchFactoryV2` and
+  `RegentLBPStrategyV2`. The Base manifest names no factory until the v2
+  ceremony runs there; the lab manifest names the v2 practice chain's.
+- A launch proposal fixes a floor price and an optional higher minimum raise in
+  place of a raise target. The vote contract asks the strategy what the launch
+  must raise when it is proposed, and the strategy refuses a floor or minimum
+  it cannot launch.
+- The keeper and the chain reader read the strategy's nineteen-field launch
+  distribution, with the floor price. The keeper's settle round is a backstop:
+  the Regent bot normally settles.
+- The site records each launch's floor price and minimum raise, and shows the
+  floor, any higher minimum and the REGENT the launch must raise. The launch
+  form asks for a floor price (0.000001 REGENT per token to start) and an
+  optional higher minimum; the server reads what the launch must raise from
+  the strategy when it builds the step, and says so when the strategy would
+  refuse it. Key purchases stay switched off.
+- Launch plans (pack 0.2.0) name a floor price and a minimum raise; a plan
+  that disagrees with its proposal's launch says which.
+- The API's launch envelope carries the floor price, the minimum raise and the
+  REGENT the launch must raise.
+- The opportunities page and terms say what a v2 launch pays the fleet: at
+  least a quarter of the REGENT raised, and 65% of the launched token over a
+  year.
+- `mix test --only autolaunch_fork` runs a whole v2 launch through the site
+  and the keeper on a local fork of a chain carrying v2.
