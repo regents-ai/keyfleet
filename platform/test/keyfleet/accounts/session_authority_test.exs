@@ -272,6 +272,26 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     refute SessionAuthority.leased_account(bound.lineage, account.id)
   end
 
+  test "SIGN_IN_LIFETIME: a sign-in lasts 30 days from its last bind or refresh" do
+    account = account!("lifetime")
+    fresh = SessionAuthority.bootstrap()
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh, account.id)
+    unbound = SessionAuthority.bootstrap()
+    lifetime = 30 * 24 * 60 * 60
+
+    age!(bound.lineage, lifetime - 60)
+    assert {:current, ^bound} = SessionAuthority.renew(bound)
+    assert SessionAuthority.leased_account(bound.lineage, account.id).id == account.id
+
+    age!(bound.lineage, lifetime)
+    assert SessionAuthority.renew(bound) == {:error, :reset}
+    assert SessionAuthority.resolve(bound) == {nil, nil}
+    refute SessionAuthority.leased_account(bound.lineage, account.id)
+
+    age!(unbound.lineage, lifetime)
+    assert {:current, ^unbound} = SessionAuthority.renew(unbound)
+  end
+
   test "SERIALIZED_ABSENT_AND_PRESENT_ROWS: an absent row serializes a bind that a revocation then ends" do
     account = shared_account!("absent-bind-first")
     claim = absent_claim(0)
@@ -483,6 +503,12 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
         }
       )
     )
+  end
+
+  # Moves the row's last bind or refresh `seconds` into the past.
+  defp age!(lineage, seconds) do
+    signed_in_at = DateTime.add(DateTime.utc_now(), -seconds)
+    {1, _} = Repo.update_all(digest_query(lineage), set: [updated_at: signed_in_at])
   end
 
   defp digest_query(lineage) do

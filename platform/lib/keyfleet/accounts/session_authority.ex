@@ -13,6 +13,11 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   advance the generation exactly once, so the cookie that carried the previous
   generation is stale for every later request and mount. Revocation is terminal.
 
+  A sign-in lasts the session cookie's `max_age` (30 days) from the last bind
+  or refresh, so the cookie and the row carry the same limit: a bound row older
+  than that reads as reset, and the browser holding it is signed out until it
+  proves the person to Privy again.
+
   Every transition runs inside one transaction that inserts the operation's row
   when it is absent, locks it `FOR UPDATE`, and applies at most one legal
   change, so the absent-row race and the present-row race serialize identically.
@@ -37,6 +42,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   @maximum_generation 9_223_372_036_854_775_807
   @topic_prefix "session_authority:"
   @canonical_keys ["session_lineage", "session_generation", "live_socket_id"]
+  @sign_in_lifetime_seconds Application.compile_env!(:keyfleet, [:session_options, :max_age])
 
   @typedoc "Everything a browser carries. There is no account here by design."
   @type claim :: %{lineage: String.t(), generation: non_neg_integer()}
@@ -278,12 +284,14 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   The verified account a mounted lease still resolves to, or `nil`.
 
   A same-account refresh advances the generation beneath a mounted socket, so a
-  lease revalidates the lineage, its account, its revocation and the account's
-  provider evidence rather than the generation it mounted with.
+  lease revalidates the lineage, its account, its revocation, the sign-in's age
+  and the account's provider evidence rather than the generation it mounted with.
   """
   @spec leased_account(String.t(), integer()) :: Ash.Resource.record() | nil
   def leased_account(lineage, account_id) when is_binary(lineage) and is_integer(account_id) do
-    if match?(%{revoked_at: nil, human_account_id: ^account_id}, lineage |> digest() |> row()),
+    row = lineage |> digest() |> row()
+
+    if match?(%{revoked_at: nil, human_account_id: ^account_id}, row) and not lapsed?(row),
       do: verified(account_id)
   end
 
@@ -296,16 +304,27 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   # The four states an integrity-valid claim can hold against its row. A claim
   # ahead of its row, or above generation zero without one, is unrecoverable
-  # rather than merely superseded.
+  # rather than merely superseded, and so is a sign-in past its lifetime.
   defp state(nil, %{generation: 0}), do: :ensurable
   defp state(nil, _claim), do: :reset
   defp state(%{revoked_at: revoked_at}, _claim) when not is_nil(revoked_at), do: :reset
-  defp state(%{generation: generation}, %{generation: generation}), do: :exact
+  defp state(row, claim), do: if(lapsed?(row), do: :reset, else: generation_state(row, claim))
 
-  defp state(%{generation: generation}, %{generation: claimed}) when claimed < generation,
-    do: :superseded
+  defp generation_state(%{generation: generation}, %{generation: generation}), do: :exact
 
-  defp state(_row, _claim), do: :reset
+  defp generation_state(%{generation: generation}, %{generation: claimed})
+       when claimed < generation,
+       do: :superseded
+
+  defp generation_state(_row, _claim), do: :reset
+
+  # Bind and refresh are the only updates a live row takes, and each is a
+  # sign-in, so a bound row's `updated_at` is when the person last signed in.
+  # An unbound row confers nothing, so it has no lifetime to outlive.
+  defp lapsed?(%{human_account_id: nil}), do: false
+
+  defp lapsed?(%{updated_at: signed_in_at}),
+    do: DateTime.diff(DateTime.utc_now(), signed_in_at) >= @sign_in_lifetime_seconds
 
   # Exhaustion is terminal rather than wrapping: the lineage is revoked and the
   # browser bootstraps a fresh one.
@@ -389,9 +408,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   defp verified(account_id) do
     with {:ok, account} when not is_nil(account) <-
-           Accounts.get_human_account(account_id,
-             actor: %Human{human_account_id: account_id}
-           ),
+           Accounts.get_human_account(account_id, actor: %Human{human_account_id: account_id}),
          true <- VerifiedSession.current?(account) do
       account
     else
