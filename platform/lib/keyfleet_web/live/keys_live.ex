@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.KeysLive do
           :if={@notice}
           id="key-notice"
           class={["key-notice", @notice.tone == :error && "key-notice--error"]}
-          phx-hook="Refusal"
+          phx-hook="MotionRefusal"
           data-refused={@notice.tone == :error}
         >
           {@notice.message}

@@ -29,9 +29,10 @@ function recordMotion() {
       for (const record of records) {
         const el = record.target as Element
         if (record.type === "childList") {
-          if (el.matches("[phx-hook=Counter]") && record.addedNodes.length > 0) {
-            rolled.add(el.id)
-            noteSplit(el.id, record.addedNodes)
+          if (el.matches("[data-count]") && record.addedNodes.length > 0) {
+            const id = el.closest("[phx-hook=MotionCount]")!.id
+            rolled.add(id)
+            noteSplit(id, record.addedNodes)
           }
           if (el.closest("main h1")) noteSplit("headline", record.addedNodes)
           continue

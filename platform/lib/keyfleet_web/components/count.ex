@@ -17,8 +17,10 @@ defmodule KeyfleetWeb.Components.Count do
   attr :many, :string, required: true, doc: "the words after any other count"
 
   def count(assigns) do
+    assigns = assign(assigns, :figure, Rules.grouped(assigns.value))
+
     ~H"""
-    <span id={@id} phx-hook="Counter" data-variant={Motion.standard("count")}>{Rules.grouped(@value)}</span>
+    <span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@figure}</span></span>
     {if @value == 1, do: @one, else: @many}
     """
   end

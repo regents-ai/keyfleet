@@ -36,7 +36,6 @@ defmodule KeyfleetWeb.CheckIns do
     """
   end
 
-  attr :fleet_id, :string, required: true
   attr :agents, :list, required: true, doc: "the agents shown, as `Keyfleet.Directory.agents/1`"
   attr :agents_here, :integer, required: true, doc: "every agent running the fleet's keys"
   attr :on_close, JS, required: true
@@ -51,8 +50,6 @@ defmodule KeyfleetWeb.CheckIns do
       id="fleet-who"
       class="who-is-here"
       aria-labelledby="fleet-who-title"
-      data-panel="drawer"
-      phx-mounted={JS.ignore_attributes(["style"])}
       hidden
     >
       <div class="who-is-here__heading">
@@ -75,11 +72,16 @@ defmodule KeyfleetWeb.CheckIns do
         :if={@agents != []}
         id="fleet-who-list"
         class="who-is-here__list"
-        phx-hook="Arrivals"
+        phx-hook="MotionList"
         data-variant={Motion.standard("list")}
-        data-list={@fleet_id}
+        data-layout-id="fleet-who-list"
+        data-children="[data-layout-id]"
       >
-        <li :for={agent <- @agents} id={"fleet-who-#{agent.first_key}"}>
+        <li
+          :for={agent <- @agents}
+          id={"fleet-who-#{agent.first_key}"}
+          data-layout-id={"fleet-who-#{agent.first_key}"}
+        >
           <p class="who-is-here__name">
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">{keys(agent)}</span>

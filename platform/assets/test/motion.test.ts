@@ -2,7 +2,7 @@ import {afterEach, beforeEach, expect, it, vi} from "vitest"
 
 // The moves themselves are Anime.js's; these tests hold the rules around them:
 // who gets to move, and that a press is never held up by its motion.
-const moved = vi.hoisted(() => ({squish: [] as unknown[], nope: [] as unknown[], animate: [] as unknown[][]}))
+const moved = vi.hoisted(() => ({squish: [] as unknown[], nope: [] as unknown[]}))
 
 vi.mock("../js/hooks/motion/press", () => ({
   squish: (el: unknown) => moved.squish.push(el),
@@ -13,10 +13,7 @@ vi.mock("animejs", async original => {
   const anime = await original<typeof import("animejs")>()
   return {
     ...anime,
-    animate: (targets: unknown[], params: {onComplete: (done: unknown) => void}) => {
-      moved.animate.push(targets)
-      return move(params.onComplete)
-    },
+    animate: (_targets: unknown[], params: {onComplete: (done: unknown) => void}) => move(params.onComplete),
     utils: {...anime.utils, cleanInlineStyles: () => {}},
   }
 })
@@ -45,7 +42,6 @@ vi.stubGlobal("Element", Control)
 
 import {press} from "../js/motion"
 import {lastInputByPointer, play, watchInput} from "../js/hooks/motion/shared"
-import {Arrivals} from "../js/hooks/motion/moments"
 
 let lessMotion = false
 
@@ -60,7 +56,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  moved.squish.length = moved.nope.length = moved.animate.length = 0
+  moved.squish.length = moved.nope.length = 0
 })
 
 // A move that ends when `end` is called, or is put back by `revert`.
@@ -151,60 +147,4 @@ it("a move that has ended is never put back, so it can't undo what came after it
   ended.end()
   play(el, {})
   expect(ended.revert).not.toHaveBeenCalled()
-})
-
-type Item = {id: string}
-
-// A list naming what it shows, as the server renders it.
-function list(ids: string[], shows = "fleet-1:1") {
-  const el = {dataset: {variant: "bounce", list: shows}, children: ids.map(id => ({id})), closest: () => null}
-  const hook = {el}
-  Arrivals.mounted!.call(hook)
-  const change = (next: string[], nowShows = el.dataset.list) => {
-    el.dataset.list = nowShows
-    el.children = next.map(id => ({id}))
-    Arrivals.updated!.call(hook)
-  }
-  return change
-}
-
-// The ids of the items each arrival moved, across every list.
-const arrivedIds = () => moved.animate.map(targets => (targets as Item[]).map(item => item.id))
-
-it("only the items that arrive in a list move", () => {
-  const change = list(["a", "b"])
-  change(["c", "a", "b"])
-  expect(arrivedIds()).toEqual([["c"]])
-})
-
-it("a list whose one line is replaced by a newer one still shows it arriving", () => {
-  const change = list(["sale-6"])
-  change(["sale-7"])
-  expect(arrivedIds()).toEqual([["sale-7"]])
-})
-
-it("a list that now shows another room simply shows its messages, however many there are", () => {
-  list([], "fleet-1/general")(["m-1", "m-2", "m-3"], "fleet-1/plans")
-  list(["m-4"], "fleet-1/general")(["m-9"], "fleet-1/plans")
-  expect(arrivedIds()).toEqual([])
-})
-
-it("older lines shown on request simply show", () => {
-  const change = list(["a", "b"], "fleet-1:1")
-  change(["a", "b", "c", "d"], "fleet-1:2")
-  expect(arrivedIds()).toEqual([])
-})
-
-it("a list that has just changed what it shows still bounces what arrives next", () => {
-  const change = list(["a"], "fleet-1/general")
-  change(["x"], "fleet-1/plans")
-  change(["y", "x"])
-  expect(arrivedIds()).toEqual([["y"]])
-})
-
-it("a reader who asked for less motion sees new items without movement", () => {
-  const change = list(["a"])
-  lessMotion = true
-  change(["b", "a"])
-  expect(arrivedIds()).toEqual([])
 })

@@ -340,11 +340,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
         id="key-profile-thread"
         class="rooms-thread-list"
         phx-update="stream"
-        phx-hook="Arrivals"
+        phx-hook="MotionList"
         data-variant={Motion.standard("list")}
-        data-list={"#{@profile.fleet_id}/#{@profile.token_id}"}
+        data-layout-id="key-profile-thread"
+        data-children="[data-layout-id]"
       >
-        <li :for={{dom_id, message} <- @thread} id={dom_id}>
+        <li :for={{dom_id, message} <- @thread} id={dom_id} data-layout-id={dom_id}>
           <p class="rooms-author">
             <.author fleet_id={@profile.fleet_id} message={message} params={@params} />
           </p>
@@ -358,7 +359,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         :if={@profile.notice}
         id="key-profile-notice"
         class="rooms-notice rooms-notice--error"
-        phx-hook="Refusal"
+        phx-hook="MotionRefusal"
         data-refused
       >
         {@profile.notice}

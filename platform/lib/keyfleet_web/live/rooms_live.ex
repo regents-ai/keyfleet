@@ -120,7 +120,7 @@ defmodule KeyfleetWeb.RoomsLive do
             :if={@notice}
             id="rooms-notice"
             class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}
-            phx-hook="Refusal"
+            phx-hook="MotionRefusal"
             data-refused={@notice.tone == :error}
           >
             {@notice.message}
@@ -132,13 +132,15 @@ defmodule KeyfleetWeb.RoomsLive do
             id="rooms-thread-list"
             class="rooms-thread-list"
             phx-update="stream"
-            phx-hook="Arrivals"
+            phx-hook="MotionList"
             data-variant={Motion.standard("list")}
-            data-list={"#{@room.fleet_id}/#{@room.slug}"}
+            data-layout-id="rooms-thread-list"
+            data-children="[data-layout-id]"
           >
             <li
               :for={{dom_id, message} <- @posts}
               id={dom_id}
+              data-layout-id={dom_id}
               class={message.kind == :room_named && "rooms-naming"}
             >
               <p :if={message.kind == :room_named} class="rooms-detail">

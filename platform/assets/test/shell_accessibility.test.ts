@@ -17,9 +17,9 @@ vi.mock("../js/auth_lazy", () => ({
 vi.mock("../js/hooks/shell_motion", () => ({ShellMotion: {}}))
 vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
-vi.mock("../js/hooks/motion/moments", () => ({Arrivals: {}, Counter: {}, Refusal: {}}))
-vi.mock("../js/hooks/motion/reveals", () => ({Cascade: {}}))
-vi.mock("../js/hooks/motion/slides", () => ({Slides: {}}))
+vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
+vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}}))
+vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(

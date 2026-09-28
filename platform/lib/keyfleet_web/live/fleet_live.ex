@@ -112,7 +112,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :now, :map,
     required: true,
     doc:
-      ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it; and `list`, naming the fleet and the pages shown)
+      ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
 
   def page(assigns) do
     ~H"""
@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.FleetLive do
         :if={@fleet.name && not @fleet.coming_soon?}
         id="fleet-view"
         class="fleet-view"
-        phx-hook="Slides"
+        phx-hook="MotionPanels"
       >
         <header class="fleet-bar">
           <div class="fleet-bar__title">
@@ -232,7 +232,6 @@ defmodule KeyfleetWeb.FleetLive do
           <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
           <.about fleet={@fleet} actor={@actor} />
           <CheckIns.who_is_here
-            fleet_id={@fleet.fleet_id}
             agents={@fleet.agents}
             agents_here={@fleet.agents_here}
             on_close={close("#fleet-who", "#fleet-who-toggle")}
@@ -377,9 +376,7 @@ defmodule KeyfleetWeb.FleetLive do
       class="fleet-now"
       aria-labelledby="fleet-now-title"
       phx-hook="OpenWhenWide"
-      phx-mounted={JS.ignore_attributes(["style"])}
       data-toggle="fleet-now-toggle"
-      data-panel="drawer"
       data-wide-only
     >
       <div class="fleet-now__heading">
@@ -405,9 +402,6 @@ defmodule KeyfleetWeb.FleetLive do
           id="fleet-now-list"
           class="activity-lines"
           phx-update="stream"
-          phx-hook="Arrivals"
-          data-variant={Motion.standard("list")}
-          data-list={@now.list}
         >
           <.activity_line
             :for={{dom_id, item} <- @activity}
@@ -645,8 +639,6 @@ defmodule KeyfleetWeb.FleetLive do
       id="fleet-about"
       class="fleet-about"
       aria-labelledby="fleet-about-title"
-      data-panel="drawer"
-      phx-mounted={JS.ignore_attributes(["style"])}
       hidden
     >
       <div class="fleet-about__heading">
@@ -825,14 +817,14 @@ defmodule KeyfleetWeb.FleetLive do
         <dl class="fleet-buy-facts">
           <div>
             <dt>Key</dt>
-            <dd id="buy-key-number" phx-hook="Counter" data-variant={Motion.standard("count")}>
-              {@buy.token_id && grouped(@buy.token_id)}
+            <dd id="buy-key-number" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+              <span data-count>{@buy.token_id && grouped(@buy.token_id)}</span>
             </dd>
           </div>
           <div>
             <dt>Price</dt>
-            <dd id="buy-key-price" phx-hook="Counter" data-variant={Motion.standard("count")}>
-              {@buy.price && usdc(@buy.price)}
+            <dd id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+              <span data-count>{@buy.price && usdc(@buy.price)}</span>
             </dd>
           </div>
           <div :if={@buy.level}>
@@ -1095,18 +1087,11 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   What the panel needs to know of the pages read, and never the cursor:
   whether anything is there, whether earlier items are a press of "Show
-  earlier" away or past the pages it shows, what the fleet is trying, and
-  which list it shows: the fleet and how many pages of it.
+  earlier" away or past the pages it shows, and what the fleet is trying.
   """
   def now_shown(nil), do: nil
 
-  def now_shown(%{
-        fleet_id: fleet_id,
-        cursor: cursor,
-        pages: pages,
-        empty?: empty?,
-        trying: trying
-      }) do
+  def now_shown(%{cursor: cursor, pages: pages, empty?: empty?, trying: trying}) do
     earlier =
       cond do
         cursor == nil -> nil
@@ -1114,7 +1099,7 @@ defmodule KeyfleetWeb.FleetLive do
         true -> :elsewhere
       end
 
-    %{empty?: empty?, earlier: earlier, trying: trying, list: "#{fleet_id}:#{pages}"}
+    %{empty?: empty?, earlier: earlier, trying: trying}
   end
 
   @doc "The id of an item of \"What's happening\" on the page."

@@ -11,12 +11,11 @@ import {
   splitText,
   stagger,
   type AnimationParams,
-  type JSAnimation,
   type LayoutAnimationParams,
   type Scope,
   type TextSplitter,
 } from "animejs"
-import {BASE, CLIPPED_CHAR, SLOW, play, still} from "./shared"
+import {BASE, CLIPPED_CHAR, SLOW, still} from "./shared"
 import {deny} from "./press"
 import type {Hook} from "../../hook_composition"
 
@@ -79,7 +78,12 @@ export const ROLLS: Record<string, Roll> = {
   roll: {clip: true, move: up => ({y: [up ? "100%" : "-100%", "0%"], duration: SLOW, ease: "outBack(1.4)"})},
 }
 
-const worth = (text: string) => Number(text.replace(/\D/g, ""))
+// What a figure is worth, decimals included, so 1.75 to 2 rolls up.
+const worth = (text: string) => Number(text.replace(/[^\d.]/g, ""))
+
+// A figure's characters as the split makes them, which leaves out spaces, so
+// a figure with a unit such as "12.5 USDC" lines up digit for digit.
+const glyphs = (figure: HTMLElement) => (figure.textContent ?? "").replace(/\s/g, "")
 
 // The figures inside a part of the page, each marked `data-count`.
 const figures = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>("[data-count]")]
@@ -94,10 +98,11 @@ function join(hook: CountHook, split: TextSplitter) {
 }
 
 /**
- * Figures the server changes, built from a table of versions. Only the digits
- * that changed move, the ones nearest the end first, like a counter turning
- * over. The digits are split into pieces for the move and joined back as soon
- * as it ends, so the page always patches the plain figure it rendered.
+ * Figures the server changes, built from a table of versions. A figure may
+ * carry a unit, such as "12.5 USDC". Only the characters that changed move,
+ * the ones nearest the end first, like a counter turning over. The figure is
+ * split into pieces for the move and joined back as soon as it ends, so the
+ * page always patches the plain figure it rendered.
  */
 export const countHook = (rolls: Record<string, Roll>): Hook => ({
   mounted(this: CountHook) {
@@ -117,7 +122,7 @@ export const countHook = (rolls: Record<string, Roll>): Hook => ({
 
   beforeUpdate(this: CountHook) {
     for (const split of this.splits) join(this, split)
-    this.before = figures(this.el).map(figure => figure.textContent ?? "")
+    this.before = figures(this.el).map(glyphs)
   },
 
   updated(this: CountHook) {
@@ -128,7 +133,7 @@ export const countHook = (rolls: Record<string, Roll>): Hook => ({
     const {clip} = rolls[this.el.dataset.variant ?? ""]
     after.forEach((figure, index) => {
       const was = before[index]
-      const now = figure.textContent ?? ""
+      const now = glyphs(figure)
       if (was === now) return
 
       const split = splitText(figure, {words: false, chars: clip ? CLIPPED_CHAR : true})
@@ -146,93 +151,6 @@ export const countHook = (rolls: Record<string, Roll>): Hook => ({
 
 export const MotionCount = countHook(ROLLS)
 
-// Keyfleet's own islands follow. Each does something the ones above don't yet.
-
-// How the items the server adds to a list arrive.
-const ARRIVALS: Record<string, (items: HTMLElement[]) => JSAnimation> = {
-  bounce: items => play(items, {y: [-12, 0], opacity: [0, 1], ease: spring({bounce: 0.35, duration: 420})}),
-}
-
-type ArrivalsHook = {el: HTMLElement; list?: string; ids?: Set<string>}
-
-const itemsOf = (list: HTMLElement) => [...list.children] as HTMLElement[]
-const idsOf = (items: HTMLElement[]) => new Set(items.map(item => item.id))
-
-/**
- * A list the server owns, each item with its own id, and `data-list` naming
- * what the list shows: which room, which key's messages, which fleet and how
- * many pages of it. Only the items that arrive in the same list move; the
- * rest stay put. When `data-list` names something else, the list simply shows.
- *
- * The page may empty the list before saying it is about to change, so the
- * items to compare against are the ones seen after the last change.
- */
-export const Arrivals: Hook = {
-  mounted(this: ArrivalsHook) {
-    this.list = this.el.dataset.list
-    this.ids = idsOf(itemsOf(this.el))
-  },
-
-  updated(this: ArrivalsHook) {
-    const {list, ids: before} = this
-    const items = itemsOf(this.el)
-    this.list = this.el.dataset.list
-    this.ids = idsOf(items)
-    if (this.list !== list || still(this.el)) return
-
-    const arrived = items.filter(item => !before!.has(item.id))
-    if (arrived.length > 0) ARRIVALS[this.el.dataset.variant as string](arrived)
-  },
-}
-
-// The characters a split makes, which leave out spaces, and what a figure is
-// worth, decimals included, so a price from 1.75 to 2 rolls up.
-const glyphs = (el: HTMLElement) => (el.textContent ?? "").replace(/\s/g, "")
-const decimalWorth = (text: string) => Number(text.replace(/[^\d.]/g, ""))
-
-type CounterHook = {el: HTMLElement; split?: TextSplitter; before?: string}
-
-// Put the plain number back, but only for the split still on the page: an
-// older one would write its stale number over the new one.
-function joinCounter(hook: CounterHook, split?: TextSplitter) {
-  if (split === undefined || split !== hook.split) return
-  split.revert()
-  hook.split = undefined
-}
-
-/**
- * A number the server changes, the element itself, rolling as `data-variant`
- * names in `ROLLS`. Only the characters that changed move, the ones nearest
- * the end first, like a counter turning over. Unlike `countHook`, a figure
- * may carry words and spaces, such as "12.5 USDC". The number is split into
- * pieces for the move and joined back as soon as it ends, so the page always
- * patches the plain text it rendered.
- */
-export const Counter: Hook = {
-  beforeUpdate(this: CounterHook) {
-    joinCounter(this, this.split)
-    this.before = glyphs(this.el)
-  },
-
-  updated(this: CounterHook) {
-    const before = this.before as string
-    const after = glyphs(this.el)
-    if (before === after || still(this.el)) return
-
-    const {clip, move} = ROLLS[this.el.dataset.variant as string]
-    const split = splitText(this.el, {words: false, chars: clip ? CLIPPED_CHAR : true})
-    const digits = split.chars.filter((_char, i) => before.at(i - after.length) !== after[i])
-    this.split = split
-    play(digits, {...move(decimalWorth(after) > decimalWorth(before)), delay: stagger(45, {from: "last"})}).then(() =>
-      joinCounter(this, split),
-    )
-  },
-
-  destroyed(this: CounterHook) {
-    joinCounter(this, this.split)
-  },
-}
-
 type RefusalHook = {el: HTMLElement; said?: string}
 
 // Shake while `data-refused` is on the message.
@@ -243,9 +161,9 @@ function shake(hook: RefusalHook) {
 /**
  * A message a live page shows when it refuses something. It shakes once when
  * it appears and again whenever it says something new, while `data-refused`
- * is on it.
+ * is on it. Pages the server draws once shake their alerts from `motion.ts`.
  */
-export const Refusal: Hook = {
+export const MotionRefusal: Hook = {
   mounted(this: RefusalHook) {
     this.said = this.el.textContent ?? ""
     shake(this)

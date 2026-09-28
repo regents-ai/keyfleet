@@ -482,7 +482,7 @@ defmodule KeyfleetWeb.HomeLive do
         id="home-fleet-cards"
         class="rl-fleet-cards"
         role="list"
-        phx-hook="Cascade"
+        phx-hook="MotionCascade"
         data-variant={Motion.standard("grid")}
       >
         <li
@@ -561,7 +561,7 @@ defmodule KeyfleetWeb.HomeLive do
         id="home-opportunity-tiles"
         class="rl-opportunity-tiles"
         role="list"
-        phx-hook="Cascade"
+        phx-hook="MotionCascade"
         data-variant={Motion.standard("grid")}
       >
         <li

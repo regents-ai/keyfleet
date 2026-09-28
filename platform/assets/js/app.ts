@@ -28,9 +28,9 @@ import {KeyMap} from "./hooks/key_map"
 import {LaunchPlanPicker} from "./hooks/launch_plan_picker"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
-import {Arrivals, Counter, Refusal} from "./hooks/motion/moments"
-import {Cascade} from "./hooks/motion/reveals"
-import {Slides} from "./hooks/motion/slides"
+import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
+import {MotionCascade} from "./hooks/motion/reveals"
+import {MotionPanels} from "./hooks/motion/slides"
 import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
@@ -315,20 +315,20 @@ const showcaseHooks = window.location.pathname.startsWith("/showcase")
 const hooks = {
   ...showcaseHooks,
   ...colocatedHooks,
-  Arrivals,
-  Cascade,
-  Counter,
   FleetPreview,
   HolographicCard,
   HomePrism,
   KeyMap,
   LaunchPlanPicker,
   ModalDialog,
+  MotionCascade,
+  MotionCount,
+  MotionList,
+  MotionPanels,
+  MotionRefusal,
   OnchainSteps,
   OpenWhenWide,
-  Refusal,
   ShellBehavior: composeHooks(shellBehavior, ShellMotion),
-  Slides,
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")

@@ -31,23 +31,20 @@ export const menu = (el: Element) =>
 export const backdrop = (el: Element) =>
   play(el, {opacity: {from: 0}, duration: BASE, ease: EASE_OUT})
 
-// Keyfleet's own. Its panels beside the fleet map sit against the right edge,
-// so a drawer here comes from there.
-const sideDrawer = (el: Element) =>
-  play(el, {x: ["100%", "0%"], ease: spring({bounce: 0.3, duration: 380})})
+// How each kind of panel, named in `data-panel`, moves when it opens.
+const PANELS: Record<string, (el: Element) => unknown> = {drawer, sheet, menu}
 
-type SlidesHook = {el: HTMLElement; watch?: MutationObserver}
+type PanelsHook = {el: HTMLElement; watch?: MutationObserver}
 
 /**
- * Keyfleet's own: an island whose drawers and menus, each marked
- * `data-panel`, are opened by LiveView commands. A command acts on a press
- * only after it has passed the document, so rather than the press, this
- * watches each panel's `hidden` go and moves it then, when the reader was last
- * using a mouse or a finger. A menu here is opened by a button, not a summary,
- * and pops as a header menu does.
+ * An island whose panels, each marked `data-panel`, are opened by LiveView
+ * commands rather than by a press the page follows, such as a menu a button
+ * opens with `JS.show`. A command acts only after the press has reached the
+ * document, so this watches each panel's `hidden` go and moves it then, when
+ * the reader was last using a mouse or a finger.
  */
-export const Slides: Hook = {
-  mounted(this: SlidesHook) {
+export const MotionPanels: Hook = {
+  mounted(this: PanelsHook) {
     const panels = () => [...this.el.querySelectorAll<HTMLElement>("[data-panel]")]
     const open = new Set(panels().filter(el => !el.hidden))
 
@@ -56,15 +53,13 @@ export const Slides: Hook = {
         if (el.hidden) open.delete(el)
         if (el.hidden || open.has(el)) continue
         open.add(el)
-        if (!lastInputByPointer() || still(el)) continue
-        if (el.dataset.panel === "menu") menu(el)
-        else sideDrawer(el)
+        if (lastInputByPointer() && !still(el)) PANELS[el.dataset.panel ?? ""](el)
       }
     })
     this.watch.observe(this.el, {subtree: true, attributes: true, attributeFilter: ["hidden"]})
   },
 
-  destroyed(this: SlidesHook) {
+  destroyed(this: PanelsHook) {
     this.watch?.disconnect()
   },
 }

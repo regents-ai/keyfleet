@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
         <p
           :if={@notice}
           id={"#{@id}-notice"}
-          phx-hook="Refusal"
+          phx-hook="MotionRefusal"
           data-refused={@notice.tone == :error}
           class={[
             "verified-connections__notice",
