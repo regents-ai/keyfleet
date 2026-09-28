@@ -1,7 +1,6 @@
-# Keyfleet CLI
+# Keyfleet commands
 
-This is the TypeScript CLI component of the monorepo. Run pnpm here.
-`packages/keyfleet-cli/` owns the published command; keep its public command
-shapes documented in `README.md` before changing them.
-
-Follow the root instructions. Verify with `pnpm build && pnpm typecheck && pnpm test`.
+`commands.json` is this site's command description; the code lives in `regents-cli`.
+Change it in the same commit as the route it describes, and verify with
+`make check-cli` from the repository root. `README.md` explains the format and what
+does not belong here.

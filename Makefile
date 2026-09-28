@@ -14,8 +14,12 @@ check-required-fixes:
 	&& gh api -H "Accept: application/vnd.github.raw" "$(TEMPLATE)/contents/platform/scripts/check_required_fixes.exs?ref=$$rev" > _build/check_required_fixes.exs \
 	&& gh api -H "Accept: application/vnd.github.raw" "$(TEMPLATE)/contents/security/required-fixes.json?ref=$$rev" > _build/required-fixes.json \
 	&& elixir _build/check_required_fixes.exs "ash-template $$rev" < _build/required-fixes.json
+# The command description check is regents-cli's own checker at the commit pinned
+# here, run by uv straight from GitHub. Move the pin in a commit.
+REGENTS_CLI_REV := 65722c6
 check-cli:
-	cd cli && pnpm build && pnpm typecheck && pnpm test
+	uv run --no-project --with "regents-cli[check] @ git+https://github.com/regents-ai/regents-cli@$(REGENTS_CLI_REV)" \
+	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
 check-contracts:
 	cd contracts && forge fmt --check && forge build && forge test
 # The release checks and builds exactly the committed tree, so every change must

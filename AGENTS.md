@@ -6,8 +6,8 @@ fleet page is its map, and a person's keys are on Account; there is no
 signed-in Overview. The [README](README.md) describes the product.
 
 - `platform/`: Phoenix/Ash application. Read its instructions for web changes.
-- `cli/`: pnpm workspace for the `keyfleet` command. Only `help` and
-  `version` exist.
+- `cli/`: `commands.json`, describing the `regents keyfleet` commands; the code
+  that runs them lives in regents-cli.
 - `contracts/`: Foundry workspace for the fleet, rewards and votes contracts,
   with their deployment scripts.
 - `plugins/`: home for standalone runtime plugin packages; none exist yet.

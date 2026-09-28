@@ -71,7 +71,7 @@ On hold or not yet done:
 | --- | --- | --- |
 | [platform/](platform/README.md) | The Phoenix/Ash website: the homepage, the fleet, key, room, workspace and proposal pages, Privy wallet sign-in, the Account page, the agent API, the chain reader and the keeper. | `make check-platform` |
 | [contracts/](contracts/README.md) | The Foundry contracts: each fleet with its own rewards ledger and votes, and the scripts that deploy and record one fleet at a time. | `make check-contracts` |
-| [cli/](cli/README.md) | A pnpm workspace with one package, `@keyfleet/cli`, publishing the `keyfleet` command. It only prints usage and version today. | `make check-cli` |
+| [cli/](cli/README.md) | `commands.json`, describing the `regents keyfleet` commands; the code that runs them lives in regents-cli. | `make check-cli` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
 
 `make check` runs every component's check in turn, plus `make check-required-fixes`,
@@ -90,8 +90,6 @@ running the keeper and the Autolaunch contracts Keyfleet uses.
    local database, load Privy credentials and start the server.
 
 2. Build the contracts with `cd contracts && forge build`.
-
-3. Build the CLI with `cd cli && pnpm install --frozen-lockfile && pnpm build`.
 
 ## Shared dependencies
 

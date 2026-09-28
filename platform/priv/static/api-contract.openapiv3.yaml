@@ -1582,7 +1582,7 @@ components:
     KeyPairing:
       type: object
       additionalProperties: false
-      required: [id, fleet_id, token_id, ownership_epoch, owner_wallet, operator_wallet, status, ended_reason, effective?, requested_at, approved_at, ended_at, limits]
+      required: [id, fleet_id, token_id, ownership_epoch, owner_wallet, operator_wallet, status, ended_reason, 'effective?', requested_at, approved_at, ended_at, limits]
       properties:
         id: {type: string, format: uuid}
         fleet_id: {type: string, pattern: '^[a-z][a-z0-9_]{0,62}$'}
@@ -1604,7 +1604,7 @@ components:
           description: >-
             Why an ended pairing ended; declined also covers a request its agent took back, and
             stepped_down is the agent giving up the key itself
-        effective?:
+        'effective?':
           type: boolean
           description: True while the pairing is active under the key's current owner
         requested_at: {type: string, format: date-time}

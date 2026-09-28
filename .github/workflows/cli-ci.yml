@@ -9,33 +9,12 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: platform/.tool-versions
-          cache: pnpm
-          cache-dependency-path: cli/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build workspace
-        run: pnpm build
-
-      - name: Typecheck workspace
-        run: pnpm typecheck
-
-      - name: Run tests
-        run: pnpm test
+      - name: Check the command description
+        run: make check-cli
