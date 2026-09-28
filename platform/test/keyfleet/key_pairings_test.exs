@@ -336,6 +336,18 @@ defmodule Keyfleet.KeyPairingsTest do
              [{attached.id, :ended, :stepped_down}, {again.id, :active, nil}]
   end
 
+  test "a request read once is decided once: the same stale copy cannot approve it twice",
+       %{owner: owner} do
+    request = request!(agent("b"), "Operator")
+    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: human(owner))
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+             Keys.approve_pairing(request, Keys.default_limits(), actor: human(owner))
+
+    assert [unchanged] = Keys.pairing_history!(@fleet, 1)
+    assert Map.take(unchanged, @decision) == Map.take(approved, @decision)
+  end
+
   test "a decision already taken cannot be retaken from a stale record", %{owner: owner} do
     operator = agent("b")
     request = request!(operator, "Operator")
