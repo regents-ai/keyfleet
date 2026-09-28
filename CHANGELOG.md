@@ -134,3 +134,36 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   and the bids' share-out, how each of Keyfleet's gaps resolves, what Keyfleet
   changes to adopt v2, and six open questions. No code, contract or test
   changed.
+
+## 2026-09-28 — Phase 1 close-out
+
+- A sold-out fleet keeps its Buy button on the page, disabled, with "144/144
+  keys sold" beside it and a line saying a key can still be had from someone
+  who holds one. It is the one wallet button a page ever disables.
+- The unused session lease is gone; session authority matches Regents'.
+- `/healthz` reads the database and answers 503 when it can't.
+- `scripts/release.sh` removes the throwaway database's volume when it cleans
+  up.
+- Every page's title and description come from one registry in
+  `KeyfleetWeb.PublicDocuments`; titles end in "· Keyfleet", the homepage's
+  reads "Keyfleet" alone.
+- The Privacy Policy and Terms of Use are public documents like `/about`,
+  outside the launch gate, with Markdown twins. Reading pages send no
+  referrer. `/developers` is gone.
+- The app shell has a "Skip to content" link, and after moving to another
+  page the focus goes to that page's heading.
+- Every page offers a browser's own agent two read tools, `about` and `docs`,
+  from `priv/tool_manifest.json`; `/capabilities` serves the manifest, `/docs`
+  and `/llms.txt` list the tools, and every answer carries
+  `permissions-policy: tools=(self)`.
+- A count that the database refuses no longer crashes a page: the fleet page
+  says it couldn't count the agents, the homepage says which read failed and
+  keeps what it had, and the fleet directory answers 503 and says so.
+- Raw SQL names the schema from `Keyfleet.Repo.default_prefix/0`.
+- Tests prove a stale copy can't approve a pairing, or move the graph cursor
+  on, a second time.
+- `KEYFLEET_APP_SURFACES` takes exactly `on` or `off`; anything else stops the
+  boot, and production must set it. Development and test set it in their own
+  config.
+- The release tests call `bootstrap_staging` and `pending_migrations`
+  themselves; the `_for_test` variants are gone.
