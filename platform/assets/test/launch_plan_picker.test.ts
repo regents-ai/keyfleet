@@ -14,7 +14,6 @@ const plan = {
     description: "Research the fleet funds\nweekly",
     website: "https://example.test",
     image: "ipfs://cascade",
-    raise: "250000.5",
   },
 }
 
@@ -22,7 +21,7 @@ const noPlan = {value: "", dataset: {}}
 
 function mountForm() {
   const inputs: Record<string, {value: string}> = Object.fromEntries(
-    ["key", "name", "symbol", "description", "website", "image", "raise", "digest"].map(name => [name, {value: ""}]),
+    ["key", "name", "symbol", "description", "website", "image", "digest"].map(name => [name, {value: ""}]),
   )
   inputs.key.value = "4"
   const select = {dataset: {launchPlans: ""}, options: [noPlan, plan], selectedIndex: 0}
@@ -47,7 +46,7 @@ function mountForm() {
   return {inputs, choose, values}
 }
 
-it("choosing a plan fills in its six launch details and points the proposal to its version", () => {
+it("choosing a plan fills in its five launch details and points the proposal to its version", () => {
   const form = mountForm()
 
   form.choose(1)
@@ -59,7 +58,6 @@ it("choosing a plan fills in its six launch details and points the proposal to i
     description: "Research the fleet funds\nweekly",
     website: "https://example.test",
     image: "ipfs://cascade",
-    raise: "250000.5",
     digest: planDigest,
   })
 })

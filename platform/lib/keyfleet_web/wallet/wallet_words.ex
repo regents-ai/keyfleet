@@ -57,10 +57,15 @@ defmodule KeyfleetWeb.WalletWords do
       "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
   end
 
-  defp says(:propose_launch, %{key: key, raise: raise}),
-    do:
-      "Proposes a launch that raises #{ProposalsPage.units(raise, 18)} REGENT, " <>
-        "with key #{Rules.grouped(key)}."
+  defp says(:propose_launch, %{
+         key: key,
+         floor_price_q96: floor,
+         required_regent_raised: required
+       }),
+       do:
+         "Proposes a launch at a floor of #{ProposalsPage.floor_price(floor)} REGENT per token " <>
+           "that must raise at least #{ProposalsPage.regent_at_least(required)} REGENT, " <>
+           "with key #{Rules.grouped(key)}."
 
   defp says(:delegate, %{delegate: delegate}),
     do:
@@ -79,6 +84,15 @@ defmodule KeyfleetWeb.WalletWords do
     do: "Use a point for decimals, like 12.5. Commas can only group thousands, like 1,250."
 
   defp problem(:amount_unreadable), do: "Write the amount as a number, like 12.5."
+
+  defp problem(:floor_unreadable),
+    do: "Write the floor price as a number of REGENT per token, like 0.000001."
+
+  defp problem(:launch_refused),
+    do:
+      "Autolaunch won’t take this floor price and minimum raise, so the proposal would be " <>
+        "refused. Try a floor price nearer 0.000001 REGENT per token, or a lower minimum raise."
+
   defp problem({:too_many_decimals, 0}), do: "This token is counted in whole units only."
 
   defp problem({:too_many_decimals, decimals}),

@@ -20,6 +20,10 @@ defmodule Keyfleet.WalletStepsTest do
     timestamp: ~U[2026-09-27 12:00:00Z]
   }
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @factory "0x" <> String.duplicate("fa", 20)
+  @strategy "0x" <> String.duplicate("5a", 20)
+  # A floor price of 0.000001 REGENT per token.
+  @floor 79_228_162_514_264_337_593_500
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -241,7 +245,9 @@ defmodule Keyfleet.WalletStepsTest do
                )
     end
 
-    test "a launch carries its six details and the REGENT to raise in its smallest units" do
+    test "a launch carries its details, its floor price and the keys' own minimum raise" do
+      answering(required: {:ok, 19_999_999_999_999_999_999_989})
+
       inputs = %{
         "key" => "1",
         "name" => "Fleet",
@@ -249,28 +255,91 @@ defmodule Keyfleet.WalletStepsTest do
         "description" => "A fleet token",
         "website" => "https://example.com",
         "image" => "https://example.com/a.png",
-        "raise" => "250000",
+        "floor" => "0.000001",
+        "minimum" => "",
         "digest" => ""
       }
 
       assert {:ok, built} = build(:propose_launch, inputs: inputs)
-      raise = 250_000 * Integer.pow(10, 18)
-      assert built.figures.raise == raise
+      assert built.problem == nil
+
+      # 0.000001 times 2^96 is 79,228,162,514,264,337,593,543.95, rounded
+      # down to a whole number of bid ticks.
+      assert %{
+               key: 1,
+               floor_price_q96: @floor,
+               minimum_regent_raised: 0,
+               required_regent_raised: 19_999_999_999_999_999_999_989
+             } = built.figures
 
       assert steps(built)["propose"].data ==
                Call.encode(
-                 "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
+                 "proposeAutolaunch(uint256,(string,string,string,string,string,uint256,uint128,bytes32))",
                  [
                    1,
                    {"Fleet", "FLT", "A fleet token", "https://example.com",
-                    "https://example.com/a.png", raise, "0x" <> String.duplicate("0", 64)}
+                    "https://example.com/a.png", @floor, 0, "0x" <> String.duplicate("0", 64)}
                  ]
                )
 
-      assert {:ok, %{problem: :amount_too_large}} =
-               build(:propose_launch,
-                 inputs: %{inputs | "raise" => Integer.to_string(Integer.pow(2, 128))}
+      # What it must raise is asked of the strategy behind the fleet's
+      # factory, at the latest block.
+      assert List.last(StubClient.call_requests()) ==
+               {@strategy, Call.encode("requiredRegentRaisedFor(uint256,uint128)", [@floor, 0]),
+                @head.hash}
+
+      minimum = 25_000 * Integer.pow(10, 18)
+      answering(required: {:ok, minimum})
+
+      assert {:ok, %{figures: %{minimum_regent_raised: ^minimum}} = built} =
+               build(:propose_launch, inputs: %{inputs | "minimum" => "25,000"})
+
+      assert steps(built)["propose"].data ==
+               Call.encode(
+                 "proposeAutolaunch(uint256,(string,string,string,string,string,uint256,uint128,bytes32))",
+                 [
+                   1,
+                   {"Fleet", "FLT", "A fleet token", "https://example.com",
+                    "https://example.com/a.png", @floor, minimum,
+                    "0x" <> String.duplicate("0", 64)}
+                 ]
                )
+    end
+
+    # The step is built all the same when the strategy refuses the floor and
+    # minimum, or can't be read: the vote contract asks the strategy again
+    # when the proposal is made.
+    test "a launch the strategy refuses, or can't answer for, is still sent" do
+      inputs = %{"key" => "1", "floor" => "0", "minimum" => "", "digest" => ""}
+
+      for {answer, problem} <- [
+            {{:error, :reverted}, :launch_refused},
+            {{:error, :chain_unavailable}, :unread}
+          ] do
+        answering(required: answer)
+
+        assert {:ok, %{problem: ^problem, figures: %{required_regent_raised: nil}} = built} =
+                 build(:propose_launch, inputs: inputs)
+
+        assert Map.keys(steps(built)) == ["propose"]
+      end
+    end
+
+    test "a floor or minimum that can't be put into the call names why" do
+      answering(required: {:ok, 1})
+      inputs = %{"key" => "1", "floor" => "0.000001", "minimum" => "", "digest" => ""}
+
+      for {typed, problem} <- [
+            {%{"floor" => ""}, :floor_unreadable},
+            {%{"floor" => "a tenth"}, :floor_unreadable},
+            {%{"floor" => "0,5"}, :amount_commas},
+            {%{"minimum" => "lots"}, :amount_unreadable},
+            {%{"minimum" => "0.0000000000000000001"}, {:too_many_decimals, 18}},
+            {%{"minimum" => Integer.to_string(Integer.pow(2, 128))}, :amount_too_large}
+          ] do
+        assert {:ok, %{problem: ^problem, review: %{steps: []}}} =
+                 build(:propose_launch, inputs: Map.merge(inputs, typed))
+      end
     end
   end
 
@@ -331,6 +400,9 @@ defmodule Keyfleet.WalletStepsTest do
     allowance = Call.selector("allowance(address,address)")
     reward_assets = Call.selector("rewardAssets()")
     accrued = Call.selector("accrued(address,uint256)")
+    factory = Call.selector("FACTORY()")
+    strategy = Call.selector("strategy()")
+    required = Call.selector("requiredRegentRaisedFor(uint256,uint128)")
 
     StubClient.put_chain(@head, [],
       calls: fn _to, data, _hash ->
@@ -347,6 +419,15 @@ defmodule Keyfleet.WalletStepsTest do
 
           {^accrued, <<_pad::binary-size(24), asset::binary-size(40), _token::binary-size(64)>>} ->
             {:ok, <<Map.fetch!(answers[:accrued], "0x" <> asset)::256>>}
+
+          {^factory, ""} ->
+            {:ok, <<0::96>> <> address(@factory)}
+
+          {^strategy, ""} ->
+            {:ok, <<0::96>> <> address(@strategy)}
+
+          {^required, _arguments} ->
+            with {:ok, raise} <- Keyword.fetch!(answers, :required), do: {:ok, <<raise::256>>}
         end
       end
     )

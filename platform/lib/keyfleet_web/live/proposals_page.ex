@@ -202,8 +202,7 @@ defmodule KeyfleetWeb.ProposalsPage do
               symbol: data["symbol"],
               description: data["description"],
               website: data["website"],
-              image: data["image"],
-              raise: data["required_regent_raised"]
+              image: data["image"]
             }
           }
         end

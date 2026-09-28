@@ -3,6 +3,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
@@ -458,7 +459,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(
                view,
-               ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"][data-raise="250000.5"]|
+               ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"]|
              )
 
       # Going back to the page shows the form as new, never a plan the
@@ -1037,6 +1038,20 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert text(view, "#propose-payment-action-line") ==
              "The token isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."
 
+    # What the launch must raise is read from the strategy behind the
+    # fleet's Autolaunch factory.
+    minimum = 250_000_500_000_000_000_000_000
+    required = Call.selector("requiredRegentRaisedFor(uint256,uint128)")
+
+    StubClient.put_chain(%{number: 10, hash: "0x" <> String.duplicate("c", 64)}, [],
+      calls: fn _to, data, _block_hash ->
+        case String.split_at(data, 10) do
+          {^required, _arguments} -> {:ok, <<minimum::256>>}
+          _factory_or_strategy -> {:ok, <<0::96, 0xFA::160>>}
+        end
+      end
+    )
+
     active!(view, "#propose-launch-action", @holder)
 
     view
@@ -1047,7 +1062,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       description: "Research the fleet funds",
       website: "https://example.test",
       image: "ipfs://cascade",
-      raise: "250,000.5"
+      floor: "0.000001",
+      minimum: "250,000.5"
     )
     |> render_change()
 
@@ -1058,17 +1074,18 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert launch.data ==
              Call.encode(
-               "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
+               "proposeAutolaunch(uint256,(string,string,string,string,string,uint256,uint128,bytes32))",
                [
                  7,
                  {"Cascade Research", "CSR", "Research the fleet funds", "https://example.test",
-                  "ipfs://cascade", 250_000_500_000_000_000_000_000,
+                  "ipfs://cascade", 79_228_162_514_264_337_593_500, minimum,
                   "0x" <> String.duplicate("0", 64)}
                ]
              )
 
     assert text(view, "#propose-launch-action-line") ==
-             "Proposes a launch that raises 250,000.5 REGENT, with key 7."
+             "Proposes a launch at a floor of 0.000001 REGENT per token that must raise at " <>
+               "least 250,000.5 REGENT, with key 7."
   end
 
   test "letting another wallet vote is built for the wallet typed, and clearing names no wallet",

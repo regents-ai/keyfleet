@@ -612,7 +612,8 @@ defmodule KeyfleetWeb.ProposalsLive do
             "description" => "",
             "website" => "",
             "image" => "",
-            "raise" => "",
+            "floor" => "0.000001",
+            "minimum" => "",
             "digest" => ""
           }
         }
@@ -655,13 +656,22 @@ defmodule KeyfleetWeb.ProposalsLive do
               A link to the token’s image.
             </.text_field>
             <.text_field
-              id="propose-launch-raise"
-              name="raise"
-              label="REGENT to raise"
+              id="propose-launch-floor"
+              name="floor"
+              label="Floor price (REGENT per token)"
               inputmode="decimal"
-              value={panel.inputs["raise"]}
+              value={panel.inputs["floor"]}
             >
-              In whole REGENT, like 250000.
+              The lowest price the auction sells at. The auction sells 20 billion tokens, and must raise that many at this price, like 20,000 REGENT at 0.000001.
+            </.text_field>
+            <.text_field
+              id="propose-launch-minimum"
+              name="minimum"
+              label="Higher minimum raise (optional)"
+              inputmode="decimal"
+              value={panel.inputs["minimum"]}
+            >
+              In whole REGENT. If the auction raises less than this, or less than the floor price asks, the launch fails and every bidder is refunded.
             </.text_field>
           </div>
         </:fields>
@@ -702,7 +712,6 @@ defmodule KeyfleetWeb.ProposalsLive do
           data-description={plan.fields.description}
           data-website={plan.fields.website}
           data-image={plan.fields.image}
-          data-raise={plan.fields.raise}
         >
           {plan.title}, version {plan.version}
         </option>

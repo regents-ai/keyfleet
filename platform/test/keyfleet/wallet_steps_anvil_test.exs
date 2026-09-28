@@ -220,7 +220,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
             "description" => "A lab launch",
             "website" => "https://example.com",
             "image" => "https://example.com/lab.png",
-            "raise" => "1000"
+            "floor" => "0.000001"
           }
         )
 

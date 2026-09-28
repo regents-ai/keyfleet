@@ -7,9 +7,10 @@ defmodule Keyfleet.WalletSteps.Build do
   The answer is `%{review: review, figures: figures, problem: problem}`.
   `figures` are what the steps were built from, for the page to show beside
   the buttons. When what was typed can't be put into a call, or the chain
-  can't be read, the review has no steps and `problem` names why; otherwise
-  `problem` is nil. The contract decides everything else: nothing here
-  guesses whether it will take a step.
+  can't be read for a step that needs it, the review has no steps and
+  `problem` names why; otherwise `problem` is nil, or names what the page
+  should say about steps that were built all the same. The contract decides
+  everything else: nothing here guesses whether it will take a step.
 
   Reads go to the site's own node through `Keyfleet.Chain.Client`, at the
   latest block. Key sales need a fleet the site has recorded as deployed,
@@ -212,31 +213,48 @@ defmodule Keyfleet.WalletSteps.Build do
     end
   end
 
+  # The launch the form describes, at the floor price typed and the keys'
+  # own minimum raise, if any. What it must raise is read from the
+  # Autolaunch strategy the fleet launches through; the step is built
+  # whatever that read says, since the vote contract puts the same floor and
+  # minimum to the strategy when the proposal is made.
   defp steps(:propose_launch, fleet, _signer, inputs, _arguments) do
     with {:ok, key} <- typed(inputs, "key", &Typed.key/1, %{}),
-         {:ok, raise} <-
-           typed(
-             inputs,
-             "raise",
-             &Typed.amount(&1, @regent_decimals, @largest_uint128),
-             %{key: key}
-           ),
+         {:ok, floor} <- typed(inputs, "floor", &Typed.floor_price/1, %{key: key}),
+         {:ok, minimum} <- typed(inputs, "minimum", &minimum_raise/1, %{key: key}),
          {:ok, digest} <- typed(inputs, "digest", &Typed.document_code/1, %{key: key}) do
       envelope =
         {field(inputs, "name"), field(inputs, "symbol"), field(inputs, "description"),
-         field(inputs, "website"), field(inputs, "image"), raise, digest}
+         field(inputs, "website"), field(inputs, "image"), floor, minimum, digest}
 
-      {:ok,
-       [
-         Review.step(
-           "propose",
-           fleet.votes_address,
-           Call.encode(
-             "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
-             [key, envelope]
-           )
-         )
-       ], %{key: key, raise: raise, digest: digest}}
+      steps = [
+        Review.step(
+          "propose",
+          fleet.votes_address,
+          Call.encode(
+            "proposeAutolaunch(uint256,(string,string,string,string,string,uint256,uint128,bytes32))",
+            [key, envelope]
+          )
+        )
+      ]
+
+      figures = %{
+        key: key,
+        floor_price_q96: floor,
+        minimum_regent_raised: minimum,
+        digest: digest
+      }
+
+      case required_raise(fleet, floor, minimum) do
+        {:ok, required} ->
+          {:ok, steps, Map.put(figures, :required_regent_raised, required)}
+
+        {:error, :reverted} ->
+          {:ok, steps, Map.put(figures, :required_regent_raised, nil), :launch_refused}
+
+        _unread ->
+          {:ok, steps, Map.put(figures, :required_regent_raised, nil), :unread}
+      end
     end
   end
 
@@ -314,6 +332,34 @@ defmodule Keyfleet.WalletSteps.Build do
       {:ok, if(approve?, do: [approve, buy], else: [buy]), Map.put(figures, :approve?, approve?)}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
+    end
+  end
+
+  # Nothing typed is no minimum of the keys' own: the floor alone sets the
+  # raise.
+  defp minimum_raise(text) do
+    if String.trim(text) == "",
+      do: {:ok, 0},
+      else: Typed.amount(text, @regent_decimals, @largest_uint128)
+  end
+
+  # What a launch at this floor and minimum must raise, as the strategy
+  # behind the fleet's Autolaunch factory answers it at the latest block.
+  defp required_raise(fleet, floor, minimum) do
+    client = Chain.Client.configured()
+
+    with {:ok, head} <- client.head(),
+         {:ok, factory} <-
+           read(client, fleet.contract_address, "FACTORY()", [], head, :address),
+         {:ok, strategy} <- read(client, factory, "strategy()", [], head, :address) do
+      read(
+        client,
+        strategy,
+        "requiredRegentRaisedFor(uint256,uint128)",
+        [floor, minimum],
+        head,
+        {:uint, 128}
+      )
     end
   end
 

@@ -5,6 +5,7 @@ defmodule Keyfleet.WalletSteps.Typed do
   Anything the call can carry is carried, and the contract decides the rest.
   """
 
+  alias Keyfleet.Proposals.LaunchPrice
   alias RegentChain.Address
 
   @largest_uint256 Integer.pow(2, 256) - 1
@@ -67,17 +68,46 @@ defmodule Keyfleet.WalletSteps.Typed do
   be paid, so they aren't rounded.
   """
   def amount(text, decimals, largest) do
+    with {:ok, whole, written} <- decimal(text) do
+      units(whole, String.trim_trailing(written, "0"), decimals, largest)
+    end
+  end
+
+  @doc """
+  A launch's floor price in REGENT per launched token, written like an
+  amount, as the floor a launch proposal carries: times 2^96, rounded down to
+  a whole number of the auction's bid ticks (`LaunchPrice.floor_price_q96/2`).
+  """
+  def floor_price(text) do
+    case decimal(text) do
+      {:ok, whole, written} ->
+        floor =
+          LaunchPrice.floor_price_q96(
+            String.to_integer(whole <> written),
+            Integer.pow(10, byte_size(written))
+          )
+
+        if floor > @largest_uint256, do: {:error, :amount_too_large}, else: {:ok, floor}
+
+      {:error, :amount_unreadable} ->
+        {:error, :floor_unreadable}
+
+      error ->
+        error
+    end
+  end
+
+  # A number as written: its whole part and its decimals, without the commas
+  # that group thousands.
+  defp decimal(text) do
     entry = String.trim(text)
 
     if Regex.match?(~r/\A\d{1,3}(?:,\d{3})+(?:\.\d+)?\z/, entry) or
          Regex.match?(~r/\A\d+(?:\.\d+)?\z/, entry) do
-      {whole, written} =
-        case entry |> String.replace(",", "") |> String.split(".") do
-          [whole] -> {whole, ""}
-          [whole, written] -> {whole, written}
-        end
-
-      units(whole, String.trim_trailing(written, "0"), decimals, largest)
+      case entry |> String.replace(",", "") |> String.split(".") do
+        [whole] -> {:ok, whole, ""}
+        [whole, written] -> {:ok, whole, written}
+      end
     else
       {:error, if(String.contains?(entry, ","), do: :amount_commas, else: :amount_unreadable)}
     end
