@@ -66,9 +66,8 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   await expect(sentLine(page, second.hash)).toContainText("Sent. Waiting for Base.")
 
   // The first approval lands; the steps are built again from the allowance
-  // it gave, which leaves only the purchase.
-  const price = 8_000_000
-  allowUsdc(me, price)
+  // it gave, exactly the next key's price, which leaves only the purchase.
+  allowUsdc(me, Number(BigInt(`0x${first.transaction.data.slice(-64)}`)))
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
   await expect(sentLine(page, first.hash)).toContainText("Approved. Now press Buy key.")
