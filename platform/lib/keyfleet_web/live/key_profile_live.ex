@@ -173,7 +173,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Rewards waiting</dt>
-          <dd id="key-profile-rewards" aria-live="polite">{rewards(@profile.rewards)}</dd>
+          <dd
+            id="key-profile-rewards"
+            aria-live="polite"
+            phx-hook="MotionCount"
+            data-variant={Motion.standard("count")}
+          >
+            <.rewards rewards={@profile.rewards} />
+          </dd>
         </div>
         <div>
           <dt>Held since</dt>
@@ -463,10 +470,17 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp held_by(%{yours?: true}), do: "You"
   defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)
 
-  # The USDC the key has earned and not yet paid out, read after the window opens.
-  defp rewards(:reading), do: "Reading…"
-  defp rewards({:ok, amount}), do: FleetLive.usdc(amount)
-  defp rewards(:failed), do: "Couldn’t read rewards right now."
+  attr :rewards, :any, required: true
+
+  # The USDC the key has earned and not yet paid out, read after the window
+  # opens. The amount rolls when income arrives.
+  defp rewards(%{rewards: :reading} = assigns), do: ~H"Reading…"
+  defp rewards(%{rewards: :failed} = assigns), do: ~H"Couldn’t read rewards right now."
+
+  defp rewards(%{rewards: {:ok, amount}} = assigns) do
+    assigns = assign(assigns, :amount, FleetLive.usdc(amount))
+    ~H|<span data-count>{@amount}</span>|
+  end
 
   defp times(0), do: "Never"
   defp times(1), do: "Once"
@@ -565,19 +579,30 @@ defmodule KeyfleetWeb.KeyProfileLive do
        ),
        do: update(socket, :key_profile, &Map.put(&1, :rewards, shown))
 
-  defp read_rewards(
-         %{assigns: %{fleet: fleet, key_profile: %{issued?: true, token_id: token_id}}} = socket,
-         _before
-       ) do
-    rewards = Map.take(fleet, [:fleet_id, :rewards_address, :usdc_address])
-    client = Chain.Client.configured()
-
+  defp read_rewards(%{assigns: %{key_profile: %{issued?: true}}} = socket, _before) do
     socket
     |> update(:key_profile, &Map.put(&1, :rewards, :reading))
-    |> start_async(:rewards, fn -> RewardsWaiting.read(rewards, token_id, client) end)
+    |> start_rewards_read()
   end
 
   defp read_rewards(socket, _before), do: socket
+
+  @doc """
+  What the open key has waiting, read again when income may have reached the
+  fleet. The figure on show stays until the chain answers.
+  """
+  def refresh_rewards(%{assigns: %{key_profile: %{issued?: true}}} = socket),
+    do: start_rewards_read(socket)
+
+  def refresh_rewards(socket), do: socket
+
+  defp start_rewards_read(
+         %{assigns: %{fleet: fleet, key_profile: %{token_id: token_id}}} = socket
+       ) do
+    rewards = Map.take(fleet, [:fleet_id, :rewards_address, :usdc_address])
+    client = Chain.Client.configured()
+    start_async(socket, :rewards, fn -> RewardsWaiting.read(rewards, token_id, client) end)
+  end
 
   defp rewards_shown({:ok, {:ok, amount}}), do: {:ok, amount}
   defp rewards_shown(_failed), do: :failed
