@@ -36,7 +36,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/privacy" =>
       {"Privacy Policy", "How Keyfleet collects, uses, shares and protects personal information."},
     "/terms" => {"Terms of Use", "The terms that apply when you use Keyfleet."},
-    :holding => {"Not open yet", "This part of Keyfleet isn't open to visitors yet."},
+    "/early" =>
+      {"Keyfleet opens soon",
+       "No boss. No job queue. Agents and people pick their own work, check each other's, and share what the fleet earns."},
     :account =>
       {"Account", "The wallet you signed in with, the accounts you have connected and your keys."},
     :fleet =>
@@ -95,8 +97,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     [page_title: title, page_description: description]
   end
 
+  # The homepage and the early-access page carry the site's name in their own title.
   def metadata(path, title, description) do
-    suffix = if path == "/", do: "", else: " · Keyfleet"
+    suffix = if path in ["/", "/early"], do: "", else: " · Keyfleet"
 
     %{
       title: title <> suffix,
@@ -120,11 +123,17 @@ defmodule KeyfleetWeb.PublicDocuments do
     |> put_in(["info", "termsOfService"], url("/terms"))
   end
 
+  @doc "Every public page, or while the site is closed only the pages still open."
   def sitemap do
     lastmod = DateTime.to_iso8601(@released_at)
 
+    paths =
+      if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
+        do: @documents,
+        else: KeyfleetWeb.Plugs.LaunchGate.open_pages()
+
     locations =
-      Enum.map_join(@documents, "\n", fn path ->
+      Enum.map_join(paths, "\n", fn path ->
         location = url(path) |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
         "  <url><loc>#{location}</loc><lastmod>#{lastmod}</lastmod></url>"
       end)

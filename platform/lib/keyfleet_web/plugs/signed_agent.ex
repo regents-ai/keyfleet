@@ -81,12 +81,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @impl Plug
   def call(conn, _opts) do
-    if agent_request?(conn) and KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
-      do: authenticate(conn),
-      else: conn
+    if agent_request?(conn), do: authenticate(conn), else: conn
   end
 
-  # While the launch gate is closed the router answers 503 like every other surface.
   defp agent_request?(conn),
     do: Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) == ["api", "v1", "agent"]
 

@@ -8,7 +8,8 @@ defmodule KeyfleetWeb.LaunchGateTest do
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
-  @gated_shell_paths ~w(/account /app/fleets/fibonacci_syndicate)
+  @closed_pages ~w(/ /docs /about /contact /opportunities /account /app/fleets/fibonacci_syndicate
+                   /app/keys/fibonacci_syndicate/1 /fleets/fibonacci_syndicate /no-such-page)
   @closed_message "This part of the site isn't open yet."
 
   setup do
@@ -32,7 +33,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert get(build_conn(), "/account").status == 200
 
     close_surfaces()
-    assert get(build_conn(), "/account").status == 503
+    assert redirected_to(get(build_conn(), "/account")) == "/early"
 
     open_surfaces()
     assert get(build_conn(), "/account").status == 200
@@ -67,16 +68,58 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
   end
 
-  test "every product route answers 503 with no product markup and no caching" do
+  test "while closed, every other page a browser opens is sent to the early-access page" do
     close_surfaces()
 
-    for path <- @gated_shell_paths do
+    for path <- @closed_pages do
       conn = get(build_conn(), path)
 
-      assert conn.status == 503, "#{path} stayed open"
-      assert get_resp_header(conn, "retry-after") == ["3600"]
+      assert redirected_to(conn, 302) == "/early", "#{path} was not sent to /early"
       assert get_resp_header(conn, "cache-control") == ["no-store"]
       refute conn.resp_body =~ ~s(id="app-shell")
+    end
+  end
+
+  test "while closed, the API, sign-in and the other JSON documents answer one plain 503" do
+    close_surfaces()
+
+    for conn <- [
+          get(build_conn(), "/api/v1/fleets"),
+          get(build_conn(), "/api/v1/profile"),
+          get(build_conn(), "/auth/session"),
+          get(build_conn(), "/auth/csrf"),
+          post(build_conn(), "/auth/privy/session", %{}),
+          delete(build_conn(), "/auth/privy/session"),
+          get(build_conn(), "/openapi.json"),
+          get(build_conn(), "/capabilities"),
+          get(build_conn(), "/.well-known/api-catalog"),
+          get(build_conn(), "/.well-known/skills/index.json"),
+          get(build_conn(), "/metadata/1/1")
+        ] do
+      assert json_response(conn, 503) == refused("not_open_yet"), conn.request_path
+      assert get_resp_header(conn, "retry-after") == ["3600"]
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
+    end
+  end
+
+  test "while closed, the agent guides, the directory and the contract answer one plain 503 line" do
+    close_surfaces()
+
+    for conn <- [
+          get(build_conn(), "/skill.md"),
+          get(build_conn(), "/.well-known/skills/keyfleet/SKILL.md"),
+          get(build_conn(), "/llms.txt"),
+          get(build_conn(), "/fleets.md"),
+          get(build_conn(), "/fleets/fibonacci_syndicate.md"),
+          get(build_conn(), "/agent/siwa_agent.py"),
+          get(build_conn(), "/api-contract.openapiv3.yaml"),
+          build_conn() |> put_req_header("accept", "text/markdown") |> get("/"),
+          build_conn() |> put_req_header("accept", "text/markdown") |> get("/docs")
+        ] do
+      assert response(conn, 503) == @closed_message <> "\n", conn.request_path
+      assert response_content_type(conn, :md) =~ "text/markdown"
+      assert get_resp_header(conn, "retry-after") == ["3600"]
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
     end
   end
 
@@ -84,11 +127,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     open = get(build_conn(), "/account")
     close_surfaces()
 
-    for closed <- [
-          get(build_conn(), "/account"),
-          get(build_conn(), "/auth/session"),
-          get(build_conn(), "/fleets.md")
-        ] do
+    for closed <- [get(build_conn(), "/auth/session"), get(build_conn(), "/fleets.md")] do
       assert get_resp_header(closed, "content-security-policy") ==
                [ContentSecurityPolicy.reading()]
 
@@ -99,34 +138,37 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert secure_headers(open) != %{}
   end
 
-  test "session and API JSON endpoints answer one plain 503 line" do
+  test "while closed, the early-access page, the legal pages, the operational files and the static files stay open" do
     close_surfaces()
 
-    for conn <- [
-          get(build_conn(), "/api/v1/profile"),
-          get(build_conn(), "/auth/session")
-        ] do
-      assert json_response(conn, 503) == refused("not_open_yet")
-      assert get_resp_header(conn, "retry-after") == ["3600"]
-      assert get_resp_header(conn, "cache-control") == ["no-store"]
+    for path <-
+          ~w(/early /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
+            ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg) do
+      assert get(build_conn(), path).status == 200, "#{path} closed"
     end
+
+    for path <- ~w(/privacy /terms) do
+      conn = build_conn() |> put_req_header("accept", "text/markdown") |> get(path)
+      assert response(conn, 200) =~ "# Keyfleet"
+    end
+
+    assert get(build_conn(), "/healthz").resp_body == "ok"
   end
 
-  test "the fleet directory's Markdown answers one plain 503 line" do
+  test "while closed, the sitemap lists only the pages still open" do
     close_surfaces()
 
-    for path <- ["/fleets.md", "/fleets/fibonacci_syndicate.md"] do
-      conn = get(build_conn(), path)
+    assert locations(get(build_conn(), "/sitemap.xml")) ==
+             Enum.map(~w(/early /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
 
-      assert response(conn, 503) == @closed_message <> "\n"
-      assert response_content_type(conn, :md) =~ "text/markdown"
-      assert get_resp_header(conn, "retry-after") == ["3600"]
-      assert get_resp_header(conn, "cache-control") == ["no-store"]
-    end
+    open_surfaces()
+
+    assert KeyfleetWeb.PublicDocuments.url("/early") not in locations(
+             get(build_conn(), "/sitemap.xml")
+           )
   end
 
-  test "the marketing page, health check and static files are untouched by the gate" do
-    close_surfaces()
+  test "while open, the homepage is itself and the early-access page stays available" do
     home = get(build_conn(), "/")
 
     title =
@@ -139,41 +181,31 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
     assert home.status == 200
     assert title == "Your agent has tools. Now give it a crew."
-    refute home.resp_body =~ "Not open yet"
-
-    assert get(build_conn(), "/healthz").status == 200
-    assert get(build_conn(), "/healthz").resp_body == "ok"
-    assert get(build_conn(), "/robots.txt").status == 200
-    assert get(build_conn(), "/privacy").status == 200
-    assert get(build_conn(), "/terms").status == 200
+    assert get(build_conn(), "/early").status == 200
   end
 
-  test "signing out stays available while every other session endpoint closes" do
-    close_surfaces()
-
-    assert json_response(delete(build_conn(), "/auth/privy/session"), 200) == %{"ok" => true}
-    assert json_response(get(build_conn(), "/auth/csrf"), 503) == refused("not_open_yet")
-
-    assert json_response(post(build_conn(), "/auth/privy/session", %{}), 503) ==
-             refused("not_open_yet")
-  end
-
-  test "a mount arriving over the socket is sent to the marketing page instead" do
+  test "a mount arriving over the socket is sent to the early-access page instead" do
     close_surfaces()
 
     assert {:halt, halted} =
              LaunchGateHook.on_mount(:default, %{}, %{}, %Phoenix.LiveView.Socket{})
 
-    assert halted.redirected == {:redirect, %{to: "/", status: 302}}
+    assert halted.redirected == {:redirect, %{to: "/early", status: 302}}
   end
 
-  test "a page open when the gate closes cannot keep browsing product routes", %{conn: conn} do
+  test "a page open when the site closes cannot keep browsing product routes", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 
     close_surfaces()
     render_patch(view, "/app/fleets/fibonacci_syndicate")
 
-    assert_redirect(view, "/")
+    assert_redirect(view, "/early")
+  end
+
+  defp locations(conn) do
+    ~r{<loc>([^<]+)</loc>}
+    |> Regex.scan(response(conn, 200), capture: :all_but_first)
+    |> List.flatten()
   end
 
   # Reads the file a boot reads, returning its settings and the log it wrote.

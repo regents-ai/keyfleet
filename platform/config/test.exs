@@ -42,6 +42,9 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds:
 # server share the loopback address. The rate-limit tests put 120/60 back.
 config :keyfleet, :api_rate_limit, limit: 100_000, window_seconds: 60
 
+# And for the early-access form. Its own test puts the release 5/600 back.
+config :keyfleet, :early_signup_rate_limit, limit: 100_000, window_seconds: 600
+
 # Tests key rate limits as production does, behind Fly's proxy.
 config :keyfleet, :behind_fly_proxy, true
 

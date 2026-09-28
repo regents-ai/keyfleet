@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.Live.LaunchGateHook do
   @moduledoc """
-  Keeps product LiveViews closed while the launch gate is closed. It covers
-  mounts that reach the socket without a fresh request: reconnects and live
-  navigation from a page loaded before the gate closed.
+  Keeps the homepage and the product LiveViews closed while the site is closed,
+  sending them to `/early` as `KeyfleetWeb.Plugs.LaunchGate` sends a fresh
+  request. It covers mounts that reach the socket without a fresh request:
+  reconnects and live navigation from a page loaded before the site closed.
 
   The mount check alone would let a page opened while the gate was open keep
   moving between the routes it covers, since those moves patch the running
@@ -26,6 +27,6 @@ defmodule KeyfleetWeb.Live.LaunchGateHook do
   defp app_gate(socket) do
     if LaunchGate.app_surfaces_enabled?(),
       do: {:cont, socket},
-      else: {:halt, redirect(socket, to: ~p"/")}
+      else: {:halt, redirect(socket, to: ~p"/early")}
   end
 end

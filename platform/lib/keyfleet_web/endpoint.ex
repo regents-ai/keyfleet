@@ -12,6 +12,10 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 
+  # While the site is closed, only the early-access page, the legal pages, the
+  # operational files and the static files get past this.
+  plug KeyfleetWeb.Plugs.LaunchGate
+
   # Serve at "/" the static files from "priv/static" directory.
   #
   # When code reloading is disabled (e.g., in production),

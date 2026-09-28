@@ -1,0 +1,97 @@
+/* The early-access page: one centred column on the homepage's dark ground,
+   with its headline, what Keyfleet is, the email form and the legal links. It
+   loads this stylesheet and no scripts. */
+@layer regents-product {
+  .early {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 40rem);
+    min-height: 100svh;
+    margin-inline: auto;
+    padding: clamp(2.5rem, 10svh, 6rem) 16px 1.5rem;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  .early :is(h1, p) { margin-block: 0; }
+
+  .early__overline {
+    font-family: var(--font-family-ui);
+    font-size: .6875rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ash-muted);
+  }
+
+  .early__title {
+    margin-block-start: var(--space-2);
+    font-size: clamp(2.25rem, 1.25rem + 4vw, 3.75rem);
+    line-height: 1.04;
+    letter-spacing: -.035em;
+    overflow-wrap: anywhere;
+  }
+
+  .early__title > span { display: block; text-wrap: balance; }
+  .early__title-accent { color: var(--ash-accent-warm); }
+
+  .early__lede {
+    margin-block-start: var(--space-3);
+    max-width: 34rem;
+    color: var(--ash-muted);
+    font-size: 1.0625rem;
+  }
+
+  .early__lede + .early__lede { margin-block-start: var(--space-2); }
+
+  .early__result { margin-block-start: var(--space-3); }
+
+  /* The address and the button side by side, or stacked on a narrow screen. */
+  .early__form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-2);
+    margin-block-start: var(--space-3);
+  }
+
+  .early__field { flex: 1 1 16rem; min-width: 0; }
+  .early__submit { flex: 0 0 auto; min-height: 2.75rem; }
+
+  @media (max-width: 30rem) {
+    .early__submit { flex-basis: 100%; }
+  }
+
+  /* The field a person never sees and a program fills in. */
+  .early__trap {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .early__footer {
+    display: flex;
+    gap: var(--space-3);
+    margin-block-start: auto;
+    padding-block-start: var(--space-6);
+    font-size: .75rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .early__footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--ash-muted);
+    text-decoration: none;
+  }
+
+  .early__footer a:is(:hover, :focus-visible) {
+    color: var(--color-fg);
+    text-decoration: underline;
+    text-underline-offset: .3em;
+  }
+}

@@ -1,9 +1,8 @@
 defmodule KeyfleetWeb.RouterGateCoverageTest do
   @moduledoc """
   Walks the router's own route table so a route added later cannot quietly
-  escape the launch gate: a new pipeline without the gate, a route with no
-  pipeline at all, or a product LiveView placed outside the gated live session
-  all fail here.
+  stay open while the site is closed: a route the launch gate lets through, or
+  a LiveView mounted outside the gate's hook, fails here.
   """
 
   use KeyfleetWeb.ConnCase, async: false
@@ -16,43 +15,37 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     :ok
   end
 
-  test "only the public operational routes, marketing page and sign-out stay open" do
-    still_open =
-      for route <- routes(),
-          conn = request(route),
-          conn.status != 503,
-          do: {route.verb, route.path}
+  test "only the early-access page, the legal pages and the operational files stay open" do
+    answers =
+      for route <- routes(), conn = request(route), do: {route.verb, route.path, answer(conn)}
+
+    still_open = for {verb, path, :open} <- answers, do: {verb, path}
 
     assert still_open == [
              {:get, "/healthz"},
-             {:get, "/openapi.json"},
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
-             {:get, "/llms.txt"},
-             {:get, "/capabilities"},
              {:get, "/.well-known/security.txt"},
-             {:get, "/.well-known/api-catalog"},
-             {:get, "/skill.md"},
-             {:get, "/.well-known/skills/keyfleet/SKILL.md"},
-             {:get, "/.well-known/skills/index.json"},
-             {:get, "/agent/siwa_agent.py"},
-             {:get, "/metadata/:slot/:token_id"},
-             {:get, "/docs"},
-             {:get, "/about"},
-             {:get, "/contact"},
-             {:get, "/opportunities"},
              {:get, "/privacy"},
              {:get, "/terms"},
-             {:get, "/"},
-             {:delete, "/auth/privy/session"}
+             {:get, "/early"},
+             {:post, "/early"}
            ]
+
+    # Every page a browser opens is sent to the early-access page, and every
+    # other address answers 503.
+    assert for({:get, path, :to_early} <- answers, do: path) ==
+             ~w(/docs /about /contact /opportunities /fleets/:file / /account) ++
+               ~w(/app/fleets/:fleet_id /app/keys/:fleet_id/:token_id) ++
+               ~w(/app/fleets/:fleet_id/rooms/:slug /app/fleets/:fleet_id/workspace) ++
+               ~w(/app/fleets/:fleet_id/workspace/:object_id /app/fleets/:fleet_id/proposals) ++
+               ~w(/app/fleets/:fleet_id/proposals/:number)
   end
 
   test "every product LiveView mounts through the gate" do
     ungated =
       for route <- routes(),
           live_view = route.metadata[:phoenix_live_view],
-          route.path != "/",
           not mounts_through_gate?(live_view),
           do: route.path
 
@@ -79,9 +72,28 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     end)
   end
 
+  # The early-access form is sent with its page's token, as a browser sends it,
+  # and an empty address, so the form's own answer comes back rather than a
+  # redirect to its page.
+  defp request(%{verb: :post, path: "/early"}) do
+    page = get(build_conn(), "/early")
+
+    [token] =
+      Regex.run(~r/name="_csrf_token" value="([^"]+)"/, page.resp_body, capture: :all_but_first)
+
+    page |> recycle() |> post("/early", %{"_csrf_token" => token, "email" => ""})
+  end
+
   defp request(route) do
     Phoenix.ConnTest.dispatch(build_conn(), @endpoint, route.verb, concrete_path(route.path), %{})
   end
+
+  defp answer(%Plug.Conn{status: 503}), do: :closed
+
+  defp answer(%Plug.Conn{status: 302} = conn),
+    do: if(redirected_to(conn) == "/early", do: :to_early, else: :open)
+
+  defp answer(_conn), do: :open
 
   # Placeholders stand in for path parameters; the gate answers before any
   # controller or LiveView reads them.

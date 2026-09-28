@@ -10,7 +10,6 @@ defmodule KeyfleetWeb.Router do
     plug :fetch_live_flash
     plug KeyfleetWeb.Plugs.Theme
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
-    plug KeyfleetWeb.Plugs.LaunchGate
     plug :protect_from_forgery
 
     # These pages can start wallet sign-in.
@@ -21,18 +20,15 @@ defmodule KeyfleetWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug KeyfleetWeb.Plugs.LaunchGate
   end
 
   pipeline :agent do
     plug KeyfleetWeb.Plugs.FleetComingSoon
   end
 
-  # The open fleet directory's Markdown. The format is set before the gate,
-  # so a closed site answers these in Markdown too.
+  # The open fleet directory's Markdown.
   pipeline :directory do
     plug :put_format, "md"
-    plug KeyfleetWeb.Plugs.LaunchGate
 
     # Reading only: Markdown never starts sign-in.
     plug :put_secure_browser_headers, %{
@@ -48,6 +44,21 @@ defmodule KeyfleetWeb.Router do
     plug :protect_from_forgery
 
     # Reading only: these pages never start sign-in, so they send no referrer.
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.reading(),
+      "referrer-policy" => "no-referrer"
+    }
+  end
+
+  # The early-access page: no sign-in and no app scripts, so its root layout
+  # loads neither and it gets the strict reading policy.
+  pipeline :early do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_flash
+    plug :put_root_layout, html: {KeyfleetWeb.Layouts, :early}
+    plug :protect_from_forgery
+
     plug :put_secure_browser_headers, %{
       "content-security-policy" => ContentSecurityPolicy.reading(),
       "referrer-policy" => "no-referrer"
@@ -118,6 +129,12 @@ defmodule KeyfleetWeb.Router do
   end
 
   scope "/", KeyfleetWeb do
+    pipe_through :early
+    get "/early", EarlyController, :show
+    post "/early", EarlyController, :create
+  end
+
+  scope "/", KeyfleetWeb do
     pipe_through :directory
     get "/fleets.md", DirectoryController, :index_md
     get "/fleets/:file", DirectoryController, :show_md
@@ -163,7 +180,9 @@ defmodule KeyfleetWeb.Router do
   scope "/", KeyfleetWeb do
     pipe_through :browser
 
-    live "/", HomeLive, :home
+    live_session :home, on_mount: [KeyfleetWeb.Live.LaunchGateHook] do
+      live "/", HomeLive, :home
+    end
 
     get "/auth/csrf", PrivySessionController, :csrf
     post "/auth/privy/failure", PrivySessionController, :failure

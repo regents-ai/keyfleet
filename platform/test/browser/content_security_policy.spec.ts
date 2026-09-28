@@ -87,18 +87,29 @@ test("reading pages load with nothing refused", async ({page}) => {
   }
 })
 
-test("the closed page is styled with nothing refused", async ({page}) => {
+test("while closed, the homepage opens the early-access page, which takes an address with no scripts and nothing refused", async ({page}) => {
   const refusals = await watchRefusals(page)
+  const requested: string[] = []
+  page.on("request", request => requested.push(request.url()))
   setSurfaces(false)
 
   try {
-    const response = await page.goto(`/app/fleets/${fleet}`)
-    expect(response?.status()).toBe(503)
-    await expect(page.getByRole("heading", {name: "Not open yet", level: 1})).toBeVisible()
+    const response = await page.goto("/")
+    expect(response?.status()).toBe(200)
+    expect(new URL(page.url()).pathname).toBe("/early")
+    await expect(page.getByRole("heading", {name: "No boss. No job queue. Just a crew that runs itself.", level: 1})).toBeVisible()
     await page.waitForLoadState("networkidle")
 
-    // The site's stylesheet applied: the button to the homepage is drawn as one.
-    await expect(page.locator("main a.rg-button")).not.toHaveCSS("display", "inline")
+    // The site's stylesheet applied: the button is drawn as one.
+    await expect(page.getByRole("button", {name: "Tell me when it opens"})).not.toHaveCSS("display", "inline")
+
+    await page.getByLabel("Email").fill("ada@example.com")
+    await page.getByRole("button", {name: "Tell me when it opens"}).click()
+    await expect(page.getByText("You're on the list. We'll email you when Keyfleet opens.")).toBeVisible()
+    await page.waitForLoadState("networkidle")
+
+    expect(requested.filter(url => /privy/i.test(url))).toEqual([])
+    expect(requested.filter(url => new URL(url).pathname.endsWith(".js"))).toEqual([])
     expect(refusals).toEqual([])
   } finally {
     setSurfaces(true)

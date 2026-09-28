@@ -64,6 +64,9 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 # One budget per client address for the health check and every /api path.
 config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
 
+# Tries at the early-access form per client address: five in ten minutes.
+config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600
+
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
 

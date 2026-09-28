@@ -1,0 +1,32 @@
+<!DOCTYPE html> <% metadata =
+  KeyfleetWeb.PublicDocuments.metadata(@conn.request_path, @page_title, @page_description) %>
+<html lang="en" data-brand="platform" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <Regent.AgentMetadata.head
+      title={metadata.title}
+      description={metadata.description}
+      canonical={metadata.canonical}
+      site_name="Keyfleet"
+      site_type="business"
+      image={metadata.image}
+      image_width={1024}
+      image_height={512}
+      image_alt="Keyfleet mark"
+      twitter_site="@regents_sh"
+      structured_data={KeyfleetWeb.PublicDocuments.structured_data()}
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#161616" />
+    <title>{metadata.title}</title>
+    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href={~p"/favicon.ico"} />
+    <link rel="icon" type="image/png" sizes="32x32" href={~p"/favicon-32.png?v=2"} />
+    <link rel="icon" type="image/svg+xml" sizes="any" href={~p"/favicon.svg?v=2"} />
+    <link rel="apple-touch-icon" href={~p"/apple-touch-icon.png"} />
+    <link rel="stylesheet" href={~p"/assets/js/app.css"} />
+  </head>
+  <body>
+    {@inner_content}
+  </body>
+</html>

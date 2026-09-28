@@ -1,6 +1,6 @@
 /* Homepage-only composition: the header, a centred hero over the prism
    artwork, the four fleet cards with what each is doing, what a fleet can take
-   on and the footer. The holding page borrows the hero's copy block. */
+   on and the footer. */
 @layer regents-product {
   .rl-root {
     --rl-bg: var(--color-bg);
@@ -109,11 +109,6 @@
   }
   .rl-hero-pill__label { color: var(--rl-bg); }
   .rl-hero-pill:hover { background: color-mix(in oklab, var(--rl-ink) 82%, var(--ash-accent-warm)); }
-
-  /* The holding page's words and action. */
-  .rl-hero-copy { position: relative; z-index: 1; width: fit-content; max-width: 100%; padding: var(--space-1) var(--space-2) var(--space-2) 0; background: var(--rl-bg); }
-  .rl-hero-copy h1 { font-size: clamp(2.75rem, 5vw, 4.5rem); line-height: 1.05; letter-spacing: -.035em; }
-  .rl-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block-start: var(--space-3); }
 
   .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
 
