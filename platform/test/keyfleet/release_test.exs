@@ -89,27 +89,21 @@ defmodule Keyfleet.ReleaseTest do
   end
 
   test "the staging launchers invoke the guarded functions without printing variables" do
-    exports = Release.__info__(:functions)
-
     for {path, command} <- [
           {"rel/overlays/bin/bootstrap-staging", :bootstrap_staging},
           {"rel/overlays/bin/pending-migrations", :pending_migrations}
         ] do
       script = File.read!(path)
 
+      # Every deployed command passes no options, so nothing a deployment can
+      # write on the command line chooses which database the release touches.
       assert script =~ "Keyfleet.Release.#{command}()"
       assert script =~ "KEYFLEET_RELEASE_COMMAND=migrate"
       refute script =~ "KEYFLEET_DEPLOYMENT_ROLE="
       refute script =~ "echo"
       refute script =~ "DATABASE_POOLED_URL"
       refute script =~ "DATABASE_DIRECT_URL"
-      refute script =~ "_for_test"
       assert File.stat!(path).mode |> Bitwise.band(0o100) != 0
-
-      # Every deployed command takes no arguments, so nothing a deployment can
-      # write on the command line chooses which database the release touches.
-      assert {command, 0} in exports
-      refute {command, 1} in exports
     end
   end
 
@@ -144,7 +138,7 @@ defmodule Keyfleet.ReleaseTest do
       end
 
       assert_raise RuntimeError, @role_error, fn ->
-        Release.bootstrap_staging_for_test(getenv: getenv, config: @unreachable)
+        Release.bootstrap_staging(getenv: getenv, config: @unreachable)
       end
     end
   end
@@ -153,7 +147,7 @@ defmodule Keyfleet.ReleaseTest do
     config = disposable_database()
 
     assert {:ok, _result, _started} =
-             Release.bootstrap_staging_for_test(
+             Release.bootstrap_staging(
                getenv: staging_getenv(),
                config: config,
                migrations_path: migrations_directory([])
@@ -162,7 +156,7 @@ defmodule Keyfleet.ReleaseTest do
     assert_raise RuntimeError,
                  "keyfleet_app.schema_migrations already exists: destroy and recreate the staging database",
                  fn ->
-                   Release.bootstrap_staging_for_test(getenv: staging_getenv(), config: config)
+                   Release.bootstrap_staging(getenv: staging_getenv(), config: config)
                  end
   end
 
@@ -173,7 +167,7 @@ defmodule Keyfleet.ReleaseTest do
     assert_raise RuntimeError,
                  "regent_names schema already exists: destroy and recreate the staging database",
                  fn ->
-                   Release.bootstrap_staging_for_test(getenv: staging_getenv(), config: config)
+                   Release.bootstrap_staging(getenv: staging_getenv(), config: config)
                  end
 
     refute migration_table?(config)
@@ -183,7 +177,7 @@ defmodule Keyfleet.ReleaseTest do
     config = disposable_database()
 
     assert {:ok, _result, _started} =
-             Release.bootstrap_staging_for_test(getenv: staging_getenv(), config: config)
+             Release.bootstrap_staging(getenv: staging_getenv(), config: config)
 
     assert column_names(config, "regent_names", "platform_human_users") == [
              "avatar",
@@ -235,7 +229,7 @@ defmodule Keyfleet.ReleaseTest do
   test "the listing prints none on a database the release agrees with" do
     config = bootstrapped_database()
 
-    assert capture_io(fn -> Release.pending_migrations_for_test(config: config) end) == "none\n"
+    assert capture_io(fn -> Release.pending_migrations(config: config) end) == "none\n"
   end
 
   test "the listing names every version the release carries that the database has not applied" do
@@ -243,7 +237,7 @@ defmodule Keyfleet.ReleaseTest do
     held_back = release_migration_files() |> Enum.take(-1)
 
     assert {:ok, _result, _started} =
-             Release.bootstrap_staging_for_test(
+             Release.bootstrap_staging(
                getenv: staging_getenv(),
                config: config,
                migrations_path: migrations_directory(release_migration_files() -- held_back)
@@ -251,7 +245,7 @@ defmodule Keyfleet.ReleaseTest do
 
     expected = Enum.map_join(held_back, " ", &version_of/1)
 
-    assert capture_io(fn -> Release.pending_migrations_for_test(config: config) end) ==
+    assert capture_io(fn -> Release.pending_migrations(config: config) end) ==
              "pending: #{expected}\n"
   end
 
@@ -264,7 +258,7 @@ defmodule Keyfleet.ReleaseTest do
       [20_990_101_000_000]
     )
 
-    assert capture_io(fn -> Release.pending_migrations_for_test(config: config) end) ==
+    assert capture_io(fn -> Release.pending_migrations(config: config) end) ==
              "applied-without-file: 20990101000000\n"
   end
 
@@ -272,7 +266,7 @@ defmodule Keyfleet.ReleaseTest do
     config = disposable_database()
 
     assert_raise RuntimeError, @missing_table_error, fn ->
-      Release.pending_migrations_for_test(config: config)
+      Release.pending_migrations(config: config)
     end
 
     refute migration_table?(config)
@@ -288,7 +282,7 @@ defmodule Keyfleet.ReleaseTest do
     config = with_lock_timeout(bootstrapped_database())
     hold_migration_lock(config)
 
-    assert capture_io(fn -> Release.pending_migrations_for_test(config: config) end) == "none\n"
+    assert capture_io(fn -> Release.pending_migrations(config: config) end) == "none\n"
 
     # Ecto's migrator matches on a successful lock statement, so the cancelled
     # wait reaches the caller as a MatchError carrying PostgreSQL's own reason.
@@ -335,7 +329,7 @@ defmodule Keyfleet.ReleaseTest do
     config = disposable_database()
 
     assert {:ok, _result, _started} =
-             Release.bootstrap_staging_for_test(getenv: staging_getenv(), config: config)
+             Release.bootstrap_staging(getenv: staging_getenv(), config: config)
 
     config
   end

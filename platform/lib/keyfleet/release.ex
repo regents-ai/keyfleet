@@ -232,14 +232,12 @@ defmodule Keyfleet.Release do
   It refuses any database that already carries migration state or the
   regent_names schema, and it repairs nothing: recovery from a half-finished
   bootstrap is to destroy and recreate the staging database.
-  """
-  def bootstrap_staging, do: bootstrap_staging_for_test([])
 
-  @doc false
-  # No deployed command reaches this: the launchers call the arity-zero entry
-  # points above, and this variant exists only so the test suite can aim the
-  # commands at a disposable database.
-  def bootstrap_staging_for_test(opts) when is_list(opts) do
+  The deployed launcher passes no options, so it reads only the database the
+  release configuration resolves. The options (`:getenv`, `:config`,
+  `:migrations_path`) aim it at a disposable database under test.
+  """
+  def bootstrap_staging(opts \\ []) when is_list(opts) do
     getenv = Keyword.get(opts, :getenv, &System.get_env/1)
 
     # The role is read before anything opens a connection, so no configuration
@@ -271,13 +269,9 @@ defmodule Keyfleet.Release do
   under `pending:`, and every version the database has applied whose file the
   release does not carry under `applied-without-file:`. Prints `none` when both
   are empty. It applies nothing, creates nothing, and takes no migration lock.
+  Its options are the bootstrap's.
   """
-  def pending_migrations, do: pending_migrations_for_test([])
-
-  @doc false
-  # Arity zero above for the same reason as the bootstrap: the deployed command
-  # can only ever read the database its own release configuration resolves.
-  def pending_migrations_for_test(opts) when is_list(opts) do
+  def pending_migrations(opts \\ []) when is_list(opts) do
     getenv = Keyword.get(opts, :getenv, &System.get_env/1)
     load_app()
     Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
