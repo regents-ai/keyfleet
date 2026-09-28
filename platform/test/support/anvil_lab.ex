@@ -1,7 +1,8 @@
 defmodule Keyfleet.AnvilLab do
   @moduledoc """
-  A short-lived plain anvil for the keeper's external test, with the fleet
-  `contracts/script/KeeperLab.s.sol` puts on it.
+  A short-lived anvil for the external tests, with the fleet a lab script in
+  `contracts/script` puts on it: `KeeperLab.s.sol` on a plain anvil, or
+  `LaunchLab.s.sol` on a fork of a chain carrying Autolaunch v2.
 
   The anvil listens on a free loopback port, keeps no state history on
   disk, starts at a base fee of 0.01 gwei, and is killed when the test that
@@ -21,10 +22,11 @@ defmodule Keyfleet.AnvilLab do
   @chain_id 31_337
 
   @doc """
-  Starts an anvil, waits until it answers, and points the keeper's node and
-  the site's node for the lab chain (`:chain_nodes`) at it. Returns its URL.
+  Starts an anvil with any further `args`, such as a `--fork-url`, waits
+  until it answers, and points the keeper's node and the site's node for the
+  lab chain (`:chain_nodes`) at it. Returns its URL.
   """
-  def start! do
+  def start!(args \\ []) do
     port = free_port()
     url = "http://127.0.0.1:#{port}"
 
@@ -33,7 +35,7 @@ defmodule Keyfleet.AnvilLab do
         :binary,
         args:
           ["--port", "#{port}", "--silent", "--prune-history"] ++
-            ["--block-base-fee-per-gas", @base_fee]
+            ["--block-base-fee-per-gas", @base_fee] ++ args
       ])
 
     {:os_pid, os_pid} = Port.info(anvil, :os_pid)
@@ -105,20 +107,22 @@ defmodule Keyfleet.AnvilLab do
   def number("0x" <> hex), do: String.to_integer(hex, 16)
 
   @doc """
-  Builds the lab on the anvil at `url`, sent from `sender`, and returns the
-  addresses `KeeperLab` returned, by name, in lower case.
+  Builds the lab on the anvil at `url`, sent from `sender`, with `script`
+  given `args`, and returns the addresses the script returned, by name, in
+  lower case.
   """
-  def lab!(url, sender) do
+  def lab!(url, sender, script \\ @script, args \\ []) do
     {output, status} =
       System.cmd(
         "forge",
-        ["script", @script, "--rpc-url", url, "--broadcast", "--slow", "--unlocked"] ++
+        ["script", script | args] ++
+          ["--rpc-url", url, "--broadcast", "--slow", "--unlocked"] ++
           ["--sender", sender, "--json"],
         cd: @contracts,
         stderr_to_stdout: true
       )
 
-    assert status == 0, "KeeperLab failed:\n#{String.slice(output, -4_000, 4_000)}"
+    assert status == 0, "#{script} failed:\n#{String.slice(output, -4_000, 4_000)}"
 
     output
     |> String.split("\n")

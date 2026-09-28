@@ -200,3 +200,14 @@ From `platform/`:
   anvil's public test accounts, and stops its anvil when it finishes. The same
   command runs the rewards and wallet-button labs on anvils of their own, and
   the release package's external test, which needs Docker.
+- `mix test --only autolaunch_fork` runs a whole Autolaunch v2 launch through
+  the site and the keeper. It starts its own anvil forking the chain
+  `KEYFLEET_FORK_RPC_URL` names, whose factory `KEYFLEET_FORK_FACTORY` names,
+  builds a Classic fleet with every key it must sell on it with
+  `contracts/script/LaunchLab.s.sol`, and sends everything to that fork, never
+  to the chain it forks. The keys propose, vote and carry out a launch with the
+  steps the server builds; the chain reader records the proposal and reads its
+  launch; one bidder buys the whole sale; and the keeper settles the auction,
+  has the fleet record it, and a month later releases the vested launched
+  token to the fleet. Point it at your own fork of the v2 practice chain, as
+  `docs/deployment.md` describes under Rehearsing.

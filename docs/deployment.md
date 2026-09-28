@@ -241,7 +241,22 @@ anvil --port 58741 --fork-url http://127.0.0.1:58705 --prune-history --silent
 The factory address in `anvil.json` is the practice chain's
 `RegentsAutolaunchFactoryV2`, so fleets deployed to that fork can carry out a
 launch. The fork rehearses deployment, recording, purchases, votes and a whole
-Autolaunch. Stop the fork when done and delete its history directory under
+Autolaunch. The contracts' launch fork test and the site's launch lab both run
+against it:
+
+```sh
+# contracts/
+KEYFLEET_FORK_RPC_URL=http://127.0.0.1:58741 \
+KEYFLEET_FORK_FACTORY=0xcc0dF8493B348bFD7C58730A2c5e97b3A73aCb00 \
+forge test --match-path test/fork/KeyfleetLaunchIncomeFork.t.sol -vv
+
+# platform/
+KEYFLEET_FORK_RPC_URL=http://127.0.0.1:58741 \
+KEYFLEET_FORK_FACTORY=0xcc0dF8493B348bFD7C58730A2c5e97b3A73aCb00 \
+mix test --only autolaunch_fork
+```
+
+Stop the fork when done and delete its history directory under
 `~/.foundry/anvil/tmp`.
 
 **A plain fork on chain 31337, for the anvil manifest without the lab.**
