@@ -137,20 +137,18 @@ event LaunchGraduated(address indexed auction, address indexed subject, PoolId i
                       address splitter, address receiver, uint160 finalSqrtPriceX96, uint256 lpTokenId,
                       uint128 lpRegentUsed, uint128 lpSubjectUsed)
 event LaunchSettled(address indexed auction, uint256 regentRaised, uint256 regentToTreasury,
-                    uint256 subjectSold, uint256 subjectShared)
+                    uint256 subjectToEscrow)
 event LaunchRetired(address indexed auction, address indexed subject, uint256 subjectReturned)
-event UnsoldShareClaimed(address indexed auction, uint256 indexed bidId, address indexed owner,
-                         uint256 tokensFilled, uint256 share)
 event HookBound(address indexed hook)
 views: distribution, auctionOfSubject, requiredRegentRaisedFor, bidTickSpacingFor,
-       maxReachableRaiseFor, unsoldShareOf, poolKeyOf, lpLocker, hook, and the constants below
+       maxReachableRaiseFor, poolKeyOf, lpLocker, hook, and the constants below
 ```
 
-`distribution(auction)` returns 21 fields, in this order: `lifecycle` (None,
+`distribution(auction)` returns 19 fields, in this order: `lifecycle` (None,
 Active, Graduated, Failed), `startBlock`, `endBlock`, `claimBlock`,
 `migrationBlock`, `requiredRegentRaised`, `reserve`, `lpRegentUsed`,
-`lpSubjectUsed`, `finalSqrtPriceX96`, **`floorPriceQ96`, `subjectSold`,
-`subjectShared`** (new in v2), `launchId`, `subject`, `escrow`, `treasury`,
+`lpSubjectUsed`, `finalSqrtPriceX96`, **`floorPriceQ96`** (new in v2),
+`launchId`, `subject`, `escrow`, `treasury`,
 `splitter`, `receiver`, `poolId`, `lpTokenId`.
 
 Escrow: `EscrowInitialized`, `VestingActivated`, `SubjectReleased`,
@@ -174,8 +172,9 @@ If the auction raised its minimum, it graduates, in one transaction:
 4. The rest of the raise, `raise − lpRegentUsed`, goes to the treasury
    (`LaunchSettled.regentToTreasury`). The tests hold the pool's part to three
    quarters within one part in a million.
-5. Every SUBJECT still held for this launch is kept for the bids'
-   share-out (`subjectShared`).
+5. Every SUBJECT still held for this launch goes to the escrow
+   (`LaunchSettled.subjectToEscrow`), as in v1, and vests to the treasury on
+   the same schedule as the 65%.
 6. The splitter and the canonical payment receiver are created, and the escrow
    starts vesting its 65% to the treasury over 365 days from that block's
    timestamp.
@@ -184,26 +183,13 @@ Otherwise it fails. The unsold 20% and the 15% reserve go to the escrow, which
 retires the whole 100 billion to the dead address. The auction refunds every
 bidder. The treasury gets nothing.
 
-**The share-out.** After graduation each bid can claim
-`subjectShared × tokensFilled / subjectSold`, rounded down:
-
-```
-function claimUnsoldShare(address auction, uint256 bidId, uint64 lastFullyFilledCheckpointBlock, uint64 outbidBlock)
-function unsoldShareOf(address auction, uint256 bidId, uint64 lastFullyFilledCheckpointBlock, uint64 outbidBlock)
-    returns (address owner, uint256 share, bool claimed)
-```
-
-Anyone may send the claim, once per bid, before or after the bid's own exit and
-claim at the auction. The SUBJECT always goes to the bid's owner. The two hints
-are the ones the auction's `exitPartiallyFilledBid` takes, ignored for a bid
-priced above the final clearing price. Both revert until the launch has
-graduated. The pinned auction rolls supply one block does not sell into the
-blocks after it, and a graduated raise is at least the whole 20% at the floor,
-so a graduated auction sells its 20% up to rounding and the pool pairs the
-whole reserve. The share-out is therefore rounding crumbs, plus any SUBJECT
-someone sent to the strategy before migration. The source's tests prove that
-the bids receive the whole 20% up to crumbs. They do not bound the share on its
-own.
+**No share-out.** An earlier v2 draft let each bid claim a share of the
+SUBJECT left over after graduation. The founder removed it on 2026-09-28: the
+pinned auction rolls supply one block does not sell into the blocks after it
+and never lowers its price, so an auction that reaches its minimum sells its
+whole 20%, and the pool pairs the whole reserve. What is left is rounding
+crumbs plus any SUBJECT someone sent to the strategy before migration, and it
+goes to the escrow. Bidders claim what they won from the auction, as in v1.
 
 ## What is fixed and what is set per launch
 
@@ -240,8 +226,8 @@ Every timing value is in blocks, and Base makes one every 2 seconds.
 4. Start block: not a parameter; computed at execution, all schedule values fixed.
 5. Fee: none. The launch costs gas only.
 6. State: `strategy.distribution(auction)` returns the lifecycle and the
-   schedule, as before, with three fields added in the middle
-   (`floorPriceQ96`, `subjectSold`, `subjectShared`). Keyfleet's copy of the
+   schedule, as before, with one field added in the middle
+   (`floorPriceQ96`). Keyfleet's copy of the
    struct must change, because every field from `launchId` on would otherwise
    decode from the wrong place. The rest holds: the terminal state is written
    only by `migrate`; until then the launch stays Active even after the auction
@@ -266,22 +252,21 @@ Every timing value is in blocks, and Base makes one every 2 seconds.
    base unit. Keyfleet does not bid, so this reaches Keyfleet only as wording:
    pages that tell people how much is needed say "at least the minimum plus
    one smallest unit", or point to the Autolaunch site, which asks for it.
-10. **Unsold-share claims for a fleet-held bid.** A fleet cannot bid: its
-    contract has no call into the auction. Anyone can place a bid naming the
-    fleet as owner, though, and the auction and the strategy pay a bid's
-    tokens, refund and share to its owner whoever sends the call. So the fleet
-    need do nothing, and anyone may claim for it. What such a bid brings in
-    arrives in REGENT or the launched token; to the fleet it is a gift
-    (question 4 below), sorted as income to the keys (rule 5 sorts by token
-    alone). The share is crumbs, so no keeper job claims it.
+10. **A bid naming the fleet.** A fleet cannot bid: its contract has no call
+    into the auction. Anyone can place a bid naming the fleet as owner, though,
+    and the auction pays a bid's tokens and refund to its owner whoever sends
+    the exit and claim. So the fleet need do nothing, and anyone may claim for
+    it. What such a bid brings in arrives in REGENT or the launched token; to
+    the fleet it is a gift (question 4 below), sorted as income to the keys
+    (rule 5 sorts by token alone). No keeper job claims for it.
 11. **The fleet as treasury.** At graduation the fleet receives
     `raise − lpRegentUsed` in REGENT, about a quarter of the raise (v1 sent
     only what the position did not use), and the escrow vests 65% of the
     supply to it over 365 days. Both stay shared money, booked from the
     strategy's, the auction's and the escrow's own records. The formula
     `_syncLaunch` books already equals the strategy's `regentToTreasury`, so
-    the booking needs no change. The fleet receives no SUBJECT at graduation: in v1 the
-    unused tokens went to the escrow; in v2 they go to the bids.
+    the booking needs no change. The fleet receives no SUBJECT at graduation: the unused
+    tokens go to the escrow and vest to it, as in v1.
 12. **Graduation sent by the Regent bot.** Keyfleet's keeper also sends
     `migrate(auction)` once the migration block passes and the launch is still
     Active. Both are permissionless and the first to land settles the launch.
@@ -337,8 +322,8 @@ outright.
    `uint256 floorPriceQ96; uint128 minimumRegentRaised` and is checked against
    `abi/RegentsAutolaunchFactoryV2.json`. Why: v2's `launch` has a different
    selector and struct.
-2. `IRegentLBPStrategy.sol`: `Distribution` gets `floorPriceQ96`,
-   `subjectSold` and `subjectShared` after `finalSqrtPriceX96`;
+2. `IRegentLBPStrategy.sol`: `Distribution` gets `floorPriceQ96` after
+   `finalSqrtPriceX96`;
    `MAX_REACHABLE_RAISE()` is replaced by
    `requiredRegentRaisedFor(uint256,uint128)`. Why: the v1 struct decodes v2
    wrongly, and v2 has no `MAX_REACHABLE_RAISE`.
@@ -357,9 +342,9 @@ outright.
    missing `MAX_REACHABLE_RAISE`, and the strategy's rule is the only one that
    counts.
 6. `Keyfleet._syncLaunch` and the contract's NatSpec: the formula stays;
-   "every unused unit goes to the escrow" becomes "the unused SUBJECT goes to
-   the bids", and the header names `RegentsAutolaunchFactoryV2`. Why: the
-   booking is still right, the explanation is not.
+   "every unused unit goes to the escrow" stays true, and the header names
+   `RegentsAutolaunchFactoryV2`. Why: the booking and its explanation both
+   still hold; only the factory's name changes.
 7. Income rules: no change. REGENT and SUBJECT stay income tokens, and the
    launch's two receipts stay shared money. The NatSpec adds that a bid in the
    fleet's name brings in income. Why: rule 5 of the contract plan sorts by
@@ -372,14 +357,14 @@ outright.
 
 **Keeper** (`platform/lib/keyfleet/keeper`, `docs/keeper.md`)
 
-9. `calls.ex`: the `launch_distribution` view decodes 21 fields, with three
-   `uint256` fields after `final_sqrt_price_x96` and their names in
-   `@distribution_fields`; comments name `ConditionalVestingEscrowV2`. Why: it
+9. `calls.ex`: the `launch_distribution` view decodes 19 fields, with one
+   `uint256` field, `floor_price_q96`, after `final_sqrt_price_x96` and its name
+   in `@distribution_fields`; comments name `ConditionalVestingEscrowV2`. Why: it
    decodes the struct `Keyfleet.launchDistribution()` returns.
 10. `income.ex`: no change to `migrate`, `syncLaunch`, `release`, `collect`,
-    `sweep` or the surplus calls; no `claimUnsoldShare` job. `docs/keeper.md`
+    `sweep` or the surplus calls. `docs/keeper.md`
     says the Regent bot normally sends graduation and the keeper's `migrate`
-    is a backstop. Why: gap 12 and gap 10.
+    is a backstop. Why: gap 12.
 
 **Chain reader** (`platform/lib/keyfleet/chain`, `docs/chain-reader.md`)
 
@@ -441,7 +426,7 @@ outright.
 **Tests**
 
 18. Contracts: `test/mocks/MockAutolaunch.sol` models v2 (floor rules,
-    `requiredRegentRaisedFor`, the 21-field distribution, a quarter of the
+    `requiredRegentRaisedFor`, the 19-field distribution, a quarter of the
     raise to the treasury, no SUBJECT to the treasury at graduation);
     `KeyfleetAutolaunch.t.sol`, `KeyfleetIncome.t.sol`,
     `KeyfleetTreasury.t.sol`, `KeyfleetVotes.t.sol`,
