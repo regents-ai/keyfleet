@@ -57,6 +57,8 @@ defmodule Keyfleet.Chain do
   commit, so numbers are given in the order records are made and a record
   that rolls back gives its number back.
   """
+  # The schema is the repository's own constant; every value is a parameter.
+  # sobelow_skip ["SQL.Query"]
   def take_proposal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(
@@ -69,6 +71,8 @@ defmodule Keyfleet.Chain do
   end
 
   @doc "Takes the next number for one of the fleet's key reveals, as `take_proposal_seq!/1` does."
+  # The schema is the repository's own constant; every value is a parameter.
+  # sobelow_skip ["SQL.Query"]
   def take_reveal_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(
@@ -81,6 +85,8 @@ defmodule Keyfleet.Chain do
   end
 
   @doc "Takes the next number for one of the fleet's ownership epochs, as `take_proposal_seq!/1` does."
+  # The schema is the repository's own constant; every value is a parameter.
+  # sobelow_skip ["SQL.Query"]
   def take_ownership_seq!(fleet_id) do
     %Postgrex.Result{rows: [[seq]]} =
       Keyfleet.Repo.query!(

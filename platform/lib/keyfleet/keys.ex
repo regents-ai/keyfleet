@@ -147,6 +147,8 @@ defmodule Keyfleet.Keys do
   recorded reveal, lowest first, leaving out the numbers in `except`:
   `{:ok, token_ids}` or `{:error, error}`.
   """
+  # The schema is the repository's own constant; every value is a parameter.
+  # sobelow_skip ["SQL.Query"]
   def unrevealed(fleet_id, minted, except, limit) do
     # Raw SQL, not an Ash read: the keys it lists have no row (key_reveals has only revealed ones).
     case Keyfleet.Repo.query(
