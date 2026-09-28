@@ -10,6 +10,9 @@ config :keyfleet, :graph, enabled: true
 # environment names another.
 config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://localhost:4100")
 
+# Several sites run side by side locally, each on the port named by PORT.
+port = String.to_integer(System.get_env("PORT", "4000"))
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -19,11 +22,12 @@ config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://
 config :keyfleet, KeyfleetWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  url: [host: "localhost", port: 4000],
-  http: [ip: {127, 0, 0, 1}],
-  check_origin: ["http://localhost:4000", "http://127.0.0.1:4000"],
+  url: [host: "localhost", port: port],
+  http: [ip: {127, 0, 0, 1}, port: port],
+  check_origin: ["http://localhost:#{port}", "http://127.0.0.1:#{port}"],
   code_reloader: true,
-  debug_errors: true,
+  # `make readiness` sets this to off, so error pages answer as they do in a release.
+  debug_errors: System.get_env("KEYFLEET_DEBUG_ERRORS", "on") == "on",
   secret_key_base: "6ihHqnWB0px5FXmoddiKg3V2NLeiM0k0UsFs5DwmIADSX35FFdeSs5VNICCc3iU5",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:keyfleet, ~w(--sourcemap=inline --watch)]}

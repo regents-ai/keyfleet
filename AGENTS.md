@@ -21,6 +21,9 @@ signed-in Overview. The [README](README.md) describes the product.
   `make check-platform`, `check-required-fixes`, `check-cli` and
   `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value uses
   `keyfleet_test`).
+- `make readiness` starts the local development server on a free port with the
+  error debugger off and checks what the agent-readiness scorer looks for
+  (`scripts/readiness.sh`). It needs the local development database.
 - `make release` is the one release path: it refuses uncommitted changes, runs
   `make check`, builds HEAD's `platform/` and the graph host's sealed Python
   supply into an image and starts it against a throwaway database
