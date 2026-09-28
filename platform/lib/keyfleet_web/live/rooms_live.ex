@@ -13,7 +13,6 @@ defmodule KeyfleetWeb.RoomsLive do
 
   use KeyfleetWeb, :html
 
-  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
 
@@ -76,7 +75,7 @@ defmodule KeyfleetWeb.RoomsLive do
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
-            Named by {FleetLive.short_wallet(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
+            Named by {RegentFormat.short_address(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
           </p>
 
           <.form
@@ -196,7 +195,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
 
-  def writer(%{author_wallet: wallet}), do: FleetLive.short_wallet(wallet)
+  def writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
 
   @doc """
   A post's words as the page shows them. They are the writer's own, escaped

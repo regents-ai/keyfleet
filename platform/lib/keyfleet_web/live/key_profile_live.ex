@@ -440,7 +440,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp face_note(%{traits: traits}), do: Enum.min_by(traits, & &1.share).value
 
   defp held_by(%{yours?: true}), do: "You"
-  defp held_by(%{holder: wallet}), do: FleetLive.short_wallet(wallet)
+  defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)
 
   # The USDC the key has earned and not yet paid out, read after the window opens.
   defp rewards(:reading), do: "Reading…"

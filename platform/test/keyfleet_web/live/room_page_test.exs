@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert has_element?(
              view,
              ~s(.rooms-author a[href="/app/fleets/fleet_tech_classic?key=1"]),
-             "Key 1 · 0xdddd…dddd"
+             "Key 1 · 0xdddd..dddd"
            )
 
     refute html =~ "Nothing has been said here yet."
@@ -233,12 +233,12 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       html = view |> form(@namer, room: %{topic: "Hull survey"}) |> render_submit()
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
-      assert html =~ "Named by 0xdddd…dddd on"
+      assert html =~ "Named by 0xdddd..dddd on"
 
       assert has_element?(
                view,
                ".rooms-naming",
-               "Key 1 · 0xdddd…dddd named this room “Hull survey” on"
+               "Key 1 · 0xdddd..dddd named this room “Hull survey” on"
              )
 
       assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
@@ -247,7 +247,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
       assert has_element?(watcher, ".rooms-naming", "named this room “Hull survey”")
-      assert render(watcher) =~ "Named by 0xdddd…dddd on"
+      assert render(watcher) =~ "Named by 0xdddd..dddd on"
       assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
 
       # A room is renamed at most once a minute.

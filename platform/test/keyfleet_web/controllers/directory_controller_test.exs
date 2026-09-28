@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     fleet = conn |> get("/api/v1/fleets/#{@fleet}") |> json_response(200)
 
-    assert [%{"author" => %{"kind" => "human", "wallet" => "0xaaaa…aaaa"}}] =
+    assert [%{"author" => %{"kind" => "human", "wallet" => "0xaaaa..aaaa"}}] =
              fleet["recent_posts"]
 
     assert Enum.map(fleet["work"]["tasks_untaken"], & &1["title"]) == ["Nobody's"]

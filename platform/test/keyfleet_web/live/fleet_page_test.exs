@@ -263,7 +263,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-order-line") ==
                "Key 151 costs 42.99817 USDC. First approve 42.99817 USDC for the fleet, then buy it."
 
-      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa…aaaa on Base."
+      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
       assert has_element?(view, "#buy-key-button[hidden]")
     end
@@ -357,7 +357,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
       assert text(view, "#buy-key-order-mismatch") ==
-               "You're signed in with 0xaaaa…aaaa, but your wallet app has 0xbbbb…bbbb open. " <>
+               "You're signed in with 0xaaaa..aaaa, but your wallet app has 0xbbbb..bbbb open. " <>
                  "Switch to a wallet on your account to send from here."
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
@@ -704,16 +704,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa…aaaa"
+      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa..aaaa"
 
       move!(7, @stranger)
       send(view.pid, {:keys_changed, @fleet, [120]})
       assert_pushed(view, "keymap:patch", %{keys: [[120, 1]]})
-      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa…aaaa"
+      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa..aaaa"
 
       send(view.pid, {:keys_changed, @fleet, [7]})
       assert_pushed(view, "keymap:patch", %{keys: [[7, 0]]})
-      assert text(view, "#fleet-key-7") =~ "Held by 0xbbbb…bbbb"
+      assert text(view, "#fleet-key-7") =~ "Held by 0xbbbb..bbbb"
       assert shown_keys(view) == Enum.to_list(1..100)
 
       second_page = view |> element("#fleet-keys-next") |> render() |> href()
@@ -960,7 +960,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       line = ~s(#fleet-now-list li[data-kind="executed"])
       assert has_element?(view, ~s(#{line} a[data-proposal="1"]))
-      assert text(view, "#{line} .activity-line__text") =~ "12.5 USDC to 0x12ab…cd34"
+      assert text(view, "#{line} .activity-line__text") =~ "12.5 USDC to 0x12ab..cd34"
     end
 
     # The panels share one place beside the map: each button opens its own

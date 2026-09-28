@@ -201,7 +201,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                     </:caption>
                   </S.technical_figure><p>
                     Geist Sans · body copy and interface.
-                  </p><code>0x71C7…976F</code><P.disclosure
+                  </p><code>0x71C7..976F</code><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="type-tokens"
                     summary="Type & spacing tokens"

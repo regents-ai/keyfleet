@@ -90,7 +90,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
   end
 
   defp author(%{kind: :human, wallet: wallet}),
-    do: %{kind: :human, wallet: FleetLive.short_wallet(wallet)}
+    do: %{kind: :human, wallet: RegentFormat.short_address(wallet)}
 
   defp author(agent), do: agent
 

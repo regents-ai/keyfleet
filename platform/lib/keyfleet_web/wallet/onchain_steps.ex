@@ -19,7 +19,6 @@ defmodule KeyfleetWeb.OnchainSteps do
   import Phoenix.LiveView, only: [push_event: 3, start_async: 3]
 
   alias Keyfleet.Chain
-  alias KeyfleetWeb.FleetLive
   alias RegentChain.{Outcome, Presses}
 
   @recheck_ms 2_000
@@ -195,5 +194,5 @@ defmodule KeyfleetWeb.OnchainSteps do
   defp review_id(nil), do: nil
   defp review_id(%{id: id}), do: id
 
-  defp short(address), do: FleetLive.short_wallet(address)
+  defp short(address), do: RegentFormat.short_address(address)
 end

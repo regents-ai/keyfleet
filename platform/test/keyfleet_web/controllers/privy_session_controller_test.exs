@@ -297,7 +297,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert payload["authenticated"] == true
     assert get_resp_header(signed_in, "x-ash-session-changed") == ["true"]
     assert payload["account_control"]["kind"] == "signed_in"
-    assert payload["account_control"]["label"] == "0x1111…1111"
+    assert payload["account_control"]["label"] == "0x1111..1111"
     assert payload["account_control"]["avatar_src"] =~ "data:image/svg+xml;base64,"
 
     assert signed_in.private[:plug_session_info] == :renew
@@ -718,7 +718,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       |> json_response(200)
 
     assert payload["account_control"]["kind"] == "signed_in"
-    assert payload["account_control"]["label"] == "0x1111…1111"
+    assert payload["account_control"]["label"] == "0x1111..1111"
     assert payload["account_control"]["avatar_src"] =~ "data:image/svg+xml;base64,"
   end
 

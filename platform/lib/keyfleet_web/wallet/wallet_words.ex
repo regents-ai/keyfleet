@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.WalletWords do
     paid = asset |> Map.delete(:address) |> Map.merge(%{asset: asset.address, amount: amount})
 
     "Proposes paying #{token_amount(paid)} to " <>
-      "#{FleetLive.short_wallet(recipient)}, with key #{Rules.grouped(key)}."
+      "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
   end
 
   defp says(:propose_launch, %{key: key, raise: raise}),
@@ -64,7 +64,7 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp says(:delegate, %{delegate: delegate}),
     do:
-      "Lets #{FleetLive.short_wallet(delegate)} vote and propose with every key you hold, " <>
+      "Lets #{RegentFormat.short_address(delegate)} vote and propose with every key you hold, " <>
         "or stops any other wallet voting for you."
 
   defp says(_flow, _figures), do: nil
@@ -214,10 +214,12 @@ defmodule KeyfleetWeb.WalletWords do
 
   def token_amount(%{amount: amount, asset: asset, symbol: symbol, decimals: decimals})
       when is_binary(symbol) and is_integer(decimals),
-      do: "#{ProposalsPage.units(amount, decimals)} #{symbol} (#{FleetLive.short_wallet(asset)})"
+      do:
+        "#{ProposalsPage.units(amount, decimals)} #{symbol} (#{RegentFormat.short_address(asset)})"
 
   def token_amount(%{amount: amount, asset: asset}),
-    do: "#{Rules.grouped(amount)} in the smallest units of token #{FleetLive.short_wallet(asset)}"
+    do:
+      "#{Rules.grouped(amount)} in the smallest units of token #{RegentFormat.short_address(asset)}"
 
   defp key_words([key]), do: "key #{Rules.grouped(key)}"
   defp key_words(keys), do: "keys #{Enum.map_join(keys, ", ", &Rules.grouped/1)}"

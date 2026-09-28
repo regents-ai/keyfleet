@@ -33,7 +33,6 @@ defmodule KeyfleetWeb.ActivityLines do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph
   alias KeyfleetWeb.DirectoryMD
-  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
@@ -283,7 +282,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp holder(%{token_id: token_id}) when is_integer(token_id),
     do: "The holder of key #{Rules.grouped(token_id)}"
 
-  defp holder(%{wallet: wallet}), do: FleetLive.short_wallet(wallet)
+  defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
 
   defp proposal_gist(%{kind: :autolaunch, launch: %{} = launch}),
     do: [" to launch ", launch(launch), "."]
@@ -296,10 +295,10 @@ defmodule KeyfleetWeb.ActivityLines do
   defp gist(%{gist: gist}) when is_binary(gist), do: [": ", words(gist)]
   defp gist(_facts), do: ["."]
 
-  # "12.5 USDC to 0x12ab…cd34".
+  # "12.5 USDC to 0x12ab..cd34".
   defp paid(payment) do
     amount = ProposalsPage.amount(payment.amount, payment.asset, payment.assets)
-    [amount(amount), " to #{FleetLive.short_wallet(payment.recipient)}"]
+    [amount(amount), " to #{RegentFormat.short_address(payment.recipient)}"]
   end
 
   # The fleet's USDC, and a token that hasn't said its symbol, are named in
@@ -307,7 +306,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp amount(%{text: text, token: nil}), do: visible(text)
 
   defp amount(%{text: text, token: token, symbol?: false}),
-    do: "#{text} #{FleetLive.short_wallet(token)}"
+    do: "#{text} #{RegentFormat.short_address(token)}"
 
   defp amount(%{text: text, token: token, symbol?: true}), do: {:amount, visible(text), token}
 
@@ -345,8 +344,8 @@ defmodule KeyfleetWeb.ActivityLines do
   @doc ~S|How a proposal is named on a page: "Proposal 12".|
   def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
 
-  @doc ~S|How an amount in a token's own symbol is named on a page: "“3 FOO” 0xabcd…ef01".|
-  def amount_name(text, token), do: "“#{text}” #{FleetLive.short_wallet(token)}"
+  @doc ~S|How an amount in a token's own symbol is named on a page: "“3 FOO” 0xabcd..ef01".|
+  def amount_name(text, token), do: "“#{text}” #{RegentFormat.short_address(token)}"
 
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
@@ -372,7 +371,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:proposal, number}), do: proposal_name(number)
 
   defp marked({:amount, text, token}),
-    do: said(text, :amount) <> " " <> FleetLive.short_wallet(token)
+    do: said(text, :amount) <> " " <> RegentFormat.short_address(token)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
 

@@ -196,7 +196,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, other, _html} = live(conn, "#{@list}/2")
 
     assert amount(other, "#proposal-payment div:first-child dd") ==
-             {"1,234 in the smallest units of token 0xcccc…cccc", other_token}
+             {"1,234 in the smallest units of token 0xcccc..cccc", other_token}
 
     # Once the token has told its symbol and decimals, it is named, and its
     # address is still beside it.
@@ -204,7 +204,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, named, _html} = live(conn, "#{@list}/2")
 
     assert amount(named, "#proposal-payment div:first-child dd") ==
-             {"0.000000000000001234 WETH 0xcccc…cccc", other_token}
+             {"0.000000000000001234 WETH 0xcccc..cccc", other_token}
   end
 
   # Only the fleet's own USDC, known by its address, is shown without one. A
@@ -228,7 +228,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.budget_payment!(@fleet, asset: fake)
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC 0xdddd…dddd", fake}
+    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC 0xdddd..dddd", fake}
 
     {:ok, view, _html} = live(conn, "#{@list}/2")
     assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC", nil}
@@ -236,8 +236,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, view, _html} = live(conn, @list)
 
     assert fields(view, "[data-asset='#{fake}'] div") == [
-             {"Shared money", "1 USDC 0xdddd…dddd"},
-             {"Set aside for key holders", "3 USDC 0xdddd…dddd"}
+             {"Shared money", "1 USDC 0xdddd..dddd"},
+             {"Set aside for key holders", "3 USDC 0xdddd..dddd"}
            ]
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
@@ -254,7 +254,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
       |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
 
-    assert tokens == List.duplicate({"0xdddd…dddd", fake}, 2)
+    assert tokens == List.duplicate({"0xdddd..dddd", fake}, 2)
   end
 
   # A token that will not tell its symbol or its decimals is never guessed at.
@@ -271,7 +271,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
 
       assert amount(view, "#proposal-payment div:first-child dd") ==
-               {"1,234,000 in the smallest units of token #{short(asset)}", asset}
+               {"1,234,000 in the smallest units of token #{RegentFormat.short_address(asset)}",
+                asset}
     end
 
     # The fleet's USDC is known by its address even before its token has
@@ -597,8 +598,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            ]
 
     assert fields(view, "[data-asset='#{weth}'] div") == [
-             {"Shared money", "2 WETH 0xcccc…cccc"},
-             {"Set aside for key holders", "0 WETH 0xcccc…cccc"}
+             {"Shared money", "2 WETH 0xcccc..cccc"},
+             {"Set aside for key holders", "0 WETH 0xcccc..cccc"}
            ]
 
     assert fields(view, "#proposals-held div") == [{"Set aside for REGENT stakers", "2.5 USDC"}]
@@ -755,7 +756,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert text(view, "#proposal-vote-action-line") ==
              "Voting, changing or withdrawing uses keys 1, 3. Each key is one vote."
 
-    assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111…1111 on Base."
+    assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Base."
   end
 
   # A vote the contract turns down says why it may have been, and the
@@ -928,8 +929,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert view |> element("#propose-payment-asset") |> render() |> options() == [
              {@usdc, "USDC"},
-             {weth, "WETH 0xcccc…cccc"},
-             {odd, "Token 0xdddd…dddd, in its smallest units"},
+             {weth, "WETH 0xcccc..cccc"},
+             {odd, "Token 0xdddd..dddd, in its smallest units"},
              {"other", "Another token (paste its address)"}
            ]
 
@@ -997,7 +998,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-payment-action-line") ==
-             "Proposes paying 1.5 WETH (0xcccc…cccc) to 0xbbbb…bbbb, with key 7."
+             "Proposes paying 1.5 WETH (0xcccc..cccc) to 0xbbbb..bbbb, with key 7."
 
     # Another token, pasted, is paid in its smallest units.
     pasted = ProposalHelpers.wallet("5")
@@ -1022,7 +1023,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-payment-action-line") ==
-             "Proposes paying 250 in the smallest units of token 0x5555…5555 to 0xbbbb…bbbb, with key 7."
+             "Proposes paying 250 in the smallest units of token 0x5555..5555 to 0xbbbb..bbbb, with key 7."
 
     view
     |> form("#propose-payment-action-form", other_asset: "0x12")
@@ -1112,7 +1113,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
     assert text(view, "#proposal-vote-action-mismatch") ==
-             "You're signed in with 0x1111…1111, but your wallet app has 0xbbbb…bbbb open. " <>
+             "You're signed in with 0x1111..1111, but your wallet app has 0xbbbb..bbbb open. " <>
                "Switch to a wallet on your account to send from here."
 
     assert has_element?(view, "#proposal-vote-action-from[hidden]")
@@ -1337,8 +1338,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {text(node),
      if(Enum.empty?(token), do: nil, else: token |> LazyHTML.attribute("title") |> hd())}
   end
-
-  defp short(address), do: String.slice(address, 0, 6) <> "…" <> String.slice(address, -4, 4)
 
   # Polls every tenth of a second, `tries` times.
   defp shows?(check, tries \\ 30) do

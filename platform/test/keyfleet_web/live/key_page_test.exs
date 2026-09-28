@@ -288,7 +288,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     {:ok, view, _html} = conn |> signed_in_as(reader) |> live("/app/fleets/#{@fleet}")
 
-    assert view |> element("#fleet-key-1") |> render() =~ "Held by 0xaaaa…aaaa"
+    assert view |> element("#fleet-key-1") |> render() =~ "Held by 0xaaaa..aaaa"
   end
 
   defp words(view, selector),

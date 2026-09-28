@@ -109,31 +109,31 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
   test "a payment carried out names its amount and whom it paid" do
     in_usdc = paid(@usdc, {"USDC", 6}, 12_500_000)
-    assert ActivityLines.text(in_usdc) == "The fleet paid 12.5 USDC to 0x12ab…cd34 (Proposal 3)."
+    assert ActivityLines.text(in_usdc) == "The fleet paid 12.5 USDC to 0x12ab..cd34 (Proposal 3)."
     assert ActivityLines.markdown(in_usdc) == ActivityLines.text(in_usdc)
 
     in_token = paid(@token, {"*X*", 2}, 1250)
 
     assert ActivityLines.text(in_token) ==
-             "The fleet paid “12.5 *X*” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid “12.5 *X*” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
 
     assert ActivityLines.markdown(in_token) ==
-             ~S"The fleet paid “12.5 \*X\*” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             ~S"The fleet paid “12.5 \*X\*” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
   end
 
   test "a token's symbol can't pass for whom the fleet paid, or hide anything" do
-    faked = paid(@token, {"USDC to 0xdead…beef and", 2}, 1250)
+    faked = paid(@token, {"USDC to 0xdead..beef and", 2}, 1250)
 
     assert ActivityLines.text(faked) ==
-             "The fleet paid “12.5 USDC to 0xdead…beef and” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid “12.5 USDC to 0xdead..beef and” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
 
     assert ActivityLines.markdown(faked) ==
-             "The fleet paid “12.5 USDC to 0xdead…beef and” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid “12.5 USDC to 0xdead..beef and” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
 
     hidden = paid(@token, {"F\u200BO\u{E0041}O\u2028X", 2}, 1250)
 
     assert ActivityLines.text(hidden) ==
-             "The fleet paid “12.5 FOO X” 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid “12.5 FOO X” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
 
     assert ActivityLines.markdown(hidden) == ActivityLines.text(hidden)
   end
@@ -142,7 +142,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     unknown = paid(@token, {nil, nil}, 1250)
 
     assert ActivityLines.text(unknown) ==
-             "The fleet paid 1,250 in the smallest units of token 0xcccc…cccc to 0x12ab…cd34 (Proposal 3)."
+             "The fleet paid 1,250 in the smallest units of token 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
 
     assert ActivityLines.markdown(unknown) == ActivityLines.text(unknown)
   end
@@ -163,7 +163,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     }
 
     assert ActivityLines.text(proposed) ==
-             "The holder of key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab…cd34: “Pay the designer”"
+             "The holder of key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab..cd34: “Pay the designer”"
   end
 
   defp paid(asset, details, amount) do

@@ -237,7 +237,7 @@ defmodule KeyfleetWeb.FleetLive do
             >
               Key {key.token_id}
             </.link>
-            <span>Held by {short_wallet(key.owner_wallet)}</span>
+            <span>Held by {RegentFormat.short_address(key.owner_wallet)}</span>
             <span :if={is_nil(key.operator)}>No agent</span>
             <span :if={key.operator}>{key.operator.name} · {key.operator.status_label}</span>
           </li>
@@ -673,7 +673,7 @@ defmodule KeyfleetWeb.FleetLive do
             rel="noopener noreferrer"
             target="_blank"
           >
-            <code>{short_wallet(@fleet.contract_address)}</code>
+            <code>{RegentFormat.short_address(@fleet.contract_address)}</code>
           </a>
         </p>
         <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
@@ -876,10 +876,6 @@ defmodule KeyfleetWeb.FleetLive do
   # press on it before the approval lands still reaches the wallet.
   defp buy_shown?(panel),
     do: not approve_shown?(panel) or WalletPanel.sent?(panel, "approve")
-
-  @doc "A wallet shortened to its first six and last four characters."
-  def short_wallet(wallet),
-    do: String.slice(wallet, 0, 6) <> "…" <> String.slice(wallet, -4, 4)
 
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
   def usdc(atoms) do

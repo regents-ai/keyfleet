@@ -16,7 +16,6 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
-  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WorkspacePage
@@ -230,7 +229,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{vote_word(vote.support)}</span>
-              <span>{FleetLive.short_wallet(vote.voter)}, with {key_list(vote.keys)}</span>
+              <span>{RegentFormat.short_address(vote.voter)}, with {key_list(vote.keys)}</span>
             </li>
           </ol>
           <nav
@@ -965,13 +964,13 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp token(assigns),
     do:
-      ~H|<code class="proposals-token" title={@address}>{FleetLive.short_wallet(@address)}</code>|
+      ~H|<code class="proposals-token" title={@address}>{RegentFormat.short_address(@address)}</code>|
 
   attr :address, :string, required: true
 
   # A wallet shortened, in full on hover.
   defp wallet(assigns),
-    do: ~H|<code title={@address}>{FleetLive.short_wallet(@address)}</code>|
+    do: ~H|<code title={@address}>{RegentFormat.short_address(@address)}</code>|
 
   attr :page, :map, required: true
 

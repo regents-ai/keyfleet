@@ -21,7 +21,6 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
-  alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
@@ -218,10 +217,10 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp pay_name(%{address: address, symbol: symbol, decimals: decimals})
        when is_binary(symbol) and is_integer(decimals),
-       do: "#{symbol} #{FleetLive.short_wallet(address)}"
+       do: "#{symbol} #{RegentFormat.short_address(address)}"
 
   defp pay_name(%{address: address}),
-    do: "Token #{FleetLive.short_wallet(address)}, in its smallest units"
+    do: "Token #{RegentFormat.short_address(address)}, in its smallest units"
 
   defp summary(proposal, failed_launch_block) do
     %{

@@ -63,6 +63,7 @@ defmodule Keyfleet.MixProject do
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
       {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
       {:siwa, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "siwa/siwa-elixir/apps/siwa"},
+      {:regent_format, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format"},
       {:regent_chain, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},

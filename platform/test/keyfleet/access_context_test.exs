@@ -24,7 +24,7 @@ defmodule Keyfleet.AccessContextTest do
   test "a signed human without a display name is named by their shortened wallet" do
     account = %{wallet_address: @wallet, display_name: nil}
 
-    assert %AccountControl{kind: :signed_in, label: "0x1111…1111"} =
+    assert %AccountControl{kind: :signed_in, label: "0x1111..1111"} =
              AccessContext.account_control(AccessContext.human(account))
   end
 end

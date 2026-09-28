@@ -10,8 +10,8 @@ defmodule Keyfleet.PublicIdentityTest do
     }
 
     assert PublicIdentity.label(identity) == "Profile choice"
-    assert PublicIdentity.label(%{identity | display_name: " "}) == "0x1111…a1b2"
-    assert PublicIdentity.label(%{identity | display_name: nil}) == "0x1111…a1b2"
+    assert PublicIdentity.label(%{identity | display_name: " "}) == "0x1111..a1b2"
+    assert PublicIdentity.label(%{identity | display_name: nil}) == "0x1111..a1b2"
     assert PublicIdentity.label(%{display_name: nil, wallet_address: nil}) == "Account"
   end
 

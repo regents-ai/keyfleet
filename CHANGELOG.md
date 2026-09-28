@@ -99,3 +99,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   stylesheet, the graph host's Python and the server's database connection. It
   prints the app commit, the shared-library commits, the graph host supply and
   the image digest. It never deploys.
+
+## 2026-09-27 — Short addresses from regent_format
+
+- Every shortened address now comes from the shared `regent_format` library,
+  pinned by git to the same `elixir-utils` commit as the other shared
+  libraries, exactly as ash-template does it. Addresses read `0x1234..abcd`
+  (two full stops) on every page, in the activity lines, the wallet panel and
+  the fleet directory's JSON, whose contract pattern changed to match.
+- A sent transaction's hash is shortened as a hash, `0x12345678…abcdef`, not as
+  an address.
+- `KeyfleetWeb.FleetLive.short_wallet/1` is gone; no page shortens an address
+  by itself.

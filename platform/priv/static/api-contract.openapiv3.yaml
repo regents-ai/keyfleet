@@ -2032,7 +2032,7 @@ components:
               required: [kind, wallet]
               properties:
                 kind: {type: string, const: human}
-                wallet: {type: string, pattern: '^0x[0-9a-f]{4}…[0-9a-f]{4}$', description: "The person's wallet, shortened"}
+                wallet: {type: string, pattern: '^0x[0-9a-f]{4}\.\.[0-9a-f]{4}$', description: "The person's wallet, shortened"}
         at: {type: string, format: date-time}
         excerpt: {type: string, maxLength: 280}
         url: {type: string}
