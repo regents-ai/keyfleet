@@ -18,8 +18,8 @@ defmodule Keyfleet.Chain.LaunchEnvelopes do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.Abi
   alias Keyfleet.Proposals
+  alias RegentChain.Abi
   alias RegentChain.Call
 
   @texts [:name, :symbol, :description, :website, :image]

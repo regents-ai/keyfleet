@@ -212,3 +212,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `keyfleet.chain.failure.total`.
 - Tests land sent steps on `Keyfleet.TestChainNode`, a local node the suite and
   the browser test server start; a lab anvil is the node for its own chain.
+
+## 2026-09-28 — elixir-utils 590f6d6: chain reading from the shared library
+
+- elixir-utils moves from `28f6ebc` to `590f6d6` (`regent_chain` 0.3.0).
+- Contract return data, event fields and JSON-RPC values are read with
+  `RegentChain.Abi`; `Keyfleet.Chain.Abi`, which it was taken from, is gone.
+- "Stop any wallet voting for me" names no wallet (the zero address) instead of
+  the holder's own wallet. Either way only the holder votes their keys.

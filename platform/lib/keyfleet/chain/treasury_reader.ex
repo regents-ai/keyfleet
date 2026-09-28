@@ -33,9 +33,9 @@ defmodule Keyfleet.Chain.TreasuryReader do
   require Logger
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.Chain.Abi
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
+  alias RegentChain.Abi
   alias RegentChain.Call
 
   # The calldata of each view read without an argument.

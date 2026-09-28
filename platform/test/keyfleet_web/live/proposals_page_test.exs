@@ -1061,9 +1061,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "Proposes a launch that raises 250,000.5 REGENT, with key 7."
   end
 
-  test "letting another wallet vote is built for the wallet typed, and clearing for your own", %{
-    conn: conn
-  } do
+  test "letting another wallet vote is built for the wallet typed, and clearing names no wallet",
+       %{
+         conn: conn
+       } do
     ChainHelpers.seed_cursor!(@fleet)
     delegate = ProposalHelpers.wallet("d")
 
@@ -1088,7 +1089,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert Map.new(steps, &{&1.step, &1.data}) == %{
              "delegate" => Call.encode("setVotingDelegate(address)", [delegate]),
-             "clear" => Call.encode("setVotingDelegate(address)", [@holder])
+             "clear" =>
+               Call.encode("setVotingDelegate(address)", ["0x" <> String.duplicate("0", 40)])
            }
   end
 

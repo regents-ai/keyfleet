@@ -14,11 +14,11 @@ defmodule Keyfleet.Chain.Logs do
   names the log.
   """
 
-  alias Keyfleet.Chain.Abi
   alias Keyfleet.Chain.BudgetLog
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.RevealLog
   alias Keyfleet.Chain.VotesLog
+  alias RegentChain.Abi
 
   @doc "The topic0 of every event the reader asks for."
   def topics,

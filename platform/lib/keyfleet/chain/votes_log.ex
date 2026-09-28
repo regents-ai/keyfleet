@@ -19,7 +19,7 @@ defmodule Keyfleet.Chain.VotesLog do
   launch's text is always empty and is not kept.
   """
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Event
 
   @created Event.topic0("ProposalCreated(uint256,uint8,address,uint64,bytes32,string)")

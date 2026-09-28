@@ -4,7 +4,8 @@ defmodule Keyfleet.Keeper.RpcNode do
 
   require Logger
 
-  alias Keyfleet.Chain.{Abi, JsonRpc}
+  alias Keyfleet.Chain.JsonRpc
+  alias RegentChain.Abi
 
   @impl true
   def chain_id, do: quantity("eth_chainId", [])

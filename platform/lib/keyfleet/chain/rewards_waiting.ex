@@ -10,7 +10,7 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   """
   use GenServer
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Call
 
   @table __MODULE__

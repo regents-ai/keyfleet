@@ -275,13 +275,14 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "voting for another and the stakers' share" do
-    test "a typed wallet may vote for the signer; clearing names the signer" do
+    test "a typed wallet may vote for the signer; clearing names no wallet" do
       assert {:ok, built} = build(:delegate, inputs: %{"delegate" => @other})
 
       assert steps(built)["delegate"].data ==
                Call.encode("setVotingDelegate(address)", [@other])
 
-      assert steps(built)["clear"].data == Call.encode("setVotingDelegate(address)", [@signer])
+      assert steps(built)["clear"].data ==
+               Call.encode("setVotingDelegate(address)", ["0x" <> String.duplicate("0", 40)])
 
       assert {:ok, %{problem: :delegate_unreadable} = built} =
                build(:delegate, inputs: %{"delegate" => "0x12"})

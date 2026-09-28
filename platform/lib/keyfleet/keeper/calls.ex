@@ -8,7 +8,7 @@ defmodule Keyfleet.Keeper.Calls do
   so nothing outside this module can put other bytes on the chain.
 
   It also encodes the views the keeper reads before it sends and decodes what
-  they return, strictly, with `Keyfleet.Chain.Abi`. Calldata is built by
+  they return, strictly, with `RegentChain.Abi`. Calldata is built by
   `RegentChain.Call` and handed on as bytes, as the keeper signs it.
 
   Addresses are lowercase `0x` strings, as the chain reader keeps them.
@@ -16,7 +16,7 @@ defmodule Keyfleet.Keeper.Calls do
 
   import Bitwise
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Event
 
   defmodule Call do

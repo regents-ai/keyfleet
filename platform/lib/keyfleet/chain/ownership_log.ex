@@ -5,7 +5,7 @@ defmodule Keyfleet.Chain.OwnershipLog do
   `Keyfleet.Keys.record_epoch/2` takes.
   """
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Event
 
   @topic Event.topic0("OwnershipEpoch(uint256,uint64,address,address)")

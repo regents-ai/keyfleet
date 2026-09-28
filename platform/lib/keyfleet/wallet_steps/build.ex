@@ -18,12 +18,11 @@ defmodule Keyfleet.WalletSteps.Build do
   use Ash.Resource.Actions.Implementation
 
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.Abi
   alias Keyfleet.Fleets
   alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps
   alias Keyfleet.WalletSteps.Typed
-  alias RegentChain.{Call, Review}
+  alias RegentChain.{Abi, Call, Review}
 
   # How long a purchase may take to reach the chain, counted from the
   # latest block's own clock, so a wallet's computer running fast or slow
@@ -32,6 +31,8 @@ defmodule Keyfleet.WalletSteps.Build do
   @largest_uint128 Integer.pow(2, 128) - 1
   # REGENT, which a launch raises, has eighteen decimals.
   @regent_decimals 18
+  # The zero address: a contract reads it as no wallet at all.
+  @no_wallet "0x" <> String.duplicate("0", 40)
 
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
@@ -241,16 +242,14 @@ defmodule Keyfleet.WalletSteps.Build do
 
   # --- voting for another ----------------------------------------------
 
-  # The contract stops any other wallet voting a holder's keys when the
-  # holder names none (the zero address), which a step can't carry
-  # (`RegentChain.Call` refuses it), or names itself; "clear" names the
-  # signer, which leaves only the holder voting.
-  defp steps(:delegate, fleet, signer, inputs, _arguments) do
+  # "clear" names no wallet (the zero address), which leaves only the holder
+  # voting their keys.
+  defp steps(:delegate, fleet, _signer, inputs, _arguments) do
     clear =
       Review.step(
         "clear",
         fleet.votes_address,
-        Call.encode("setVotingDelegate(address)", [signer])
+        Call.encode("setVotingDelegate(address)", [@no_wallet])
       )
 
     case typed(inputs, "delegate", &Typed.address(&1, :delegate_unreadable), %{}) do

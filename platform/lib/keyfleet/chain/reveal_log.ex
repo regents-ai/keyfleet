@@ -5,7 +5,7 @@ defmodule Keyfleet.Chain.RevealLog do
   records.
   """
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Event
 
   @topic Event.topic0("KeyRevealed(uint256,uint256,bytes32)")

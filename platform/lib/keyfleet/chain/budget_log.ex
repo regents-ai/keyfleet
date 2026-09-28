@@ -12,7 +12,7 @@ defmodule Keyfleet.Chain.BudgetLog do
   Amounts are in the asset's own units, any uint256.
   """
 
-  alias Keyfleet.Chain.Abi
+  alias RegentChain.Abi
   alias RegentChain.Event
 
   @income_recognized Event.topic0("IncomeRecognized(address,address,uint256)")
