@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.DirectoryControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Keyfleet.Actors
   alias Keyfleet.Agents
   alias Keyfleet.ChainHelpers
@@ -198,6 +200,35 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   end
 
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+
+  describe "a count the directory can't read" do
+    # Renamed inside the test's own transaction, so the count raises the way a
+    # database that refuses it does; the rename ends with the test.
+    setup do
+      Keyfleet.Repo.query!(
+        "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
+      )
+
+      :ok
+    end
+
+    test "answers the whole directory in Markdown with 503 and says so", %{conn: conn} do
+      {conn, log} = with_log(fn -> get(conn, "/fleets.md") end)
+
+      assert response(conn, 503) ==
+               "The fleet directory can't be read right now. Try again in a moment.\n"
+
+      assert log =~ "Counting Keyfleet.Agents.AgentProfile (here_in_fleet) failed"
+    end
+
+    test "answers one fleet in JSON with 503 and says so", %{conn: conn} do
+      {conn, _log} = with_log(fn -> get(conn, "/api/v1/fleets/#{@fleet}") end)
+
+      assert json_response(conn, 503) == %{
+               "error" => "The fleet directory can't be read right now. Try again in a moment."
+             }
+    end
+  end
 
   defp post!(body) do
     Rooms.send_message!(

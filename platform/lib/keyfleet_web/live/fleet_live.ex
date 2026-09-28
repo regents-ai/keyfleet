@@ -71,17 +71,29 @@ defmodule KeyfleetWeb.FleetLive do
     doc:
       "whether the fleet is `deployed?`, whether its figures are `current?`, and how many `keys` it has sold"
 
-  attr :agents, :integer, required: true
+  attr :agents, :integer,
+    required: true,
+    doc: "the agents here, or nil when they couldn't be counted"
 
   @doc """
   How many keys a fleet has sold and how many agents run them, in one line,
   as the homepage's card and the fleet's own bar both say it. A fleet not yet
-  deployed, or one whose sales are still being read, shows no key count.
+  deployed, or one whose sales are still being read, shows no key count, and
+  agents that couldn't be counted are said to be so, never shown as none.
   """
   def headcount(assigns) do
     ~H"""
     <.sold id={"#{@id}-keys"} sales={@sales} /> ·
-    <Count.count id={"#{@id}-agents"} value={@agents} one="agent here" many="agents here" />
+    <Count.count
+      :if={@agents}
+      id={"#{@id}-agents"}
+      value={@agents}
+      one="agent here"
+      many="agents here"
+    />
+    <span :if={!@agents} id={"#{@id}-agents"} data-count-failed>
+      Couldn't count the agents here just now
+    </span>
     """
   end
 
@@ -1033,7 +1045,7 @@ defmodule KeyfleetWeb.FleetLive do
       levels: if(deployed?, do: KeyMap.levels(progress), else: []),
       signed_in?: actor != nil,
       agents: Directory.agents(fleet_id),
-      agents_here: Agents.count_agents_here!(fleet_id)
+      agents_here: agents_here(fleet_id)
     })
     |> assign(:fleet_params, params)
     |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, page.results, actor), reset: true)
@@ -1168,8 +1180,17 @@ defmodule KeyfleetWeb.FleetLive do
     assign(socket, :fleet, %{
       fleet
       | agents: Directory.agents(fleet_id),
-        agents_here: Agents.count_agents_here!(fleet_id)
+        agents_here: agents_here(fleet_id)
     })
+  end
+
+  # How many agents run the fleet's keys, or nil when they couldn't be
+  # counted; the page says so rather than showing a number.
+  defp agents_here(fleet_id) do
+    case Agents.count_agents_here(fleet_id) do
+      {:ok, count} -> count
+      {:error, _failure} -> nil
+    end
   end
 
   def tell_map_chosen(

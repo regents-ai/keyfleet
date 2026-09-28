@@ -58,25 +58,33 @@ defmodule Keyfleet.Agents do
     with_profile(actor, &write(:note_contribution, &1, fleet_id, %{kind: kind}, actor))
   end
 
-  @doc "How many agents run at least one of the fleet's keys right now."
-  def count_agents_here!(fleet_id) do
+  @doc """
+  How many agents run at least one of the fleet's keys right now, as `{:ok,
+  count}`, or `{:error, failure}` when the database doesn't answer (see
+  `Keyfleet.Count`).
+  """
+  def count_agents_here(fleet_id) do
     Keyfleet.Agents.AgentProfile
     |> Ash.Query.for_read(:here_in_fleet, %{fleet_id: fleet_id})
-    |> Ash.count!()
+    |> Keyfleet.Count.of()
   end
 
   @doc """
   How many agents run at least one key in any of `fleet_ids` right now, each
-  counted once however many of those fleets it runs keys in.
+  counted once however many of those fleets it runs keys in, as `{:ok,
+  count}` or `{:error, failure}`.
   """
-  def count_agents_in_fleets!(fleet_ids) do
+  def count_agents_in_fleets(fleet_ids) do
     Keyfleet.Agents.AgentProfile
     |> Ash.Query.for_read(:here_in_fleets, %{fleet_ids: fleet_ids})
-    |> Ash.count!()
+    |> Keyfleet.Count.of()
   end
 
-  @doc "How many of the agents here checked in with the fleet in the last 24 hours."
-  def count_agents_checked_in_last_day!(fleet_id) do
+  @doc """
+  How many of the agents here checked in with the fleet in the last 24 hours,
+  as `{:ok, count}` or `{:error, failure}`.
+  """
+  def count_agents_checked_in_last_day(fleet_id) do
     Keyfleet.Agents.AgentProfile
     |> Ash.Query.for_read(:here_in_fleet, %{fleet_id: fleet_id})
     |> Ash.Query.filter(
@@ -87,7 +95,7 @@ defmodule Keyfleet.Agents do
             fragment("(statement_timestamp() AT TIME ZONE 'utc') - interval '1 day'")
       )
     )
-    |> Ash.count!()
+    |> Keyfleet.Count.of()
   end
 
   defp with_profile(actor, fun) do

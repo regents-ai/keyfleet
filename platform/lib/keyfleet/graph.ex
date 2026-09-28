@@ -82,12 +82,13 @@ defmodule Keyfleet.Graph do
   @doc """
   How many objects of one kind of open work the fleet's workspace holds:
   `:goals_open`, `:tasks_doing`, `:tasks_taken` or `:tasks_untaken`, as the
-  `:open_work` read of `Keyfleet.Graph.Object` defines them.
+  `:open_work` read of `Keyfleet.Graph.Object` defines them, as `{:ok,
+  count}` or `{:error, failure}` (see `Keyfleet.Count`).
   """
-  def count_open_work!(fleet_id, kind) do
+  def count_open_work(fleet_id, kind) do
     Keyfleet.Graph.Object
     |> Ash.Query.for_read(:open_work, %{fleet_id: fleet_id, kind: kind})
-    |> Ash.count!()
+    |> Keyfleet.Count.of()
   end
 
   @doc """

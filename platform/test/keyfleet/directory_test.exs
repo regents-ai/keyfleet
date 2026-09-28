@@ -202,7 +202,8 @@ defmodule Keyfleet.DirectoryTest do
 
     assert Directory.fleet("fibonacci_cascade") == {:ok, soon}
 
-    assert Enum.map(Directory.list(), &{&1.id, &1.coming_soon}) == [
+    assert {:ok, fleets} = Directory.list()
+    assert Enum.map(fleets, &{&1.id, &1.coming_soon}) == [
              {"fleet_tech_classic", false},
              {@fleet, false},
              {"fibonacci_cascade", true},
@@ -228,7 +229,10 @@ defmodule Keyfleet.DirectoryTest do
     )
   end
 
-  defp listed(fleet_id), do: Enum.find(Directory.list(), &(&1.id == fleet_id))
+  defp listed(fleet_id) do
+    {:ok, fleets} = Directory.list()
+    Enum.find(fleets, &(&1.id == fleet_id))
+  end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)
 

@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.HomeLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, KeeperHelpers, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
@@ -241,6 +243,50 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
     assert text(view, "#home-tally") == "1 agent here · 1 key sold"
     assert has_element?(view, "#home-tally [data-tally-dot]")
+  end
+
+  test "a read that fails is said to have failed, on the card and in the count, and the page stays up",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+    refute has_element?(view, "[data-fleet-failed]")
+
+    # Renamed inside the test's own transaction, so the next reads fail the way
+    # a database that refuses them does; the rename ends with the test.
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
+    )
+
+    log =
+      capture_log(fn ->
+        send(view.pid, {:refresh, @classic})
+        send(view.pid, {:refresh, :agents})
+        render(view)
+        render_async(view, 3_000)
+      end)
+
+    assert text(view, "#home-fleet-#{@classic} [data-fleet-failed]") ==
+             "Couldn't read this fleet just now"
+
+    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+    assert text(view, "#home-tally") == "0 agents here · 0 keys sold · may be out of date"
+    assert log =~ "failed"
+    assert Process.alive?(view.pid)
+  end
+
+  test "a first read that fails shows the failure, never zero", %{conn: conn} do
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
+    )
+
+    capture_log(fn ->
+      {:ok, view, _html} = live(conn, "/")
+      render_async(view, 3_000)
+
+      assert text(view, "#home-tally") == "Couldn't count the agents here just now"
+      assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-failed]")
+      refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+    end)
   end
 
   test "the command box shows the homepage instruction and copies what it shows",

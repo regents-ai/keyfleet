@@ -1403,6 +1403,28 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     Jason.decode!(commands)
   end
 
+  test "agents that couldn't be counted are said to be so, never shown as none" do
+    html =
+      render_component(&KeyfleetWeb.FleetLive.headcount/1,
+        id: "fleet-sales",
+        sales: %{deployed?: false},
+        agents: nil
+      )
+
+    assert html =~ "Couldn't count the agents here just now"
+    refute html =~ "agents here</"
+
+    html =
+      render_component(&KeyfleetWeb.CheckIns.who_is_here/1,
+        agents: [],
+        agents_here: nil,
+        on_close: %Phoenix.LiveView.JS{}
+      )
+
+    assert html =~ "No agents run keys here yet."
+    refute html =~ "agents run keys here. These are"
+  end
+
   defp signed_in(conn) do
     account =
       Accounts.register_verified!(

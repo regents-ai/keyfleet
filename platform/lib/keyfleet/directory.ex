@@ -24,15 +24,27 @@ defmodule Keyfleet.Directory do
   @posts_shown 10
   @excerpt_length 280
 
-  @doc "Every fleet's summary, in catalog order."
+  @doc """
+  Every fleet's summary, in catalog order, as `{:ok, fleets}`, or `{:error,
+  failure}` when a count the summaries give can't be read.
+  """
   def list do
     recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+    listed(Fleets.catalog(), recorded, [])
+  end
 
-    Enum.map(Fleets.catalog(), fn %{id: id} = entry ->
-      if Fleets.coming_soon?(id, recorded[id]),
-        do: coming_soon(entry),
-        else: summary(entry, recorded[id], recent_posts(id, 1))
-    end)
+  # Each fleet in turn, stopping at the first that can't be read.
+  defp listed([], _recorded, fleets), do: {:ok, Enum.reverse(fleets)}
+
+  defp listed([%{id: id} = entry | rest], recorded, fleets) do
+    with {:ok, fleet} <- listing(entry, recorded[id]),
+         do: listed(rest, recorded, [fleet | fleets])
+  end
+
+  defp listing(%{id: id} = entry, recorded) do
+    if Fleets.coming_soon?(id, recorded),
+      do: {:ok, coming_soon(entry)},
+      else: summary(entry, recorded, recent_posts(id, 1))
   end
 
   @doc """
@@ -40,7 +52,8 @@ defmodule Keyfleet.Directory do
   members join under, up to #{@agents_shown} agents running its keys (see
   `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
   and its #{@posts_shown} latest posts. A coming-soon fleet's is its summary
-  alone. `:unknown` for a fleet outside the catalog.
+  alone. `:unknown` for a fleet outside the catalog, and `{:error, failure}`
+  when a count it gives can't be read.
   """
   def fleet(fleet_id) do
     case Enum.find(Fleets.catalog(), &(&1.id == fleet_id)) do
@@ -52,7 +65,7 @@ defmodule Keyfleet.Directory do
 
         if Fleets.coming_soon?(fleet_id, recorded),
           do: {:ok, coming_soon(entry)},
-          else: {:ok, detail(entry, recorded)}
+          else: detail(entry, recorded)
     end
   end
 
@@ -68,11 +81,16 @@ defmodule Keyfleet.Directory do
 
   defp detail(%{id: id} = entry, recorded) do
     posts = recent_posts(id, @posts_shown)
+
+    with {:ok, summary} <- summary(entry, recorded, posts) do
+      {:ok, Map.merge(summary, more(id, posts))}
+    end
+  end
+
+  defp more(id, posts) do
     rooms = Rooms.list_rooms!(id, load: [:post_count])
 
-    entry
-    |> summary(recorded, posts)
-    |> Map.merge(%{
+    %{
       terms: Rules.membership_terms(),
       agents: agents(id),
       work: %{
@@ -83,28 +101,34 @@ defmodule Keyfleet.Directory do
       rooms: for(%{kind: kind} = room <- rooms, kind in [:fixed, :open], do: room(room)),
       created_rooms: Enum.count(rooms, &(&1.kind == :created)),
       recent_posts: Enum.map(posts, &post/1)
-    })
+    }
   end
 
   defp coming_soon(%{id: id, name: name}), do: %{id: id, name: name, coming_soon: true}
 
   defp summary(%{id: id, name: name}, recorded, latest_posts) do
-    %{
-      id: id,
-      name: name,
-      coming_soon: false,
-      pricing: Rules.pricing(id),
-      sales: sales(id, recorded),
-      agents_here: Agents.count_agents_here!(id),
-      agents_checked_in_last_day: Agents.count_agents_checked_in_last_day!(id),
-      open_goals: Graph.count_open_work!(id, :goals_open),
-      tasks_in_progress: Graph.count_open_work!(id, :tasks_doing),
-      last_post_at:
-        case latest_posts do
-          [latest | _] -> latest.inserted_at
-          [] -> nil
-        end
-    }
+    with {:ok, agents_here} <- Agents.count_agents_here(id),
+         {:ok, checked_in} <- Agents.count_agents_checked_in_last_day(id),
+         {:ok, open_goals} <- Graph.count_open_work(id, :goals_open),
+         {:ok, tasks_in_progress} <- Graph.count_open_work(id, :tasks_doing) do
+      {:ok,
+       %{
+         id: id,
+         name: name,
+         coming_soon: false,
+         pricing: Rules.pricing(id),
+         sales: sales(id, recorded),
+         agents_here: agents_here,
+         agents_checked_in_last_day: checked_in,
+         open_goals: open_goals,
+         tasks_in_progress: tasks_in_progress,
+         last_post_at:
+           case latest_posts do
+             [latest | _] -> latest.inserted_at
+             [] -> nil
+           end
+       }}
+    end
   end
 
   # A fleet not yet deployed isn't on sale. One whose sales are still being

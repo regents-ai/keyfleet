@@ -35,7 +35,11 @@ defmodule KeyfleetWeb.CheckIns do
   end
 
   attr :agents, :list, required: true, doc: "the agents shown, as `Keyfleet.Directory.agents/1`"
-  attr :agents_here, :integer, required: true, doc: "every agent running the fleet's keys"
+
+  attr :agents_here, :integer,
+    required: true,
+    doc: "every agent running the fleet's keys, or nil when they couldn't be counted"
+
   attr :on_close, JS, required: true
 
   @doc """
@@ -82,7 +86,7 @@ defmodule KeyfleetWeb.CheckIns do
         </li>
       </ul>
 
-      <p :if={@agents_here > length(@agents)} class="who-is-here__note">
+      <p :if={@agents_here && @agents_here > length(@agents)} class="who-is-here__note">
         {grouped(@agents_here)} agents run keys here. These are the {length(@agents)} that checked in most recently.
       </p>
     </aside>

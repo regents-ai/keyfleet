@@ -4,15 +4,22 @@ defmodule KeyfleetWeb.DirectoryController do
   in: `/fleets.md` and `/fleets/<id>.md` as Markdown, `/api/v1/fleets` and
   `/api/v1/fleets/<id>` as JSON, all read from `Keyfleet.Directory`.
 
-  Answers may be kept for 30 seconds; nothing is kept on the server.
+  Answers may be kept for 30 seconds; nothing is kept on the server. When a
+  count the directory gives can't be read, it answers 503 and says so.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
   alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorMD}
 
-  def index_md(conn, _params),
-    do: markdown(conn, DirectoryMD.index(%{fleets: Directory.list(), generated_at: now()}))
+  @unavailable "The fleet directory can't be read right now. Try again in a moment."
+
+  def index_md(conn, _params) do
+    case Directory.list() do
+      {:ok, fleets} -> markdown(conn, DirectoryMD.index(%{fleets: fleets, generated_at: now()}))
+      {:error, _failure} -> unavailable_md(conn)
+    end
+  end
 
   # A fleet's Markdown sits at its id with `.md` after it. Anything else here
   # is not a page of the directory.
@@ -21,6 +28,9 @@ defmodule KeyfleetWeb.DirectoryController do
          {:ok, fleet} <- Directory.fleet(fleet_id) do
       markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
     else
+      {:error, _failure} ->
+        unavailable_md(conn)
+
       _not_a_fleet ->
         conn
         |> put_resp_content_type("text/markdown")
@@ -28,11 +38,15 @@ defmodule KeyfleetWeb.DirectoryController do
     end
   end
 
-  def index_json(conn, _params),
-    do:
-      conn
-      |> cached()
-      |> json(DirectoryJSON.index(%{fleets: Directory.list(), generated_at: now()}))
+  def index_json(conn, _params) do
+    case Directory.list() do
+      {:ok, fleets} ->
+        conn |> cached() |> json(DirectoryJSON.index(%{fleets: fleets, generated_at: now()}))
+
+      {:error, _failure} ->
+        unavailable_json(conn)
+    end
+  end
 
   def show_json(conn, %{"fleet_id" => fleet_id}) do
     case Directory.fleet(fleet_id) do
@@ -41,8 +55,19 @@ defmodule KeyfleetWeb.DirectoryController do
 
       :unknown ->
         conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+
+      {:error, _failure} ->
+        unavailable_json(conn)
     end
   end
+
+  defp unavailable_md(conn) do
+    conn
+    |> put_resp_content_type("text/markdown")
+    |> send_resp(503, @unavailable <> "\n")
+  end
+
+  defp unavailable_json(conn), do: conn |> put_status(503) |> json(%{error: @unavailable})
 
   defp fleet_file(file) do
     with fleet_id when fleet_id != file <- String.replace_suffix(file, ".md", ""),

@@ -791,7 +791,7 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/FleetList"}
-        "503": {$ref: "#/components/responses/SiteNotOpen"}
+        "503": {$ref: "#/components/responses/DirectoryUnavailable"}
   /api/v1/fleets/{fleet_id}:
     get:
       operationId: getFleet
@@ -816,7 +816,7 @@ paths:
                   - {$ref: "#/components/schemas/FleetDetail"}
                   - {$ref: "#/components/schemas/FleetComingSoonDetail"}
         "404": {$ref: "#/components/responses/FleetUnknown"}
-        "503": {$ref: "#/components/responses/SiteNotOpen"}
+        "503": {$ref: "#/components/responses/DirectoryUnavailable"}
 components:
   parameters:
     ExpectedSubject:
@@ -1044,8 +1044,10 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/KeyPairingEnvelope"}
-    SiteNotOpen:
-      description: This part of the site isn't open yet
+    DirectoryUnavailable:
+      description: >-
+        This part of the site isn't open yet, and Retry-After says when to ask again; or the
+        directory can't be read right now, and the error says so
       headers:
         Retry-After:
           schema: {type: string, const: "3600"}

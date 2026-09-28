@@ -166,6 +166,7 @@
   .rl-fleet-card__featured { -webkit-line-clamp: 4; }
   .rl-fleet-card__latest { display: grid; gap: .125rem; color: var(--rl-muted); font-size: .875rem; }
   .rl-fleet-card__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
+  .rl-fleet-card .rl-fleet-card__failed { color: var(--rl-muted); font-size: .875rem; }
 
   .rl-fleet-card .key-map-preview { aspect-ratio: 16 / 10; border: 1px solid var(--rl-line); }
   /* A coming-soon fleet: its map faded, and the tag under its name. */

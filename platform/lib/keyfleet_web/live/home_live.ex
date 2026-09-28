@@ -20,13 +20,26 @@ defmodule KeyfleetWeb.HomeLive do
   once for a burst of notices, and only for the fleet the notice was about.
   The count of agents across the open fleets is read alongside, once for a
   burst of notices about any of them.
+
+  A read that fails is said to have failed, on its card or in the count
+  above the headline, and never shown as zero; what was read before stays.
   """
 
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
   alias Keyfleet.Fleets.Presets
-  alias KeyfleetWeb.{ActivityLines, FleetLive, Motion, PublicDocuments, RouteCatalog, Time}
+
+  alias KeyfleetWeb.{
+    ActivityLines,
+    FleetLive,
+    Motion,
+    PublicDocuments,
+    Read,
+    RouteCatalog,
+    Time
+  }
+
   alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent}
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -144,7 +157,7 @@ defmodule KeyfleetWeb.HomeLive do
       |> assign(
         route_spec: RouteCatalog.fetch!(:home),
         fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
-        agents: nil,
+        agents: %Read{},
         refreshing: MapSet.new()
       )
 
@@ -155,7 +168,15 @@ defmodule KeyfleetWeb.HomeLive do
   # coming-soon fleet's card is never read.
   defp card(%{id: id, name: name}, recorded) do
     if Fleets.coming_soon?(id, recorded) do
-      %{id: id, name: name, layout: Presets.preset(id), coming_soon?: true, sales: nil, now: nil}
+      %{
+        id: id,
+        name: name,
+        layout: Presets.preset(id),
+        coming_soon?: true,
+        sales: nil,
+        now: nil,
+        failed?: false
+      }
     else
       %{
         id: id,
@@ -163,7 +184,8 @@ defmodule KeyfleetWeb.HomeLive do
         layout: Presets.preset(id),
         coming_soon?: false,
         sales: sales(id, recorded),
-        now: nil
+        now: nil,
+        failed?: false
       }
     end
   end
@@ -198,7 +220,7 @@ defmodule KeyfleetWeb.HomeLive do
   # Every agent here across the open fleets, each once.
   defp start_agents_read(socket) do
     fleet_ids = open_fleet_ids(socket)
-    start_async(socket, :agents, fn -> Agents.count_agents_in_fleets!(fleet_ids) end)
+    Read.start(socket, :agents, fleet_ids, fn -> Agents.count_agents_in_fleets(fleet_ids) end)
   end
 
   defp open_fleet_ids(socket),
@@ -210,13 +232,16 @@ defmodule KeyfleetWeb.HomeLive do
     latest =
       fleet_id |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
 
-    %{
-      sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),
-      agents: Agents.count_agents_here!(fleet_id),
-      trying: trying(fleet_id),
-      featured: Activity.headline(fleet_id, now) || latest,
-      latest: latest
-    }
+    with {:ok, agents} <- Agents.count_agents_here(fleet_id) do
+      {:ok,
+       %{
+         sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),
+         agents: agents,
+         trying: trying(fleet_id),
+         featured: Activity.headline(fleet_id, now) || latest,
+         latest: latest
+       }}
+    end
   end
 
   # The title of the fleet's most recently changed open goal.
@@ -269,24 +294,33 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # A read that failed leaves the card as it was; the next notice reads again.
+  # A card whose read failed keeps what it showed and says the read failed;
+  # the next notice reads again. The failure is logged where it happened: a
+  # count that failed by `Keyfleet.Count`, a read that raised by its task.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, %{sales: sales} = now}, socket) do
-    fleets =
-      Enum.map(socket.assigns.fleets, fn
-        %{id: ^fleet_id} = card -> %{card | sales: sales, now: Map.delete(now, :sales)}
+  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
+    do:
+      {:noreply,
+       update_card(
+         socket,
+         fleet_id,
+         &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
+       )}
+
+  def handle_async({:now, fleet_id}, _failed, socket),
+    do: {:noreply, update_card(socket, fleet_id, &%{&1 | failed?: true})}
+
+  def handle_async({Read, _name, _generation} = name, result, socket),
+    do: {:noreply, Read.settle(socket, name, result)}
+
+  defp update_card(socket, fleet_id, fun) do
+    update(socket, :fleets, fn fleets ->
+      Enum.map(fleets, fn
+        %{id: ^fleet_id} = card -> fun.(card)
         other -> other
       end)
-
-    {:noreply, assign(socket, :fleets, fleets)}
+    end)
   end
-
-  def handle_async({:now, _fleet_id}, {:exit, _reason}, socket), do: {:noreply, socket}
-
-  def handle_async(:agents, {:ok, agents}, socket),
-    do: {:noreply, assign(socket, :agents, agents)}
-
-  def handle_async(:agents, {:exit, _reason}, socket), do: {:noreply, socket}
 
   defp fleet_path(fleet_id), do: "/app/fleets/#{fleet_id}"
 
@@ -313,7 +347,7 @@ defmodule KeyfleetWeb.HomeLive do
 
       <main>
         <Regent.Structure.row rail={false}>
-          <.hero tally={tally(@fleets, @agents)} />
+          <.hero tally={tally(@fleets, @agents.value)} agents={@agents.state} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}><.fleets fleets={@fleets} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
@@ -379,6 +413,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
 
+  attr :agents, :atom,
+    required: true,
+    doc: "how the count of agents stands, as `KeyfleetWeb.Read`"
+
   defp hero(assigns) do
     ~H"""
     <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
@@ -417,7 +455,11 @@ defmodule KeyfleetWeb.HomeLive do
               <span :if={@tally.keys}>
                 · <Count.count id="home-tally-keys" value={@tally.keys} one="key" many="keys" /> sold
               </span>
+              <span :if={@agents == :stale} data-tally-stale>· may be out of date</span>
             </span>
+          </p>
+          <p :if={@agents == :error} class="rl-hero-tally__pill" data-tally-failed>
+            Couldn't count the agents here just now
           </p>
         </div>
 
@@ -513,6 +555,9 @@ defmodule KeyfleetWeb.HomeLive do
               sales={fleet.sales}
               now={fleet.now}
             />
+            <p :if={fleet.failed?} class="rl-fleet-card__failed" data-fleet-failed>
+              Couldn't read this fleet just now
+            </p>
           </a>
         </li>
       </ul>
