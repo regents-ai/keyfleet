@@ -253,8 +253,8 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info({:proposals_changed, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
-  # A new reading of the fleet's balances may carry income, so the open key's
-  # rewards are read again.
+  # A new reading of the fleet's balances, every five minutes, may carry
+  # income, so the open key's rewards are read again with it.
   def handle_info(
         {:balances_changed, fleet_id},
         %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket

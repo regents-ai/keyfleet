@@ -18,8 +18,8 @@ record `Collected`, the vote contract's log of matches paid out.
 Apart from those passes, so a slow node never holds them up, it reads every
 few seconds, at the head, the launch each launch proposal approves, and keeps
 it only if its hash is the one the proposal carries; a read that fails is
-logged once and tried again after a wait that doubles, up to five minutes. Once
-a minute it reads, at the head, the fleet's income tokens (USDC, REGENT and the
+logged once and tried again after a wait that doubles, up to five minutes. Every
+five minutes it reads, at the head, the fleet's income tokens (USDC, REGENT and the
 launched token once there is one) and every token a payment proposal not yet
 carried out names, and no other: a token merely sent to the fleet is never read
 or shown. For each of those it reads the shared money and the reward backing,
