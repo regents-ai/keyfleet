@@ -508,7 +508,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     blank =
       Map.new(
         ~w(title who_we_serve what_we_sell what_works why_raise commitments narrative name symbol
-           description website image required_regent_raised),
+           description website image floor_price minimum_regent_raised),
         &{&1, nil}
       )
 

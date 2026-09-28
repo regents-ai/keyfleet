@@ -1433,10 +1433,10 @@ components:
         "keyfleet-launch-plan-v1\n" followed by canonical_json({"fleet": fleet_id, "item": object.id,
         "version": object.version, "plan": plan}).
 
-        plan is object.data with exactly these thirteen fields, each a string or null, all always
+        plan is object.data with exactly these fourteen fields, each a string or null, all always
         present: title, who_we_serve, what_we_sell, what_works, why_raise, commitments, narrative,
-        name, symbol, description, website, image, required_regent_raised. A field never set, or
-        removed, is null; a field set to blank text is stored trimmed, as "", not as null. Use the
+        name, symbol, description, website, image, floor_price, minimum_regent_raised. A field never
+        set, or removed, is null; a field set to blank text is stored trimmed, as "", not as null. Use the
         values exactly as object.data holds them. discussion and sys are left out.
 
         canonical_json is RFC 8785 (JSON Canonicalization Scheme): keys sorted, no whitespace,
@@ -1449,8 +1449,8 @@ components:
         "what_we_sell": "A weekly brief\n\tin plain words", "what_works": null, "why_raise": null,
         "commitments": null, "narrative": "Café ☕ — naïve 🚀 back\\slash", "name": "Cascade Research",
         "symbol": "CSR", "description": null, "website": "https://example.test/a/b", "image": null,
-        "required_regent_raised": "250000.5"} give
-        0xb03009c6a6684970069520afd2e49bc7004e23ed5c6a73b4f0b9d26872985738.
+        "floor_price": "0.000001", "minimum_regent_raised": "250000.5"} give
+        0x71980caf2d08068cc3d699ad06fdb561ecafcbaffa68c31c4c1f05f4f1cc84a3.
     WorkspaceObject:
       type: object
       additionalProperties: false

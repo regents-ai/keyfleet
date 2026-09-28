@@ -62,7 +62,8 @@ defmodule Keyfleet.WorkspaceFixtures do
       "description" => nil,
       "website" => nil,
       "image" => nil,
-      "required_regent_raised" => nil,
+      "floor_price" => nil,
+      "minimum_regent_raised" => nil,
       "discussion" => []
     },
     "note" => %{"discussion" => []}

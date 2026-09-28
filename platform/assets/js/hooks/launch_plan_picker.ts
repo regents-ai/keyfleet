@@ -6,7 +6,7 @@ type LaunchPlanPickerHook = Hook & {
 }
 
 /** The form fields a launch plan fills in, each named as its option's data and its input. */
-export const planFields = ["name", "symbol", "description", "website", "image"] as const
+export const planFields = ["name", "symbol", "description", "website", "image", "floor", "minimum"] as const
 
 type PlanField = (typeof planFields)[number]
 
@@ -20,9 +20,10 @@ export type PlanChoice = {
 }
 
 /**
- * What choosing `option` does to the launch form. A plan fills in its five
- * launch details and makes the proposal point to its version; "Don't use a
- * plan" makes it point nowhere and leaves the details as they are.
+ * What choosing `option` does to the launch form. A plan fills in its six
+ * launch details, the floor price among them, and its minimum raise, and
+ * makes the proposal point to its version; "Don't use a plan" makes it point
+ * nowhere and leaves the details as they are.
  */
 export function planChoice(option: PlanOption): PlanChoice {
   if (option.value === "") return {digest: "", fields: {}}

@@ -130,7 +130,8 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # The fleet's launch plans a launch can be proposed from: those not
-    # archived whose six launch details are all filled in, the most recently
+    # archived whose six launch details, the floor price among them, are all
+    # filled in (a minimum raise is the plan's choice), the most recently
     # changed first.
     read :launch_plans do
       argument :fleet_id, :string, allow_nil?: false
@@ -139,7 +140,7 @@ defmodule Keyfleet.Graph.Object do
                fleet_id == ^arg(:fleet_id) and type == "launch_card" and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
                  fragment(
-                   "(? ->> 'name') <> '' AND (? ->> 'symbol') <> '' AND (? ->> 'description') <> '' AND (? ->> 'website') <> '' AND (? ->> 'image') <> '' AND (? ->> 'required_regent_raised') <> ''",
+                   "(? ->> 'name') <> '' AND (? ->> 'symbol') <> '' AND (? ->> 'description') <> '' AND (? ->> 'website') <> '' AND (? ->> 'image') <> '' AND (? ->> 'floor_price') <> ''",
                    data,
                    data,
                    data,

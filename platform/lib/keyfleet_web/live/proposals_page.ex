@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Proposals
   alias Keyfleet.Proposals.LaunchPrice
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.Typed
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
@@ -171,8 +172,8 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   @doc """
   Each launch plan of the fleet a launch can be proposed from, at its
-  current version: its six launch details exactly as that version holds
-  them, and the digest a proposal carries to point to it. The launch form
+  current version: its six launch details and its minimum raise exactly as
+  that version holds them, and the digest a proposal carries to point to it. The launch form
   reads them once, when it is first shown, and keeps them after.
   """
   def launch_plans(fleet_id) do
@@ -202,7 +203,9 @@ defmodule KeyfleetWeb.ProposalsPage do
               symbol: data["symbol"],
               description: data["description"],
               website: data["website"],
-              image: data["image"]
+              image: data["image"],
+              floor: data["floor_price"],
+              minimum: data["minimum_regent_raised"]
             }
           }
         end
@@ -351,29 +354,37 @@ defmodule KeyfleetWeb.ProposalsPage do
           Map.fetch!(envelope, field) != data[key],
           do: key
 
-    required =
-      LaunchPrice.required_regent_raised(
-        Decimal.to_integer(envelope.floor_price_q96),
-        Decimal.to_integer(envelope.minimum_regent_raised)
-      )
+    floor? = Decimal.to_integer(envelope.floor_price_q96) != plan_floor(data["floor_price"])
 
-    raise? = required != regent_atoms(data)
-    if raise?, do: texts ++ ["the REGENT to raise"], else: texts
+    minimum? =
+      Decimal.to_integer(envelope.minimum_regent_raised) !=
+        plan_minimum(data["minimum_regent_raised"])
+
+    texts ++
+      if(floor?, do: ["the floor price"], else: []) ++
+      if(minimum?, do: ["the minimum raise"], else: [])
   end
 
-  # A plan names the REGENT to raise in whole REGENT, as a decimal string
-  # with up to eighteen places; the launch holds it in REGENT's smallest
-  # units.
-  defp regent_atoms(%{"required_regent_raised" => nil}), do: nil
+  # A plan names its floor price in REGENT per token, and its minimum raise
+  # in whole REGENT, as decimal strings; the launch holds them as the
+  # proposal carries them, read the way the launch form reads them, a
+  # minimum left out being none.
+  defp plan_floor(nil), do: nil
 
-  defp regent_atoms(%{"required_regent_raised" => text}) do
-    {whole, fraction} =
-      case String.split(text, ".") do
-        [whole] -> {whole, ""}
-        [whole, fraction] -> {whole, fraction}
-      end
+  defp plan_floor(text) do
+    case Typed.floor_price(text) do
+      {:ok, floor} -> floor
+      {:error, _problem} -> nil
+    end
+  end
 
-    String.to_integer(whole <> String.pad_trailing(fraction, @regent_decimals, "0"))
+  defp plan_minimum(nil), do: 0
+
+  defp plan_minimum(text) do
+    case Typed.amount(text, @regent_decimals, Typed.largest_uint256()) do
+      {:ok, minimum} -> minimum
+      {:error, _problem} -> nil
+    end
   end
 
   defp vote(vote) do

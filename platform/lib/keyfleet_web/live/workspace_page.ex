@@ -86,7 +86,8 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"why_raise", "What the money is for"},
       {"commitments", "Who does what afterwards"},
       {"narrative", "The story"},
-      {"required_regent_raised", "REGENT to raise"}
+      {"floor_price", "Floor price (REGENT per token)"},
+      {"minimum_regent_raised", "Higher minimum raise (REGENT)"}
     ],
     "note" => [{"body", "Note"}]
   }

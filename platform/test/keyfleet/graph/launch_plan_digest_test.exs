@@ -19,12 +19,13 @@ defmodule Keyfleet.Graph.LaunchPlanDigestTest do
     "description" => nil,
     "website" => "https://example.test/a/b",
     "image" => nil,
-    "required_regent_raised" => "250000.5"
+    "floor_price" => "0.000001",
+    "minimum_regent_raised" => "250000.5"
   }
 
   test "a plan version's digest is the one the API contract documents for agents" do
     assert LaunchPlanDigest.digest("fibonacci_cascade", "launch_card#4", 2, @plan) ==
-             "0xb03009c6a6684970069520afd2e49bc7004e23ed5c6a73b4f0b9d26872985738"
+             "0x71980caf2d08068cc3d699ad06fdb561ecafcbaffa68c31c4c1f05f4f1cc84a3"
   end
 
   test "where a plan was discussed does not change its digest" do

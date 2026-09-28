@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.1.0` work pack.
+"""The pinned `keyfleet_work@0.2.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.1.0"
+PACK_VERSION = "0.2.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -117,7 +117,10 @@ class LaunchCard(WorkObject):
     description: Optional[Annotated[str, multi_line, _max_bytes(512)]] = None
     website: Optional[Annotated[str, single_line, _max_bytes(256)]] = None
     image: Optional[Annotated[str, single_line, _max_bytes(256)]] = None
-    required_regent_raised: Optional[DecimalString] = None
+    # REGENT per launched token, as a launch proposal's floor price is typed.
+    floor_price: Optional[DecimalString] = None
+    # Whole REGENT; left out when the floor alone sets the raise.
+    minimum_regent_raised: Optional[DecimalString] = None
 
 
 class Note(WorkObject):

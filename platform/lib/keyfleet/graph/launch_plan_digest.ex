@@ -20,15 +20,16 @@ defmodule Keyfleet.Graph.LaunchPlanDigest do
   plans of one fleet, gives different digests; `version` is the object's
   version, so each edit gives a new one.
 
-  `plan` is the object's `data` with exactly these thirteen fields of the
-  pinned `keyfleet_work@0.1.0` pack's `LaunchCard`, each a string or null:
+  `plan` is the object's `data` with exactly these fourteen fields of the
+  pinned `keyfleet_work@0.2.0` pack's `LaunchCard`, each a string or null:
   `title`, `who_we_serve`, `what_we_sell`, `what_works`, `why_raise`,
   `commitments`, `narrative`, `name`, `symbol`, `description`, `website`,
-  `image` and `required_regent_raised` (a decimal string). The graph stores
-  every field of an object, so all thirteen are always present: a field
-  never set, or removed, is null, and a field set to blank text is stored
-  trimmed, as `""`, not as null. `discussion`, the links to room posts, is left out: pointing to
-  where a plan was talked about does not change the plan. The server-owned
+  `image`, `floor_price` and `minimum_regent_raised` (both decimal strings).
+  The graph stores every field of an object, so all fourteen are always
+  present: a field never set, or removed, is null, and a field set to blank
+  text is stored trimmed, as `""`, not as null. `discussion`, the links to
+  room posts, is left out: pointing to where a plan was talked about does not
+  change the plan. The server-owned
   `sys` block is left out too, so archiving a plan changes its digest only
   through its version.
 
@@ -45,7 +46,7 @@ defmodule Keyfleet.Graph.LaunchPlanDigest do
 
   @plan_fields ~w(
     title who_we_serve what_we_sell what_works why_raise commitments narrative
-    name symbol description website image required_regent_raised
+    name symbol description website image floor_price minimum_regent_raised
   )
 
   @doc "The fields of a launch plan's `data` that its digest covers, as named above."

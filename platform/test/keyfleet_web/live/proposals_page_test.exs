@@ -412,13 +412,28 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       launch!(1, digest(plan, 1),
         name: "Cascade Research Two",
+        floor_price_q96: Decimal.new("158456325028528675187000"),
         minimum_regent_raised: Decimal.new("250000000000000000000000")
       )
 
       {:ok, view, _html} = live(conn, "#{@list}/1")
 
       assert text(view, "#proposal-plan-mismatch") ==
-               "These launch details differ from the plan: name, the REGENT to raise."
+               "These launch details differ from the plan: name, the floor price, the minimum raise."
+
+      # A plan that names no minimum matches a launch without one.
+      bare =
+        WorkspaceFixtures.create(
+          @fleet,
+          "launch_card",
+          plan_data(%{"minimum_regent_raised" => nil})
+        )
+
+      launch!(2, digest(bare, 1), minimum_regent_raised: Decimal.new(0))
+
+      {:ok, view, _html} = live(conn, "#{@list}/2")
+      assert has_element?(view, "#proposal-plan-version")
+      refute has_element?(view, "#proposal-plan-mismatch")
     end
 
     test "is not shown for a launch that points to no plan the workspace has", %{conn: conn} do
@@ -459,7 +474,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(
                view,
-               ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"]|
+               ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"][data-floor="0.000001"][data-minimum="250000.5"]|
              )
 
       # Going back to the page shows the form as new, never a plan the
@@ -1205,7 +1220,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         "description" => "Research the fleet funds",
         "website" => "https://example.test",
         "image" => "ipfs://cascade",
-        "required_regent_raised" => "250000.5"
+        "floor_price" => "0.000001",
+        "minimum_regent_raised" => "250000.5"
       },
       attrs
     )

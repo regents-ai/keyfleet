@@ -712,6 +712,8 @@ defmodule KeyfleetWeb.ProposalsLive do
           data-description={plan.fields.description}
           data-website={plan.fields.website}
           data-image={plan.fields.image}
+          data-floor={plan.fields.floor}
+          data-minimum={plan.fields.minimum}
         >
           {plan.title}, version {plan.version}
         </option>
