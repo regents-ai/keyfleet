@@ -467,10 +467,11 @@ outright.
 5. **Where is v2 tested on a Base fork?** Answered by the Autolaunch UI lane
    on 2026-09-27: there is no v2 fork or lab tooling yet. The Base fork suite
    and the deployment ceremony stay in `contracts/v1` and are a separately
-   authorised step before any deployment, and the lane has asked the founder
-   whether to build a v2 lab. Until then Keyfleet builds against
-   `revstake-v2`'s hermetic suite and its ABIs in `revstake-v2/abi`, and the
-   fork test waits for that lab.
+   authorised step before any deployment. Founder, 2026-09-28: the Autolaunch
+   lane builds a v2 lab on a Base fork before the v2 deployment ceremony, and
+   sends Keyfleet its ports and addresses when it is up. Until then Keyfleet
+   builds against `revstake-v2`'s hermetic suite and its ABIs in
+   `revstake-v2/abi`, and the fork test waits for that lab.
 6. **When does the Keyfleet change start?** Founder, 2026-09-27: wait. The
    change starts once v2 is pushed and its ABIs are frozen, and merges only
    after v2 is deployed and the founder says to switch.
