@@ -4,7 +4,8 @@ A Foundry workspace pinned to Solidity 0.8.26 with OpenZeppelin 5.7.0 and
 forge-std 1.9.7 vendored as git submodules under `contracts/lib`.
 
 There are four contracts. `KeyfleetPresets` is a pure library holding every
-price, supply, holding-limit, purchase-split and launch-threshold rule.
+price, supply, holding-limit, purchase-split and launch-threshold rule, with
+Classic's price table in the generated `KeyfleetClassicPrices`.
 `Keyfleet` is one fleet: its keys, its purchases and its money. Each fleet
 deploys its own `KeyfleetRewards` ledger and its own `KeyfleetVotes` controller
 in its constructor, so a fleet, its ledger and its vote are born bound to each
@@ -28,6 +29,9 @@ Decided by the founder on 27 September 2026, and what the code on main does:
   graduated launch is the fleet's last.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
   refused request.
+- Keyfleet Classic, decided 28 September 2026: 1,024 keys, the first at 8 USDC
+  and the last at 80 USDC, each key the same percentage dearer than the one
+  before, rounded to the nearest cent.
 - Referrals, the receipt fee, the 20/80 budget split, the voting window, the pay
   cap and period, execution expiries and the shared asset registry are deleted.
 
@@ -43,6 +47,9 @@ On hold or not yet done:
   key cap.
 - The purchase and send gas figures on a fork of Base have not been measured
   since the change; the figures below are from the suite's stand-ins.
+- At 1,024 Classic keys, each key's Chainlink VRF request is paid from the
+  Regents subscription. The VRF cost of one key on Base has not been measured
+  against the 2% Regents takes from that key's sale (16 cents on the first key).
 
 ## Presets
 
@@ -51,10 +58,10 @@ On hold or not yet done:
 and makes no external calls. Every function is `internal pure` with checked
 arithmetic.
 
-Keys are paid in USDC, and every price is in atomic USDC (six decimals) from the
-reference price `Q_USDC`, which is 10,000,000: ten USDC. Both ladders are
-computed iteratively from the first step, never as a closed-form power, and
-every step rounds up:
+Keys are paid in USDC, and every price is in atomic USDC (six decimals). The
+Fibonacci and Accelerant ladders start from the reference price `Q_USDC`, which
+is 10,000,000: ten USDC. Both are computed iteratively from the first step,
+never as a closed-form power, and every step rounds up:
 
 - Fibonacci level price: level 1 costs `Q_USDC`, and each further level costs
   `ceilDiv(previous * 120, 100)`. `MAX_FIBONACCI_LEVEL` is 20.
@@ -63,8 +70,19 @@ every step rounds up:
   indexes run 0 through 1999. Only primary mints advance the price; resales do
   not. The fleet stores the current price in `currentPrice` and steps it after
   each primary mint.
-- Fleet.Tech Classic: `CLASSIC_SUPPLY` is 144 and every primary key costs
-  `Q_USDC`.
+- Fleet.Tech Classic: `CLASSIC_SUPPLY` is 1024, and key n costs
+  800 × 10^((n − 1) / 1023) US cents, rounded to the nearest cent: key 1 costs
+  8 USDC, key 144 11.04, key 512 25.27 and key 1024 80 USDC, each key about
+  0.2253% dearer than the one before, and all 1,024 together 32,032.45 USDC.
+  `classicPrice(tokenId)` reads the price from `KeyfleetClassicPrices.CENTS`, a
+  table of 1,024 two-byte cent values, and multiplies it by `CENT_USDC`
+  (10,000). The table is written by `scripts/classic_prices.py` at the
+  repository root, which also writes `platform/priv/classic_key_prices.txt`, the
+  same prices the site shows; change the script and run
+  `uv run scripts/classic_prices.py`, never either file. The table adds about
+  2.2 KB to the fleet's code and about 1,100 gas to a Classic purchase. The
+  preset test walks the curve one key at a time in 36-decimal fixed point and
+  checks every one of the 1,024 prices against it.
 
 Fibonacci level supplies are 2, 3, 5, 8, 13, ... through 17711 at level 20.
 Token ids are 1-based and contiguous across levels, so `FIBONACCI_MAX_TOKEN_ID`
@@ -188,7 +206,7 @@ There is no burn.
 The worst primary purchase is the first one on a fresh Cascade fleet, every slot
 cold. Against a plain ERC-20 standing in for USDC and a stand-in coordinator it
 measured 391,092 gas in execution (Syndicate 366,216, Accelerant 345,518, Classic
-342,865), and the suite asserts a ceiling of 470,000. That is a regression bound
+343,969), and the suite asserts a ceiling of 470,000. That is a regression bound
 on the fleet's own work. Real Base USDC is a proxy and costs more per transfer,
 so the figures to publish must be measured on a fork of Base.
 

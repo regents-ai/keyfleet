@@ -327,45 +327,55 @@ contract KeyfleetTest is Test {
     /// slot that moved, so each one is checked before any token moves.
     function test_purchaseHonoursDeadlineMaximumPriceAndDefaultReceiver() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        usdc.mint(buyer, 10 * Q);
+        uint256 price = fleet.nextPrice();
+        usdc.mint(buyer, 10 * price);
         vm.prank(buyer);
         usdc.approve(address(fleet), type(uint256).max);
 
         vm.warp(1000);
         vm.prank(buyer);
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.Expired.selector, 999));
-        fleet.purchase(alice, Q, 999);
+        fleet.purchase(alice, price, 999);
 
         vm.prank(buyer);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PriceAboveMax.selector, Q, Q - 1));
-        fleet.purchase(alice, Q - 1, block.timestamp);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PriceAboveMax.selector, price, price - 1));
+        fleet.purchase(alice, price - 1, block.timestamp);
 
         vm.prank(buyer);
-        uint256 tokenId = fleet.purchase(address(0), 2 * Q, block.timestamp);
+        uint256 tokenId = fleet.purchase(address(0), 2 * price, block.timestamp);
         assertEq(fleet.ownerOf(tokenId), buyer, "zero receiver mints to the caller");
         assertEq(tokenId, 1, "token ids start at one");
     }
 
-    /// @dev Invariant: Classic stops at 144 seats and the price never moves.
-    function test_classicSellsExactlyOneHundredAndFortyFourSeatsAtTheReferencePrice() public {
+    /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
+    /// 8 USDC to 80 USDC, and 2% of every sale is owed to staking.
+    function test_classicSellsExactlyOneThousandTwentyFourKeysAlongItsPriceCurve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        assertEq(fleet.maxSupply(), 144);
+        assertEq(fleet.maxSupply(), 1024);
 
+        uint256 paid;
         for (uint256 i = 0; i < KeyfleetPresets.CLASSIC_SUPPLY; ++i) {
-            assertEq(fleet.nextPrice(), Q, "Classic price is constant");
-            assertEq(fleet.remainingSupply(), 144 - i);
+            uint256 price = fleet.nextPrice();
+            assertEq(price, KeyfleetPresets.classicPrice(i + 1), "each key costs its own price on the curve");
+            assertEq(fleet.remainingSupply(), 1024 - i);
+            paid += price;
             _buy(fleet, _wallet(i));
         }
+
+        assertEq(paid, 32_032_450_000, "the whole fleet cost 32,032.45 USDC");
+        assertEq(fleet.protocolShareOwed(), paid / 50, "2% of every sale is owed to staking");
+        assertEq(fleet.freeCapital(address(usdc)), paid - paid / 50, "and the rest is shared money");
+        _assertBalanceInvariant(fleet);
 
         assertEq(fleet.remainingSupply(), 0);
         vm.expectRevert(Keyfleet.SoldOut.selector);
         fleet.nextPrice();
 
-        usdc.mint(buyer, Q);
+        usdc.mint(buyer, 100 * Q);
         vm.startPrank(buyer);
-        usdc.approve(address(fleet), Q);
+        usdc.approve(address(fleet), 100 * Q);
         vm.expectRevert(Keyfleet.SoldOut.selector);
-        fleet.purchase(alice, Q, block.timestamp);
+        fleet.purchase(alice, 100 * Q, block.timestamp);
         vm.stopPrank();
     }
 

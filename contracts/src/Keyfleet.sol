@@ -458,7 +458,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         uint256 minted = totalMinted;
         if (minted >= maxSupply()) revert SoldOut();
         if (PRESET == KeyfleetPresets.Preset.FleetTechAccelerant) return currentPrice;
-        if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.classicPrice();
+        if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.classicPrice(minted + 1);
         return KeyfleetPresets.fibonacciLevelPrice(KeyfleetPresets.fibonacciLevelOf(minted + 1));
     }
 

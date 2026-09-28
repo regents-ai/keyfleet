@@ -54,7 +54,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".deploymentBlock"), DEPLOYMENT_BLOCK, "Deployment block");
         assertEq(vm.parseJsonAddress(json, ".regent"), address(regent), "REGENT");
         assertEq(vm.parseJsonAddress(json, ".usdc"), address(usdc), "USDC");
-        assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "Every first key costs 10 USDC");
+        assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "The reference price Q");
         assertEq(vm.parseJsonAddress(json, ".staking"), STAKING, "Staking");
         assertEq(vm.parseJsonAddress(json, ".regentSafe"), SAFE, "Regents Safe");
 
@@ -70,7 +70,7 @@ contract RecordKeyfleetsTest is Test {
             manifest.fleet.baseTokenURI,
             "Metadata base read from the fleet"
         );
-        assertEq(vm.parseJsonUint(json, ".fleet.maxSupply"), 144, "Classic's supply");
+        assertEq(vm.parseJsonUint(json, ".fleet.maxSupply"), 1024, "Classic's supply");
 
         address[] memory incomeTokens = vm.parseJsonAddressArray(json, ".incomeTokens");
         assertEq(incomeTokens.length, 2, "Two income tokens before any launch");
@@ -79,7 +79,7 @@ contract RecordKeyfleetsTest is Test {
 
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciLevels"), 20, "Levels");
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciMaxTokenId"), 46_365, "Highest token id");
-        assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 144, "Classic seats");
+        assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 1024, "Classic keys");
         assertEq(vm.parseJsonUint(json, ".bounds.accelerantMaxKeys"), 2000, "Accelerant cap");
         assertEq(vm.parseJsonUint(json, ".bounds.fibonacciAutolaunchMinKeys"), 86, "Launch after level 7");
         assertEq(vm.parseJsonUint(json, ".bounds.fleetTechAutolaunchMinKeys"), 100, "Launch after 100 keys");
@@ -122,7 +122,7 @@ contract RecordKeyfleetsTest is Test {
     /// and with its own supply, whichever fleets are on chain already.
     function test_eachFleetRecordsOnItsOwn() public {
         string[4] memory keys = ["syndicate", "cascade", "classic", "accelerant"];
-        uint256[4] memory supplies = [uint256(46_365), 46_365, 144, 2000];
+        uint256[4] memory supplies = [uint256(46_365), 46_365, 1024, 2000];
         KeyfleetManifest.Manifest memory manifest = _manifest();
 
         for (uint8 order = 0; order < 4; ++order) {

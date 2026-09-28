@@ -619,9 +619,10 @@ contract KeyfleetIncomeTest is Test {
         assertEq(fleet.protocolShareOwed(), owed, "the whole share is still owed");
         assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval survives the revert");
 
+        uint256 secondShare = fleet.nextPrice() / 50;
         _buy(fleet, bob);
         assertEq(fleet.totalMinted(), 2, "a purchase goes through while staking is paused");
-        assertEq(fleet.protocolShareOwed(), 2 * owed, "and adds its share on top");
+        assertEq(fleet.protocolShareOwed(), owed + secondShare, "and adds its share on top");
         assertEq(
             usdc.balanceOf(address(fleet)),
             fleet.freeCapital(address(usdc)) + fleet.protocolShareOwed(),
@@ -629,8 +630,8 @@ contract KeyfleetIncomeTest is Test {
         );
 
         staking.setPaused(false);
-        assertEq(fleet.sendProtocolShare(), 2 * owed, "one send registers everything that built up");
-        assertEq(staking.registered(), 2 * owed);
+        assertEq(fleet.sendProtocolShare(), owed + secondShare, "one send registers everything that built up");
+        assertEq(staking.registered(), owed + secondShare);
         assertEq(fleet.protocolShareOwed(), 0);
     }
 
@@ -654,8 +655,9 @@ contract KeyfleetIncomeTest is Test {
         assertEq(fleet.protocolShareOwed(), owed, "a credit without a pull leaves the share owed");
         assertEq(usdc.allowance(address(fleet), address(staking)), 0, "and no approval behind");
 
+        uint256 secondShare = fleet.nextPrice() / 50;
         _buy(fleet, bob);
-        assertEq(fleet.protocolShareOwed(), 2 * owed, "a later purchase accrues on top");
+        assertEq(fleet.protocolShareOwed(), owed + secondShare, "a later purchase accrues on top");
         assertEq(staking.registered(), 0, "nothing was ever registered");
         assertEq(usdc.balanceOf(address(staking)), 0, "and nothing was ever taken");
     }

@@ -623,50 +623,51 @@ contract KeyfleetTreasuryTest is Test {
         ids[0] = tokenId;
     }
 
-    /// @dev Invariant, the worked example: a Fleet Tech Classic fleet sells all 144 keys and holds
-    /// 1,411.20 USDC of shared money. With 73 keys voting YES a payment can take at most 73/144 of
-    /// it, 715.40: one atomic unit more rounds each of the other 71 matches up to 9.800001, and the
-    /// payment and its matches no longer fit. 72 YES keys cannot approve anything. The payment sets aside 9.80 for each of
-    /// the other 71 keys, whether they voted NO or stayed silent, and each collects exactly that,
-    /// paid to whoever holds it, which leaves no shared money and nothing held for anyone.
-    function test_classicSeventyThreeOfOneFortyFourMatchesEveryOtherKey() public {
+    /// @dev Invariant, the worked example: a Fleet Tech Classic fleet sells all 1024 keys for
+    /// 32,032.45 USDC and holds 98% of it, 31,391.801 USDC, as shared money. 512 YES keys, exactly
+    /// half, cannot approve anything. With 513 YES keys a payment sets aside its share, rounded up,
+    /// for each of the other 511 keys, whether they voted NO or stayed silent, so the largest payment
+    /// is 15,726.556384 USDC: with 30.656056 set aside for each other key it uses the shared money
+    /// exactly, and one atomic unit more no longer fits. Each other key collects its share, paid to
+    /// whoever holds it, which leaves no shared money and nothing held for anyone.
+    function test_classicFiveHundredThirteenOfOneThousandTwentyFourMatchesEveryOtherKey() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buyKeys(fleet, KeyfleetPresets.CLASSIC_SUPPLY);
         KeyfleetVotes votes = fleet.VOTES();
-        assertEq(fleet.freeCapital(address(usdc)), 1_411_200_000, "1,411.20 USDC of shared money");
+        assertEq(fleet.freeCapital(address(usdc)), 31_391_801_000, "31,391.801 USDC of shared money");
 
-        uint256 tooMuch = _pay(fleet, address(usdc), 715_400_001, _ids(1, 72), _ids(74, 30));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 72, 144));
+        uint256 tooMuch = _pay(fleet, address(usdc), 15_726_556_385, _ids(1, 512), _ids(514, 200));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 512, 1024));
         votes.execute(tooMuch);
         vm.prank(alice);
-        votes.vote(tooMuch, _one(73), true);
+        votes.vote(tooMuch, _one(513), true);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Keyfleet.AboveYesShare.selector, address(usdc), 715_400_001, 71 * 9_800_001, 1_411_200_000
+                Keyfleet.AboveYesShare.selector, address(usdc), 15_726_556_385, 511 * 30_656_056, 31_391_801_000
             )
         );
         votes.execute(tooMuch);
 
-        uint256 proposalId = _pay(fleet, address(usdc), 715_400_000, _ids(1, 73), _ids(74, 30));
+        uint256 proposalId = _pay(fleet, address(usdc), 15_726_556_384, _ids(1, 513), _ids(514, 200));
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit BudgetPaid(address(usdc), bob, 715_400_000, 9_800_000, 695_800_000);
+        emit BudgetPaid(address(usdc), bob, 15_726_556_384, 30_656_056, 15_665_244_616);
         votes.execute(proposalId);
 
-        assertEq(usdc.balanceOf(bob), 715_400_000, "715.40 paid");
-        assertEq(usdc.balanceOf(address(votes)), 695_800_000, "9.80 set aside for each of the 71 other keys");
+        assertEq(usdc.balanceOf(bob), 15_726_556_384, "15,726.556384 paid");
+        assertEq(usdc.balanceOf(address(votes)), 15_665_244_616, "30.656056 set aside for each of the 511 other keys");
         assertEq(fleet.freeCapital(address(usdc)), 0, "and no shared money is left");
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(stored.share, 9_800_000);
-        assertEq(stored.keysSold, 144);
+        assertEq(stored.share, 30_656_056);
+        assertEq(stored.keysSold, 1024);
 
-        uint256[] memory others = _ids(74, 71);
+        uint256[] memory others = _ids(514, 511);
         vm.expectEmit(true, true, true, true, address(votes));
-        emit Collected(proposalId, 9_800_000, others);
+        emit Collected(proposalId, 30_656_056, others);
         vm.prank(mallory);
         votes.collect(proposalId, others);
 
-        for (uint256 tokenId = 74; tokenId <= 144; ++tokenId) {
-            assertEq(usdc.balanceOf(_holder(tokenId)), 9_800_000, "each other key collected 9.80");
+        for (uint256 tokenId = 514; tokenId <= 1024; ++tokenId) {
+            assertEq(usdc.balanceOf(_holder(tokenId)), 30_656_056, "each other key collected 30.656056");
         }
         assertEq(usdc.balanceOf(mallory), 0, "the caller is paid nothing");
         assertEq(usdc.balanceOf(address(votes)), 0, "and nothing is left held");
@@ -838,8 +839,8 @@ contract KeyfleetTreasuryTest is Test {
 
     /// @dev Invariant: a match is rounded up, so a payment smaller than its YES votes still matches
     /// every other key with at least one unit, and repeating small payments can never spend the
-    /// shared money without matching everyone else. On a 144-key fleet with 73 YES keys, 72 units
-    /// set aside 1 for each of the other 71 keys, and 145 units set aside 2 each.
+    /// shared money without matching everyone else. On a 1024-key fleet with 513 YES keys, 512 units
+    /// set aside 1 for each of the other 511 keys, and 1025 units set aside 2 each.
     function test_aMatchIsRoundedUpSoASmallPaymentStillMatchesEveryOtherKey() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buyKeys(fleet, KeyfleetPresets.CLASSIC_SUPPLY);
@@ -849,22 +850,22 @@ contract KeyfleetTreasuryTest is Test {
         uint256 rounds = 5;
         uint256[] memory proposals = new uint256[](rounds);
         for (uint256 r = 0; r < rounds; ++r) {
-            proposals[r] = _pay(fleet, address(usdc), 72, _ids(1, 73), _none());
+            proposals[r] = _pay(fleet, address(usdc), 512, _ids(1, 513), _none());
             votes.execute(proposals[r]);
             assertEq(votes.proposal(proposals[r]).share, 1, "each other key is matched with one unit");
         }
-        assertEq(usdc.balanceOf(bob), 72 * rounds);
-        assertEq(before - fleet.freeCapital(address(usdc)), (72 + 71) * rounds, "every payment was matched");
+        assertEq(usdc.balanceOf(bob), 512 * rounds);
+        assertEq(before - fleet.freeCapital(address(usdc)), (512 + 511) * rounds, "every payment was matched");
         for (uint256 r = 0; r < rounds; ++r) {
-            votes.collect(proposals[r], _ids(74, 71));
+            votes.collect(proposals[r], _ids(514, 511));
         }
-        assertEq(usdc.balanceOf(_holder(144)), rounds, "and every other key collected its unit each time");
+        assertEq(usdc.balanceOf(_holder(1024)), rounds, "and every other key collected its unit each time");
 
-        uint256 larger = _pay(fleet, address(usdc), 2 * 73 - 1, _ids(1, 73), _none());
+        uint256 larger = _pay(fleet, address(usdc), 2 * 513 - 1, _ids(1, 513), _none());
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit BudgetPaid(address(usdc), bob, 145, 2, 142);
+        emit BudgetPaid(address(usdc), bob, 1025, 2, 1022);
         votes.execute(larger);
-        assertEq(votes.proposal(larger).share, 2, "145 over 73 is rounded up to 2");
+        assertEq(votes.proposal(larger).share, 2, "1025 over 513 is rounded up to 2");
     }
 
     /// @dev Invariant: a key that voted YES and was then sold does not bind its buyer. The buyer can

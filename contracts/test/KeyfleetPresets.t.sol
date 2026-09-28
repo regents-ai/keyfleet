@@ -41,8 +41,8 @@ contract PresetsHarness {
         return KeyfleetPresets.fibonacciHoldingLimit(level);
     }
 
-    function classicPrice() external pure returns (uint256) {
-        return KeyfleetPresets.classicPrice();
+    function classicPrice(uint256 tokenId) external pure returns (uint256) {
+        return KeyfleetPresets.classicPrice(tokenId);
     }
 
     function accelerantNextPrice(uint256 previousPrice) external pure returns (uint256) {
@@ -262,10 +262,39 @@ contract KeyfleetPresetsTest {
 
     // --- 5. classic ----------------------------------------------------------------------------
 
-    /// @dev Invariant: Classic has a fixed 144-key supply and every primary key costs ten USDC.
-    function testClassicSupplyIsFixedAndEveryPrimaryKeyCostsTenUsdc() public view {
-        require(KeyfleetPresets.CLASSIC_SUPPLY == 144, "Classic supply");
-        require(presets.classicPrice() == 10_000_000, "Classic price is 10 USDC");
+    /// @dev 10^(1/1023), the ratio from one Classic key's exact price to the next, in units of 1e-36,
+    ///      rounded down. Written out independently of the generated table it checks.
+    uint256 private constant CLASSIC_STEP = 1_002_253_351_306_309_679_922_542_762_744_250_256;
+    uint256 private constant FIXED_ONE = 1e36;
+
+    /// @dev Invariant: Classic sells 1024 keys; key 1 costs exactly 8 USDC and key 1024 exactly 80 USDC.
+    function testClassicSellsOneThousandTwentyFourKeysFromEightToEightyUsdc() public {
+        require(KeyfleetPresets.CLASSIC_SUPPLY == 1024, "Classic supply");
+        require(presets.classicPrice(1) == 8_000_000, "Key 1 costs 8 USDC");
+        require(presets.classicPrice(144) == 11_040_000, "Key 144 costs 11.04 USDC");
+        require(presets.classicPrice(512) == 25_270_000, "Key 512 costs 25.27 USDC");
+        require(presets.classicPrice(1024) == 80_000_000, "Key 1024 costs 80 USDC");
+        vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
+        presets.classicPrice(0);
+        vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
+        presets.classicPrice(1025);
+    }
+
+    /// @dev Invariant: every one of the 1024 prices is 800 * 10^((n - 1) / 1023) cents rounded to the
+    ///      nearest cent. The exact price is walked one key at a time in 36-decimal fixed point, whose
+    ///      error after 1023 steps is below 1e-29 of a cent, far inside the smallest distance of any
+    ///      key's exact price from a half cent (about 1.8e-4 of a cent).
+    function testEveryClassicPriceIsTheSteadyPercentageCurveRoundedToTheCent() public view {
+        uint256 exactCents = 800 * FIXED_ONE;
+        uint256 total;
+        for (uint256 tokenId = 1; tokenId <= KeyfleetPresets.CLASSIC_SUPPLY; ++tokenId) {
+            uint256 price = presets.classicPrice(tokenId);
+            require(price == (exactCents + FIXED_ONE / 2) / FIXED_ONE * 10_000, "Rounded to the nearest cent");
+            total += price;
+            if (tokenId < KeyfleetPresets.CLASSIC_SUPPLY) exactCents = exactCents * CLASSIC_STEP / FIXED_ONE;
+        }
+        require(8000 * FIXED_ONE - exactCents < 1e8, "1023 steps multiply the first price by ten");
+        require(total == 32_032_450_000, "The whole fleet costs 32,032.45 USDC");
     }
 
     // --- 6. accelerant -------------------------------------------------------------------------

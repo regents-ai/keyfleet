@@ -101,7 +101,10 @@ contract DeployKeyfleetsTest is Test {
             // The Safe has not added the fleet to the subscription yet: the key sells all the same
             // and waits for a retry.
             uint256 price = fleet.nextPrice();
-            assertEq(price, KeyfleetPresets.Q_USDC, "The first key costs 10 USDC");
+            uint256 firstPrice = presets[slot] == KeyfleetPresets.Preset.FleetTechClassic
+                ? KeyfleetPresets.classicPrice(1)
+                : KeyfleetPresets.Q_USDC;
+            assertEq(price, firstPrice, "The first key costs 8 USDC on Classic and 10 USDC on the others");
             usdc.mint(BUYER, price);
             vm.startPrank(BUYER);
             usdc.approve(address(fleet), price);

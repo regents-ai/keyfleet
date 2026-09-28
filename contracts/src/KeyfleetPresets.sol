@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {KeyfleetClassicPrices} from "./KeyfleetClassicPrices.sol";
+
 /// @notice Supply, price, holding-limit, purchase-split and launch-threshold arithmetic for the four
 ///         fleet presets.
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
@@ -31,7 +33,8 @@ library KeyfleetPresets {
 
     /// @notice Fibonacci level is rejected outside `1 <= level <= MAX_FIBONACCI_LEVEL`.
     error LevelOutOfBounds();
-    /// @notice Fibonacci token id is rejected outside `1 <= tokenId <= FIBONACCI_MAX_TOKEN_ID`.
+    /// @notice Token id is rejected outside the preset's range: `1 <= tokenId <= FIBONACCI_MAX_TOKEN_ID`
+    ///         for Fibonacci, `1 <= tokenId <= CLASSIC_SUPPLY` for Classic.
     error TokenIdOutOfBounds();
     /// @notice Accelerant mint index is rejected at or above `MAX_ACCELERANT_KEYS`.
     error MintIndexOutOfBounds();
@@ -58,7 +61,9 @@ library KeyfleetPresets {
     uint256 internal constant FIBONACCI_STEP_DENOMINATOR = 100;
 
     /// @notice Fleet.Tech Classic key supply.
-    uint256 internal constant CLASSIC_SUPPLY = 144;
+    uint256 internal constant CLASSIC_SUPPLY = 1024;
+    /// @notice One US cent in atomic USDC. Every Classic price is a whole number of cents.
+    uint256 internal constant CENT_USDC = 10_000;
 
     /// @notice Highest number of Fleet.Tech Accelerant keys, so valid mint indexes are 0..1999.
     uint256 internal constant MAX_ACCELERANT_KEYS = 2000;
@@ -158,9 +163,14 @@ library KeyfleetPresets {
         return fibonacciLevelSupply(level) / FIBONACCI_HOLDING_DIVISOR;
     }
 
-    /// @notice USDC price of any Fleet.Tech Classic primary key, which is the reference price itself.
-    function classicPrice() internal pure returns (uint256) {
-        return Q_USDC;
+    /// @notice USDC price of Fleet.Tech Classic key `tokenId`: 8 USDC for key 1, 80 USDC for key 1024,
+    ///         each key the same percentage dearer than the one before, rounded to the nearest cent.
+    /// @dev Read from the generated cent table in `KeyfleetClassicPrices`, the same table the site reads.
+    function classicPrice(uint256 tokenId) internal pure returns (uint256) {
+        if (tokenId == 0 || tokenId > CLASSIC_SUPPLY) revert TokenIdOutOfBounds();
+        bytes memory cents = KeyfleetClassicPrices.CENTS;
+        uint256 offset = 2 * (tokenId - 1);
+        return ((uint256(uint8(cents[offset])) << 8) | uint8(cents[offset + 1])) * CENT_USDC;
     }
 
     /// @notice USDC price of the Accelerant primary mint after one priced at `previousPrice`.
