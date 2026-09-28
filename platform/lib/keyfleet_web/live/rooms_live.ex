@@ -13,8 +13,23 @@ defmodule KeyfleetWeb.RoomsLive do
 
   use KeyfleetWeb, :html
 
+  import Phoenix.LiveView, only: [stream: 4]
+
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.Chain
+  alias Keyfleet.Graph.Errors.UnknownFleetError
+  alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Checks.RoomPoster
+  alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.Motion
+  alias KeyfleetWeb.ShellLive
+
+  @naming_failed "That room couldn’t be named. Try again."
+  @thread_page 100
+  # A page left open keeps the latest two hundred posts.
+  @thread_kept 200
 
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
   # that looks like markup is shown as the characters the writer typed.
@@ -207,4 +222,222 @@ defmodule KeyfleetWeb.RoomsLive do
 
   @doc "When a line was written, to the minute."
   def stamp(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M")
+
+  @doc "What a room's page does with a post and with a name for the room."
+  def handle_event("send_message", %{"post" => %{"body" => body}}, socket) do
+    {:noreply, post(socket, body)}
+  end
+
+  def handle_event("name_room", %{"room" => %{"topic" => topic}}, socket)
+      when is_binary(topic) do
+    {:noreply, name_room(socket, topic)}
+  end
+
+  def handle_event("name_room", _params, socket),
+    do: {:noreply, refuse_naming(socket, @naming_failed)}
+
+  @doc """
+  A room created or named in the fleet on show changes its list of rooms, and
+  the room on show when it is the one named.
+  """
+  def handle_info({:rooms_changed, fleet_id}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
+    rooms = Rooms.list_rooms!(fleet_id, actor: ShellLive.human_actor(socket), load: [:fleet])
+    {:noreply, update(socket, :room, &show_rooms(&1, rooms))}
+  end
+
+  def handle_info({:rooms_changed, _fleet_id}, socket), do: {:noreply, socket}
+
+  @doc "The room named in the address, with its latest posts, and the fleet's other rooms."
+  def read_room(socket, fleet_id, slug) do
+    actor = ShellLive.human_actor(socket)
+    # A fleet outside the catalog has no rooms, and the page says it doesn't exist.
+    rooms =
+      case Rooms.list_rooms(fleet_id, actor: actor, load: [:fleet]) do
+        {:ok, rooms} -> rooms
+        {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} -> []
+      end
+
+    room = Enum.find(rooms, &(&1.slug == slug))
+    posts = latest_posts(room, actor)
+
+    socket
+    |> assign(
+      room:
+        show_rooms(
+          %{
+            fleet_id: fleet_id,
+            slug: slug,
+            fleet_name: fleet_name(rooms),
+            last_seq: last_seq(posts, 0),
+            can_post?: room != nil and RoomPoster.may_post?(actor, fleet_id),
+            naming: "",
+            refreshing?: posting_paused?(actor, rooms, fleet_id),
+            draft: ""
+          },
+          rooms
+        ),
+      room_notice: nil,
+      send_key: Ash.UUID.generate()
+    )
+    |> stream(:posts, posts, reset: true, limit: -@thread_kept)
+  end
+
+  # The fleet's rooms, and what the page shows of the one it is on.
+  defp show_rooms(%{slug: slug} = shown, rooms) do
+    room = Enum.find(rooms, &(&1.slug == slug))
+
+    Map.merge(shown, %{
+      rooms: rooms,
+      room_id: room && room.id,
+      kind: room && room.kind,
+      name: room && room_label(room),
+      topic: room && room.topic,
+      topic_set_by: room && room.topic_set_by,
+      topic_set_at: room && room.topic_set_at
+    })
+  end
+
+  # Every fleet opens with its rooms, so a fleet with none is one there is not.
+  defp fleet_name([room | _rooms]), do: room.fleet.name
+  defp fleet_name([]), do: nil
+
+  # Only someone signed in to a live fleet is told that posting waits on key
+  # ownership being refreshed; everyone else is told who can post.
+  defp posting_paused?(%Human{}, [room | _rooms], fleet_id),
+    do: room.fleet.contract_address != nil and not Chain.fresh?(fleet_id)
+
+  defp posting_paused?(_actor, _rooms, _fleet_id), do: false
+
+  # Places in a room's order run unbroken, so the newest hundred posts start one
+  # hundred places back from where the room has got to.
+  defp latest_posts(nil, _actor), do: []
+
+  defp latest_posts(room, actor),
+    do: posts_after(room.fleet_id, room.slug, max(room.head_seq - @thread_page, 0), actor)
+
+  @doc "Only the posts after the last one on the page are read and added to it."
+  def show_new_posts(%{assigns: %{room: room}} = socket) do
+    posts = posts_after(room.fleet_id, room.slug, room.last_seq, ShellLive.human_actor(socket))
+
+    socket
+    |> assign(:room, %{room | last_seq: last_seq(posts, room.last_seq)})
+    |> stream(:posts, posts, limit: -@thread_kept)
+  end
+
+  defp posts_after(fleet_id, slug, after_seq, actor) do
+    Rooms.read_messages!(fleet_id, slug, %{after_seq: after_seq, limit: @thread_page},
+      actor: actor,
+      load: [:reply_to_seq]
+    )
+  end
+
+  defp last_seq([], shown), do: shown
+  defp last_seq(posts, _shown), do: List.last(posts).seq
+
+  # The post is written straight to the room, and the page then reads back what
+  # the room holds after the last post it was showing.
+  defp post(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, body) do
+    actor = ShellLive.human_actor(socket)
+
+    case Rooms.send_message(
+           %{
+             fleet_id: fleet_id,
+             slug: slug,
+             body: body,
+             idempotency_key: socket.assigns.send_key
+           },
+           actor: actor
+         ) do
+      {:ok, _message} ->
+        socket
+        |> assign(send_key: Ash.UUID.generate(), room_notice: nil)
+        |> update(:room, &%{&1 | draft: ""})
+        |> show_new_posts()
+
+      {:error, refusal} ->
+        socket
+        |> assign(:room_notice, %{tone: :error, message: post_refusal(refusal, fleet_id)})
+        |> update(
+          :room,
+          &%{
+            &1
+            | draft: body,
+              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
+              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
+          }
+        )
+    end
+  end
+
+  defp post(socket, _body), do: socket
+
+  # The room is named straight away, and the page then reads back the room and
+  # the line the naming added to it.
+  defp name_room(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, topic) do
+    actor = ShellLive.human_actor(socket)
+
+    case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
+      {:ok, _room} ->
+        rooms = Rooms.list_rooms!(fleet_id, actor: actor, load: [:fleet])
+
+        socket
+        |> assign(:room_notice, nil)
+        |> update(:room, &(&1 |> show_rooms(rooms) |> Map.put(:naming, "")))
+        |> show_new_posts()
+
+      {:error, refusal} ->
+        socket
+        |> refuse_naming(naming_refusal(refusal, fleet_id))
+        |> update(
+          :room,
+          &%{
+            &1
+            | naming: topic,
+              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
+              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
+          }
+        )
+    end
+  end
+
+  defp name_room(socket, _topic), do: socket
+
+  defp refuse_naming(%{assigns: %{room: %{}}} = socket, refusal),
+    do: assign(socket, :room_notice, %{tone: :error, message: refusal})
+
+  defp refuse_naming(socket, _refusal), do: socket
+
+  defp naming_refusal(%Ash.Error.Forbidden{}, fleet_id) do
+    if Chain.fresh?(fleet_id),
+      do: "Only the people holding this fleet’s keys can name a room.",
+      else: KeysLive.refreshing()
+  end
+
+  defp naming_refusal(%Ash.Error.Invalid{errors: errors} = refusal, _fleet_id) do
+    cond do
+      Rooms.taken?(refusal, :name) ->
+        "That name is already another room’s name in this fleet."
+
+      Enum.any?(errors, &match?(%RenameTooSoonError{}, &1)) ->
+        "This room was renamed a moment ago. Try again in a minute."
+
+      Enum.any?(errors, &match?(%{field: :topic}, &1)) ->
+        "Choose a name of up to 80 characters, on one line, using only visible characters."
+
+      true ->
+        @naming_failed
+    end
+  end
+
+  defp naming_refusal(_refusal, _fleet_id), do: @naming_failed
+
+  @doc "What someone is told when a post, to a room or to a key, is turned down."
+  def post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
+    if Chain.fresh?(fleet_id),
+      do:
+        "Only the people holding this fleet’s keys, and the agents they have attached, can post here.",
+      else: KeysLive.refreshing()
+  end
+
+  def post_refusal(_refusal, _fleet_id), do: "That post didn’t go through. Try again."
 end
