@@ -1,5 +1,9 @@
 import Config
 config :keyfleet, :local_showcase, true
+
+# The product surfaces are open under test and in the browser-test server;
+# tests that close them put the setting back.
+config :keyfleet, :app_surfaces, true
 port = String.to_integer(System.get_env("PORT", "4002"))
 
 # We don't run a server during test. If one is required,

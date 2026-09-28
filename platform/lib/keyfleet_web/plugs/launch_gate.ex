@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   alias KeyfleetWeb.{ContentSecurityPolicy, HoldingController}
 
   @doc "True while the product surfaces are open."
-  def app_surfaces_enabled?, do: Application.get_env(:keyfleet, :app_surfaces, true)
+  def app_surfaces_enabled?, do: Application.fetch_env!(:keyfleet, :app_surfaces)
 
   def init(opts), do: opts
 

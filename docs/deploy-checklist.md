@@ -42,7 +42,7 @@ the values from their owners.
 | --- | --- |
 | `PHX_HOST` | `keyfleet.ai` |
 | `SECRET_KEY_BASE` | A fresh random secret of at least 64 bytes (`mix phx.gen.secret`). |
-| `KEYFLEET_APP_SURFACES` | `on` opens the signed-in pages. The site will not start without it. |
+| `KEYFLEET_APP_SURFACES` | `on` opens the signed-in pages; `off` keeps them closed. The site will not start without it, or with any other value. |
 | `DATABASE_POOLED_URL` | The shared production database. Its host must be `direct.dzx6qo6xqzvojpv5.flympg.net`, with no port other than 5432 and nothing after `?`. |
 | `DATABASE_DIRECT_URL` | The same database, used by the migration step. Same host rule. |
 | `KEYFLEET_DATABASE_TARGET_MODE` | `production` |

@@ -63,7 +63,7 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the signed-in pages. Anything else keeps them closed, so a typo closes rather than opens. Boot fails in production if unset. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the signed-in pages and `off` keeps them closed. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
@@ -212,8 +212,8 @@ them when they end, which can take away fleets the browser server relies on.
 Deploying runs `/app/bin/migrate` as its release command, so a deploy writes
 database migrations. Every deployment names its venue in
 `KEYFLEET_DEPLOYMENT_ROLE`, and each role admits only its own database
-hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES`,
-`PHX_HOST` and a 64-byte `SECRET_KEY_BASE` are set.
+hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES` is `on`
+or `off` and `PHX_HOST` and a 64-byte `SECRET_KEY_BASE` are set.
 `/app/bin/pending-migrations` reports what a deployed database and the release
 image disagree about, without applying anything.
 

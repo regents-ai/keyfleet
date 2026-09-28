@@ -61,8 +61,6 @@ config :keyfleet, :behind_fly_proxy, false
 # other sites' local servers without taking the one port they all name in production.
 config :keyfleet, :metrics_listener, ip: {127, 0, 0, 1}, port: 0
 
-config :keyfleet, :app_surfaces, true
-
 # Each fleet's work graph lives in a Python host run from graph_host/'s uv
 # environment (`uv sync` there), one SQLite file per fleet under :data_dir.
 # A new host replays its fleet's whole log before it answers, so it gets far

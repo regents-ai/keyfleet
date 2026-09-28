@@ -23,25 +23,24 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   config :keyfleet, Keyfleet.Repo, pool_size: 40
 end
 
-# Production must say out loud whether the product surfaces are open. Anything
-# but "on" keeps them closed, so a typo closes rather than opens.
-app_surfaces_setting =
-  case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
-    {:prod, nil} ->
-      raise ~s(KEYFLEET_APP_SURFACES must be set to "on" or "off")
+# Whether the product surfaces are open: KEYFLEET_APP_SURFACES says exactly
+# "on" or "off", and anything else stops the boot. Production must say it;
+# development and test set it in their own config files.
+case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
+  {_env, "on"} ->
+    config :keyfleet, :app_surfaces, true
+    Logger.info("App surfaces enabled")
 
-    {_env, nil} ->
-      "on"
+  {_env, "off"} ->
+    config :keyfleet, :app_surfaces, false
+    Logger.info("App surfaces disabled")
 
-    {_env, setting} ->
-      setting
-  end
+  {env, nil} when env != :prod ->
+    :ok
 
-app_surfaces? = app_surfaces_setting == "on"
-
-config :keyfleet, :app_surfaces, app_surfaces?
-
-Logger.info("App surfaces #{if app_surfaces?, do: "enabled", else: "disabled"}")
+  {_env, other} ->
+    raise ~s(KEYFLEET_APP_SURFACES must be "on" or "off", got #{inspect(other)})
+end
 
 # Fleets are read from the chain only when a node is named, and never by the
 # test suite.

@@ -19,10 +19,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   defp close_surfaces, do: Application.put_env(:keyfleet, :app_surfaces, false)
   defp open_surfaces, do: Application.put_env(:keyfleet, :app_surfaces, true)
 
-  test "one switch is open by default and reads both explicit states" do
-    Application.delete_env(:keyfleet, :app_surfaces)
-    assert LaunchGate.app_surfaces_enabled?()
-
+  test "one switch reads both explicit states" do
     open_surfaces()
     assert LaunchGate.app_surfaces_enabled?()
 
@@ -40,24 +37,33 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert get(build_conn(), "/account").status == 200
   end
 
-  test "production refuses to boot without an explicit setting, and records the state" do
+  test "the boot takes only on or off, production must say which, and records the state" do
     original = System.get_env("KEYFLEET_APP_SURFACES")
     on_exit(fn -> restore_setting(original) end)
     System.delete_env("KEYFLEET_APP_SURFACES")
 
-    assert_raise RuntimeError, ~s(KEYFLEET_APP_SURFACES must be set to "on" or "off"), fn ->
+    assert_raise RuntimeError, ~s(KEYFLEET_APP_SURFACES must be "on" or "off", got nil), fn ->
       read_runtime_config(:prod)
     end
 
+    assert {config, _log} = read_runtime_config(:test)
+    refute Keyword.has_key?(config[:keyfleet], :app_surfaces)
+
+    System.put_env("KEYFLEET_APP_SURFACES", "on")
     assert {config, log} = read_runtime_config(:test)
     assert config[:keyfleet][:app_surfaces]
     assert log =~ "App surfaces enabled"
 
-    System.put_env("KEYFLEET_APP_SURFACES", "yes")
-
+    System.put_env("KEYFLEET_APP_SURFACES", "off")
     assert {config, log} = read_runtime_config(:test)
     refute config[:keyfleet][:app_surfaces]
     assert log =~ "App surfaces disabled"
+
+    System.put_env("KEYFLEET_APP_SURFACES", "yes")
+
+    assert_raise RuntimeError, ~s(KEYFLEET_APP_SURFACES must be "on" or "off", got "yes"), fn ->
+      read_runtime_config(:test)
+    end
   end
 
   test "every product route answers 503 with no product markup and no caching" do

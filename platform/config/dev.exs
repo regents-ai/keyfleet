@@ -1,5 +1,9 @@
 import Config
 config :keyfleet, :local_showcase, true
+
+# The product surfaces are open while developing; KEYFLEET_APP_SURFACES may
+# still say "on" or "off" (see runtime.exs).
+config :keyfleet, :app_surfaces, true
 config :keyfleet, :graph, enabled: true
 
 # The SIWA sign-in server agents use: the local siwa-server unless the
