@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.MetadataControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import KeyfleetWeb.RefusalHelpers
+
   alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
@@ -125,7 +127,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
           "/metadata/cascade/1234567890123456789"
         ] do
       response = get(conn, path)
-      assert json_response(response, 404) == %{"error" => "key_not_found"}, path
+      assert json_response(response, 404) == refused("key_not_found"), path
       assert ContractSchema.response_errors(json_response(response, 404), "GET", @path, 404) == []
     end
   end

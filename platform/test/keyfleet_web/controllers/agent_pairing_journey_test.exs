@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.AgentPairingJourneyTest do
   use ExUnit.Case, async: false
+  import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
   alias Keyfleet.Actors
@@ -90,12 +91,12 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
   end
 
   test "a signed agent asks for a key, sees the request and takes it back again", c do
-    assert send_signed(c, "POST", @pairing_path).body == %{"error" => "profile_not_found"}
+    assert send_signed(c, "POST", @pairing_path).body == refused("profile_not_found")
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     missing_key = send_signed(c, "POST", "/api/v1/agent/keys/fibonacci_syndicate/7/pairing")
     assert missing_key.status == 404
-    assert missing_key.body == %{"error" => "key_not_found"}
+    assert missing_key.body == refused("key_not_found")
 
     requested = send_signed(c, "POST", @pairing_path)
     assert requested.status == 200
@@ -120,13 +121,13 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
 
     repeated = send_signed(c, "DELETE", @pairing_path)
     assert repeated.status == 404
-    assert repeated.body == %{"error" => "pairing_not_found"}
+    assert repeated.body == refused("pairing_not_found")
     assert send_signed(c, "GET", @pairings_path).body["pairings"] == [withdrawn.body["pairing"]]
   end
 
   test "a signed agent steps down from the key it runs, once", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
-    assert send_signed(c, "POST", @step_down_path).body == %{"error" => "pairing_not_found"}
+    assert send_signed(c, "POST", @step_down_path).body == refused("pairing_not_found")
 
     requested = send_signed(c, "POST", @pairing_path).body["pairing"]
     assert send_signed(c, "POST", @step_down_path).status == 404
@@ -153,10 +154,10 @@ defmodule KeyfleetWeb.AgentPairingJourneyTest do
 
     repeated = send_signed(c, "POST", @step_down_path)
     assert repeated.status == 404
-    assert repeated.body == %{"error" => "pairing_not_found"}
+    assert repeated.body == refused("pairing_not_found")
 
     nowhere = send_signed(c, "POST", "/api/v1/agent/keys/hull_survey/1/step-down")
-    assert nowhere.body == %{"error" => "fleet_unknown"}
+    assert nowhere.body == refused("fleet_unknown")
 
     for body <- [~s({"token_id":1}), ~s({"reason":"done"})],
         do: assert(send_signed(c, "POST", @step_down_path, body).status == 401)

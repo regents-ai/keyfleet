@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.AgentRoomJourneyTest do
   use ExUnit.Case, async: false
+  import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
   alias Keyfleet.Actors
@@ -140,11 +141,11 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
     assert refused.status == 403
-    assert refused.body == %{"error" => "not_a_member"}
+    assert refused.body == refused("not_a_member")
 
     unknown = send_signed(c, "POST", room_path("hull-survey", "read"))
     assert unknown.status == 404
-    assert unknown.body == %{"error" => "room_unknown"}
+    assert unknown.body == refused("room_unknown")
   end
 
   # A coming-soon fleet has nothing an agent can read or write, and a sync is
@@ -181,7 +182,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       answer = send_signed(c, method, path, body)
 
-      assert {answer.status, answer.body} == {404, %{"error" => "fleet_coming_soon"}}, path
+      assert {answer.status, answer.body} == {404, refused("fleet_coming_soon")}, path
 
       assert Keyfleet.ContractSchema.response_errors(answer.body, method, template, 404) == [],
              path
@@ -223,13 +224,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     conflict = send_signed(c, "POST", @send_general, send_body("Hull survey finished", "k-1"))
     assert conflict.status == 422
-    assert conflict.body == %{"error" => "idempotency_conflict"}
+    assert conflict.body == refused("idempotency_conflict")
 
     missing =
       send_signed(c, "POST", room_path("hull-survey", "send"), send_body("Anyone there?", "k-2"))
 
     assert missing.status == 404
-    assert missing.body == %{"error" => "room_unknown"}
+    assert missing.body == refused("room_unknown")
 
     elsewhere =
       send_signed(c, "POST", room_path("coding", "send"), send_body("Hull survey log", "k-3"))
@@ -249,7 +250,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       )
 
     assert answer.status == 422
-    assert answer.body == %{"error" => "reply_not_here"}
+    assert answer.body == refused("reply_not_here")
 
     assert Enum.map(send_signed(c, "POST", @read_general).body["messages"], & &1["seq"]) == [1]
   end
@@ -304,7 +305,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.ContractSchema.errors(read.body, "ProposalRead") == []
 
     missing = send_signed(c, "POST", @read_proposal, ~s({"number":2,"votes_after_seq":0}))
-    assert {missing.status, missing.body} == {404, %{"error" => "proposal_unknown"}}
+    assert {missing.status, missing.body} == {404, refused("proposal_unknown")}
 
     assert first.body["graph"] == %{
              "run_id" => nil,
@@ -342,10 +343,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     unknown = send_signed(c, "POST", @sync_path, sync_body(%{"hull-survey" => 0}))
     assert unknown.status == 404
-    assert unknown.body == %{"error" => "room_unknown"}
+    assert unknown.body == refused("room_unknown")
 
     elsewhere = send_signed(c, "POST", "/api/v1/agent/fleets/hull_survey/sync", sync_body(%{}))
-    assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
+    assert {elsewhere.status, elsewhere.body} == {404, refused("fleet_unknown")}
   end
 
   test "only the canonical signed room path and body reach the room actions", c do
@@ -418,7 +419,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {@read_proposal, ~s({"number":1,"votes_after_seq":-1})}
         ] do
       refused = send_signed(c, "POST", path, body)
-      assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
+      assert {refused.status, refused.body} == {422, refused("out_of_range")}
     end
 
     twice =
@@ -430,7 +431,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       })
 
     refused = send_signed(c, "POST", @sync_path, twice)
-    assert {refused.status, refused.body} == {422, %{"error" => "invalid_request"}}
+    assert {refused.status, refused.body} == {422, refused("invalid_request")}
   end
 
   test "an agent reads and writes a key's thread by the key's number", c do
@@ -455,7 +456,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"hull_survey", 1, "send", send_body("Anyone there?", "k-0"), "fleet_unknown"}
         ] do
       refused = key_thread(c, token_id, action, body, fleet)
-      assert {refused.status, refused.body} == {404, %{"error" => error}}, "#{fleet} #{token_id}"
+      assert {refused.status, refused.body} == {404, refused(error)}, "#{fleet} #{token_id}"
       assert documented(refused, if(action == "read", do: @key_read, else: @key_send)) == []
     end
 
@@ -473,7 +474,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert documented(again, @key_send) == []
 
     conflict = key_thread(c, 5, "send", send_body("Welcome back", "k-1"))
-    assert {conflict.status, conflict.body} == {422, %{"error" => "idempotency_conflict"}}
+    assert {conflict.status, conflict.body} == {422, refused("idempotency_conflict")}
     assert documented(conflict, @key_send) == []
 
     in_room = send_signed(c, "POST", @send_general, send_body("Morning", "k-2"))
@@ -490,7 +491,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         })
       )
 
-    assert {answer.status, answer.body} == {422, %{"error" => "reply_not_here"}}
+    assert {answer.status, answer.body} == {422, refused("reply_not_here")}
 
     read = key_thread(c, 5, "read")
     assert documented(read, @key_read) == []
@@ -507,7 +508,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {@sync_path, sync_body(%{"key-5" => 0})}
         ] do
       missing = send_signed(c, "POST", path, body)
-      assert {missing.status, missing.body} == {404, %{"error" => "room_unknown"}}, path
+      assert {missing.status, missing.body} == {404, refused("room_unknown")}, path
     end
 
     created =
@@ -518,14 +519,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         ~s({"slug":"key-5","name":"Key 5"})
       )
 
-    assert {created.status, created.body} == {422, %{"error" => "invalid_room"}}
+    assert {created.status, created.body} == {422, refused("invalid_room")}
   end
 
   test "only members write to a key's thread, and only while ownership is fresh", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     refused = key_thread(c, 1, "send", send_body("Standing by", "k-1"))
-    assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
+    assert {refused.status, refused.body} == {403, refused("not_a_member")}
     assert documented(refused, @key_send) == []
 
     # Reading stays open to everyone.
@@ -538,7 +539,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     )
 
     refused = key_thread(c, 1, "send", send_body("Standing by", "k-1"))
-    assert {refused.status, refused.body} == {503, %{"error" => "ownership_refreshing"}}
+    assert {refused.status, refused.body} == {503, refused("ownership_refreshing")}
     assert documented(refused, @key_send) == []
   end
 
@@ -571,7 +572,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     for body <- [~s({"after_seq":#{2 ** 70}}), ~s({"after_seq":-1}), ~s({"limit":201})] do
       refused = send_signed(c, "POST", read_path, body)
-      assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
+      assert {refused.status, refused.body} == {422, refused("out_of_range")}
       assert documented(refused, @key_read) == []
     end
 
@@ -633,7 +634,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
             {%{slug: "hull", name: "HULL survey"}, 409, "name_taken"}
           ] do
         refused = create_room(c, body)
-        assert {refused.status, refused.body} == {status, %{"error" => error}}, inspect(body)
+        assert {refused.status, refused.body} == {status, refused(error)}, inspect(body)
       end
 
       elsewhere =
@@ -644,7 +645,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           ~s({"slug":"hull","name":"Hull"})
         )
 
-      assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
+      assert {elsewhere.status, elsewhere.body} == {404, refused("fleet_unknown")}
 
       sent = send_signed(c, "POST", cascade_room("hull-survey", "send"), send_body("Hi", "k-1"))
       assert sent.status == 201
@@ -707,7 +708,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       # A room is renamed at most once a minute.
       too_soon = name_room(c, "open-2", "Dry dock")
-      assert {too_soon.status, too_soon.body} == {429, %{"error" => "rename_too_soon"}}
+      assert {too_soon.status, too_soon.body} == {429, refused("rename_too_soon")}
       assert [wait] = Req.Response.get_header(too_soon, "retry-after")
       assert String.to_integer(wait) in 59..60
 
@@ -730,12 +731,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
             {"open-3", "DRY DOCK", 409, "name_taken"}
           ] do
         refused = name_room(c, slug, topic)
-        assert {refused.status, refused.body} == {status, %{"error" => error}}, inspect(topic)
+        assert {refused.status, refused.body} == {status, refused(error)}, inspect(topic)
       end
 
       create_room(c, %{slug: "hull", name: "Hull"})
       refused = name_room(c, "hull", "Mine")
-      assert {refused.status, refused.body} == {422, %{"error" => "room_not_open"}}
+      assert {refused.status, refused.body} == {422, refused("room_not_open")}
 
       elsewhere =
         send_signed(
@@ -745,7 +746,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           ~s({"topic":"Hull"})
         )
 
-      assert {elsewhere.status, elsewhere.body} == {404, %{"error" => "fleet_unknown"}}
+      assert {elsewhere.status, elsewhere.body} == {404, refused("fleet_unknown")}
     end
 
     test "while key ownership is not fresh, an agent neither posts, creates nor names a room",
@@ -759,7 +760,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
             {cascade_room("general", "send"), send_body("Standing by", "k-2")}
           ] do
         refused = send_signed(c, "POST", path, body)
-        assert {refused.status, refused.body} == {503, %{"error" => "ownership_refreshing"}}
+        assert {refused.status, refused.body} == {503, refused("ownership_refreshing")}
       end
 
       # Reading stays open to everyone.
@@ -774,7 +775,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       )
 
       refused = create_room(c, %{slug: "hull", name: "Hull"})
-      assert {refused.status, refused.body} == {422, %{"error" => "invalid_room"}}
+      assert {refused.status, refused.body} == {422, refused("invalid_room")}
       assert create_room(c, %{slug: "keel", name: "Keel"}).status == 201
     end
 
@@ -782,10 +783,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
       refused = create_room(c, %{slug: "hull", name: "Hull"})
-      assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
+      assert {refused.status, refused.body} == {403, refused("not_a_member")}
 
       refused = name_room(c, "open-1", "Hull")
-      assert {refused.status, refused.body} == {403, %{"error" => "not_a_member"}}
+      assert {refused.status, refused.body} == {403, refused("not_a_member")}
     end
 
     # Five fixed rooms, five open rooms and a hundred created ones: 110 rooms.
@@ -800,7 +801,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       end
 
       refused = create_room(c, %{slug: "made-101", name: "Made 101"})
-      assert {refused.status, refused.body} == {409, %{"error" => "room_limit_reached"}}
+      assert {refused.status, refused.body} == {409, refused("room_limit_reached")}
 
       every_room = Map.new(Rooms.list_rooms!(@cascade), &{&1.slug, 0})
       assert map_size(every_room) == 110
@@ -816,7 +817,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       refused =
         send_signed(c, "POST", "/api/v1/agent/fleets/#{@cascade}/sync", sync_body(one_more))
 
-      assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
+      assert {refused.status, refused.body} == {422, refused("out_of_range")}
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
@@ -859,7 +860,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       # The created room's name is taken, whatever its case.
       taken = name_room(c, "open-1", "hULL")
-      assert {taken.status, taken.body} == {409, %{"error" => "name_taken"}}
+      assert {taken.status, taken.body} == {409, refused("name_taken")}
       assert name_room(c, "open-1", "Hull works").status == 200
     end
   end

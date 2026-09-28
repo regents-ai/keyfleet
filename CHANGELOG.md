@@ -182,3 +182,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - `openapi.json` gives every operation a 429 with the rate-limit headers and a
   default error answer, and every other answer the rate-limit headers. The
   YAML contract declares the 429 on every `/api` operation.
+
+## 2026-09-28 — Every JSON error in one shape
+
+- Every JSON error Keyfleet gives is `{"error": {"code", "message", "hint"}}`,
+  with one plain message and hint per code in `KeyfleetWeb.Refusal`. That
+  covers the directory, the metadata, the launch gate, browser sign-in and every
+  signed agent request. A route's own refusal was `{"error": "code"}` and keeps
+  its code.
+- A workspace refusal carries its `details` inside `error`, beside the
+  workspace's own message.
+- The closed site's answer is the code `not_open_yet` and the directory's
+  unreadable answer the code `directory_unavailable`; both were sentences.
+- The profile answers come from the Regents identity library and keep
+  `{"error": {"code"}}` until that library changes.
+- The YAML contract, `openapi.json`, `/docs`, `/skill.md`, `/llms.txt` and the
+  tests describe and check only this shape.

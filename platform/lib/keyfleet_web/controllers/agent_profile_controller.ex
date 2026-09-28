@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.AgentProfileController do
   use KeyfleetWeb, :controller
 
+  alias KeyfleetWeb.Refusal
+
   def status(conn, %{"name" => name, "declared_harness" => harness}) do
     case Keyfleet.Agents.ensure_profile(%{name: name, declared_harness: harness},
            actor: conn.assigns.agent_actor
@@ -20,12 +22,12 @@ defmodule KeyfleetWeb.AgentProfileController do
          {:ok, profile} <- Keyfleet.Agents.edit_my_profile(profile, params, actor: actor) do
       respond_profile(conn, profile)
     else
-      {:ok, nil} -> conn |> put_status(404) |> json(%{error: "profile_not_found"})
+      {:ok, nil} -> Refusal.json(conn, 404, "profile_not_found")
       {:error, _error} -> invalid_profile(conn)
     end
   end
 
-  defp invalid_profile(conn), do: conn |> put_status(422) |> json(%{error: "invalid_profile"})
+  defp invalid_profile(conn), do: Refusal.json(conn, 422, "invalid_profile")
 
   defp respond_profile(conn, profile) do
     json(conn, %{

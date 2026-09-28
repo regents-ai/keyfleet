@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   use KeyfleetWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
+  import KeyfleetWeb.RefusalHelpers
 
   alias KeyfleetWeb.ContentSecurityPolicy
   alias KeyfleetWeb.Live.LaunchGateHook
@@ -105,7 +106,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
           get(build_conn(), "/api/v1/profile"),
           get(build_conn(), "/auth/session")
         ] do
-      assert json_response(conn, 503) == %{"error" => @closed_message}
+      assert json_response(conn, 503) == refused("not_open_yet")
       assert get_resp_header(conn, "retry-after") == ["3600"]
       assert get_resp_header(conn, "cache-control") == ["no-store"]
     end
@@ -151,10 +152,10 @@ defmodule KeyfleetWeb.LaunchGateTest do
     close_surfaces()
 
     assert json_response(delete(build_conn(), "/auth/privy/session"), 200) == %{"ok" => true}
-    assert json_response(get(build_conn(), "/auth/csrf"), 503) == %{"error" => @closed_message}
+    assert json_response(get(build_conn(), "/auth/csrf"), 503) == refused("not_open_yet")
 
     assert json_response(post(build_conn(), "/auth/privy/session", %{}), 503) ==
-             %{"error" => @closed_message}
+             refused("not_open_yet")
   end
 
   test "a mount arriving over the socket is sent to the marketing page instead" do

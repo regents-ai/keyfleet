@@ -76,7 +76,14 @@ paths:
                 additionalProperties: false
                 required: [error]
                 properties:
-                  error: {type: string, const: rate_limited}
+                  error:
+                    type: object
+                    additionalProperties: false
+                    required: [code, message, hint]
+                    properties:
+                      code: {type: string, const: rate_limited}
+                      message: {type: string}
+                      hint: {type: string}
   /auth/privy/failure:
     post:
       operationId: reportPrivyBrowserFailure
@@ -770,10 +777,7 @@ paths:
             RateLimit: {$ref: "#/components/headers/RateLimit"}
           content:
             application/json:
-              schema:
-                oneOf:
-                  - {$ref: "#/components/schemas/RoomRenameTooSoonError"}
-                  - {$ref: "#/components/schemas/RecoveryError"}
+              schema: {$ref: "#/components/schemas/RoomTopicWaitError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
   /metadata/{slot}/{token_id}:
     get:
@@ -1101,8 +1105,8 @@ components:
           schema: {$ref: "#/components/schemas/KeyPairingEnvelope"}
     DirectoryUnavailable:
       description: >-
-        This part of the site isn't open yet, and Retry-After says when to ask again; or the
-        directory can't be read right now, and the error says so
+        not_open_yet: this part of the site isn't open yet, and Retry-After says when to ask
+        again. directory_unavailable: the directory can't be read right now; try again in a moment.
       headers:
         Retry-After:
           schema: {type: string, const: "3600"}
@@ -1113,7 +1117,14 @@ components:
             additionalProperties: false
             required: [error]
             properties:
-              error: {type: string}
+              error:
+                type: object
+                additionalProperties: false
+                required: [code, message, hint]
+                properties:
+                  code: {type: string, enum: [not_open_yet, directory_unavailable]}
+                  message: {type: string}
+                  hint: {type: string}
     FleetUnknown:
       description: There is no such fleet
       content:
@@ -1240,18 +1251,29 @@ components:
       required: [error]
       properties:
         error:
-          type: string
-          enum: [unauthorized, authentication_unavailable, request_too_large, out_of_range]
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [unauthorized, authentication_unavailable, request_too_large, out_of_range]}
+            message: {type: string}
+            hint: {type: string}
     WorkspaceError:
       type: object
       additionalProperties: false
-      required: [error, message, details]
+      required: [error]
       properties:
         error:
-          type: string
-          enum: [bad_request, forbidden_scope, not_found, conflict, invalid, forbidden_field, duplicate_mismatch, fleet_unknown, not_a_key_holder, ownership_refreshing, graph_unavailable, indeterminate, invalid_request]
-        message: {type: string}
-        details: {type: object}
+          type: object
+          additionalProperties: false
+          required: [code, message, hint, details]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, forbidden_scope, not_found, conflict, invalid, forbidden_field, duplicate_mismatch, fleet_unknown, not_a_key_holder, ownership_refreshing, graph_unavailable, indeterminate, invalid_request]
+            message: {type: string}
+            hint: {type: string}
+            details: {type: object}
     WorkspaceGetRequest:
       type: object
       additionalProperties: false
@@ -1562,13 +1584,27 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: authentication_unavailable}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: authentication_unavailable}
+            message: {type: string}
+            hint: {type: string}
     AgentOwnershipUnavailableError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [authentication_unavailable, ownership_refreshing]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [authentication_unavailable, ownership_refreshing]}
+            message: {type: string}
+            hint: {type: string}
     AgentJoinRequest:
       type: object
       additionalProperties: false
@@ -1628,13 +1664,27 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: invalid_profile}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: invalid_profile}
+            message: {type: string}
+            hint: {type: string}
     AgentProfileNotFoundError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: profile_not_found}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: profile_not_found}
+            message: {type: string}
+            hint: {type: string}
     AgentWallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
     KeyPairing:
       type: object
@@ -1710,25 +1760,53 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_not_found, profile_not_found]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_not_found, profile_not_found]}
+            message: {type: string}
+            hint: {type: string}
     KeyPairingOperatingError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: already_operating}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: already_operating}
+            message: {type: string}
+            hint: {type: string}
     KeyPairingRequestNotFoundError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, pairing_not_found]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, pairing_not_found]}
+            message: {type: string}
+            hint: {type: string}
     KeyPairingDecidedError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: pairing_already_decided}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: pairing_already_decided}
+            message: {type: string}
+            hint: {type: string}
     RoomSeq: {type: integer, minimum: 0, maximum: 9223372036854775807}
     Room:
       type: object
@@ -1873,19 +1951,40 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: fleet_unknown}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: fleet_unknown}
+            message: {type: string}
+            hint: {type: string}
     AgentFleetNotFoundError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon]}
+            message: {type: string}
+            hint: {type: string}
     FleetComingSoonError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: fleet_coming_soon}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: fleet_coming_soon}
+            message: {type: string}
+            hint: {type: string}
     FleetList:
       type: object
       additionalProperties: false
@@ -2098,55 +2197,118 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, room_unknown]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, room_unknown]}
+            message: {type: string}
+            hint: {type: string}
     KeyUnknownError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_unknown]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, key_unknown]}
+            message: {type: string}
+            hint: {type: string}
     RoomMemberError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: not_a_member}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: not_a_member}
+            message: {type: string}
+            hint: {type: string}
     RoomOpenConflictError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [room_taken, name_taken, room_limit_reached]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [room_taken, name_taken, room_limit_reached]}
+            message: {type: string}
+            hint: {type: string}
     RoomOpenInvalidError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: invalid_room}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: invalid_room}
+            message: {type: string}
+            hint: {type: string}
     RoomTopicInvalidError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [invalid_topic, room_not_open]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [invalid_topic, room_not_open]}
+            message: {type: string}
+            hint: {type: string}
     RoomNameTakenError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: name_taken}
-    RoomRenameTooSoonError:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: name_taken}
+            message: {type: string}
+            hint: {type: string}
+    RoomTopicWaitError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: rename_too_soon}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [rename_too_soon, too_many_requests]}
+            message: {type: string}
+            hint: {type: string}
     RoomSendError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [idempotency_conflict, reply_not_here, invalid_message]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [idempotency_conflict, reply_not_here, invalid_message]}
+            message: {type: string}
+            hint: {type: string}
     FleetSyncRequest:
       type: object
       additionalProperties: false
@@ -2515,13 +2677,27 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [fleet_unknown, fleet_coming_soon, proposal_unknown]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, proposal_unknown]}
+            message: {type: string}
+            hint: {type: string}
     FleetSyncInvalidError:
       type: object
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [out_of_range, invalid_request]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [out_of_range, invalid_request]}
+            message: {type: string}
+            hint: {type: string}
     ProfileEnvelope:
       type: object
       additionalProperties: false
@@ -2610,7 +2786,14 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, enum: [unauthorized]}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [unauthorized]}
+            message: {type: string}
+            hint: {type: string}
     KeyMetadataRevealing:
       type: object
       additionalProperties: false
@@ -2663,4 +2846,11 @@ components:
       additionalProperties: false
       required: [error]
       properties:
-        error: {type: string, const: key_not_found}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: key_not_found}
+            message: {type: string}
+            hint: {type: string}

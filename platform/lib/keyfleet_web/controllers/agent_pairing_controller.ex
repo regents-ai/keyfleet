@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.AgentPairingController do
   alias Keyfleet.Keys.Errors.ProfileRequiredError
   alias Keyfleet.Keys.Errors.UnknownKeyError
   alias KeyfleetWeb.PairingJSON
+  alias KeyfleetWeb.Refusal
 
   @fields [
     :id,
@@ -47,7 +48,7 @@ defmodule KeyfleetWeb.AgentPairingController do
          {:ok, withdrawn} <- Keys.withdraw_pairing_request(request, %{}, actor: actor) do
       json(conn, %{pairing: pairing_json(withdrawn, actor)})
     else
-      {:ok, nil} -> conn |> put_status(404) |> json(%{error: "pairing_not_found"})
+      {:ok, nil} -> Refusal.json(conn, 404, "pairing_not_found")
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -61,7 +62,7 @@ defmodule KeyfleetWeb.AgentPairingController do
          {:ok, ended} <- Keys.step_down(pairing, %{}, actor: actor) do
       json(conn, %{pairing: pairing_json(ended, actor)})
     else
-      {:ok, nil} -> conn |> put_status(404) |> json(%{error: "pairing_not_found"})
+      {:ok, nil} -> Refusal.json(conn, 404, "pairing_not_found")
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -105,12 +106,11 @@ defmodule KeyfleetWeb.AgentPairingController do
 
   defp refuse(conn, _error), do: invalid(conn)
 
-  defp refreshing(conn),
-    do: conn |> put_status(503) |> json(%{error: "ownership_refreshing"})
+  defp refreshing(conn), do: Refusal.json(conn, 503, "ownership_refreshing")
 
-  defp not_found(conn, error), do: conn |> put_status(404) |> json(%{error: error})
+  defp not_found(conn, code), do: Refusal.json(conn, 404, code)
 
-  defp conflict(conn, error), do: conn |> put_status(409) |> json(%{error: error})
+  defp conflict(conn, code), do: Refusal.json(conn, 409, code)
 
-  defp invalid(conn), do: conn |> put_status(422) |> json(%{error: "invalid_pairing"})
+  defp invalid(conn), do: Refusal.json(conn, 422, "invalid_pairing")
 end

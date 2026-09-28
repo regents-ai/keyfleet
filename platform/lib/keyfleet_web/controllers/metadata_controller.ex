@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.MetadataController do
         conn |> put_resp_header("cache-control", "public, max-age=3600") |> json(metadata)
 
       :not_found ->
-        conn |> put_status(:not_found) |> json(%{error: "key_not_found"})
+        KeyfleetWeb.Refusal.json(conn, 404, "key_not_found")
     end
   end
 end

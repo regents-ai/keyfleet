@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias KeyfleetWeb.PairingJSON
   alias KeyfleetWeb.ProposalJSON
+  alias KeyfleetWeb.Refusal
 
   @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
@@ -254,13 +255,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp refuse(conn, %Ash.Error.Invalid{errors: errors}) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+        Refusal.json(conn, 404, "fleet_unknown")
 
       Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
         not_found(conn)
 
       Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
-        conn |> put_status(404) |> json(%{error: "key_unknown"})
+        Refusal.json(conn, 404, "key_unknown")
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
         invalid(conn, "idempotency_conflict")
@@ -278,13 +279,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp refuse_room(conn, %Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+        Refusal.json(conn, 404, "fleet_unknown")
 
       Enum.any?(errors, &match?(%CreatedRoomLimitError{}, &1)) ->
-        conn |> put_status(409) |> json(%{error: "room_limit_reached"})
+        Refusal.json(conn, 409, "room_limit_reached")
 
       Rooms.taken?(error, :slug) ->
-        conn |> put_status(409) |> json(%{error: "room_taken"})
+        Refusal.json(conn, 409, "room_taken")
 
       Rooms.taken?(error, :name) ->
         name_taken(conn)
@@ -301,7 +302,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp refuse_topic(conn, %Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+        Refusal.json(conn, 404, "fleet_unknown")
 
       Enum.any?(errors, &match?(%{field: :kind}, &1)) ->
         invalid(conn, "room_not_open")
@@ -312,8 +313,7 @@ defmodule KeyfleetWeb.AgentRoomController do
       too_soon = Enum.find(errors, &match?(%RenameTooSoonError{}, &1)) ->
         conn
         |> put_resp_header("retry-after", Integer.to_string(too_soon.retry_after))
-        |> put_status(429)
-        |> json(%{error: "rename_too_soon"})
+        |> Refusal.json(429, "rename_too_soon")
 
       true ->
         invalid(conn, "invalid_topic")
@@ -323,14 +323,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp refuse_topic(conn, _error), do: invalid(conn, "invalid_topic")
 
   # Another room of the fleet already goes by this name.
-  defp name_taken(conn), do: conn |> put_status(409) |> json(%{error: "name_taken"})
+  defp name_taken(conn), do: Refusal.json(conn, 409, "name_taken")
 
-  defp forbidden(conn), do: conn |> put_status(403) |> json(%{error: "not_a_member"})
+  defp forbidden(conn), do: Refusal.json(conn, 403, "not_a_member")
 
-  defp refreshing(conn),
-    do: conn |> put_status(503) |> json(%{error: "ownership_refreshing"})
+  defp refreshing(conn), do: Refusal.json(conn, 503, "ownership_refreshing")
 
-  defp not_found(conn), do: conn |> put_status(404) |> json(%{error: "room_unknown"})
+  defp not_found(conn), do: Refusal.json(conn, 404, "room_unknown")
 
-  defp invalid(conn, error), do: conn |> put_status(422) |> json(%{error: error})
+  defp invalid(conn, code), do: Refusal.json(conn, 422, code)
 end

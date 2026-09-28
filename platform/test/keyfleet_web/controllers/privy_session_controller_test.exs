@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
+  import KeyfleetWeb.RefusalHelpers
 
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.{RequestRateLimiter, SessionAuthority}
@@ -236,7 +237,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
         |> post("/auth/privy/session", %{})
       end)
 
-    assert json_response(response, 401) == %{"error" => "unauthorized"}
+    assert json_response(response, 401) == refused("unauthorized")
     assert failures(log, "session_exchange") == 1
 
     assert_receive {:session_failure, @browser_failure_event, %{count: 1},
@@ -376,7 +377,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     refused = csrf_bootstrap(browser)
 
-    assert json_response(refused, 409) == %{"error" => "session_superseded"}
+    assert json_response(refused, 409) == refused("session_superseded")
     refute session_cookie(refused)
     assert SessionAuthority.exact(current) == {:ok, account_id}
   end
@@ -387,7 +388,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     refused = csrf_bootstrap(browser)
 
-    assert json_response(refused, 409) == %{"error" => "session_reset_required"}
+    assert json_response(refused, 409) == refused("session_reset_required")
     assert refused.private[:plug_session_info] == :drop
 
     minted = csrf_bootstrap(build_conn())
@@ -412,7 +413,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     denied = bootstrap_from(@peer)
 
-    assert json_response(denied, 429) == %{"error" => "rate_limited"}
+    assert json_response(denied, 429) == refused("rate_limited")
     assert get_resp_header(denied, "retry-after") == ["300"]
     assert get_resp_header(denied, "cache-control") == ["no-store"]
     refute session_cookie(denied)
@@ -596,7 +597,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       |> put_req_header("x-csrf-token", csrf)
       |> post("/auth/privy/session", %{})
 
-    assert json_response(loser, 409) == %{"error" => "session_superseded"}
+    assert json_response(loser, 409) == refused("session_superseded")
     refute session_cookie(loser)
     assert SessionAuthority.exact(current) == {:ok, account_id}
   end
@@ -623,7 +624,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       |> post("/auth/privy/session", %{})
 
     assert_response_sent_then_disconnect(topic)
-    assert json_response(switched, 409) == %{"error" => "account_switch_required"}
+    assert json_response(switched, 409) == refused("account_switch_required")
     assert switched.private[:plug_session_info] == :drop
     assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
 
@@ -775,7 +776,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
             |> put_headers(pair)
             |> post("/auth/privy/session", %{})
 
-          assert json_response(refused, 401) == %{"error" => "unauthorized"}
+          assert json_response(refused, 401) == refused("unauthorized")
           assert_no_token_disclosure(refused)
         end
       end)
@@ -878,7 +879,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       end)
 
     assert_response_sent_then_disconnect(topic)
-    assert json_response(marked, 401) == %{"error" => "unauthorized"}
+    assert json_response(marked, 401) == refused("unauthorized")
     assert failures(log, "session_exchange") == 1
     assert get_resp_header(marked, "x-ash-provider-relogin") == ["allowed"]
     assert marked.private[:plug_session_info] == :drop
@@ -913,7 +914,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     try do
       capture_log(fn ->
         assert browser |> post("/auth/privy/session", %{}) |> json_response(401) ==
-                 %{"error" => "unauthorized"}
+                 refused("unauthorized")
       end)
     after
       Logger.configure(level: level)
@@ -1051,7 +1052,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       end)
 
     assert_response_sent_then_disconnect(topic)
-    assert %{"error" => "unauthorized"} = json_response(rejected, 401)
+    assert json_response(rejected, 401) == refused("unauthorized")
     assert failures(log, "session_exchange") == 1
     assert rejected.private[:plug_session_info] == :drop
 
@@ -1084,7 +1085,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
         |> post("/auth/privy/session", %{})
       end)
 
-    assert %{"error" => "unauthorized"} = json_response(rejected, 401)
+    assert json_response(rejected, 401) == refused("unauthorized")
     assert failures(log, "session_exchange") == 1
     assert rejected.private[:plug_session_info] == :drop
 

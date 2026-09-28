@@ -8,10 +8,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   of Use, never pass through the gate.
   """
 
-  import Phoenix.Controller, only: [get_format: 1, json: 2, put_secure_browser_headers: 2]
+  import Phoenix.Controller, only: [get_format: 1, put_secure_browser_headers: 2]
   import Plug.Conn
 
-  alias KeyfleetWeb.{ContentSecurityPolicy, HoldingController}
+  alias KeyfleetWeb.{ContentSecurityPolicy, HoldingController, Refusal}
 
   @doc "True while the product surfaces are open."
   def app_surfaces_enabled?, do: Application.fetch_env!(:keyfleet, :app_surfaces)
@@ -32,8 +32,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   defp response_format(%Plug.Conn{path_info: ["auth" | _]}), do: "json"
   defp response_format(conn), do: get_format(conn)
 
-  defp closed(conn, "json"),
-    do: conn |> unavailable() |> json(%{error: "This part of the site isn't open yet."})
+  defp closed(conn, "json"), do: conn |> unavailable() |> Refusal.json(503, "not_open_yet")
 
   defp closed(conn, "md"),
     do:

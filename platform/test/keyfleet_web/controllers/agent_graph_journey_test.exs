@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.AgentGraphJourneyTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
+  import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
   alias Keyfleet.Actors
@@ -308,9 +309,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     {won_status, _won} = Enum.find(answers, fn {_status, answer} -> answer.status == 200 end)
     {_status, lost} = Enum.find(answers, fn {_status, answer} -> answer.status == 409 end)
 
-    assert lost.body["error"] == "conflict"
-    assert lost.body["details"]["current_version"] == 2
-    assert lost.body["details"]["object"]["data"]["status"] == won_status
+    assert lost.body["error"]["code"] == "conflict"
+    assert lost.body["error"]["details"]["current_version"] == 2
+    assert lost.body["error"]["details"]["object"]["data"]["status"] == won_status
   end
 
   test "a key changing hands while its agent's write waits in line refuses that write, and its earlier edits keep their author",
@@ -339,7 +340,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     refused = Task.await(waiting, 15_000)
     assert refused.status == 403
-    assert refused.body["error"] == "not_a_key_holder"
+    assert refused.body["error"]["code"] == "not_a_key_holder"
 
     object = graph(c, ann, "get", %{id: goal["id"]}).body["object"]
     assert object["version"] == 1
@@ -374,7 +375,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
           Map.put(@goal, :approved, true)
         ] do
       refused = graph(c, ann, "create", %{create | data: data})
-      assert {refused.status, refused.body["error"]} == {422, "forbidden_field"}
+      assert {refused.status, refused.body["error"]["code"]} == {422, "forbidden_field"}
     end
 
     refused =
@@ -386,7 +387,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         set: %{sys: %{archived: true}}
       })
 
-    assert {refused.status, refused.body["details"]} == {422, %{"fields" => ["sys"]}}
+    assert {refused.status, refused.body["error"]["details"]} == {422, %{"fields" => ["sys"]}}
 
     events = graph(c, ann, "changes", %{}).body["events"]
     assert Enum.count(events, &(&1["type"] == "keyfleet.command")) == 1
@@ -441,7 +442,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     # While the fleet's key ownership is not fresh, no level is written.
     ChainHelpers.seed_cursor!(@levelled, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     refused = graph(c, cal, "create", level_goal(3, "c-3", "level:2"), @levelled)
-    assert {refused.status, refused.body["error"]} == {503, "ownership_refreshing"}
+    assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
     assert length(commands(c, ann, @levelled)) == 3
   end
 
@@ -500,7 +501,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for {set, n} <- Enum.with_index([%{sys: %{scope: "fleet"}}, %{scope: "fleet"}]) do
       patch = %{as_key: 3, command_id: "s-#{n}", id: closed["id"], expected_version: 1, set: set}
       refused = graph(c, cal, "patch", patch, @levelled)
-      assert {refused.status, refused.body["error"]} == {422, "forbidden_field"}
+      assert {refused.status, refused.body["error"]["code"]} == {422, "forbidden_field"}
     end
 
     read = graph(c, ann, "get", %{id: closed["id"]}, @levelled).body
@@ -642,7 +643,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
           data: @goal
         })
 
-      assert {refused.status, refused.body["error"]} == {403, "not_a_key_holder"}
+      assert {refused.status, refused.body["error"]["code"]} == {403, "not_a_key_holder"}
     end
 
     events = graph(c, stranger, "changes", %{}).body["events"]
@@ -664,7 +665,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         expected_version: 1
       })
 
-    assert {refused.status, refused.body["error"]} == {503, "ownership_refreshing"}
+    assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
 
     read = graph(c, ann, "get", %{id: goal["id"]})
     assert read.status == 200
@@ -680,20 +681,20 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     for {op, body} <- [{"get", %{id: goal["id"]}}, {"create", create}] do
       missing = send_signed(c, ann, "POST", "/api/v1/agent/fleets/hull_survey/graph/#{op}", body)
-      assert {missing.status, missing.body["error"]} == {404, "fleet_unknown"}
+      assert {missing.status, missing.body["error"]["code"]} == {404, "fleet_unknown"}
     end
 
     stop_supervised!(Keyfleet.Graph.Supervisor)
 
     refused = graph(c, ann, "create", create)
-    assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
+    assert {refused.status, refused.body["error"]["code"]} == {503, "graph_unavailable"}
 
     read = graph(c, ann, "get", %{id: goal["id"]})
     assert {read.status, read.body["object"]["data"]["title"]} == {200, @goal.title}
     assert [_command] = commands(c, ann)
 
     absent = graph(c, ann, "get", %{id: "goal#9"})
-    assert {absent.status, absent.body["error"]} == {404, "not_found"}
+    assert {absent.status, absent.body["error"]["code"]} == {404, "not_found"}
   end
 
   test "a write whose outcome never came back says so, and its retry applies it once", c do
@@ -713,8 +714,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       end)
 
     assert lost.status == 503
-    assert lost.body["error"] == "indeterminate"
-    assert lost.body["details"] == %{"retry_same_command_id" => true}
+    assert lost.body["error"]["code"] == "indeterminate"
+    assert lost.body["error"]["details"] == %{"retry_same_command_id" => true}
 
     assert Regex.scan(~r/graph host for \S+ stopped: .+$/m, log) ==
              [["graph host for #{@fleet} stopped: :reply_timeout"]]
@@ -752,8 +753,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
                "** (DBConnection.OwnershipError) cannot find ownership process for"
 
     refute log =~ "Unknown Error"
-    assert {refused.status, refused.body["error"]} == {503, "graph_unavailable"}
-    assert refused.body["message"] =~ "nothing was written"
+    assert {refused.status, refused.body["error"]["code"]} == {503, "graph_unavailable"}
+    assert refused.body["error"]["hint"] =~ "Nothing was written"
 
     # Leaving manual mode rolled the sandbox back, so the log itself shows
     # that nothing was written.
@@ -777,7 +778,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     :sys.resume(writer)
 
     refused = Task.await(waiting, 15_000)
-    assert {refused.status, refused.body["error"]} == {503, "ownership_refreshing"}
+    assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
     assert commands(c, ann) == []
   end
 
@@ -791,7 +792,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert Process.info(writer, :message_queue_len) == {:message_queue_len, 0}
     :sys.resume(writer)
 
-    assert {refused.status, refused.body["error"]} == {403, "not_a_key_holder"}
+    assert {refused.status, refused.body["error"]["code"]} == {403, "not_a_key_holder"}
     assert commands(c, stranger) == []
   end
 
@@ -840,7 +841,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         data: too_large
       })
 
-    assert {refused.status, refused.body} == {413, %{"error" => "request_too_large"}}
+    assert {refused.status, refused.body} == {413, refused("request_too_large")}
     assert length(commands(c, ann)) == 1
   end
 
@@ -888,7 +889,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
           {"archive", %{as_key: 1, command_id: "c-1", id: "goal#1", expected_version: 2 ** 70}}
         ] do
       refused = graph(c, ann, op, body)
-      assert {refused.status, refused.body} == {422, %{"error" => "out_of_range"}}
+      assert {refused.status, refused.body} == {422, refused("out_of_range")}
     end
   end
 
@@ -1043,7 +1044,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     do: graph(c, agent, "get", %{id: id}, @levelled).body["object"]["sys"]["scope"]
 
   defp assert_forbidden_scope(refused, scope) do
-    assert {refused.status, refused.body["error"], refused.body["details"]} ==
+    assert {refused.status, refused.body["error"]["code"], refused.body["error"]["details"]} ==
              {403, "forbidden_scope", %{"scope" => scope}}
   end
 

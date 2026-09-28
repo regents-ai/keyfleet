@@ -86,7 +86,16 @@ defmodule KeyfleetWeb.ApiContractTest do
                              "additionalProperties" => false,
                              "required" => ["error"],
                              "properties" => %{
-                               "error" => %{"type" => "string", "const" => "rate_limited"}
+                               "error" => %{
+                                 "type" => "object",
+                                 "additionalProperties" => false,
+                                 "required" => ["code", "message", "hint"],
+                                 "properties" => %{
+                                   "code" => %{"type" => "string", "const" => "rate_limited"},
+                                   "message" => %{"type" => "string"},
+                                   "hint" => %{"type" => "string"}
+                                 }
+                               }
                              }
                            }
                          }
@@ -237,7 +246,16 @@ defmodule KeyfleetWeb.ApiContractTest do
              "additionalProperties" => false,
              "required" => ["error"],
              "properties" => %{
-               "error" => %{"type" => "string", "enum" => ["unauthorized"]}
+               "error" => %{
+                 "type" => "object",
+                 "additionalProperties" => false,
+                 "required" => ["code", "message", "hint"],
+                 "properties" => %{
+                   "code" => %{"type" => "string", "enum" => ["unauthorized"]},
+                   "message" => %{"type" => "string"},
+                   "hint" => %{"type" => "string"}
+                 }
+               }
              }
            }
 

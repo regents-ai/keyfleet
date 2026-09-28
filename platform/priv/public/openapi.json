@@ -113,7 +113,7 @@
             }
           },
           "503": {
-            "description": "This part of the site isn't open yet, and Retry-After says when to ask again; or the directory can't be read right now, and the error says so",
+            "description": "not_open_yet: this part of the site isn't open yet, and Retry-After says when to ask again. directory_unavailable: the directory can't be read right now; try again in a moment.",
             "headers": {
               "Retry-After": {
                 "schema": {
@@ -131,16 +131,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -220,7 +211,7 @@
             }
           },
           "404": {
-            "description": "There is no such fleet",
+            "description": "fleet_unknown: there is no such fleet",
             "headers": {
               "RateLimit-Policy": {
                 "$ref": "#/components/headers/RateLimitPolicy"
@@ -232,23 +223,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "const": "fleet_unknown"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
           },
           "503": {
-            "description": "This part of the site isn't open yet, and Retry-After says when to ask again; or the directory can't be read right now, and the error says so",
+            "description": "not_open_yet: this part of the site isn't open yet, and Retry-After says when to ask again. directory_unavailable: the directory can't be read right now; try again in a moment.",
             "headers": {
               "Retry-After": {
                 "schema": {
@@ -266,16 +247,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -978,8 +950,11 @@
             "properties": {
               "code": {
                 "type": "string",
-                "description": "A stable machine-readable code. Profile answers use the codes in examples; any other error uses its status name in snake case, such as not_found or too_many_requests.",
+                "description": "A stable machine-readable code. The directory and profile answers use the codes in examples; any other error uses its status name in snake case, such as not_found or too_many_requests.",
                 "examples": [
+                  "fleet_unknown",
+                  "directory_unavailable",
+                  "not_open_yet",
                   "authentication_required",
                   "profile_unconfigured",
                   "profile_unavailable",

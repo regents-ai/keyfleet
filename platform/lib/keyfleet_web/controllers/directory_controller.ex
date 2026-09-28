@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.DirectoryController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorMD}
+  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorMD, Refusal}
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.DirectoryController do
         conn |> cached() |> json(DirectoryJSON.show(%{fleet: fleet, generated_at: now()}))
 
       :unknown ->
-        conn |> put_status(404) |> json(%{error: "fleet_unknown"})
+        Refusal.json(conn, 404, "fleet_unknown")
 
       {:error, _failure} ->
         unavailable_json(conn)
@@ -67,7 +67,7 @@ defmodule KeyfleetWeb.DirectoryController do
     |> send_resp(503, @unavailable <> "\n")
   end
 
-  defp unavailable_json(conn), do: conn |> put_status(503) |> json(%{error: @unavailable})
+  defp unavailable_json(conn), do: Refusal.json(conn, 503, "directory_unavailable")
 
   defp fleet_file(file) do
     with fleet_id when fleet_id != file <- String.replace_suffix(file, ".md", ""),

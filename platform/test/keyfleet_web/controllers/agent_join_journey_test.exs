@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.AgentJoinJourneyTest do
   use ExUnit.Case, async: false
+  import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
   @path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
@@ -89,7 +90,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     invalid = send_request(c, signed(c, ~s({"name":"","declared_harness":"local"})))
     assert invalid.status == 422
-    assert invalid.body == %{"error" => "invalid_profile"}
+    assert invalid.body == refused("invalid_profile")
   end
 
   test "foreign receipt audience and chain never acquire a Keyfleet actor", c do
@@ -134,7 +135,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     other = %{c | signer: other_signer}
     missing = update(other, %{name: "Cannot target first wallet"})
     assert missing.status == 404
-    assert missing.body == %{"error" => "profile_not_found"}
+    assert missing.body == refused("profile_not_found")
     assert update(other, %{id: initial["id"], name: "Denied"}).status == 401
     own = send_request(other, signed(other, @body)).body["profile"]
     other_edit = update(other, %{name: "Second wallet"}).body["profile"]
@@ -256,7 +257,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     Application.put_env(:keyfleet, :siwa_broker_url, failure)
     response = send_request(c, signed(c, @body))
     assert response.status == 503
-    assert response.body == %{"error" => "authentication_unavailable"}
+    assert response.body == refused("authentication_unavailable")
     assert_receive :unavailable_called
     refute_receive :unavailable_called
     stop_supervised!(:unavailable)
@@ -389,7 +390,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       Application.put_env(:keyfleet, :siwa_broker_url, origin)
       response = send_request(c, signed(c, @body))
       assert response.status == 503
-      assert response.body == %{"error" => "authentication_unavailable"}
+      assert response.body == refused("authentication_unavailable")
     end
   end
 

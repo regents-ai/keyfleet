@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   admits, and the answers it really gives.
   """
   use ExUnit.Case, async: false
+  import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
   alias Keyfleet.Actors
@@ -319,7 +320,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              first["id"]
 
     assert answer(c, c.signer, "POST", @send, @address, %{post | "body" => "Changed"}, 422).body ==
-             %{"error" => "idempotency_conflict"}
+             refused("idempotency_conflict")
 
     reply = %{"body" => "Seen", "idempotency_key" => "k-2", "reply_to_id" => by_person.id}
 
@@ -332,10 +333,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       "reply_to_id" => Ecto.UUID.generate()
     }
 
-    assert answer(c, c.signer, "POST", @send, @address, elsewhere, 422).body["error"] ==
+    assert answer(c, c.signer, "POST", @send, @address, elsewhere, 422).body["error"]["code"] ==
              "reply_not_here"
 
-    assert answer(c, c.signer, "POST", @send, @address, %{post | "body" => ""}, 422).body["error"] ==
+    assert answer(c, c.signer, "POST", @send, @address, %{post | "body" => ""}, 422).body["error"][
+             "code"
+           ] ==
              "invalid_message"
 
     answer(c, c.signer, "POST", @send, Map.put(@address, "slug", "hull-survey"), post, 404)
@@ -434,10 +437,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              }
 
     assert answer(c, c.signer, "POST", @create, @address, room, 409).body ==
-             %{"error" => "room_taken"}
+             refused("room_taken")
 
     assert answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "plans"}, 409).body ==
-             %{"error" => "name_taken"}
+             refused("name_taken")
 
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "Survey"}, 422)
     answer(c, stranger, "POST", @create, @address, %{room | "slug" => "outsiders"}, 403)
@@ -450,7 +453,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     end
 
     assert answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "one-more"}, 409).body ==
-             %{"error" => "room_limit_reached"}
+             refused("room_limit_reached")
 
     # Naming an open room: named, by an outsider, somewhere else, refused, a
     # name taken, and renamed too soon.
@@ -464,18 +467,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @topic, Map.put(open, "slug", "open-6"), %{"topic" => "x"}, 404)
 
     assert answer(c, c.signer, "POST", @topic, open, %{"topic" => ""}, 422).body ==
-             %{"error" => "invalid_topic"}
+             refused("invalid_topic")
 
     assert answer(c, c.signer, "POST", @topic, @address, %{"topic" => "Mine"}, 422).body ==
-             %{"error" => "room_not_open"}
+             refused("room_not_open")
 
     other_open = Map.put(@address, "slug", "open-2")
 
     assert answer(c, c.signer, "POST", @topic, other_open, %{"topic" => "General"}, 409).body ==
-             %{"error" => "name_taken"}
+             refused("name_taken")
 
     too_soon = answer(c, c.signer, "POST", @topic, open, %{"topic" => "Dry dock"}, 429)
-    assert too_soon.body == %{"error" => "rename_too_soon"}
+    assert too_soon.body == refused("rename_too_soon")
     assert [_seconds] = Req.Response.get_header(too_soon, "retry-after")
 
     # A fleet outside the catalog is not found on every route that names one,
@@ -483,7 +486,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     nowhere = Map.put(@address, "fleet_id", "hull_survey")
 
     for {method, template, [], body} <- @bodies, String.contains?(template, "{fleet_id}") do
-      assert answer(c, c.signer, method, template, nowhere, body, 404).body["error"] ==
+      assert answer(c, c.signer, method, template, nowhere, body, 404).body["error"]["code"] ==
                "fleet_unknown",
              "#{method} #{template}"
     end
@@ -626,7 +629,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
 
     case {response.status, response.body} do
-      {401, %{"error" => "unauthorized"}} -> false
+      {401, %{"error" => %{"code" => "unauthorized"}}} -> false
       {401, other} -> flunk("#{method} #{template} refused with #{inspect(other)}")
       _admitted -> true
     end

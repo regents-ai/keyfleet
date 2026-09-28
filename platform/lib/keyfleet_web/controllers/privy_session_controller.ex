@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   alias Keyfleet.AccessContext
   alias Keyfleet.Accounts.{RequestRateLimiter, SessionAuthority, VerifiedSession}
-  alias KeyfleetWeb.ClientAddress
+  alias KeyfleetWeb.{ClientAddress, Refusal}
 
   require Logger
 
@@ -129,8 +129,7 @@ defmodule KeyfleetWeb.PrivySessionController do
     conn
     |> put_resp_header("retry-after", to_string(window))
     |> put_resp_header("cache-control", "no-store")
-    |> put_status(:too_many_requests)
-    |> json(%{error: "rate_limited"})
+    |> Refusal.json(429, "rate_limited")
   end
 
   defp diagnostic_accepted(conn) do
@@ -240,8 +239,7 @@ defmodule KeyfleetWeb.PrivySessionController do
   defp unauthorized(conn) do
     topic = SessionAuthority.revoke(claim(conn))
 
-    %Plug.Conn{state: :sent} =
-      conn = conn |> drop_session() |> put_status(:unauthorized) |> json(%{error: "unauthorized"})
+    %Plug.Conn{state: :sent} = conn = conn |> drop_session() |> Refusal.json(401, "unauthorized")
 
     broadcast_disconnect(topic)
     conn
@@ -272,7 +270,7 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   defp issue_token(conn), do: json(conn, %{csrf_token: Plug.CSRFProtection.get_csrf_token()})
 
-  defp lifecycle_error(conn, error), do: conn |> put_status(:conflict) |> json(%{error: error})
+  defp lifecycle_error(conn, code), do: Refusal.json(conn, 409, code)
 
   defp drop_session(conn), do: configure_session(conn, drop: true)
 

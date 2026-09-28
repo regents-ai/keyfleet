@@ -8,10 +8,10 @@ defmodule KeyfleetWeb.Plugs.FleetComingSoon do
   """
   @behaviour Plug
 
-  import Phoenix.Controller, only: [json: 2]
   import Plug.Conn
 
   alias Keyfleet.Fleets
+  alias KeyfleetWeb.Refusal
 
   @impl Plug
   def init(opts), do: opts
@@ -19,7 +19,7 @@ defmodule KeyfleetWeb.Plugs.FleetComingSoon do
   @impl Plug
   def call(%{path_params: %{"fleet_id" => fleet_id}} = conn, _opts) do
     if Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id)) do
-      conn |> put_status(404) |> json(%{error: "fleet_coming_soon"}) |> halt()
+      conn |> Refusal.json(404, "fleet_coming_soon") |> halt()
     else
       conn
     end

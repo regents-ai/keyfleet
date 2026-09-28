@@ -205,7 +205,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     conn
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_content_type("application/json")
-    |> send_resp(status, Jason.encode!(%{error: code}))
+    |> send_resp(status, Jason.encode!(KeyfleetWeb.Refusal.body(code)))
     |> halt()
   end
 

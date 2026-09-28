@@ -33,5 +33,5 @@ defmodule KeyfleetWeb.AgentProposalController do
     end
   end
 
-  defp not_found(conn, error), do: conn |> put_status(404) |> json(%{error: error})
+  defp not_found(conn, code), do: KeyfleetWeb.Refusal.json(conn, 404, code)
 end

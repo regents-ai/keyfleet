@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
   import ExUnit.CaptureLog
+  import KeyfleetWeb.RefusalHelpers
 
   alias Keyfleet.Actors
   alias Keyfleet.Agents
@@ -175,7 +176,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
   test "a fleet outside the catalog, or a fleet's file without .md, is not found", %{conn: conn} do
     unknown = conn |> get("/api/v1/fleets/fleet_unknown") |> json_response(404)
-    assert unknown == %{"error" => "fleet_unknown"}
+    assert unknown == refused("fleet_unknown")
 
     assert ContractSchema.response_errors(unknown, "GET", "/api/v1/fleets/{fleet_id}", 404) ==
              []
@@ -224,9 +225,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     test "answers one fleet in JSON with 503 and says so", %{conn: conn} do
       {conn, _log} = with_log(fn -> get(conn, "/api/v1/fleets/#{@fleet}") end)
 
-      assert json_response(conn, 503) == %{
-               "error" => "The fleet directory can't be read right now. Try again in a moment."
-             }
+      assert json_response(conn, 503) == refused("directory_unavailable")
     end
   end
 

@@ -306,7 +306,7 @@ function signInScenario({
     if (outcome === "ok") {
       return new Response("{}", {status: 200, headers: {"x-ash-session-changed": "true"}})
     }
-    return new Response(JSON.stringify({error: "unauthorized"}), {
+    return new Response(JSON.stringify({error: {code: "unauthorized", message: "The sign-in on this request couldn't be confirmed.", hint: "Sign in again."}}), {
       status: 401,
       ...(outcome === "marked" ? {headers: {"x-ash-provider-relogin": "allowed"}} : {}),
     })
@@ -897,7 +897,7 @@ describe("Privy session bridge", () => {
           (async input =>
             String(input) === "/auth/csrf"
               ? new Response(JSON.stringify({csrf_token: "csrf"}), {status: 200})
-              : new Response(JSON.stringify({error: "unauthorized"}), {status: 401})) as typeof fetch,
+              : new Response(JSON.stringify({error: {code: "unauthorized", message: "The sign-in on this request couldn't be confirmed.", hint: "Sign in again."}}), {status: 401})) as typeof fetch,
         ).then(() => undefined),
       loginOpen,
       showFailure,
