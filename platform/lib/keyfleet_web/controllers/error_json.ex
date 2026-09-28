@@ -7,16 +7,10 @@ defmodule KeyfleetWeb.ErrorJSON do
 
   alias KeyfleetWeb.PublicDocuments
 
-  # If you want to customize a particular status code,
-  # you may add your own clauses, such as:
-  #
-  # def render("500.json", _assigns) do
-  #   %{errors: %{detail: "Internal Server Error"}}
-  # end
-
-  # By default, Phoenix returns the status message from
-  # the template name. For example, "404.json" becomes
-  # "Not Found".
+  # An error no route answers itself, such as an unknown /api address or a
+  # body that is not JSON, is `{"error": {"code", "message", "hint"}}`: the
+  # status message from the template name, "404.json" becoming "Not Found",
+  # its code in snake case, and where to read about the supported requests.
   def render(template, _assigns) do
     template
     |> Phoenix.Controller.status_message_from_template()

@@ -17,7 +17,9 @@ defmodule KeyfleetWeb.Plugs.ParsersTest do
     {400, headers, body} = assert_error_sent(400, malformed(conn, "/api/v1/fleets"))
 
     assert content_type(headers) =~ "application/json"
-    assert %{"errors" => %{"detail" => "Bad Request"}} = Jason.decode!(body)
+
+    assert %{"error" => %{"code" => "bad_request", "message" => "Bad Request"}} =
+             Jason.decode!(body)
   end
 
   test "a page's malformed body still gets the HTML 400", %{conn: conn} do
