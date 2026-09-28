@@ -10,15 +10,10 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
-  alias Keyfleet.Activity
   alias Keyfleet.Actors.Human
-  alias Keyfleet.Agents
-  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
-  alias Keyfleet.Directory
   alias Keyfleet.Fleets
-  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.UnknownFleetError
@@ -31,12 +26,10 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias KeyfleetWeb.{
     AccountLive,
-    ActivityLines,
     FleetLive,
     KeyLinks,
     KeyMap,
     KeysLive,
-    NotFoundError,
     ProposalsLive,
     ProposalsPage,
     Read,
@@ -66,14 +59,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The same for a proposals page after a notice that the fleet's proposal
   # records or balances changed.
   @proposals_refresh_after 1_000
-  # A check-in status changes as time passes, so an open fleet page reads its
-  # agents' check-ins again this often.
-  @check_ins_refresh_after 60_000
-  # How long an open fleet page waits after a notice that something happened
-  # in the fleet before it reads "What's happening" again, so a burst of
-  # changes is read once; and how many pages of it the page shows at most.
-  @activity_refresh_after 2_000
-  @activity_pages 5
+  @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
 
   @impl true
   def mount(params, session, socket) do
@@ -85,7 +71,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:fleet_keys, [])
      |> stream_configure(:key_thread, dom_id: &"key-message-#{&1.id}")
      |> stream(:key_thread, [])
-     |> stream_configure(:activity, dom_id: &activity_dom_id/1)
+     |> stream_configure(:activity, dom_id: &FleetLive.activity_dom_id/1)
      |> stream(:activity, [])
      |> assign(
        theme: session["theme"],
@@ -232,55 +218,8 @@ defmodule KeyfleetWeb.ShellLive do
 
   def handle_event("close_key", _params, socket), do: {:noreply, socket}
 
-  def handle_event("open_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, true)}
-
-  def handle_event("close_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, false)}
-
-  # "Show earlier" adds the next page of "What's happening" below the ones
-  # shown, up to five pages.
-  def handle_event(
-        "activity_earlier",
-        _params,
-        %{assigns: %{activity: %{cursor: cursor, pages: pages} = activity}} = socket
-      )
-      when cursor != nil and pages < @activity_pages do
-    %{items: items, cursor: next} = Activity.page(activity.fleet_id, cursor)
-
-    {:noreply,
-     socket
-     |> assign(:activity, %{activity | cursor: next, pages: pages + 1})
-     |> stream(:activity, items)}
-  end
-
-  def handle_event("activity_earlier", _params, socket), do: {:noreply, socket}
-
-  # The map on a deployed fleet's page asks for its keys when it loads and
-  # every time it reconnects.
-  def handle_event("keymap_ready", _params, %{assigns: %{fleet: %{deployed?: true}}} = socket) do
-    %{fleet_id: fleet_id, progress: progress} = socket.assigns.fleet
-    {:reply, KeyMap.snapshot(fleet_id, progress, human_actor(socket)), socket}
-  end
-
-  # A key chosen on the map goes into the address and its profile opens over
-  # the page, so Back closes it. Chosen while a profile is open, it takes that
-  # profile's place in the address, so closing still just closes.
-  def handle_event(
-        "select_key",
-        %{"token_id" => token_id},
-        %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
-      ) do
-    if KeyMap.choosable?(fleet.progress, token_id) do
-      {:noreply,
-       push_patch(socket,
-         to: KeyLinks.key_path(fleet.fleet_id, token_id, socket.assigns.fleet_params),
-         replace: socket.assigns.key_profile != nil
-       )}
-    else
-      {:noreply, socket}
-    end
-  end
+  def handle_event(event, params, socket) when event in @fleet_events,
+    do: FleetLive.handle_event(event, params, socket)
 
   def handle_event("name_room", %{"room" => %{"topic" => topic}}, socket)
       when is_binary(topic) do
@@ -311,7 +250,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The page only hears about the rooms of the fleet it shows.
   def handle_info({:room_head, _room_id, _seq}, socket),
-    do: {:noreply, refresh_activity_soon(socket, fleet_on_show(socket))}
+    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
 
   # Keys changed in the fleet on show: its sales figures, the key on offer and
   # the agents here are read again (an agent starting or stopping on a key
@@ -325,11 +264,11 @@ defmodule KeyfleetWeb.ShellLive do
       ) do
     socket =
       socket
-      |> refresh_sales()
-      |> refresh_agents()
-      |> refresh_listed(token_ids)
+      |> FleetLive.refresh_sales()
+      |> FleetLive.refresh_agents()
+      |> FleetLive.refresh_listed(token_ids)
       |> refresh_key_profile(token_ids)
-      |> refresh_activity_soon(fleet_id)
+      |> FleetLive.refresh_activity_soon(fleet_id)
 
     progress = socket.assigns.fleet.progress
 
@@ -341,7 +280,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # A notice for a fleet the page has since left, or one not yet on sale.
   def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
-    do: {:noreply, refresh_activity_soon(socket, fleet_id)}
+    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   # Something written as, or to, the open key or another of its holder's keys:
   # the key's new messages are read from its thread, and its posts again.
@@ -381,7 +320,7 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
-    do: {:noreply, refresh_activity_soon(socket, fleet_id)}
+    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket),
     do: {:noreply, socket |> assign(:workspace_refresh?, false) |> read_workspace()}
@@ -414,11 +353,11 @@ defmodule KeyfleetWeb.ShellLive do
     {:noreply,
      socket
      |> assign(:key_profile, Map.merge(profile, votes))
-     |> refresh_activity_soon(fleet_id)}
+     |> FleetLive.refresh_activity_soon(fleet_id)}
   end
 
   def handle_info({:proposals_changed, fleet_id}, socket),
-    do: {:noreply, refresh_activity_soon(socket, fleet_id)}
+    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
 
@@ -431,24 +370,23 @@ defmodule KeyfleetWeb.ShellLive do
   # Time has passed on an open fleet page: its agents' statuses are read
   # again, and the page waits for the next minute. A page that has left the
   # fleet stops.
-  def handle_info(:refresh_check_ins, %{assigns: %{fleet: %{agents: _}}} = socket),
-    do:
-      {:noreply,
-       socket |> assign(:check_ins_timer, nil) |> refresh_check_ins() |> watch_check_ins()}
+  def handle_info(:refresh_check_ins, %{assigns: %{fleet: %{agents: _}}} = socket) do
+    # "Who's here", the key list and the open key's agent, as the agents'
+    # check-ins say now.
+    {:noreply,
+     socket
+     |> assign(:check_ins_timer, nil)
+     |> FleetLive.refresh_agents()
+     |> FleetLive.reread_listed()
+     |> refresh_key_operator()
+     |> FleetLive.watch_check_ins()}
+  end
 
   def handle_info(:refresh_check_ins, socket),
     do: {:noreply, assign(socket, :check_ins_timer, nil)}
 
-  # "What's happening" is read again from the top, as many pages as are
-  # shown, once for the burst of notices about the fleet on show that asked
-  # for it. A wait begun for a fleet the page has since left reads nothing.
-  def handle_info(
-        {:refresh_activity, fleet_id},
-        %{assigns: %{activity: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, socket |> assign(:activity_refresh, nil) |> reread_activity()}
-
-  def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
+  def handle_info({:refresh_activity, _fleet_id} = message, socket),
+    do: FleetLive.handle_info(message, socket)
 
   @impl true
   def handle_async({Read, _name, _generation} = name, result, socket) do
@@ -489,7 +427,7 @@ defmodule KeyfleetWeb.ShellLive do
           profile={@key_profile}
           thread={@streams.key_thread}
           activity={@streams.activity}
-          now={now_shown(@activity)}
+          now={FleetLive.now_shown(@activity)}
           send_agent_open={@send_agent_open}
         />
 
@@ -531,7 +469,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key
   # chosen changes under it: back or forward, or another fleet's page.
-  defp load_fleet(socket, %{route_id: :fleet} = route_spec, %{"fleet_id" => fleet_id} = params) do
+  defp load_fleet(socket, %{route_id: :fleet}, %{"fleet_id" => fleet_id} = params) do
     shown = socket.assigns.fleet
 
     socket
@@ -539,9 +477,9 @@ defmodule KeyfleetWeb.ShellLive do
     |> listen_to(fleet_id)
     |> follow_workspace(fleet_id)
     |> follow_proposals(fleet_id)
-    |> read_fleet(route_spec, params)
-    |> tell_map_chosen(shown)
-    |> watch_check_ins()
+    |> FleetLive.read_fleet(params)
+    |> FleetLive.tell_map_chosen(shown)
+    |> FleetLive.watch_check_ins()
   end
 
   defp load_fleet(socket, _route_spec, _params),
@@ -552,232 +490,6 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
-  defp read_fleet(socket, _route_spec, %{"fleet_id" => fleet_id} = params) do
-    actor = human_actor(socket)
-
-    fleet = Fleets.get_fleet!(fleet_id, actor: actor)
-
-    cond do
-      fleet == nil ->
-        show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params)
-
-      Fleets.coming_soon?(fleet_id, fleet) ->
-        show_without_keys(
-          socket,
-          %{
-            fleet_id: fleet_id,
-            name: fleet.name,
-            coming_soon?: true,
-            layout: Presets.preset(fleet_id)
-          },
-          params
-        )
-
-      true ->
-        page = key_page!(fleet_id, params, actor)
-        pages = page_links(fleet_id, page, params)
-        deployed? = fleet.contract_address != nil
-        current? = deployed? and Chain.fresh?(fleet_id)
-        progress = if deployed?, do: Chain.progress(fleet_id)
-
-        socket
-        |> assign(:fleet, %{
-          fleet_id: fleet_id,
-          name: fleet.name,
-          coming_soon?: false,
-          chain_id: fleet.chain_id,
-          contract_address: fleet.contract_address,
-          rewards_address: fleet.rewards_address,
-          usdc_address: fleet.usdc_address,
-          deployed?: deployed?,
-          current?: current?,
-          progress: progress,
-          buy: if(deployed?, do: next_sale(fleet_id, progress)),
-          rooms: Rooms.list_rooms!(fleet_id, actor: actor),
-          no_keys?: page.results == [] and not paged?(params),
-          pages: pages,
-          listed: listed(page, pages),
-          layout: Presets.preset(fleet_id),
-          chosen_key: if(deployed?, do: chosen_key(progress, params["key"])),
-          levels: if(deployed?, do: KeyMap.levels(progress), else: []),
-          signed_in?: actor != nil,
-          agents: Directory.agents(fleet_id),
-          agents_here: Agents.count_agents_here!(fleet_id)
-        })
-        |> assign(:fleet_params, params)
-        |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor), reset: true)
-        |> read_activity(fleet_id)
-    end
-  end
-
-  # A fleet there is not, or one coming soon: its name at most, and no keys
-  # or activity to read.
-  defp show_without_keys(socket, fleet, params) do
-    socket
-    |> assign(fleet: fleet, fleet_params: params, activity: nil, activity_refresh: nil)
-    |> stream(:fleet_keys, [], reset: true)
-    |> stream(:activity, [], reset: true)
-  end
-
-  # "What's happening": the fleet's activity, newest first. A page moving
-  # within the same fleet keeps the pages it shows; another fleet starts
-  # from its first page. The cursor for the next page stays here, on the
-  # server.
-  defp read_activity(%{assigns: %{activity: %{fleet_id: fleet_id}}} = socket, fleet_id),
-    do: socket
-
-  defp read_activity(socket, fleet_id) do
-    socket
-    |> assign(activity: %{fleet_id: fleet_id, cursor: nil, pages: 1}, activity_refresh: nil)
-    |> reread_activity()
-  end
-
-  defp reread_activity(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
-    {items, cursor, read} = activity_pages(fleet_id, nil, pages, [])
-
-    socket
-    |> assign(:activity, %{
-      fleet_id: fleet_id,
-      cursor: cursor,
-      pages: read,
-      empty?: items == [],
-      trying: trying_now(fleet_id)
-    })
-    |> stream(:activity, items, reset: true)
-  end
-
-  # "Trying now", at the top of "What's happening": the fleet's open goals and
-  # the work on them, with the agent running each key on a task named.
-  defp trying_now(fleet_id) do
-    now = Graph.trying_now(fleet_id)
-    tasks = Enum.flat_map(now.goals, & &1.tasks) ++ now.taken
-    token_ids = for %{assignee_key: token_id} <- tasks, token_id, uniq: true, do: token_id
-    ActivityLines.trying_now(now, agents(fleet_id, token_ids))
-  end
-
-  # The agent running each of these keys, by number; none to look up when no
-  # key is shown.
-  defp agents(_fleet_id, []), do: %{}
-
-  defp agents(fleet_id, token_ids) do
-    fleet_id
-    |> Keys.fleet_operators!(token_ids)
-    |> Map.new(&{&1.token_id, &1.agent_profile.name})
-  end
-
-  defp activity_pages(fleet_id, cursor, wanted, read) do
-    %{items: items, cursor: next} = Activity.page(fleet_id, cursor)
-    read = [items | read]
-
-    if next != nil and length(read) < wanted,
-      do: activity_pages(fleet_id, next, wanted, read),
-      else: {read |> Enum.reverse() |> Enum.concat(), next, length(read)}
-  end
-
-  # One read for a burst of notices about the fleet on show; the wait names
-  # the fleet it was begun for.
-  defp refresh_activity_soon(
-         %{assigns: %{activity: %{fleet_id: fleet_id}, activity_refresh: nil}} = socket,
-         fleet_id
-       ) do
-    Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
-    assign(socket, :activity_refresh, fleet_id)
-  end
-
-  defp refresh_activity_soon(socket, _fleet_id), do: socket
-
-  # What the panel needs to know of the pages read, and never the cursor:
-  # whether anything is there, whether earlier items are a press of "Show
-  # earlier" away or past the pages it shows, what the fleet is trying, and
-  # which list it shows: the fleet and how many pages of it.
-  defp now_shown(nil), do: nil
-
-  defp now_shown(%{
-         fleet_id: fleet_id,
-         cursor: cursor,
-         pages: pages,
-         empty?: empty?,
-         trying: trying
-       }) do
-    earlier =
-      cond do
-        cursor == nil -> nil
-        pages < @activity_pages -> :more
-        true -> :elsewhere
-      end
-
-    %{empty?: empty?, earlier: earlier, trying: trying, list: "#{fleet_id}:#{pages}"}
-  end
-
-  defp activity_dom_id(%{id: id}), do: "fleet-now-" <> String.replace(id, ":", "-")
-
-  # Sales move the figures, the key on offer and the levels the map can go to.
-  defp refresh_sales(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    progress = Chain.progress(fleet_id)
-
-    assign(socket, :fleet, %{
-      fleet
-      | progress: progress,
-        current?: Chain.fresh?(fleet_id),
-        buy: next_sale(fleet_id, progress),
-        levels: KeyMap.levels(progress)
-    })
-  end
-
-  # The key list's page is read again only when a changed key is on it. Its
-  # rows change in place, and a key sold onto its end joins it.
-  defp refresh_listed(%{assigns: %{fleet: %{listed: {from, to}}}} = socket, token_ids) do
-    if Enum.any?(token_ids, &(&1 >= from and (is_nil(to) or &1 <= to))),
-      do: reread_listed(socket),
-      else: socket
-  end
-
-  defp reread_listed(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    params = socket.assigns.fleet_params
-    actor = human_actor(socket)
-    page = key_page!(fleet_id, params, actor)
-    pages = page_links(fleet_id, page, params)
-
-    socket
-    |> assign(:fleet, %{
-      fleet
-      | pages: pages,
-        listed: listed(page, pages),
-        no_keys?: page.results == [] and not paged?(params)
-    })
-    |> stream(:fleet_keys, fleet_keys(fleet_id, page.results, actor))
-  end
-
-  # One timer per page, set while a fleet's page is open.
-  defp watch_check_ins(%{assigns: %{fleet: %{agents: _}, check_ins_timer: nil}} = socket) do
-    if connected?(socket) do
-      timer = Process.send_after(self(), :refresh_check_ins, @check_ins_refresh_after)
-      assign(socket, :check_ins_timer, timer)
-    else
-      socket
-    end
-  end
-
-  defp watch_check_ins(socket), do: socket
-
-  # "Who's here", the key list and the open key's agent, as the agents'
-  # check-ins say now.
-  defp refresh_check_ins(socket) do
-    socket
-    |> refresh_agents()
-    |> reread_listed()
-    |> refresh_key_operator()
-  end
-
-  # "Who's here" and the bar's count of agents.
-  defp refresh_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    assign(socket, :fleet, %{
-      fleet
-      | agents: Directory.agents(fleet_id),
-        agents_here: Agents.count_agents_here!(fleet_id)
-    })
-  end
-
   defp refresh_key_operator(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
     do:
       assign(socket, :key_profile, %{
@@ -786,32 +498,6 @@ defmodule KeyfleetWeb.ShellLive do
       })
 
   defp refresh_key_operator(socket), do: socket
-
-  # The key numbers a list page holds, as `{first, last}`. The last page has
-  # no last number, since a key sold later joins it.
-  defp listed(%Ash.Page.Keyset{results: []}, _pages), do: {1, nil}
-
-  defp listed(%Ash.Page.Keyset{results: keys}, %{next: next}),
-    do: {hd(keys).token_id, if(next, do: List.last(keys).token_id)}
-
-  # A key in the address that isn't one the map shows is no choice at all.
-  defp chosen_key(progress, key) when is_binary(key) do
-    case Integer.parse(key) do
-      {token_id, ""} -> if KeyMap.choosable?(progress, token_id), do: token_id
-      _not_a_number -> nil
-    end
-  end
-
-  defp chosen_key(_progress, _key), do: nil
-
-  defp tell_map_chosen(
-         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,
-         %{fleet_id: fleet_id, chosen_key: shown}
-       )
-       when chosen != shown,
-       do: push_event(socket, "keymap:select", %{token_id: chosen})
-
-  defp tell_map_chosen(socket, _shown), do: socket
 
   # One subscription to the keys of the fleet on show, dropped on the way out.
   defp follow_keys(socket, fleet_id) do
@@ -982,94 +668,6 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp post_to_key(socket, _body), do: socket
-
-  # The key on offer now, which moves on with every sale.
-  defp next_sale(fleet_id, progress) do
-    level =
-      if progress.next_token_id && Presets.levelled?(fleet_id),
-        do: Presets.fibonacci_level_of(progress.next_token_id)
-
-    %{
-      token_id: progress.next_token_id,
-      price: progress.next_price,
-      max_supply: progress.max_supply,
-      level: level
-    }
-  end
-
-  # A page is named by the key it follows or precedes; a name that isn't one
-  # is a page that doesn't exist.
-  defp key_page!(fleet_id, params, actor) do
-    case Keys.keys_in_fleet(fleet_id, page: key_position(params), actor: actor) do
-      {:ok, page} -> page
-      {:error, %Ash.Error.Invalid{}} -> raise NotFoundError
-    end
-  end
-
-  defp key_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
-  defp key_position(%{"before" => keyset}) when is_binary(keyset), do: [before: keyset]
-  defp key_position(params), do: if(paged?(params), do: raise(NotFoundError), else: [])
-
-  defp paged?(params), do: Map.has_key?(params, "after") or Map.has_key?(params, "before")
-
-  # A page reached by going forward always has one before it, and one reached by
-  # going back always has one after it.
-  defp page_links(_fleet_id, %Ash.Page.Keyset{results: []}, _params),
-    do: %{previous: nil, next: nil}
-
-  defp page_links(fleet_id, %Ash.Page.Keyset{results: keys, more?: more?}, params) do
-    {previous?, next?} =
-      case params do
-        %{"after" => _keyset} -> {true, more?}
-        %{"before" => _keyset} -> {more?, true}
-        _first_page -> {false, more?}
-      end
-
-    # The map keeps its chosen key while the visitor pages through keys.
-    kept = for name <- ["key"], is_binary(params[name]), do: {name, params[name]}
-
-    %{
-      previous:
-        if(previous?,
-          do: fleet_page_path(fleet_id, [before: hd(keys).__metadata__.keyset], kept)
-        ),
-      next:
-        if(next?,
-          do: fleet_page_path(fleet_id, [after: List.last(keys).__metadata__.keyset], kept)
-        )
-    }
-  end
-
-  defp fleet_page_path(fleet_id, position, kept),
-    do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position ++ kept)}"
-
-  # Each key with the agent running it, if any, and what that agent's
-  # check-ins with the fleet say.
-  defp fleet_keys(fleet_id, keys, actor) do
-    pairings = Keys.fleet_operators!(fleet_id, Enum.map(keys, & &1.token_id), actor: actor)
-
-    check_ins =
-      Map.new(
-        Agents.check_ins_in_fleet!(fleet_id, Enum.map(pairings, & &1.agent_profile.id)),
-        &{&1.agent_profile_id, &1}
-      )
-
-    now = DateTime.utc_now()
-
-    operators =
-      Map.new(pairings, fn %{agent_profile: agent} = pairing ->
-        {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
-        {pairing.token_id, %{name: agent.name, status_label: label}}
-      end)
-
-    for key <- keys do
-      %{
-        token_id: key.token_id,
-        owner_wallet: key.owner_wallet,
-        operator: operators[key.token_id]
-      }
-    end
-  end
 
   defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
     assign(socket,
@@ -1617,8 +1215,9 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  defp human_actor(%{assigns: %{access_context: access_context}}), do: actor(access_context)
-  defp human_actor(_socket), do: nil
+  @doc "The signed-in person the page acts for, or nil; the area pages act as them too."
+  def human_actor(%{assigns: %{access_context: access_context}}), do: actor(access_context)
+  def human_actor(_socket), do: nil
 
   defp actor(%{principal: {:human, account}}),
     do: %Human{human_account_id: account.id, wallet_addresses: account_wallets(account)}
