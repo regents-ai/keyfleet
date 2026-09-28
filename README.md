@@ -19,8 +19,9 @@ person's keys are on the Account page.
   votes or its money. The Regents Safe owns the Chainlink subscription that pays
   for each key's traits and adds each fleet to it.
 - A key costs what its fleet type's price rule says: Syndicate and Cascade step
-  up by level along a Fibonacci ladder, Classic is a flat ten USDC for 144 keys,
-  and Accelerant steps up 5% with every key sold.
+  up by level along a Fibonacci ladder, Classic's 1,024 keys run from 8 USDC for
+  the first to 80 USDC for the last, each key the same percentage dearer than the
+  one before, and Accelerant steps up 5% with every key sold.
 - Regents takes 2% of each key purchase, once, for the Regents staking contract.
   Keyfleet takes nothing from money a fleet receives afterwards.
 - Income in USDC, REGENT or the fleet's launched token is paid 100% to the keys.

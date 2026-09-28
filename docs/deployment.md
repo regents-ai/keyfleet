@@ -247,7 +247,8 @@ anvil --fork-url "$BASE_RPC_URL" --chain-id 31337 --gas-limit 100000000
 export RPC_URL=http://127.0.0.1:8545
 
 # USDC for a purchase, from a fork address that holds it. Amounts are atomic
-# USDC: 10000000 is 10 USDC, the price of the first key of every fleet.
+# USDC: 10000000 is 10 USDC, the price of the first key of Syndicate, Cascade
+# and Accelerant; Classic's first key costs 8000000, 8 USDC.
 cast rpc anvil_impersonateAccount <address holding USDC> --rpc-url "$RPC_URL"
 cast send 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 "transfer(address,uint256)" \
   <wallet> <atomic USDC> --from <address holding USDC> --unlocked --rpc-url "$RPC_URL"
@@ -324,8 +325,9 @@ deployed code is the code those constants came from. It carries:
 - under `fleet` the fleet's name in the manifest (`slot`, such as `classic`),
   address, code hash, reward ledger, voting controller, name, symbol, metadata
   base and supply;
-- REGENT, USDC, `qUsdc` — the first key's price, 10000000 atomic USDC, which is
-  10 USDC — the staking contract and the Regents Safe;
+- REGENT, USDC, `qUsdc` — the reference price the Syndicate, Cascade and
+  Accelerant ladders start from, 10000000 atomic USDC, which is 10 USDC; Classic
+  prices from its own table — the staking contract and the Regents Safe;
 - the numeric bounds (Fibonacci levels and last token id, Classic supply,
   Accelerant key limit, the two launch thresholds and the cohort limit) and the
   fee basis points (the 2% protocol share and the Accelerant 10% capital
@@ -369,10 +371,13 @@ everything else is shared money, and only a vote of more than half of all keys
 sold spends it. The [contracts README](../contracts/README.md) states the
 rules.
 
-**D6 — the key price.** Every key is paid in USDC on Base. The first key of every
-ladder costs 10 USDC (`Q_USDC`, 10,000,000 atomic USDC); Fibonacci levels step by
-1.2, Accelerant primary mints by 1.05, and every Classic key costs 10 USDC. The
-price is fixed in the contracts, so neither manifest carries it. The 2% protocol
+**D6 — the key price.** Every key is paid in USDC on Base. The first key of the
+Fibonacci and Accelerant ladders costs 10 USDC (`Q_USDC`, 10,000,000 atomic
+USDC); Fibonacci levels step by 1.2 and Accelerant primary mints by 1.05.
+Classic's 1,024 keys run from 8 USDC for the first to 80 USDC for the last, each
+key about 0.2253% dearer than the one before, rounded to the nearest cent, and
+32,032.45 USDC for all of them. The price is fixed in the contracts, so neither
+manifest carries it. The 2% protocol
 share, shared money from key sales, the Cascade reserve and repayment and the
 Accelerant rebate are all USDC.
 

@@ -263,3 +263,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   page is gone.
 - The Privacy Policy (version 1.2, effective September 28, 2026) says what the
   early-access email is kept for and how to have it removed.
+
+## 2026-09-28 — Keyfleet Classic is 1,024 keys from 8 to 80 USDC
+
+- Keyfleet Classic sells 1,024 keys instead of 144. Key n costs 8 USDC times
+  10^((n − 1) / 1023), rounded to the nearest cent: 8.00 USDC for the first,
+  11.04 for key 144, 25.27 for key 512 and 80.00 for the last, each key about
+  0.2253% dearer than the one before, and 32,032.45 USDC for all 1,024.
+- `scripts/classic_prices.py` writes the 1,024 prices once, as the contract's
+  cent table `KeyfleetClassicPrices` and as `platform/priv/classic_key_prices.txt`
+  for the site, so both always charge and show the same price.
+- The fleet page, the fleet directory and the Markdown homepage describe
+  Classic's new range, and the next key's price comes from the same table. The
+  Classic key map closes at 32 × 32.
+- Everything else about Classic is unchanged: 2% to Regents staking once per
+  sale, votes approved by more than half of all keys sold, income paid in full to
+  the keys, one Chainlink VRF request per key. Key sales stay off.
