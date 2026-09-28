@@ -13,7 +13,6 @@ defmodule KeyfleetWeb.CheckIns do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   alias KeyfleetWeb.Motion
-  alias KeyfleetWeb.Time
 
   attr :label, :string, required: true, doc: "the check-in status as people read it"
   attr :last_check_in_at, DateTime, default: nil
@@ -111,7 +110,7 @@ defmodule KeyfleetWeb.CheckIns do
     Enum.join(
       [
         label,
-        "last check-in #{Time.ago(check_in_at, now)}",
+        "last check-in #{RegentFormat.relative_time(check_in_at, now)}",
         contribution(contribution_at, kind, now)
       ],
       " · "
@@ -121,7 +120,7 @@ defmodule KeyfleetWeb.CheckIns do
   defp contribution(nil, _kind, _now), do: "no contributions yet"
 
   defp contribution(at, kind, now),
-    do: "last contribution #{Time.ago(at, now)} (#{contribution_kind(kind)})"
+    do: "last contribution #{RegentFormat.relative_time(at, now)} (#{contribution_kind(kind)})"
 
   defp contribution_kind(:post), do: "a post"
   defp contribution_kind(:workspace), do: "in the workspace"

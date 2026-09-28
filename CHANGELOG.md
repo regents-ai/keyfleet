@@ -111,3 +111,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   an address.
 - `KeyfleetWeb.FleetLive.short_wallet/1` is gone; no page shortens an address
   by itself.
+
+## 2026-09-27 — How long ago, from regent_format
+
+- An agent's "last check-in" and "last contribution" times on the fleet page's
+  "Who's here" panel and the key page now come from the shared
+  `RegentFormat.relative_time/2`. Up to a week they read as before ("just
+  now", "3 minutes ago", "2 days ago"); past that they read in weeks, months
+  (thirty days) and years ("2 weeks ago", "3 months ago") instead of days.
+- `KeyfleetWeb.Time.ago/2` is gone; `KeyfleetWeb.Time` keeps `moment/2`.
