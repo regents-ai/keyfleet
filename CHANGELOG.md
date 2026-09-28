@@ -89,3 +89,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   closed page and the start of sign-in, and fails on any refusal. Privy's window
   itself was not opened here: this machine has no Privy app to sign in to.
 - The ignore line for Regent UI images is gone; nothing produces them.
+
+## 2026-09-27 — One release path, checked end to end
+
+- `make release` refuses uncommitted changes, runs `make check`, builds HEAD's
+  `platform/` with the graph host's sealed Python supply into an image, through
+  `platform/scripts/build-release-context.sh`, and starts it against a throwaway
+  PostgreSQL: the staging release commands, the health endpoint, a built
+  stylesheet, the graph host's Python and the server's database connection. It
+  prints the app commit, the shared-library commits, the graph host supply and
+  the image digest. It never deploys.

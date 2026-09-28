@@ -258,6 +258,32 @@ cache, the CPython download, and their checksums in `SUPPLY-ADDENDUM.txt`.
 It prints the supply name to set as `ARM64_GRAPH_HOST_SUPPLY` or
 `AMD64_GRAPH_HOST_SUPPLY` in `scripts/build-release-context.sh`.
 
+## Release
+
+From the monorepo root, with Docker running:
+
+```sh
+make release
+```
+
+It stops unless every change is committed, then runs `make check`; a failing
+gate stops it before anything is built. `../scripts/release.sh` then builds
+the image from the context `scripts/build-release-context.sh` assembles for
+this computer's Docker architecture: `git archive` of HEAD's `platform/` folder
+and the graph host's sealed Python supply, checked against its checksums. It
+reuses no cached layers, so nothing uncommitted or outside the repository
+enters it, and tags it `keyfleet:<commit>`. The smoke check starts a throwaway
+PostgreSQL 17 on its own Docker network, answering to the staging database
+hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
+`bin/migrate` and `bin/pending-migrations` (which must print `none`), then the
+server with an empty `/data`, whose `/healthz`, home page, fingerprinted
+stylesheet, graph host Python and own database connection it checks. The
+server gets no chain node, keeper key or Privy app, and a sign-in server
+address that never resolves. It removes the database, the network and the
+context afterwards, keeps the image, and prints the app commit, the
+shared-library commits from `mix.lock`, the graph host supply and the image
+digest. It never deploys.
+
 ## License
 
 MIT, see [LICENSE](../LICENSE).

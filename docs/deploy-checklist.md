@@ -20,9 +20,12 @@ graph host. The build fetches the shared libraries from GitHub at the commits
    `graph_host/uv.lock` or `graph_host/.python-version` changes.
 2. Commit everything first: uncommitted changes are left out, and the script
    warns when there are any.
-3. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
-   if a supply does not match its checksums. Fly's remote builder builds the image from this
-   folder in step 6; nothing is built on this computer.
+3. `make release` from the monorepo root runs every gate, then builds the same
+   commit into an image for this computer and starts it against a throwaway
+   database (see [Release](../platform/README.md#release)). It deploys nothing.
+4. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
+   if a supply does not match its checksums. Fly's remote builder builds the
+   deployed image from this folder in step 6.
 
 ## 2. Create the app and its volume
 

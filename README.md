@@ -78,6 +78,8 @@ On hold or not yet done:
 which checks the shared libraries against ash-template's list of required fixes
 and needs `gh auth login`. The platform check needs `MIX_TEST_PARTITION` set for
 its test database; the [platform README](platform/README.md#checks) explains it.
+`make release` runs them on the committed tree, then builds and starts the release
+image; see [Release](platform/README.md#release).
 
 [docs/](docs/) explains deploying the fleets, reading them from the chain,
 running the keeper and the Autolaunch contracts Keyfleet uses.

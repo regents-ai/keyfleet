@@ -21,6 +21,10 @@ signed-in Overview. The [README](README.md) describes the product.
   `make check-platform`, `check-required-fixes`, `check-cli` and
   `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value uses
   `keyfleet_test`).
+- `make release` is the one release path: it refuses uncommitted changes, runs
+  `make check`, builds HEAD's `platform/` and the graph host's sealed Python
+  supply into an image and starts it against a throwaway database
+  (`scripts/release.sh`). It never deploys.
 - Follow the workspace's `regent-workflow`; use one integrating owner for this
   repository. Scope verification to observable acceptance and preserve useful
   regression coverage.
