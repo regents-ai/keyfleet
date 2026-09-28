@@ -53,24 +53,8 @@
           {Credo.Check.Readability.VariableNames, []},
           {Credo.Check.Readability.WithSingleClause, []},
           {Credo.Check.Refactor.Apply, []},
-          {Credo.Check.Refactor.CondStatements,
-           [
-             files: %{
-               excluded: [
-                 # The signed-in shell branches on session state; changing that is not lint-only.
-                 "lib/keyfleet_web/live/shell_live.ex"
-               ]
-             }
-           ]},
-          {Credo.Check.Refactor.CyclomaticComplexity,
-           [
-             files: %{
-               excluded: [
-                 # The signed-in shell branches on session state; changing that is not lint-only.
-                 "lib/keyfleet_web/live/shell_live.ex"
-               ]
-             }
-           ]},
+          {Credo.Check.Refactor.CondStatements, []},
+          {Credo.Check.Refactor.CyclomaticComplexity, []},
           {Credo.Check.Refactor.FilterCount, []},
           {Credo.Check.Refactor.FilterFilter, []},
           {Credo.Check.Refactor.FunctionArity, []},
@@ -79,15 +63,7 @@
           {Credo.Check.Refactor.MatchInCondition, []},
           {Credo.Check.Refactor.NegatedConditionsInUnless, []},
           {Credo.Check.Refactor.NegatedConditionsWithElse, []},
-          {Credo.Check.Refactor.Nesting,
-           [
-             files: %{
-               excluded: [
-                 # The signed-in shell branches on session state; changing that is not lint-only.
-                 "lib/keyfleet_web/live/shell_live.ex"
-               ]
-             }
-           ]},
+          {Credo.Check.Refactor.Nesting, []},
           {Credo.Check.Refactor.RedundantWithClauseResult, []},
           {Credo.Check.Refactor.RejectReject, []},
           {Credo.Check.Refactor.UnlessWithElse, []},
