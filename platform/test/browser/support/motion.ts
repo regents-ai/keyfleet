@@ -4,17 +4,36 @@ import type {Page} from "@playwright/test"
 // element takes, every number split into pieces to roll and whether the
 // headline moved, so a test can ask what moved and whether it ended clean.
 // The shell's page-change motion is recorded apart, as the regions it moved.
+// Each time a number or the headline splits, it records whether every piece
+// sits in a box clipped by its class (`.split-clip`) rather than by a style of
+// its own, which a policy refusing style attributes would refuse.
 function recordMotion() {
   const moves = new Map<Element, string[]>()
   const rolled = new Set<string>()
   const pageMoves = new Set<string>()
-  Object.assign(window, {__moves: moves, __rolled: rolled, __pageMoves: pageMoves})
-  const watch = () =>
+  const clipped = new Map<string, boolean>()
+  Object.assign(window, {__moves: moves, __rolled: rolled, __pageMoves: pageMoves, __clipped: clipped})
+  const clippedByClass = (el: Element) =>
+    el.matches(".split-clip") && (el as HTMLElement).style.overflow === "" && getComputedStyle(el).overflow === "clip"
+  const piece = "[data-word], [data-char], :has(> [data-word], > [data-char])"
+  const noteSplit = (id: string, added: NodeList) => {
+    const pieces = [...added].filter(node => node instanceof Element && node.matches(piece)) as Element[]
+    if (pieces.length > 0) clipped.set(id, (clipped.get(id) ?? true) && pieces.every(clippedByClass))
+  }
+  // A page the server draws once splits its headline before this starts
+  // watching, so the pieces are read as they stand.
+  const watch = () => {
+    const headline = document.querySelector("main h1")
+    if (headline) noteSplit("headline", headline.childNodes)
     new MutationObserver(records => {
       for (const record of records) {
         const el = record.target as Element
         if (record.type === "childList") {
-          if (el.matches("[phx-hook=Counter]") && record.addedNodes.length > 0) rolled.add(el.id)
+          if (el.matches("[phx-hook=Counter]") && record.addedNodes.length > 0) {
+            rolled.add(el.id)
+            noteSplit(el.id, record.addedNodes)
+          }
+          if (el.closest("main h1")) noteSplit("headline", record.addedNodes)
           continue
         }
         const style = el.getAttribute("style") ?? ""
@@ -35,11 +54,17 @@ function recordMotion() {
       attributes: true,
       attributeFilter: ["style"],
     })
+  }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch)
   else watch()
 }
 
-type Recorded = {__moves: Map<Element, string[]>; __rolled: Set<string>; __pageMoves: Set<string>}
+type Recorded = {
+  __moves: Map<Element, string[]>
+  __rolled: Set<string>
+  __pageMoves: Set<string>
+  __clipped: Map<string, boolean>
+}
 
 export const watchMotion = (page: Page) => page.addInitScript(recordMotion)
 
@@ -60,6 +85,11 @@ export const anythingMoved = (page: Page) =>
 
 export const rolled = (page: Page, id: string) => page.evaluate(id => (window as unknown as Recorded).__rolled.has(id), id)
 
+// Whether the number with this id, or "headline", split into pieces that each
+// sat in a box clipped by class; undefined if it never split.
+export const clippedByClass = (page: Page, id: string) =>
+  page.evaluate(id => (window as unknown as Recorded).__clipped.get(id), id)
+
 // Whether a page change moved the page arriving.
 export const pageChangeMoved = (page: Page) => page.evaluate(() => (window as unknown as Recorded).__pageMoves.size > 0)
 
@@ -68,6 +98,7 @@ export const forget = (page: Page) =>
     ;(window as unknown as Recorded).__moves.clear()
     ;(window as unknown as Recorded).__rolled.clear()
     ;(window as unknown as Recorded).__pageMoves.clear()
+    ;(window as unknown as Recorded).__clipped.clear()
   })
 
 // What still carries an inline transform or opacity after moving; empty once

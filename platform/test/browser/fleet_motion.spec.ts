@@ -1,6 +1,16 @@
 import {expect, test, type Page} from "@playwright/test"
 import {prepareFleet, sellKey} from "./support/fleet_chain"
-import {anythingMoved, forget, leftovers, moved, movedCount, pressRapidly, rolled, watchMotion} from "./support/motion"
+import {
+  anythingMoved,
+  clippedByClass,
+  forget,
+  leftovers,
+  moved,
+  movedCount,
+  pressRapidly,
+  rolled,
+  watchMotion,
+} from "./support/motion"
 
 // A fleet page's motion: presses squish, panels slide and dialogs rise only for
 // a pointer, a sale rolls its numbers and bounces its line into What's
@@ -77,7 +87,7 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
   await expect(page.locator("#buy-key-order-press-note")).toHaveText("Sign in to send this. Nothing was sent.")
 })
 
-test("a sale rolls the count and bounces only its new line in, ending as plain text", async ({page}) => {
+test("a sale rolls the count, each digit clipped by class, and bounces only its new line in, ending as plain text", async ({page}) => {
   await openFleet(page)
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
 
@@ -85,6 +95,8 @@ test("a sale rolls the count and bounces only its new line in, ending as plain t
 
   await expect.poll(() => plainNumber(page, "fleet-sales-keys")).toBe(String(sold + 1))
   expect(await rolled(page, "fleet-sales-keys")).toBe(true)
+  // Each digit rolls in a box its stylesheet clips, not one styled in markup.
+  expect(await clippedByClass(page, "fleet-sales-keys")).toBe(true)
   // What's happening hears of the sale a moment after the count does.
   await expect(page.locator(`#fleet-now-sale-${sold + 1}`)).toBeAttached({timeout: 10_000})
   await expect.poll(() => moved(page, `#fleet-now-sale-${sold + 1}`)).toBe(true)

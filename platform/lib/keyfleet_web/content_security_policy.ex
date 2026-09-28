@@ -35,9 +35,11 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
     {"default-src", ["'none'"]},
     {"script-src", ["'self'"]},
     {"style-src", ["'self'"]},
-    # Style attributes only, never style elements: Anime.js text splitting clips
-    # each headline word and refused letter with one, and the showcase's ratio
-    # card sizes its fill with one.
+    # Style attributes only, never style elements: a card, panel or dialog that is
+    # moving keeps its inline style across a page update with
+    # `JS.ignore_attributes(["style"])`, which LiveView puts back with one, and
+    # the showcase's ratio card sizes its fill with one. Rising words and digits
+    # clip by class (`.split-clip`), not with one.
     {"style-src-attr", ["'unsafe-inline'"]},
     {"img-src", ["'self'", "data:"]},
     {"font-src", ["'self'"]},

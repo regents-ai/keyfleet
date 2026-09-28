@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {anythingMoved, forget, leftovers, moved, rolled, watchMotion} from "./support/motion"
+import {anythingMoved, clippedByClass, forget, leftovers, moved, rolled, watchMotion} from "./support/motion"
 
 // Keyfleet's motion plays only for pointer presses and for readers who haven't
 // asked for less motion, and every piece hands its element back to the
@@ -14,7 +14,7 @@ async function openHomepage(page: Page) {
   await forget(page)
 }
 
-async function openAccountMenu(page: Page) {
+async function openAccount(page: Page) {
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
   await watchMotion(page)
@@ -23,6 +23,31 @@ async function openAccountMenu(page: Page) {
   await auth.expectAuthenticatedSession()
   await forget(page)
   return page.locator("#account-menu")
+}
+
+// The account page hears that a connection couldn't be verified, as it does
+// when the provider turns one down, and shows why.
+const refuseConnection = (page: Page) =>
+  page.evaluate(() => window.dispatchEvent(new CustomEvent("ash:identity-state", {detail: {error: "failed"}})))
+
+const REFUSAL = "#account-verified-connections-notice"
+
+// Serves the page under its own policy with style attributes refused outright,
+// and collects whatever the browser refuses.
+async function refuseStyleAttributes(page: Page, path: string) {
+  await page.route(path, async route => {
+    const response = await route.fetch()
+    const headers = response.headers()
+    const policy = headers["content-security-policy"]
+    expect(policy).toMatch(/style-src-attr [^;]+/)
+    headers["content-security-policy"] = policy.replace(/style-src-attr [^;]+/, "style-src-attr 'none'")
+    await route.fulfill({response, headers})
+  })
+  const refusals: string[] = []
+  page.on("console", message => {
+    if (message.text().includes("Refused to")) refusals.push(message.text())
+  })
+  return refusals
 }
 
 test("the homepage's fleet cards settle in once, when first scrolled to, and end clean", async ({page}) => {
@@ -58,8 +83,22 @@ test("a page's headline rises in and is left exactly as the server drew it", asy
     .toBe(true)
 })
 
+test("a headline's words rise each in a box clipped by class, so a policy refusing style attributes refuses nothing", async ({
+  page,
+}) => {
+  const refusals = await refuseStyleAttributes(page, "**/about")
+  await watchMotion(page)
+  await page.goto("/about")
+
+  await expect.poll(() => rolled(page, "headline")).toBe(true)
+  expect(await clippedByClass(page, "headline")).toBe(true)
+  await expect.poll(() => page.locator("main h1 .split-clip").count()).toBe(0)
+  await page.waitForLoadState("networkidle")
+  expect(refusals).toEqual([])
+})
+
 test("a pointer press squishes the account button and pops its menu, and both end clean", async ({page}) => {
-  const account = await openAccountMenu(page)
+  const account = await openAccount(page)
 
   await account.locator("summary").click()
   await expect(account.locator(".account-menu__content")).toBeVisible()
@@ -70,7 +109,7 @@ test("a pointer press squishes the account button and pops its menu, and both en
 })
 
 test("a keyboard press opens the account menu at once, with no squish or pop", async ({page}) => {
-  const account = await openAccountMenu(page)
+  const account = await openAccount(page)
 
   await account.locator("summary").focus()
   await page.keyboard.press("Enter")
@@ -80,15 +119,38 @@ test("a keyboard press opens the account menu at once, with no squish or pop", a
   expect(await anythingMoved(page)).toBe(false)
 })
 
-test("a reader who asked for less motion sees presses, menus and cards without movement", async ({browser}) => {
+test("a refusal shakes once as it appears, and refusals again and again end at rest", async ({page}) => {
+  await openAccount(page)
+
+  await refuseConnection(page)
+  await expect(page.locator(REFUSAL)).toHaveText("That connection couldn’t be verified. Try again.")
+  await expect(page.locator(REFUSAL)).toHaveAttribute("data-refused")
+  await expect.poll(() => moved(page, REFUSAL)).toBe(true)
+  await expect.poll(() => leftovers(page)).toEqual([])
+
+  for (let refusal = 0; refusal < 5; refusal++) {
+    await refuseConnection(page)
+    await page.waitForTimeout(70)
+  }
+  await expect(page.locator(REFUSAL)).toBeVisible()
+  await expect.poll(() => leftovers(page)).toEqual([])
+  expect(await page.locator(REFUSAL).getAttribute("style")).toBeNull()
+})
+
+test("a reader who asked for less motion sees presses, menus, refusals and cards without movement", async ({browser}) => {
   const context = await browser.newContext({reducedMotion: "reduce"})
   const page = await context.newPage()
 
-  const account = await openAccountMenu(page)
+  const account = await openAccount(page)
   await account.locator("summary").click()
   await expect(account.locator(".account-menu__content")).toBeVisible()
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "the account menu").toBe(false)
+
+  await refuseConnection(page)
+  await expect(page.locator(REFUSAL)).toBeVisible()
+  await page.waitForTimeout(600)
+  expect(await anythingMoved(page), "a refusal").toBe(false)
 
   await page.goto("/")
   await expect(page.locator(".phx-connected").first()).toBeAttached()
