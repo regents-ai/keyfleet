@@ -54,23 +54,23 @@ export const OnchainSteps: Hook = {
     const push: Push = (event, payload) => void this.pushEventTo(this.el, event, payload)
 
     // Every hook on the page hears this event; keep only this component's review.
-    // No review means no eligible wallet: a press then sends nothing.
+    // No review means none is built yet, or no wallet may send.
     this.handleEvent("onchain-steps:review", payload => {
       const {component_id, review} = payload as {component_id: string; review: Review | null}
       if (component_id === this.el.id) this.review = review ?? undefined
     })
 
     // Every press runs on its own and reaches the wallet, even while an earlier
-    // one is still there. On a component with review inputs, a press with no
-    // review yet, or whose review no longer matches the form on screen, asks the
-    // server for the matching review and sends what comes back.
+    // one is still there. A press whose step isn't on the page yet, or whose
+    // review no longer matches the form on screen, asks the server for the
+    // matching review and sends what comes back.
     this.clicked = event => {
       const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
       const name = button?.dataset.onchainStep
       if (!button || !name || !this.el.contains(button)) return
       const release = mark(button)
       const form = formInputs(this.el)
-      const asks = Object.keys(form).length > 0 && (!this.review || !sameInputs(this.review.inputs, form))
+      const asks = asksServer(this.review, name, form)
       lost(this.el, false)
 
       if (activeEthereumWallet() && asks) {
@@ -159,6 +159,16 @@ export function formInputs(root: HTMLElement): Record<string, string> {
     }
   })
   return inputs
+}
+
+/**
+ * Whether a press must ask the server for its review first: its step isn't in
+ * the review on the page (none has arrived yet, as when the button has just
+ * appeared), or the review was built from other inputs than the form shows.
+ */
+export function asksServer(review: Review | undefined, name: string, form: Record<string, string>): boolean {
+  if (!review?.steps.some(step => step.step === name)) return true
+  return Object.keys(form).length > 0 && !sameInputs(review.inputs, form)
 }
 
 function sameInputs(review: Record<string, string>, form: Record<string, string>): boolean {

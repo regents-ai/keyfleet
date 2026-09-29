@@ -104,8 +104,9 @@ defmodule KeyfleetWeb.WalletPanel do
   def handle_event("change", params, socket),
     do: {:noreply, socket |> take_inputs(params) |> sync()}
 
-  # A press made before the steps caught up with the form: the form is taken
-  # as the page's own, and the reply carries the steps built from it.
+  # A press made before its step reached the page, or before the steps caught
+  # up with the form: the form is taken as the page's own, and the reply
+  # carries the steps built from it.
   def handle_event("prepare_and_send", %{"form" => form, "step" => step}, socket)
       when is_map(form) and is_binary(step) do
     socket = socket |> take_inputs(form) |> sync()
