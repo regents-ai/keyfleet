@@ -34,7 +34,9 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert text(page, "button[type=submit]") == "Tell me when it opens"
 
     assert page |> LazyHTML.query("footer a") |> LazyHTML.attribute("href") ==
-             ["/privacy", "/terms"]
+             ["https://x.com/regents_sh", "/privacy", "/terms"]
+
+    assert text(page, "footer a[href='https://x.com/regents_sh']") == "Follow on X"
   end
 
   test "the page loads no scripts and nothing of sign-in" do

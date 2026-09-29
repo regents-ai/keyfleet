@@ -280,3 +280,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Everything else about Classic is unchanged: 2% to Regents staking once per
   sale, votes approved by more than half of all keys sold, income paid in full to
   the keys, one Chainlink VRF request per key. Key sales stay off.
+
+## 2026-09-29 — Follow on X from the early-access page
+
+- `/early` links to https://x.com/regents_sh as "Follow on X", first in its
+  footer beside Privacy and Terms.

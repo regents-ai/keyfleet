@@ -134,6 +134,7 @@ defmodule KeyfleetWeb.EarlyHTML do
       <% end %>
 
       <footer class="early__footer">
+        <a href="https://x.com/regents_sh" rel="me">Follow on X</a>
         <a href={~p"/privacy"}>Privacy</a>
         <a href={~p"/terms"}>Terms</a>
       </footer>

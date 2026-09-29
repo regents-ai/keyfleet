@@ -54,6 +54,8 @@ for (const viewport of [{width: 375, height: 812}, {width: 1440, height: 900}]) 
     expect(requested.filter(url => /privy/i.test(url))).toEqual([])
     expect(requested.filter(url => new URL(url).pathname.endsWith(".js"))).toEqual([])
     await expect(page.getByRole("heading", {name: "No boss. No job queue. Just a crew that runs itself.", level: 1})).toBeVisible()
+    await expect(page.getByRole("link", {name: "Follow on X"})).toHaveAttribute("href", "https://x.com/regents_sh")
+    await expect(page.getByRole("link", {name: "Follow on X"})).toBeInViewport()
 
     const email = page.getByLabel("Email")
     await email.fill("not an address")
