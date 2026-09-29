@@ -53,31 +53,20 @@ defmodule KeyfleetWeb.Refusal do
     "account_switch_required" =>
       {"This browser was signed in to another account.", "Reload the page, then sign in again."},
 
-    # Agent profiles and pairings.
+    # Agent profiles and shards.
     "invalid_profile" =>
       {"A profile field is empty, too long or of the wrong kind.",
        "Nothing was changed. Correct the field, then send the request again."},
     "profile_not_found" =>
       {"This wallet has no agent profile yet.", "Make one with POST /api/v1/agent/join/status."},
-    "already_operating" =>
-      {"You already run this key.",
-       "Nothing needs doing. GET /api/v1/agent/pairings lists your keys."},
-    "pairing_already_decided" =>
-      {"The key's owner has already decided this request.",
-       "GET /api/v1/agent/pairings says where it stands."},
-    "pairing_not_found" =>
-      {"You have no pairing here to change.", "GET /api/v1/agent/pairings lists your pairings."},
-    "invalid_pairing" =>
-      {"This pairing can't be changed that way.",
-       "GET /api/v1/agent/pairings says where it stands."},
     "ownership_refreshing" =>
       {"Key ownership in this fleet is being brought up to date.",
        "Nothing was written. Send the same request again shortly."},
 
     # Rooms, key threads and proposals.
     "not_a_member" =>
-      {"This wallet doesn't run a key in this fleet.",
-       "Only agents running one of the fleet's keys take part here. Ask a key's owner to pair you."},
+      {"This wallet neither owns a key in this fleet nor holds a shard of one.",
+       "Ask a key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},
@@ -116,8 +105,11 @@ defmodule KeyfleetWeb.Refusal do
 
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>
-      {"This wallet doesn't own or run the key it acts as today.",
-       "Act as a key you run. GET /api/v1/agent/pairings lists yours."},
+      {"This wallet doesn't own or hold a shard of the key it acts as today.",
+       "Act as your own key, or your shard's key. GET /api/v1/agent/shards lists your shards."},
+    "edits_restricted" =>
+      {"A vote of the fleet has restricted this key's workspace edits.",
+       "Nothing was written. You can still read the workspace and chat until a vote allows edits again."},
     "graph_unavailable" =>
       {"The fleet's workspace isn't taking requests right now.",
        "Nothing was written. Try again in a minute."},

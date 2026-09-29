@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.FleetPage do
   @moduledoc """
   What a fleet's page reads: the key on offer, a page of its keys with the
-  agents running them, the links to the pages either side, the key the map
+  agents holding their shards, the links to the pages either side, the key the map
   has chosen, and "What's happening" with what the fleet is trying now.
 
   A page name that isn't one the keys can answer is a page that doesn't exist.
@@ -83,31 +83,43 @@ defmodule KeyfleetWeb.FleetPage do
     do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position ++ kept)}"
 
   @doc """
-  Each key with the agent running it, if any, and what that agent's
-  check-ins with the fleet say.
+  Each key with its active shards: each shard's agent and what its check-ins
+  with the fleet say, or the shard's wallet while no agent has signed in
+  with it.
   """
   def fleet_keys(fleet_id, keys, actor) do
-    pairings = Keys.fleet_operators!(fleet_id, Enum.map(keys, & &1.token_id), actor: actor)
+    shards =
+      Keys.active_shards_of_keys!(fleet_id, Enum.map(keys, & &1.token_id),
+        actor: actor,
+        load: [:agent_profile]
+      )
 
     check_ins =
       Map.new(
-        Agents.check_ins_in_fleet!(fleet_id, Enum.map(pairings, & &1.agent_profile.id)),
+        Agents.check_ins_in_fleet!(
+          fleet_id,
+          for(%{agent_profile: %{id: id}} <- shards, do: id)
+        ),
         &{&1.agent_profile_id, &1}
       )
 
     now = DateTime.utc_now()
 
-    operators =
-      Map.new(pairings, fn %{agent_profile: agent} = pairing ->
-        {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
-        {pairing.token_id, %{name: agent.name, status_label: label}}
+    by_key =
+      Enum.group_by(shards, & &1.token_id, fn
+        %{agent_profile: nil, wallet: wallet} ->
+          %{wallet: wallet, name: nil, status_label: nil}
+
+        %{agent_profile: agent, wallet: wallet} ->
+          {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
+          %{wallet: wallet, name: agent.name, status_label: label}
       end)
 
     for key <- keys do
       %{
         token_id: key.token_id,
         owner_wallet: key.owner_wallet,
-        operator: operators[key.token_id]
+        shards: Map.get(by_key, key.token_id, [])
       }
     end
   end
@@ -133,24 +145,9 @@ defmodule KeyfleetWeb.FleetPage do
 
   @doc """
   "Trying now", at the top of "What's happening": the fleet's open goals and
-  the work on them, with the agent running each key on a task named.
+  the work on them, with the key on each task named.
   """
-  def read_trying_now(fleet_id) do
-    now = Graph.trying_now(fleet_id)
-    tasks = Enum.flat_map(now.goals, & &1.tasks) ++ now.taken
-    token_ids = for %{assignee_key: token_id} <- tasks, token_id, uniq: true, do: token_id
-    ActivityLines.trying_now(now, agents(fleet_id, token_ids))
-  end
-
-  # The agent running each of these keys, by number; none to look up when no
-  # key is shown.
-  defp agents(_fleet_id, []), do: %{}
-
-  defp agents(fleet_id, token_ids) do
-    fleet_id
-    |> Keys.fleet_operators!(token_ids)
-    |> Map.new(&{&1.token_id, &1.agent_profile.name})
-  end
+  def read_trying_now(fleet_id), do: fleet_id |> Graph.trying_now() |> ActivityLines.trying_now()
 
   @doc """
   The first `wanted` pages of "What's happening", newest first, as the items,

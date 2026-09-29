@@ -15,7 +15,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   # come only from the keys this test issues.
   @owner "0x" <> String.duplicate("d", 40)
   @stranger "0x" <> String.duplicate("e", 40)
-  @operator "0x" <> String.duplicate("c", 40)
+  @agent "0x" <> String.duplicate("c", 40)
+  @other_owner "0x" <> String.duplicate("f", 40)
   @composer "#rooms-composer"
 
   setup do
@@ -54,8 +55,10 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert has_element?(
              view,
              ~s(.rooms-author a[href="/app/fleets/fleet_tech_classic?key=1"]),
-             "Key 1 · 0xdddd..dddd"
+             "Key 1"
            )
+
+    assert has_element?(view, ".rooms-author .rooms-writer", "0xdddd..dddd")
 
     refute html =~ "Nothing has been said here yet."
     assert Enum.map(Rooms.read_messages!(@fleet, "general"), & &1.body) == ["Hull survey started"]
@@ -127,20 +130,87 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   test "an agent signs its own posts, and what anyone types is shown, not run", %{conn: conn} do
-    agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
+    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
-    request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner_actor())
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
 
     post_as(agent, "<script>alert(1)</script>")
     post_as(agent, "Readings at https://example.com")
 
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
-    assert has_element?(view, ".rooms-author a", "Key 1 · Orbit runner · claude-code")
+    assert has_element?(view, ".rooms-author a", "Key 1")
+    assert has_element?(view, ".rooms-author .rooms-writer", "Orbit runner · claude-code")
     assert html =~ "&lt;script&gt;alert(1)&lt;/script&gt;"
     refute html =~ "<script>alert(1)</script>"
     assert html =~ ~s(<a href="https://example.com" rel="noopener noreferrer">)
+  end
+
+  describe "muting a key" do
+    setup do
+      agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
+      transfer!(2, @other_owner)
+
+      %{
+        owners: post_as_owner("Hull survey started"),
+        shards: post_as(agent, "Readings are in"),
+        others:
+          post_as(
+            %Actors.Human{human_account_id: 2, wallet_addresses: [@other_owner]},
+            "Dry dock"
+          )
+      }
+    end
+
+    test "hides the key's posts and its shards' posts from the one who muted it, on every page they have open",
+         %{conn: conn, owners: owners} do
+      conn = signed_in_as(conn, @stranger)
+      {:ok, view, _html} = live(conn, @path)
+      {:ok, other_page, _html} = live(conn, @path)
+      {:ok, owner_view, _html} = build_conn() |> signed_in_as(@owner) |> live(@path)
+
+      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute key #1")
+      refute has_element?(view, "#rooms-muted")
+
+      view |> element("#rooms-mute-#{owners.id}") |> render_click()
+
+      for page <- [view, other_page] do
+        html = render(page)
+        refute html =~ "Hull survey started"
+        refute html =~ "Readings are in"
+        assert html =~ "Dry dock"
+        assert has_element?(page, "#rooms-muted-1", "Key 1")
+      end
+
+      # Nobody else is affected.
+      assert render(owner_view) =~ "Hull survey started"
+      assert render(owner_view) =~ "Readings are in"
+      refute has_element?(owner_view, "#rooms-muted")
+
+      # A post the muted key makes while the page is open stays hidden too.
+      post_as_owner("Second survey")
+      refute render(view) =~ "Second survey"
+      assert render(owner_view) =~ "Second survey"
+
+      view |> element("#rooms-unmute-1") |> render_click()
+
+      for page <- [view, other_page] do
+        html = render(page)
+        assert html =~ "Hull survey started"
+        assert html =~ "Readings are in"
+        assert html =~ "Second survey"
+        refute has_element?(page, "#rooms-muted")
+      end
+    end
+
+    test "is offered only to someone signed in", %{conn: conn, owners: owners} do
+      {:ok, view, html} = live(conn, @path)
+
+      assert html =~ "Hull survey started"
+      refute has_element?(view, "#rooms-mute-#{owners.id}")
+    end
   end
 
   test "a visitor who is not signed in is told who can post, whatever ownership is doing",
@@ -235,11 +305,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
       assert html =~ "Named by 0xdddd..dddd on"
 
-      assert has_element?(
-               view,
-               ".rooms-naming",
-               "Key 1 · 0xdddd..dddd named this room “Hull survey” on"
-             )
+      assert has_element?(view, ".rooms-naming a", "Key 1")
+      assert has_element?(view, ".rooms-naming .rooms-writer", "0xdddd..dddd")
+      assert has_element?(view, ".rooms-naming", "named this room “Hull survey” on")
 
       assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
       assert has_element?(view, "#rooms-namer-topic[value='']")
@@ -352,10 +420,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     end
 
     test "a room an agent creates joins the list for everyone watching", %{conn: conn} do
-      agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
+      agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
-      request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-      Keys.approve_pairing!(request, Keys.default_limits(), actor: owner_actor())
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
 
       {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 

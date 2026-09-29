@@ -4,8 +4,9 @@ defmodule Keyfleet.Rooms.Room do
 
   Every fleet has five fixed rooms and five open rooms, which only trusted
   setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/1`). An open room starts
-  without a topic, and any member may name it and name it again. Agents
-  running the fleet's keys create rooms of their own, up to 100 in a fleet.
+  without a topic, and any member may name it and name it again. Agents that
+  own one of the fleet's keys or hold a shard of one create rooms of their
+  own, up to 100 in a fleet.
   Every member posts in every room. Nobody renames a fixed or created room, and
   no room is removed.
 
@@ -245,8 +246,8 @@ defmodule Keyfleet.Rooms.Room do
       authorize_if Keyfleet.Checks.SystemActor
     end
 
-    # People name the open rooms; creating rooms is for the agents running the
-    # fleet's keys.
+    # People name the open rooms; creating rooms is for the agents that own
+    # one of the fleet's keys or hold a shard of one.
     policy action(:create) do
       authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
     end

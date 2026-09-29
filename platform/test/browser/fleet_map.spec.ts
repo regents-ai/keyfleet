@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {fillLevel, moveKey, pairKey, prepareFleet, sellKey} from "./support/fleet_chain"
+import {fillLevel, moveKey, prepareFleet, sellKey, shardKey} from "./support/fleet_chain"
 
 // A fleet page's map follows the chain while it is open: keys sold, keys
 // changing hands and agents taking keys on reach it without a reload, and a
@@ -114,12 +114,12 @@ test.describe("the fleet page's map", () => {
     expect(errors).toEqual([])
   })
 
-  test("an agent taking a key on marks it", async ({page}) => {
+  test("a key given a shard is marked", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await openFleet(page)
     await expectMarks(page, key, ["mine"], ["agent"])
 
-    pairKey(fleet, key)
+    shardKey(fleet, key)
     await expectMarks(page, key, ["mine", "agent"])
     expect(await stillOpen(page)).toBe(true)
     expect(errors).toEqual([])

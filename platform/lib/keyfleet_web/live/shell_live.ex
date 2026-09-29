@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Muter
 
   alias KeyfleetWeb.{
     AccountLive,
@@ -34,14 +35,14 @@ defmodule KeyfleetWeb.ShellLive do
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
-  @key_events ~w(approve_pairing set_limits decline_pairing detach_operator)
-  @room_events ~w(send_message name_room)
+  @room_events ~w(send_message name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
 
   @impl true
   def mount(params, _session, socket) do
     {:ok,
      socket
+     |> follow_mutes()
      |> stream_configure(:posts, dom_id: &"post-#{&1.id}")
      |> stream(:posts, [])
      |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
@@ -64,8 +65,6 @@ defmodule KeyfleetWeb.ShellLive do
        activity_refresh: nil,
        key_profile: nil,
        key: nil,
-       key_notice: nil,
-       key_drafts: %{},
        room: nil,
        room_notice: nil,
        room_topic: nil,
@@ -97,6 +96,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
        |> load_held_keys(route_spec)
+       |> follow_keys(keys_fleet(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
        |> load_key(route_spec, params)
@@ -151,9 +151,6 @@ defmodule KeyfleetWeb.ShellLive do
      |> read_verified_connections()}
   end
 
-  def handle_event(event, params, socket) when event in @key_events,
-    do: KeysLive.handle_event(event, params, socket)
-
   def handle_event(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 
@@ -203,14 +200,22 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  # A notice for a fleet the page has since left, or one not yet on sale.
-  def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
-    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
+  # A notice for the key page on show, or for a fleet the page has since
+  # left, or one not yet on sale.
+  def handle_info({:keys_changed, fleet_id, token_ids}, socket),
+    do:
+      {:noreply,
+       socket
+       |> KeysLive.refresh_key(fleet_id, token_ids)
+       |> FleetLive.refresh_activity_soon(fleet_id)}
 
   def handle_info({:key_activity, _fleet_id, _token_id} = message, socket),
     do: KeyProfileLive.handle_info(message, socket)
 
   def handle_info({:rooms_changed, _fleet_id} = message, socket),
+    do: RoomsLive.handle_info(message, socket)
+
+  def handle_info({:mutes_changed, _fleet_id} = message, socket),
     do: RoomsLive.handle_info(message, socket)
 
   # A notice that the open fleet's workspace has moved past what the page last
@@ -275,7 +280,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> assign(:check_ins_timer, nil)
      |> FleetLive.refresh_agents()
      |> FleetLive.reread_listed()
-     |> KeyProfileLive.refresh_key_operator()
+     |> KeyProfileLive.refresh_key_shards()
      |> FleetLive.watch_check_ins()}
   end
 
@@ -327,8 +332,7 @@ defmodule KeyfleetWeb.ShellLive do
         <KeysLive.page
           :if={@route_spec.route_id == :keys}
           key={@key}
-          notice={@key_notice}
-          drafts={@key_drafts}
+          actor={actor(@access_context)}
         />
 
         <RoomsLive.page
@@ -365,7 +369,6 @@ defmodule KeyfleetWeb.ShellLive do
     shown = socket.assigns.fleet
 
     socket
-    |> follow_keys(fleet_id)
     |> listen_to(fleet_id)
     |> follow_workspace(fleet_id)
     |> follow_proposals(fleet_id)
@@ -377,10 +380,25 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_fleet(socket, _route_spec, _params),
     do:
       socket
-      |> follow_keys(nil)
       |> assign(fleet: nil, fleet_params: nil, activity: nil, activity_refresh: nil)
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
+
+  # The fleet whose keys the page on show follows: the fleet's own page, or
+  # one of its keys' pages.
+  defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
+       when route_id in [:fleet, :keys],
+       do: fleet_id
+
+  defp keys_fleet(_route_spec, _params), do: nil
+
+  # A person signed in hears when their own mutes change, on any of their
+  # pages, for as long as the page is open.
+  defp follow_mutes(socket) do
+    muter = Muter.of(human_actor(socket))
+    if connected?(socket) and muter != nil, do: start_listening(Muter.topic(muter))
+    socket
+  end
 
   # One subscription to the keys of the fleet on show, dropped on the way out.
   defp follow_keys(socket, fleet_id) do
@@ -406,15 +424,10 @@ defmodule KeyfleetWeb.ShellLive do
     do: socket |> assign(:key_profile, nil) |> stream(:key_thread, [], reset: true)
 
   defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
-    assign(socket,
-      key: KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)),
-      key_notice: nil,
-      key_drafts: %{}
-    )
+    assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))
   end
 
-  defp load_key(socket, _route_spec, _params),
-    do: assign(socket, key: nil, key_notice: nil, key_drafts: %{})
+  defp load_key(socket, _route_spec, _params), do: assign(socket, :key, nil)
 
   # The page starts listening before it reads, so a post that lands while it
   # loads still reaches it; a notice for a post it already read is passed over.

@@ -144,7 +144,45 @@
 }
 
 .rooms-author {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
   font-weight: 600;
+}
+
+/* Who wrote as the key sits beside it, smaller and quieter than the key. */
+.rooms-writer {
+  color: var(--ash-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.rooms-mute {
+  margin-inline-start: auto;
+  font-weight: 400;
+}
+
+.rooms-side {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.rooms-muted ul {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rooms-muted li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .rooms-detail {

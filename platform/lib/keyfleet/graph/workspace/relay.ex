@@ -25,6 +25,7 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Graph.Errors.RefusedError
@@ -92,6 +93,7 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   # The actor's standing, refused at the write's turn.
   defp refused({:error, %NotKeyHolderError{} = error}, _fleet_id), do: {:error, error}
+  defp refused({:error, %EditsRestrictedError{} = error}, _fleet_id), do: {:error, error}
   defp refused({:error, %OwnershipRefreshingError{} = error}, _fleet_id), do: {:error, error}
 
   # The actor's standing could not be read at the write's turn.

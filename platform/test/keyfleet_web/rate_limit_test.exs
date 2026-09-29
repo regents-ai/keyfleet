@@ -13,7 +13,7 @@ defmodule KeyfleetWeb.RateLimitTest do
   end
 
   test "the health check and every /api answer say what is left of the budget", %{conn: conn} do
-    for path <- ~w(/healthz /api/v1/fleets /api/no-such-route /api/v1/agent/pairings) do
+    for path <- ~w(/healthz /api/v1/fleets /api/no-such-route /api/v1/agent/shards) do
       response = get(conn, path)
 
       assert get_resp_header(response, "ratelimit-policy") == [~s("default";q=120;w=60)], path

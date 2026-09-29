@@ -95,19 +95,21 @@ defmodule Keyfleet.MessagesTest do
     assert read("general") == []
   end
 
-  test "an agent posts while it runs a key and stops when the key moves on" do
+  test "an agent posts as the key it has a shard of and stops when the key moves on" do
     agent = agent("c")
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+
+    profile =
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
 
     assert {:error, %Ash.Error.Forbidden{}} = send_as(agent, "general", "Standing by", "k-1")
 
-    request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: human("a"))
+    ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
 
     posted = post!(agent, "general", "Hull survey started", "k-2")
     assert posted.author_kind == :agent
+    assert posted.as_key == 1
     assert posted.author_wallet == wallet("c")
-    assert posted.agent_profile_id == request.agent_profile_id
+    assert posted.agent_profile_id == profile.id
 
     epoch!(ownership_epoch: 2, owner_wallet: wallet("d"), log_index: 1)
 
@@ -122,8 +124,7 @@ defmodule Keyfleet.MessagesTest do
     profile =
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
 
-    request = Keys.request_pairing!(@fleet, 1, %{}, actor: agent)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+    ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
 
     post!(agent, "general", "Hull survey started", "k-1")
     noted = Agents.get_check_in!(profile.id, @fleet)
@@ -252,7 +253,7 @@ defmodule Keyfleet.MessagesTest do
     refute_receive {:room_head, _room_id, _seq}, 100
   end
 
-  test "the database refuses to edit, delete or empty posts, key ownership or pairings",
+  test "the database refuses to edit, delete or empty posts, key ownership or shards",
        %{owner: owner} do
     posted = post!(owner, "general", "Hull survey started")
 
@@ -270,7 +271,7 @@ defmodule Keyfleet.MessagesTest do
                mode: :savepoint
              )
 
-    for table <- ~w(messages key_attachments key_pairings) do
+    for table <- ~w(messages key_attachments shard_events) do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query("TRUNCATE keyfleet_app.#{table}", [], mode: :savepoint)
     end
@@ -310,23 +311,24 @@ defmodule Keyfleet.MessagesTest do
     assert Enum.map(read("general"), &{&1.seq, &1.as_key}) == [{1, 7}, {2, 30}]
   end
 
-  test "an agent writes as the highest-ranked key it runs today", %{owner: owner} do
+  test "an agent that holds a key writes as its own key, never as a shard" do
     agent = agent("f")
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
-
-    for token_id <- [40, 12] do
-      epoch!(token_id: token_id)
-      request = Keys.request_pairing!(@fleet, token_id, %{}, actor: agent)
-      Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-    end
+    epoch!(token_id: 12)
+    ChainHelpers.issue_shard!(@fleet, 12, wallet("f"))
 
     first = post!(agent, "general", "Hull survey started")
     assert {first.as_key, first.author_wallet, first.author_kind} == {12, wallet("f"), :agent}
 
-    # Key 12 changes hands, which ends the agent running it.
+    # The agent's wallet buys key 40, so it writes as that key from now on.
+    epoch!(token_id: 40, owner_wallet: wallet("f"))
+    assert post!(agent, "general", "Still surveying").as_key == 40
+
+    # Key 12 changes hands, which ends its shards.
+    epoch!(token_id: 40, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 1)
     epoch!(token_id: 12, ownership_epoch: 2, owner_wallet: wallet("e"), log_index: 1)
 
-    assert post!(agent, "general", "Still surveying").as_key == 40
+    assert {:error, %Ash.Error.Forbidden{}} = send_as(agent, "general", "Anyone?", "k-3")
   end
 
   test "a repeated send key answers with the key the post was first written as", %{owner: owner} do

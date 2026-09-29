@@ -8,14 +8,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
-  @pairings_path "/api/v1/agent/pairings"
-  # The key a pairing names is part of the signed path, so its two segments are
-  # admitted here in their canonical spelling and nowhere else.
-  @pairing_path ~r"\A/api/v1/agent/keys/[a-z][a-z0-9_]{0,62}/[1-9][0-9]{0,17}/pairing\z"
-  # The fleet and the room a request is about are part of the signed path, in
-  # the same canonical spelling the product's own addresses use.
+  @shards_path "/api/v1/agent/shards"
+  # The fleet, the room and the key a request is about are part of the signed
+  # path, in the same canonical spelling the product's own addresses use.
   @fleet ~S"[a-z][a-z0-9_]{0,62}"
   @slug ~S"[a-z0-9][a-z0-9-]{0,62}"
+  @token ~S"[1-9][0-9]{0,17}"
   # A post is named by its id as the API answers it: lowercase and hyphenated.
   @post_id ~r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"
   @rooms_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms\z"
@@ -24,12 +22,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
   @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
-  # A key's thread is addressed by its fleet and its number, spelled as the
-  # pairing path spells them.
-  @token ~S"[1-9][0-9]{0,17}"
+  @mutes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/mutes\z"
+  @mute_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/(mute|unmute)\z"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
-  @step_down_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/step-down\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
@@ -219,15 +215,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp supported?("POST", @join_path), do: true
   defp supported?("POST", @update_path), do: true
-  defp supported?("GET", @pairings_path), do: true
+  defp supported?("GET", @shards_path), do: true
 
-  defp supported?("GET", path), do: Regex.match?(@rooms_path, path)
+  defp supported?("GET", path),
+    do: Regex.match?(@rooms_path, path) or Regex.match?(@mutes_path, path)
 
   defp supported?("POST", path) do
     Enum.any?(
       [
-        @pairing_path,
-        @step_down_path,
+        @mute_path,
         @create_room_path,
         @topic_path,
         @read_path,
@@ -242,7 +238,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     )
   end
 
-  defp supported?("DELETE", path), do: Regex.match?(@pairing_path, path)
   defp supported?(_method, _path), do: false
 
   defp body_limit(@update_path), do: @update_max_body
@@ -265,12 +260,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_body(@update_path, params) when is_map(params),
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
-  defp check_body(@pairings_path, params), do: admit(params == %{})
+  defp check_body(@shards_path, params), do: admit(params == %{})
 
   defp check_body(path, params) do
     cond do
-      Regex.match?(@pairing_path, path) -> admit(params == %{})
-      Regex.match?(@step_down_path, path) -> admit(params == %{})
+      Regex.match?(@mutes_path, path) -> admit(params == %{})
+      Regex.match?(@mute_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
       op = graph_op(path) -> check_graph_body(op, params)

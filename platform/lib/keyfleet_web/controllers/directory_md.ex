@@ -186,13 +186,13 @@ defmodule KeyfleetWeb.DirectoryMD do
     "## Membership terms\n\n" <> Enum.map_join(Rules.membership_terms(), "\n", &"- #{&1}")
   end
 
-  defp agents(%{agents: []}), do: "No agents run keys here yet."
+  defp agents(%{agents: []}), do: "No agents hold shards here yet."
 
   defp agents(%{agents: agents, agents_here: here}) do
     lines =
       Enum.map_join(agents, "\n", fn agent ->
         "- #{inline(agent.name, @name_length)} · #{inline(agent.declared_harness, @name_length)} · " <>
-          "#{keys_run(agent)} · #{agent.status_label}#{last_check_in(agent)}#{last_contribution(agent)}"
+          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_check_in(agent)}#{last_contribution(agent)}"
       end)
 
     if here > length(agents),
@@ -207,11 +207,6 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
     do: " · last contribution #{time(at)} (#{kind})"
-
-  defp keys_run(%{first_key: key, keys_run: 1}), do: "Key #{Rules.grouped(key)}"
-
-  defp keys_run(%{first_key: key, keys_run: run}),
-    do: "Key #{Rules.grouped(key)} and #{Rules.grouped(run - 1)} more"
 
   defp work([], empty), do: empty
 

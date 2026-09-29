@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
-  Key ownership and reveals projected from contract events, and who operates
-  each key.
+  Key ownership, reveals, shards and edit restrictions projected from
+  contract events.
   """
   use Ash.Domain
 
@@ -79,72 +79,6 @@ defmodule Keyfleet.Keys do
         action: :latest_for_keys,
         args: [:fleet_id, :token_ids]
     end
-
-    resource Keyfleet.Keys.KeyPairing do
-      define :request_pairing, action: :request_pairing, args: [:fleet_id, :token_id]
-      define :approve_pairing, action: :approve_pairing
-      define :set_limits, action: :set_limits
-      define :decline_pairing, action: :decline_pairing
-      define :detach_operator, action: :detach_operator
-      define :withdraw_pairing_request, action: :withdraw_pairing_request
-      define :step_down, action: :step_down
-
-      define :current_operator,
-        action: :current_operator,
-        args: [:fleet_id, :token_id],
-        not_found_error?: false
-
-      define :list_pairing_requests, action: :pairing_requests, args: [:fleet_id, :token_id]
-      define :pairing_history, action: :pairing_history, args: [:fleet_id, :token_id]
-      define :my_pairings, action: :my_pairings
-
-      define :my_identity_key,
-        action: :my_identity_in_fleet,
-        args: [:fleet_id],
-        not_found_error?: false
-
-      define :my_keys_in_fleet, action: :my_keys_in_fleet, args: [:fleet_id]
-      define :fleet_operators, action: :operators_in_fleet, args: [:fleet_id, :token_ids]
-      define :keys_run_in_fleet, action: :run_in_fleet, args: [:fleet_id]
-
-      define :arrivals_before,
-        action: :arrivals_before,
-        args: [:fleet_id, :before_at, :before_id, :limit]
-
-      define :departures_before,
-        action: :departures_before,
-        args: [:fleet_id, :before_at, :before_id, :limit]
-
-      define :runs_elsewhere,
-        action: :runs_elsewhere,
-        args: [:fleet_id, :agent_profile_ids, :after]
-
-      define :my_open_request,
-        action: :my_open_request,
-        args: [:fleet_id, :token_id],
-        not_found_error?: false
-
-      define :my_active_pairing,
-        action: :my_active_pairing,
-        args: [:fleet_id, :token_id],
-        not_found_error?: false
-    end
-  end
-
-  @doc """
-  The limits an owner is offered before approving an agent, as the arguments
-  `approve_pairing` and `set_limits` take. The owner may change any of them.
-  """
-  def default_limits do
-    %{
-      money: "Don't spend or promise any money. Ask me first.",
-      information:
-        "Don't share anything about me, my accounts or my contacts. Talk only about your own work here.",
-      outside:
-        "Don't sign up for anything, send messages or publish anywhere outside Keyfleet without asking me.",
-      check_first:
-        "Before agreeing to a deadline or a deliverable for someone, and whenever something needs my decision."
-    }
   end
 
   @doc "Whether the key's workspace edits are restricted by a vote of the fleet right now."
@@ -163,12 +97,13 @@ defmodule Keyfleet.Keys do
 
   @doc """
   The key `actor` is in a fleet today, as `%{token_id: token_id, wallet: wallet}`,
-  or `nil` when it holds and runs none of the fleet's keys.
+  or `nil` when it neither holds one of the fleet's keys nor has a shard of one.
 
   Keys rank by the order they were sold, the first key sold ranking highest. A
   person is the highest-ranked key their wallets hold, and `wallet` is the one
-  holding it. An agent is the highest-ranked key it runs today, and `wallet` is
-  its own. Everything either writes in the fleet is written as that key.
+  holding it. An agent is the highest-ranked key its wallet holds, or else the
+  key of the shard it holds in the fleet, and `wallet` is its own. Everything
+  either writes in the fleet is written as that key.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
     case held_identity_key!(fleet_id, wallets, actor: actor) do
@@ -179,7 +114,7 @@ defmodule Keyfleet.Keys do
 
   def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
     with true <- Agent.valid?(actor),
-         %{token_id: token_id} <- my_identity_key!(fleet_id, actor: actor) do
+         %{token_id: token_id} <- held_or_shard(fleet_id, wallet, actor) do
       %{token_id: token_id, wallet: wallet}
     else
       _none -> nil
@@ -187,6 +122,11 @@ defmodule Keyfleet.Keys do
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  defp held_or_shard(fleet_id, wallet, actor),
+    do:
+      held_identity_key!(fleet_id, [wallet], actor: actor) ||
+        active_shard!(fleet_id, wallet, actor: actor)
 
   @doc """
   Up to `limit` of the fleet's keys numbered 1 to `minted` that have no

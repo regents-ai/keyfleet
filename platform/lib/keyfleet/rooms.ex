@@ -1,10 +1,14 @@
 defmodule Keyfleet.Rooms do
-  @moduledoc "Fleet-scoped rooms for native chat, and a public thread for every key."
+  @moduledoc """
+  Fleet-scoped rooms for native chat, a public thread for every key, and each
+  reader's own mutes of the keys whose posts they would rather not see.
+  """
   use Ash.Domain
 
   require Ash.Query
 
   alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
 
   # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
@@ -50,7 +54,43 @@ defmodule Keyfleet.Rooms do
         args: [:fleet_id, :author_wallets, :idempotency_key],
         not_found_error?: false
     end
+
+    resource Keyfleet.Rooms.Mute do
+      define :mute_key, action: :mute, args: [:fleet_id, :token_id]
+      define :unmute, action: :unmute
+      define :mutes_in_fleet, action: :in_fleet, args: [:fleet_id]
+      define :get_mute, action: :of_key, args: [:fleet_id, :token_id], not_found_error?: false
+    end
   end
+
+  @doc """
+  Takes away `actor`'s mute of a key, if it has one: `{:ok, mute | nil}`.
+  Unmuting a key that isn't muted changes nothing.
+  """
+  def unmute_key(fleet_id, token_id, opts) do
+    case get_mute(fleet_id, token_id, opts) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, mute} -> with :ok <- unmute(mute, opts), do: {:ok, mute}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  The keys `actor` has muted in the fleet, as a set of key numbers; none for
+  anyone not signed in.
+  """
+  def muted_keys!(fleet_id, actor) do
+    if Muter.of(actor),
+      do: fleet_id |> mutes_in_fleet!(actor: actor) |> MapSet.new(& &1.token_id),
+      else: MapSet.new()
+  end
+
+  @doc """
+  `messages` without the posts written as a key in `muted`. How far a reader
+  has got is always counted over every message, shown or not.
+  """
+  def unmuted(messages, muted),
+    do: Enum.reject(messages, &(&1.kind == :post and MapSet.member?(muted, &1.as_key)))
 
   @doc "Where a fleet says that one of its rooms has taken a new post."
   def fleet_topic(fleet_id), do: "fleet:#{fleet_id}:rooms"

@@ -18,7 +18,6 @@ defmodule Keyfleet.ActivityTest do
   alias Keyfleet.WorkspaceFixtures, as: Workspace
 
   @fleet "fibonacci_syndicate"
-  @other_fleet "fibonacci_cascade"
   @system %Actors.System{}
   # The wallet the workspace fixtures sign every change with.
   @member_wallet "0x" <> String.duplicate("a1", 20)
@@ -67,9 +66,8 @@ defmodule Keyfleet.ActivityTest do
 
       runner = agent("c")
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
-      pairing = Keys.request_pairing!(@fleet, 3, %{}, actor: runner)
-      pairing = Keys.approve_pairing!(pairing, Keys.default_limits(), actor: owner)
-      Keys.detach_operator!(pairing, %{}, actor: owner)
+      ChainHelpers.issue_shard!(@fleet, 3, wallet("c"))
+      ChainHelpers.end_shard!(@fleet, 3, wallet("c"), wallet("a"))
 
       goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
@@ -88,8 +86,8 @@ defmodule Keyfleet.ActivityTest do
                executed: 1,
                sale: 1,
                transfer: 1,
-               agent_started: 1,
-               agent_stopped: 1,
+               shard_issued: 1,
+               shard_ended: 1,
                created: 3,
                claimed: 1,
                linked: 1,
@@ -168,10 +166,7 @@ defmodule Keyfleet.ActivityTest do
       Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
       proposal!(@fleet, 1, %{})
-      runner = agent("c")
-      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
-      pairing = Keys.request_pairing!(@fleet, 2, %{}, actor: runner)
-      pairing = Keys.approve_pairing!(pairing, Keys.default_limits(), actor: owner)
+      ChainHelpers.issue_shard!(@fleet, 2, wallet("c"))
 
       # The newest item, a change the workspace logged ahead of this server's
       # clock, fills the first page: every other source is still to be read.
@@ -187,15 +182,12 @@ defmodule Keyfleet.ActivityTest do
       # One of everything, each newer than the first page by place or time.
       Workspace.create(@fleet, "note", %{"title" => "Plates"})
       post!(owner, "general", "Survey done")
-      Keys.detach_operator!(pairing, %{}, actor: owner)
+      ChainHelpers.end_shard!(@fleet, 2, wallet("c"), wallet("c"))
       epoch!(4, 1, "a")
       epoch!(2, 2, "b")
       proposal!(@fleet, 2, %{})
       vote!(@fleet, 2, wallet("a"), true, [1])
-      stayed = agent("d")
-      Agents.ensure_profile!(%{name: "Dock hand", declared_harness: "test"}, actor: stayed)
-      later = Keys.request_pairing!(@fleet, 3, %{}, actor: stayed)
-      Keys.approve_pairing!(later, Keys.default_limits(), actor: owner)
+      ChainHelpers.issue_shard!(@fleet, 3, wallet("d"))
 
       assert walk(cursor, 1, [first]) == whole
       assert length(Activity.page(@fleet, nil).items) > length(whole)
@@ -405,39 +397,35 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
-  test "an agent that stopped and runs a key in another fleet is shown running it" do
-    owner = human("a")
-    ChainHelpers.seed_cursor!(@other_fleet)
-    epoch!(3, 1, "a", @other_fleet)
-    moved = agent("c")
-    stayed = agent("d")
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: moved)
-    Agents.ensure_profile!(%{name: "Dock hand", declared_harness: "test"}, actor: stayed)
+  test "a shard issued and ended names its agent, and whether the agent stepped down" do
     epoch!(2, 1, "a")
+    runner = agent("c")
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
+    issued = ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
+    ChainHelpers.issue_shard!(@fleet, 2, wallet("d"))
+    ChainHelpers.end_shard!(@fleet, 1, wallet("c"), wallet("c"))
+    ChainHelpers.end_shard!(@fleet, 2, wallet("d"), wallet("a"))
 
-    for {runner, token_id} <- [{moved, 1}, {stayed, 2}] do
-      pairing = Keys.request_pairing!(@fleet, token_id, %{}, actor: runner)
-      pairing = Keys.approve_pairing!(pairing, Keys.default_limits(), actor: owner)
-      Keys.detach_operator!(pairing, %{}, actor: owner)
-    end
+    shards =
+      for %{kind: kind, facts: facts} <- Activity.page(@fleet, nil).items,
+          kind in [:shard_issued, :shard_ended],
+          do: {kind, facts.token_id, facts.agent && facts.agent.name, facts[:stepped_down?]}
 
-    elsewhere = Keys.request_pairing!(@other_fleet, 3, %{}, actor: moved)
-    Keys.approve_pairing!(elsewhere, Keys.default_limits(), actor: owner)
-
-    stopped =
-      @fleet
-      |> Activity.page(nil)
-      |> Map.fetch!(:items)
-      |> Enum.filter(&(&1.kind == :agent_stopped))
-      |> Enum.map(
-        &{&1.facts.agent.name, &1.facts.token_id, &1.facts.ended_reason, &1.facts.now_runs}
-      )
-
-    assert stopped == [
-             {"Dock hand", 2, :detached, nil},
-             {"Orbit runner", 1, :detached,
-              %{fleet_id: @other_fleet, fleet_name: "Keyfleet Cascade", token_id: 3}}
+    assert shards == [
+             {:shard_ended, 2, nil, false},
+             {:shard_ended, 1, "Orbit runner", true},
+             {:shard_issued, 2, nil, nil},
+             {:shard_issued, 1, "Orbit runner", nil}
            ]
+
+    assert [%{expires_at: expires_at}] =
+             for(
+               %{kind: :shard_issued, facts: %{token_id: 1} = facts} <-
+                 Activity.page(@fleet, nil).items,
+               do: facts
+             )
+
+    assert expires_at == issued.expires_at
   end
 
   test "a payment carries its token's details, read once however many payments a page holds" do
@@ -579,10 +567,10 @@ defmodule Keyfleet.ActivityTest do
     Graph.advance_cursor!(cursor, %{applied_seq: List.last(seqs)}, actor: @system)
   end
 
-  defp epoch!(token_id, ownership_epoch, owner, fleet_id \\ @fleet) do
+  defp epoch!(token_id, ownership_epoch, owner) do
     Keys.record_epoch!(
       %{
-        fleet_id: fleet_id,
+        fleet_id: @fleet,
         token_id: token_id,
         ownership_epoch: ownership_epoch,
         owner_wallet: wallet(owner),
@@ -590,7 +578,7 @@ defmodule Keyfleet.ActivityTest do
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash:
           "0x" <>
-            Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{token_id}/#{ownership_epoch}"),
+            Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/#{ownership_epoch}"),
               case: :lower
             ),
         log_index: 0

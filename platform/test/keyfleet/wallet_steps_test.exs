@@ -242,6 +242,81 @@ defmodule Keyfleet.WalletStepsTest do
     end
   end
 
+  describe "restricting and allowing a key's edits" do
+    test "names the proposing key, the key voted on, and restrict or allow", %{fleet: fleet} do
+      code = String.duplicate("cd", 32)
+
+      for {restricted, typed} <- [{true, "true"}, {false, "false"}] do
+        assert {:ok, built} =
+                 build(:propose_edits,
+                   inputs: %{
+                     "key" => "2",
+                     "target" => "7",
+                     "restricted" => typed,
+                     "text" => "Key 7 keeps deleting goals",
+                     "digest" => "0x" <> code
+                   }
+                 )
+
+        assert %{to: to, data: data} = steps(built)["propose"]
+        assert to == fleet.votes_address
+
+        assert data ==
+                 Call.encode("proposeRestrictEdits(uint256,uint256,bool,string,bytes32)", [
+                   2,
+                   7,
+                   restricted,
+                   "Key 7 keeps deleting goals",
+                   "0x" <> code
+                 ])
+      end
+
+      assert {:ok, %{problem: :no_target}} =
+               build(:propose_edits, inputs: %{"key" => "2", "restricted" => "true"})
+    end
+  end
+
+  describe "shards" do
+    test "issuing sends the key, the typed wallet and the days to the shards contract",
+         %{fleet: fleet} do
+      typed = "0x" <> String.upcase(String.slice(@other, 2..-1//1))
+
+      assert {:ok, built} =
+               build(:issue_shard, token_id: 3, inputs: %{"wallet" => typed, "days" => " 45 "})
+
+      assert %{to: to, data: data} = steps(built)["issue"]
+      assert to == fleet.shards_address
+      assert data == Call.encode("issue(uint256,address,uint16)", [3, @other, 45])
+
+      for days <- ["0", "366", "1.5", "", "thirty"] do
+        assert {:ok, %{problem: :days_unreadable, review: %{steps: []}}} =
+                 build(:issue_shard, token_id: 3, inputs: %{"wallet" => @other, "days" => days}),
+               days
+      end
+
+      assert {:ok, %{problem: :shard_wallet_unreadable}} =
+               build(:issue_shard, token_id: 3, inputs: %{"wallet" => "0x12", "days" => "30"})
+    end
+
+    test "each active shard of the key can be ended now or renewed for 30 days",
+         %{fleet: fleet} do
+      ProposalHelpers.keys_sold!(@fleet, [3], @signer)
+      ChainHelpers.issue_shard!(@fleet, 3, @other)
+
+      assert {:ok, built} = build(:end_shard, token_id: 3)
+      built = steps(built)
+      assert Map.keys(built) == ["end-#{@other}", "renew-#{@other}"]
+      assert built["end-#{@other}"].to == fleet.shards_address
+      assert built["end-#{@other}"].data == Call.encode("end(uint256,address)", [3, @other])
+
+      assert built["renew-#{@other}"].data ==
+               Call.encode("issue(uint256,address,uint16)", [3, @other, 30])
+
+      ChainHelpers.end_shard!(@fleet, 3, @other, @signer)
+      assert {:ok, %{review: %{steps: []}}} = build(:end_shard, token_id: 3)
+    end
+  end
+
   describe "voting for another and Regents' share" do
     test "a typed wallet may vote for the signer; clearing names no wallet" do
       assert {:ok, built} = build(:delegate, inputs: %{"delegate" => @other})

@@ -161,10 +161,7 @@ defmodule KeyfleetWeb.Router do
     pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
-    get "/pairings", AgentPairingController, :index
-    post "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :create
-    delete "/keys/:fleet_id/:token_id/pairing", AgentPairingController, :delete
-    post "/keys/:fleet_id/:token_id/step-down", AgentPairingController, :step_down
+    get "/shards", AgentShardController, :index
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
@@ -173,6 +170,9 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
+    get "/fleets/:fleet_id/mutes", AgentMuteController, :index
+    post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
+    post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
     post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes

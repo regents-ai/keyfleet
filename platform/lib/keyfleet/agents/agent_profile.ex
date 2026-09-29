@@ -43,15 +43,13 @@ defmodule Keyfleet.Agents.AgentProfile do
       prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
     end
 
-    # The agents running at least one of the fleet's keys right now, with how
-    # many of its keys each runs, the lowest-numbered one and its check-ins
-    # with the fleet: the most recent check-in first, then those that haven't
-    # checked in, by name. Requested, ended and earlier owners' pairings don't
-    # count.
+    # The agents holding an active shard of one of the fleet's keys, with
+    # that key and their check-ins with the fleet: the most recent check-in
+    # first, then those that haven't checked in, by name.
     read :here_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
 
-      filter expr(exists(pairings, fleet_id == ^arg(:fleet_id) and effective?))
+      filter expr(exists(shards, fleet_id == ^arg(:fleet_id) and active?))
 
       prepare fn query, _context ->
         fleet_id = Ash.Query.get_argument(query, :fleet_id)
@@ -59,8 +57,7 @@ defmodule Keyfleet.Agents.AgentProfile do
         query
         |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
         |> Ash.Query.load(
-          keys_run: %{fleet_id: fleet_id},
-          first_key: %{fleet_id: fleet_id},
+          key: %{fleet_id: fleet_id},
           check_ins: Ash.Query.filter(Keyfleet.Agents.CheckIn, fleet_id == ^fleet_id)
         )
         |> Ash.Query.sort(
@@ -71,12 +68,12 @@ defmodule Keyfleet.Agents.AgentProfile do
       end
     end
 
-    # The agents running at least one key in any of these fleets right now, by
-    # the same rule as `:here_in_fleet`, each once however many fleets it runs
-    # keys in.
+    # The agents holding an active shard in any of these fleets, by the same
+    # rule as `:here_in_fleet`, each once however many fleets it holds shards
+    # in.
     read :here_in_fleets do
       argument :fleet_ids, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
-      filter expr(exists(pairings, fleet_id in ^arg(:fleet_ids) and effective?))
+      filter expr(exists(shards, fleet_id in ^arg(:fleet_ids) and active?))
     end
 
     # The agents behind some wallets, by name, to say who made a change the
@@ -167,8 +164,10 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   relationships do
-    has_many :pairings, Keyfleet.Keys.KeyPairing do
-      destination_attribute :agent_profile_id
+    # Every shard record naming this agent's wallet, in every fleet.
+    has_many :shards, Keyfleet.Keys.ShardEvent do
+      source_attribute :wallet_address
+      destination_attribute :wallet
       public? false
     end
 
@@ -178,18 +177,6 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   calculations do
-    # How many of the fleet's keys this agent runs right now.
-    calculate :keys_run,
-              :integer,
-              expr(
-                count(pairings,
-                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and effective?)]
-                )
-              ) do
-      argument :fleet_id, :string, allow_nil?: false
-      public? true
-    end
-
     # When this agent last checked in with the fleet.
     calculate :last_check_in_at,
               :utc_datetime_usec,
@@ -203,13 +190,14 @@ defmodule Keyfleet.Agents.AgentProfile do
       public? true
     end
 
-    # The lowest-numbered of the fleet's keys this agent runs right now.
-    calculate :first_key,
+    # The key of the active shard this agent holds in the fleet, if any: a
+    # wallet holds one shard in a fleet at a time.
+    calculate :key,
               :integer,
               expr(
-                min(pairings,
+                min(shards,
                   field: :token_id,
-                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and effective?)]
+                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and active?)]
                 )
               ) do
       argument :fleet_id, :string, allow_nil?: false

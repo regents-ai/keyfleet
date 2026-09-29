@@ -106,6 +106,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <div :if={@page.deployed?} class="proposals-grid">
         <.propose_decision page={@page} actor={@actor} />
         <.propose_payment page={@page} actor={@actor} />
+        <.propose_edits page={@page} actor={@actor} />
         <.voting_delegate page={@page} actor={@actor} />
       </div>
 
@@ -324,7 +325,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :proposal, :map, required: true
 
   # Anyone may carry out a proposal once enough of all the keys sold have
-  # voted yes: three fifths for a change to a key's edits, more than half for
+  # voted yes: 3 of every 5 for a change to a key's edits, more than half for
   # every other kind.
   defp carry_out(assigns) do
     assigns =
@@ -351,7 +352,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       >
         <:notes>
           <p class="proposals-detail">
-            Anyone can carry out this proposal once {@needed} of all the keys sold have voted yes.
+            Anyone can carry out this proposal once {@needed} have voted yes.
           </p>
           <p
             :for={{status, note} <- @carry_out_notes}
@@ -561,6 +562,74 @@ defmodule KeyfleetWeb.ProposalsLive do
         <:buttons>
           <Regent.Primitives.button id="propose-payment-button" data-onchain-step="propose">
             <span data-press-label>Propose this payment</span>
+          </Regent.Primitives.button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  attr :page, :map, required: true
+  attr :actor, :any, required: true
+
+  # Stopping a key, and every shard of it, changing the workspace, or letting
+  # it change the workspace again. It can still read the workspace and chat.
+  defp propose_edits(assigns) do
+    ~H"""
+    <section id="propose-edits" class="proposals-panel" aria-labelledby="propose-edits-title">
+      <h2 id="propose-edits-title">Restrict or allow a key’s edits</h2>
+      <p class="proposals-detail">
+        Stops a key and its shards changing the workspace, or lets them again. They can still read it and chat. Needs 3 of every 5 keys sold to vote yes.
+      </p>
+      <.live_component
+        module={WalletPanel}
+        id="propose-edits-action"
+        class="proposals-action"
+        flow={:propose_edits}
+        fleet={fleet(@page)}
+        actor={@actor}
+        inputs={%{"key" => "", "target" => "", "restricted" => "true", "text" => "", "digest" => ""}}
+      >
+        <:fields :let={panel}>
+          <div class="proposals-form">
+            <.key_field id="propose-edits-key" value={panel.inputs["key"]} />
+            <.text_field
+              id="propose-edits-target"
+              name="target"
+              label="The key whose edits this is about"
+              inputmode="numeric"
+              value={panel.inputs["target"]}
+            />
+            <Regent.Primitives.field :let={field} id="propose-edits-restricted" label="Proposal">
+              <select
+                id={field.id}
+                name="restricted"
+                aria-describedby={field.described_by}
+                data-onchain-input="restricted"
+              >
+                <option value="true" selected={panel.inputs["restricted"] == "true"}>
+                  Restrict edits
+                </option>
+                <option value="false" selected={panel.inputs["restricted"] == "false"}>
+                  Allow edits
+                </option>
+              </select>
+            </Regent.Primitives.field>
+            <.text_area
+              id="propose-edits-text"
+              name="text"
+              label="Why"
+              rows="3"
+              value={panel.inputs["text"]}
+            />
+            <.document_code_field id="propose-edits-digest" value={panel.inputs["digest"]}>
+              A code for the exact document this is about: 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one.
+            </.document_code_field>
+          </div>
+        </:fields>
+        <:buttons>
+          <Regent.Primitives.button id="propose-edits-button" data-onchain-step="propose">
+            <span data-press-label>Propose this</span>
           </Regent.Primitives.button>
         </:buttons>
       </.live_component>
@@ -864,19 +933,18 @@ defmodule KeyfleetWeb.ProposalsLive do
   def approval_rule,
     do:
       "Each key is one vote. A proposal is approved once more than half of all the keys sold " <>
-        "vote yes, or three fifths for a change to a key’s workspace edits, so a key that " <>
+        "vote yes, or 3 of every 5 keys sold for a change to a key’s workspace edits, so a key that " <>
         "doesn’t vote counts against it. There is no deadline: it stays open to votes until " <>
         "someone carries it out."
 
-  defp needed(:restrict_edits), do: "three fifths"
-  defp needed(_kind), do: "more than half"
+  defp needed(:restrict_edits), do: "3 of every 5 keys sold"
+  defp needed(_kind), do: "more than half of all the keys sold"
 
   # What the page knows that the contract will likely refuse, said beside the
   # button that carries a proposal out.
   defp carry_out_notes(kind) do
     [
-      open:
-        "Yes votes aren’t yet #{needed(kind)} of all the keys sold, so carrying it out now will be refused.",
+      open: "Yes votes aren’t yet #{needed(kind)}, so carrying it out now will be refused.",
       executed: "It has already been carried out, so doing it again will be refused."
     ]
   end

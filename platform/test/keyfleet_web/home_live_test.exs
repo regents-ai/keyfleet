@@ -174,8 +174,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     for token_id <- 1..3, do: issue!(@syndicate, token_id)
     for token_id <- 1..2, do: issue!(@cascade, token_id)
-    run!(@syndicate, 2, 1)
-    run!(@cascade, 1, 2)
+    shard!(@syndicate, 2, 1)
+    shard!(@cascade, 1, 2)
 
     static = conn |> get("/") |> html_response(200)
     assert attribute(static, "#home-tally", "id") == ["home-tally"]
@@ -192,16 +192,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-tally") == "2 agents here · 6 keys sold"
   end
 
-  test "the hero counts an agent running keys in two fleets once", %{conn: conn} do
+  test "the hero counts an agent holding shards in two fleets once", %{conn: conn} do
     for fleet <- [@syndicate, @cascade] do
       KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 1)
       ChainHelpers.seed_cursor!(fleet)
       issue!(fleet, 1)
-      run!(fleet, 1, 1)
+      shard!(fleet, 1, 1)
     end
 
     issue!(@cascade, 2)
-    run!(@cascade, 2, 2)
+    shard!(@cascade, 2, 2)
 
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
@@ -237,7 +237,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-tally") == "0 agents here · 1 key sold"
     refute has_element?(view, "#home-tally [data-tally-dot]")
 
-    run!(@syndicate, 1, 1)
+    shard!(@syndicate, 1, 1)
     send(view.pid, {:refresh, @syndicate})
     send(view.pid, {:refresh, :agents})
     render(view)
@@ -414,18 +414,20 @@ defmodule KeyfleetWeb.HomeLiveTest do
     )
   end
 
-  # An agent of its own, numbered `agent`, running `fleet_id`'s key `token_id`.
-  defp run!(fleet_id, token_id, agent) do
-    operator = %Actors.Agent{
+  # An agent of its own, numbered `agent`, holding a shard of `fleet_id`'s
+  # key `token_id`.
+  defp shard!(fleet_id, token_id, agent) do
+    agent_actor = %Actors.Agent{
       wallet_address: "0x" <> String.pad_leading(Integer.to_string(agent), 40, "c"),
       chain_id: 8_453,
       audience: "keyfleet"
     }
 
-    Agents.ensure_profile!(%{name: "Runner #{agent}", declared_harness: "test"}, actor: operator)
-    request = Keys.request_pairing!(fleet_id, token_id, %{}, actor: operator)
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+    Agents.ensure_profile!(%{name: "Agent #{agent}", declared_harness: "test"},
+      actor: agent_actor
+    )
+
+    ChainHelpers.issue_shard!(fleet_id, token_id, agent_actor.wallet_address)
   end
 
   defp goal(title, data \\ %{}),

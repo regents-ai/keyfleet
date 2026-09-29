@@ -1,9 +1,9 @@
 defmodule Keyfleet.BrowserChain do
   @moduledoc """
   The browser tests' chain. Called on the browser test server's own node, it
-  sells, moves and pairs keys of one fleet through the real chain reader and
-  pairing actions, so a page open in the browser hears of them exactly as it
-  would from Ethereum.
+  sells and moves keys of one fleet, and issues and ends their shards, through
+  the real chain reader, so a page open in the browser hears of them exactly
+  as it would from Ethereum.
 
   Every pass reads blocks well past the last one recorded, so the reader's
   second look at recent blocks never finds a record the made-up chain has
@@ -28,6 +28,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.Scanner
+  alias Keyfleet.Chain.ShardsLog
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
@@ -46,8 +47,10 @@ defmodule Keyfleet.BrowserChain do
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
+  @shard_issued ShardsLog.topics() |> hd()
+  @shard_ended ShardsLog.topics() |> List.last()
   # Agents sign in on Base whatever chain the keys are on.
-  @operator %Agent{
+  @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
     audience: "keyfleet"
@@ -91,7 +94,7 @@ defmodule Keyfleet.BrowserChain do
           contract_address: @contract,
           rewards_address: "0x" <> String.duplicate("6", 40),
           votes_address: "0x" <> String.duplicate("9", 40),
-          shards_address: "0x" <> String.duplicate("6", 40),
+          shards_address: "0x" <> String.duplicate("4", 40),
           usdc_address: @usdc,
           deployed_block: 1_000,
           trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -190,15 +193,48 @@ defmodule Keyfleet.BrowserChain do
     :ok
   end
 
-  @doc "An agent asks to run key `token_id`, and the key's owner approves."
-  def pair!(fleet_id, token_id) do
-    # Pairing waits for ownership read just now.
-    pass!(fleet_id, [])
-    Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: @operator)
-    request = Keys.request_pairing!(fleet_id, token_id, %{}, actor: @operator)
-    owner = %Human{human_account_id: 1, wallet_addresses: [request.owner_wallet]}
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-    :ok
+  @doc """
+  Key `token_id`'s owner issues the browser agent, with a profile of its own,
+  a shard of the key for 30 days.
+  """
+  def shard!(fleet_id, token_id) do
+    Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: @agent)
+    issue_shard!(fleet_id, token_id, @agent.wallet_address, 30)
+  end
+
+  @doc "Key `token_id`'s owner has issued `wallet` a shard of the key for `days`."
+  def issue_shard!(fleet_id, token_id, wallet, days) do
+    %{ownership_epoch: epoch} = Keys.current_key!(fleet_id, token_id)
+    expires = DateTime.to_unix(DateTime.utc_now()) + days * 86_400
+
+    pass!(fleet_id, fn fleet, block ->
+      [
+        log(
+          fleet.shards_address,
+          [@shard_issued, word(token_id), address_word(wallet)],
+          word_data([expires, epoch]),
+          fleet.id,
+          block,
+          0
+        )
+      ]
+    end)
+  end
+
+  @doc "The shard of key `token_id` that `wallet` holds has been ended by `by`."
+  def end_shard!(fleet_id, token_id, wallet, by) do
+    pass!(fleet_id, fn fleet, block ->
+      [
+        log(
+          fleet.shards_address,
+          [@shard_ended, word(token_id), address_word(wallet), address_word(by)],
+          "0x",
+          fleet.id,
+          block,
+          0
+        )
+      ]
+    end)
   end
 
   @doc """
@@ -208,19 +244,7 @@ defmodule Keyfleet.BrowserChain do
   the key, and the fleet has proposal 1. Returns the key's number.
   """
   def furnish!(fleet_id, owner) do
-    Rooms.bootstrap_rooms!([fleet_id])
-    token_id = sell!(fleet_id, owner)
-
-    message =
-      Rooms.send_message!(
-        %{
-          fleet_id: fleet_id,
-          slug: "general",
-          body: "The plan is in the workspace.",
-          idempotency_key: Ash.UUID.generate()
-        },
-        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
-      )
+    {token_id, message} = speak!(fleet_id, owner, "The plan is in the workspace.")
 
     WorkspaceFixtures.open_log(fleet_id)
 
@@ -239,8 +263,30 @@ defmodule Keyfleet.BrowserChain do
     token_id
   end
 
+  @doc """
+  Sells the fleet's next key to `owner`, who says `body` in the General room.
+  Returns the key's number.
+  """
+  def say!(fleet_id, owner, body) do
+    {token_id, _message} = speak!(fleet_id, owner, body)
+    token_id
+  end
+
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
+
+  defp speak!(fleet_id, owner, body) do
+    Rooms.bootstrap_rooms!([fleet_id])
+    token_id = sell!(fleet_id, owner)
+
+    message =
+      Rooms.send_message!(
+        %{fleet_id: fleet_id, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
+        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
+      )
+
+    {token_id, message}
+  end
 
   defp last_of_level?(token_id, level), do: Presets.fibonacci_level_of(token_id + 1) > level
 
@@ -249,9 +295,28 @@ defmodule Keyfleet.BrowserChain do
     minted
   end
 
-  # One pass over a chain whose next block holds `changes`, as
+  # One pass over a chain whose next block holds the ownership `changes`, as
   # `{token_id, epoch, owner}`, and whose head is well past it.
-  defp pass!(fleet_id, changes) do
+  defp pass!(fleet_id, changes) when is_list(changes) do
+    pass!(fleet_id, fn fleet, block ->
+      changes
+      |> Enum.with_index()
+      |> Enum.map(fn {{token_id, epoch, owner}, index} ->
+        log(
+          fleet.contract_address,
+          [OwnershipLog.topic(), word(token_id), word(0), address_word(owner)],
+          word(epoch),
+          fleet.id,
+          block,
+          index
+        )
+      end)
+    end)
+  end
+
+  # One pass over a chain whose next block holds the logs `logs_at` makes for
+  # the fleet and that block, and whose head is well past it.
+  defp pass!(fleet_id, logs_at) do
     fleet = Fleets.get_fleet!(fleet_id)
 
     block =
@@ -260,41 +325,34 @@ defmodule Keyfleet.BrowserChain do
         cursor -> cursor.next_block + 40
       end
 
-    logs =
-      changes
-      |> Enum.with_index()
-      |> Enum.map(fn {{token_id, epoch, owner}, index} ->
-        ownership_log(fleet, token_id, epoch, owner, block, index)
-      end)
-
     StubClient.put_chain(
       %{
         number: block + 40,
         hash: "0x" <> String.duplicate("f", 64),
         timestamp: DateTime.utc_now()
       },
-      logs
+      logs_at.(fleet, block)
     )
 
     :ok = Scanner.step(fleet, StubClient)
   end
 
-  defp ownership_log(fleet, token_id, epoch, "0x" <> owner, block, log_index) do
+  defp log(address, topics, data, fleet_id, block, log_index) do
     %{
-      "address" => fleet.contract_address,
-      "topics" => [
-        OwnershipLog.topic(),
-        word(token_id),
-        word(0),
-        "0x" <> String.duplicate("0", 24) <> owner
-      ],
-      "data" => word(epoch),
+      "address" => address,
+      "topics" => topics,
+      "data" => data,
       "blockNumber" => quantity(block),
       "blockHash" => "0x" <> String.duplicate("b", 64),
-      "transactionHash" => transaction_hash(fleet.id, block),
+      "transactionHash" => transaction_hash(fleet_id, block),
       "logIndex" => quantity(log_index)
     }
   end
+
+  defp address_word("0x" <> address), do: "0x" <> String.duplicate("0", 24) <> address
+
+  defp word_data(values),
+    do: "0x" <> Enum.map_join(values, &String.slice(word(&1), 2..-1//1))
 
   # Chain events are unique across fleets, so each fleet's block has its own
   # transaction.

@@ -25,6 +25,12 @@ defmodule KeyfleetWeb.WalletWords do
       else: "The wallet to vote for you isn’t a valid address. #{@address_words}"
   end
 
+  def line(:issue_shard, %{problem: :shard_wallet_unreadable}, %{"wallet" => typed}) do
+    if String.trim(typed) == "",
+      do: "Type the wallet to issue a shard to.",
+      else: "The wallet isn’t a valid address. #{@address_words}"
+  end
+
   def line(_flow, %{problem: problem}, _inputs) when problem != nil, do: problem(problem)
   def line(flow, %{figures: figures}, _inputs), do: says(flow, figures)
 
@@ -57,6 +63,21 @@ defmodule KeyfleetWeb.WalletWords do
       "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
   end
 
+  defp says(:propose_edits, %{key: key, target: target, restricted: true}),
+    do:
+      "Proposes stopping key #{Rules.grouped(target)} and its shards changing the workspace, " <>
+        "with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
+
+  defp says(:propose_edits, %{key: key, target: target, restricted: false}),
+    do:
+      "Proposes letting key #{Rules.grouped(target)} and its shards change the workspace " <>
+        "again, with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
+
+  defp says(:issue_shard, %{token_id: token_id, wallet: wallet, days: days}),
+    do:
+      "Issues #{RegentFormat.short_address(wallet)} a shard of key #{Rules.grouped(token_id)} " <>
+        "for #{days(days)}. Issuing again to a wallet with a shard renews it."
+
   defp says(:delegate, %{delegate: delegate}),
     do:
       "Lets #{RegentFormat.short_address(delegate)} vote and propose with every key you hold, " <>
@@ -68,6 +89,9 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
   defp problem(:key_too_large), do: "That key number is larger than any key number can be."
   defp problem(:no_key), do: "Name the key you’re proposing with, like 12."
+  defp problem(:no_target), do: "Name the key whose edits this is about, like 12."
+  defp problem(:target_unreadable), do: "Name the key whose edits this is about, like 12."
+  defp problem(:days_unreadable), do: "A shard lasts from 1 to 365 whole days."
   defp problem(:key_unreadable), do: "Name the key you’re proposing with, like 12."
 
   defp problem(:amount_commas),
@@ -108,6 +132,9 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "clear"}), do: "Stop any wallet voting for you"
   def title(%{name: "send"}), do: "Send Regents its share"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
+  def title(%{name: "issue"}), do: "Issue a shard"
+  def title(%{name: "end-" <> _wallet}), do: "End a shard"
+  def title(%{name: "renew-" <> _wallet}), do: "Renew a shard"
   def title(_unknown), do: "Transaction"
 
   defp with_keys(%{review: %{inputs: %{"keys" => keys}}}) do
@@ -148,6 +175,16 @@ defmodule KeyfleetWeb.WalletWords do
   defp confirmed("clear"), do: "Done. No other wallet can vote your keys now."
   defp confirmed("send"), do: "Done. Regents’ share has been sent to Regents."
   defp confirmed("claim-" <> _asset), do: "Done. It was paid to your wallet."
+
+  defp confirmed("issue"),
+    do: "Done. The shard is issued, and this page shows it in a few seconds."
+
+  defp confirmed("end-" <> _wallet),
+    do: "Done. The shard has ended, and this page shows it in a few seconds."
+
+  defp confirmed("renew-" <> _wallet),
+    do: "Done. The shard is renewed, and this page shows it in a few seconds."
+
   defp confirmed(_step), do: "Done."
 
   defp reverted("approve"), do: "The approval didn’t go through and nothing moved."
@@ -173,7 +210,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("carry_out"),
     do:
       "This wasn’t carried out and nothing moved. Yes votes may not be enough yet (more " <>
-        "than half of all the keys sold, or three fifths for a change to a key’s workspace " <>
+        "than half of all the keys sold, or 3 of every 5 for a change to a key’s workspace " <>
         "edits), it may already have been carried out, or a payment and its matches may not " <>
         "fit in the shared money."
 
@@ -185,7 +222,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("propose"),
     do:
       "The proposal wasn’t made. The key may be neither yours nor held by someone who let " <>
-        "your wallet vote for them."
+        "your wallet vote for them, or a key it is about may not have been sold yet."
 
   defp reverted(delegate) when delegate in ["delegate", "clear"],
     do: "This didn’t go through and nothing changed."
@@ -197,6 +234,19 @@ defmodule KeyfleetWeb.WalletWords do
     do:
       "Nothing was claimed. The key may not be held by the wallet that sent this, or nothing " <>
         "is waiting for it any more."
+
+  defp reverted("issue"),
+    do:
+      "No shard was issued. The key may not be held by the wallet that sent this, the wallet " <>
+        "may be the key’s own, or it may already hold a shard of another key in this fleet."
+
+  defp reverted("end-" <> _wallet),
+    do: "The shard didn’t end. It may have ended already, or the key may have changed hands."
+
+  defp reverted("renew-" <> _wallet),
+    do:
+      "The shard wasn’t renewed. The key may not be held by the wallet that sent this, or the " <>
+        "shard may have ended."
 
   defp reverted(_step), do: "This did not go through and nothing moved."
 
@@ -215,6 +265,9 @@ defmodule KeyfleetWeb.WalletWords do
   def token_amount(%{amount: amount, asset: asset}),
     do:
       "#{Rules.grouped(amount)} in the smallest units of token #{RegentFormat.short_address(asset)}"
+
+  defp days(1), do: "1 day"
+  defp days(days), do: "#{days} days"
 
   defp key_words([key]), do: "key #{Rules.grouped(key)}"
   defp key_words(keys), do: "keys #{Enum.map_join(keys, ", ", &Rules.grouped/1)}"

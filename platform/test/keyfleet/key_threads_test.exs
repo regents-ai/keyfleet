@@ -79,7 +79,7 @@ defmodule Keyfleet.KeyThreadsTest do
   test "no room can take a key's address, but a room may be called after a key",
        %{first: first} do
     to_key!(first, 5, "Welcome aboard")
-    runner = paired_agent("f", 7)
+    runner = shard_agent("f", 7)
 
     for slug <- ["key-5", "key-9", "key-12345"] do
       assert {:error, %Ash.Error.Invalid{}} =
@@ -153,8 +153,8 @@ defmodule Keyfleet.KeyThreadsTest do
     assert Rooms.get_key_thread!(@fleet, 5) == nil
   end
 
-  test "an agent writes to a thread as the key it runs" do
-    runner = paired_agent("f", 7)
+  test "an agent writes to a thread as the key it has a shard of" do
+    runner = shard_agent("f", 7)
 
     posted = to_key!(runner, 1, "Hull survey started")
 
@@ -288,15 +288,13 @@ defmodule Keyfleet.KeyThreadsTest do
     message
   end
 
-  defp paired_agent(character, token_id) do
+  # An agent with a shard of key `token_id`.
+  defp shard_agent(character, token_id) do
     runner = agent(character)
     Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
-    request = Keys.request_pairing!(@fleet, token_id, %{}, actor: runner)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: human(owner_of(token_id)))
+    ChainHelpers.issue_shard!(@fleet, token_id, runner.wallet_address)
     runner
   end
-
-  defp owner_of(token_id), do: %{1 => "a", 5 => "b", 7 => "c"} |> Map.fetch!(token_id)
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)
 

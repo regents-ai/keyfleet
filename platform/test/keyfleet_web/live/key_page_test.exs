@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Agents
+  alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -12,266 +13,113 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
   @path "/app/keys/fleet_tech_classic/1"
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
-  @operator "0x" <> String.duplicate("c", 40)
-  @approve ~s(form[phx-submit="approve_pairing"])
-  @change ~s(form[phx-submit="set_limits"])
-  @decline ~s(button[phx-click="decline_pairing"])
-  @detach ~s(button[phx-click="detach_operator"])
+  @agent "0x" <> String.duplicate("c", 40)
+  @bare "0x" <> String.duplicate("d", 40)
 
   setup do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
+    # The owner's wallet buttons are built from the chain's latest block.
+    StubClient.put_chain(
+      %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
+      []
+    )
 
-    Keys.record_epoch!(
+    epoch!(1, @owner)
+
+    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
+    :ok
+  end
+
+  test "the owner reads the key's shards and is offered issuing, renewing and ending them", %{
+    conn: conn
+  } do
+    ChainHelpers.issue_shard!(@fleet, 1, @agent, 45)
+    ChainHelpers.issue_shard!(@fleet, 1, @bare)
+
+    {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
+
+    assert html =~ "Key 1"
+    assert html =~ "You own this key."
+    refute has_element?(view, "#key-no-shards")
+    refute has_element?(view, "#key-edits-restricted")
+
+    assert has_element?(view, "#key-shard-#{@agent}", "Orbit runner")
+    assert has_element?(view, "#key-shard-#{@agent}", "Runs on claude-code")
+    assert has_element?(view, "#key-shard-#{@agent}", "Until ")
+    assert has_element?(view, "#key-shard-#{@bare}", "No agent has signed in with it yet")
+
+    # The owner compares the wallet's whole address before trusting it.
+    assert view |> element("#key-shard-address-#{@agent}") |> render() =~
+             ~s(data-copy-text="#{@agent}")
+
+    for wallet <- [@agent, @bare] do
+      assert has_element?(view, "#key-shard-renew-#{wallet}")
+      assert has_element?(view, "#key-shard-end-#{wallet}")
+    end
+
+    assert has_element?(view, "#key-issue-shard #key-shard-wallet")
+    assert has_element?(view, "#key-issue-shard-button", "Issue shard")
+
+    assert has_element?(view, "#key-issue-shard", "Check this is your agent’s wallet address.")
+  end
+
+  test "anyone else reads the key's shards without the owner's buttons", %{conn: conn} do
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
+
+    for conn <- [signed_in_as(conn, @stranger), conn] do
+      {:ok, view, html} = live(conn, @path)
+
+      refute html =~ "You own this key."
+      assert has_element?(view, "#key-shard-#{@agent}", "Orbit runner")
+      refute has_element?(view, "#key-shard-end-#{@agent}")
+      refute has_element?(view, "#key-shard-renew-#{@agent}")
+      refute has_element?(view, "#key-issue-shard")
+    end
+  end
+
+  test "a shard that ended, ran out or was issued under an earlier owner is not shown", %{
+    conn: conn
+  } do
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
+    ChainHelpers.end_shard!(@fleet, 1, @agent, @owner)
+    ChainHelpers.issue_shard!(@fleet, 1, @bare, -1)
+
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    assert has_element?(view, "#key-no-shards", "This key has no shards.")
+
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
+    epoch!(2, @stranger)
+
+    {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
+    assert html =~ "You own this key."
+    assert has_element?(view, "#key-no-shards")
+  end
+
+  test "a key whose edits a vote restricted says so", %{conn: conn} do
+    Keys.record_edits_restriction!(
       %{
         fleet_id: @fleet,
         token_id: 1,
-        ownership_epoch: 1,
-        owner_wallet: @owner,
-        block_number: 10,
-        block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash: "0x" <> String.duplicate("a", 64),
+        restricted: true,
+        proposal_number: 1,
+        block_number: 20,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash: "0x" <> String.duplicate("e", 64),
         log_index: 0
       },
       actor: %Actors.System{}
     )
 
-    agent = %Actors.Agent{wallet_address: @operator, chain_id: 8453, audience: "keyfleet"}
-
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
-
-    %{agent: agent, request: Keys.request_pairing!(@fleet, 1, %{}, actor: agent)}
-  end
-
-  test "the owner reads the key and approves the agent asking to run it", %{
-    conn: conn,
-    request: request
-  } do
-    {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
-
-    assert html =~ "Key 1"
-    assert html =~ "You own this key."
-    assert html =~ "No agent runs this key."
-    assert html =~ "Orbit runner"
-    assert html =~ "Runs on claude-code"
-
-    # The owner compares the agent's whole address before approving it.
-    assert view |> element("#key-request-address-#{request.id}") |> render() =~
-             ~s(data-copy-text="#{@operator}")
-
-    assert view |> element(".key-request-list code") |> render() =~ @operator
-
-    assert words(view, ".key-address-check") =~
-             "Check this is your agent’s address. Approving it lets it post and work for this key; it can’t spend your money."
-
-    assert view |> element("#key-request-address-#{request.id}") |> render() =~
-             ~s(aria-label="Copy Orbit runner’s address")
-
-    assert has_element?(view, @approve)
-    assert has_element?(view, @decline)
-    refute has_element?(view, @detach)
-    refute has_element?(view, @change)
-
-    # The owner starts from the usual limits and may rewrite any of them.
-    approve = "#key-approve-#{request.id}"
-
-    for {field, text} <- Keys.default_limits(),
-        do: assert(has_element?(view, "#{approve}-#{field}", text))
-
-    assert view |> element(approve <> " button[type=submit]") |> render() =~
-             "Approve with these limits"
-
-    html = view |> form(approve, limits: %{money: "Spend nothing at all."}) |> render_submit()
-
-    assert html =~ "That agent now runs this key."
-    assert html =~ "Running this key since"
-    assert html =~ "No one has asked to run this key."
-    refute has_element?(view, @approve)
-    assert has_element?(view, @detach)
-    assert Keys.current_operator!(@fleet, 1).id == request.id
-    assert Keys.current_operator!(@fleet, 1).limits_money == "Spend nothing at all."
-
-    assert has_element?(view, "#key-agent-limits", "Limits set by the key’s holder, last changed")
-    assert has_element?(view, "#key-agent-limits dd", "Spend nothing at all.")
-    assert has_element?(view, "#key-limits-form-money", "Spend nothing at all.")
-
-    html =
-      view |> form(@change, limits: %{outside: "Nothing outside Keyfleet."}) |> render_submit()
-
-    assert html =~ "Limits saved."
-    assert has_element?(view, "#key-agent-limits dd", "Nothing outside Keyfleet.")
-    assert Keys.current_operator!(@fleet, 1).limits_outside == "Nothing outside Keyfleet."
-
-    assert view |> element("#key-agent-address") |> render() =~ ~s(data-copy-text="#{@operator}")
-    assert view |> element(@detach) |> render_click() =~ "Agent removed."
-    assert Keys.current_operator!(@fleet, 1) == nil
-    assert render(view) =~ "No agent runs this key."
-    assert render(view) =~ "removed on"
-  end
-
-  test "someone who does not own the key is offered nothing and refused anyway", %{
-    conn: conn,
-    request: request
-  } do
-    {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
-
-    assert html =~ "Orbit runner"
-    assert html =~ "Waiting for the owner"
-    assert html =~ @operator
-    refute html =~ "You own this key."
-    refute has_element?(view, ".key-address-check")
-
-    for selector <- [@approve, @decline, @detach] do
-      refute has_element?(view, selector)
-    end
-
-    approve = %{"pairing" => request.id, "limits" => Keys.default_limits()}
-    assert render_click(view, "approve_pairing", approve) =~ "didn’t go through"
-    assert Keys.current_operator!(@fleet, 1) == nil
-    assert Keys.list_pairing_requests!(@fleet, 1) |> Enum.map(& &1.id) == [request.id]
-  end
-
-  test "everyone reads the limits of the agent running a key; only the owner changes them", %{
-    conn: conn,
-    request: request
-  } do
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-
-    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
-
-    assert has_element?(view, "#key-agent-limits", "Limits set by the key’s holder, last changed")
-
-    for {_field, text} <- Keys.default_limits(),
-        do: assert(has_element?(view, "#key-agent-limits dd", text))
-
-    refute has_element?(view, @change)
-
-    change = %{"pairing" => approved.id, "limits" => %{Keys.default_limits() | money: "Anything"}}
-    assert render_click(view, "set_limits", change) =~ "didn’t go through"
-    assert Keys.current_operator!(@fleet, 1).limits_money == approved.limits_money
-  end
-
-  test "a refused approval keeps the limits the owner typed", %{conn: conn, request: request} do
-    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-    approve = "#key-approve-#{request.id}"
-
-    typed = %{
-      money: "Nothing over ten dollars.",
-      information: "Never name my employer.",
-      outside: "No new accounts anywhere.",
-      check_first: "   "
-    }
-
-    html = view |> form(approve, limits: typed) |> render_submit()
-
-    assert html =~ "Write each limit, in no more than 500 characters."
-    assert has_element?(view, "#{approve}-money", "Nothing over ten dollars.")
-    assert has_element?(view, "#{approve}-information", "Never name my employer.")
-    assert has_element?(view, "#{approve}-outside", "No new accounts anywhere.")
-    assert Keys.current_operator!(@fleet, 1) == nil
-
-    view
-    |> form(approve, limits: %{check_first: "Anything with a deadline."})
-    |> render_submit()
-
-    assert Keys.current_operator!(@fleet, 1).limits_money == "Nothing over ten dollars."
-  end
-
-  test "a refused change keeps the owner's words, not the saved limits", %{
-    conn: conn,
-    request: request
-  } do
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-
-    html =
-      view
-      |> form(@change, limits: %{money: "Only what I say.", outside: String.duplicate("o", 501)})
-      |> render_submit()
-
-    assert html =~ "Write each limit, in no more than 500 characters."
-    assert has_element?(view, "#key-limits-form-money", "Only what I say.")
-    assert has_element?(view, "#key-agent-limits dd", Keys.default_limits().money)
-  end
-
-  test "an owner who leaves a limit blank is asked to write it, and nothing is approved", %{
-    conn: conn,
-    request: request
-  } do
-    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-
-    html =
-      view |> form("#key-approve-#{request.id}", limits: %{check_first: "   "}) |> render_submit()
-
-    assert html =~ "Write each limit, in no more than 500 characters."
-    assert Keys.current_operator!(@fleet, 1) == nil
-    assert Keys.list_pairing_requests!(@fleet, 1) |> Enum.map(& &1.id) == [request.id]
-  end
-
-  test "an agent signing from the owner's own wallet runs the key with no limits written", %{
-    conn: conn
-  } do
-    own = %Actors.Agent{wallet_address: @owner, chain_id: 8453, audience: "keyfleet"}
-    Agents.ensure_profile!(%{name: "Home agent", declared_harness: "hermes"}, actor: own)
-    Keys.request_pairing!(@fleet, 1, %{}, actor: own)
-
-    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+    {:ok, view, _html} = live(conn, @path)
 
     assert has_element?(
              view,
-             "#key-agent-limits",
-             "No limits written. This agent holds its own key."
+             "#key-edits-restricted",
+             "A vote of the fleet has stopped this key and its shards changing the workspace."
            )
-  end
-
-  test "a page that has not caught up is told the request was answered", %{
-    conn: conn,
-    agent: agent,
-    request: request
-  } do
-    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-    Keys.withdraw_pairing_request!(request, %{}, actor: agent)
-
-    html = view |> form("#key-approve-#{request.id}") |> render_submit()
-
-    assert html =~ "This request was already answered."
-    assert html =~ "No one has asked to run this key."
-    assert Keys.current_operator!(@fleet, 1) == nil
-  end
-
-  test "removing an agent that already stepped down shows the key as it is now", %{
-    conn: conn,
-    agent: agent,
-    request: request
-  } do
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-    Keys.step_down!(approved, %{}, actor: agent)
-
-    html = view |> element(@detach) |> render_click()
-
-    assert html =~ "This key has already changed; here it is now."
-    assert html =~ "No agent runs this key."
-    assert html =~ "stepped down on"
-  end
-
-  test "an agent that stepped down is remembered in the key's history", %{
-    conn: conn,
-    agent: agent,
-    request: request
-  } do
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    approved = Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-    Keys.step_down!(approved, %{}, actor: agent)
-
-    {:ok, _view, html} = conn |> signed_in_as(@stranger) |> live(@path)
-
-    assert html =~ "No agent runs this key."
-    assert html =~ "Orbit runner"
-    assert html =~ "stepped down on"
   end
 
   test "a key nobody has been issued shows nothing but says so", %{conn: conn} do
@@ -289,10 +137,25 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     {:ok, view, _html} = conn |> signed_in_as(reader) |> live("/app/fleets/#{@fleet}")
 
     assert view |> element("#fleet-key-1") |> render() =~ "Held by 0xaaaa..aaaa"
+    # The page's buy steps are built after it opens; let them finish.
+    render_async(view)
   end
 
-  defp words(view, selector),
-    do: view |> element(selector) |> render() |> String.split() |> Enum.join(" ")
+  defp epoch!(epoch, owner) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        ownership_epoch: epoch,
+        owner_wallet: owner,
+        block_number: 10 + epoch,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate(Integer.to_string(epoch), 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+  end
 
   defp signed_in_as(conn, wallet) do
     account =

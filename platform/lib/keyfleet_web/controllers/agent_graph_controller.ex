@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Graph
+  alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Graph.Errors.RefusedError
@@ -82,6 +83,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   defp answer(%UnknownFleetError{}), do: refusal(404, "fleet_unknown")
   defp answer(%OwnershipRefreshingError{}), do: refusal(503, "ownership_refreshing")
   defp answer(%NotKeyHolderError{}), do: refusal(403, "not_a_key_holder")
+  defp answer(%EditsRestrictedError{}), do: refusal(403, "edits_restricted")
   defp answer(%UnavailableError{}), do: refusal(503, "graph_unavailable")
 
   defp answer(%IndeterminateError{}),

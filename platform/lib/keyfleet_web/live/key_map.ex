@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.KeyMap do
   and the marks of the keys that have just changed after that.
 
   A key's marks are whether one of the viewer's wallets holds it and whether
-  an agent runs it today. Someone signed out holds nothing. Owners are never
+  it has an active shard today. Someone signed out holds nothing. Owners are never
   sent to the map; the map draws every key sold and the rest of the level on
   sale, so how many are sold travels with the marks.
   """
@@ -18,22 +18,22 @@ defmodule KeyfleetWeb.KeyMap do
 
   @doc """
   The map's first load: keys sold, the fleet's size (`nil` for a fleet whose
-  levels keep opening), and the viewer's held keys and the keys agents run as
-  `bitset/1`s.
+  levels keep opening), and the viewer's held keys and the keys with active
+  shards as `bitset/1`s.
   """
   def snapshot(fleet_id, %{total_minted: minted, max_supply: max_supply}, actor) do
     %{
       minted: minted,
       max_supply: max_supply,
       mine: bitset(held(fleet_id, actor, [])),
-      agent: bitset(Enum.map(Keys.keys_run_in_fleet!(fleet_id), & &1.token_id))
+      agent: bitset(Enum.map(Keys.keys_with_shards!(fleet_id), & &1.token_id))
     }
   end
 
   @doc """
   What the map is told once `token_ids` have changed: `{:patch, patch}` with
   each key's marks as `[token_id, flags]`, bit 0 held by the viewer and bit 1
-  run by an agent, or `:reset` when more than #{@reset_above} keys changed.
+  an active shard, or `:reset` when more than #{@reset_above} keys changed.
   """
   def change(fleet_id, %{total_minted: minted}, token_ids, actor) do
     token_ids = token_ids |> Enum.uniq() |> Enum.sort()
@@ -44,8 +44,7 @@ defmodule KeyfleetWeb.KeyMap do
       only = [filter: [token_id: [in: token_ids]]]
       mine = MapSet.new(held(fleet_id, actor, only))
 
-      agent =
-        MapSet.new(Keys.keys_run_in_fleet!(fleet_id, query: only), & &1.token_id)
+      agent = MapSet.new(Keys.keys_with_shards!(fleet_id, query: only), & &1.token_id)
 
       {:patch,
        %{

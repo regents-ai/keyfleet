@@ -123,26 +123,22 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :transfer, facts: f}),
     do: ["Key #{Rules.grouped(f.token_id)} changed hands."]
 
-  def parts(%{kind: :agent_started, facts: f}),
-    do: [agent(f.agent), " started running key #{Rules.grouped(f.token_id)}."]
+  def parts(%{kind: :shard_issued, facts: f}),
+    do: [
+      shard_holder(f),
+      " holds a shard of key #{Rules.grouped(f.token_id)} until " <>
+        Calendar.strftime(f.expires_at, "%-d %B %Y") <> "."
+    ]
 
-  def parts(%{kind: :agent_stopped, facts: f}) do
-    stopped =
-      if f.ended_reason == :stepped_down,
-        do: " stepped down from key #{Rules.grouped(f.token_id)}",
-        else: " stopped running key #{Rules.grouped(f.token_id)}"
+  def parts(%{kind: :shard_ended, facts: %{stepped_down?: true} = f}),
+    do: [shard_holder(f), " stepped down from its shard of key #{Rules.grouped(f.token_id)}."]
 
-    moved_on =
-      case f.now_runs do
-        %{token_id: token_id, fleet_name: fleet_name} ->
-          ", and now runs key #{Rules.grouped(token_id)} in #{fleet_name}."
-
-        nil ->
-          "."
-      end
-
-    [agent(f.agent), stopped, moved_on]
-  end
+  def parts(%{kind: :shard_ended, facts: f}),
+    do: [
+      "The owner of key #{Rules.grouped(f.token_id)} ended the shard of ",
+      shard_holder(f),
+      "."
+    ]
 
   def parts(%{kind: :proposed, facts: f}),
     do: [holder(f.proposer), " put ", proposal(f), " to a vote" | proposal_gist(f)]
@@ -171,8 +167,8 @@ defmodule KeyfleetWeb.ActivityLines do
 
   @doc """
   What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
-  reads it, ready for a page; `agents` names the agent running each key, by
-  its number. Items and keys are parts, as `parts/1` gives them:
+  reads it, ready for a page. Items and keys are parts, as `parts/1` gives
+  them:
 
     * `goals`: `%{id: id, goal: item, tally: text, tasks: [task]}`, where
       `tally` counts the tasks listed and those done, as "3 tasks · 1 done",
@@ -188,10 +184,10 @@ defmodule KeyfleetWeb.ActivityLines do
   A task is `%{id: id, task: item, key: key | nil, progress: text}`, with
   its progress in words, as "In progress".
   """
-  def trying_now(now, agents) do
+  def trying_now(now) do
     %{
-      goals: Enum.map(now.goals, &goal(&1, agents)),
-      taken: Enum.map(now.taken, &task(&1, agents)),
+      goals: Enum.map(now.goals, &goal/1),
+      taken: Enum.map(now.taken, &task/1),
       problems:
         for %{relation: link, source: source, target: target} <- now.problems do
           %{id: link.id, target: item(target), source: item(source)}
@@ -205,21 +201,21 @@ defmodule KeyfleetWeb.ActivityLines do
     }
   end
 
-  defp goal(%{goal: goal, tasks: tasks}, agents) do
+  defp goal(%{goal: goal, tasks: tasks}) do
     %{
       id: goal.id,
       goal: item(goal),
       tally: tally(tasks),
-      tasks: Enum.map(tasks, &task(&1, agents))
+      tasks: Enum.map(tasks, &task/1)
     }
   end
 
   # A goal's task may be one no key has taken.
-  defp task(%{task: task, assignee_key: token_id}, agents) do
+  defp task(%{task: task, assignee_key: token_id}) do
     %{
       id: task.id,
       task: item(task),
-      key: token_id && key(%{token_id: token_id, agent: agents[token_id]}),
+      key: token_id && key(%{token_id: token_id, agent: nil}),
       progress: WorkspacePage.choice("progress", task.card["progress"])
     }
   end
@@ -261,7 +257,9 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp room(room), do: {:room, room.slug, visible(room.topic || room.name)}
 
-  defp agent(%{name: name}), do: {:agent, visible(name)}
+  # A shard's agent by name, or its wallet while no agent has signed in with it.
+  defp shard_holder(%{agent: nil, wallet: wallet}), do: RegentFormat.short_address(wallet)
+  defp shard_holder(%{agent: agent}), do: {:agent, visible(agent.name)}
 
   defp words(text), do: {:quote, visible(text)}
 
@@ -344,7 +342,7 @@ defmodule KeyfleetWeb.ActivityLines do
     Enum.intersperse(rest, ", ") ++ [" and ", last]
   end
 
-  @doc ~S|How a key is named on a page: "Key 1,234", or "Ada (key 1,234)" when an agent runs it.|
+  @doc ~S|How a key is named on a page: "Key 1,234", or "Ada (key 1,234)" when an agent wrote as it.|
   def key_name(token_id, nil), do: "Key #{Rules.grouped(token_id)}"
   def key_name(token_id, agent), do: "#{agent} (key #{Rules.grouped(token_id)})"
 

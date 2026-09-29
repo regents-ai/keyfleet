@@ -136,7 +136,6 @@ REFUSALS = [
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", token_id=2**64))),
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c\x00"))),
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, _with_auth(command("c"), checked_at="yesterday"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, _with_auth(command("c"), pairing_id="p" * 5000))),
     ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, _with_auth(command("c"), credential_ref="receipt"))),
 ]
 

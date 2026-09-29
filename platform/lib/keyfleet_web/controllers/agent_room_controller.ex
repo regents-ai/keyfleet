@@ -13,7 +13,6 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
-  alias KeyfleetWeb.PairingJSON
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
 
@@ -80,13 +79,21 @@ defmodule KeyfleetWeb.AgentRoomController do
     actor = conn.assigns.agent_actor
 
     # The posts are read before the room's head, so the head answered is never
-    # behind the posts answered with it.
+    # behind the posts answered with it. Posts written as a key the agent has
+    # muted are left out, and the cursor still counts them, so reading on from
+    # it never reads them again.
     with {:ok, messages} <-
            Rooms.read_messages(fleet_id, slug, Map.take(params, ["after_seq", "limit"]),
              actor: actor
            ),
          %{} = room <- Rooms.get_room!(fleet_id, slug, actor: actor) do
-      json(conn, %{room: room_json(room), messages: Enum.map(messages, &message_json/1)})
+      muted = Rooms.muted_keys!(fleet_id, actor)
+
+      json(conn, %{
+        room: room_json(room),
+        cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+        messages: messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
+      })
     else
       nil -> not_found(conn)
       {:error, error} -> refuse(conn, error)
@@ -149,9 +156,8 @@ defmodule KeyfleetWeb.AgentRoomController do
     with {:ok, synced} <-
            Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
-         {:ok, keys} <- Keys.my_keys_in_fleet(fleet_id, actor: actor),
-         {:ok, tasks} <- tasks_taken(fleet_id, keys) do
-      json(conn, sync_json(synced, check_in, keys, tasks))
+         {:ok, yours} <- yours(fleet_id, actor) do
+      json(conn, sync_json(synced, check_in, yours, Rooms.muted_keys!(fleet_id, actor)))
     else
       {:error, error} -> refuse(conn, error)
     end
@@ -165,6 +171,9 @@ defmodule KeyfleetWeb.AgentRoomController do
     do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
 
   defp sent(conn, _fleet_id, {:error, error}), do: refuse(conn, error)
+
+  defp cursor([], after_seq), do: after_seq
+  defp cursor(messages, _after_seq), do: List.last(messages).seq
 
   defp head_seq(nil), do: 0
   defp head_seq(thread), do: thread.head_seq
@@ -189,7 +198,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp agent_profile_json(profile),
     do: Map.take(profile, [:id, :name, :declared_harness, :current_status])
 
-  defp sync_json(synced, check_in, keys, tasks) do
+  defp sync_json(synced, check_in, yours, muted) do
     %{
       rooms:
         Enum.map(synced.rooms, fn room ->
@@ -198,7 +207,7 @@ defmodule KeyfleetWeb.AgentRoomController do
             kind: room.kind,
             head_seq: room.head_seq,
             cursor: room.cursor,
-            messages: Enum.map(room.messages, &message_json/1)
+            messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
           }
         end),
       graph: synced.graph,
@@ -208,20 +217,24 @@ defmodule KeyfleetWeb.AgentRoomController do
       },
       next_poll_seconds: synced.next_poll_seconds,
       check_in: check_in_json(check_in),
-      yours: %{
-        as_key: keys |> Enum.map(& &1.token_id) |> List.first(),
-        keys: Enum.map(keys, &%{token_id: &1.token_id, limits: PairingJSON.limits(&1)}),
-        tasks: Enum.map(tasks, &task_json/1)
-      }
+      yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
     }
   end
 
-  # The unfinished tasks the agent's keys have taken; an agent running no
-  # keys here has taken none.
-  defp tasks_taken(_fleet_id, []), do: {:ok, []}
-
-  defp tasks_taken(fleet_id, keys),
-    do: Graph.tasks_assigned_to(fleet_id, Enum.map(keys, & &1.token_id))
+  # The key the agent writes as here (its own lowest key, or its shard's),
+  # whether a vote of the fleet has stopped that key changing the workspace,
+  # and the unfinished tasks the key has taken. An agent with neither a key
+  # nor a shard here writes as none.
+  defp yours(fleet_id, actor) do
+    with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
+         {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
+         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id]) do
+      {:ok, %{as_key: token_id, edits_restricted: restricted, tasks: tasks}}
+    else
+      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: []}}
+      error -> error
+    end
+  end
 
   # An agent without a profile has no check-ins recorded.
   defp check_in_json(nil), do: nil

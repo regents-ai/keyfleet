@@ -1,10 +1,11 @@
 import {randomBytes} from "node:crypto"
 import {defineConfig, devices} from "@playwright/test"
 
-// The specs here sell, move and pair keys on the server while a page watches,
-// and land the steps a page's wallet buttons send. A key's profile is checked
-// in Chromium, Firefox and WebKit; the map, the fleet page's motion, the
-// wallet buttons, the copy buttons, the pages' security policy and the links
+// The specs here sell and move keys, and issue and end their shards, on the
+// server while a page watches, and land the steps a page's wallet buttons
+// send. A key's profile is checked in Chromium, Firefox and WebKit; the map,
+// the fleet page's motion, the wallet buttons, a key's shards, muting a key
+// in a room, the copy buttons, the pages' security policy and the links
 // between the in-app pages in Chromium.
 // They call `Keyfleet.BrowserChain` on the server over Erlang distribution, so
 // the server runs as a named node on the loopback address, with a secret
@@ -13,7 +14,7 @@ import {defineConfig, devices} from "@playwright/test"
 // The server gets a database of its own, the partition's name with
 // `_fleet_map` after it, created and brought up to date before the server
 // starts; the ExUnit suite never reads it. The server holds it in one
-// transaction it never commits, so the keys a run sells, moves and pairs are
+// transaction it never commits, so the keys and shards a run records are
 // gone when the server stops, and every run starts from the same unsold
 // fleets.
 const port = process.env.PORT || "4002"
@@ -29,7 +30,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "wallet_buttons.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "two agents build a goal and a service with tasks, evidence and links, each edit credited to its key",
        c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
 
     posted =
       send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/voting/messages/send", %{
@@ -181,26 +181,24 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     # The standing each write was made under stays in the log itself.
     [stamp | _] = logged_commands()
-    [pairing] = Keys.my_pairings!(actor: agent_actor(ann))
 
     assert %{
              "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => 1},
              "ownership_epoch" => 1,
              "kind" => "agent",
              "operator_wallet" => operator,
-             "pairing_id" => pairing_id,
              "credential_ref" => "sha256:" <> digest,
              "chain_block" => 1_000
            } = stamp["payload"]["auth"]
 
-    assert {operator, pairing_id} == {ann.address, pairing.id}
+    assert operator == ann.address
     assert digest =~ ~r/\A[0-9a-f]{64}\z/
   end
 
   test "an agent that was away gets the workspace's edits and the chat it missed in one sync",
        c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
     left = sync(c, ann, %{"general" => 0, "voting" => 0}, 0)
@@ -255,7 +253,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "while the workspace's writer is held, reads and syncs still answer", c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
     writer = writer()
     :sys.suspend(writer)
@@ -273,7 +271,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a write made while the projectors are down is answered, and says its place is not known to be copied",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     stop_supervised!(Keyfleet.Graph.Projectors)
 
     written = graph(c, ann, "create", goal_command("g-1"))
@@ -284,7 +282,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "two agents patching one version at once get one success and one conflict", c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
     answers =
@@ -317,7 +315,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a key changing hands while its agent's write waits in line refuses that write, and its earlier edits keep their author",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
     writer = writer()
 
@@ -355,7 +353,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a request cannot name its own author, standing or scope, or write server-owned fields",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
     create = %{as_key: 1, command_id: "f-1", type: "goal", scope: "fleet", data: @goal}
 
@@ -399,7 +397,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     sell_levelled(1..3)
     start_graph(c, fleets: [@fleet, @levelled])
-    [ann, cal] = pair_levelled(c, [{"Ann", 1}, {"Cal", 3}])
+    [ann, cal] = shard_levelled(c, [{"Ann", 1}, {"Cal", 3}])
 
     # Key 1 is in level 1. Key 3 opens level 2, whose keys run from 3 to 5.
     first = write!(c, ann, "create", level_goal(1, "a-1", "level:1"), @levelled)
@@ -450,7 +448,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     sell_levelled(1..3)
     start_graph(c, fleets: [@fleet, @levelled])
-    [ann, cal] = pair_levelled(c, [{"Ann", 1}, {"Cal", 3}])
+    [ann, cal] = shard_levelled(c, [{"Ann", 1}, {"Cal", 3}])
     task = %{type: "task", data: %{title: "Draft the brief"}}
 
     open = write!(c, ann, "create", Map.merge(task, %{as_key: 1, command_id: "t-1"}), @levelled)
@@ -523,7 +521,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     dee = join(c, "Dee")
 
     for fleet <- unlevelled do
-      pair(c, dee, 1, owner_wallet(1), fleet)
+      shard(dee, 1, fleet)
       assert write!(c, dee, "create", level_goal(1, "g-1", "fleet"), fleet)
 
       for scope <- ["level:1", "level:2"] do
@@ -540,7 +538,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a task marked done tells the tasks waiting on it, and new evidence asks for a review, in changes and in sync",
        c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
     task = fn id, title -> %{as_key: 1, command_id: id, type: "task", data: %{title: title}} end
     blocker = write!(c, ann, "create", task.("t-1", "Find a customer"))
     waiting = write!(c, ann, "create", task.("t-2", "Write the brief"))
@@ -631,7 +629,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "an agent records the dead end its task ran into, and anyone reads it back with the link",
        c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
 
     task =
       write!(c, ann, "create", %{
@@ -679,9 +677,10 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert source == task["id"]
   end
 
-  test "a wallet that does not run the key it names is refused and nothing is written", c do
+  test "a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written",
+       c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
     stranger = join(c, "Stranger")
 
     for {agent, key} <- [{bea, 1}, {stranger, 1}, {ann, 3}] do
@@ -703,7 +702,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "while key ownership is not fresh, writes wait and reads carry on", c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
@@ -726,7 +725,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "an unknown fleet is not found, and a fleet whose workspace is down refuses writes but still reads",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
     create = %{as_key: 1, command_id: "g-2", type: "goal", scope: "fleet", data: @goal}
 
@@ -750,7 +749,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "a write whose outcome never came back says so, and its retry applies it once", c do
     start_graph(c, reply_timeout: 1_000)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     create = %{as_key: 1, command_id: "g-1", type: "goal", scope: "fleet", data: @goal}
 
     # A host that stops answering: its outcome is unknown until it is replaced.
@@ -780,7 +779,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a write whose ownership cannot be read at its turn is answered unavailable and nothing is written",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     writer = writer()
 
     :sys.suspend(writer)
@@ -819,7 +818,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "key ownership going stale while a write waits in line refuses that write at its turn",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     writer = writer()
 
     :sys.suspend(writer)
@@ -850,11 +849,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "after a key changes hands, the new owner's agent writes as that key under its new epoch",
        c do
     start_graph(c)
-    [_ann, _bea] = pair_agents(c)
+    [_ann, _bea] = shard_agents(c)
     new_owner = "0x" <> String.duplicate("c", 40)
     record_owner(1, 2, new_owner)
     cal = join(c, "Cal")
-    pair(c, cal, 1, new_owner)
+    shard(cal, 1)
 
     goal = write!(c, cal, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
@@ -871,7 +870,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a long note fits in one write, and a body past the write limit is refused as too large",
        c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     # Twenty thousand characters, the most a note holds.
     note = %{title: "Interview transcript", body: String.duplicate("word ", 3_999) <> "done."}
 
@@ -898,7 +897,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "a write's log entry names the credential that signed it, by digest", c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
     receipt = receipt(c, ann)
     path = "/api/v1/agent/fleets/#{@fleet}/graph/create"
 
@@ -913,7 +912,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   test "only the canonical workspace bodies reach the workspace", c do
     start_graph(c)
-    [ann, _bea] = pair_agents(c)
+    [ann, _bea] = shard_agents(c)
 
     for {op, body} <- [
           {"get", %{}},
@@ -944,10 +943,10 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     end
   end
 
-  test "a sync records the agent's check-in and tells it its keys, their limits and the unfinished tasks they have taken",
+  test "a sync records the agent's check-in and tells it its key, whether its edits are restricted and the unfinished tasks it has taken",
        c do
     start_graph(c)
-    [ann, bea] = pair_agents(c)
+    [ann, bea] = shard_agents(c)
 
     doing =
       write!(c, ann, "create", %{
@@ -987,7 +986,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     assert %{
              "as_key" => 1,
-             "keys" => [%{"token_id" => 1, "limits" => %{"written_at" => _} = limits}],
+             "edits_restricted" => false,
              "tasks" => [
                # A task with no next step says so, rather than naming its deliverable.
                %{"title" => "Only a deliverable", "next_step" => nil},
@@ -1001,21 +1000,35 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
              ]
            } = synced.body["yours"]
 
-    assert Map.delete(limits, "written_at") == %{
-             "money" => Keys.default_limits().money,
-             "your_information" => Keys.default_limits().information,
-             "outside_keyfleet" => Keys.default_limits().outside,
-             "check_with_owner_first" => Keys.default_limits().check_first
-           }
+    # Once a vote restricts the key's edits, the sync says so and a write is
+    # refused, while chatting carries on.
+    restrict_edits!(1)
+    restricted = sync(c, ann, %{"general" => 0}, 0)
+    assert restricted.body["yours"]["edits_restricted"]
+    assert ContractSchema.errors(restricted.body, "FleetSync") == []
+
+    refused = graph(c, ann, "create", goal_command("t-6"))
+    assert refused.status == 403
+    assert refused.body == put_in(refused("edits_restricted"), ["error", "details"], %{})
+    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+
+    chatted =
+      send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/general/messages/send", %{
+        body: "Still here.",
+        idempotency_key: "m-9"
+      })
+
+    assert chatted.status == 201
 
     # Its writes in the workspace are its latest contribution here.
     {:ok, profile} = Agents.get_my_profile(actor: agent_actor(ann))
     assert %{last_contribution_kind: :workspace} = Agents.get_check_in!(profile.id, @fleet)
 
-    # An agent running no key here has nothing of its own in the fleet.
+    # An agent with neither a key nor a shard here has nothing of its own in
+    # the fleet.
     visitor = sync(c, join(c, "Cy"), %{"general" => 0}, 0)
     assert visitor.body["check_in"]["status"] == "connected_now"
-    assert visitor.body["yours"] == %{"as_key" => nil, "keys" => [], "tasks" => []}
+    assert visitor.body["yours"] == %{"as_key" => nil, "edits_restricted" => false, "tasks" => []}
   end
 
   defp start_graph(c, opts \\ []) do
@@ -1077,11 +1090,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for token_id <- token_ids, do: record_owner(token_id, 1, owner_wallet(token_id), @levelled)
   end
 
-  # One agent for each named Cascade key, paired by the key's owner.
-  defp pair_levelled(c, names_and_keys) do
+  # One agent for each named Cascade key, holding a shard its owner issued.
+  defp shard_levelled(c, names_and_keys) do
     for {name, token_id} <- names_and_keys do
       agent = join(c, name)
-      pair(c, agent, token_id, owner_wallet(token_id), @levelled)
+      shard(agent, token_id, @levelled)
       agent
     end
   end
@@ -1110,22 +1123,33 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     Integer.to_string(os_pid)
   end
 
-  # Two agents, each running one of the fleet's two keys for its owner.
-  defp pair_agents(c) do
+  # Two agents, each holding a shard of one of the fleet's two keys.
+  defp shard_agents(c) do
     for {token_id, name} <- [{1, "Ann"}, {2, "Bea"}] do
       agent = join(c, name)
-      pair(c, agent, token_id, @owners[token_id])
+      shard(agent, token_id)
       agent
     end
   end
 
-  defp pair(c, agent, token_id, owner_wallet, fleet \\ @fleet) do
-    path = "/api/v1/agent/keys/#{fleet}/#{token_id}/pairing"
-    assert send_signed(c, agent, "POST", path, %{}).status == 200
+  defp shard(agent, token_id, fleet \\ @fleet),
+    do: ChainHelpers.issue_shard!(fleet, token_id, agent.address)
 
-    owner = %Actors.Human{human_account_id: token_id, wallet_addresses: [owner_wallet]}
-    [request] = Keys.list_pairing_requests!(fleet, token_id, actor: owner)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+  # A carried-out vote restricting the key's workspace edits.
+  defp restrict_edits!(token_id) do
+    Keys.record_edits_restriction!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        restricted: true,
+        proposal_number: 1,
+        block_number: 20,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash: "0x" <> String.duplicate("e", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
   end
 
   defp commands(c, agent, fleet \\ @fleet) do

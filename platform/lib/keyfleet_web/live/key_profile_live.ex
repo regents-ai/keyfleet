@@ -209,21 +209,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
         <div>
-          <dt>Run by</dt>
-          <dd :if={is_nil(@profile.operator)}>No agent</dd>
-          <dd :if={@profile.operator}>
-            {@profile.operator.name} · {@profile.operator.harness}
-            <CheckIns.status
-              id="key-profile-check-in"
-              class="key-profile-status"
-              label={@profile.operator.check_in.label}
-              last_check_in_at={@profile.operator.last_check_in_at}
-              last_contribution_at={@profile.operator.last_contribution_at}
-              last_contribution={@profile.operator.last_contribution}
-            />
-            <span :if={@profile.operator.status != ""} class="key-profile-status">
-              “{@profile.operator.status}”, {day(@profile.operator.status_updated_at)}
-            </span>
+          <dt>Shards</dt>
+          <dd :if={@profile.shards == []} id="key-profile-shards">None</dd>
+          <dd :if={@profile.shards != []} id="key-profile-shards">
+            <ul class="key-profile-shards">
+              <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
+                <.shard_agent shard={shard} /> · until {day(shard.expires_at)}
+              </li>
+            </ul>
           </dd>
         </div>
       </dl>
@@ -232,9 +225,33 @@ defmodule KeyfleetWeb.KeyProfileLive do
         id="key-profile-manage"
         patch={"/app/keys/#{@profile.fleet_id}/#{@profile.token_id}"}
       >
-        Manage agents
+        Manage shards
       </.link>
     </section>
+    """
+  end
+
+  attr :shard, :map, required: true
+
+  # The agent holding a shard, as its check-ins say, or its wallet while no
+  # agent has signed in with it.
+  defp shard_agent(%{shard: %{agent: nil}} = assigns),
+    do: ~H"<code>{RegentFormat.short_address(@shard.wallet)}</code>"
+
+  defp shard_agent(assigns) do
+    ~H"""
+    {@shard.agent.name} · {@shard.agent.harness}
+    <CheckIns.status
+      id={"key-profile-check-in-#{@shard.wallet}"}
+      class="key-profile-status"
+      label={@shard.agent.check_in.label}
+      last_check_in_at={@shard.agent.last_check_in_at}
+      last_contribution_at={@shard.agent.last_contribution_at}
+      last_contribution={@shard.agent.last_contribution}
+    />
+    <span :if={@shard.agent.status != ""} class="key-profile-status">
+      “{@shard.agent.status}”, {day(@shard.agent.status_updated_at)}
+    </span>
     """
   end
 
@@ -458,7 +475,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp author(assigns) do
     ~H"""
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key, @params)} replace>
-      Key {Rules.grouped(@message.as_key)} · {RoomsLive.writer(@message)}
+      Key {Rules.grouped(@message.as_key)}
+      <small class="rooms-writer">{RoomsLive.writer(@message)}</small>
     </.link>
     """
   end
@@ -622,9 +640,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
   @doc """
   The open key is read again when it was sold, or when it or another key
   changed hands to or from its holder. What the visitor was writing stays,
-  and the thread keeps its messages. Otherwise only who may write is checked
-  again: the visitor may have bought their first key, or the fleet's key
-  ownership become fresh.
+  and the thread keeps its messages. Otherwise its shards are read again when
+  it is among the changed keys, and who may write is checked again: the
+  visitor may have bought their first key, or the fleet's key ownership become
+  fresh.
   """
   def refresh_key_profile(%{assigns: %{key_profile: %{} = shown}} = socket, token_ids) do
     if holder_moved?(shown, token_ids) do
@@ -640,11 +659,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
       |> read_rewards(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
-      recheck_composer(socket)
+      socket
+      |> refresh_shards_among(shown.token_id in token_ids)
+      |> recheck_composer()
     end
   end
 
   def refresh_key_profile(socket, _token_ids), do: socket
+
+  defp refresh_shards_among(socket, true), do: refresh_key_shards(socket)
+  defp refresh_shards_among(socket, false), do: socket
 
   defp holder_moved?(%{issued?: false, token_id: token_id}, token_ids), do: token_id in token_ids
 
@@ -719,13 +743,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
     assign(socket, :key_profile, Map.merge(profile, votes))
   end
 
-  @doc "The agent running the open key, as its check-ins say now."
-  def refresh_key_operator(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
+  @doc "The open key's shards, as their agents' check-ins say now."
+  def refresh_key_shards(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
     do:
       assign(socket, :key_profile, %{
         shown
-        | operator: Profile.operator(shown.fleet_id, shown.token_id)
+        | shards: Profile.shards(shown.fleet_id, shown.token_id)
       })
 
-  def refresh_key_operator(socket), do: socket
+  def refresh_key_shards(socket), do: socket
 end

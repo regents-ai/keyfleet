@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     refute has_element?(view, "#key-profile-manage")
   end
 
-  test "the agent running a key shows what its check-ins say, never what it says of itself",
+  test "an agent holding a shard of a key shows what its check-ins say, never what it says of itself",
        %{conn: conn} do
     runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
 
@@ -78,14 +78,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       actor: runner
     )
 
-    @fleet
-    |> Keys.request_pairing!(12, %{}, actor: runner)
-    |> Keys.approve_pairing!(Keys.default_limits(),
-      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet("e")]}
-    )
+    ChainHelpers.issue_shard!(@fleet, 12, runner.wallet_address)
 
     {:ok, view, _html} = live(conn, @path <> "?key=12")
-    assert text(view, "#key-profile-check-in") == "Hasn’t checked in"
+    assert text(view, "#key-profile-check-in-#{wallet("c")}") == "Hasn’t checked in"
 
     # Two scheduled check-ins, half an hour apart.
     every_half_hour = %{"kind" => "scheduled", "every_minutes" => 30}
@@ -102,7 +98,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     {:ok, view, _html} = live(conn, @path <> "?key=12")
 
-    assert text(view, "#key-profile-check-in") ==
+    assert text(view, "#key-profile-check-in-#{wallet("c")}") ==
              "Check-ins working · last check-in just now · no contributions yet"
   end
 
@@ -115,18 +111,16 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       actor: runner
     )
 
-    @fleet
-    |> Keys.request_pairing!(12, %{}, actor: runner)
-    |> Keys.approve_pairing!(Keys.default_limits(),
-      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet("e")]}
-    )
+    ChainHelpers.issue_shard!(@fleet, 12, runner.wallet_address)
 
     {:ok, _check_in} = Agents.check_in(runner, @fleet, %{"kind" => "session"})
 
     {:ok, view, _html} = live(conn, @path <> "?key=12")
     assert text(view, "#fleet-key-12") =~ "Orbit runner · Connected now"
-    assert text(view, "#fleet-who-12") =~ "Connected now · last check-in just now"
-    assert text(view, "#key-profile-check-in") =~ "Connected now · last check-in just now"
+    assert text(view, "#fleet-who-#{wallet("c")}") =~ "Connected now · last check-in just now"
+
+    assert text(view, "#key-profile-check-in-#{wallet("c")}") =~
+             "Connected now · last check-in just now"
 
     Repo.query!("""
     UPDATE keyfleet_app.agent_check_ins SET
@@ -137,9 +131,11 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     send(view.pid, :refresh_check_ins)
 
     assert text(view, "#fleet-key-12") =~ "Orbit runner · No scheduled check-ins"
-    assert text(view, "#fleet-who-12") =~ "No scheduled check-ins · last check-in 3 minutes ago"
 
-    assert text(view, "#key-profile-check-in") =~
+    assert text(view, "#fleet-who-#{wallet("c")}") =~
+             "No scheduled check-ins · last check-in 3 minutes ago"
+
+    assert text(view, "#key-profile-check-in-#{wallet("c")}") =~
              "No scheduled check-ins · last check-in 3 minutes ago"
   end
 
@@ -305,7 +301,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
         |> render_submit()
 
       assert html =~ "Hull survey started"
-      assert has_element?(view, "#key-profile-thread li", "Key 1 · 0xffff..ffff")
+      assert has_element?(view, "#key-profile-thread li", "Key 1")
+      assert has_element?(view, "#key-profile-thread li .rooms-writer", "0xffff..ffff")
       assert text(view, "#key-profile-messages") == "1"
       assert text(view, "#key-profile-composer-body") == ""
     end

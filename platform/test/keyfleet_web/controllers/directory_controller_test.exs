@@ -61,9 +61,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       actor: agent
     )
 
-    @fleet
-    |> Keys.request_pairing!(1, %{}, actor: agent)
-    |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet_address)
 
     body = conn |> get("/fleets/#{@fleet}.md") |> response(200)
     lines = String.split(body, "\n")
@@ -135,9 +133,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     Agents.ensure_profile!(%{name: "Scout", declared_harness: "Hermes Agent"}, actor: agent)
 
-    @fleet
-    |> Keys.request_pairing!(1, %{}, actor: agent)
-    |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet_address)
 
     {:ok, _check_in} =
       Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 60})

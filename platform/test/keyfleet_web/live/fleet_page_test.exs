@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Agents
-  alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
+  alias Keyfleet.Chain.{OwnershipLog, Scanner, ShardsLog, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -22,7 +22,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @issued 150
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
-  @operator "0x" <> String.duplicate("c", 40)
+  @agent "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
   @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 
@@ -579,11 +579,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     # Every sold key's two marks travel as bitsets that reach only as far as the
     # highest key marked, so they stay small however far the fleet has grown.
-    test "loads with the keys the viewer holds and the keys agents run", %{conn: conn} do
+    test "loads with the keys the viewer holds and the keys agents hold shards of", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       issue!(@fleet, 151, @stranger)
-      pair!(7)
+      shard!(7)
 
       {:ok, view, _html} = live(conn, @path)
       render_hook(view, "keymap_ready", %{})
@@ -638,7 +638,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#key-map-selected") == "No key chosen yet."
     end
 
-    # A key sold, moved or paired reaches an open page as that key's new marks.
+    # A key sold, moved or given a shard reaches an open page as that key's new marks.
     test "a key sold by the chain reader reaches the map as a change", %{conn: conn} do
       fleet = deploy!("fleet_tech_accelerant", 5_000_000)
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_accelerant")
@@ -663,38 +663,45 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 0]]})
     end
 
-    test "an agent starting or stopping on a key reaches the map as a change", %{conn: conn} do
+    test "a shard issued, ended by its owner or stepped down from reaches the map as a change",
+         %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
+      agent_profile!()
       {:ok, view, _html} = live(conn, @path)
 
-      pairing = pair!(7)
+      issued = shard_log(:issued, 7, 1_010)
+      scan!(1_020, [issued])
       assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
 
-      Keys.detach_operator!(pairing, %{}, actor: owner())
+      ended = shard_log({:ended, @owner}, 7, 1_030)
+      scan!(1_040, [issued, ended])
       assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
 
-      pairing = pair!(7)
+      again = shard_log(:issued, 7, 1_050)
+      scan!(1_060, [issued, ended, again])
       assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
 
-      Keys.step_down!(pairing, %{}, actor: operator())
+      scan!(1_080, [issued, ended, again, shard_log({:ended, @agent}, 7, 1_070)])
       assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
     end
 
-    # A pairing's notice is the fleet's keys changing, so the bar counts the
-    # agent as soon as it starts, and stops counting it once it stops.
-    test "the bar counts an agent that starts on a key, and stops when it stops", %{conn: conn} do
+    # A shard's notice is the fleet's keys changing, so the bar counts the
+    # agent as soon as its shard is issued, and stops once it ends.
+    test "the bar counts an agent once its shard is issued, and stops when it ends", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
+      agent_profile!()
       {:ok, view, _html} = live(conn, @path)
       assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
 
-      pairing = pair!(7)
+      issued = shard_log(:issued, 7, 1_010)
+      scan!(1_020, [issued])
       assert_pushed(view, "keymap:patch", %{keys: [[7, 3]]})
       assert text(view, "#fleet-sales") == "150 keys sold · 1 agent here"
       assert has_element?(view, "#fleet-who-list", "Orbit runner")
 
-      Keys.detach_operator!(pairing, %{}, actor: owner())
+      scan!(1_040, [issued, shard_log({:ended, @owner}, 7, 1_030)])
       assert_pushed(view, "keymap:patch", %{keys: [[7, 1]]})
       assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
       assert has_element?(view, "#fleet-who-empty")
@@ -1030,7 +1037,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     test "an open goal shows with its tasks, each task's key linked", %{conn: conn} do
-      pair!(12)
       goal = goal!("Sell the first audit")
       task = task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
       Workspace.link(@fleet, task, goal, "implements")
@@ -1048,7 +1054,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                ~s(#{task_row} a[data-item-link="#{task}"][href="#{item_path(task)}"])
              )
 
-      assert has_element?(view, ~s(#{task_row} a[data-key="12"]), "Orbit runner")
+      assert has_element?(view, ~s(#{task_row} a[data-key="12"]), "Key 12")
       assert has_element?(view, ~s(#fleet-trying-taken li[data-task="#{task}"] a[data-key="12"]))
       refute has_element?(view, ~s(#fleet-trying-taken li[data-task="#{unclaimed}"]))
       refute has_element?(view, "#fleet-trying-empty")
@@ -1179,17 +1185,58 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     )
   end
 
-  # An agent asks to run key `token_id` of Cascade, and its owner approves.
-  defp pair!(token_id) do
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: operator())
-    request = Keys.request_pairing!(@fleet, token_id, %{}, actor: operator())
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner())
+  defp agent_profile! do
+    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8_453, audience: "keyfleet"}
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
   end
 
-  defp operator,
-    do: %Actors.Agent{wallet_address: @operator, chain_id: 8_453, audience: "keyfleet"}
-
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+
+  # The test's agent holding a shard of Cascade's key `token_id`.
+  defp shard!(token_id) do
+    agent_profile!()
+    ChainHelpers.issue_shard!(@fleet, token_id, @agent)
+  end
+
+  # One pass of the chain reader over Cascade up to block `head`.
+  defp scan!(head, logs) do
+    StubClient.put_chain(chain_head(head), logs)
+    assert Scanner.step(Fleets.get_fleet!(@fleet), StubClient) == :ok
+  end
+
+  # The shards contract issuing the test's agent a 30-day shard of key
+  # `token_id` under its first owner, or the wallet named ending it.
+  defp shard_log(:issued, token_id, block) do
+    expires = DateTime.to_unix(DateTime.utc_now()) + 30 * 86_400
+    topics = [hd(ShardsLog.topics()), word(token_id), address_word(@agent)]
+    shards_log(topics, "0x" <> bare_word(expires) <> bare_word(1), block)
+  end
+
+  defp shard_log({:ended, by}, token_id, block) do
+    topics = [
+      List.last(ShardsLog.topics()),
+      word(token_id),
+      address_word(@agent),
+      address_word(by)
+    ]
+
+    shards_log(topics, "0x", block)
+  end
+
+  defp shards_log(topics, data, block) do
+    %{
+      "address" => "0x" <> String.duplicate("6", 40),
+      "topics" => topics,
+      "data" => data,
+      "blockNumber" => "0x" <> Integer.to_string(block, 16),
+      "blockHash" => "0x" <> String.duplicate("b", 64),
+      "transactionHash" => word(block),
+      "logIndex" => "0x0"
+    }
+  end
+
+  defp address_word("0x" <> address), do: "0x" <> String.duplicate("0", 24) <> address
+  defp bare_word(value), do: value |> word() |> String.slice(2..-1//1)
 
   # The keys a bitset from the map's first load marks.
   defp marked(bitset) do
@@ -1412,8 +1459,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         on_close: %Phoenix.LiveView.JS{}
       )
 
-    assert html =~ "No agents run keys here yet."
-    refute html =~ "agents run keys here. These are"
+    assert html =~ "No agents hold shards here yet."
+    refute html =~ "agents hold shards here. These are"
   end
 
   defp signed_in(conn) do
