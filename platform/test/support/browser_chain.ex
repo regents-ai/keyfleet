@@ -3,7 +3,7 @@ defmodule Keyfleet.BrowserChain do
   The browser tests' chain. Called on the browser test server's own node, it
   sells, moves and pairs keys of one fleet through the real chain reader and
   pairing actions, so a page open in the browser hears of them exactly as it
-  would from Base.
+  would from Ethereum.
 
   Every pass reads blocks well past the last one recorded, so the reader's
   second look at recent blocks never finds a record the made-up chain has
@@ -31,7 +31,6 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
-  alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
@@ -42,14 +41,14 @@ defmodule Keyfleet.BrowserChain do
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-  @chain_id 8_453
+  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  @chain_id 1
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
   @operator %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
-    chain_id: 8_453,
+    chain_id: 1,
     audience: "keyfleet"
   }
 
@@ -203,9 +202,8 @@ defmodule Keyfleet.BrowserChain do
   @doc """
   Gives a deployed fleet something on each of its pages to link to the
   others: a key sold to `owner` says something in the General room, the
-  workspace holds a launch plan that discusses that message and a task
-  assigned to the key, and launch proposal 1 points to the plan. Returns the
-  key's number.
+  workspace holds a goal that discusses that message and a task assigned to
+  the key, and the fleet has proposal 1. Returns the key's number.
   """
   def furnish!(fleet_id, owner) do
     Rooms.bootstrap_rooms!([fleet_id])
@@ -224,22 +222,17 @@ defmodule Keyfleet.BrowserChain do
 
     WorkspaceFixtures.open_log(fleet_id)
 
-    plan =
-      WorkspaceFixtures.create(fleet_id, "launch_card", %{
-        "title" => "Research plan",
-        "discussion" => [%{"room" => "general", "seq" => message.seq}]
-      })
+    WorkspaceFixtures.create(fleet_id, "goal", %{
+      "title" => "Research plan",
+      "discussion" => [%{"room" => "general", "seq" => message.seq}]
+    })
 
     WorkspaceFixtures.create(fleet_id, "task", %{
       "title" => "Draft the brief",
       "assignee_key" => token_id
     })
 
-    [revision] = Graph.current_launch_plan_revisions!(fleet_id, [%{object_id: plan, version: 1}])
-
-    fleet_id
-    |> ProposalHelpers.proposal!(1, kind: :autolaunch, digest: revision.digest)
-    |> ProposalHelpers.launch_envelope!()
+    ProposalHelpers.proposal!(fleet_id, 1)
 
     token_id
   end
@@ -247,10 +240,7 @@ defmodule Keyfleet.BrowserChain do
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
 
-  defp last_of_level?(token_id, level),
-    do:
-      not Presets.fibonacci_token?(token_id + 1) or
-        Presets.fibonacci_level_of(token_id + 1) > level
+  defp last_of_level?(token_id, level), do: Presets.fibonacci_level_of(token_id + 1) > level
 
   defp minted(fleet_id) do
     {:ok, minted} = Chain.minted(fleet_id)

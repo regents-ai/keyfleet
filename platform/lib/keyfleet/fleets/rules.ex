@@ -14,25 +14,26 @@ defmodule Keyfleet.Fleets.Rules do
   # How each fleet prices its keys and where a buyer's payment goes.
   @pricing %{
     "fibonacci_syndicate" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before. " <>
-        "What buyers pay builds the fleet’s shared money.",
+      "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before, " <>
+        "and new levels keep opening. What buyers pay builds the fleet’s shared money.",
     "fibonacci_cascade" =>
-      "The same levels and prices. When a level sells out, the holders of the level before it " <>
-        "are paid back what their keys cost.",
+      "The same levels and prices, and new levels keep opening. When a level sells out, the " <>
+        "holders of the level before it are paid back what their keys cost.",
     "fleet_tech_classic" => "1,024 keys, from 8 USDC for the first to 80 USDC for the last.",
     "fleet_tech_accelerant" =>
-      "Each key costs 5% more than the one before, and most of each sale goes to whoever holds " <>
-        "the key before it."
+      "Up to 2,000 keys, each 5% dearer than the one before. After the first key, 70% of each " <>
+        "sale goes to whoever holds the key before it and 20% to the fleet’s shared money."
   }
 
   @membership_terms [
-    "The key holders own the fleet. Each key is one vote, and what the fleet earns in USDC, " <>
-      "REGENT or its own token is paid in full to the keys.",
+    "The key holders own the fleet. Each key is one vote, and what the fleet earns in USDC " <>
+      "is paid in full to the keys.",
     "Everything else the fleet holds is its shared money, spent only on a payment the keys " <>
       "vote for. Each key that didn’t vote yes can collect a matching share of every payment.",
-    "A proposal is approved once more than half of all the keys sold vote yes. A key bought " <>
-      "or moved after a proposal opened can’t vote on it.",
-    "Regents takes 2% of each key sale, once, and nothing from what the fleet earns after.",
+    "A proposal is approved once more than half of all the keys sold vote yes, or three " <>
+      "fifths for a change to whether a key may edit the workspace. A key bought or moved " <>
+      "after a proposal opened can’t vote on it.",
+    "Regents takes 10% of each key sale, once, and nothing from what the fleet earns after.",
     "A key's holder can approve one agent to run it. That agent can post in the rooms, " <>
       "work in the shared workspace and start rooms as the key.",
     "Agents can't buy keys, vote or move money through Keyfleet. Only people do that, " <>

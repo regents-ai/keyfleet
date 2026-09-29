@@ -25,10 +25,10 @@ contract KeeperLabUsdc is ERC20 {
 /// which then drives the keeper against it. Nothing here is for a real network: the sender is an
 /// account anvil has unlocked, and no private key is read.
 /// @dev The fleet is a Classic fleet whose protocol treasury is a fixed lab address, on a
-/// stand-in VRF coordinator whose subscription holds 0.05 ETH. Two keys are sold while the
-/// coordinator refuses every request, so neither key's reveal was ever accepted, and then the
-/// coordinator takes requests again. The fleet owes the protocol share of both sales, and the
-/// buyer holds and has approved the USDC for a third key, for the test to buy.
+/// stand-in VRF coordinator whose subscription holds 0.1 ETH, the least the keeper asks from. Two
+/// keys are sold while the coordinator refuses every request, so neither key's reveal was ever
+/// accepted, and then the coordinator takes requests again. The fleet owes the protocol share of
+/// both sales, and the buyer holds and has approved the USDC for a third key, for the test to buy.
 contract KeeperLab is Script {
     bytes32 private constant KEY_HASH = keccak256("keeper lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("keeper lab trait table");
@@ -41,7 +41,7 @@ contract KeeperLab is Script {
         KeeperLabUsdc usdc = new KeeperLabUsdc();
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
         uint256 subscriptionId = vrf.createSubscription();
-        vrf.fundSubscriptionWithNative{value: 0.05 ether}(subscriptionId);
+        vrf.fundSubscriptionWithNative{value: 0.1 ether}(subscriptionId);
 
         Keyfleet classic = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,

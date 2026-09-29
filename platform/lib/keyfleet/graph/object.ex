@@ -129,33 +129,6 @@ defmodule Keyfleet.Graph.Object do
       prepare build(select: [:fleet_id, :id, :type, :sys], load: [:title])
     end
 
-    # The fleet's launch plans a launch can be proposed from: those not
-    # archived whose six launch details are all filled in, the most recently
-    # changed first.
-    read :launch_plans do
-      argument :fleet_id, :string, allow_nil?: false
-
-      filter expr(
-               fleet_id == ^arg(:fleet_id) and type == "launch_card" and
-                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
-                 fragment(
-                   "(? ->> 'name') <> '' AND (? ->> 'symbol') <> '' AND (? ->> 'description') <> '' AND (? ->> 'website') <> '' AND (? ->> 'image') <> '' AND (? ->> 'required_regent_raised') <> ''",
-                   data,
-                   data,
-                   data,
-                   data,
-                   data,
-                   data
-                 )
-             )
-
-      prepare build(
-                sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :version],
-                limit: 24
-              )
-    end
-
     # What a link's relationships to its two ends read through.
     read :link_end do
       public? false

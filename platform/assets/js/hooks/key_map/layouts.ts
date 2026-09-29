@@ -10,7 +10,7 @@ import {axialToOffset, mod, offsetToAxial, type Cell} from "./lattice"
 
 export type LayoutKind = "fibonacci" | "classic" | "accelerant"
 
-type Seats = {q: Int32Array; r: Int32Array; level: Uint8Array}
+type Seats = {q: Int32Array; r: Int32Array; level: Uint16Array}
 
 export type KeyMapGrid = {
   /** The two axial translations under which the map repeats. */
@@ -26,26 +26,50 @@ export type KeyMapGrid = {
 
 // Empty cells kept around the shown keys, so neighbouring copies stay apart.
 const gutter = 2
-const levelCount = 20
 // Level 8's 55 keys make one 28 + 27 band; every later level repeats it.
 const wideRow = 28
 const narrowRow = 27
 const snakeWidth = 5
+const classicSupply = 1_024
+const accelerantSupply = 2_000
 
-export const fibonacciLevelSupplies: readonly number[] = (() => {
-  const supplies = [2, 3]
-  while (supplies.length < levelCount) supplies.push(supplies.at(-1)! + supplies.at(-2)!)
-  return supplies
-})()
-
-export const maxSupply: Record<LayoutKind, number> = {
-  fibonacci: fibonacciLevelSupplies.reduce((total, supply) => total + supply, 0),
-  classic: 1_024,
-  accelerant: 2_000,
+/** How many keys a fleet can ever have; the Fibonacci fleets' levels keep opening, so they have no limit. */
+export const maxSupply: Record<LayoutKind, number | null> = {
+  fibonacci: null,
+  classic: classicSupply,
+  accelerant: accelerantSupply,
 }
 
+/** How many keys a Fibonacci level has: 2, 3, 5, 8 and on, without end. */
+export function fibonacciLevelSupply(level: number) {
+  let [previous, current] = [1, 2]
+  for (let index = 1; index < level; index++) [previous, current] = [current, previous + current]
+  return current
+}
+
+/** The Fibonacci level a key belongs to. */
+export function fibonacciLevelOf(key: number) {
+  let level = 1
+  let last = fibonacciLevelSupply(1)
+  while (key > last) {
+    level += 1
+    last += fibonacciLevelSupply(level)
+  }
+  return level
+}
+
+/** The first key of a Fibonacci level. */
+export function levelStart(level: number) {
+  let start = 1
+  for (let earlier = 1; earlier < level; earlier++) start += fibonacciLevelSupply(earlier)
+  return start
+}
+
+/** The last key of a Fibonacci level. */
+export const levelEnd = (level: number) => levelStart(level + 1) - 1
+
 function seatTable(count: number, place: (push: (col: number, row: number, level: number) => void) => void): Seats {
-  const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint8Array(count)}
+  const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint16Array(count)}
   let index = 0
   place((col, row, level) => {
     const [q, r] = offsetToAxial(col, row)
@@ -61,12 +85,14 @@ function seatTable(count: number, place: (push: (col: number, row: number, level
 // centres exactly only when its length suits its row's parity, so the rest sit
 // half a cell off. One tie-break per level keeps a level's rows interlocking,
 // and alternating it between levels keeps the stack from leaning. One blank
-// row separates levels and holds the level's heading.
-const fibonacciSeats = () =>
-  seatTable(maxSupply.fibonacci, push => {
+// row separates levels and holds the level's heading. The levels never end,
+// so the seats go as far as the level holding key `count`.
+const fibonacciSeats = (count: number) => {
+  const levels = fibonacciLevelOf(Math.max(count, 1))
+  return seatTable(levelEnd(levels), push => {
     let row = 0
-    fibonacciLevelSupplies.forEach((supply, index) => {
-      const level = index + 1
+    for (let level = 1; level <= levels; level++) {
+      const supply = fibonacciLevelSupply(level)
       const lean = level % 2 === 0 ? Math.floor : Math.ceil
       let left = supply
       let wide = true
@@ -80,13 +106,14 @@ const fibonacciSeats = () =>
         row += 1
       }
       row += 1
-    })
+    }
   })
+}
 
 // Rows of five in a snake, so every key is a neighbour of the one before it.
 const accelerantSeats = () =>
-  seatTable(maxSupply.accelerant, push => {
-    for (let index = 0; index < maxSupply.accelerant; index++) {
+  seatTable(accelerantSupply, push => {
+    for (let index = 0; index < accelerantSupply; index++) {
       const row = Math.floor(index / snakeWidth)
       const k = index % snakeWidth
       push(row % 2 === 0 ? k : snakeWidth - 1 - k, row, 0)
@@ -96,8 +123,8 @@ const accelerantSeats = () =>
 // Axial rhombus shells: shell k is the far edge of a (k+1)×(k+1) rhombus, so
 // the fleet closes at exactly 32 × 32 = 1,024.
 const classicSeats = (): Seats => {
-  const count = maxSupply.classic
-  const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint8Array(count)}
+  const count = classicSupply
+  const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint16Array(count)}
   for (let key = 1; key <= count; key++) {
     const shell = classicShell(key)
     const i = key - 1 - shell * shell
@@ -109,7 +136,7 @@ const classicSeats = (): Seats => {
 
 const classicShell = (key: number) => Math.ceil(Math.sqrt(key)) - 1
 
-const seatBuilders: Record<LayoutKind, () => Seats> = {
+const seatBuilders: Record<LayoutKind, (count: number) => Seats> = {
   fibonacci: fibonacciSeats,
   classic: classicSeats,
   accelerant: accelerantSeats,
@@ -117,17 +144,19 @@ const seatBuilders: Record<LayoutKind, () => Seats> = {
 
 const seatCache = new Map<LayoutKind, Seats>()
 
-const seatsFor = (kind: LayoutKind) => {
+// A key's seat never changes, so seats built for more keys serve fewer; a
+// Fibonacci fleet's seats are built again only once a new level is shown.
+const seatsFor = (kind: LayoutKind, shown: number) => {
   const cached = seatCache.get(kind)
-  if (cached) return cached
-  const built = seatBuilders[kind]()
+  if (cached && cached.q.length >= shown) return cached
+  const built = seatBuilders[kind](shown)
   seatCache.set(kind, built)
   return built
 }
 
 /** The finite map of the first `shown` keys of a fleet, repeating in both directions. */
 export function buildMap(kind: LayoutKind, shown: number): KeyMapGrid {
-  const seats = seatsFor(kind)
+  const seats = seatsFor(kind, shown)
   return {
     ...(kind === "classic" ? rhombusMap(seats, shown) : rowMap(seats, shown)),
     home: key => [seats.q[key - 1], seats.r[key - 1]],

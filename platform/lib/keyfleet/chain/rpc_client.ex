@@ -17,8 +17,8 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  # Base's sequencer confirms `latest` in about two seconds; nothing here waits
-  # for L1 finality.
+  # Ethereum makes a `latest` block about every twelve seconds; nothing here
+  # waits for `safe` or `finalized`.
   @impl true
   def head do
     with {:ok, header} <- block("latest"), do: head_of(header)

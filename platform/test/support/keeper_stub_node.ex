@@ -13,7 +13,7 @@ defmodule Keyfleet.Keeper.StubNode do
   @behaviour Keyfleet.Keeper.Node
 
   @doc """
-  Sets up the chain. `opts` may name the `:chain_id` (8453); the latest
+  Sets up the chain. `opts` may name the `:chain_id` (1); the latest
   `:block` (number, timestamp and base fee); the `:max_priority_fee`; the
   wallet's `:balance`; its `:nonce`, the latest, and `:pending`, which is the
   latest unless given; `:calls` and `:estimate`, functions answering
@@ -23,8 +23,8 @@ defmodule Keyfleet.Keeper.StubNode do
   hash}` to accept it under that hash, or `{:error, reason}` to refuse it;
   `:mine`, a function given the number of the accepted send, from 1, and its
   raw bytes that returns `{:mined, status}`, `{:mined, status, logs}` for a
-  receipt with those logs, or `:pending`; and `:receipt`,
-  the gas used, gas price and L1 fee each mined receipt shows.
+  receipt with those logs, or `:pending`; and `:receipt`, the gas used and
+  gas price each mined receipt shows.
   """
   def put_chain(opts \\ []) do
     nonce = Keyword.get(opts, :nonce, 0)
@@ -32,7 +32,7 @@ defmodule Keyfleet.Keeper.StubNode do
     {:ok, agent} =
       Agent.start_link(fn ->
         %{
-          chain_id: Keyword.get(opts, :chain_id, 8_453),
+          chain_id: Keyword.get(opts, :chain_id, 1),
           block:
             Keyword.get(opts, :block, %{
               number: 1_000,
@@ -50,7 +50,7 @@ defmodule Keyfleet.Keeper.StubNode do
           mine: Keyword.get(opts, :mine, fn _n, _raw -> {:mined, 1} end),
           receipt:
             Map.merge(
-              %{gas_used: 60_000, effective_gas_price: 6_000_000, l1_fee: 2_000},
+              %{gas_used: 60_000, effective_gas_price: 6_000_000},
               Keyword.get(opts, :receipt, %{})
             ),
           sent: [],

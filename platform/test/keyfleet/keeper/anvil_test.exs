@@ -10,31 +10,31 @@ defmodule Keyfleet.Keeper.AnvilTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{AnvilLab, ChainHelpers, Fleets, Keeper, Repo}
-  alias Keyfleet.Keeper.{Income, Reveals, RpcNode, Sender, Wallet}
+  alias Keyfleet.Keeper.{ProtocolShare, Reveals, RpcNode, Sender, Wallet}
 
   @moduletag :external
   @moduletag timeout: 600_000
 
   @fleet_id "fleet_tech_classic"
   @buyer "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-  @max_fee 2_000_000_000
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
 
     url = AnvilLab.start!()
-    %{"fleet" => fleet, "staking" => staking} = AnvilLab.lab!(url, @buyer)
+    %{"fleet" => fleet, "treasury" => treasury} = AnvilLab.lab!(url, @buyer)
     deploy!(@fleet_id, fleet, 31_337)
     ChainHelpers.seed_cursor!(@fleet_id)
 
     {:ok, wallet} = Wallet.new(anvil_key())
     # Anvil answers a send before its block is written, so the keeper waits
-    # a little between its looks for a receipt, as it waits a second on Base.
+    # a little between its looks for a receipt, as it waits two seconds on
+    # Ethereum.
     {:ok, sender} = Sender.start(%{Sender.new(wallet, RpcNode) | receipt_poll_ms: 100})
     {:ok, reveals} = Reveals.start(sender)
 
-    %{url: url, fleet: fleet, staking: staking, sender: sender, reveals: reveals}
+    %{url: url, fleet: fleet, treasury: treasury, sender: sender, reveals: reveals}
   end
 
   test "a request the node leaves waiting is raised at the same nonce, and one of them is mined",
@@ -63,7 +63,7 @@ defmodule Keyfleet.Keeper.AnvilTest do
     end
 
     newest = List.last(raises)
-    assert newest.max_fee <= @max_fee
+    assert newest.max_fee <= Keeper.limits().max_fee
     assert log =~ "Keeper left #{newest.tx_hash} waiting"
     assert pending(url) == [newest.tx_hash]
 
@@ -98,27 +98,27 @@ defmodule Keyfleet.Keeper.AnvilTest do
     assert runs() == [{:reveal, :sent}]
   end
 
-  test "the fleet's protocol share is sent to staking once, and not again the same day",
-       %{url: url, fleet: fleet, staking: staking, sender: sender} do
-    # Two per cent of two ten-USDC keys.
-    assert owed(sender, fleet) == 400_000
+  test "the fleet's protocol share is sent to the Regents Safe once, and not again the same day",
+       %{url: url, fleet: fleet, treasury: treasury, sender: sender} do
+    # Ten per cent of the first two keys, at 8 and 8.02 USDC.
+    assert owed(sender, fleet) == 1_602_000
 
-    sender = Income.run(sender)
+    sender = ProtocolShare.run(sender)
 
     assert [%{function: :send_protocol_share, target: ^fleet, status: :mined} = sent] = txs()
     receipt = AnvilLab.receipt!(url, sent.tx_hash)
     assert receipt["status"] == "0x1"
     assert owed(sender, fleet) == 0
-    assert registered(url, staking) == 400_000
+    assert usdc_held(url, fleet, treasury) == 1_602_000
 
     # A key sold since makes the fleet owe again, but the keeper's share
     # went less than a day ago.
     buy(url, fleet)
-    assert owed(sender, fleet) == 200_000
+    assert owed(sender, fleet) == 804_000
 
-    Income.run(sender)
+    ProtocolShare.run(sender)
     assert [^sent] = txs()
-    assert runs() == [{:income, :sent}]
+    assert runs() == [{:protocol_share, :sent}]
   end
 
   defp owed(sender, fleet) do
@@ -126,17 +126,18 @@ defmodule Keyfleet.Keeper.AnvilTest do
     owed
   end
 
-  # What the stand-in staking contract has had registered with it.
-  defp registered(url, staking) do
-    AnvilLab.number(
-      AnvilLab.rpc!(url, "eth_call", [
-        %{to: staking, data: hex(selector("registered()"))},
-        "latest"
-      ])
-    )
+  # The fleet's USDC held by `holder`.
+  defp usdc_held(url, fleet, holder) do
+    "0x" <> word = eth_call(url, fleet, selector("USDC()"))
+    usdc = "0x" <> String.slice(word, -40, 40)
+
+    AnvilLab.number(eth_call(url, usdc, selector("balanceOf(address)") <> words([holder])))
   end
 
-  # The buyer's third key, at its ten-USDC price.
+  defp eth_call(url, to, data),
+    do: AnvilLab.rpc!(url, "eth_call", [%{to: to, data: hex(data)}, "latest"])
+
+  # The buyer's third key, at 8.04 USDC, under a ten-USDC most.
   defp buy(url, fleet) do
     data =
       selector("purchase(address,uint256,uint256)") <>

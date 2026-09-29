@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
         kind: :pay,
         proposer: %{wallet: @recipient, token_id: 4},
         gist: "Pay the designer",
-        launch: nil,
+        edits: nil,
         payment: payment(@usdc, {"USDC", 6}, 12_500_000)
       }
     }
@@ -180,12 +180,58 @@ defmodule KeyfleetWeb.ActivityLinesTest do
              "The holder of key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab..cd34: “Pay the designer”"
   end
 
+  test "a vote on a key's edits names the key and what would change" do
+    asked = fn restricted ->
+      %{
+        id: "proposal:1",
+        at: ~U[2026-09-25 12:00:00Z],
+        kind: :proposed,
+        facts: %{
+          number: 5,
+          kind: :restrict_edits,
+          proposer: %{wallet: @recipient, token_id: 4},
+          gist: "Key 1234 keeps deleting findings",
+          edits: %{token_id: 1234, restricted: restricted},
+          payment: nil
+        }
+      }
+    end
+
+    assert ActivityLines.text(asked.(true)) ==
+             "The holder of key 4 put Proposal 5 to a vote to stop key 1,234 editing the workspace: “Key 1234 keeps deleting findings”"
+
+    assert ActivityLines.text(asked.(false)) ==
+             "The holder of key 4 put Proposal 5 to a vote to let key 1,234 edit the workspace again: “Key 1234 keeps deleting findings”"
+  end
+
+  test "a carried-out vote on a key's edits says what the fleet did" do
+    done = fn restricted ->
+      %{
+        id: "executed:1",
+        at: ~U[2026-09-25 12:00:00Z],
+        kind: :executed,
+        facts: %{
+          number: 5,
+          kind: :restrict_edits,
+          edits: %{token_id: 7, restricted: restricted},
+          payment: nil
+        }
+      }
+    end
+
+    assert ActivityLines.text(done.(true)) ==
+             "The fleet stopped key 7 editing the workspace (Proposal 5)."
+
+    assert ActivityLines.text(done.(false)) ==
+             "The fleet let key 7 edit the workspace again (Proposal 5)."
+  end
+
   defp paid(asset, details, amount) do
     %{
       id: "executed:1",
       at: ~U[2026-09-25 12:00:00Z],
       kind: :executed,
-      facts: %{number: 3, kind: :pay, launch: nil, payment: payment(asset, details, amount)}
+      facts: %{number: 3, kind: :pay, edits: nil, payment: payment(asset, details, amount)}
     }
   end
 

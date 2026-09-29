@@ -1,6 +1,6 @@
 defmodule Keyfleet.TestChainNode do
   @moduledoc """
-  The node the test server reads Base through (`:chain_nodes`) for the steps
+  The node the test server reads Ethereum through (`:chain_nodes`) for the steps
   a page's wallet sent. It answers `eth_getTransactionByHash` and
   `eth_getTransactionReceipt` with what a test landed, and `null` for any
   other hash, as a node does before it hears of a transaction.
@@ -17,7 +17,7 @@ defmodule Keyfleet.TestChainNode do
 
   @doc """
   Starts the node on a free loopback port, in a process of its own that
-  lives as long as the node does, and points `:chain_nodes` for Base at it.
+  lives as long as the node does, and points `:chain_nodes` for Ethereum at it.
   Returns its URL.
   """
   def start! do
@@ -36,7 +36,7 @@ defmodule Keyfleet.TestChainNode do
 
     receive do
       {:node, url} ->
-        Application.put_env(:keyfleet, :chain_nodes, %{8_453 => url})
+        Application.put_env(:keyfleet, :chain_nodes, %{1 => url})
         url
     end
   end

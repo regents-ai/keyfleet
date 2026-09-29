@@ -5,15 +5,13 @@ defmodule Keyfleet.ProposalsChainTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.{LaunchEnvelopes, Logs, Scanner, StubClient}
+  alias Keyfleet.Chain.{Logs, Scanner, StubClient}
   alias Keyfleet.CommittedCatalog
   alias Keyfleet.Fleets
-  alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Treasury
-  alias Keyfleet.WorkspaceFixtures
 
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
@@ -30,15 +28,13 @@ defmodule Keyfleet.ProposalsChainTest do
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
   @revealed "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
   @created "0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647"
-  @autolaunch "0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513"
   @pay "0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be"
+  @restrict_edits "0x051dcf97e7396a690509aaa36720e1aeaabeff0faca865092638a5b028e2fa8f"
   @vote "0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53"
   @withdrawn "0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
   @income_recognized "0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13"
   @shared_money_recognized "0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7"
-  @graduation_booked "0xd8c9a3e20faa52b5fa537458d4e055db2d5d91ef401d3120ec549f8724b42355"
-  @vesting_booked "0xee00fd5e75d11a67d01f1e2c820557fb28f1e211c8119f94759d4f5b470eeee2"
   @budget_paid "0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e"
 
   setup context do
@@ -64,13 +60,11 @@ defmodule Keyfleet.ProposalsChainTest do
     # One request per stretch of blocks covers both contracts and every
     # event, and each kind lands with exactly the fields its logs carry.
     test "each kind, its votes and its execution are recorded in chain order", %{fleet: fleet} do
-      envelope = "0x" <> String.duplicate("a1", 32)
-
       StubClient.put_chain(
         head(@deployed + 10),
         List.flatten([
           decision(1, @deployed + 1, text: "Ship the docs"),
-          autolaunch(2, @deployed + 3, 3, envelope_hash: envelope),
+          restrict_edits(2, @deployed + 3, 3, target: 7),
           vote(1, "a", true, [1, 2, 3], @deployed + 4, 0),
           vote(1, "b", false, [4], @deployed + 4, 1),
           executed(1, "c", @deployed + 5, 0)
@@ -85,15 +79,13 @@ defmodule Keyfleet.ProposalsChainTest do
                   @ownership,
                   @revealed,
                   @created,
-                  @autolaunch,
                   @pay,
+                  @restrict_edits,
                   @vote,
                   @withdrawn,
                   @executed,
                   @income_recognized,
                   @shared_money_recognized,
-                  @graduation_booked,
-                  @vesting_booked,
                   @budget_paid
                 ], @deployed, @deployed + 10}
              ]
@@ -107,8 +99,9 @@ defmodule Keyfleet.ProposalsChainTest do
                digest: nil,
                text: "Ship the docs",
                text_bytes: 13,
-               envelope_hash: nil,
                asset: nil,
+               target_token_id: nil,
+               restricted: nil,
                amount: nil,
                recipient: nil,
                block_number: block,
@@ -122,12 +115,13 @@ defmodule Keyfleet.ProposalsChainTest do
       assert decision.text_sha256 == sha256("Ship the docs")
       assert decision.transaction_hash == String.downcase(transaction(@deployed + 1))
 
-      launch = Proposals.get_proposal!(@fleet, 2)
+      edits = Proposals.get_proposal!(@fleet, 2)
 
-      assert %{kind: :autolaunch, envelope_hash: ^envelope, digest: ^envelope} = launch
-      assert %{text: nil, text_bytes: nil, text_sha256: nil} = launch
-      assert %{asset: nil, amount: nil, recipient: nil} = launch
-      assert %{log_index: 3, record_seq: 2} = launch
+      assert %{kind: :restrict_edits, target_token_id: 7, restricted: true, digest: nil} = edits
+      assert %{text: "Edits 2", text_bytes: 7} = edits
+      assert edits.text_sha256 == sha256("Edits 2")
+      assert %{asset: nil, amount: nil, recipient: nil} = edits
+      assert %{log_index: 3, record_seq: 2} = edits
 
       assert [yes, no] =
                @fleet
@@ -152,7 +146,7 @@ defmodule Keyfleet.ProposalsChainTest do
       tallied = Ash.load!(decision, [:yes_keys, :no_keys, :executed?])
       assert %{yes_keys: 3, no_keys: 1} = tallied
       assert tallied.executed?
-      refute Ash.load!(launch, :executed?).executed?
+      refute Ash.load!(edits, :executed?).executed?
 
       assert Chain.get_cursor!(@fleet).proposal_seq == 5
     end
@@ -221,7 +215,8 @@ defmodule Keyfleet.ProposalsChainTest do
                digest: nil,
                text: "Pay the auditor",
                text_bytes: 15,
-               envelope_hash: nil,
+               target_token_id: nil,
+               restricted: nil,
                log_index: 0,
                record_seq: 1
              } = paid
@@ -247,45 +242,35 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
       assert_received {:proposals_changed, @fleet}
 
-      assert [recognized, graduation, income, vesting, payment] =
+      assert [recognized, income, payment] =
                @fleet
                |> Treasury.recorded_in_blocks!(@deployed, @deployed + 10)
                |> Enum.sort_by(& &1.record_seq)
 
-      assert %{kind: :recognized, record_seq: 2, block_number: recognized_block, log_index: 1} =
-               recognized
+      assert %{record_seq: 2, block_number: recognized_block, log_index: 1} = recognized
 
       assert recognized_block == @deployed + 1
       assert recognized.asset == wallet("e")
       assert Decimal.equal?(recognized.amount, @max_uint256)
 
-      assert %{kind: :graduation, record_seq: 3, log_index: 2} = graduation
-      assert graduation.asset == wallet("9")
-      assert Decimal.equal?(graduation.amount, 100)
-
-      assert %{record_seq: 4, block_number: income_block, log_index: 0} = income
+      assert %{record_seq: 3, block_number: income_block, log_index: 0} = income
       assert income_block == @deployed + 2
       assert income.asset == wallet("a") and income.caller == wallet("f")
       assert Decimal.equal?(income.amount, @max_uint256)
 
-      # The escrow's running total is on the log; the amount it released is kept.
-      assert %{kind: :vesting, record_seq: 5, log_index: 1} = vesting
-      assert vesting.asset == wallet("b")
-      assert Decimal.equal?(vesting.amount, 5)
-
-      assert %{record_seq: 6, log_index: 1} = payment
+      assert %{record_seq: 4, log_index: 1} = payment
       assert payment.asset == wallet("a") and payment.recipient == wallet("c")
       assert Decimal.equal?(payment.amount, 700)
       assert Decimal.equal?(payment.share, 350)
       assert Decimal.equal?(payment.matched, 1_050)
 
-      assert Chain.get_cursor!(@fleet).proposal_seq == 6
+      assert Chain.get_cursor!(@fleet).proposal_seq == 4
 
       # Read again, nothing is made twice or numbered again.
       StubClient.put_chain(head(@deployed + 12), logs)
       assert Scanner.step(fleet, StubClient) == :ok
-      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 12)) == 5
-      assert Chain.get_cursor!(@fleet).proposal_seq == 6
+      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 12)) == 3
+      assert Chain.get_cursor!(@fleet).proposal_seq == 4
     end
 
     # A budget log read again with other amounts is the chain disagreeing with
@@ -317,7 +302,7 @@ defmodule Keyfleet.ProposalsChainTest do
       fleet: fleet
     } do
       mint = ownership(1, "a", @deployed + 1, 0)
-      [created, payload] = autolaunch(1, @deployed + 2, 0)
+      [created, payload] = restrict_edits(1, @deployed + 2, 0)
       [pay_created, pay_payload] = pay(1, @deployed + 2, 0)
 
       created_at = {String.downcase(transaction(@deployed + 2)), 0}
@@ -455,9 +440,9 @@ defmodule Keyfleet.ProposalsChainTest do
       assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
                [
                  {@deployed, @deployed + 9_999},
-                 {@deployed + 9_970, @deployed + 9_999},
+                 {@deployed + 9_968, @deployed + 9_999},
                  {@deployed + 10_000, @deployed + 19_999},
-                 {@deployed + 19_970, @deployed + 19_999},
+                 {@deployed + 19_968, @deployed + 19_999},
                  {@deployed + 20_000, @deployed + 25_000}
                ]
     end
@@ -564,7 +549,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Chain.get_cursor!(@fleet).proposal_seq == 4
     end
 
-    # The block holding the launch has two logs where the node sends one at
+    # The block holding the vote on a key's edits has two logs where the node sends one at
     # most. The pieces before it stay recorded with the cursor just after them,
     # and the next pass carries on from there with the same numbers.
     test "a single block the node will not answer ends the pass after the last piece recorded",
@@ -731,7 +716,7 @@ defmodule Keyfleet.ProposalsChainTest do
       logs =
         List.flatten([
           decision(1, @deployed + 1),
-          autolaunch(2, @deployed + 2, 0),
+          restrict_edits(2, @deployed + 2, 0),
           decision(3, @deployed + 3),
           vote(1, "a", true, [1], @deployed + 4, 0),
           vote(3, "b", false, [2], @deployed + 4, 1),
@@ -892,211 +877,6 @@ defmodule Keyfleet.ProposalsChainTest do
     end
   end
 
-  describe "reading launches" do
-    # The contract records a launch's narrativeDigest as its proposal's
-    # digest, so a launch plan version's digest leads from the proposal back
-    # to the exact version its keys read.
-    test "a launch that carries a launch plan's digest points to that plan version",
-         %{fleet: fleet} do
-      WorkspaceFixtures.open_log(@fleet)
-      plan = WorkspaceFixtures.create(@fleet, "launch_card", %{"title" => "Research fund"})
-      WorkspaceFixtures.edit(@fleet, plan, %{"name" => "Research Fund", "symbol" => "RSF"})
-      WorkspaceFixtures.edit(@fleet, plan, %{"symbol" => "RSFD"})
-
-      [%{digest: digest}] =
-        Graph.current_launch_plan_revisions!(@fleet, [%{object_id: plan, version: 2}], actor: nil)
-
-      texts = ["Research Fund", "RSF", "A fleet's research", "https://example.test", "ipfs://r"]
-      returned = encoded_envelope(texts, 250_000, bytes(digest))
-
-      StubClient.put_chain(
-        head(@deployed + 10),
-        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned), digest: digest),
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      assert Scanner.step(fleet, StubClient) == :ok
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-
-      proposal = Proposals.get_proposal!(@fleet, 1)
-      assert proposal.digest == digest
-
-      assert [%{object_id: ^plan, version: 2, data: %{"symbol" => "RSF"}}] =
-               Graph.launch_plan_revisions!(@fleet, [proposal.digest], actor: nil)
-    end
-
-    # The launch is read apart from the pass, at the head, and kept byte for
-    # byte, text that is not valid text included, and only once.
-    test "a launch proposal's launch is read at the head and kept exactly", %{fleet: fleet} do
-      texts = ["Cascade", "CSC", "A fleet's launch", "https://example.test", <<0xFF, 0xFE>>]
-      returned = encoded_envelope(texts, 250_000)
-
-      StubClient.put_chain(
-        head(@deployed + 10),
-        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned)),
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      # The pass reads no launch, so a slow one never holds it up.
-      assert Scanner.step(fleet, StubClient) == :ok
-      assert StubClient.call_requests() == []
-
-      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-      assert_received {:proposals_changed, @fleet}
-
-      assert StubClient.call_requests() == [
-               {@votes, "0xb3bceadb" <> String.duplicate("0", 63) <> "1",
-                head(@deployed + 10).hash}
-             ]
-
-      launch = Proposals.get_proposal!(@fleet, 1, load: :launch_envelope)
-
-      assert %{
-               name: "Cascade",
-               symbol: "CSC",
-               description: "A fleet's launch",
-               website: "https://example.test",
-               image: <<0xFF, 0xFE>>,
-               record_seq: 2
-             } = launch.launch_envelope
-
-      assert Decimal.equal?(launch.launch_envelope.required_regent_raised, 250_000)
-      assert Chain.get_cursor!(@fleet).proposal_seq == 2
-
-      # Kept, it is not asked for again.
-      StubClient.put_chain(
-        head(@deployed + 12),
-        autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned)),
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-      assert StubClient.call_requests() == []
-      refute_received {:proposals_changed, _fleet}
-
-      # Made again differently, it is refused as not the record, which names
-      # no block, since a launch is not read from one.
-      assert {:error, %Ash.Error.Invalid{errors: [%{vars: []}]}} =
-               Proposals.record_launch_envelope(
-                 %{
-                   fleet_id: @fleet,
-                   proposal_id: launch.id,
-                   name: "Other",
-                   symbol: "CSC",
-                   description: "A fleet's launch",
-                   website: "https://example.test",
-                   image: <<0xFF, 0xFE>>,
-                   required_regent_raised: Decimal.new(250_000)
-                 },
-                 actor: %System{}
-               )
-
-      assert Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope.name ==
-               "Cascade"
-
-      for {sql, params} <- [
-            {"UPDATE keyfleet_app.proposal_launch_envelopes SET name = $1", ["Other"]},
-            {"DELETE FROM keyfleet_app.proposal_launch_envelopes", []},
-            {"TRUNCATE keyfleet_app.proposal_launch_envelopes", []}
-          ] do
-        assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
-                 Repo.query(sql, params, mode: :savepoint),
-               sql
-      end
-    end
-
-    # An answer always comes in whole 32-byte words, so the hash's own
-    # 136-byte blocks are met exactly by a launch 1088 bytes long. Its hash
-    # is pinned from `cast keccak` of the same bytes, and in
-    # contracts/test/KeyfleetAutolaunch.t.sol from the same launch proposed,
-    # as its event carries it and as `launchEnvelope` returns it.
-    test "a launch that fills the hash's blocks exactly is kept", %{fleet: fleet} do
-      description = "A fleet's launch. " |> String.duplicate(29) |> binary_part(0, 512)
-
-      texts = [
-        "Cascade Research",
-        "CSR",
-        description,
-        "https://example.test",
-        "ipfs://" <> String.duplicate("c", 50)
-      ]
-
-      returned = encoded_envelope(texts, 250_000)
-      assert byte_size(returned) == 8 * 136
-
-      StubClient.put_chain(
-        head(@deployed + 10),
-        autolaunch(1, @deployed + 2, 0,
-          envelope_hash: "0x9d2685a27d497a7918a1a17b76177782499261be330345e630bcc08ef34bf285"
-        ),
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      assert Scanner.step(fleet, StubClient) == :ok
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-
-      assert %{name: "Cascade Research", description: ^description} =
-               Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
-    end
-
-    # A read that fails, is refused, or answers with another launch keeps
-    # nothing and holds up nothing; the next read tries again. A head that
-    # cannot be read is the read failing.
-    test "a launch that cannot be read keeps nothing and is tried again", %{fleet: fleet} do
-      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
-      logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
-      other = encoded_envelope(["N", "S", "D", "W", "J"], 1)
-      StubClient.put_chain(head(@deployed + 10), logs)
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      for {answer, reason} <- [
-            {{:error, :chain_unavailable}, :chain_unavailable},
-            {{:error, :reverted}, :reverted},
-            {{:ok, other}, :envelope_not_the_approved_one},
-            {{:ok, binary_part(returned, 0, 64)}, :envelope_not_the_approved_one}
-          ] do
-        StubClient.put_chain(head(@deployed + 10), logs,
-          calls: fn _to, _data, _block_hash -> answer end
-        )
-
-        assert LaunchEnvelopes.read(fleet, StubClient) ==
-                 {:error, {:launches_not_read, [{1, reason}]}}
-
-        assert length(StubClient.call_requests()) == 1
-        refute Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
-      end
-
-      StubClient.put_chain(head(@deployed + 12), logs,
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-
-      assert %{name: "N", image: "I"} =
-               Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
-    end
-
-    test "a stopped fleet's launches are not read", %{fleet: fleet} do
-      returned = encoded_envelope(["N", "S", "D", "W", "I"], 1)
-      logs = autolaunch(1, @deployed + 2, 0, envelope_hash: keccak(returned))
-      StubClient.put_chain(head(@deployed + 10), logs)
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      # The chain's history changed under the proposal: it is gone from a
-      # block whose hash is new.
-      StubClient.put_chain(head(@deployed + 12), [],
-        block_hashes: %{(@deployed + 2) => @new_hash},
-        calls: fn _to, _data, _block_hash -> {:ok, returned} end
-      )
-
-      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 2} end)
-      assert LaunchEnvelopes.read(fleet, StubClient) == :ok
-      assert StubClient.call_requests() == []
-      refute Proposals.get_proposal!(@fleet, 1, load: :launch_envelope).launch_envelope
-    end
-  end
-
   describe "the record tables" do
     test "refuse every change, delete and emptying", %{fleet: fleet} do
       budget = [
@@ -1136,7 +916,7 @@ defmodule Keyfleet.ProposalsChainTest do
     test "only logs in the contracts' exact encoding are read", %{fleet: fleet} do
       decision = decision(1, @deployed + 1, text: "abc")
       vote = vote(1, "a", true, [1, 2], @deployed + 2, 0)
-      [created, payload] = autolaunch(2, @deployed + 3, 0)
+      [created, payload] = restrict_edits(2, @deployed + 3, 0)
       [pay_created, pay_payload] = pay(3, @deployed + 4, 1, amount: @max_uint256)
       mint = ownership(1, "a", @deployed + 4, 0)
       valid = [decision, vote, created, payload, pay_created, pay_payload]
@@ -1190,6 +970,9 @@ defmodule Keyfleet.ProposalsChainTest do
             {1, %{vote | "data" => hex(data.(vote) <> <<0::256>>)}},
             {3, %{payload | "data" => hex(data.(payload) <> <<0::256>>)}},
             {3, %{payload | "data" => hex(binary_part(data.(payload), 0, 31))}},
+            {3, %{payload | "data" => hex(<<2::256>>)}},
+            {3, %{payload | "topics" => topic.(payload, 2, hex(<<0::256>>))}},
+            {3, %{payload | "topics" => Enum.drop(payload["topics"], -1)}},
             {5, %{pay_payload | "topics" => topic.(pay_payload, 2, hex(<<1::96, 0::160>>))}},
             {5, %{pay_payload | "topics" => topic.(pay_payload, 3, hex(<<1::96, 0::160>>))}},
             {5, %{pay_payload | "topics" => Enum.drop(pay_payload["topics"], -1)}},
@@ -1206,20 +989,20 @@ defmodule Keyfleet.ProposalsChainTest do
                inspect(broken)
       end
 
-      # A launch or payment proposal read as a decision leaves its payload
-      # without a proposal; a payload for another proposal, or of the other
-      # kind, leaves it without its payload.
-      launch_tx = String.downcase(transaction(@deployed + 3))
+      # A payment or a vote on a key's edits read as a decision leaves its
+      # payload without a proposal; a payload for another proposal, or of the
+      # other kind, leaves it without its payload.
+      edits_tx = String.downcase(transaction(@deployed + 3))
       pay_tx = String.downcase(transaction(@deployed + 4))
 
       for {index, broken, reason} <- [
             {2, %{created | "topics" => topic.(created, 2, hex(<<0::256>>))},
-             {:payload_without_proposal, launch_tx, 1}},
+             {:payload_without_proposal, edits_tx, 1}},
             {3, %{payload | "topics" => topic.(payload, 1, hex(<<1::256>>))},
-             {:payload_missing, launch_tx, 0}},
+             {:payload_missing, edits_tx, 0}},
             {4, %{pay_created | "topics" => topic.(pay_created, 2, hex(<<0::256>>))},
              {:payload_without_proposal, pay_tx, 2}},
-            {4, %{pay_created | "topics" => topic.(pay_created, 2, hex(<<1::256>>))},
+            {4, %{pay_created | "topics" => topic.(pay_created, 2, hex(<<2::256>>))},
              {:payload_missing, pay_tx, 1}},
             {5, %{pay_payload | "topics" => topic.(pay_payload, 1, hex(<<2::256>>))},
              {:payload_missing, pay_tx, 1}}
@@ -1269,11 +1052,11 @@ defmodule Keyfleet.ProposalsChainTest do
     end
   end
 
-  # A decision, a launch, a vote and an execution, numbered 1 to 4.
+  # A decision, a vote on a key's edits, a vote and an execution, numbered 1 to 4.
   defp history do
     List.flatten([
       decision(1, @deployed + 1),
-      autolaunch(2, @deployed + 2, 0),
+      restrict_edits(2, @deployed + 2, 0),
       vote(1, "a", true, [1], @deployed + 4, 0),
       executed(1, "a", @deployed + 5, 0)
     ])
@@ -1305,28 +1088,35 @@ defmodule Keyfleet.ProposalsChainTest do
   defp payload_for(payload, number),
     do: %{payload | "topics" => List.replace_at(payload["topics"], 1, hex(<<number::256>>))}
 
-  # A launch proposal; its digest is the envelope hash unless `:digest` names
-  # the narrativeDigest it carries.
-  defp autolaunch(number, block, log_index, opts \\ []) do
-    envelope = opts |> Keyword.get(:envelope_hash, "0x" <> String.duplicate("a1", 32)) |> bytes()
-    digest = opts |> Keyword.get(:digest, hex(envelope)) |> bytes()
-
-    [
-      created(number, 1, block, log_index, "", digest),
-      log(@votes, [@autolaunch, <<number::256>>], envelope, block, log_index + 1)
-    ]
-  end
-
   # A payment of `amount` of asset 0xaa… to 0xbb….
   defp pay(number, block, log_index, opts \\ []) do
     amount = Keyword.get(opts, :amount, 5_000)
 
     [
-      created(number, 2, block, log_index, Keyword.get(opts, :text, "Pay #{number}"), <<0::256>>),
+      created(number, 1, block, log_index, Keyword.get(opts, :text, "Pay #{number}"), <<0::256>>),
       log(
         @votes,
         [@pay, <<number::256>>, address_word_bytes("a"), address_word_bytes("b")],
         <<amount::256>>,
+        block,
+        log_index + 1
+      )
+    ]
+  end
+
+  # A vote to stop key `:target` (7 unless given) editing the workspace, or
+  # with `restricted: false` to let it edit again.
+  defp restrict_edits(number, block, log_index, opts \\ []) do
+    target = Keyword.get(opts, :target, 7)
+    restricted = if Keyword.get(opts, :restricted, true), do: 1, else: 0
+    text = Keyword.get(opts, :text, "Edits #{number}")
+
+    [
+      created(number, 2, block, log_index, text, <<0::256>>),
+      log(
+        @votes,
+        [@restrict_edits, <<number::256>>, <<target::256>>],
+        <<restricted::256>>,
         block,
         log_index + 1
       )
@@ -1380,9 +1170,7 @@ defmodule Keyfleet.ProposalsChainTest do
     List.flatten([
       decision(1, @deployed + 1),
       shared_money("e", @deployed + 1, 1, @max_uint256),
-      graduation("9", @deployed + 1, 2, 100),
       income("a", @deployed + 2, 0, @max_uint256),
-      vesting("b", @deployed + 2, 1, 5, 25),
       budget_paid("a", "c", @deployed + 3, 1, [700, 350, 1_050]),
       ownership(1, "d", @deployed + 3, 0)
     ])
@@ -1407,28 +1195,6 @@ defmodule Keyfleet.ProposalsChainTest do
     )
   end
 
-  # `amount` of the REGENT 0x`asset`… the launch sent at graduation.
-  defp graduation(asset, block, log_index, amount) do
-    log(
-      @contract,
-      [@graduation_booked, address_word_bytes(asset)],
-      <<amount::256>>,
-      block,
-      log_index
-    )
-  end
-
-  # `amount` of launched token 0x`asset`… the escrow released, `total` in all.
-  defp vesting(asset, block, log_index, amount, total) do
-    log(
-      @contract,
-      [@vesting_booked, address_word_bytes(asset)],
-      <<amount::256, total::256>>,
-      block,
-      log_index
-    )
-  end
-
   # A payment of asset 0x`asset`… to 0x`recipient`…, as [amount, share,
   # matched].
   defp budget_paid(asset, recipient, block, log_index, fields) do
@@ -1440,25 +1206,6 @@ defmodule Keyfleet.ProposalsChainTest do
       log_index
     )
   end
-
-  # What `launchEnvelope` returns for a launch of these five texts, raise and
-  # narrative digest (none unless given): the struct's offset, then the struct.
-  defp encoded_envelope(texts, raise, narrative_digest \\ <<0::256>>) do
-    tails =
-      Enum.map(texts, fn text ->
-        padded = 32 * div(byte_size(text) + 31, 32)
-        <<byte_size(text)::256>> <> text <> <<0::size(8 * (padded - byte_size(text)))>>
-      end)
-
-    {offsets, _end} = Enum.map_reduce(tails, 224, &{<<&2::256>>, &2 + byte_size(&1)})
-
-    <<32::256>> <>
-      Enum.join(offsets) <>
-      <<raise::256>> <>
-      narrative_digest <> Enum.join(tails)
-  end
-
-  defp keccak(bytes), do: hex(ExKeccak.hash_256(bytes))
 
   defp ownership(token_id, owner, block, log_index) do
     log(
@@ -1492,7 +1239,6 @@ defmodule Keyfleet.ProposalsChainTest do
   defp address_word_bytes(character),
     do: <<0::96>> <> Base.decode16!(String.duplicate(character, 40), case: :mixed)
 
-  defp bytes("0x" <> hex), do: Base.decode16!(hex, case: :lower)
   defp hex(bytes), do: "0x" <> Base.encode16(bytes, case: :lower)
   defp sha256(text), do: hex(:crypto.hash(:sha256, text))
   defp quantity(value), do: "0x" <> Integer.to_string(value, 16)
@@ -1511,11 +1257,11 @@ defmodule Keyfleet.ProposalsChainTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8_453,
+        chain_id: 1,
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: @deployed,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
@@ -1653,22 +1399,6 @@ defmodule Keyfleet.ProposalsChainTest do
   # The records from block `offset` on removed as docs/chain-reader.md does.
   defp remove_from(offset) do
     Repo.transaction(fn ->
-      Repo.query!(
-        "ALTER TABLE keyfleet_app.proposal_launch_envelopes DISABLE TRIGGER immutable_proposal_launch_envelopes"
-      )
-
-      Repo.query!(
-        "DELETE FROM keyfleet_app.proposal_launch_envelopes AS envelope " <>
-          "USING keyfleet_app.proposals AS proposal " <>
-          "WHERE envelope.proposal_id = proposal.id AND proposal.fleet_id = $1 " <>
-          "AND proposal.block_number >= $2",
-        [@fleet, @deployed + offset]
-      )
-
-      Repo.query!(
-        "ALTER TABLE keyfleet_app.proposal_launch_envelopes ENABLE TRIGGER immutable_proposal_launch_envelopes"
-      )
-
       for table <-
             ~w(budget_payments budget_receipts income_receipts proposal_executions proposal_votes proposals) do
         Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER immutable_#{table}")
@@ -1703,7 +1433,6 @@ defmodule Keyfleet.ProposalsChainTest do
             {"budget_payments", "immutable_budget_payments"},
             {"budget_receipts", "immutable_budget_receipts"},
             {"income_receipts", "immutable_income_receipts"},
-            {"proposal_launch_envelopes", "immutable_proposal_launch_envelopes"},
             {"proposal_executions", "immutable_proposal_executions"},
             {"proposal_votes", "immutable_proposal_votes"},
             {"proposals", "immutable_proposals"}

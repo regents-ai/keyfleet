@@ -74,28 +74,24 @@ defmodule Keyfleet.Keeper.RpcNode do
     end
   end
 
-  defp receipt_of(
-         %{
-           "status" => status,
-           "blockNumber" => block_number,
-           "gasUsed" => gas_used,
-           "effectiveGasPrice" => effective_gas_price,
-           "logs" => logs
-         } = receipt
-       )
+  defp receipt_of(%{
+         "status" => status,
+         "blockNumber" => block_number,
+         "gasUsed" => gas_used,
+         "effectiveGasPrice" => effective_gas_price,
+         "logs" => logs
+       })
        when is_list(logs) do
     with {:ok, status} when status in [0, 1] <- Abi.quantity(status),
          {:ok, block_number} <- Abi.quantity(block_number),
          {:ok, gas_used} <- Abi.quantity(gas_used),
-         {:ok, effective_gas_price} <- Abi.quantity(effective_gas_price),
-         {:ok, l1_fee} <- l1_fee(receipt) do
+         {:ok, effective_gas_price} <- Abi.quantity(effective_gas_price) do
       {:ok,
        %{
          status: status,
          block_number: block_number,
          gas_used: gas_used,
          effective_gas_price: effective_gas_price,
-         l1_fee: l1_fee,
          logs: logs
        }}
     else
@@ -104,10 +100,6 @@ defmodule Keyfleet.Keeper.RpcNode do
   end
 
   defp receipt_of(_receipt), do: {:error, :invalid_receipt}
-
-  # Base's receipts carry the L1 data fee; a chain without one has none.
-  defp l1_fee(%{"l1Fee" => l1_fee}), do: Abi.quantity(l1_fee)
-  defp l1_fee(_receipt), do: {:ok, nil}
 
   defp quantity(method, params) do
     with {:ok, result} <- request(method, params) do

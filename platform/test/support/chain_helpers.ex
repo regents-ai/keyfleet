@@ -14,7 +14,7 @@ defmodule Keyfleet.ChainHelpers do
   @head_hash "0x" <> String.duplicate("c", 64)
 
   @doc """
-  Records a deployment on Base for `fleet_id`, which opens a fleet the
+  Records a deployment on Ethereum for `fleet_id`, which opens a fleet the
   catalog shows as coming soon. Each fleet gets contract addresses of its own.
   """
   def deploy!(fleet_id) do
@@ -24,11 +24,11 @@ defmodule Keyfleet.ChainHelpers do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8_453,
+        chain_id: 1,
         contract_address: "0x" <> String.duplicate("c" <> digit, 20),
         rewards_address: "0x" <> String.duplicate("d" <> digit, 20),
         votes_address: "0x" <> String.duplicate("e" <> digit, 20),
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

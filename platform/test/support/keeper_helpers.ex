@@ -1,9 +1,8 @@
 defmodule Keyfleet.KeeperHelpers do
   @moduledoc """
-  What the keeper's tests share: one fleet's launch on Base, as the chain
-  answers the keeper's reads about it, a sender started on
-  `Keyfleet.Keeper.StubNode`, and the transactions it sent read back from
-  their bytes.
+  What the keeper's tests share: a fleet deployed on Ethereum, a sender
+  started on `Keyfleet.Keeper.StubNode`, the chain's answers to the
+  keeper's reads, and the transactions it sent read back from their bytes.
 
   The keeper's wallet is anvil's first public test account, never a real
   key, and every address is made up.
@@ -18,29 +17,17 @@ defmodule Keyfleet.KeeperHelpers do
   @addresses %{
     keeper: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
     fleet: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
-    factory: "0x" <> String.duplicate("f1", 20),
-    strategy: "0x" <> String.duplicate("f2", 20),
-    locker: "0x" <> String.duplicate("f3", 20),
-    escrow: "0x" <> String.duplicate("e1", 20),
-    splitter: "0x" <> String.duplicate("e2", 20),
-    receiver: "0x" <> String.duplicate("e3", 20),
-    usdc: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-    regent: "0x" <> String.duplicate("a1", 20),
-    subject: "0x" <> String.duplicate("a2", 20),
+    usdc: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     stranger: "0x" <> String.duplicate("99", 20)
   }
 
   @anvil_key "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-  @lp_token_id 4_242
 
-  @doc "The address the tests give `name`: `:keeper`, `:fleet` or one of its launch's contracts and tokens."
+  @doc "The address the tests give `name`: `:keeper`, `:fleet`, `:usdc` or `:stranger`."
   def address(name), do: Map.fetch!(@addresses, name)
 
   @doc "Anvil's first public test key, the keeper's wallet."
   def anvil_key, do: @anvil_key
-
-  @doc "The launch's LP position."
-  def lp_token_id, do: @lp_token_id
 
   @doc "Records a fleet's deployment at `address` on `chain_id`."
   def deploy!(fleet_id, address, chain_id) do
@@ -103,80 +90,6 @@ defmodule Keyfleet.KeeperHelpers do
   end
 
   @doc """
-  The fleet's launch as the chain answers it, as `answering/1` takes it: its
-  record and distribution, its factory's strategy and LP locker, the
-  splitter's USDC and REGENT, and each income contract's treasury.
-  `:distribution` changes what the distribution says (its `:lifecycle`,
-  graduated by default, `:migration_block`, `:treasury`, `:splitter` and
-  `:lp_token_id`), and `:treasury` maps
-  a contract to the treasury it names instead of the fleet.
-  """
-  def launch(opts \\ []) do
-    a = @addresses
-
-    treasury =
-      Map.merge(
-        Map.new([a.escrow, a.splitter, a.receiver], &{&1, a.fleet}),
-        Keyword.get(opts, :treasury, %{})
-      )
-
-    distribution =
-      Map.merge(
-        %{
-          lifecycle: 2,
-          migration_block: 4,
-          splitter: a.splitter,
-          treasury: a.fleet,
-          lp_token_id: @lp_token_id
-        },
-        Keyword.get(opts, :distribution, %{})
-      )
-
-    %{
-      {a.fleet, :launch_record} => [
-        1,
-        2,
-        a.subject,
-        3,
-        a.stranger,
-        a.escrow,
-        a.splitter,
-        a.receiver,
-        0,
-        0,
-        @lp_token_id
-      ],
-      {a.fleet, :launch_distribution} => [
-        distribution.lifecycle,
-        1,
-        2,
-        3,
-        distribution.migration_block,
-        5,
-        6,
-        7,
-        8,
-        9,
-        1,
-        a.subject,
-        a.escrow,
-        distribution.treasury,
-        distribution.splitter,
-        a.receiver,
-        0,
-        distribution.lp_token_id
-      ],
-      {a.fleet, :factory} => [a.factory],
-      {a.factory, :strategy} => [a.strategy],
-      {a.strategy, :lp_locker} => [a.locker],
-      {a.splitter, :usdc} => [a.usdc],
-      {a.splitter, :regent} => [a.regent]
-    }
-    |> Map.new(fn {{to, view}, values} -> {{to, view!(view)}, values} end)
-    |> Map.merge(Map.new(treasury, fn {to, pays} -> {{to, view!(:treasury)}, [pays]} end))
-  end
-
-  @doc """
   A stub node's `:calls`, answering the keeper from `answers`: a map from
   the contract and calldata to the values returned, as `words/1` takes
   them, to raw bytes, or to an `{:error, reason}`. Anything else it does
@@ -197,20 +110,20 @@ defmodule Keyfleet.KeeperHelpers do
 
   @doc """
   Records that the keeper sent `fun` to `target` with `arg` for `fleet_id`
-  at `nonce` on Base, and that the chain included it, settled at
+  at `nonce` on Ethereum, and that the chain included it, settled at
   `settled_at`, which may be in the past, with `result`.
   """
   def included!(fleet_id, {fun, target, arg}, nonce, settled_at, result \\ nil) do
     tx =
       Keeper.record_sent_tx!(
         %{
-          job: if(fun == :request_reveal, do: :reveal, else: :income),
+          job: if(fun == :request_reveal, do: :reveal, else: :protocol_share),
           fleet_id: fleet_id,
           function: fun,
           target: target,
           from_address: @addresses.keeper,
           args: %{"arg" => arg},
-          chain_id: 8_453,
+          chain_id: 1,
           nonce: nonce,
           tx_hash: hex(<<nonce::256>>),
           max_fee: 1,

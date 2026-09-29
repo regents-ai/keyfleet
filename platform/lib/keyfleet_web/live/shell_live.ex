@@ -24,7 +24,6 @@ defmodule KeyfleetWeb.ShellLive do
     KeyProfileLive,
     KeysLive,
     ProposalsLive,
-    ProposalsPage,
     Read,
     RoomsLive,
     WorkspaceLive
@@ -79,7 +78,6 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
-       launch_plans: nil,
        check_ins_timer: nil,
        send_agent_open: false
      )}
@@ -346,7 +344,6 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :proposals}
           page={@proposals}
           actor={actor(@access_context)}
-          launch_plans={@launch_plans}
         />
         <ProposalsLive.detail
           :if={@route_spec.route_id == :proposal}
@@ -487,15 +484,12 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The page starts listening before it reads, so votes recorded while it
-  # loads still reach it. Each visit, reconnection included, reads afresh;
-  # the launch plans the launch form offers are read only then, since the
-  # form keeps what it first showed.
+  # loads still reach it. Each visit, reconnection included, reads afresh.
   defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
        when route_id in [:proposals, :proposal] do
     socket
     |> follow_proposals(fleet_id)
     |> assign(:proposals_params, params)
-    |> assign(:launch_plans, if(route_id == :proposals, do: ProposalsPage.launch_plans(fleet_id)))
     |> ProposalsLive.read_proposals()
   end
 
@@ -503,7 +497,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_proposals(socket, _route_spec, _params) do
     socket
     |> follow_proposals(fleet_on_show(socket))
-    |> assign(proposals: nil, proposals_params: nil, launch_plans: nil)
+    |> assign(proposals: nil, proposals_params: nil)
   end
 
   defp follow_proposals(socket, fleet_id) do

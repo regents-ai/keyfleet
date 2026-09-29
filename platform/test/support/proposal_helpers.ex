@@ -1,8 +1,8 @@
 defmodule Keyfleet.ProposalHelpers do
   @moduledoc """
-  Records key sales, proposals, votes, executions, launches, budget receipts,
-  launch income, budget payments, balance readings and asset details as the
-  chain reader would, without a chain. Each record gets a chain event of its own. The
+  Records key sales, proposals, votes, executions, budget receipts, income,
+  budget payments, balance readings and asset details as the chain reader
+  would, without a chain. Each record gets a chain event of its own. The
   fleet needs a cursor first, as `Keyfleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
@@ -16,7 +16,7 @@ defmodule Keyfleet.ProposalHelpers do
 
   @doc """
   Proposal `number` of the fleet: a decision, unless `attrs` says otherwise.
-  A payment and a launch get the fields their kind carries.
+  A payment and a vote on a key's edits get the fields their kind carries.
   """
   def proposal!(fleet_id, number, attrs \\ %{}) do
     attrs = Map.new(attrs)
@@ -65,25 +65,9 @@ defmodule Keyfleet.ProposalHelpers do
     |> Proposals.record_execution!(actor: @system)
   end
 
-  @doc "The launch a launch proposal approves, read."
-  def launch_envelope!(proposal, attrs \\ %{}) do
-    %{
-      fleet_id: proposal.fleet_id,
-      proposal_id: proposal.id,
-      name: "Cascade Research",
-      symbol: "CSR",
-      description: "Research the fleet funds",
-      website: "https://example.test",
-      image: "ipfs://cascade",
-      required_regent_raised: Decimal.new("250000000000000000000000")
-    }
-    |> Map.merge(Map.new(attrs))
-    |> Proposals.record_launch_envelope!(actor: @system)
-  end
-
   @doc "10 USDC-sized units of a token recognized into the budget, unless `attrs` says otherwise."
   def budget_receipt!(fleet_id, attrs \\ %{}) do
-    %{fleet_id: fleet_id, kind: :recognized, asset: wallet("a"), amount: Decimal.new(10_000_000)}
+    %{fleet_id: fleet_id, asset: wallet("a"), amount: Decimal.new(10_000_000)}
     |> Map.merge(event())
     |> Map.merge(Map.new(attrs))
     |> Treasury.record_budget_receipt!(actor: @system)
@@ -143,10 +127,6 @@ defmodule Keyfleet.ProposalHelpers do
 
   def wallet(character), do: "0x" <> String.duplicate(character, 40)
 
-  defp kind_fields(:autolaunch, _number) do
-    %{envelope_hash: "0x" <> String.duplicate("a1", 32)}
-  end
-
   defp kind_fields(kind, number) do
     text = "Proposal #{number}"
 
@@ -156,16 +136,15 @@ defmodule Keyfleet.ProposalHelpers do
       text_sha256: "0x" <> Base.encode16(:crypto.hash(:sha256, text), case: :lower)
     }
 
-    if kind == :pay do
-      Map.merge(text_fields, %{
-        asset: wallet("a"),
-        amount: Decimal.new(5_000_000),
-        recipient: wallet("b")
-      })
-    else
-      text_fields
-    end
+    Map.merge(text_fields, payload(kind))
   end
+
+  defp payload(:decision), do: %{}
+
+  defp payload(:pay),
+    do: %{asset: wallet("a"), amount: Decimal.new(5_000_000), recipient: wallet("b")}
+
+  defp payload(:restrict_edits), do: %{target_token_id: 2, restricted: true}
 
   # A chain event no other record has.
   defp event do

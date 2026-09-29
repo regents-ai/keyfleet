@@ -19,7 +19,6 @@ defmodule Keyfleet.WalletSteps.Steps do
     :collect,
     :propose_decision,
     :propose_payment,
-    :propose_launch,
     :delegate,
     :send_share
   ]

@@ -25,7 +25,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
       assert {:ok, settled} = Keeper.settle(tx, mined())
 
       assert {settled.status, settled.cost_wei, settled.result} ==
-               {:mined, 130_000, "reveal_requested"}
+               {:mined, 100_000_000, "reveal_requested"}
 
       assert %DateTime{} = settled.settled_at
 
@@ -84,8 +84,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
       assert {:error, _error} = Keeper.settle(tx, %{status: :replaced, block_number: 1})
       assert {:error, _error} = Keeper.settle(tx, Map.delete(mined(), :status))
 
-      assert {:ok, %{status: :reverted, l1_fee_wei: nil}} =
-               Keeper.settle(tx, mined(status: :reverted, l1_fee_wei: nil))
+      assert {:ok, %{status: :reverted}} = Keeper.settle(tx, mined(status: :reverted))
     end
 
     test "refuses changes to what was sent, deleting and emptying" do
@@ -93,13 +92,13 @@ defmodule Keyfleet.Keeper.RecordsTest do
 
       for {field, value} <- [
             id: Ecto.UUID.dump!(Ash.UUID.generate()),
-            job: "income",
+            job: "protocol_share",
             fleet_id: "fibonacci_cascade",
-            function: "release",
+            function: "send_protocol_share",
             target: "0x" <> String.duplicate("1", 40),
             from_address: "0x" <> String.duplicate("2", 40),
             args: %{"arg" => 2},
-            chain_id: 1,
+            chain_id: 8_453,
             nonce: 9,
             tx_hash: hash("9"),
             replaces_tx_hash: hash("8"),
@@ -170,8 +169,8 @@ defmodule Keyfleet.Keeper.RecordsTest do
       for {overrides, n} <-
             Enum.with_index([
               [from_address: "0x" <> String.duplicate("1", 40)],
-              [chain_id: 1],
-              [function: :send_protocol_share, job: :income, args: %{"arg" => nil}],
+              [chain_id: 8_453],
+              [function: :send_protocol_share, job: :protocol_share, args: %{"arg" => nil}],
               [fleet_id: "fibonacci_cascade"]
             ]) do
         settled!(tx_attrs([tx_hash: hash("other #{n}"), nonce: 10 + n] ++ overrides), mined())
@@ -179,7 +178,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
 
       recent = fn since ->
         {:ok, txs} =
-          Keeper.list_recent_txs(8453, @keeper, @fleet, :request_reveal, since, actor: @system)
+          Keeper.list_recent_txs(1, @keeper, @fleet, :request_reveal, since, actor: @system)
 
         txs |> Enum.map(& &1.id) |> Enum.sort()
       end
@@ -202,7 +201,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
       id = Ecto.UUID.dump!(run.id)
 
       for {field, value} <- [
-            job: "income",
+            job: "protocol_share",
             started_at: ~N[2000-01-01 00:00:00.000000],
             finished_at: ~N[2100-01-01 00:00:00.000000],
             outcome: "stopped",
@@ -292,7 +291,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
         target: @target,
         from_address: @keeper,
         args: %{"arg" => 1},
-        chain_id: 8453,
+        chain_id: 1,
         nonce: 0,
         tx_hash: hash("a"),
         max_fee: 2_000_000_000,
@@ -310,8 +309,7 @@ defmodule Keyfleet.Keeper.RecordsTest do
         block_number: 36_000_000,
         gas_used: 100_000,
         effective_gas_price: 1_000,
-        l1_fee_wei: 30_000,
-        cost_wei: 130_000,
+        cost_wei: 100_000_000,
         result: "reveal_requested"
       },
       Map.new(overrides)

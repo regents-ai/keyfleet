@@ -129,12 +129,11 @@ defmodule Keyfleet.MixProject do
         # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
         # floor: each resource adds its domain's edge and one per policy check module.
         # The keeper's transaction record adds one more: its functions come from Calls.
-        # The launch plan revisions table adds two: its domain and the SystemActor check.
         # Agents' check-in records add two: their domain and the OwnProfile check.
         # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
         # The router adds one: its pipelines read the content security policies as they compile.
         # The early-access list adds two: its domain and the SystemActor check.
-        "xref graph --label compile-connected --fail-above 72",
+        "xref graph --label compile-connected --fail-above 67",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

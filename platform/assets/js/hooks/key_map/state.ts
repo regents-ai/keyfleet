@@ -1,11 +1,15 @@
 import {axialToOffset, hexDistance, offsetToAxial, type Cell} from "./lattice"
-import {fibonacciLevelSupplies, type KeyMapGrid, type LayoutKind} from "./layouts"
+import {fibonacciLevelOf, levelEnd, type KeyMapGrid} from "./layouts"
 
 /** The server's reply to `keymap_ready`. */
 export type KeyMapSnapshot = {
   minted: number
-  max_supply: number
-  /** Base64 bitsets; bit `id − 1` sits in byte `(id − 1) >> 3`, least significant bit first. */
+  /** How many keys the fleet can ever have, or null for a fleet whose levels keep opening. */
+  max_supply: number | null
+  /**
+   * Base64 bitsets, as long as the highest key marked needs; bit `id − 1` sits
+   * in byte `(id − 1) >> 3`, least significant bit first.
+   */
   mine: string
   agent: string
 }
@@ -18,7 +22,7 @@ export type KeyMapPatch = {
 
 export type KeyMapState = {
   minted: number
-  maxSupply: number
+  maxSupply: number | null
   mine: Uint8Array
   agent: Uint8Array
 }
@@ -41,10 +45,18 @@ const setBit = (bits: Uint8Array, key: number, on: boolean) => {
   bits[(key - 1) >> 3] = on ? bits[(key - 1) >> 3] | mask : bits[(key - 1) >> 3] & ~mask
 }
 
+// A copy of `bits` at least `bytes` long; a key past the end has no mark.
+const widened = (bits: Uint8Array, bytes: number) => {
+  const copy = new Uint8Array(Math.max(bits.length, bytes))
+  copy.set(bits)
+  return copy
+}
+
 /** The state after a patch; the state given is left as it was. */
 export function applyPatch(state: KeyMapState, patch: KeyMapPatch): KeyMapState {
-  const mine = state.mine.slice()
-  const agent = state.agent.slice()
+  const bytes = patch.keys.reduce((most, [key]) => Math.max(most, (key + 7) >> 3), 0)
+  const mine = widened(state.mine, bytes)
+  const agent = widened(state.agent, bytes)
   for (const [key, flags] of patch.keys) {
     setBit(mine, key, (flags & 1) === 1)
     setBit(agent, key, (flags & 2) === 2)
@@ -53,31 +65,20 @@ export function applyPatch(state: KeyMapState, patch: KeyMapPatch): KeyMapState 
 }
 
 /** The last key that can be chosen: the next key, or the last key once the fleet is sold out. */
-export const lastChoosable = (state: KeyMapState) => Math.min(state.minted + 1, state.maxSupply)
+export const lastChoosable = (state: KeyMapState) =>
+  state.maxSupply === null ? state.minted + 1 : Math.min(state.minted + 1, state.maxSupply)
 
 /** The key on sale, or 0 once the fleet is sold out. */
-export const nextKey = (state: KeyMapState) => (state.minted < state.maxSupply ? state.minted + 1 : 0)
+export const nextKey = (state: KeyMapState) =>
+  state.maxSupply === null || state.minted < state.maxSupply ? state.minted + 1 : 0
 
 /**
- * How many keys the map draws, the one place that decides it: every key sold,
- * the rest of the level on sale and the whole level after it. A fleet without
- * levels is drawn whole.
+ * How many keys the map draws, the one place that decides it. A fleet whose
+ * levels keep opening is drawn to the end of the level on sale: every level
+ * reached, and no level after it. A fleet with a size is drawn whole.
  */
-export function drawnKeys(layout: LayoutKind, state: KeyMapState) {
-  const next = nextKey(state)
-  if (layout !== "fibonacci" || !next) return state.maxSupply
-  return Math.min(levelStart(fibonacciLevelOf(next) + 2) - 1, state.maxSupply)
-}
-
-/** The Fibonacci level a key belongs to. */
-export function fibonacciLevelOf(key: number) {
-  let last = 0
-  for (const [index, supply] of fibonacciLevelSupplies.entries()) {
-    last += supply
-    if (key <= last) return index + 1
-  }
-  return fibonacciLevelSupplies.length
-}
+export const drawnKeys = (state: KeyMapState) =>
+  state.maxSupply === null ? levelEnd(fibonacciLevelOf(state.minted + 1)) : state.maxSupply
 
 /** The level of the key on sale, or 0 once the fleet is sold out or for a fleet without levels. */
 export const onSaleLevel = (grid: KeyMapGrid, state: KeyMapState) => {
@@ -85,14 +86,11 @@ export const onSaleLevel = (grid: KeyMapGrid, state: KeyMapState) => {
   return next ? grid.levelOf(next) : 0
 }
 
-/** How a level stands: sold out, on sale now, or not on sale yet. */
-export type LevelSale = "sold-out" | "on-sale" | "upcoming"
+/** How a level stands: sold out, or on sale now. No level after the one on sale is drawn. */
+export type LevelSale = "sold-out" | "on-sale"
 
-/** Where a level stands against the level on sale; every level is sold out once the fleet is. */
-export function levelSale(onSale: number, level: number): LevelSale {
-  if (!onSale || level < onSale) return "sold-out"
-  return level === onSale ? "on-sale" : "upcoming"
-}
+/** Where a level stands against the level on sale. */
+export const levelSale = (onSale: number, level: number): LevelSale => (level === onSale ? "on-sale" : "sold-out")
 
 /** How many tones the levels step through; neighbouring levels always differ. */
 export const levelTones = 4
@@ -101,10 +99,8 @@ export const levelTones = 4
 export const levelTone = (level: number) => (level - 1) % levelTones
 
 /** A level heading's words. */
-export function levelHeading(level: number, sale: LevelSale) {
-  if (sale === "sold-out") return `Level ${level} · sold out`
-  return sale === "on-sale" ? `Level ${level} · on sale now` : `Level ${level}`
-}
+export const levelHeading = (level: number, sale: LevelSale) =>
+  sale === "sold-out" ? `Level ${level} · sold out` : `Level ${level} · on sale now`
 
 /** Where the map opens and where Home goes: the next key, or key 1 once sold out. */
 export const startKey = (state: KeyMapState) => nextKey(state) || 1
@@ -121,10 +117,6 @@ export function nextHeldKey(state: KeyMapState, after: number) {
   }
   return 0
 }
-
-/** The first key of a Fibonacci level. */
-export const levelStart = (level: number) =>
-  fibonacciLevelSupplies.slice(0, level - 1).reduce((total, supply) => total + supply, 1)
 
 /** A key drawn but not sold, other than the next key, which can't be chosen yet. */
 const unsold = (state: KeyMapState, key: number) => key > state.minted + 1

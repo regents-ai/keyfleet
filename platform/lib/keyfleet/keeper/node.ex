@@ -3,9 +3,9 @@ defmodule Keyfleet.Keeper.Node do
   What the keeper asks of the chain: a JSON-RPC node in production
   (`Keyfleet.Keeper.RpcNode`) and a stand-in in tests.
 
-  Everything is read at the latest block; on Base the sequencer's first
-  block is final enough (nothing waits for L1). Addresses and hashes are
-  lowercase `0x` strings, amounts are wei and data is bytes.
+  Everything is read at the latest block; nothing waits for Ethereum's
+  `safe` or `finalized` blocks. Addresses and hashes are lowercase `0x`
+  strings, amounts are wei and data is bytes.
 
   A call or estimate the contract refuses is
   `{:error, {:revert, selector, args}}`: the four-byte selector of the
@@ -24,14 +24,12 @@ defmodule Keyfleet.Keeper.Node do
   @typedoc """
   A mined transaction's receipt: `status` 1 for success and 0 for a revert,
   what it cost and the logs it emitted, exactly as the node returned them.
-  `l1_fee` is Base's L1 data fee, `nil` on a chain without one.
   """
   @type receipt :: %{
           status: 0 | 1,
           block_number: non_neg_integer(),
           gas_used: non_neg_integer(),
           effective_gas_price: non_neg_integer(),
-          l1_fee: non_neg_integer() | nil,
           logs: [map()]
         }
 

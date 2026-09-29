@@ -142,22 +142,16 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
   defp holding(_actor, fleet_id, token_id, _opts), do: not_a_holder(fleet_id, token_id)
 
-  # Read once the standing is known, so the key has an owner on record. A
-  # number past the fleet's supply is one the contract never issued.
+  # Read once the standing is known, so the key has an owner on record.
   defp writable_scopes(fleet_id, token_id, deadline) do
-    cond do
-      not Presets.levelled?(fleet_id) ->
-        {:ok, ["fleet"]}
-
-      not Presets.fibonacci_token?(token_id) ->
-        not_a_holder(fleet_id, token_id)
-
-      true ->
-        with {:ok, opts} <- within(deadline, fleet_id),
-             {:ok, minted} <- Keyfleet.Chain.minted(fleet_id, opts) do
-          levels = Presets.writable_levels(token_id, minted)
-          {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
-        end
+    if Presets.levelled?(fleet_id) do
+      with {:ok, opts} <- within(deadline, fleet_id),
+           {:ok, minted} <- Keyfleet.Chain.minted(fleet_id, opts) do
+        levels = Presets.writable_levels(token_id, minted)
+        {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
+      end
+    else
+      {:ok, ["fleet"]}
     end
   end
 

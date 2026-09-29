@@ -79,6 +79,25 @@ defmodule Keyfleet.Keeper do
     end
   end
 
+  @doc """
+  The keeper's spending limits from its configuration, in wei: `max_fee`,
+  `daily_spend`, `low_balance` and `min_vrf_balance`.
+  """
+  def limits do
+    config = Application.fetch_env!(:keyfleet, __MODULE__)
+
+    %{
+      max_fee: Keyword.fetch!(config, :max_fee_wei),
+      daily_spend: Keyword.fetch!(config, :daily_spend_wei),
+      low_balance: Keyword.fetch!(config, :low_balance_wei),
+      min_vrf_balance: Keyword.fetch!(config, :min_vrf_balance_wei)
+    }
+  end
+
+  @doc "An amount in wei, written in gwei."
+  def gwei(wei),
+    do: wei |> Decimal.new() |> Decimal.div(1_000_000_000) |> Decimal.to_string(:normal)
+
   @doc "An amount in wei, written in ETH."
   def eth(wei),
     do:

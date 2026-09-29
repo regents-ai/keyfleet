@@ -1,20 +1,20 @@
 import {describe, expect, it} from "vitest"
 
-import {buildMap, fibonacciLevelSupplies, type KeyMapGrid} from "../js/hooks/key_map/layouts"
+import {buildMap, type KeyMapGrid} from "../js/hooks/key_map/layouts"
 import {
   applyPatch,
   decodeSnapshot,
   describeKey,
   drawnKeys,
-  fibonacciLevelOf,
   hasBit,
   keyMarks,
   keyNear,
   levelHeading,
   levelSale,
-  levelStart,
   levelTone,
+  lastChoosable,
   nextHeldKey,
+  nextKey,
   onSaleLevel,
   type KeyMapState,
 } from "../js/hooks/key_map/state"
@@ -39,6 +39,13 @@ const bits = (...keys: number[]) => {
   return bytes
 }
 
+const fibonacci = (minted: number): KeyMapState => ({
+  minted,
+  maxSupply: null,
+  mine: new Uint8Array(0),
+  agent: new Uint8Array(0),
+})
+
 const accelerant = (minted: number, mine: Uint8Array, agent = bits()): KeyMapState => ({
   minted,
   maxSupply: 2_000,
@@ -47,15 +54,19 @@ const accelerant = (minted: number, mine: Uint8Array, agent = bits()): KeyMapSta
 })
 
 describe("key map loading", () => {
-  // The page's bitset for keys 2 and 10 of 10 (KeyMap.bitset(10, [2, 10]) in
-  // test/keyfleet_web/live/key_map_test.exs).
+  // The page's bitset for keys 2 and 10 (KeyMap.bitset([2, 10]) in
+  // test/keyfleet_web/live/key_map_test.exs), and for no keys at all.
   it("reads the page's bitsets key by key", () => {
-    const state = decodeSnapshot({minted: 10, max_supply: 10, mine: "AgI=", agent: "AAA="})
+    const state = decodeSnapshot({minted: 10, max_supply: 1_024, mine: "AgI=", agent: ""})
 
-    expect(state.maxSupply).toBe(10)
-    const keys = Array.from({length: 10}, (_, i) => i + 1)
+    expect(state.maxSupply).toBe(1_024)
+    const keys = Array.from({length: 20}, (_, i) => i + 1)
     expect(keys.filter(key => hasBit(state.mine, key))).toEqual([2, 10])
     expect(keys.filter(key => hasBit(state.agent, key))).toEqual([])
+  })
+
+  it("reads a fleet whose levels keep opening as having no size", () => {
+    expect(decodeSnapshot({minted: 3, max_supply: null, mine: "", agent: ""}).maxSupply).toBeNull()
   })
 })
 
@@ -70,6 +81,14 @@ describe("key map changes", () => {
     // The state given is left as it was.
     expect(hasBit(before.mine, 3)).toBe(true)
     expect(before.minted).toBe(10)
+  })
+
+  it("marks a key past the end of the marks it was loaded with", () => {
+    const before = fibonacci(4)
+    const after = applyPatch(before, {minted: 6, keys: [[6, 3]]})
+
+    expect([hasBit(after.mine, 6), hasBit(after.agent, 6)]).toEqual([true, true])
+    expect(before.mine.length).toBe(0)
   })
 })
 
@@ -86,18 +105,6 @@ describe("key map controls", () => {
   it("never goes to a key of yours past the next key", () => {
     expect(nextHeldKey(accelerant(20, bits(30)), 0)).toBe(0)
   })
-
-  it("finds each Fibonacci level's first key", () => {
-    expect([1, 2, 3, 4, 8].map(levelStart)).toEqual([1, 3, 6, 11, 87])
-    expect(levelStart(20) + fibonacciLevelSupplies[19] - 1).toBe(46_365)
-  })
-})
-
-const fibonacci = (minted: number): KeyMapState => ({
-  minted,
-  maxSupply: 46_365,
-  mine: new Uint8Array(5_796),
-  agent: new Uint8Array(5_796),
 })
 
 describe("key map levels", () => {
@@ -107,41 +114,42 @@ describe("key map levels", () => {
     tones.slice(1).forEach((tone, index) => expect(tone).not.toBe(tones[index]))
   })
 
-  it("puts each key in its level", () => {
-    expect([1, 2, 3, 5, 6, 87, 141, 142, 46_365].map(fibonacciLevelOf)).toEqual([1, 1, 2, 2, 3, 8, 8, 9, 20])
-  })
-
   // Level 7 is keys 53 to 86 and level 8 keys 87 to 141.
   it("sells the level of the next key, and moves on when that level sells out", () => {
-    const grid = buildMap("fibonacci", drawnKeys("fibonacci", fibonacci(60)))
+    const grid = buildMap("fibonacci", drawnKeys(fibonacci(141)))
     expect(onSaleLevel(grid, fibonacci(60))).toBe(7)
     expect(onSaleLevel(grid, fibonacci(85))).toBe(7)
     expect(onSaleLevel(grid, fibonacci(86))).toBe(8)
-    expect(onSaleLevel(grid, fibonacci(46_365))).toBe(0)
 
-    expect([6, 7, 8].map(level => levelSale(7, level))).toEqual(["sold-out", "on-sale", "upcoming"])
-    expect(levelSale(0, 20)).toBe("sold-out")
+    expect([6, 7].map(level => levelSale(7, level))).toEqual(["sold-out", "on-sale"])
     expect(levelHeading(3, "sold-out")).toBe("Level 3 · sold out")
     expect(levelHeading(7, "on-sale")).toBe("Level 7 · on sale now")
-    expect(levelHeading(9, "upcoming")).toBe("Level 9")
   })
 
-  it("draws the keys sold, the rest of the level on sale and the whole level after it", () => {
-    expect(drawnKeys("fibonacci", fibonacci(60))).toBe(141)
-    expect(drawnKeys("fibonacci", fibonacci(86))).toBe(230)
-    expect(drawnKeys("fibonacci", fibonacci(0))).toBe(5)
-    expect(drawnKeys("fibonacci", fibonacci(17_768))).toBe(46_365)
-    expect(drawnKeys("fibonacci", fibonacci(46_365))).toBe(46_365)
+  it("draws the keys sold and the rest of the level on sale, and no level after it", () => {
+    expect(drawnKeys(fibonacci(60))).toBe(86)
+    expect(drawnKeys(fibonacci(86))).toBe(141)
+    expect(drawnKeys(fibonacci(0))).toBe(2)
+    expect(drawnKeys(fibonacci(17_768))).toBe(28_654)
+    // The levels never end, so a level past 20 opens once 20 is sold.
+    expect(drawnKeys(fibonacci(46_365))).toBe(75_022)
     // A fleet without levels is drawn whole.
-    expect(drawnKeys("accelerant", accelerant(10, bits()))).toBe(2_000)
-    expect(drawnKeys("classic", {...accelerant(0, bits()), maxSupply: 1_024})).toBe(1_024)
+    expect(drawnKeys(accelerant(10, bits()))).toBe(2_000)
+    expect(drawnKeys({...accelerant(0, bits()), maxSupply: 1_024})).toBe(1_024)
+  })
+
+  it("never runs out of keys to sell in a fleet whose levels keep opening", () => {
+    expect(nextKey(fibonacci(46_365))).toBe(46_366)
+    expect(lastChoosable(fibonacci(46_365))).toBe(46_366)
+    expect(nextKey(accelerant(2_000, bits()))).toBe(0)
+    expect(lastChoosable(accelerant(2_000, bits()))).toBe(2_000)
   })
 
   it("marks keys not sold yet, other than the next, and says so", () => {
     const state = fibonacci(60)
-    const grid = buildMap("fibonacci", drawnKeys("fibonacci", state))
-    expect([60, 61, 62, 100].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "next", "unsold", "unsold"])
-    expect(describeKey(grid, state, 100)).toBe("Key 100, level 8, not sold yet.")
+    const grid = buildMap("fibonacci", drawnKeys(state))
+    expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "next", "unsold", "unsold"])
+    expect(describeKey(grid, state, 80)).toBe("Key 80, level 7, not sold yet.")
   })
 
   // Level 1 is one row of two keys; level 8 is a 28-key row over a 27-key row.

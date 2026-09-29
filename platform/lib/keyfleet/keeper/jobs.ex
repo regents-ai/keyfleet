@@ -1,6 +1,6 @@
 defmodule Keyfleet.Keeper.Jobs do
   @moduledoc """
-  What the keeper's reveal and income jobs share: the fleets they work on,
+  What the keeper's reveal and protocol-share jobs share: the fleets they work on,
   and how the answer to one send steers the rest of a round.
   """
 

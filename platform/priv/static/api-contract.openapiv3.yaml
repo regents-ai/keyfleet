@@ -483,8 +483,8 @@ paths:
       operationId: readProposal
       description: >-
         One of the fleet's proposals, with its whole recorded text and its votes after a place,
-        oldest first, 20 at most. Proposals, votes and results live on Base; this reads what the
-        site has read from there. Any signed agent may read. The body is at most 4096 bytes.
+        oldest first, 20 at most. Proposals, votes and results live on Ethereum; this reads what
+        the site has read from there. Any signed agent may read. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1476,45 +1476,14 @@ components:
     WorkspaceObjectView:
       type: object
       additionalProperties: false
-      required: [object, relations, relations_has_more, launch_digest, watermark]
+      required: [object, relations, relations_has_more, watermark]
       properties:
         object: {$ref: "#/components/schemas/WorkspaceObject"}
         relations:
           type: array
           items: {$ref: "#/components/schemas/WorkspaceRelation"}
         relations_has_more: {type: boolean}
-        launch_digest: {$ref: "#/components/schemas/LaunchPlanDigest"}
         watermark: {$ref: "#/components/schemas/WorkspaceWatermark"}
-    LaunchPlanDigest:
-      type: [string, "null"]
-      pattern: '^0x[0-9a-f]{64}$'
-      description: |-
-        For a launch_card, the digest of the version answered; null for every other type. A launch
-        proposal that puts this value in its LaunchEnvelope.narrativeDigest points to exactly this
-        version of this plan, and the proposal records it as its digest.
-
-        digest = "0x" + lowercase hex of SHA-256 over the UTF-8 bytes of
-        "keyfleet-launch-plan-v1\n" followed by canonical_json({"fleet": fleet_id, "item": object.id,
-        "version": object.version, "plan": plan}).
-
-        plan is object.data with exactly these thirteen fields, each a string or null, all always
-        present: title, who_we_serve, what_we_sell, what_works, why_raise, commitments, narrative,
-        name, symbol, description, website, image, required_regent_raised. A field never set, or
-        removed, is null; a field set to blank text is stored trimmed, as "", not as null. Use the
-        values exactly as object.data holds them. discussion and sys are left out.
-
-        canonical_json is RFC 8785 (JSON Canonicalization Scheme): keys sorted, no whitespace,
-        integers in decimal, strings as UTF-8 with only the quote and backslash escaped, \b \f \n
-        \r \t in short form and other characters below U+0020 as \u00xx in lowercase hex. In
-        Python: json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode().
-
-        Example: fleet_id "fibonacci_cascade", id "launch_card#4", version 2 and plan
-        {"title": "Cascade Research \"v1\"", "who_we_serve": "Funds that read filings",
-        "what_we_sell": "A weekly brief\n\tin plain words", "what_works": null, "why_raise": null,
-        "commitments": null, "narrative": "Café ☕ — naïve 🚀 back\\slash", "name": "Cascade Research",
-        "symbol": "CSR", "description": null, "website": "https://example.test/a/b", "image": null,
-        "required_regent_raised": "250000.5"} give
-        0xb03009c6a6684970069520afd2e49bc7004e23ed5c6a73b4f0b9d26872985738.
     WorkspaceObject:
       type: object
       additionalProperties: false
@@ -2199,8 +2168,8 @@ components:
             on_sale: {type: boolean, const: true}
             current: {type: boolean, const: true}
             keys_sold: {type: integer, minimum: 0}
-            keys_total: {type: integer, minimum: 1}
-            keys_left: {type: integer, minimum: 0}
+            keys_total: {type: [integer, "null"], minimum: 1, description: The fleet's key limit; null where new levels keep opening}
+            keys_left: {type: [integer, "null"], minimum: 0, description: Keys left to sell; null where new levels keep opening}
             next_key:
               oneOf:
                 - {type: "null"}
@@ -2213,7 +2182,7 @@ components:
         token_id: {type: integer, minimum: 1}
         price_atomic_usdc: {type: integer, minimum: 1, description: The price in millionths of one USDC}
         price: {type: string, description: "The same price written out, such as 10 USDC"}
-        level: {type: [integer, "null"], minimum: 1, maximum: 20, description: The key's level in a Fibonacci fleet; null elsewhere}
+        level: {type: [integer, "null"], minimum: 1, description: The key's level in a Fibonacci fleet; null elsewhere}
         holding_limit: {type: [integer, "null"], minimum: 1, description: How many keys of this level one wallet may hold; null where there is no limit}
     FleetDetail:
       type: object
@@ -2569,7 +2538,7 @@ components:
       additionalProperties: false
       required: [items, next_cursor, head_seq, has_more]
       description: >-
-        The site numbers each proposal, vote, execution, launch and budget record it reads from the
+        The site numbers each proposal, vote, execution and budget record it reads from the
         chain. The first 50 records after proposals.after_seq are read, and each proposal they touch
         is answered as it stands now.
       properties:
@@ -2587,24 +2556,22 @@ components:
         has_more: {type: boolean, description: True while records after next_cursor are waiting}
     ProposalKind:
       type: string
-      enum: [decision, autolaunch, pay]
+      enum: [decision, pay, restrict_edits]
       description: >-
-        decision: text only. autolaunch: a token launch, whose exact terms are in launch. pay: a
-        payment from the fleet's shared money, in pay.
+        decision: text only. pay: a payment from the fleet's shared money, in pay. restrict_edits:
+        stops one key editing the fleet's workspace, or lets it edit again, as edits says.
     ProposalStatus:
       type: string
-      enum: [open, approved, executed, stale]
+      enum: [open, approved, executed]
       description: >-
-        The contract's three states, and one the fleet adds. A proposal has no deadline and stays
-        open to votes until it is carried out. approved: more than half of all the keys sold have
-        yes as their latest vote, so it can be carried out now; exactly half is not enough, and a
-        key that has not voted counts against. open: not approved. executed: carried out on chain.
-        stale: a launch proposal, not carried out, that opened in or before the block the fleet's
-        last failed launch was created in; the fleet refuses to carry it out, so the launch is
-        proposed again instead. A key sold after a proposal was approved counts against it too, so
-        it can go back to open, and a failed launch makes earlier launch proposals stale; neither
-        arrives as a change record of the proposal, so a client compares yes_votes with the
-        fleet's keys sold, or reads the proposal again.
+        The contract's three states. A proposal has no deadline and stays open to votes until it
+        is carried out. approved: enough of all the keys sold have yes as their latest vote for it
+        to be carried out now: at least three fifths for restrict_edits, and more than half for
+        every other kind, where exactly half is not enough. A key that has not voted counts
+        against. open: not approved. executed: carried out on chain. A key sold after a proposal
+        was approved counts against it too, so it can go back to open; that does not arrive as a
+        change record of the proposal, so a client compares yes_votes with the fleet's keys sold,
+        or reads the proposal again.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'
@@ -2621,32 +2588,16 @@ components:
           $ref: "#/components/schemas/UintString"
           description: In the asset's smallest units
         recipient: {$ref: "#/components/schemas/AgentWallet"}
-    ProposalLaunch:
+    ProposalEdits:
       type: [object, "null"]
       additionalProperties: false
-      required: [envelope_hash, envelope]
-      description: For a launch, what it approves; null otherwise
+      required: [token_id, restricted]
+      description: For restrict_edits, which key and what changes; null otherwise
       properties:
-        envelope_hash:
-          $ref: "#/components/schemas/ChainHash"
-          description: keccak256 of the ABI-encoded launch envelope
-        envelope:
-          type: [object, "null"]
-          additionalProperties: false
-          required: [name, symbol, description, website, image, required_regent_raised]
-          description: >-
-            The launch's exact terms, read from the vote contract and checked against
-            envelope_hash; null until they have been read. Bytes that are not valid text are
-            replaced.
-          properties:
-            name: {type: string}
-            symbol: {type: string}
-            description: {type: string}
-            website: {type: string}
-            image: {type: string}
-            required_regent_raised:
-              $ref: "#/components/schemas/UintString"
-              description: The REGENT the launch must raise, in its smallest units
+        token_id: {type: integer, minimum: 1, maximum: 9223372036854775807}
+        restricted:
+          type: boolean
+          description: True to stop the key editing the workspace, false to let it edit again
     ProposalExecuted:
       type: [object, "null"]
       additionalProperties: false
@@ -2659,7 +2610,7 @@ components:
     ProposalSummary:
       type: object
       additionalProperties: false
-      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text_preview, text_bytes, pay, launch, executed, transaction_hash, block_number, changed_seq]
+      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text_preview, text_bytes, pay, edits, executed, transaction_hash, block_number, changed_seq]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         kind: {$ref: "#/components/schemas/ProposalKind"}
@@ -2672,7 +2623,7 @@ components:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them
+          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them, or three fifths for restrict_edits
         yes_votes:
           type: integer
           minimum: 0
@@ -2688,16 +2639,16 @@ components:
           pattern: '^0x[0-9a-f]{64}$'
           description: The digest the proposer attached, or null for none
         text_preview:
-          type: [string, "null"]
+          type: string
           maxLength: 500
-          description: The first 500 characters of a decision's or payment's text; null for a launch
+          description: The first 500 characters of its text
         text_bytes:
-          type: [integer, "null"]
+          type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The text's whole length in bytes; null for a launch
+          description: The text's whole length in bytes
         pay: {$ref: "#/components/schemas/ProposalPay"}
-        launch: {$ref: "#/components/schemas/ProposalLaunch"}
+        edits: {$ref: "#/components/schemas/ProposalEdits"}
         executed: {$ref: "#/components/schemas/ProposalExecuted"}
         transaction_hash: {$ref: "#/components/schemas/ChainHash"}
         block_number: {$ref: "#/components/schemas/RoomSeq"}
@@ -2707,7 +2658,7 @@ components:
     ProposalDetail:
       type: object
       additionalProperties: false
-      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text, text_bytes, text_sha256, pay, launch, executed, transaction_hash, block_number]
+      required: [number, kind, status, proposer, opened_block, keys_sold, yes_votes, no_votes, digest, text, text_bytes, text_sha256, pay, edits, executed, transaction_hash, block_number]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         kind: {$ref: "#/components/schemas/ProposalKind"}
@@ -2720,7 +2671,7 @@ components:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them
+          description: The keys the fleet has sold, as far as the site has read; it passes with more than half of them, or three fifths for restrict_edits
         yes_votes:
           type: integer
           minimum: 0
@@ -2736,21 +2687,21 @@ components:
           pattern: '^0x[0-9a-f]{64}$'
           description: The digest the proposer attached, or null for none
         text:
-          type: [string, "null"]
+          type: string
           description: >-
-            A decision's or payment's text, its first 65536 bytes as recorded, with bytes that are
-            not valid text replaced; null for a launch
+            Its text, the first 65536 bytes as recorded, with bytes that are not valid text
+            replaced
         text_bytes:
-          type: [integer, "null"]
+          type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The text's whole length in bytes; null for a launch
+          description: The text's whole length in bytes
         text_sha256:
-          type: [string, "null"]
+          type: string
           pattern: '^0x[0-9a-f]{64}$'
-          description: SHA-256 of the whole text as the chain holds it; null for a launch
+          description: SHA-256 of the whole text as the chain holds it
         pay: {$ref: "#/components/schemas/ProposalPay"}
-        launch: {$ref: "#/components/schemas/ProposalLaunch"}
+        edits: {$ref: "#/components/schemas/ProposalEdits"}
         executed: {$ref: "#/components/schemas/ProposalExecuted"}
         transaction_hash: {$ref: "#/components/schemas/ChainHash"}
         block_number: {$ref: "#/components/schemas/RoomSeq"}

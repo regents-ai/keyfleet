@@ -3,10 +3,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   import Keyfleet.WorkspaceFixtures
 
-  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
-  alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
@@ -27,11 +25,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8_453,
+        chain_id: 1,
         contract_address: "0x" <> String.duplicate("7", 40),
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
@@ -548,75 +546,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              ]
     end
 
-    test "a launch plan names the launch proposals that point to it, and where each stands", %{
-      conn: conn
-    } do
-      ChainHelpers.seed_cursor!(@fleet)
-      plan = create(@fleet, "launch_card", %{"title" => "Cascade Research", "name" => "CSR"})
-      edit(@fleet, plan, %{"symbol" => "CSR"})
-      other = create(@fleet, "launch_card", %{"title" => "Another plan"})
-
-      ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch, digest: digest(plan, 1))
-
-      ProposalHelpers.proposal!(@fleet, 2, kind: :autolaunch, digest: digest(plan, 2))
-
-      ProposalHelpers.vote!(@fleet, 2, ProposalHelpers.wallet("e"), true, [1])
-      ProposalHelpers.execution!(@fleet, 2, ProposalHelpers.wallet("e"))
-      ProposalHelpers.proposal!(@fleet, 3, kind: :autolaunch, digest: digest(other, 1))
-      ProposalHelpers.proposal!(@fleet, 4, digest: digest(plan, 1))
-
-      {:ok, view, _html} = live(conn, item_path(plan))
-
-      assert lines(view, "#workspace-proposed > li") == [
-               "Proposed as Proposal 2 (Launched), version 2",
-               "Proposed as Proposal 1 (Open), version 1"
-             ]
-
-      assert has_element?(
-               view,
-               ~s|#workspace-proposed a[href="/app/fleets/#{@fleet}/proposals/2"]|,
-               "Proposal 2"
-             )
-
-      {:ok, view, _html} = live(conn, item_path(other))
-
-      assert lines(view, "#workspace-proposed > li") == [
-               "Proposed as Proposal 3 (Open), version 1"
-             ]
-
-      task = create(@fleet, "task", %{"title" => "Draft", "progress" => "todo"})
-      {:ok, view, _html} = live(conn, item_path(task))
-      refute has_element?(view, "#workspace-proposed")
-    end
-
-    # A launch the fleet will refuse to start, since it was proposed before
-    # the fleet's last launch failed, is shown as such, not as open.
-    test "a launch proposed before the fleet's last failed launch says so", %{conn: conn} do
-      ChainHelpers.seed_cursor!(@fleet)
-      plan = create(@fleet, "launch_card", %{"title" => "Cascade Research"})
-
-      ProposalHelpers.proposal!(@fleet, 1,
-        kind: :autolaunch,
-        digest: digest(plan, 1),
-        opened_block: 10
-      )
-
-      ProposalHelpers.proposal!(@fleet, 2,
-        kind: :autolaunch,
-        digest: digest(plan, 1),
-        opened_block: 11
-      )
-
-      ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
-
-      {:ok, view, _html} = live(conn, item_path(plan))
-
-      assert lines(view, "#workspace-proposed > li") == [
-               "Proposed as Proposal 2 (Open), version 1",
-               "Proposed as Proposal 1 (Proposed before the last launch), version 1"
-             ]
-    end
-
     test "links and history come fifty at a time", %{conn: conn} do
       hub = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
@@ -1082,13 +1011,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)
-
-  defp digest(id, version) do
-    [revision] =
-      Graph.current_launch_plan_revisions!(@fleet, [%{object_id: id, version: version}])
-
-    revision.digest
-  end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
 

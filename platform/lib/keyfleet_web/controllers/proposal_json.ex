@@ -12,8 +12,7 @@ defmodule KeyfleetWeb.ProposalJSON do
     proposal
     |> common(status)
     |> Map.merge(%{
-      text_preview:
-        proposal.text && proposal.text |> as_text() |> String.slice(0, @preview_chars),
+      text_preview: proposal.text |> as_text() |> String.slice(0, @preview_chars),
       changed_seq: changed_seq
     })
   end
@@ -23,7 +22,7 @@ defmodule KeyfleetWeb.ProposalJSON do
     proposal
     |> common(status)
     |> Map.merge(%{
-      text: proposal.text && as_text(proposal.text),
+      text: as_text(proposal.text),
       text_sha256: proposal.text_sha256
     })
   end
@@ -54,7 +53,7 @@ defmodule KeyfleetWeb.ProposalJSON do
       digest: proposal.digest,
       text_bytes: proposal.text_bytes,
       pay: pay(proposal),
-      launch: launch(proposal),
+      edits: edits(proposal),
       executed: executed(proposal.execution),
       transaction_hash: proposal.transaction_hash,
       block_number: proposal.block_number
@@ -71,27 +70,10 @@ defmodule KeyfleetWeb.ProposalJSON do
 
   defp pay(_proposal), do: nil
 
-  defp launch(%{kind: :autolaunch} = proposal) do
-    %{
-      envelope_hash: proposal.envelope_hash,
-      envelope: envelope(proposal.launch_envelope)
-    }
-  end
+  defp edits(%{kind: :restrict_edits} = proposal),
+    do: %{token_id: proposal.target_token_id, restricted: proposal.restricted}
 
-  defp launch(_proposal), do: nil
-
-  defp envelope(nil), do: nil
-
-  defp envelope(envelope) do
-    %{
-      name: as_text(envelope.name),
-      symbol: as_text(envelope.symbol),
-      description: as_text(envelope.description),
-      website: as_text(envelope.website),
-      image: as_text(envelope.image),
-      required_regent_raised: decimal(envelope.required_regent_raised)
-    }
-  end
+  defp edits(_proposal), do: nil
 
   defp executed(nil), do: nil
 

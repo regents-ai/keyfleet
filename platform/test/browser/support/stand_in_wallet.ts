@@ -14,7 +14,7 @@ declare global {
 }
 
 /**
- * Makes a stand-in wallet on Base, holding `address`, Privy's active wallet
+ * Makes a stand-in wallet on Ethereum, holding `address`, Privy's active wallet
  * in the open page, as Privy does once a person picks a wallet. It sends
  * nothing anywhere: each transaction it is asked to send is kept, answered
  * with a new random hash, or declined as a person declining in their wallet
@@ -41,7 +41,7 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
           async request({method, params}: {method: string; params?: unknown[]}) {
             switch (method) {
               case "eth_chainId":
-                return "0x2105"
+                return "0x1"
               case "eth_accounts":
                 return [address]
               case "eth_sendTransaction": {

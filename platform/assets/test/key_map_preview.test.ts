@@ -1,6 +1,5 @@
 import {describe, expect, it} from "vitest"
 
-import {maxSupply} from "../js/hooks/key_map/layouts"
 import {preview} from "../js/hooks/key_map/preview"
 
 const marked = (minted: number, layout: Parameters<typeof preview>[0]) =>
@@ -35,7 +34,7 @@ describe("a fleet's still preview", () => {
   })
 
   it("opens on key 1 with nothing on sale once a fleet is sold out", () => {
-    const {tiles} = preview("classic", maxSupply.classic)
+    const {tiles} = preview("classic", 1_024)
 
     expect(tiles.some(tile => tile.key === 1)).toBe(true)
     expect(tiles.every(tile => tile.mark === undefined)).toBe(true)

@@ -8,7 +8,7 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
   @fleet %{
     fleet_id: "fibonacci_cascade",
     rewards_address: "0x" <> String.duplicate("8", 40),
-    usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   }
   @head_hash "0x" <> String.duplicate("c", 64)
 
@@ -26,7 +26,7 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
     calldata =
       "0xbfe87f4d" <>
         String.duplicate("0", 24) <>
-        "833589fcd6edb6e08f4c7c32d4f71b54bda02913" <> String.duplicate("0", 62) <> "0c"
+        "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" <> String.duplicate("0", 62) <> "0c"
 
     assert StubClient.call_requests() == [{@fleet.rewards_address, calldata, @head_hash}]
   end

@@ -35,14 +35,14 @@ defmodule KeyfleetWeb.MetricsTest do
     :telemetry.execute([:keyfleet, :chain, :failure], %{count: 1}, %{
       method: "eth_getTransactionReceipt",
       class: "timeout",
-      chain_id: 8_453,
+      chain_id: 1,
       scope: "wallet"
     })
 
     body = Req.get!(url <> "/metrics", retry: false).body
 
     assert body =~
-             ~s(keyfleet_chain_failure_total{chain_id="8453",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
+             ~s(keyfleet_chain_failure_total{chain_id="1",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
   end
 
   test "exposes the keeper's transactions, pauses, balance, spending and reveals", %{url: url} do

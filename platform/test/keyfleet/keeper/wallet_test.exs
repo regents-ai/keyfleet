@@ -10,22 +10,20 @@ defmodule Keyfleet.Keeper.WalletTest do
   @anvil_key "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
   @anvil_address "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
   @fleet "0x5fbdb2315678afecb367f032d93f642f64180aa3"
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   @curve_order 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
-  # cast mktx --private-key <anvil key> --chain 8453 --nonce 0 --gas-limit 200000 \
+  # cast mktx --private-key <anvil key> --chain 1 --nonce 0 --gas-limit 200000 \
   #   --priority-gas-price 1000000 --gas-price 2000000000 \
   #   0x5fbdb2315678afecb367f032d93f642f64180aa3 "requestReveal(uint256)" 1
-  @reveal_raw "0x02f89082210580830f4240847735940083030d40945fbdb2315678afecb367f032d93f642f64180aa380a440261cdd0000000000000000000000000000000000000000000000000000000000000001c080a03d9c56d093ccd97bdac88ff17cedd4458d69b999551bb7dc83322926e5b11999a0591bdb09039448d5a43de85e7c7a5ac9c432e0dbc0ac0ca0a52cde7d964f8e1b"
+  @reveal_raw "0x02f88e0180830f4240847735940083030d40945fbdb2315678afecb367f032d93f642f64180aa380a440261cdd0000000000000000000000000000000000000000000000000000000000000001c080a06010540e0453b5d173d6ce2998720d54f07fb5e5f433b07ded4d307ce142bb0fa059f9ac7456223d9e26aa2d0d309fc49f3148ac098e94fe4e93af05bae7d9f3bc"
   # cast keccak <the raw transaction above>
-  @reveal_hash "0x5c6513570d6bc9bef595725559b7e46a78e6c77ed4f68ce8ad28090124c47cf5"
+  @reveal_hash "0x5f7ad86ebad87af529d02fcfe4766a80bed76cbfb3723fad61aedd3af1029edc"
 
-  # cast mktx --private-key <anvil key> --chain 8453 --nonce 300 --gas-limit 260000 \
+  # cast mktx --private-key <anvil key> --chain 1 --nonce 300 --gas-limit 260000 \
   #   --priority-gas-price 1250000 --gas-price 1500000000 \
-  #   0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 "sweep(address)" \
-  #   0x5fbdb2315678afecb367f032d93f642f64180aa3
+  #   0x5fbdb2315678afecb367f032d93f642f64180aa3 "sendProtocolShare()"
   # (yParity 1 and a two-byte nonce)
-  @sweep_raw "0x02f89282210582012c831312d08459682f008303f7a094833589fcd6edb6e08f4c7c32d4f71b54bda0291380a401681a620000000000000000000000005fbdb2315678afecb367f032d93f642f64180aa3c001a03c9f38d2409dbac34f63bb130e13ca52222aaca2578c8475c670a0af89830ab2a03f39b830da5cc767efb78dd249d5c47991d8cb382becc68d5446dffbe699ffda"
+  @share_raw "0x02f8700182012c831312d08459682f008303f7a0945fbdb2315678afecb367f032d93f642f64180aa38084cb097587c001a0396b6510d0f91ad3ee81eb8332d3e0b99e21e7f1632f2563bfb82c1e005ac106a0774277140a4fc382affef9b0848de7c43dab2e665ba58911534acbbb339e38cf"
 
   setup do
     {:ok, wallet} = Wallet.new(@anvil_key)
@@ -45,12 +43,12 @@ defmodule Keyfleet.Keeper.WalletTest do
     assert hex(raw) == @reveal_raw
     assert hex(hash) == @reveal_hash
 
-    {:ok, sweep} = Calls.new(:sweep, @usdc, @fleet)
+    {:ok, share} = Calls.new(:send_protocol_share, @fleet, nil)
 
     assert {:ok, {raw, _hash}} =
              Wallet.sign(
                wallet,
-               sweep,
+               share,
                fees(
                  nonce: 300,
                  gas_limit: 260_000,
@@ -59,11 +57,11 @@ defmodule Keyfleet.Keeper.WalletTest do
                )
              )
 
-    assert hex(raw) == @sweep_raw
+    assert hex(raw) == @share_raw
   end
 
   test "every signature is low-s and recovers to the wallet", %{wallet: wallet} do
-    {:ok, call} = Calls.new(:recognize_surplus, @fleet, @usdc)
+    {:ok, call} = Calls.new(:send_protocol_share, @fleet, nil)
 
     for nonce <- 0..63 do
       {:ok, {<<2, rlp::binary>>, _hash}} = Wallet.sign(wallet, call, fees(nonce: nonce))
@@ -71,7 +69,7 @@ defmodule Keyfleet.Keeper.WalletTest do
       [chain_id, nonce_bytes, _tip, _max, _gas, to, value, data, [], y_parity, r, s] = fields
 
       assert {:binary.decode_unsigned(chain_id), :binary.decode_unsigned(nonce_bytes)} ==
-               {8453, nonce}
+               {1, nonce}
 
       assert {hex(to), value, Calls.calldata(call)} == {@fleet, <<>>, {:ok, data}}
       assert y_parity in [<<>>, <<1>>]
@@ -118,8 +116,9 @@ defmodule Keyfleet.Keeper.WalletTest do
     for call <- [
           %Call{fn: :transfer, target: @fleet, arg: nil},
           %Call{fn: :request_reveal, target: @fleet, arg: -1},
-          %Call{fn: :sweep, target: String.upcase(@usdc), arg: @fleet},
-          %Call{fn: :release, target: "0x" <> String.duplicate("0", 40), arg: nil}
+          %Call{fn: :send_protocol_share, target: String.upcase(@fleet), arg: nil},
+          %Call{fn: :send_protocol_share, target: @fleet, arg: 1},
+          %Call{fn: :sweep, target: @fleet, arg: @fleet}
         ] do
       assert {:error, _reason} = Wallet.sign(wallet, call, fees(nonce: 0))
     end
@@ -185,7 +184,7 @@ defmodule Keyfleet.Keeper.WalletTest do
   defp fees(overrides) do
     Map.merge(
       %{
-        chain_id: 8453,
+        chain_id: 1,
         max_priority_fee: 1_000_000,
         max_fee: 2_000_000_000,
         gas_limit: 200_000

@@ -1,8 +1,7 @@
 defmodule Keyfleet.Chain.Supervisor do
   @moduledoc """
   For each deployed fleet, one `Keyfleet.Chain.Poller` reading its history,
-  and apart from it, the launches its launch proposals approve, read every
-  few seconds, and its balances and rewards, read every minute.
+  and apart from it, its balances and rewards, read every minute.
   """
   use Supervisor
 
@@ -14,13 +13,10 @@ defmodule Keyfleet.Chain.Supervisor do
 
   @impl true
   def init(_opts) do
-    poll_interval = Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:poll_interval_ms]
-
     Keyfleet.Fleets.list_deployed_fleets!()
     |> Enum.flat_map(
       &[
         {Keyfleet.Chain.Poller, &1},
-        {Repeat, {Keyfleet.Chain.LaunchEnvelopes, &1, poll_interval}},
         {Repeat, {Keyfleet.Chain.TreasuryReader, &1, @balances_every}}
       ]
     )

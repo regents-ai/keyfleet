@@ -13,7 +13,7 @@ defmodule Keyfleet.Keeper.Transaction do
     authorizers: [Ash.Policy.Authorizer]
 
   @bigint 9_223_372_036_854_775_807
-  @jobs [:reveal, :income]
+  @jobs [:reveal, :protocol_share]
   @functions Keyfleet.Keeper.Calls.functions()
   @statuses [:mined, :reverted, :replaced, :replaced_externally]
 
@@ -57,21 +57,20 @@ defmodule Keyfleet.Keeper.Transaction do
             :block_number,
             :gas_used,
             :effective_gas_price,
-            :l1_fee_wei,
             :cost_wei
           ] do
         check_constraint(field, "keeper_txs_nonnegative_#{field}", check: "#{field} >= 0")
       end
 
       # The outcome arrives whole: a status and when it was settled, and for a
-      # transaction the chain included, what it cost. Base adds an L1 fee;
-      # a chain without one leaves it empty. A result comes only with a status.
+      # transaction the chain included, what it cost. A result comes only
+      # with a status.
       check_constraint(:status, "keeper_txs_outcome_fields",
         check: """
         num_nonnulls(status, settled_at) IN (0, 2) AND
         CASE WHEN status IN ('mined', 'reverted')
           THEN num_nonnulls(block_number, gas_used, effective_gas_price, cost_wei) = 4
-          ELSE num_nonnulls(block_number, gas_used, effective_gas_price, l1_fee_wei, cost_wei) = 0
+          ELSE num_nonnulls(block_number, gas_used, effective_gas_price, cost_wei) = 0
         END AND
         (status IS NOT NULL OR result IS NULL)
         """
@@ -161,7 +160,6 @@ defmodule Keyfleet.Keeper.Transaction do
         :block_number,
         :gas_used,
         :effective_gas_price,
-        :l1_fee_wei,
         :cost_wei,
         :result
       ]
@@ -290,8 +288,8 @@ defmodule Keyfleet.Keeper.Transaction do
 
     attribute :status, :atom, constraints: [one_of: @statuses]
 
-    # All in wei; `cost_wei` is gas used times its price plus Base's L1 fee.
-    for field <- [:block_number, :gas_used, :effective_gas_price, :l1_fee_wei, :cost_wei] do
+    # All in wei; `cost_wei` is gas used times its price.
+    for field <- [:block_number, :gas_used, :effective_gas_price, :cost_wei] do
       attribute field, :integer, constraints: [min: 0, max: @bigint]
     end
 

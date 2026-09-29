@@ -1,52 +1,33 @@
 defmodule KeyfleetWeb.ProposalsPage do
   @moduledoc """
-  What a fleet's proposal pages show, read from the proposals, votes and
-  launches the chain reader recorded.
+  What a fleet's proposal pages show, read from the proposals and votes the
+  chain reader recorded.
 
   `list/2` is the fleet's proposals, newest first, twenty to a page, with
   its shared money once it is on chain: the latest reading of its balances,
-  and its latest launch income and payments. `detail/3` is one proposal with
-  its votes, fifty to a page, and for a launch the version of the fleet's
-  launch plan it points to by its digest. The form for a new launch starts
-  from the fleet's launch plans. Once the fleet is on chain, each carries the
+  and its latest income and payments. `detail/3` is one proposal with its
+  votes, fifty to a page. Once the fleet is on chain, each carries the
   network its wallet buttons send on; the buttons' steps are built by
-  `Keyfleet.WalletSteps`. A page name that is
-  not a proposal number is a page that doesn't exist.
+  `Keyfleet.WalletSteps`. A page name that is not a proposal number is a
+  page that doesn't exist.
   """
 
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
-  alias Keyfleet.Graph
-  alias Keyfleet.Graph.LaunchPlanDigest
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50
-  @regent_decimals 18
   @text_cap 64 * 1024
 
-  @kinds %{decision: "Decision", autolaunch: "Launch", pay: "Payment from shared money"}
-
-  # A launch's details as a launch plan names them, and as the page words
-  # them when they differ.
-  @launch_texts [
-    {:name, "name"},
-    {:symbol, "symbol"},
-    {:description, "description"},
-    {:website, "website"},
-    {:image, "image"}
-  ]
-
-  # What a launch plan says beyond the launch's details, as the page names it.
-  @plan_fields [
-    {"who_we_serve", "Who it’s for"},
-    {"what_we_sell", "What we offer"},
-    {"why_raise", "What the money is for"},
-    {"commitments", "Who does what afterwards"}
-  ]
+  @kinds %{
+    decision: "Decision",
+    pay: "Payment from shared money",
+    restrict_edits: "Workspace edits for a key"
+  }
 
   @doc """
   The page of proposals below the one `params` names, if it names one, with
@@ -60,7 +41,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
-        proposals: Enum.map(proposals, &summary(&1, failed_launch_block(balances))),
+        proposals: Enum.map(proposals, &summary/1),
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
         treasury: reading.deployed? && treasury(fleet, balances),
@@ -83,11 +64,10 @@ defmodule KeyfleetWeb.ProposalsPage do
         proposal ->
           {votes, more?} = Proposals.votes_after(proposal.id, votes_after, @votes_page)
           path = &detail_path(fleet_id, proposal.number, &1)
-          failed = failed_launch_block(reading.deployed? && Treasury.get_reading!(fleet_id))
 
           Map.merge(reading, %{
             number: number,
-            proposal: Map.merge(summary(proposal, failed), details(proposal, fleet)),
+            proposal: Map.merge(summary(proposal), details(proposal, fleet)),
             votes: Enum.map(votes, &vote/1),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
             first_votes: if(votes_after > 0, do: path.([]))
@@ -135,9 +115,6 @@ defmodule KeyfleetWeb.ProposalsPage do
     %{text: text, token: if(asset != usdc, do: asset), symbol?: symbol?}
   end
 
-  # REGENT, which has eighteen decimals.
-  defp regent(atoms), do: "#{units(atoms, @regent_decimals)} REGENT"
-
   defp with_fleet(fleet_id, read) do
     case Fleets.get_fleet!(fleet_id) do
       nil ->
@@ -157,8 +134,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   end
 
   # The tokens the payment form lists by name: USDC, then the tokens of the
-  # latest reading (REGENT, the launched token and each token an open payment
-  # names). The form takes any other token by its address.
+  # latest reading (each token an open payment names). The form takes any
+  # other token by its address.
   defp propose(fleet),
     do: %{
       assets:
@@ -167,47 +144,6 @@ defmodule KeyfleetWeb.ProposalsPage do
           &%{address: &1.address, name: pay_name(&1)}
         )
     }
-
-  @doc """
-  Each launch plan of the fleet a launch can be proposed from, at its
-  current version: its six launch details exactly as that version holds
-  them, and the digest a proposal carries to point to it. The launch form
-  reads them once, when it is first shown, and keeps them after.
-  """
-  def launch_plans(fleet_id) do
-    case Graph.proposable_launch_plans!(fleet_id) do
-      [] ->
-        []
-
-      plans ->
-        revisions =
-          fleet_id
-          |> Graph.current_launch_plan_revisions!(
-            Enum.map(plans, &%{object_id: &1.id, version: &1.version})
-          )
-          |> Map.new(&{{&1.object_id, &1.version}, &1})
-
-        for plan <- plans do
-          revision = Map.fetch!(revisions, {plan.id, plan.version})
-          data = revision.data
-
-          %{
-            id: plan.id,
-            title: data["title"],
-            version: revision.version,
-            digest: revision.digest,
-            fields: %{
-              name: data["name"],
-              symbol: data["symbol"],
-              description: data["description"],
-              website: data["website"],
-              image: data["image"],
-              raise: data["required_regent_raised"]
-            }
-          }
-        end
-    end
-  end
 
   # A token as the payment form names it: the fleet's own USDC by name, any
   # other with its address beside its symbol, so a token calling itself USDC
@@ -222,11 +158,11 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp pay_name(%{address: address}),
     do: "Token #{RegentFormat.short_address(address)}, in its smallest units"
 
-  defp summary(proposal, failed_launch_block) do
+  defp summary(proposal) do
     %{
       number: proposal.number,
       kind: proposal.kind,
-      status: Proposals.status(proposal, failed_launch_block),
+      status: Proposals.status(proposal),
       keys_sold: proposal.keys_sold,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
@@ -234,24 +170,16 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
   end
 
-  # The block the latest reading says the fleet's failed launch was created
-  # in, or nil.
-  defp failed_launch_block(%{failed_launch_block: block}), do: block
-  defp failed_launch_block(_no_reading), do: nil
-
-  defp gist(%{kind: :autolaunch, launch_envelope: %{name: name}}), do: as_text(name)
-  defp gist(%{kind: :autolaunch}), do: nil
   defp gist(%{text: text}), do: text |> as_text() |> String.slice(0, 280)
 
   defp details(proposal, fleet) do
     %{
       proposer: proposal.proposer,
-      text: proposal.text && as_text(proposal.text),
-      text_cut?: proposal.text_bytes != nil and proposal.text_bytes > @text_cap,
+      text: as_text(proposal.text),
+      text_cut?: proposal.text_bytes > @text_cap,
       pay: pay(proposal, fleet),
       match: match(proposal, fleet),
-      launch: launch(proposal),
-      plan: plan(proposal),
+      edits: edits(proposal),
       executor: proposal.execution && proposal.execution.executor
     }
   end
@@ -282,87 +210,11 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp match(_proposal, _fleet), do: nil
 
-  defp launch(%{kind: :autolaunch, launch_envelope: nil}), do: %{read?: false}
+  # Which key's workspace edits a vote restricts or restores.
+  defp edits(%{kind: :restrict_edits} = proposal),
+    do: %{token_id: proposal.target_token_id, restricted?: proposal.restricted}
 
-  defp launch(%{kind: :autolaunch, launch_envelope: envelope}) do
-    %{
-      read?: true,
-      fields: [
-        {"Name", as_text(envelope.name)},
-        {"Symbol", as_text(envelope.symbol)},
-        {"Description", as_text(envelope.description)},
-        {"Website", as_text(envelope.website)},
-        {"Image", as_text(envelope.image)}
-      ],
-      raise: regent(Decimal.to_integer(envelope.required_regent_raised))
-    }
-  end
-
-  defp launch(_proposal), do: nil
-
-  # The launch plan version a launch points to by its digest, when the
-  # fleet's workspace has it: what that version says, whether the plan has
-  # changed or been archived since, and which of the launch's details, once
-  # read, differ from it.
-  defp plan(%{kind: :autolaunch, digest: nil}), do: %{found?: false}
-
-  defp plan(%{kind: :autolaunch} = proposal) do
-    case Graph.launch_plan_revisions!(proposal.fleet_id, [proposal.digest]) do
-      [] -> %{found?: false}
-      [revision] -> found_plan(proposal, revision)
-    end
-  end
-
-  defp plan(_proposal), do: nil
-
-  defp found_plan(proposal, revision) do
-    data = revision.data
-    current = Graph.read_object!(proposal.fleet_id, revision.object_id)
-
-    %{
-      found?: true,
-      object_id: revision.object_id,
-      title: data["title"],
-      version: revision.version,
-      changed?: LaunchPlanDigest.plan(current.data) != data,
-      archived?: current.sys["archived"] == true,
-      fields:
-        for(
-          {field, label} <- @plan_fields,
-          data[field] not in [nil, ""],
-          do: {label, data[field]}
-        ),
-      mismatches: mismatches(proposal.launch_envelope, data)
-    }
-  end
-
-  # Unknown until the launch's details have been read.
-  defp mismatches(nil, _data), do: nil
-
-  defp mismatches(envelope, data) do
-    texts =
-      for {field, key} <- @launch_texts,
-          Map.fetch!(envelope, field) != data[key],
-          do: key
-
-    raise? = Decimal.to_integer(envelope.required_regent_raised) != regent_atoms(data)
-    if raise?, do: texts ++ ["the REGENT to raise"], else: texts
-  end
-
-  # A plan names the REGENT to raise in whole REGENT, as a decimal string
-  # with up to eighteen places; the launch holds it in REGENT's smallest
-  # units.
-  defp regent_atoms(%{"required_regent_raised" => nil}), do: nil
-
-  defp regent_atoms(%{"required_regent_raised" => text}) do
-    {whole, fraction} =
-      case String.split(text, ".") do
-        [whole] -> {whole, ""}
-        [whole, fraction] -> {whole, fraction}
-      end
-
-    String.to_integer(whole <> String.pad_trailing(fraction, @regent_decimals, "0"))
-  end
+  defp edits(_proposal), do: nil
 
   defp vote(vote) do
     %{

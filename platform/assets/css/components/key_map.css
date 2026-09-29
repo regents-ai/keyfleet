@@ -21,7 +21,6 @@
   --km-sale-2: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 54%, var(--ash-ink)) 40.7%, var(--ash-ground));
   --km-sale-3: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 58.5%, var(--palette-powder-blue)) 37.6%, var(--ash-ground));
   --km-sold-out-line: var(--ash-line-strong);
-  --km-upcoming-line: var(--ash-muted);
   --km-on-sale-line: var(--ash-accent);
 }
 
@@ -187,12 +186,6 @@
   stroke-linecap: round;
 }
 
-.km-edge[data-level="upcoming"] {
-  stroke: var(--km-upcoming-line);
-  stroke-width: 1.5px;
-  stroke-dasharray: 4 4;
-}
-
 .km-edge[data-level="on-sale"] {
   stroke: var(--km-on-sale-line);
   stroke-width: 3px;
@@ -257,11 +250,6 @@
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.km-level[data-level="upcoming"] {
-  border-style: dashed;
-  border-color: var(--km-upcoming-line);
 }
 
 .km-level[data-level="on-sale"] {

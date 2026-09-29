@@ -130,7 +130,7 @@ defmodule Keyfleet.Keeper.BootTest do
           :sys.get_state(runner)
         end)
 
-      assert log =~ "Keeper on: sending from #{@keeper} on chain 8453."
+      assert log =~ "Keeper on: sending from #{@keeper} on chain 1."
     end
 
     test "a stopped keeper says so as it starts, and not that it is on" do
@@ -156,7 +156,7 @@ defmodule Keyfleet.Keeper.BootTest do
           :sys.get_status(pid)
         end)
 
-      assert log =~ "Keeper on: sending from #{@keeper} on chain 8453."
+      assert log =~ "Keeper on: sending from #{@keeper} on chain 1."
       refute log =~ key_digits()
 
       shown = inspect(status, limit: :infinity, printable_limit: :infinity)
@@ -169,7 +169,7 @@ defmodule Keyfleet.Keeper.BootTest do
     end
 
     test "the keeper's reveal round asks for a sold key, and its next rounds do not ask again" do
-      deploy!("fibonacci_syndicate", @fleet, 8_453)
+      deploy!("fibonacci_syndicate", @fleet, 1)
       ChainHelpers.seed_cursor!("fibonacci_syndicate")
       coordinator = "0x" <> String.duplicate("c0", 20)
 
@@ -180,7 +180,7 @@ defmodule Keyfleet.Keeper.BootTest do
             {@fleet, view!(:vrf_subscription_id)} => [5],
             {coordinator, view!(:get_subscription, [5])} => [
               0,
-              20_000_000_000_000_000,
+              100_000_000_000_000_000,
               0,
               @other_keeper,
               160,
@@ -190,7 +190,6 @@ defmodule Keyfleet.Keeper.BootTest do
             {@fleet, view!(:total_minted)} => [1],
             {@fleet, view!(:reveal_seed, [1])} => [0],
             {@fleet, view!(:reveal_requested_at, [1])} => [0],
-            {@fleet, view!(:launch_state)} => [0],
             {@fleet, view!(:protocol_share_owed)} => [0]
           })
       )
@@ -204,7 +203,7 @@ defmodule Keyfleet.Keeper.BootTest do
 
         # The key was just asked for, so neither round sends anything more.
         send(runner, :reveal)
-        send(runner, :income)
+        send(runner, :protocol_share)
         :sys.get_state(runner)
         assert [_request] = sent()
       end)
@@ -225,16 +224,16 @@ defmodule Keyfleet.Keeper.BootTest do
         actor: %System{}
       )
 
-      deploy!("fibonacci_syndicate", @fleet, 8_453)
+      deploy!("fibonacci_syndicate", @fleet, 1)
       tx = sent!()
 
       other_wallet =
         sent!(%{from_address: @other_keeper, tx_hash: "0x" <> String.duplicate("cd", 32)})
 
-      other_chain = sent!(%{chain_id: 1, tx_hash: "0x" <> String.duplicate("ef", 32)})
+      other_chain = sent!(%{chain_id: 8_453, tx_hash: "0x" <> String.duplicate("ef", 32)})
 
       {:ok, _stop} =
-        Keeper.record_stop(:income, :tx_hash_mismatch, "the node named another hash.")
+        Keeper.record_stop(:protocol_share, :tx_hash_mismatch, "the node named another hash.")
 
       {:ok, _tx} =
         Keeper.settle(tx, %{
@@ -242,21 +241,20 @@ defmodule Keyfleet.Keeper.BootTest do
           block_number: 5,
           gas_used: 100_000,
           effective_gas_price: 10_000_000,
-          l1_fee_wei: 1_000,
-          cost_wei: 1_000_000_001_000,
+          cost_wei: 1_000_000_000_000,
           result: "reveal_refused"
         })
 
       output = capture_io(fn -> Release.keeper_status!() end)
 
       assert output =~ "Keeper wallet #{@keeper}\n"
-      assert output =~ "Chain 8453, balance 0.05 ETH\n"
+      assert output =~ "Chain 1, balance 0.05 ETH\n"
 
       assert output =~
-               "Spent in the last 24 hours: 0.000001000000001 ETH, and up to 0 ETH more waiting (limit 0.01 ETH)\n"
+               "Spent in the last 24 hours: 0.000001 ETH, and up to 0 ETH more waiting (limit 0.02 ETH)\n"
 
       assert output =~ "reveal: paused_gas at 2026-09-23 10:00:01.000000Z, 0 sent, 3 skipped\n"
-      assert output =~ ~r/income: stopped at \S+ \S+, 0 sent, 0 skipped\n/
+      assert output =~ ~r/protocol_share: stopped at \S+ \S+, 0 sent, 0 skipped\n/
 
       assert output =~
                ~r/Last 20 transactions:\n\S+ \S+ reveal fibonacci_syndicate request_reveal #{@fleet} nonce 0 mined reveal_refused #{tx.tx_hash}\n/
@@ -328,7 +326,7 @@ defmodule Keyfleet.Keeper.BootTest do
           target: @fleet,
           from_address: @keeper,
           args: %{"arg" => 1},
-          chain_id: 8_453,
+          chain_id: 1,
           nonce: 0,
           tx_hash: "0x" <> String.duplicate("ab", 32),
           max_fee: 11_000_000,

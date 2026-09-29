@@ -131,13 +131,12 @@ defmodule KeyfleetWeb.ShowcaseTest do
     assert html =~ "No key chosen yet."
 
     render_hook(view, "keymap_ready", %{})
-    assert_reply(view, %{minted: 17_768, max_supply: 46_365, mine: mine, agent: agent})
+    assert_reply(view, %{minted: 17_768, max_supply: nil, mine: mine, agent: agent})
     mine = Base.decode64!(mine)
     agent = Base.decode64!(agent)
-    assert byte_size(mine) == 5_796 and byte_size(agent) == 5_796
+    # Only sold keys have owners and agents, so the bitsets end by key 17,768.
+    assert byte_size(mine) <= 2_221 and byte_size(agent) <= 2_221
     assert held?(mine, 13) and not held?(mine, 14) and held?(agent, 3)
-    # Only sold keys have owners and agents.
-    refute held?(mine, 17_861) or held?(agent, 17_776)
 
     assert render_hook(view, "select_key", %{"token_id" => 17_769}) =~ "Key 17,769 chosen."
     assert render_hook(view, "select_key", %{"token_id" => 17_770}) =~ "Key 17,769 chosen."
@@ -150,7 +149,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
     assert html =~ ~s(id="key-map-classic") and html =~ "No key chosen yet."
     render_hook(view, "keymap_ready", %{})
     assert_reply(view, %{minted: 1_023, max_supply: 1_024, mine: mine})
-    assert byte_size(Base.decode64!(mine)) == 128
+    assert byte_size(Base.decode64!(mine)) <= 128
   end
 
   defp held?(bits, id),

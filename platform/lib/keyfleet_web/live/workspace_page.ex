@@ -5,11 +5,9 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   `board/3` is the fleet's items a page at a time, the most recently changed
   first, beside its latest changes; `item/4` is one item with its fields, its
-  links a page at a time and its history a page at a time, and for a launch
-  plan the launch proposals that point to a version of it. Each answers
+  links a page at a time and its history a page at a time. Each answers
   `seen`, the log and the place in it the read tables had reached when the
-  page was read. Every change is
-  told as one plain line: a list of parts, each a piece of text, a key
+  page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
   (`{:key, token_id}`) or an item (`{:item, id, title}`, with a `nil` title
   when the item is not in the workspace).
 
@@ -19,15 +17,11 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
-  alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
   @types ~w(goal task finding evidence service launch_card note dead_end)
-
-  # The launch proposals a launch plan's page lists, newest first.
-  @proposed_page 20
 
   @type_names %{
     "goal" => {"goal", "Goals"},
@@ -217,7 +211,6 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           Map.merge(base, %{
             object: detail(object, fleet_id, opts),
-            proposed: proposed(object, fleet_id, opts),
             links: %{
               rows: Enum.map(links.results, &link_row(&1, object, titles)),
               more:
@@ -237,34 +230,6 @@ defmodule KeyfleetWeb.WorkspacePage do
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
     end
   end
-
-  # The launch proposals that point to a version of a launch plan, each
-  # with where it stands and the version it points to.
-  defp proposed(%{type: "launch_card", id: id}, fleet_id, opts) do
-    {proposals, older?} = Proposals.launches_of_plan(fleet_id, id, @proposed_page)
-    failed_launch_block = Proposals.failed_launch_block(fleet_id)
-
-    versions =
-      fleet_id
-      |> Graph.launch_plan_revisions!(proposals |> Enum.map(& &1.digest) |> Enum.uniq(), opts)
-      |> Map.new(&{&1.digest, &1.version})
-
-    %{
-      proposals:
-        Enum.map(
-          proposals,
-          &%{
-            number: &1.number,
-            kind: &1.kind,
-            status: Proposals.status(&1, failed_launch_block),
-            version: Map.fetch!(versions, &1.digest)
-          }
-        ),
-      older?: older?
-    }
-  end
-
-  defp proposed(_object, _fleet_id, _opts), do: nil
 
   # An item page's links and history are paged apart: moving one keeps where
   # the other stands.

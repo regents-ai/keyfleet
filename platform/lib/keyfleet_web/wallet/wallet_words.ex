@@ -57,11 +57,6 @@ defmodule KeyfleetWeb.WalletWords do
       "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
   end
 
-  defp says(:propose_launch, %{key: key, raise: raise}),
-    do:
-      "Proposes a launch that raises #{ProposalsPage.units(raise, 18)} REGENT, " <>
-        "with key #{Rules.grouped(key)}."
-
   defp says(:delegate, %{delegate: delegate}),
     do:
       "Lets #{RegentFormat.short_address(delegate)} vote and propose with every key you hold, " <>
@@ -94,7 +89,9 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:document_code),
     do: "A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one."
 
-  defp problem(:unread), do: "Base can’t be read right now. This tries again in a few seconds."
+  defp problem(:unread),
+    do: "Ethereum can’t be read right now. This tries again in a few seconds."
+
   defp problem(:nothing_waiting), do: "Nothing is waiting for this key right now."
   defp problem(:sold_out), do: "Every key in this fleet has been sold."
 
@@ -109,7 +106,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "propose"}), do: "Propose"
   def title(%{name: "delegate"}), do: "Let a wallet vote for you"
   def title(%{name: "clear"}), do: "Stop any wallet voting for you"
-  def title(%{name: "send"}), do: "Send stakers their share"
+  def title(%{name: "send"}), do: "Send Regents its share"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
   def title(_unknown), do: "Transaction"
 
@@ -149,7 +146,7 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp confirmed("delegate"), do: "Done. That wallet can now vote and propose with your keys."
   defp confirmed("clear"), do: "Done. No other wallet can vote your keys now."
-  defp confirmed("send"), do: "Done. The stakers’ share has been sent."
+  defp confirmed("send"), do: "Done. Regents’ share has been sent to Regents."
   defp confirmed("claim-" <> _asset), do: "Done. It was paid to your wallet."
   defp confirmed(_step), do: "Done."
 
@@ -175,9 +172,10 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp reverted("carry_out"),
     do:
-      "This wasn’t carried out and nothing moved. Yes votes may not be more than half of all " <>
-        "the keys sold, it may already have been carried out, a payment and its matches may " <>
-        "not fit in the shared money, or a launch may not be possible right now."
+      "This wasn’t carried out and nothing moved. Yes votes may not be enough yet (more " <>
+        "than half of all the keys sold, or three fifths for a change to a key’s workspace " <>
+        "edits), it may already have been carried out, or a payment and its matches may not " <>
+        "fit in the shared money."
 
   defp reverted("collect"),
     do:
@@ -187,16 +185,13 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("propose"),
     do:
       "The proposal wasn’t made. The key may be neither yours nor held by someone who let " <>
-        "your wallet vote for them; a launch also needs enough keys sold, every detail filled " <>
-        "in and short enough, and no other launch running."
+        "your wallet vote for them."
 
   defp reverted(delegate) when delegate in ["delegate", "clear"],
     do: "This didn’t go through and nothing changed."
 
   defp reverted("send"),
-    do:
-      "Nothing was sent. Nothing may be set aside for REGENT stakers right now, or staking " <>
-        "didn’t take it, so it stays set aside."
+    do: "Nothing was sent. Nothing may be set aside for Regents right now."
 
   defp reverted("claim-" <> _asset),
     do:

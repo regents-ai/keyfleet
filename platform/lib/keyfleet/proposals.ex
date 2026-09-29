@@ -1,9 +1,8 @@
 defmodule Keyfleet.Proposals do
   @moduledoc """
-  A fleet's proposals, the votes cast on them, their executions and the
-  launches they approve, recorded from its vote contract by the chain reader
-  and by nothing else. The chain is the authority; these records only mirror
-  it. Anyone may read them.
+  A fleet's proposals, the votes cast on them and their executions, recorded
+  from its vote contract by the chain reader and by nothing else. The chain
+  is the authority; these records only mirror it. Anyone may read them.
   """
   use Ash.Domain
 
@@ -11,15 +10,13 @@ defmodule Keyfleet.Proposals do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Proposals.{Execution, LaunchEnvelope, Proposal, Vote}
-  alias Keyfleet.Treasury
+  alias Keyfleet.Proposals.{Execution, Proposal, Vote}
   alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
 
   @page 20
   @changes_page 50
-  # What a proposal is shown with: its tally, the keys sold, its execution and
-  # its launch.
-  @summary [:yes_keys, :no_keys, :keys_sold, :execution, :launch_envelope]
+  # What a proposal is shown with: its tally, the keys sold and its execution.
+  @summary [:yes_keys, :no_keys, :keys_sold, :execution]
 
   resources do
     resource Keyfleet.Proposals.Proposal do
@@ -35,15 +32,9 @@ defmodule Keyfleet.Proposals do
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
 
-      define :launches_without_envelope, action: :launches_without_envelope, args: [:fleet_id]
-
       define :proposals_recorded_before,
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
-    end
-
-    resource Keyfleet.Proposals.LaunchEnvelope do
-      define :record_launch_envelope, action: :record
     end
 
     resource Keyfleet.Proposals.Vote do
@@ -76,44 +67,30 @@ defmodule Keyfleet.Proposals do
 
   @doc """
   Where a proposal stands, as far as the fleet's history has been read,
-  loaded with `#{inspect(@summary)}`, and the block the fleet's last failed
-  launch was created in (`failed_launch_block/1`). A proposal has no
-  deadline: it stays open to votes until it is carried out. The first three
-  are the contract's own states.
+  loaded with `#{inspect(@summary)}`. A proposal has no deadline: it stays
+  open to votes until it is carried out. These are the contract's own
+  states.
 
     * `:executed` once its execution is recorded;
-    * `:approved` while more than half of all the keys sold have yes as their
-      latest vote, so it can be carried out now;
+    * `:approved` while enough of all the keys sold have yes as their latest
+      vote for it to be carried out now: at least three fifths for a vote to
+      restrict or restore a key's edits, and more than half for every other
+      kind;
     * `:open` otherwise. A key that has not voted counts against it, and so
-      does every key sold later;
-    * `:stale`, in place of the other two, for a launch proposal that opened
-      in or before the block the fleet's last failed launch was created in,
-      which the fleet refuses to carry out.
+      does every key sold later.
   """
-  def status(%Proposal{} = proposal, failed_launch_block) do
+  def status(%Proposal{} = proposal) do
     cond do
       proposal.execution -> :executed
-      stale?(proposal, failed_launch_block) -> :stale
-      proposal.yes_keys * 2 > proposal.keys_sold -> :approved
+      approved?(proposal) -> :approved
       true -> :open
     end
   end
 
-  defp stale?(%Proposal{kind: :autolaunch, opened_block: opened}, failed) when is_integer(failed),
-    do: opened <= failed
+  defp approved?(%Proposal{kind: :restrict_edits, yes_keys: yes, keys_sold: sold}),
+    do: yes * 5 >= sold * 3
 
-  defp stale?(_proposal, _failed_launch_block), do: false
-
-  @doc """
-  The block the fleet's last failed launch was created in, as its latest
-  budget reading says, or nil.
-  """
-  def failed_launch_block(fleet_id) do
-    case Treasury.get_reading!(fleet_id) do
-      %{failed_launch_block: block} -> block
-      nil -> nil
-    end
-  end
+  defp approved?(%Proposal{yes_keys: yes, keys_sold: sold}), do: yes * 2 > sold
 
   @doc "Each asset the fleet's payment proposals name, by address."
   def payment_assets(fleet_id) do
@@ -138,13 +115,13 @@ defmodule Keyfleet.Proposals do
     |> Enum.sort()
   end
 
-  @doc "The fleet's proposal `number`, as `status/2` needs it, or nil."
+  @doc "The fleet's proposal `number`, as `status/1` needs it, or nil."
   def get_by_number(fleet_id, number),
     do: get_proposal!(fleet_id, number, load: @summary)
 
   @doc """
   The fleet's proposals below `before_number` (all of them for nil), newest
-  first, #{@page} at most, as `status/2` needs them, and whether older ones remain.
+  first, #{@page} at most, as `status/1` needs them, and whether older ones remain.
   """
   def list_page(fleet_id, before_number \\ nil) do
     Proposal
@@ -155,28 +132,6 @@ defmodule Keyfleet.Proposals do
     |> Ash.Query.load(@summary)
     |> Ash.read!()
     |> Enum.split(@page)
-    |> then(fn {proposals, older} -> {proposals, older != []} end)
-  end
-
-  @doc """
-  The fleet's launch proposals that point to a version of its launch plan
-  `object_id` by their digest, newest first, `limit` at most, as `status/1`
-  needs them, and whether older ones remain.
-  """
-  def launches_of_plan(fleet_id, object_id, limit) do
-    Proposal
-    |> Ash.Query.filter(
-      fleet_id == ^fleet_id and kind == :autolaunch and
-        exists(
-          Keyfleet.Graph.LaunchPlanRevision,
-          fleet_id == parent(fleet_id) and digest == parent(digest) and object_id == ^object_id
-        )
-    )
-    |> Ash.Query.sort(number: :desc)
-    |> Ash.Query.limit(limit + 1)
-    |> Ash.Query.load(@summary)
-    |> Ash.read!()
-    |> Enum.split(limit)
     |> then(fn {proposals, older} -> {proposals, older != []} end)
   end
 
@@ -217,13 +172,12 @@ defmodule Keyfleet.Proposals do
     head_seq = if(cursor, do: cursor.proposal_seq, else: 0)
 
     {read, rest} =
-      [Proposal, Vote, Execution, LaunchEnvelope, BudgetReceipt, IncomeReceipt, BudgetPayment]
+      [Proposal, Vote, Execution, BudgetReceipt, IncomeReceipt, BudgetPayment]
       |> Enum.flat_map(&records_after(&1, fleet_id, after_seq, head_seq))
       |> Enum.sort()
       |> Enum.split(@changes_page)
 
     changed = for {seq, proposal_id} <- read, proposal_id, into: %{}, do: {proposal_id, seq}
-    failed_launch_block = failed_launch_block(fleet_id)
 
     items =
       Proposal
@@ -233,7 +187,7 @@ defmodule Keyfleet.Proposals do
       |> Enum.map(
         &%{
           proposal: &1,
-          status: status(&1, failed_launch_block),
+          status: status(&1),
           changed_seq: Map.fetch!(changed, &1.id)
         }
       )

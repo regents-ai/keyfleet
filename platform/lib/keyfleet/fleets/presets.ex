@@ -14,11 +14,14 @@ defmodule Keyfleet.Fleets.Presets do
   Prices are in atomic USDC, millionths of one USDC, and are exactly what a
   purchase pays: the Fibonacci and Accelerant fleets start at the contract's
   `Q_USDC`, 10 USDC, and follow their preset's ladder from there.
+
+  The two Fibonacci fleets have no last level: new levels keep opening by the
+  same rule, so they never sell out. Only Classic (1,024 keys) and
+  Accelerant (2,000 keys) have a supply limit.
   """
 
   @q_usdc 10_000_000
 
-  @fibonacci_levels 20
   @accelerant_max_keys 2_000
 
   # Classic's price table: one whole number of US cents per key, key 1 first.
@@ -31,16 +34,6 @@ defmodule Keyfleet.Fleets.Presets do
                   |> List.to_tuple()
   @classic_supply tuple_size(@classic_prices)
 
-  # Level supplies 2, 3, 5, 8, … and the last token id of each level.
-  @fibonacci_level_ends 2..@fibonacci_levels
-                        |> Enum.scan({1, 2, 2}, fn _level, {previous, current, total} ->
-                          {current, previous + current, total + previous + current}
-                        end)
-                        |> Enum.map(&elem(&1, 2))
-                        |> then(&[2 | &1])
-
-  @fibonacci_max_token_id List.last(@fibonacci_level_ends)
-
   @presets %{
     "fibonacci_syndicate" => :fibonacci,
     "fibonacci_cascade" => :fibonacci,
@@ -50,19 +43,18 @@ defmodule Keyfleet.Fleets.Presets do
 
   @doc """
   Where a fleet stands after `total_minted` primary keys: how many it can ever
-  issue, how many levels it has and how many are complete (both `nil` for the
-  two presets without levels), and the next key's id and price in atomic USDC,
-  both `nil` once sold out.
+  issue (`nil` for the two Fibonacci fleets, which have no limit), how many
+  levels are complete (`nil` for the two presets without levels), and the
+  next key's id and price in atomic USDC, both `nil` once sold out.
   """
   def progress(fleet_id, total_minted) when is_integer(total_minted) and total_minted >= 0 do
     preset = Map.fetch!(@presets, fleet_id)
     max_supply = max_supply(preset)
-    sold_out? = total_minted >= max_supply
+    sold_out? = max_supply != nil and total_minted >= max_supply
 
     %{
       total_minted: total_minted,
       max_supply: max_supply,
-      levels: if(preset == :fibonacci, do: @fibonacci_levels),
       completed_levels: completed_levels(preset, total_minted),
       next_token_id: if(sold_out?, do: nil, else: total_minted + 1),
       next_price: if(sold_out?, do: nil, else: next_price(preset, total_minted))
@@ -94,15 +86,20 @@ defmodule Keyfleet.Fleets.Presets do
     [own | Enum.to_list((own + 1)..completed_levels(:fibonacci, total_minted)//1)]
   end
 
-  @doc "Whether a Fibonacci fleet ever issues `token_id`."
-  def fibonacci_token?(token_id), do: token_id in 1..@fibonacci_max_token_id
-
   @doc "The Fibonacci level that owns a token id."
-  def fibonacci_level_of(token_id) when token_id in 1..@fibonacci_max_token_id,
-    do: Enum.find_index(@fibonacci_level_ends, &(token_id <= &1)) + 1
+  def fibonacci_level_of(token_id) when is_integer(token_id) and token_id >= 1,
+    do: level_ends() |> Enum.find_index(&(token_id <= &1)) |> Kernel.+(1)
+
+  @doc "How many keys a Fibonacci level has: 2, 3, 5, 8 and on."
+  def fibonacci_level_supply(level) when is_integer(level) and level >= 1,
+    do: level_supplies() |> Enum.at(level - 1)
+
+  @doc "The last token id of a Fibonacci level."
+  def fibonacci_level_end(level) when is_integer(level) and level >= 1,
+    do: level_ends() |> Enum.at(level - 1)
 
   @doc "A Fibonacci level's price: 10 USDC at level 1, then ×1.2 per level, rounded up at each step."
-  def fibonacci_level_price(level) when level in 1..@fibonacci_levels,
+  def fibonacci_level_price(level) when is_integer(level) and level >= 1,
     do: step(@q_usdc, level - 1, 120)
 
   @doc """
@@ -111,8 +108,8 @@ defmodule Keyfleet.Fleets.Presets do
   """
   def fibonacci_holding_limit(level) when level in 1..7, do: 1
 
-  def fibonacci_holding_limit(level) when level in 8..@fibonacci_levels,
-    do: div(level_supply(level), 10)
+  def fibonacci_holding_limit(level) when is_integer(level) and level >= 8,
+    do: div(fibonacci_level_supply(level), 10)
 
   @doc "An Accelerant primary mint's price: 10 USDC for the first, then ×1.05 per mint, rounded up."
   def accelerant_price(mint_index) when mint_index in 0..(@accelerant_max_keys - 1)//1,
@@ -122,18 +119,20 @@ defmodule Keyfleet.Fleets.Presets do
   defp next_price(:classic, minted), do: elem(@classic_prices, minted)
   defp next_price(:accelerant, minted), do: accelerant_price(minted)
 
-  defp max_supply(:fibonacci), do: @fibonacci_max_token_id
+  defp max_supply(:fibonacci), do: nil
   defp max_supply(:classic), do: @classic_supply
   defp max_supply(:accelerant), do: @accelerant_max_keys
 
-  # Token ids are contiguous, so a level is complete once its last id is minted.
-  defp completed_levels(:fibonacci, minted),
-    do: Enum.count(@fibonacci_level_ends, &(&1 <= minted))
-
+  # Token ids are contiguous, so every level before the next key's is complete.
+  defp completed_levels(:fibonacci, minted), do: fibonacci_level_of(minted + 1) - 1
   defp completed_levels(_preset, _minted), do: nil
 
-  defp level_supply(level),
-    do: Enum.at(@fibonacci_level_ends, level - 1) - Enum.at(@fibonacci_level_ends, level - 2)
+  # Level supplies 2, 3, 5, 8, … without end, and the last token id of each.
+  defp level_supplies,
+    do:
+      Stream.unfold({1, 2}, fn {previous, current} -> {current, {current, previous + current}} end)
+
+  defp level_ends, do: Stream.scan(level_supplies(), &+/2)
 
   defp step(price, 0, _numerator), do: price
 
