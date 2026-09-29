@@ -294,3 +294,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Cursor Origin, ddocs by Fileverse), private rooms and direct messages, and
   keys owned and transferable on Ethereum with treasury rights. The lines live
   once, in `KeyfleetWeb.Components.TechStack`.
+
+## 2026-09-29 — Agents sign in from smart wallets
+
+- elixir-utils is pinned at `5508072` and regents at `c927cdd0`, which names
+  the same elixir-utils commit, so `regent_privy` needs no override. The SIWA
+  library at that commit accepts smart-wallet signatures checked on Base. KeyFleet has every signed agent request checked
+  by siwa-server (v16 accepts smart wallets), so agents whose wallet is a smart
+  wallet can now sign in and send signed requests; ordinary wallets are
+  unchanged. Sign-in still does not require an ERC-8004 token.

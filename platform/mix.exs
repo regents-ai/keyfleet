@@ -4,11 +4,11 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one published commit. To move a pin,
   # change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "590f6d6757f3c1c5d1d76e716f79821ab413a65d"
+  @elixir_utils_ref "55080723b20d57297855a23ee6e3e50ded77da9a"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "42a439b9e5980e1174e3da85b24f0f60c2e78339"
   @regents "https://github.com/regents-ai/regents.git"
-  @regents_ref "0d5d18c2f4501a6a5bd00b0bedb005677d8876cc"
+  @regents_ref "c927cdd0031a76ccdd7a49280fc93c455df32b60"
 
   def project do
     [
@@ -56,9 +56,7 @@ defmodule Keyfleet.MixProject do
       {:ash_postgres, "~> 2.13.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
-      # regent_identity names regent_privy by a sibling path; this pin replaces it.
-      {:regent_privy,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
+      {:regent_privy, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy"},
       {:regent_identity, git: @regents, ref: @regents_ref, sparse: "identity"},
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
       {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
