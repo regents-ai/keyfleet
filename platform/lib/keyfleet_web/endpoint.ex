@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.Endpoint do
     guide: "/llms.txt"
 
   plug KeyfleetWeb.Plugs.Parsers,
-    body_reader: {RegentIdentity.BodyReader, :read_body, []},
+    body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()

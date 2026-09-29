@@ -19,7 +19,15 @@ config :keyfleet, :privy_verifier, Keyfleet.TestPrivyVerifier
 
 # The SIWA sign-in server agents use. The agent API tests start their own and
 # point this at it; a browser test server may name a local one.
-config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://127.0.0.1:4100")
+siwa_url = System.get_env("KEYFLEET_SIWA_URL", "http://127.0.0.1:4100")
+config :keyfleet, :siwa_broker_url, siwa_url
+
+# The shared agent requests reach a stub of the same server
+# (`Req.Test.stub(RegentAgents.Broker, ...)`).
+config :regent_agents,
+  siwa: [url: siwa_url, audience: "keyfleet"],
+  req_options: [plug: {Req.Test, RegentAgents.Broker}]
+
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,

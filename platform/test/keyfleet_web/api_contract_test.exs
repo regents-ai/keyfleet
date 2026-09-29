@@ -10,6 +10,8 @@ defmodule KeyfleetWeb.ApiContractTest do
     contract = YamlElixir.read_from_file!(@contract)
 
     assert Map.keys(contract["paths"]) |> Enum.sort() == [
+             "/api/agents/v1/me",
+             "/api/agents/v1/pair",
              @graph <> "archive",
              @graph <> "changes",
              @graph <> "create",

@@ -9,6 +9,15 @@ import Config
 
 config :regent_identity, repo: Keyfleet.Repo, ash_domains: [RegentIdentity]
 
+# Agents paired with a person's Regent account, shared by every Regent site. A
+# check-in names the person's Keyfleet account; the SIWA sign-in server is set
+# beside `:siwa_broker_url` in each environment.
+config :regent_agents,
+  repo: Keyfleet.Repo,
+  pubsub: Keyfleet.PubSub,
+  account: {Keyfleet.Agents, :account},
+  ash_domains: [RegentAgents]
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks

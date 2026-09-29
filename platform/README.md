@@ -21,8 +21,8 @@ transactions (see [the keeper guide](../docs/keeper.md)).
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
 repository: elixir-utils `0b4496e` (`privy`, `agent_access`, `siwa`, `format`,
 `chain`, `credo_ash`), design-system `42a439b` (`regent_ui`) and regents
-`251d5f95` (`identity`). `mix deps.get` fetches them with everything else, and the release
-image is built from the same commits.
+`1ca65917` (`identity`, `agents`). `mix deps.get` fetches them with everything
+else, and the release image is built from the same commits.
 
 To move a pin, change its ref in `mix.exs`, run `mix deps.update <name>` for each
 library from that repository, then the checks. `make check-required-fixes` (from the repository root, needs

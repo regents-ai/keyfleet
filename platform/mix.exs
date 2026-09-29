@@ -8,7 +8,7 @@ defmodule Keyfleet.MixProject do
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "42a439b9e5980e1174e3da85b24f0f60c2e78339"
   @regents "https://github.com/regents-ai/regents.git"
-  @regents_ref "251d5f958940dfc6ee3805563cb85e3f782345e2"
+  @regents_ref "1ca659170ee7470f9ecf000e2d202c8db6d62aac"
 
   def project do
     [
@@ -58,6 +58,7 @@ defmodule Keyfleet.MixProject do
       {:mdex, "== 0.13.3"},
       {:regent_privy, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy"},
       {:regent_identity, git: @regents, ref: @regents_ref, sparse: "identity"},
+      {:regent_agents, git: @regents, ref: @regents_ref, sparse: "agents"},
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
       {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
       {:siwa, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "siwa/siwa-elixir/apps/siwa"},

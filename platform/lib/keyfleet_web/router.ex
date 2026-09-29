@@ -150,6 +150,13 @@ defmodule KeyfleetWeb.Router do
     forward "/profile", RegentIdentity.HTTP, otp_app: :keyfleet
   end
 
+  # An agent pairs with a person's Regent account, and checks in on it, the
+  # same way on every Regent site. Pairing grants nothing here.
+  scope "/" do
+    pipe_through :api
+    forward "/api/agents/v1", RegentAgents.HTTP
+  end
+
   scope "/api/v1/agent", KeyfleetWeb do
     pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status

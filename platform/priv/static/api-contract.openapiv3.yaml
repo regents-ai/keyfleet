@@ -779,6 +779,60 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/RoomTopicWaitError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+  /api/agents/v1/pair:
+    post:
+      operationId: pairSharedAgent
+      description: >-
+        Pairs the signing agent with the person who made the pairing code on their regents.sh
+        Account page. The pairing is the same on every Regent site. It says only whose agent this
+        is: to run a key, the agent still asks, and the key's owner approves it on the key's page.
+        A code works once, for ten minutes. A refusal from the sign-in server itself, such as 409
+        request_replayed, comes back with that server's own status and code.
+      security: [{siwaReceipt: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SharedAgentPairRequest"}
+      responses:
+        "201":
+          description: The agent is paired
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentEnvelope"}
+        "400":
+          description: >-
+            pairing_failed: the body is not exactly code, name and harness, or the code is unknown,
+            used or expired. harness_unknown: the harness is not one of the listed names.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentError"}
+        "401": {$ref: "#/components/responses/SharedAgentUnverified"}
+        "503": {$ref: "#/components/responses/SharedAgentSignInUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+  /api/agents/v1/me:
+    get:
+      operationId: checkInSharedAgent
+      description: >-
+        Checks the signing agent in and answers with its pairing, the same on every Regent site,
+        and the display name of its person's Keyfleet account, null when they have none here. It
+        is sent without a body and without a query string. A refusal from the sign-in server
+        itself comes back with that server's own status and code.
+      security: [{siwaReceipt: []}]
+      responses:
+        "200":
+          description: The agent's pairing
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentCheckInEnvelope"}
+        "401": {$ref: "#/components/responses/SharedAgentUnverified"}
+        "404":
+          description: not_paired, the agent is not paired with anyone
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentError"}
+        "503": {$ref: "#/components/responses/SharedAgentSignInUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
   /metadata/{slot}/{token_id}:
     get:
       operationId: getKeyMetadata
@@ -1046,6 +1100,16 @@ components:
               value: {error: {code: profile_unconfigured}}
             unavailable:
               value: {error: {code: profile_unavailable}}
+    SharedAgentUnverified:
+      description: verification_failed, the signed request could not be verified for audience keyfleet
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/SharedAgentError"}
+    SharedAgentSignInUnavailable:
+      description: verification_unavailable, the sign-in server could not be reached
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/SharedAgentError"}
     AgentUnauthorized:
       description: The signed request was missing or invalid, or its body does not fit the operation exactly; nothing else about the request was trusted
       content:
@@ -1683,6 +1747,68 @@ components:
           required: [code, message, hint]
           properties:
             code: {type: string, const: profile_not_found}
+            message: {type: string}
+            hint: {type: string}
+    SharedAgentPairRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, harness]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 128, description: The pairing code the person made on regents.sh}
+        name: {type: string, minLength: 1, maxLength: 80}
+        harness: {$ref: "#/components/schemas/SharedAgentHarness"}
+    SharedAgentHarness:
+      type: string
+      description: What the agent runs on; other for anything not listed
+      enum: [hermes, grok_bot, muse, openclaw, nemoclaw, ironclaw, pi, claude_code, codex, cursor, gemini_cli, dots, other]
+    SharedAgent:
+      type: object
+      additionalProperties: false
+      required: [name, harness, wallet, paired_at, last_contact_at]
+      properties:
+        name: {type: string}
+        harness: {$ref: "#/components/schemas/SharedAgentHarness"}
+        wallet: {$ref: "#/components/schemas/AgentWallet"}
+        paired_at: {type: string, format: date-time}
+        last_contact_at: {type: string, format: date-time}
+    SharedAgentEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: {$ref: "#/components/schemas/SharedAgent"}
+    SharedAgentCheckInEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [name, harness, wallet, paired_at, last_contact_at, account]
+          properties:
+            name: {type: string}
+            harness: {$ref: "#/components/schemas/SharedAgentHarness"}
+            wallet: {$ref: "#/components/schemas/AgentWallet"}
+            paired_at: {type: string, format: date-time}
+            last_contact_at: {type: string, format: date-time}
+            account:
+              type: object
+              additionalProperties: false
+              required: [display_name]
+              properties:
+                display_name: {type: [string, "null"]}
+    SharedAgentError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string}
             message: {type: string}
             hint: {type: string}
     AgentWallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}

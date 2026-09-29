@@ -29,6 +29,8 @@ defmodule Keyfleet.LocalDatabaseFixture do
   # idempotent, so an already prepared database is left as it is. The file is
   # shipped inside this application's priv directory and holds only DDL written
   # in this repository, so neither the path nor the statements come from input.
+  # The shared agent pairing schema comes from `regent_agents`' own migrations,
+  # which Regents alone runs in production; running them again changes nothing.
   # sobelow_skip ["SQL.Query", "Traversal.FileModule"]
   def create_shared_tables! do
     :keyfleet
@@ -38,5 +40,7 @@ defmodule Keyfleet.LocalDatabaseFixture do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.each(&Ecto.Adapters.SQL.query!(Keyfleet.Repo, &1, []))
+
+    RegentAgents.Migrator.up(Keyfleet.Repo)
   end
 end

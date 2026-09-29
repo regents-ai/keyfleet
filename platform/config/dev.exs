@@ -8,7 +8,9 @@ config :keyfleet, :graph, enabled: true
 
 # The SIWA sign-in server agents use: the local siwa-server unless the
 # environment names another.
-config :keyfleet, :siwa_broker_url, System.get_env("KEYFLEET_SIWA_URL", "http://localhost:4100")
+siwa_url = System.get_env("KEYFLEET_SIWA_URL", "http://localhost:4100")
+config :keyfleet, :siwa_broker_url, siwa_url
+config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))

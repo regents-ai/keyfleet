@@ -29,6 +29,16 @@ defmodule Keyfleet.Agents do
   alias Keyfleet.Agents.CheckIn
 
   @doc """
+  How a check-in from an agent paired with a person's Regent account
+  (`regent_agents`) names that person's Keyfleet account: by its display name,
+  which is nil when they have none or no account here.
+  """
+  def account(privy_user_id) do
+    account = Keyfleet.Accounts.get_by_privy_did!(privy_user_id, actor: %Keyfleet.Actors.System{})
+    %{display_name: account && account.display_name}
+  end
+
+  @doc """
   Records that the agent checked in with the fleet, as `run` says: in a
   conversation (`%{"kind" => "session"}`) or on its schedule
   (`%{"kind" => "scheduled", "every_minutes" => minutes}`). An agent without a

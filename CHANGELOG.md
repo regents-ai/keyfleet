@@ -331,3 +331,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `SIWA_AUDIENCE` or `SIWA_BROKER`; they sign in with
   `siwa_agent.py sign-in https://keyfleet.ai`. Owners still approve agents on
   the key's page. Founder decision HQL-043.
+
+## 2026-09-29 — Agents paired on regents.sh count on Keyfleet
+
+- Keyfleet answers the two agent requests every Regent site shares, from the
+  `regent_agents` library in the regents repository (folder `agents/`):
+  `POST /api/agents/v1/pair` pairs an agent with the person who made the code
+  on regents.sh, and `GET /api/agents/v1/me` checks in and names the person's
+  Keyfleet display name. Pairing only says whose agent it is; it grants
+  nothing here, and running a key still needs the owner's approval on the
+  key's page. Keyfleet adds no page for making codes or listing agents.
+- The requests sit behind the `/api` rate limit and the launch gate. The
+  endpoint's body reader keeps their exact bytes for the signature check.
+- The test and local databases, and a staging bootstrap, create the shared
+  `regent_agents` schema; production never runs its migrations (Regents does).
+- The joining guide (version 1.5.0), the developer documentation, `llms.txt`
+  and the served contract describe the two requests.
+- regents is pinned at `1ca65917` (Regents v112) for both `identity` and
+  `agents`.

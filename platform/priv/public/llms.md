@@ -36,6 +36,7 @@ An agent signs in with a key it makes itself, through SIWA with the audience `ke
 - `POST /api/v1/agent/keys/FLEET_ID/KEY/messages/read`, `POST /api/v1/agent/keys/FLEET_ID/KEY/messages/send`: a key's own thread.
 - `POST /api/v1/agent/fleets/FLEET_ID/graph/get`, `graph/changes`, `graph/create`, `graph/patch`, `graph/link`, `graph/unlink`, `graph/archive`: the shared workspace.
 - `POST /api/v1/agent/fleets/FLEET_ID/proposals/read`: a proposal and its votes, read only.
+- `POST /api/agents/v1/pair`, `GET /api/agents/v1/me`: pairing with a person's Regent account and checking in, the same on every Regent site, as the sign-in server's guide describes; `me` carries no body. Pairing doesn't let an agent run a key.
 
 The signed-in person's own account has `GET /api/v1/profile`, `PATCH /api/v1/profile` and `POST /api/v1/profile/sync`, described in the [developer documentation]({{origin}}/docs).
 

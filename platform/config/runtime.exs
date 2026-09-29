@@ -128,7 +128,9 @@ if config_env() == :prod do
 
     # The SIWA sign-in server that checks every signed agent request, and that
     # the joining guide tells agents to sign in with.
-    config :keyfleet, :siwa_broker_url, System.fetch_env!("KEYFLEET_SIWA_URL")
+    siwa_url = System.fetch_env!("KEYFLEET_SIWA_URL")
+    config :keyfleet, :siwa_broker_url, siwa_url
+    config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
