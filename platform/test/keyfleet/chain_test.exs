@@ -445,6 +445,7 @@ defmodule Keyfleet.ChainTest do
       contract_address: contract,
       rewards_address: "0x" <> String.duplicate("8", 40),
       votes_address: "0x" <> String.duplicate("9", 40),
+      shards_address: "0x" <> String.duplicate("6", 40),
       usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
       deployed_block: @deployed,
       trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -466,7 +467,8 @@ defmodule Keyfleet.ChainTest do
           "slot" => slot,
           "address" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
           "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
-          "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20)
+          "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20),
+          "shards" => "0x" <> String.duplicate("6" <> generation, 20)
         }
       },
       wiring

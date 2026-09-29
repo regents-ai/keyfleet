@@ -39,6 +39,7 @@ defmodule Keyfleet.KeeperHelpers do
         contract_address: address,
         rewards_address: "0x" <> String.duplicate("7", 40),
         votes_address: "0x" <> String.duplicate("8", 40),
+        shards_address: "0x" <> String.duplicate("6", 40),
         usdc_address: @addresses.usdc,
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)

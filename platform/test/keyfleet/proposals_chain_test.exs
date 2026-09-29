@@ -18,6 +18,7 @@ defmodule Keyfleet.ProposalsChainTest do
   @fleet "fleet_tech_accelerant"
   @contract "0x" <> String.duplicate("7", 40)
   @votes "0x" <> String.duplicate("9", 40)
+  @shards "0x" <> String.duplicate("6", 40)
   @deployed 5_000_000
   @new_hash "0x" <> String.duplicate("e", 64)
   @max_uint256 115_792_089_237_316_195_423_570_985_008_687_907_853_269_984_665_640_564_039_457_584_007_913_129_639_935
@@ -36,6 +37,9 @@ defmodule Keyfleet.ProposalsChainTest do
   @income_recognized "0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13"
   @shared_money_recognized "0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7"
   @budget_paid "0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e"
+  @edits_set "0x2e8b5462cfaf90ff39c1d520552d96015e77788b57b81d3bf8dd40a847037bad"
+  @shard_issued "0x3b2824f462424cb01c09746900aff2810947c0577d310c08082c75fe40c2312a"
+  @shard_ended "0x22773ac65ded0957ecf7109dad0076e1968f3db974ccda1df370bfa4505092f4"
 
   setup context do
     if context[:independent_connections] do
@@ -74,7 +78,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
 
       assert StubClient.log_requests() == [
-               {[@contract, @votes],
+               {[@contract, @votes, @shards],
                 [
                   @ownership,
                   @revealed,
@@ -84,9 +88,12 @@ defmodule Keyfleet.ProposalsChainTest do
                   @vote,
                   @withdrawn,
                   @executed,
+                  @edits_set,
                   @income_recognized,
                   @shared_money_recognized,
-                  @budget_paid
+                  @budget_paid,
+                  @shard_issued,
+                  @shard_ended
                 ], @deployed, @deployed + 10}
              ]
 
@@ -1261,6 +1268,7 @@ defmodule Keyfleet.ProposalsChainTest do
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
+        shards_address: @shards,
         usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: @deployed,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -1446,7 +1454,7 @@ defmodule Keyfleet.ProposalsChainTest do
 
       Repo.query!(
         "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
-          "rewards_address = NULL, votes_address = NULL, usdc_address = NULL, " <>
+          "rewards_address = NULL, votes_address = NULL, shards_address = NULL, usdc_address = NULL, " <>
           "deployed_block = NULL, trait_table_hash = NULL " <>
           "WHERE id = $1",
         [@fleet]

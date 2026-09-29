@@ -201,6 +201,7 @@ defmodule Keyfleet.ReleaseTest do
              "budget_receipts",
              "chain_cursors",
              "early_signups",
+             "edits_restrictions",
              "fleets",
              "graph_cursors",
              "graph_events",
@@ -220,6 +221,7 @@ defmodule Keyfleet.ReleaseTest do
              "rooms",
              "schema_migrations",
              "session_authorities",
+             "shard_events",
              "treasury_asset_details",
              "treasury_readings"
            ]

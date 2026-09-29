@@ -5,9 +5,10 @@ defmodule Keyfleet.Chain.Logs do
 
   Each log is sent, by its contract and topic0, to
   `Keyfleet.Chain.OwnershipLog`, `Keyfleet.Chain.RevealLog` or
-  `Keyfleet.Chain.BudgetLog`, for the fleet contract, or
-  `Keyfleet.Chain.VotesLog`, and carries its fleet and its place on the
-  chain. A payment or edit-restriction proposal is joined with the payload
+  `Keyfleet.Chain.BudgetLog`, for the fleet contract,
+  `Keyfleet.Chain.VotesLog`, for its vote contract, or
+  `Keyfleet.Chain.ShardsLog`, for its shard record, and carries its fleet and
+  its place on the chain. A payment or edit-restriction proposal is joined with the payload
   log that follows it in the same transaction. A log the node lists twice is read once.
   One log that cannot be read, two different logs in one place, or a proposal
   and payload that do not pair up refuses the whole stretch, and the reason
@@ -17,12 +18,16 @@ defmodule Keyfleet.Chain.Logs do
   alias Keyfleet.Chain.BudgetLog
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.RevealLog
+  alias Keyfleet.Chain.ShardsLog
   alias Keyfleet.Chain.VotesLog
   alias RegentChain.Abi
 
   @doc "The topic0 of every event the reader asks for."
   def topics,
-    do: [OwnershipLog.topic(), RevealLog.topic() | VotesLog.topics() ++ BudgetLog.topics()]
+    do: [
+      OwnershipLog.topic(),
+      RevealLog.topic() | VotesLog.topics() ++ BudgetLog.topics() ++ ShardsLog.topics()
+    ]
 
   @doc """
   The records in `logs`, read from blocks `from..to` of `fleet`, in (block,
@@ -50,7 +55,7 @@ defmodule Keyfleet.Chain.Logs do
   number, `highest`: each new proposal must be the next number, and each vote
   and execution must name a proposal recorded by then. A proposal at or below
   the highest is one read again, which recording compares with the record.
-  Key ownership, key reveal and budget records name no proposal.
+  Key ownership, key reveal, budget and shard records name no proposal.
   """
   def in_sequence(records, highest) do
     Enum.reduce_while(records, highest, fn
@@ -140,6 +145,9 @@ defmodule Keyfleet.Chain.Logs do
 
   defp route(%{votes_address: address}, address, topic0, words, data),
     do: VotesLog.decode(topic0, words, data)
+
+  defp route(%{shards_address: address}, address, topic0, words, data),
+    do: ShardsLog.decode(topic0, words, data)
 
   defp route(_fleet, _address, _topic0, _words, _data), do: :error
 

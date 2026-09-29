@@ -101,7 +101,13 @@ defmodule Keyfleet.Fleets do
         "deploymentBlock" => block,
         "usdc" => usdc,
         "traitTableHash" => trait_table_hash,
-        "fleet" => %{"slot" => slot, "address" => address, "rewards" => rewards, "votes" => votes}
+        "fleet" => %{
+          "slot" => slot,
+          "address" => address,
+          "rewards" => rewards,
+          "votes" => votes,
+          "shards" => shards
+        }
       })
       when is_integer(chain_id) and is_integer(block) do
     bootstrap_catalog!()
@@ -112,6 +118,7 @@ defmodule Keyfleet.Fleets do
       contract_address: String.downcase(address),
       rewards_address: String.downcase(rewards),
       votes_address: String.downcase(votes),
+      shards_address: String.downcase(shards),
       usdc_address: String.downcase(usdc),
       deployed_block: block,
       trait_table_hash: String.downcase(trait_table_hash)

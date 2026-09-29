@@ -141,6 +141,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
         contract_address: "0x" <> String.duplicate(character, 40),
         rewards_address: "0x" <> String.duplicate(character <> "a", 20),
         votes_address: "0x" <> String.duplicate(character <> "b", 20),
+        shards_address: "0x" <> String.duplicate(character <> "c", 20),
         usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: 1,
         trait_table_hash: @table_hash

@@ -16,6 +16,10 @@ defmodule Keyfleet.Chain.VotesLog do
 
   A proposal's text is kept up to its first 64 KiB, as raw bytes that need
   not be valid text, beside its full length and its SHA-256.
+
+  Carrying out an edit-restriction proposal also logs `EditsRestrictionSet`,
+  read as `{:edits_restriction, fields}`: the key it names and whether that
+  key's workspace edits are now restricted.
   """
 
   alias RegentChain.Abi
@@ -27,6 +31,7 @@ defmodule Keyfleet.Chain.VotesLog do
   @vote Event.topic0("VoteCast(uint256,address,bool,uint256[])")
   @withdrawn Event.topic0("VoteWithdrawn(uint256,address,uint256[])")
   @executed Event.topic0("ProposalExecuted(uint256,address)")
+  @edits_set Event.topic0("EditsRestrictionSet(uint256,bool,uint256)")
 
   @text_cap 65_536
   @zero_digest "0x" <> String.duplicate("0", 64)
@@ -34,7 +39,7 @@ defmodule Keyfleet.Chain.VotesLog do
   @kinds %{0 => :decision, 1 => :pay, 2 => :restrict_edits}
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@created, @pay, @restrict_edits, @vote, @withdrawn, @executed]
+  def topics, do: [@created, @pay, @restrict_edits, @vote, @withdrawn, @executed, @edits_set]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
@@ -106,6 +111,18 @@ defmodule Keyfleet.Chain.VotesLog do
          {:ok, executor} <- Abi.word(executor, :address),
          {:ok, []} <- Abi.decode(data, []) do
       {:ok, {:execution, %{proposal_number: number, executor: executor}}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@edits_set, [target, id], data) do
+    with {:ok, token_id} <- number(target),
+         {:ok, number} <- number(id),
+         {:ok, [restricted]} <- Abi.decode(data, [:bool]) do
+      {:ok,
+       {:edits_restriction,
+        %{token_id: token_id, restricted: restricted, proposal_number: number}}}
     else
       _malformed -> :error
     end

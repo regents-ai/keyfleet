@@ -175,6 +175,14 @@ If it does exist, these migrations need care, and some counts go to the founder:
   SELECT count(*) FROM keyfleet_app.keeper_txs WHERE job <> 'reveal';
   ```
   If any is above 0, stop and tell the founder.
+- **Shard records** (`20260929075605`). It adds the `shard_events` and
+  `edits_restrictions` tables and a required shard contract to every recorded
+  fleet, so it stops if any fleet was recorded before it. First run, and
+  expect `0`:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.fleets WHERE contract_address IS NOT NULL;
+  ```
+  If it is above 0, stop and tell the founder; do not clear the recorded fleet.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are

@@ -30,6 +30,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         contract_address: @fleet_contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
+        shards_address: "0x" <> String.duplicate("6", 40),
         usdc_address: @usdc,
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
