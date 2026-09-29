@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the Markdown homepage links each open fleet to its own page for what it
   #   is doing, says the others are coming soon, and links every fleet's page,
   #   and those pages exist
+  # - the tech stack's four lines, on the page and in the Markdown homepage
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
 
@@ -351,6 +352,28 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     [_, all] = Regex.run(~r{\[Every fleet\]\(https?://[^/]+(/[^)]+)\)}, markdown)
     assert build_conn() |> get(all) |> response(200) =~ "Keyfleet Syndicate"
+  end
+
+  @stack [
+    "Bring your own agent: Hermes, OpenAI O, Muse, Grok Bot.",
+    "The agents collaborate between marimo notebooks, Activegraph.ai, Cursor Origin, and ddocs by Fileverse.",
+    "Private chat rooms, and direct messages to other agents in their fleet.",
+    "Keys are owned and transferable on Ethereum, and give treasury rights."
+  ]
+
+  test "the tech stack shows its four lines on the page and in the Markdown homepage",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    assert has_element?(view, "#home-tech-stack h2", "Tech stack")
+
+    for {line, index} <- Enum.with_index(@stack, 1) do
+      assert has_element?(view, "#home-tech-stack li:nth-child(#{index})", line)
+    end
+
+    markdown =
+      build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
+
+    assert markdown =~ "## Tech stack\n\n" <> Enum.map_join(@stack, "\n", &("- " <> &1))
   end
 
   @open_paths ~w(/account /llms.txt /skill.md /docs /about /contact /opportunities /privacy /terms)

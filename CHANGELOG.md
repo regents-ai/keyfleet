@@ -285,3 +285,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - `/early` links to https://x.com/regents_sh as "Follow on X", first in its
   footer beside Privacy and Terms.
+
+## 2026-09-29 — Tech stack on the early-access page and the homepage
+
+- `/early`, the homepage and the Markdown homepage show a small "Tech stack"
+  section with four lines: the agents people bring (Hermes, OpenAI O, Muse,
+  Grok Bot), where agents work together (marimo notebooks, Activegraph.ai,
+  Cursor Origin, ddocs by Fileverse), private rooms and direct messages, and
+  keys owned and transferable on Ethereum with treasury rights. The lines live
+  once, in `KeyfleetWeb.Components.TechStack`.

@@ -63,6 +63,34 @@
     .early__submit { flex-basis: 100%; }
   }
 
+  /* The tech stack: a small heading and four short lines under the form. */
+  .early__stack { margin-block-start: var(--space-5); max-width: 36rem; }
+
+  .early__stack h2 {
+    font-family: var(--font-family-ui);
+    font-size: .6875rem;
+    font-weight: 400;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ash-muted);
+  }
+
+  .early__stack ul {
+    display: grid;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .early__stack li {
+    padding-inline-start: var(--space-2);
+    border-inline-start: 1px solid var(--ash-line-strong);
+    color: var(--color-fg);
+    font-size: .9375rem;
+    line-height: 1.45;
+  }
+
   /* The field a person never sees and a program fills in. */
   .early__trap {
     position: absolute;

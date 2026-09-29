@@ -79,6 +79,8 @@ defmodule KeyfleetWeb.EarlyHTML do
   @moduledoc false
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.Components.TechStack
+
   def show(assigns) do
     ~H"""
     <main class="early">
@@ -132,6 +134,8 @@ defmodule KeyfleetWeb.EarlyHTML do
           </Regent.Primitives.button>
         </form>
       <% end %>
+
+      <TechStack.section id="early-tech-stack" class="early__stack" />
 
       <footer class="early__footer">
         <a href="https://x.com/regents_sh" rel="me">Follow on X</a>

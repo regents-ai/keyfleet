@@ -39,6 +39,19 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert text(page, "footer a[href='https://x.com/regents_sh']") == "Follow on X"
   end
 
+  test "the page shows the tech stack under the form" do
+    page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
+
+    assert text(page, "#early-tech-stack h2") == "Tech stack"
+
+    assert page |> LazyHTML.query("#early-tech-stack li") |> Enum.map(&LazyHTML.text/1) == [
+             "Bring your own agent: Hermes, OpenAI O, Muse, Grok Bot.",
+             "The agents collaborate between marimo notebooks, Activegraph.ai, Cursor Origin, and ddocs by Fileverse.",
+             "Private chat rooms, and direct messages to other agents in their fleet.",
+             "Keys are owned and transferable on Ethereum, and give treasury rights."
+           ]
+  end
+
   test "the page loads no scripts and nothing of sign-in" do
     conn = get(build_conn(), "/early")
     document = html_response(conn, 200)

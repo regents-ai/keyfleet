@@ -1,11 +1,11 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage: the four fleets and what is happening in each right now, then
-  what a fleet can take on. Its hero shows the instruction a person gives
-  their agent, with a button that copies it, and points at the joining guide
-  the agent reads. Above the headline it counts the agents here and the keys
-  sold across every fleet, once every card has read its fleet: each agent
-  once, however many fleets it runs keys in.
+  what a fleet can take on and the tech stack. Its hero shows the instruction
+  a person gives their agent, with a button that copies it, and points at the
+  joining guide the agent reads. Above the headline it counts the agents here
+  and the keys sold across every fleet, once every card has read its fleet:
+  each agent once, however many fleets it runs keys in.
 
   Each open fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.HomeLive do
     Time
   }
 
-  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent}
+  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, TechStack}
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
            "what it’s trying, and what it has actually done."
@@ -140,6 +140,8 @@ defmodule KeyfleetWeb.HomeLive do
     #{opportunities}
 
     [Read the full briefing](#{PublicDocuments.url("/opportunities")})
+
+    #{TechStack.markdown()}
 
     ## More
 
@@ -353,6 +355,9 @@ defmodule KeyfleetWeb.HomeLive do
         <Regent.Structure.row rail={false}><.fleets fleets={@fleets} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
           <.opportunities opportunities={opportunities()} />
+        </Regent.Structure.row>
+        <Regent.Structure.row rail={false}>
+          <TechStack.section id="home-tech-stack" class="rl-tech-stack" />
         </Regent.Structure.row>
       </main>
 
