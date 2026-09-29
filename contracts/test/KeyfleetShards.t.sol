@@ -187,13 +187,9 @@ contract KeyfleetShardsTest is Test {
     }
 
     /// @dev Invariant: a wallet answers for one key at a time in a fleet. While its shard is
-    /// active it cannot be issued another, by the same key or any other; a key may have many.
+    /// active no other key can issue it one; a key may have many.
     function test_aWalletHoldsOneActiveShardPerFleet() public {
         _issue(1, carol, 30);
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetShards.ShardAlreadyActive.selector, carol, 1));
-        shards.issue(1, carol, 60);
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetShards.ShardAlreadyActive.selector, carol, 1));
@@ -204,6 +200,24 @@ contract KeyfleetShardsTest is Test {
         assertTrue(_active(carol) && _active(dave) && _active(mallory), "One key, three shards");
         (uint256 tokenId,,,) = shards.shardOf(carol);
         assertEq(tokenId, 1, "The first shard stands");
+    }
+
+    /// @dev Invariant: the key's owner renews an active shard by issuing it again, which counts its
+    /// days from now and keeps the key's ownership.
+    function test_theOwnerRenewsAnActiveShard() public {
+        _issue(1, carol, 30);
+        vm.warp(block.timestamp + 20 days);
+
+        uint64 expiresAt = uint64(block.timestamp + 60 days);
+        vm.expectEmit(address(shards));
+        emit ShardIssued(1, carol, expiresAt, 1);
+        _issue(1, carol, 60);
+
+        (uint256 tokenId, uint64 renewedUntil, uint64 epoch, bool active) = shards.shardOf(carol);
+        assertEq(tokenId, 1, "Same key");
+        assertEq(renewedUntil, expiresAt, "Counted from the renewal");
+        assertEq(epoch, 1, "Same ownership");
+        assertTrue(active, "Still active");
     }
 
     /// @dev Invariant: the one-shard rule is per fleet; another fleet's record is its own.

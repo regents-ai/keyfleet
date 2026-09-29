@@ -382,8 +382,9 @@ reachable as `SHARDS()` on the fleet.
   key's current `ownershipEpoch`. It emits
   `ShardIssued(tokenId, wallet, expiresAt, epoch)`.
 - A wallet holds at most one active shard in a fleet, under whichever key issued
-  it (`ShardAlreadyActive`). A key may have any number of shards. A new shard
-  replaces a wallet's inactive one.
+  it; another key cannot issue it one (`ShardAlreadyActive`). A key may have any
+  number of shards. A new shard replaces a wallet's inactive one, and the key's
+  owner renews an active shard by issuing it again, which counts its days from now.
 - `end(tokenId, wallet)` ends an active shard early. The key's current owner or
   the shard's own wallet may call it (`NotAllowedToEnd` otherwise), and it emits
   `ShardEnded(tokenId, wallet, by)`.

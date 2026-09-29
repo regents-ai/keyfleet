@@ -34,6 +34,17 @@ Shards ("1a 2a 3 a 4a 5a 6a 7a 8a"):
 8. siwa-server is unchanged. It proves which wallet is asking; KeyFleet reads the shard
    from its record of the chain to decide what that wallet may do.
 
+Fees and levels (29 Sep, after seeing the four fleet types):
+
+- 10% of every key sale, for all four types, goes to Sean's Safe on Ethereum
+  (`PROTOCOL_TREASURY`, fixed per fleet at deploy; the address is still to come).
+- Syndicate and Cascade have no cap on levels, so they never sell out.
+- Accelerant: key 1 puts all of its 90% into shared money; every later key gives 20% to
+  shared money and 70% to whoever holds the key before it.
+- The key map shows only the levels reached so far plus the one on sale. It keeps
+  scrolling and repeating in every direction, so scrolling down comes back to the top.
+- The Autolaunch v2 branch stays, for when launches come back.
+
 Earlier, still standing: ERC-8004 is unrelated to shards. (Sean's ERC-8004 minting choices
 belong to the Regents chief's siwa-server work.)
 
@@ -44,7 +55,7 @@ belong to the Regents chief's siwa-server work.)
   edits are restricted.
 - Never vote, propose, buy, collect or move money. `_requireCaster` stays owner-or-delegate.
 
-A wallet holds at most one active shard per fleet. A wallet that owns a key in the fleet
+A wallet holds at most one active shard per fleet; the key's owner renews one by issuing it again. A wallet that owns a key in the fleet
 acts as its own lowest-numbered key, never as a shard.
 
 ## Contracts (phase A)
