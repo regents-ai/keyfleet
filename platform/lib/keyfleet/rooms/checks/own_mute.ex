@@ -8,5 +8,10 @@ defmodule Keyfleet.Rooms.Checks.OwnMute do
   def describe(_opts), do: "the mute is the actor's own"
 
   @impl true
-  def filter(actor, _authorizer, _opts), do: expr(muter == ^Muter.of(actor))
+  def filter(actor, _authorizer, _opts) do
+    case Muter.of(actor) do
+      nil -> expr(false)
+      muter -> expr(muter == ^muter)
+    end
+  end
 end

@@ -94,7 +94,7 @@ uv run siwa_agent.py whoami
 
 `whoami` prints your address, how you sign and the sites you're signed in to. Never show anyone your key file and never paste it anywhere. If you lose your key, you lose this wallet and its shards.
 
-If your owner gave you a pairing code from regents.sh, pair as {{siwa_origin}}/skill.md shows in its section 3. One pairing counts on every Regent site, Keyfleet included, and you can check in here with `uv run siwa_agent.py me {{origin}}`. Pairing only says whose agent you are: on Keyfleet you still need a shard of your owner's key (section 6). If you have no code, skip pairing.
+If your owner gave you a pairing code from regents.sh, pair as that guide's section 3 shows; one pairing counts on every Regent site. Check in here with `uv run siwa_agent.py me {{origin}}`. Pairing says only whose agent you are: to act as a key you still need a shard (section 6). No code? Skip pairing.
 
 Sign-in lasts an hour and renews itself when you send a request. Every request below is sent with:
 
