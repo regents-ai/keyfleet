@@ -1,11 +1,12 @@
 # Keyfleet
 
-Keyfleet is a website and a set of Base contracts for fleets owned by their key
+Keyfleet is a website and a set of Ethereum contracts for fleets owned by their key
 holders, one of each type: Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic
 and Keyfleet Accelerant. A fleet is a group of people and agents who each hold a numbered
 key, bought in USDC. Key holders talk in the fleet's rooms, share work in the
 fleet's workspace, and vote on proposals that record a decision, pay from the
-fleet's shared money or launch a token through Autolaunch. A keeper inside the
+fleet's shared money or restrict a key's edits. A key's owner can give other
+wallets time-limited shards of the key. A keeper inside the
 site sends the few routine transactions anyone may send, such as key reveals and
 income sweeps.
 
@@ -19,25 +20,27 @@ person's keys are on the Account page.
   votes or its money. The Regents Safe owns the Chainlink subscription that pays
   for each key's traits and adds each fleet to it.
 - A key costs what its fleet type's price rule says: Syndicate and Cascade step
-  up by level along a Fibonacci ladder, Classic's 1,024 keys run from 8 USDC for
-  the first to 80 USDC for the last, each key the same percentage dearer than the
-  one before, and Accelerant steps up 5% with every key sold.
-- Regents takes 2% of each key purchase, once, for the Regents staking contract.
+  up by level along a Fibonacci ladder with no last level, Classic's 1,024 keys
+  run from 8 USDC for the first to 80 USDC for the last, each key the same
+  percentage dearer than the one before, and Accelerant's 2,000 keys step up 5%
+  with every key sold.
+- Regents takes 10% of each key purchase, once, in USDC, for the Regents Safe.
   Keyfleet takes nothing from money a fleet receives afterwards.
-- Income in USDC, REGENT or the fleet's launched token is paid 100% to the keys.
-  Everything else is the fleet's shared money: what is left of key sales after
-  the 2%, the launched token released from vesting, the REGENT the fleet holds
-  after graduation, and any other token.
-- A proposal stays open until more than half of all keys sold vote yes; then
-  anyone can carry it out. There is no voting window, deadline or cap. A key
+- Income in USDC is paid 100% to the keys. Everything else is the fleet's shared
+  money: what is left of key sales after the 10% (on Accelerant, 20% of each
+  later sale, with 70% going to the holder of the key before) and any other
+  token.
+- A proposal stays open until more than half of all keys sold vote yes, or at
+  least three fifths to restrict a key's edits; then anyone can carry it out. There is no voting window, deadline or cap. A key
   bought or moved after a proposal opened cannot vote on it; a vote cast before
   the key moved stays until the key's current holder withdraws it. Votes can be
   changed or withdrawn.
 - Every payment is matched: it can spend at most the yes keys' share of that
   token, and every key that did not vote yes can collect the same amount per
   key.
-- A fleet runs one Autolaunch at a time. After a failed launch it can propose
-  another; after graduation, never again.
+- A shard lets another wallet act for a key off chain for 1 to 365 days. It
+  carries no vote and no money, and every shard of a key ends when the key
+  changes hands.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
   refused request.
 
@@ -45,17 +48,16 @@ person's keys are on the Account page.
 
 ## Status
 
-Decided by the founder on 27 September 2026: the rules above.
+Decided by the founder on 27 and 29 September 2026: the rules above.
 
 On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before the
-  contracts are complete and deployed on Base.
-- Before any deploy: a fork test against the real Autolaunch contracts on Base,
-  an outside audit, and the founder's go.
-- Deferred until each fleet type is next: Fibonacci late-entry capture, the
-  Cascade reserve of a level that never completes, and a sensible Accelerant key
-  cap.
+  contracts are complete and deployed on Ethereum.
+- Before any deploy: the Regents Safe on Ethereum chosen, an outside audit, and
+  the founder's go.
+- Deferred until each fleet type is next: Fibonacci late-entry capture and the
+  Cascade reserve of a level that never completes.
 - Every wallet button sends a step the server built before anyone pressed, and
   the server follows each sent step until the chain answers.
 - There is no Fly app yet; it is created at launch.
@@ -71,7 +73,7 @@ On hold or not yet done:
 | Component | What it holds | Check |
 | --- | --- | --- |
 | [platform/](platform/README.md) | The Phoenix/Ash website: the homepage, the fleet, key, room, workspace and proposal pages, Privy wallet sign-in, the Account page, the agent API, the chain reader and the keeper. | `make check-platform` |
-| [contracts/](contracts/README.md) | The Foundry contracts: each fleet with its own rewards ledger and votes, and the scripts that deploy and record one fleet at a time. | `make check-contracts` |
+| [contracts/](contracts/README.md) | The Foundry contracts: each fleet with its own rewards ledger, votes and shard record, and the scripts that deploy and record one fleet at a time. | `make check-contracts` |
 | [cli/](cli/README.md) | `commands.json`, describing the `regents keyfleet` commands; the code that runs them lives in regents-cli. | `make check-cli` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
 
@@ -82,8 +84,8 @@ its test database; the [platform README](platform/README.md#checks) explains it.
 `make release` runs them on the committed tree, then builds and starts the release
 image; see [Release](platform/README.md#release).
 
-[docs/](docs/) explains deploying the fleets, reading them from the chain,
-running the keeper and the Autolaunch contracts Keyfleet uses.
+[docs/](docs/) explains deploying the fleets, reading them from the chain and
+running the keeper.
 
 ## Start
 

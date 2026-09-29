@@ -5,9 +5,9 @@ of the others later, one at a time, when the founder opens it. Nothing is
 deployed before the first fleet, and fleets share only the randomness
 subscription.
 
-No fleet may be deployed yet. Before any deploy the contracts must be complete,
-tested against the real Autolaunch contracts on a fork of Base and audited by an
-outside auditor, and the founder must give the go; the
+No fleet may be deployed yet. Before any deploy the contracts must be complete
+and audited by an outside auditor, the Regents Safe on Ethereum must be chosen,
+and the founder must give the go; the
 [contracts README](../contracts/README.md#status) lists what is decided and
 what is on hold.
 
@@ -30,40 +30,45 @@ broadcasts anything. A file written by the deployment step would be written by
 a dry run too, and by a broadcast that failed partway, naming contracts that do
 not exist. The record step runs only against what the chain actually holds.
 
-Each fleet deploys its own reward ledger and voting controller inside its own
-constructor, so there is no step in which a fleet exists without them and no
-step in which a fleet could be pointed at someone else's.
+Each fleet deploys its own reward ledger, voting controller and shard record
+inside its own constructor, so there is no step in which a fleet exists without
+them and no step in which a fleet could be pointed at someone else's.
 
-Everything the deployment decides is in one file. `contracts/deployments/base.json`
-is the Base input and `contracts/deployments/anvil.json` is the lab input. Nothing
-else configures a deployment: there is no environment variable other than the
-name of the manifest and of the fleet, and no value either step invents for
-itself.
+Everything the deployment decides is in one file and one environment variable.
+`contracts/deployments/ethereum.json` is the Ethereum input and
+`contracts/deployments/anvil.json` is the lab input. The protocol treasury, the
+Safe that receives the 10% protocol share of every key sale, is the one value
+not in the file: both steps take it from `KEYFLEET_PROTOCOL_TREASURY`, which has
+no default, so no run can fall back on an address nobody chose. Nothing else
+configures a deployment: there is no other environment variable than the name
+of the manifest and of the fleet, and no value either step invents for itself.
 
 ## What a manifest says
 
 | Key | What it fixes |
 | --- | --- |
 | `chainId` | The only chain this manifest may be deployed to or recorded on. |
-| `regent` | The REGENT token, one of every fleet's three income tokens. Must hold code; on Base must be `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
-| `usdc` | The USDC every key is paid in, and an income token. On Base must be `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`; a fleet refuses a USDC that does not report six decimals. |
-| `staking` | The Regents revenue staking contract. It registers the 2% protocol share of every purchase as revenue. |
-| `regentSafe` | The Safe that owns the randomness subscription. On Base the record step refuses a subscription it does not own. |
-| `autolaunchFactory` | The one Autolaunch factory the fleets may ever launch through. |
-| `autolaunchFactoryMayBeEmpty` | Whether the factory may still be undeployed. Ignored on Base. |
+| `usdc` | The USDC every key is paid in, and every fleet's one income token. On Ethereum must be `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`; a fleet refuses a USDC that does not report six decimals. |
 | `fleets.*` | Per fleet, under `syndicate`, `cascade`, `classic` and `accelerant`: ERC-721 `name`, `symbol` and `baseTokenURI`. A run reads only the fleet it deploys. |
-| `vrf.coordinator` | The Chainlink VRF v2.5 coordinator every key's traits are requested from. Must hold code; on Base must be `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`. |
+| `vrf.coordinator` | The Chainlink VRF v2.5 coordinator every key's traits are requested from. Must hold code; on Ethereum must be `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a`. |
 | `vrf.subscriptionId` | The coordinator subscription that pays for every request, written as a decimal string because ids exceed what JSON numbers hold exactly. The coordinator must know it. |
-| `vrf.keyHash` | The gas lane. The coordinator must know it; on Base must be the 2 gwei lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab`. |
+| `vrf.keyHash` | The gas lane. The coordinator must know it; on Ethereum must be the 200 gwei lane `0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9`. |
 | `traitTableHash` | `keccak256` of the published trait-table file, byte for byte, that every key's traits are drawn from. Must not be zero. |
+
+And from the environment:
+
+| Variable | What it fixes |
+| --- | --- |
+| `KEYFLEET_PROTOCOL_TREASURY` | The Regents Safe on Ethereum. It receives the whole owed 10% protocol share whenever anyone calls `sendProtocolShare()`, and on Ethereum it must own the randomness subscription. Fixed in each fleet for good. Required, never zero, no default. |
 
 The key price is not a manifest value: it is fixed in the contracts (see D6).
 Each fleet carries its own `baseTokenURI`: all four mint token ids from 1, so a
 single shared base would make `tokenURI` ambiguous across the release.
 
-Every address in the two manifests is recorded, not derived. The Autolaunch
-factory address is the Base factory named in
-[autolaunch-target.md](autolaunch-target.md).
+Every address in the two manifests is recorded, not derived. The Ethereum
+coordinator and 200 gwei gas lane are the ones Chainlink lists for Ethereum
+mainnet on its VRF v2.5 supported-networks page
+(<https://docs.chain.link/vrf/v2-5/supported-networks>).
 
 Both committed manifests carry `"subscriptionId": "0"` and a zero
 `traitTableHash` until the subscription below exists and the trait table is
@@ -117,46 +122,48 @@ Between a fleet's deployment and its record step the Safe adds that fleet to
 the subscription with `addConsumer(subId, fleet)`. A key sold before its fleet
 is added is still sold; its request is refused, and anyone can ask again for it
 with `requestReveal(tokenId)` once the fleet is added. The record step refuses a
-fleet until it is listed, and on Base it also refuses one whose subscription the
-manifest's `regentSafe` does not own.
+fleet until it is listed, and on Ethereum it also refuses one whose
+subscription the protocol treasury does not own.
 
 ## Keeping the subscription funded
 
-The subscription must never run dry. Keep about 0.05 ETH in it, and alert at
-0.02 ETH. A request made while it is empty waits unanswered, and pending
+The subscription must never run dry. On Ethereum each answer is paid in ETH at
+up to the 200 gwei lane's price cap, so the right balance to keep and the alert
+level must be set from a measured cost per key before the first sale; the lab
+figures of about 0.05 ETH kept and an alert at 0.02 ETH are placeholders. A request made while it is empty waits unanswered, and pending
 requests block both removing a consumer and cancelling the subscription until
 they are answered, so an empty subscription cannot simply be closed and
 replaced.
 
 Regent's retry job, which asks again for keys still waiting on a seed, does not
-retry while the subscription is below the 0.02 ETH alert level or while Base gas
-is above the 2 gwei lane's price cap, since a request made then would only wait
+retry while the subscription is below the alert level or while Ethereum gas is
+above the 200 gwei lane's price cap, since a request made then would only wait
 too. Anyone can still ask again with `requestReveal(tokenId)`; the rule governs
 Regent's own job. That job is the keeper, and [keeper.md](keeper.md) is how to
 run it.
 
-On a fork of Base the coordinator is Base's own, so a rehearsal creates and
-funds its own subscription on the fork from the lab account, writes that id into
-the manifest it deploys, and adds the fleets from the same account.
+On a fork of Ethereum the coordinator is Ethereum's own, so a rehearsal creates
+and funds its own subscription on the fork from the lab account, writes that id
+into the manifest it deploys, and adds the fleets from the same account.
 
 ## Running it
 
 All commands run from `contracts/`. The two steps take the same
 `KEYFLEET_MANIFEST`, the same `KEYFLEET_FLEET` (`syndicate`, `cascade`,
-`classic` or `accelerant`) and the same RPC. Neither has a default. For the
-anvil manifest, `RPC_URL` is one of
-the Base forks under Rehearsing: the manifest names Base's own USDC and REGENT,
+`classic` or `accelerant`), the same `KEYFLEET_PROTOCOL_TREASURY` and the same
+RPC. None has a default. For the anvil manifest, `RPC_URL` is the Ethereum fork
+under Rehearsing: the manifest names Ethereum's own USDC and VRF coordinator,
 and a plain `anvil` without a fork holds neither, so the deployment is refused.
 
 ```sh
 cd contracts
 
 # Step 1, simulated. Sends nothing, needs no signer, and writes no deployment file.
-KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic \
+KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<lab treasury> \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets --rpc-url "$RPC_URL"
 
 # Step 1, deployed.
-KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic \
+KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<lab treasury> \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
   --rpc-url "$RPC_URL" --broadcast --unlocked --sender <lab account>
 
@@ -165,7 +172,7 @@ cast send <coordinator> "addConsumer(uint256,address)" <subscription id> <fleet>
   --from <lab account> --unlocked --rpc-url "$RPC_URL"
 
 # Step 2, once the broadcast has finished and the fleet is a consumer.
-KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic \
+KEYFLEET_MANIFEST=anvil KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<lab treasury> \
   forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$RPC_URL"
 ```
 
@@ -177,21 +184,21 @@ there, so each fleet is recorded straight after its own deployment, before the
 next fleet is deployed; the dated `run-<timestamp>.json` beside it keeps each
 fleet's broadcast for good.
 
-Base is the same commands with the Base manifest and a signer that keeps its
-key in hardware:
+Ethereum is the same commands with the Ethereum manifest, the Regents Safe as
+the treasury and a signer that keeps its key in hardware:
 
 ```sh
-KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
+KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<Regents Safe> \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
-  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
+  --rpc-url "$ETHEREUM_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
 
-KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
-  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$BASE_RPC_URL"
+KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<Regents Safe> \
+  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$ETHEREUM_RPC_URL"
 ```
 
 `--verify` wants an explorer API key in `ETHERSCAN_API_KEY`; leave the flag off
 and verify afterwards if there is none to hand. The record step sends nothing
-and needs no signer. On Base, the Safe adds the fleet to the subscription
+and needs no signer. On Ethereum, the Safe adds the fleet to the subscription
 between the two steps, as described under "What the Safe does next".
 
 No private key goes in a file, an environment variable or a command line.
@@ -202,89 +209,66 @@ deploying address matters only for paying gas.
 
 ## Rehearsing
 
-There are two places to rehearse, and they rehearse different things.
+Every purchase is paid in Ethereum USDC, so a rehearsal that buys keys runs on a
+fork of Ethereum, where the real USDC and VRF coordinator exist, and funds the
+buying wallet from an address that already holds USDC on the fork.
 
-Every purchase is paid in Base USDC, so a rehearsal that buys keys runs on a fork
-of Base, where the real USDC exists, and funds the buying wallet from an address
-that already holds USDC on the fork.
-
-**A plain Base fork, for the Base manifest.**
+**A plain Ethereum fork, for the Ethereum manifest.**
 
 ```sh
-anvil --fork-url "$BASE_RPC_URL" --gas-limit 100000000
+anvil --fork-url "$ETHEREUM_RPC_URL" --gas-limit 100000000
 ```
 
-This keeps Base's chain id, 8453, so the Base manifest deploys and records there
-exactly as it would on Base, against the real REGENT, USDC, staking contract and
-Safe. It also applies Base's rule that the Autolaunch factory must already hold
-code: until the Autolaunch ceremony has run on Base, the deployment step refuses
-on the fork just as it would on Base. A fork rehearsal writes
-`broadcast/DeployKeyfleets.s.sol/8453/` and `deployments/base.<fleet>.deployed.json`;
-delete both before the real deployment, so neither the record step nor anyone
-reading the repository mistakes the rehearsal for the release. Git keeps both
-paths on purpose: the Base broadcast log and each `base.<fleet>.deployed.json`
-are the evidence of the real deployment and are committed with it, while
-everything a chain-31337 lab rehearsal writes is ignored.
+This keeps Ethereum's chain id, 1, so the Ethereum manifest deploys and records
+there exactly as it would on Ethereum, against the real USDC and coordinator. A
+fork rehearsal writes `broadcast/DeployKeyfleets.s.sol/1/` and
+`deployments/ethereum.<fleet>.deployed.json`; delete both before the real
+deployment, so neither the record step nor anyone reading the repository
+mistakes the rehearsal for the release. Git keeps both paths on purpose: the
+Ethereum broadcast log and each `ethereum.<fleet>.deployed.json` are the
+evidence of the real deployment and are committed with it, while everything a
+chain-31337 lab rehearsal writes is ignored.
 
-**The Autolaunch Base lab, for the anvil manifest.** The lab in the Autolaunch
-worktree is started from `contracts/v1` with
-`REGENT_BASE_RPC_URL=<Base RPC> python3 bin/local-base-lab.py start`, optionally
-with `--fork-block <block>`. It takes no other option: it always runs on chain id
-31337, picks its own port and prints the RPC URL to use. It deploys its own
-Autolaunch factory at a fresh address, so the factory address in `anvil.json`
-holds no code there. The anvil manifest permits that, which means fleets
-deployed to the lab are pinned to an address with no factory behind it and can
-never launch. The lab rehearses deployment, recording, purchases and votes; it
-cannot rehearse an Autolaunch. It starts anvil without a gas limit of its own, so
-blocks keep the forked Base block's gas limit. Its `fund` command hands out
-REGENT only; a wallet gets USDC for a purchase the same way as on the plain fork
-below.
-
-**A plain fork on chain 31337, for the anvil manifest without the lab.**
+**A fork on chain 31337, for the anvil manifest.**
 
 ```sh
-anvil --fork-url "$BASE_RPC_URL" --chain-id 31337 --gas-limit 100000000
+anvil --fork-url "$ETHEREUM_RPC_URL" --chain-id 31337 --gas-limit 100000000
 export RPC_URL=http://127.0.0.1:8545
 
 # USDC for a purchase, from a fork address that holds it. Amounts are atomic
 # USDC: 10000000 is 10 USDC, the price of the first key of Syndicate, Cascade
 # and Accelerant; Classic's first key costs 8000000, 8 USDC.
 cast rpc anvil_impersonateAccount <address holding USDC> --rpc-url "$RPC_URL"
-cast send 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 "transfer(address,uint256)" \
+cast send 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 "transfer(address,uint256)" \
   <wallet> <atomic USDC> --from <address holding USDC> --unlocked --rpc-url "$RPC_URL"
 cast rpc anvil_stopImpersonatingAccount <address holding USDC> --rpc-url "$RPC_URL"
 ```
 
-Buy with a fresh address on either fork, not one of anvil's default accounts:
-on a Base fork account 1 carries delegated code whose NFT callback reverts, so a
-key minted to it fails.
+Buy with a fresh address, not one of anvil's default accounts, which may carry
+delegated code on a mainnet fork whose NFT callback reverts, so a key minted to
+it fails.
 
-REGENT, USDC and the staking contract are Base's own on either fork; the
-Autolaunch factory has no code on this one either. A fleet run deploys three
-contracts: the fleet (20,638 bytes of deployed code), its reward ledger (5,981)
-and its voting controller (11,295), by `forge build --sizes`. Each byte of
-deployed code costs 200 gas. The gas a whole run takes has not been measured on
-a fork since the fully owned fleet change; measure it before relying on it.
-`--gas-limit 100000000` leaves room for a run in one block.
+A fleet run deploys four contracts in one transaction: the fleet (15,891 bytes
+of deployed code), its reward ledger (5,204), its voting controller (7,401) and
+its shard record (2,204), by `forge build --sizes`. Each byte of deployed code
+costs 200 gas. The gas a whole run takes has not been measured on a fork of
+Ethereum; measure it before relying on it. `--gas-limit 100000000` leaves room
+for a run in one block.
 
 ## What the deployment step refuses
 
 - A manifest whose `chainId` is not the chain it is running on.
-- On Base, a `usdc` other than Base USDC
-  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, or a `regent` other than Base
-  REGENT `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. Every key price is written
-  in six-decimal USDC, so a look-alike with other decimals would misprice every
-  key.
-- On any chain, a `regent` address that holds no code, the zero address included.
-- An Autolaunch factory address that holds no code. A lab manifest may waive this
-  with `"autolaunchFactoryMayBeEmpty": true`; the waiver is ignored on Base, and
-  the deployed manifest records that a waiver was in force so a lab deployment is
-  never mistaken for a production one.
+- A zero protocol treasury. `KEYFLEET_PROTOCOL_TREASURY` unset stops the run
+  before anything is deployed.
+- On Ethereum, a `usdc` other than Ethereum USDC
+  `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`. Every key price is written in
+  six-decimal USDC, so a look-alike with other decimals would misprice every key.
 - A USDC that does not report six decimals, which the fleet itself refuses at
   construction.
-- On Base, a `vrf.coordinator` other than
-  `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`, or a `vrf.keyHash` other than
-  the 2 gwei lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab`.
+- On Ethereum, a `vrf.coordinator` other than
+  `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a`, or a `vrf.keyHash` other than
+  the 200 gwei lane
+  `0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9`.
 - On any chain, a coordinator that holds no code, a gas lane the coordinator
   does not know, a subscription the coordinator does not know (which includes
   the placeholder `"0"`), and a zero `traitTableHash`, which the fleet itself
@@ -297,58 +281,51 @@ a fork since the fully owned fleet change; measure it before relying on it.
   succeed.
 - A broadcast that created no fleet, or a fleet with no code on the chain it is
   run against.
-- The same chain, USDC, REGENT, Autolaunch factory and randomness refusals as
-  the deployment step.
+- The same chain, treasury, USDC and randomness refusals as the deployment step.
 - A fleet the subscription does not list as a consumer. The Safe adds it before
   this step runs.
-- On Base, a subscription whose owner is not the manifest's `regentSafe`.
+- On Ethereum, a subscription whose owner is not the protocol treasury.
 - Any value that differs from the manifest, read back from the chain: the
-  fleet's preset, which must be the one for the fleet named, USDC, REGENT, the
-  staking contract, the Autolaunch factory, the coordinator, subscription, gas
-  lane and trait table hash, and the fleet's name, symbol and metadata base.
-  Every fleet on a chain is checked against the same manifest, so they all
-  share those values.
+  fleet's preset, which must be the one for the fleet named, USDC, the protocol
+  treasury, the coordinator, subscription, gas lane and trait table hash, and
+  the fleet's name, symbol and metadata base. Every fleet on a chain is checked
+  against the same manifest, so they all share those values.
 
 ## What the record step writes
 
 `contracts/deployments/<name>.<fleet>.deployed.json`, the fleet's published
-deployment manifest, such as `base.classic.deployed.json`. Every address, every
-fleet value, the reward ledger's cohort bound and the income tokens are read
-from the chain, not copied from the input. The supply, price and split
-constants come from the `KeyfleetPresets` library the record step was compiled
-with; the fleet's code hash is recorded so anyone can check later that the
-deployed code is the code those constants came from. It carries:
+deployment manifest, such as `ethereum.classic.deployed.json`. Every address,
+every fleet value and the income token are read from the chain, not copied from
+the input. The supply, price and split constants come from the
+`KeyfleetPresets` library the record step was compiled with; the fleet's code
+hash is recorded so anyone can check later that the deployed code is the code
+those constants came from. It carries:
 
 - the chain and the deployment block — the lowest block the run's transactions
   landed in, so a reader starting there misses no purchase made the moment the
   fleet appeared;
 - under `fleet` the fleet's name in the manifest (`slot`, such as `classic`),
-  address, code hash, reward ledger, voting controller, name, symbol, metadata
-  base and supply;
-- REGENT, USDC, `qUsdc` — the reference price the Syndicate, Cascade and
-  Accelerant ladders start from, 10000000 atomic USDC, which is 10 USDC; Classic
-  prices from its own table — the staking contract and the Regents Safe;
-- the numeric bounds (Fibonacci levels and last token id, Classic supply,
-  Accelerant key limit, the two launch thresholds and the cohort limit) and the
-  fee basis points (the 2% protocol share and the Accelerant 10% capital
-  share);
-- the Autolaunch binding: the ABI name `RegentsAutolaunchFactoryV1`, the factory
-  and the strategy it publishes, and the code hash of each, so the binding can be
-  checked against the Autolaunch ceremony's own manifest, and whether the lab
-  waiver for a missing factory applied, which is never the case on Base;
+  address, code hash, reward ledger, voting controller, shard record, name,
+  symbol and metadata base;
+- USDC, `qUsdc` — the reference price the Syndicate, Cascade and Accelerant
+  ladders start from, 10000000 atomic USDC, which is 10 USDC; Classic prices
+  from its own table — and the protocol treasury;
+- under `bounds` the two supply limits, Classic's 1,024 keys and Accelerant's
+  2,000 (Syndicate and Cascade have none), and under `fees` the fee basis
+  points: the 10% protocol share and the Accelerant 20% capital share;
 - the randomness terms: the coordinator and its code hash, the subscription id
   as a decimal string, the gas lane, the three block confirmations, the 100,000
   gas each answer is given, and that requests are paid in ETH, under `vrf`;
 - the trait table hash, as its own `traitTableHash`;
-- the income tokens, under `incomeTokens`: USDC and REGENT, since no launch
-  exists when a fleet is recorded;
+- the income token, under `incomeTokens`: USDC alone;
 - the terms the release discloses: public-read chat, no refunds, service rewards
-  to keys only, what the 2% fee is and is not, and that the Regents Safe owns
-  the randomness subscription only.
+  to keys only, what the 10% fee is and is not, and that the Regents Safe
+  receives the protocol share and owns the randomness subscription only.
 
 There is no configuration UI anywhere in the product, so this file is where those
 values are published, and it is what the app is seeded from, one fleet at a
-time. Each fleet answers for its own ledger, controller, preset and wiring, so
+time. Each fleet answers for its own ledger, controller, shard record, preset
+and wiring, so
 nothing downstream has to keep a pasted list of addresses in step.
 
 ## What the Safe does next
@@ -357,35 +334,37 @@ The Regents Safe's one part in a release is the randomness subscription. After
 each fleet is deployed, and before its record step, the Safe adds the fleet as
 a consumer with `addConsumer(subId, fleet)`. It has no other step: there is no
 admission list, and the Safe holds no authority over any fleet's votes, claims,
-prices or money.
+prices or money. It receives the protocol share whenever anyone sends it, and
+moves it on by hand.
 
 ## Decided
 
-**Fully owned fleets (27 September 2026).** Regents takes 2% of each key
-purchase, once, and nothing else. Every purchase sets its 2% aside in the
-fleet's `protocolShareOwed`, and anyone may call `sendProtocolShare()` on the
-fleet to register the whole owed amount as revenue with the staking contract
-through `depositUSDC`. A paused staking contract delays that send and never a
-purchase. Income in USDC, REGENT or the launched token goes 100% to the keys,
-everything else is shared money, and only a vote of more than half of all keys
-sold spends it. The [contracts README](../contracts/README.md) states the
-rules.
+**Fully owned fleets (27 September 2026), on Ethereum (29 September 2026).**
+Regents takes 10% of each key purchase, once, and nothing else. Every purchase
+sets its 10% aside in the fleet's `protocolShareOwed`, and anyone may call
+`sendProtocolShare()` on the fleet to transfer the whole owed amount in USDC to
+the Regents Safe, fixed in the fleet as `PROTOCOL_TREASURY`. Regents moves it on
+by hand. A treasury that cannot receive delays that send and never a purchase.
+Income in USDC goes 100% to the keys, every other token is shared money, and
+only a vote of more than half of all keys sold spends it. There is no token
+launch. The [contracts README](../contracts/README.md) states the rules.
 
-**D6 — the key price.** Every key is paid in USDC on Base. The first key of the
-Fibonacci and Accelerant ladders costs 10 USDC (`Q_USDC`, 10,000,000 atomic
-USDC); Fibonacci levels step by 1.2 and Accelerant primary mints by 1.05.
-Classic's 1,024 keys run from 8 USDC for the first to 80 USDC for the last, each
-key about 0.2253% dearer than the one before, rounded to the nearest cent, and
-32,032.45 USDC for all of them. The price is fixed in the contracts, so neither
-manifest carries it. The 2% protocol
-share, shared money from key sales, the Cascade reserve and repayment and the
-Accelerant rebate are all USDC.
+**D6 — the key price.** Every key is paid in USDC on Ethereum. The first key of
+the Fibonacci and Accelerant ladders costs 10 USDC (`Q_USDC`, 10,000,000 atomic
+USDC); Fibonacci levels step by 1.2, with no last level, and Accelerant primary
+mints by 1.05 up to 2,000 keys. Classic's 1,024 keys run from 8 USDC for the
+first to 80 USDC for the last, each key about 0.2253% dearer than the one
+before, rounded to the nearest cent, and 32,032.45 USDC for all of them. The
+price is fixed in the contracts, so neither manifest carries it. The 10%
+protocol share, shared money from key sales, the Cascade reserve and repayment
+and the Accelerant rebate are all USDC. An Accelerant key after the first sends
+20% to shared money and 70% to the holder of the key before it.
 
 **Names, symbols and metadata base.** Every fleet's symbol is `KEYFLEET`. The
 collections are named Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic and
 Keyfleet Accelerant. The name of each key, such as "Keyfleet Syndicate #12",
 comes from the site's metadata, not from the contract. The site is keyfleet.ai:
-the Base manifest's metadata base is `https://keyfleet.ai/metadata/<slot>/`, for
+the Ethereum manifest's metadata base is `https://keyfleet.ai/metadata/<slot>/`, for
 example `https://keyfleet.ai/metadata/syndicate/`, and the lab manifest uses
 `http://localhost:4000/metadata/<slot>/`. The contract's `tokenURI` is that base
 followed by the key's number, and the site answers it for every key sold:
@@ -405,14 +384,15 @@ The pictures are not served yet; the art agent delivers them at those paths.
 
 **Random key traits.** Every key's traits come from Chainlink VRF v2.5 and
 nothing else. One
-subscription, owned by the Regents Safe, pays for every fleet in ETH; on Base
-the coordinator is `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` and the gas lane
-the 2 gwei one. Every fleet fixes the trait table's hash at construction, and
+subscription, owned by the Regents Safe, pays for every fleet in ETH; on
+Ethereum the coordinator is `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a` and the
+gas lane the 200 gwei one. Every fleet fixes the trait table's hash at construction, and
 each trait is drawn by weight from the key's seed as the contracts README
 describes.
 
-**The Regents Safe.** `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e` on both
-manifests. It owns the randomness subscription and nothing in any fleet.
+**The Regents Safe.** Not yet chosen on Ethereum. It is given to each run as
+`KEYFLEET_PROTOCOL_TREASURY`, receives the protocol share, owns the randomness
+subscription, and holds nothing in any fleet.
 
 The fully owned fleet, key price and random-trait decisions are built into the
 contracts. The others are inputs to the manifest only: none of them changes a

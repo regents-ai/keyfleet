@@ -349,3 +349,25 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   and the served contract describe the two requests.
 - regents is pinned at `1ca65917` (Regents v112) for both `identity` and
   `agents`.
+
+## 2026-09-29 — Contracts move to Ethereum, with shards and edit-restriction votes
+
+- The fleet contracts are built for Ethereum (chain 1): Ethereum USDC, the
+  Chainlink VRF v2.5 Ethereum coordinator and its 200 gwei gas lane. The Base
+  manifest is replaced by `contracts/deployments/ethereum.json`. Nothing is
+  deployed and key sales stay off.
+- Regents takes 10% of every key sale on all four fleet types, sent in USDC to
+  the Regents Safe, which every deployment must name; there is no default.
+- Autolaunch, REGENT and the staking contract are gone from the contracts. USDC
+  is the one income token, paid in full to the keys; every other token is shared
+  money.
+- Syndicate and Cascade have no last level: the same Fibonacci rule goes on for
+  as long as keys sell. Classic keeps 1,024 keys and Accelerant 2,000.
+- Accelerant: the first key sends 10% to the Safe and 90% to shared money; each
+  later key sends 10% to the Safe, 20% to shared money and 70% to the holder of
+  the key before it.
+- A new vote restricts or lifts a key's edits, approved by at least three fifths
+  of all keys sold.
+- Each fleet has a shard record: a key's owner gives another wallet a shard for
+  1 to 365 days, and every shard of a key ends when the key changes hands.
+- The site does not use these contracts yet.
