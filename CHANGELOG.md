@@ -371,3 +371,28 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Each fleet has a shard record: a key's owner gives another wallet a shard for
   1 to 365 days, and every shard of a key ends when the key changes hands.
 - The site does not use these contracts yet.
+
+## 2026-09-29 — The site moves to Ethereum, with no token launch
+
+- Keys, money and votes are read and sent on Ethereum (chain 1), paid in
+  Ethereum USDC, with explorer links to etherscan.io. Agent sign-in stays on
+  Base with the audience `keyfleet`.
+- Every Autolaunch part of the site is gone: launch proposals, launch plans'
+  proposal records, the launch reader and the keeper's income and launch calls.
+  Proposals are a decision, a payment from shared money or a change to a key's
+  workspace edits, the last approved by three fifths of all keys sold.
+- The keeper sends only reveals and the protocol share, which it sends once a
+  day to the Regents Safe. Its limits are set in the site's configuration:
+  3 gwei highest fee, 0.02 ETH a day, an alert under 0.02 ETH and reveals held
+  while a subscription holds under 0.1 ETH. It waits 60 seconds for a receipt.
+  Nothing is funded.
+- The chain reader checks the last 32 blocks again on each pass, and a fleet
+  counts as read once it is within 50 blocks of the head.
+- Syndicate and Cascade pages say new levels keep opening. Their key maps draw
+  the levels sold and the level on sale.
+- The protocol treasury of every fleet is the Regents Safe on Ethereum,
+  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. It stays a required deploy
+  input with no default, and on Ethereum the deploy and record scripts refuse
+  any other address.
+- Migration `20260929064211` deletes the launch tables and columns; rolling it
+  back does not bring them back. Key sales stay off.

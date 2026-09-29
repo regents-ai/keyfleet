@@ -156,7 +156,25 @@ If it does exist, these migrations need care, and some counts go to the founder:
   If either is above 0, stop and tell the founder.
 - **Failed launch block** (`20260927092503`). It adds the optional
   `failed_launch_block` column to `treasury_readings`, approved for
-  production. Nothing to check.
+  production. Nothing to check; `20260929064211` removes it again.
+- **No token launches** (`20260929064211`). Fleets no longer launch tokens,
+  and keys, money and votes are on Ethereum. It deletes the
+  `graph_launch_plan_revisions` and `proposal_launch_envelopes` tables, the
+  `kind` column of `budget_receipts`, the `l1_fee_wei` column of `keeper_txs`,
+  the `envelope_hash` column of `proposals` and the `failed_launch_block`
+  column of `treasury_readings`. Proposals may then only be decisions,
+  payments or changes to a key's workspace edits, and every proposal must have
+  its text. The keeper's records may only name its reveal and protocol-share
+  jobs. Rolling it back does not bring the deleted tables or their rows back.
+  First run, and expect `0` for each:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.graph_launch_plan_revisions;
+  SELECT count(*) FROM keyfleet_app.proposal_launch_envelopes;
+  SELECT count(*) FROM keyfleet_app.proposals WHERE kind NOT IN ('decision', 'pay');
+  SELECT count(*) FROM keyfleet_app.keeper_runs WHERE job <> 'reveal';
+  SELECT count(*) FROM keyfleet_app.keeper_txs WHERE job <> 'reveal';
+  ```
+  If any is above 0, stop and tell the founder.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are
@@ -219,8 +237,14 @@ them. These must still be done first, in order:
    until each fleet type is next: Fibonacci late-entry capture and the Cascade
    reserve of a level that never completes. A deployed fleet can never be
    changed.
-2. **The Regents Safe on Ethereum chosen**, to be given to every deployment as
-   the protocol treasury.
+2. **The protocol treasury given to every deployment.** The founder chose the
+   Regents Safe on Ethereum, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, on
+   29 September 2026. Every fleet is deployed with
+   `KEYFLEET_PROTOCOL_TREASURY` set to exactly this address, which the fleet
+   keeps for good as its `PROTOCOL_TREASURY`. The input has no default: the
+   deployment step stops without it, and on Ethereum both the deployment and
+   the record steps refuse any other address (see
+   [deployment.md](deployment.md#what-a-manifest-says)).
 3. **An outside audit.**
 4. **Deployed on Ethereum** with the founder's go, then recorded as below.
 
