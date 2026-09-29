@@ -2,13 +2,14 @@ defmodule Keyfleet.Chain.Scanner do
   @moduledoc """
   One pass over a deployed fleet's history: who holds each key, each key's
   reveal, what its budget took in and paid out and the income paid to its
-  keys, from the fleet contract,
-  and its proposals, votes and executions, from its vote contract.
+  keys, from the fleet contract; its proposals, votes and executions, and
+  which keys' workspace edits a vote restricted, from its vote contract; and
+  the shards its keys' owners issued and ended, from its shard record.
 
   Each pass reads the head, reads again the last 32 blocks it already
   recorded (one Ethereum epoch, about six minutes), then records what
   happened after them up to the head. Each stretch of blocks is one request
-  for both contracts, and its records are made in the order the chain made
+  for all three contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
   whole, such as one whose logs are more than it sends at once, is asked for
   again in halves, down to single blocks, and each answered piece is recorded
@@ -48,9 +49,10 @@ defmodule Keyfleet.Chain.Scanner do
 
   A pass that made a new proposal or budget record, or sold a key, says so on
   `Keyfleet.Proposals.topic/1`: a key sold adds to the keys a proposal needs
-  more than half of. One that recorded keys
-  revealed, sold or changing hands names them all in one notice on
-  `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
+  more than half of. One that recorded keys revealed, sold, changing hands,
+  issuing or ending shards, or having their edits restricted or allowed names
+  them all in one notice on `Keyfleet.Keys.topic/1`, wherever in the pass it
+  recorded them. Each is said
   even if the pass then failed or stopped the fleet, and each is only a hint
   to read again.
   """
@@ -158,7 +160,7 @@ defmodule Keyfleet.Chain.Scanner do
   defp each_piece(_fleet, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
   defp each_piece(fleet, from, to, client, acc, handle) do
-    addresses = [fleet.contract_address, fleet.votes_address]
+    addresses = [fleet.contract_address, fleet.votes_address, fleet.shards_address]
 
     case client.get_logs(addresses, Logs.topics(), from, to) do
       {:ok, logs} ->
@@ -251,6 +253,11 @@ defmodule Keyfleet.Chain.Scanner do
   defp make_record({:execution, execution}),
     do: Proposals.record_execution(execution, @record_opts)
 
+  defp make_record({:edits_restriction, restriction}),
+    do: Keys.record_edits_restriction(restriction, @record_opts)
+
+  defp make_record({:shard, event}), do: Keys.record_shard_event(event, @record_opts)
+
   defp make_record({:budget_receipt, receipt}),
     do: Treasury.record_budget_receipt(receipt, @record_opts)
 
@@ -268,6 +275,8 @@ defmodule Keyfleet.Chain.Scanner do
 
     fleet.id
     |> Keys.recorded_in_blocks!(from, to, actor: @system)
+    |> Enum.concat(Keys.shard_events_in_blocks!(fleet.id, from, to, actor: @system))
+    |> Enum.concat(Keys.edits_restrictions_in_blocks!(fleet.id, from, to, actor: @system))
     |> Enum.concat(Proposals.recorded_in_blocks!(fleet.id, from, to))
     |> Enum.concat(Treasury.recorded_in_blocks!(fleet.id, from, to))
     |> Enum.reject(&MapSet.member?(seen, {&1.transaction_hash, &1.log_index}))
@@ -284,9 +293,10 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
-  # Every key revealed, sold or changing hands in the pass is named once. A
-  # key sold changes how every open proposal stands, since passing takes
-  # more than half of all the keys sold.
+  # Every key revealed, sold, changing hands, issuing or ending a shard, or
+  # having its edits restricted or allowed in the pass is named once. A key
+  # sold changes how every open proposal stands, since passing takes more
+  # than half of all the keys sold.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
 
@@ -300,6 +310,17 @@ defmodule Keyfleet.Chain.Scanner do
         do: Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system),
         else: []
 
+    sharded =
+      if now.shard_seq > before.shard_seq,
+        do: Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system),
+        else: []
+
+    restricted =
+      if now.proposal_seq > before.proposal_seq,
+        do:
+          Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system),
+        else: []
+
     if now.proposal_seq > before.proposal_seq or Enum.any?(owned, &(&1.ownership_epoch == 1)) do
       Phoenix.PubSub.broadcast(
         Keyfleet.PubSub,
@@ -308,7 +329,7 @@ defmodule Keyfleet.Chain.Scanner do
       )
     end
 
-    case Enum.uniq_by(revealed ++ owned, & &1.token_id) do
+    case Enum.uniq_by(revealed ++ owned ++ sharded ++ restricted, & &1.token_id) do
       [] ->
         :ok
 

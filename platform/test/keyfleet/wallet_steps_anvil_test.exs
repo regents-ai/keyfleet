@@ -27,7 +27,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
   setup_all do
     url = AnvilLab.start!()
-    %{"fleet" => fleet, "staking" => staking} = AnvilLab.lab!(url, @buyer)
+    %{"fleet" => fleet, "shards" => shards} = AnvilLab.lab!(url, @buyer)
 
     chain = Application.fetch_env!(:keyfleet, Keyfleet.Chain)
     wallet_chains = Application.fetch_env!(:keyfleet, :wallet_chains)
@@ -44,7 +44,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
     addresses = %{
       fleet: fleet,
-      staking: staking,
+      shards: shards,
       rewards: address!(url, fleet, "REWARDS()"),
       votes: address!(url, fleet, "VOTES()"),
       usdc: address!(url, fleet, "USDC()")
@@ -65,6 +65,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
         contract_address: lab.fleet,
         rewards_address: lab.rewards,
         votes_address: lab.votes,
+        shards_address: lab.shards,
         usdc_address: lab.usdc,
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)

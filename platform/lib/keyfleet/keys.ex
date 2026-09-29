@@ -41,6 +41,45 @@ defmodule Keyfleet.Keys do
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
     end
 
+    resource Keyfleet.Keys.ShardEvent do
+      define :record_shard_event, action: :record
+
+      define :shard_events_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+
+      define :shard_events_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+
+      define :shard_events_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
+
+      define :active_shard,
+        action: :active_for_wallet,
+        args: [:fleet_id, :wallet],
+        not_found_error?: false
+
+      define :active_shards_held_by, action: :active_held_by, args: [:wallet]
+      define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
+      define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
+    end
+
+    resource Keyfleet.Keys.EditsRestriction do
+      define :record_edits_restriction, action: :record
+
+      define :edits_restrictions_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+
+      define :edits_restrictions_recorded_since,
+        action: :recorded_since,
+        args: [:fleet_id, :after_seq]
+
+      define :latest_edits_restrictions,
+        action: :latest_for_keys,
+        args: [:fleet_id, :token_ids]
+    end
+
     resource Keyfleet.Keys.KeyPairing do
       define :request_pairing, action: :request_pairing, args: [:fleet_id, :token_id]
       define :approve_pairing, action: :approve_pairing
@@ -108,9 +147,16 @@ defmodule Keyfleet.Keys do
     }
   end
 
+  @doc "Whether the key's workspace edits are restricted by a vote of the fleet right now."
+  def edits_restricted?(fleet_id, token_id, opts \\ []) do
+    with {:ok, latest} <- latest_edits_restrictions(fleet_id, [token_id], opts) do
+      {:ok, match?([%{restricted: true}], latest)}
+    end
+  end
+
   @doc """
   Where a fleet's pages hear which of its keys have just changed: sold, changed
-  hands, revealed, or gained or lost the agent running them, as
+  hands, revealed, a shard issued or ended, or edits restricted or allowed, as
   `{:keys_changed, fleet_id, token_ids}`.
   """
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"

@@ -12,8 +12,15 @@ contract it records every proposal, vote, withdrawn vote and execution
 `RestrictEditsProposed` beside it for a payment or a change to a key's
 workspace edits; `VoteCast`, `VoteWithdrawn` and `ProposalExecuted`). A payment
 keeps its asset, amount, recipient and reason; a change to a key's edits keeps
-the key and whether it stops or allows them. The reader does not record
-`Collected`, the vote contract's log of matches paid out.
+the key and whether it stops or allows them, and carrying one out records
+`EditsRestrictionSet`, which says whether that key's edits are now restricted.
+The reader does not record `Collected`, the vote contract's log of matches paid
+out. From the fleet's shard contract (`KeyfleetShards`) it records every shard
+a key's owner issues (`ShardIssued`: the key, the wallet, when the shard runs
+out and the key's ownership it lasts for) and every shard ended early
+(`ShardEnded`, with who ended it). Whether a shard is active is worked out each
+time it is asked, never stored: it is the wallet's latest shard record, it has
+not run out, and its key has not changed hands since it was issued.
 
 Apart from those passes, so a slow node never holds them up, it reads every
 minute, at the head, the fleet's income token (USDC, the only one) and every
@@ -167,6 +174,8 @@ FROM (
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_receipts
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.income_receipts
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_payments
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.edits_restrictions
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.shard_events
 ) AS recorded
 WHERE fleet_id = :'fleet'
   AND block_number >= (SELECT rescan_from - 32 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
@@ -191,13 +200,14 @@ the chain has not changed and the node answered wrongly: point
 ## Correcting the record
 
 Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
-reveal, proposal, vote, execution, budget receipt, income receipt and budget
-payment record of that fleet at or after `F` is removed, every pairing made
+reveal, proposal, vote, execution, budget receipt, income receipt, budget
+payment, edit restriction and shard record of that fleet at or after `F` is
+removed, every pairing made
 under one of those ownership records is ended, and the cursor goes back to `F`,
 so the reader records the chain's current history from there. Ended pairings
 stay as history; agents ask again and the key's owner approves again. The
-ownership, proposal, budget, income and reveal records made again from `F` on
-get new record numbers, higher than any removed, so every reader of the list
+ownership, proposal, budget, income, reveal, edit restriction and shard records
+made again from `F` on get new record numbers, higher than any removed, so every reader of the list
 sees them as new. A key whose reveal is removed shows as still being revealed
 until its reveal is read again.
 
@@ -307,6 +317,21 @@ DELETE FROM keyfleet_app.budget_payments
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 
 ALTER TABLE keyfleet_app.budget_payments ENABLE TRIGGER immutable_budget_payments;
+
+-- The edit restrictions and shard records.
+ALTER TABLE keyfleet_app.edits_restrictions DISABLE TRIGGER immutable_edits_restrictions;
+
+DELETE FROM keyfleet_app.edits_restrictions
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.edits_restrictions ENABLE TRIGGER immutable_edits_restrictions;
+
+ALTER TABLE keyfleet_app.shard_events DISABLE TRIGGER immutable_shard_events;
+
+DELETE FROM keyfleet_app.shard_events
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+
+ALTER TABLE keyfleet_app.shard_events ENABLE TRIGGER immutable_shard_events;
 
 -- The reader starts again at the fork.
 UPDATE keyfleet_app.chain_cursors

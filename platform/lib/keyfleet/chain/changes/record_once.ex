@@ -11,7 +11,8 @@ defmodule Keyfleet.Chain.Changes.RecordOnce do
   attribute holding the block the record was made from, the refusal carries
   that block as `recorded_block`.
 
-  With `:number`, `:proposal_seq`, `:reveal_seq` or `:ownership_seq`, a
+  With `:number`, `:proposal_seq`, `:reveal_seq`, `:ownership_seq` or
+  `:shard_seq`, a
   record read again keeps the number it has and a new one takes the fleet's
   next number in the same transaction, from `Keyfleet.Chain`.
   """
@@ -60,6 +61,7 @@ defmodule Keyfleet.Chain.Changes.RecordOnce do
   defp take(:proposal_seq, fleet_id), do: Keyfleet.Chain.take_proposal_seq!(fleet_id)
   defp take(:reveal_seq, fleet_id), do: Keyfleet.Chain.take_reveal_seq!(fleet_id)
   defp take(:ownership_seq, fleet_id), do: Keyfleet.Chain.take_ownership_seq!(fleet_id)
+  defp take(:shard_seq, fleet_id), do: Keyfleet.Chain.take_shard_seq!(fleet_id)
 
   defp same_as_recorded(changeset, row, opts) do
     fields =

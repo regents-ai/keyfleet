@@ -9,7 +9,8 @@ defmodule Keyfleet.Chain.Cursor do
   there until an operator has corrected the record by hand.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
-  its key reveals (`reveal_seq`) and its ownership epochs (`ownership_seq`).
+  its key reveals (`reveal_seq`), its ownership epochs (`ownership_seq`) and
+  its shards issued and ended (`shard_seq`).
   """
   use Ash.Resource,
     domain: Keyfleet.Chain,
@@ -33,7 +34,8 @@ defmodule Keyfleet.Chain.Cursor do
             :rescan_from,
             :proposal_seq,
             :reveal_seq,
-            :ownership_seq
+            :ownership_seq,
+            :shard_seq
           ] do
         check_constraint(field, "chain_cursors_nonnegative_#{field}", check: "#{field} >= 0")
       end
@@ -156,6 +158,14 @@ defmodule Keyfleet.Chain.Cursor do
     # The last number given to one of the fleet's ownership epochs. It is moved
     # only by `Keyfleet.Chain.take_ownership_seq!/1`.
     attribute :ownership_seq, :integer,
+      allow_nil?: false,
+      default: 0,
+      public?: true,
+      constraints: [min: 0]
+
+    # The last number given to one of the fleet's shards issued or ended. It is
+    # moved only by `Keyfleet.Chain.take_shard_seq!/1`.
+    attribute :shard_seq, :integer,
       allow_nil?: false,
       default: 0,
       public?: true,

@@ -91,6 +91,7 @@ defmodule Keyfleet.BrowserChain do
           contract_address: @contract,
           rewards_address: "0x" <> String.duplicate("6", 40),
           votes_address: "0x" <> String.duplicate("9", 40),
+          shards_address: "0x" <> String.duplicate("6", 40),
           usdc_address: @usdc,
           deployed_block: 1_000,
           trait_table_hash: "0x" <> String.duplicate("a", 64)

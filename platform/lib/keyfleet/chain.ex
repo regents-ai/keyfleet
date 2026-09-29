@@ -98,6 +98,20 @@ defmodule Keyfleet.Chain do
     seq
   end
 
+  @doc "Takes the next number for one of the fleet's shards issued or ended, as `take_proposal_seq!/1` does."
+  # The schema is the repository's own constant; every value is a parameter.
+  # sobelow_skip ["SQL.Query"]
+  def take_shard_seq!(fleet_id) do
+    %Postgrex.Result{rows: [[seq]]} =
+      Keyfleet.Repo.query!(
+        "UPDATE #{Keyfleet.Repo.default_prefix()}.chain_cursors SET shard_seq = shard_seq + 1 " <>
+          "WHERE fleet_id = $1 RETURNING shard_seq",
+        [fleet_id]
+      )
+
+    seq
+  end
+
   @doc """
   Moves the fleet's cursor as `changes` say, in one update that requires the
   stored cursor still to stand where `cursor` does and the fleet not to be

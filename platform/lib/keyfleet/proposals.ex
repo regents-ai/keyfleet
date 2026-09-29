@@ -10,6 +10,7 @@ defmodule Keyfleet.Proposals do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
+  alias Keyfleet.Keys.EditsRestriction
   alias Keyfleet.Proposals.{Execution, Proposal, Vote}
   alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
 
@@ -161,8 +162,9 @@ defmodule Keyfleet.Proposals do
   `changed_seq`, the last of them that touched it, and in that order.
   `next_cursor` is the last record read, to send as `after_seq` next time;
   `head_seq` the fleet's last record number, and `has_more` whether records
-  after `next_cursor` are waiting. Budget records are counted but touch no
-  proposal.
+  after `next_cursor` are waiting. Budget records and a key's edits being
+  restricted or allowed are counted but touch no proposal; the execution that
+  restricted or allowed them does.
   """
   def changes(fleet_id, after_seq) do
     # The head is read first and bounds every query: a record numbered after
@@ -172,7 +174,15 @@ defmodule Keyfleet.Proposals do
     head_seq = if(cursor, do: cursor.proposal_seq, else: 0)
 
     {read, rest} =
-      [Proposal, Vote, Execution, BudgetReceipt, IncomeReceipt, BudgetPayment]
+      [
+        Proposal,
+        Vote,
+        Execution,
+        EditsRestriction,
+        BudgetReceipt,
+        IncomeReceipt,
+        BudgetPayment
+      ]
       |> Enum.flat_map(&records_after(&1, fleet_id, after_seq, head_seq))
       |> Enum.sort()
       |> Enum.split(@changes_page)
