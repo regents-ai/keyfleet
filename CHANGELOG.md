@@ -453,3 +453,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   name it. Founder decision.
 - Migration `20260929222142` narrows the index of notable workspace changes to
   goals and services. Production had no workspace items when this was made.
+
+## 2026-09-29 — A wallet button pressed as it appears still reaches the wallet
+
+- A wallet button whose step hasn't reached the page yet, such as a shard's
+  Renew or End just after the shard appears, now asks the server for its step
+  and sends it, instead of sending nothing. Buttons with fields already did
+  this when the fields had changed.

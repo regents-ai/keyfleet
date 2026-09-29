@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
-import {press, type Review} from "../js/hooks/onchain_steps"
+import {asksServer, press, type Review} from "../js/hooks/onchain_steps"
 import {
   forgetWalletDisconnected,
   replaceActiveEthereumWallet,
@@ -171,5 +171,26 @@ describe("a press sends the server's step from the wallet it was built for", () 
       ["step_failed", {step: "approve", reason: "step_unknown"}],
       ["step_failed", {step: "buy", reason: "step_unknown"}],
     ])
+  })
+})
+
+describe("a press asks the server for its review when the page's won't do", () => {
+  const withInputs: Review = {...review, inputs: {days: "30"}}
+
+  it("asks when no review has arrived yet, as for a button that has just appeared", () => {
+    expect(asksServer(undefined, "buy", {})).toBe(true)
+  })
+
+  it("asks when the review has no such step yet", () => {
+    expect(asksServer(review, "renew-0xdddddddddddddddddddddddddddddddddddddddd", {})).toBe(true)
+  })
+
+  it("asks when the form on screen differs from what the review was built from", () => {
+    expect(asksServer(withInputs, "buy", {days: "45"})).toBe(true)
+  })
+
+  it("sends straight away when the review has the step and matches the form", () => {
+    expect(asksServer(review, "buy", {})).toBe(false)
+    expect(asksServer(withInputs, "buy", {days: "30"})).toBe(false)
   })
 })
