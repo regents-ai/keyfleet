@@ -12,7 +12,8 @@ import {Keyfleet} from "./Keyfleet.sol";
 /// the shard's wallet may step down.
 ///
 /// A wallet holds at most one active shard in a fleet, under whichever key issued it, so a wallet
-/// answers for exactly one key at a time. A key may have any number of shards.
+/// answers for exactly one key at a time. A key may have any number of shards, and its owner renews
+/// one by issuing it again, which replaces its time.
 ///
 /// A shard is a record, not a token: it cannot be moved, sold or approved. It carries no vote, no
 /// money and no authority on chain; what a shard's wallet may do is decided off chain from this
@@ -48,7 +49,7 @@ contract KeyfleetShards {
     error DaysOutOfRange(uint16 days_);
     /// @notice A key's owner cannot issue a shard of it to themselves.
     error WalletIsOwner(address wallet);
-    /// @notice The wallet already holds an active shard in this fleet.
+    /// @notice The wallet already holds an active shard of another key in this fleet.
     error ShardAlreadyActive(address wallet, uint256 tokenId);
     /// @notice The wallet holds no active shard of this key.
     error ShardNotActive(uint256 tokenId, address wallet);
@@ -89,8 +90,8 @@ contract KeyfleetShards {
 
     /// @notice Issues a shard of a key to a wallet for a number of days.
     /// @dev Only the key's current owner may call. The wallet may not be zero or the owner, and may
-    /// not already hold an active shard in this fleet under any key. The shard replaces whatever
-    /// inactive shard the wallet held before.
+    /// not hold an active shard of another key in this fleet. The shard replaces whatever the wallet
+    /// held before, so issuing an active shard of the same key again renews it from now.
     /// @param tokenId The key.
     /// @param wallet The wallet that receives the shard.
     /// @param days_ How long it lasts, 1 to 365 days.
@@ -101,7 +102,7 @@ contract KeyfleetShards {
         if (wallet == address(0)) revert ZeroAddress();
         if (wallet == owner) revert WalletIsOwner(wallet);
         Shard storage current = _shards[wallet];
-        if (_active(current)) revert ShardAlreadyActive(wallet, current.tokenId);
+        if (current.tokenId != tokenId && _active(current)) revert ShardAlreadyActive(wallet, current.tokenId);
 
         uint64 expiresAt = uint64(block.timestamp + uint256(days_) * 1 days);
         uint64 epoch = FLEET.ownershipEpoch(tokenId);
