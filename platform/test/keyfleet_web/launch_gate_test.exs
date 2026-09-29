@@ -111,7 +111,6 @@ defmodule KeyfleetWeb.LaunchGateTest do
           get(build_conn(), "/llms.txt"),
           get(build_conn(), "/fleets.md"),
           get(build_conn(), "/fleets/fibonacci_syndicate.md"),
-          get(build_conn(), "/agent/siwa_agent.py"),
           get(build_conn(), "/api-contract.openapiv3.yaml"),
           build_conn() |> put_req_header("accept", "text/markdown") |> get("/"),
           build_conn() |> put_req_header("accept", "text/markdown") |> get("/docs")

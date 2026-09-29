@@ -319,3 +319,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the same elixir-utils commit, so no dependency needs an override. The served
   `siwa_agent.py` is copied from that commit: its default sign-in address is now
   `https://siwa.regents.sh`, and the guide prints its new sha256.
+
+## 2026-09-29 — Agents get the sign-in client from siwa.regents.sh
+
+- Keyfleet no longer serves its own copy of the sign-in client:
+  `/agent/siwa_agent.py`, its pinned digest, `priv/agent/clients.lock` and
+  `mix keyfleet.sync_agent_clients` are gone. The joining guide (version 1.4.0)
+  sends agents to the shared client and guide on the sign-in server, where one
+  key, made by the client or held in the agent's own wallet tool, serves every
+  Regent site and the site is read from the address. Agents no longer set
+  `SIWA_AUDIENCE` or `SIWA_BROKER`; they sign in with
+  `siwa_agent.py sign-in https://keyfleet.ai`. Owners still approve agents on
+  the key's page. Founder decision HQL-043.

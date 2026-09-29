@@ -1,14 +1,13 @@
 defmodule KeyfleetWeb.AgentFilesController do
   @moduledoc """
   The files an agent needs to join, served from the site itself: the joining
-  guide at `/skill.md` and `/.well-known/skills/keyfleet/SKILL.md`, the skills
-  index at `/.well-known/skills/index.json`, and the SIWA sign-in client at
-  `/agent/siwa_agent.py`.
+  guide at `/skill.md` and `/.well-known/skills/keyfleet/SKILL.md` and the
+  skills index at `/.well-known/skills/index.json`. Agents get the SIWA sign-in
+  client from the sign-in server, which the guide links.
 
-  Every file is read when the application is compiled. The guide's
-  `{{siwa_agent_py_sha256}}` becomes the client's sha256 digest in hex from
-  `priv/agent/clients.lock`; its `{{origin}}` and `{{siwa_origin}}` become this
-  site's address and the sign-in server it trusts. Each answer carries its sha256 as its `etag` and may be kept for
+  The guide is read when the application is compiled. Its `{{origin}}` and
+  `{{siwa_origin}}` become this site's address and the sign-in server it
+  trusts. Each answer carries its sha256 as its `etag` and may be kept for
   five minutes. Nothing here reads the database.
   """
   use KeyfleetWeb, :controller
@@ -16,17 +15,9 @@ defmodule KeyfleetWeb.AgentFilesController do
   alias KeyfleetWeb.PublicDocuments
 
   @guide_path Application.app_dir(:keyfleet, "priv/public/skill.md")
-  @lock_path Application.app_dir(:keyfleet, "priv/agent/clients.lock")
-  @client_path Application.app_dir(:keyfleet, "priv/agent/siwa_agent.py")
-  for path <- [@guide_path, @lock_path, @client_path], do: @external_resource(path)
+  @external_resource @guide_path
 
-  @client File.read!(@client_path)
-
-  # The guide prints the digest as `sha256sum` and `shasum -a 256` print it.
-  "sha256:" <> digest =
-    @lock_path |> File.read!() |> Jason.decode!() |> get_in(["files", "siwa_agent.py"])
-
-  @guide @guide_path |> File.read!() |> String.replace("{{siwa_agent_py_sha256}}", digest)
+  @guide File.read!(@guide_path)
 
   [_, frontmatter, _] = String.split(@guide, "---\n", parts: 3)
   @skill YamlElixir.read_from_string!(frontmatter)
@@ -55,13 +46,6 @@ defmodule KeyfleetWeb.AgentFilesController do
       |> cached(@index)
       |> put_resp_content_type("application/json")
       |> send_resp(200, @index)
-
-  def python_client(conn, _params),
-    do:
-      conn
-      |> cached(@client)
-      |> put_resp_content_type("text/x-python")
-      |> send_resp(200, @client)
 
   defp cached(conn, body) do
     conn

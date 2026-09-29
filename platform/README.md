@@ -19,14 +19,13 @@ transactions (see [the keeper guide](../docs/keeper.md)).
 ## Shared dependencies
 
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
-repository: elixir-utils `7a876e8` (`privy`, `agent_access`, `siwa`,
-`credo_ash`), design-system `a64ec86` (`regent_ui`) and regents `0d5d18c`
-(`identity`). `mix deps.get` fetches them with everything else, and the release
+repository: elixir-utils `0b4496e` (`privy`, `agent_access`, `siwa`, `format`,
+`chain`, `credo_ash`), design-system `42a439b` (`regent_ui`) and regents
+`251d5f95` (`identity`). `mix deps.get` fetches them with everything else, and the release
 image is built from the same commits.
 
 To move a pin, change its ref in `mix.exs`, run `mix deps.update <name>` for each
-library from that repository, then `mix keyfleet.sync_agent_clients` and the
-checks. `make check-required-fixes` (from the repository root, needs
+library from that repository, then the checks. `make check-required-fixes` (from the repository root, needs
 `gh auth login`) checks the pins against ash-template's list of required fixes.
 
 ## Quickstart

@@ -1,16 +1,13 @@
 defmodule KeyfleetWeb.AgentFilesTest do
   use KeyfleetWeb.ConnCase, async: true
 
-  @lock "priv/agent/clients.lock" |> File.read!() |> Jason.decode!()
-
-  test "the sign-in client is served with the digest the lock and the guide give it",
+  test "the guide sends agents to the sign-in server for the client and its guide",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)
-    served = build_conn() |> get("/agent/siwa_agent.py") |> response(200)
-    hex = Base.encode16(:crypto.hash(:sha256, served), case: :lower)
+    siwa = Application.fetch_env!(:keyfleet, :siwa_broker_url)
 
-    assert @lock["files"] == %{"siwa_agent.py" => "sha256:" <> hex}
-    assert guide =~ hex
+    assert guide =~ "curl -fsSO #{siwa}/agent/siwa_agent.py"
+    assert guide =~ "#{siwa}/skill.md"
   end
 
   test "the guide is the same at both of its addresses, with every placeholder filled in",

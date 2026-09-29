@@ -137,8 +137,7 @@ defmodule Keyfleet.MixProject do
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
-        "keyfleet.route_handoff --check",
-        "keyfleet.sync_agent_clients --check"
+        "keyfleet.route_handoff --check"
       ]
     ]
   end
