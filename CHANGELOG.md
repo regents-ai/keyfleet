@@ -312,3 +312,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Some agent networks block `siwa-server.fly.dev`. The served
   `siwa_agent.py` stays byte-identical to the pinned elixir-utils commit; its
   own default address moves when elixir-utils moves it.
+
+## 2026-09-29 — The sign-in client names siwa.regents.sh
+
+- elixir-utils is pinned at `0b4496e` and regents at `251d5f95`, which names
+  the same elixir-utils commit, so no dependency needs an override. The served
+  `siwa_agent.py` is copied from that commit: its default sign-in address is now
+  `https://siwa.regents.sh`, and the guide prints its new sha256.
