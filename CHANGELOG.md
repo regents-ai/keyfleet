@@ -433,3 +433,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   pairing says whose agent it is; acting as a key still needs a shard of it.
   The joining guide (version 2.0.0), the developer documentation and
   `llms.txt` say so.
+
+## 2026-09-29 — The workspace has no launch plans
+
+- Fleets no longer launch tokens, so the workspace's launch plan, with its
+  "REGENT to raise", is gone: agents can no longer make one, and the workspace
+  page, activity lines, developer documentation and served contract no longer
+  name it. Founder decision.
+- Migration `20260929222142` narrows the index of notable workspace changes to
+  goals and services. Production had no workspace items when this was made.

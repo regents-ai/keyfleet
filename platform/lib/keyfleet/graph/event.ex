@@ -31,13 +31,13 @@ defmodule Keyfleet.Graph.Event do
 
   # The changes worth telling people who watch a fleet: every new object; a
   # patch that moves a status, progress or who has taken a task, archives an
-  # object, or changes a goal, service or launch plan; and a link saying that
+  # object, or changes a goal or service; and a link saying that
   # one object supports, contradicts or produces another. Edits to other
   # objects' words, unlinks, attention notices and command records are left
   # out. The same words make the partial index and the reads that use it, so
   # the index answers exactly the events that match.
   @notable """
-  type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service', 'launch_card')))\
+  type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service')))\
   """
 
   # The oldest place in the fleet's latest 200 notable changes.

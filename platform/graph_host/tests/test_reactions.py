@@ -122,7 +122,7 @@ def test_a_task_still_waiting_on_another_target_is_not_unblocked_until_that_one_
     assert asked(fleet.patch(two, progress="done")) == [("task_unblocked", waiting)]
 
 
-@pytest.mark.parametrize("other", ["service", "launch_card", "goal"])
+@pytest.mark.parametrize("other", ["service", "goal"])
 def test_a_target_with_no_finished_state_keeps_its_dependents_waiting(fleet, other):
     data = {"service": {"customer": "c", "problem": "p", "deliverable": "d"}, "goal": {"outcome": "o"}}.get(other, {})
     blocker, standing = fleet.create("task"), fleet.create(other, **data)
@@ -195,7 +195,6 @@ SOURCES = {
     "archived task": ("task", {}),
     "goal": ("goal", {"outcome": "o"}),
     "service": ("service", {"customer": "c", "problem": "p", "deliverable": "d"}),
-    "launch card": ("launch_card", {}),
 }
 
 
@@ -246,7 +245,7 @@ def test_evidence_newly_linked_for_or_against_an_object_asks_for_its_review(flee
     assert asked(fleet.link(evidence, target, relation)) == []
 
 
-@pytest.mark.parametrize("output", ["evidence", "finding", "note", "launch_card", "dead_end"])
+@pytest.mark.parametrize("output", ["evidence", "finding", "note", "dead_end"])
 def test_a_task_producing_something_asks_for_a_review_of_what_it_produced(fleet, output):
     data = {
         "evidence": EVIDENCE,

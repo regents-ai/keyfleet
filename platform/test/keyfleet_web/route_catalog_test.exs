@@ -82,11 +82,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     item =
       RouteCatalog.fetch!(:workspace_item, %{
         "fleet_id" => "fibonacci_syndicate",
-        "object_id" => "launch_card#12"
+        "object_id" => "task#12"
       })
 
     assert item.route_id == :workspace_item
-    assert item.destination == "/app/fleets/fibonacci_syndicate/workspace/launch_card%2312"
+    assert item.destination == "/app/fleets/fibonacci_syndicate/workspace/task%2312"
     assert item.page_display_label == "Workspace"
     assert item.canonical_root == "/"
 

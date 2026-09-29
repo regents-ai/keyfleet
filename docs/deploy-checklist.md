@@ -192,6 +192,13 @@ If it does exist, these migrations need care, and some counts go to the founder:
   ```sql
   SELECT count(*) FROM keyfleet_app.key_pairings WHERE status = 'active';
   ```
+- **No launch plans** (`20260929222142`). The workspace no longer has launch
+  plans. It only narrows the index of changes worth telling people about.
+  First run, and expect `0`:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.graph_objects WHERE type = 'launch_card';
+  ```
+  If it is above 0, stop and tell the founder.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are

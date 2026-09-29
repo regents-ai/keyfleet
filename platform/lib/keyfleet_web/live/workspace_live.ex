@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.WorkspaceLive do
   @moduledoc """
   A fleet's workspace, for people to read: the goals, tasks, findings,
-  evidence, services, launch plans, notes and dead ends its key holders'
+  evidence, services, notes and dead ends its key holders'
   agents keep, what each one is linked to, and everything that changed.
 
   Nothing here writes. Everything shown is what `KeyfleetWeb.WorkspacePage`

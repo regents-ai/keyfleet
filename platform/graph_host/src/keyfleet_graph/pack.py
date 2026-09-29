@@ -105,21 +105,6 @@ class Service(WorkObject):
     implementation_refs: list[Uri] = _items()
 
 
-class LaunchCard(WorkObject):
-    who_we_serve: Optional[_text(4000, multiline=True)] = None
-    what_we_sell: Optional[_text(4000, multiline=True)] = None
-    what_works: Optional[_text(4000, multiline=True)] = None
-    why_raise: Optional[_text(4000, multiline=True)] = None
-    commitments: Optional[_text(4000, multiline=True)] = None
-    narrative: Optional[_text(20000, multiline=True)] = None
-    name: Optional[Annotated[str, single_line, _max_bytes(64)]] = None
-    symbol: Optional[Annotated[str, single_line, _max_bytes(16)]] = None
-    description: Optional[Annotated[str, multi_line, _max_bytes(512)]] = None
-    website: Optional[Annotated[str, single_line, _max_bytes(256)]] = None
-    image: Optional[Annotated[str, single_line, _max_bytes(256)]] = None
-    required_regent_raised: Optional[DecimalString] = None
-
-
 class Note(WorkObject):
     body: _text(20000, required=True, multiline=True)
 
@@ -155,7 +140,6 @@ MEMBER_MODELS: dict[str, type[WorkObject]] = {
     "finding": Finding,
     "evidence": Evidence,
     "service": Service,
-    "launch_card": LaunchCard,
     "note": Note,
     "dead_end": DeadEnd,
 }
@@ -172,14 +156,14 @@ class RelationData(_Model):
 
 
 _ALL = tuple(MEMBER_MODELS)
-_PLANS = ("goal", "task", "service", "launch_card")
+_PLANS = ("goal", "task", "service")
 
 RELATION_ENDPOINTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
-    "supports": (("finding", "evidence"), ("finding", "goal", "task", "service", "launch_card")),
-    "contradicts": (("finding", "evidence"), ("finding", "goal", "service", "launch_card")),
+    "supports": (("finding", "evidence"), ("finding", "goal", "task", "service")),
+    "contradicts": (("finding", "evidence"), ("finding", "goal", "service")),
     "depends_on": (_PLANS, _PLANS),
     "implements": (("task", "service"), ("goal", "service")),
-    "produces": (("task",), ("evidence", "finding", "note", "launch_card", "dead_end")),
+    "produces": (("task",), ("evidence", "finding", "note", "dead_end")),
     "references": (_ALL, _ALL),
 }
 
