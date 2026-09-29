@@ -2,7 +2,7 @@
 
 The steps, in order, for the first launch of the website at keyfleet.ai. Key
 sales stay off throughout: they need the founder's word, and not before the
-contracts are complete and deployed on Base (see "Before any key is sold").
+contracts are complete and deployed on Ethereum (see "Before any key is sold").
 Commands run from `platform/` unless a step says otherwise. Anything marked
 **not verified** was not tried before this list was written.
 
@@ -209,19 +209,20 @@ Do not run it, or deploy the contracts, as part of this launch.
 ## Before any key is sold
 
 Key sales stay off until the founder explicitly says so, and not before the
-fleet contracts are complete and deployed on Base. The fully owned fleet rules
-the founder decided on 27 September 2026 are built in `contracts/src`; the
-[contracts README](../contracts/README.md#status) lists them. These must still
-be done first, in order:
+fleet contracts are complete and deployed on Ethereum. The fully owned fleet
+rules the founder decided on 27 and 29 September 2026 are built in
+`contracts/src`; the [contracts README](../contracts/README.md#status) lists
+them. These must still be done first, in order:
 
 1. **The contracts complete.** The founder decides when they are complete,
    including the trait table and key art the deploy step requires. Deferred
-   until each fleet type is next: Fibonacci late-entry capture, the Cascade
-   reserve of a level that never completes, and a sensible Accelerant key cap.
-   A deployed fleet can never be changed.
-2. **A fork test against the real Autolaunch contracts on Base.**
+   until each fleet type is next: Fibonacci late-entry capture and the Cascade
+   reserve of a level that never completes. A deployed fleet can never be
+   changed.
+2. **The Regents Safe on Ethereum chosen**, to be given to every deployment as
+   the protocol treasury.
 3. **An outside audit.**
-4. **Deployed on Base** with the founder's go, then recorded as below.
+4. **Deployed on Ethereum** with the founder's go, then recorded as below.
 
 ## Opening a fleet later
 
@@ -230,7 +231,7 @@ only after everything in "Before any key is sold" is done;
 [deployment.md](deployment.md) has the contract steps: each fleet is deployed
 with `KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest
 with
-`/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
+`/app/bin/seed-deployment /tmp/ethereum.<fleet>.deployed.json` (see
 [chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
 puts its keys on sale, all at once: if the fleet cannot be opened, nothing is
 recorded. It refuses a fleet whose chain, USDC or trait table differs from a

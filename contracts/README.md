@@ -3,30 +3,38 @@
 A Foundry workspace pinned to Solidity 0.8.26 with OpenZeppelin 5.7.0 and
 forge-std 1.9.7 vendored as git submodules under `contracts/lib`.
 
-There are four contracts. `KeyfleetPresets` is a pure library holding every
-price, supply, holding-limit, purchase-split and launch-threshold rule, with
-Classic's price table in the generated `KeyfleetClassicPrices`.
-`Keyfleet` is one fleet: its keys, its purchases and its money. Each fleet
-deploys its own `KeyfleetRewards` ledger and its own `KeyfleetVotes` controller
-in its constructor, so a fleet, its ledger and its vote are born bound to each
-other. No contract is shared between fleets, and no contract has an
-administrator, an upgrade path, a pause or a setter.
+There are five contracts. `KeyfleetPresets` is a pure library holding every
+price, supply, holding-limit and purchase-split rule, with Classic's price table
+in the generated `KeyfleetClassicPrices`. `Keyfleet` is one fleet: its keys, its
+purchases and its money. Each fleet deploys its own `KeyfleetRewards` ledger,
+its own `KeyfleetVotes` controller and its own `KeyfleetShards` record in its
+constructor, so a fleet and its three companions are born bound to each other.
+No contract is shared between fleets, and no contract has an administrator, an
+upgrade path, a pause or a setter. The fleets live on Ethereum (chain 1).
 
 ## Status
 
-Decided by the founder on 27 September 2026, and what the code on main does:
+Decided by the founder on 27, 28 and 29 September 2026, and what the code on
+this branch does:
 
-- Fleets are fully owned by their key holders. Regents takes 2% of each key
-  purchase, once. Keyfleet takes nothing from money a fleet receives
-  afterwards; Autolaunch's splitter takes its own share before paying a fleet.
-- Income in USDC, REGENT or the fleet's launched token is paid 100% to the keys.
-  Everything else a fleet holds is shared money, spent only by a vote.
-- A proposal stays open until more than half of all keys sold vote yes, and then
-  anyone may carry it out. There is no window, deadline or cap.
+- Fleets are fully owned by their key holders. Regents takes 10% of each key
+  purchase, once, in USDC, sent to the Regents Safe on Ethereum. Keyfleet takes
+  nothing from money a fleet receives afterwards.
+- Income in USDC is paid 100% to the keys. Every other token a fleet holds is
+  shared money, spent only by a vote. There is no token launch.
+- Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
+  price rule go on for as long as keys sell. Only Classic (1,024 keys) and
+  Accelerant (2,000 keys) have a supply limit.
+- Accelerant: the first key sends 10% to the Safe and 90% to shared money; every
+  later key sends 10% to the Safe, 20% to shared money and 70% to whoever holds
+  the key before it.
+- A Decision or Pay proposal stays open until more than half of all keys sold
+  vote yes, and then anyone may carry it out. A RestrictEdits proposal needs at
+  least three fifths. There is no window, deadline or cap.
 - Every payment is matched: every key that did not vote yes can collect the same
   amount per key as the payment cost the yes keys.
-- One Autolaunch at a time. A failed launch can be followed by another; a
-  graduated launch is the fleet's last.
+- A key's owner may issue shards: time-limited grants to other wallets, recorded
+  on chain and ended the moment the key changes hands.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
   refused request.
 - Keyfleet Classic, decided 28 September 2026: 1,024 keys, the first at 8 USDC
@@ -38,18 +46,19 @@ Decided by the founder on 27 September 2026, and what the code on main does:
 On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before these
-  contracts are complete and deployed on Base.
-- Before any deploy: a fork test against the real Autolaunch contracts on Base,
-  an outside audit, and the founder's go.
+  contracts are complete and deployed on Ethereum.
+- The Regents Safe address on Ethereum is not yet chosen; every deployment takes
+  it as a required input with no default.
+- Before any deploy: an outside audit and the founder's go.
 - Deferred until each fleet type is next: Fibonacci late-entry capture (a
-  level that completes shares in income that was waiting before it), the
-  Cascade reserve of a level that never completes, and a sensible Accelerant
-  key cap.
-- The purchase and send gas figures on a fork of Base have not been measured
-  since the change; the figures below are from the suite's stand-ins.
-- At 1,024 Classic keys, each key's Chainlink VRF request is paid from the
-  Regents subscription. The VRF cost of one key on Base has not been measured
-  against the 2% Regents takes from that key's sale (16 cents on the first key).
+  level that completes shares in income that was waiting before it) and the
+  Cascade reserve of a level that never completes.
+- The purchase and send gas figures on a fork of Ethereum have not been
+  measured; the figures below are from the suite's stand-ins.
+- Each key's Chainlink VRF request is paid in ETH from the Regents subscription
+  on the 200 gwei Ethereum lane. The VRF cost of one key on Ethereum has not
+  been measured against the 10% Regents takes from that key's sale (80 cents on
+  the first Classic key).
 
 ## Presets
 
@@ -64,7 +73,9 @@ is 10,000,000: ten USDC. Both are computed iteratively from the first step,
 never as a closed-form power, and every step rounds up:
 
 - Fibonacci level price: level 1 costs `Q_USDC`, and each further level costs
-  `ceilDiv(previous * 120, 100)`. `MAX_FIBONACCI_LEVEL` is 20.
+  `ceilDiv(previous * 120, 100)`. There is no last level: level 20 costs 319.48
+  USDC, level 30 about 1,978 USDC, level 40 about 12,248 USDC, and a level's
+  price first passes a billion USDC at level 103.
 - Accelerant primary price: the first mint costs `Q_USDC`, and each further mint
   costs `ceilDiv(previous * 105, 100)`. `MAX_ACCELERANT_KEYS` is 2000, so mint
   indexes run 0 through 1999. Only primary mints advance the price; resales do
@@ -85,43 +96,42 @@ never as a closed-form power, and every step rounds up:
   preset test walks the curve one key at a time in 36-decimal fixed point and
   checks every one of the 1,024 prices against it.
 
-Fibonacci level supplies are 2, 3, 5, 8, 13, ... through 17711 at level 20.
-Token ids are 1-based and contiguous across levels, so `FIBONACCI_MAX_TOKEN_ID`
-is the cumulative supply through level 20, 46365. The per-wallet holding limit is
-one key for levels 1 through 7 and the level supply divided by 10, rounded down,
-from level 8 up.
+Fibonacci level supplies are 2, 3, 5, 8, 13, ..., 17,711 at level 20, 28,657 at
+level 21, and so on without end. Token ids are 1-based and contiguous across
+levels: level 20 ends at token 46,365, level 30 at 5,702,884 and level 40 at
+701,408,730. The per-wallet holding limit is one key for levels 1 through 7 and
+the level supply divided by 10, rounded down, from level 8 up. Only level zero
+and token id zero are refused. Every level function walks the levels from the
+first, so its cost grows with the level: a purchase costs about 1,000 gas more
+per level. The supply sums first leave 256 bits at level 367, where checked
+arithmetic reverts, long after any price anyone could pay.
 
 A purchase is split into four parts that always sum to exactly the gross price.
-`PROTOCOL_BPS` is 200: 2% of every purchase, rounded down, is the protocol share
-for the Regents staking contract. The rest depends on the preset:
+`PROTOCOL_BPS` is 1000: 10% of every purchase, rounded down, is the protocol
+share for the Regents Safe. The rest depends on the preset:
 
-- Syndicate and Classic: the rest becomes shared money.
-- Cascade: the rest goes to the level-completion reserve.
-- Accelerant after the first key: `ACCELERANT_CAPITAL_BPS` (1000, 10% of gross)
-  becomes shared money and the rest, 88% of gross, is a rebate to the current
-  holder of the preceding key. The first Accelerant key has no predecessor and
-  its rest becomes shared money.
-
-A fleet may propose an Autolaunch once it has sold
-`FIBONACCI_AUTOLAUNCH_MIN_KEYS` (86, the last key of level 7) on Syndicate and
-Cascade, or `FLEET_TECH_AUTOLAUNCH_MIN_KEYS` (100) on Classic and Accelerant.
+- Syndicate and Classic: the rest, 90%, becomes shared money.
+- Cascade: the rest, 90%, goes to the level-completion reserve.
+- Accelerant after the first key: `ACCELERANT_CAPITAL_BPS` (2000, 20% of gross,
+  rounded down) becomes shared money and the rest, 70% of gross plus any
+  rounding dust, is a rebate to the current holder of the preceding key. The
+  first Accelerant key has no predecessor and its rest, 90%, becomes shared
+  money.
 
 ## Rewards ledger
 
 `KeyfleetRewards` is the per-fleet reward ledger, permanently bound to its fleet.
 The fleet is the only writer: it enrolls keys into cohorts, allocates tokens to a
-cohort, credits an address directly, and settles a key. It pays exactly three
-income tokens: USDC and REGENT, fixed at construction, and the fleet's launched
-token, which the fleet sets with `setLaunchedToken` when a launch is created and
-replaces when a launch follows a failed one. `rewardAssets()` lists them and
-`isRewardAsset(asset)` answers for one. A failed launch's token never had an
-allocation, so replacing it strands nothing.
+cohort, credits an address directly, and settles a key. It pays exactly one
+income token, USDC, fixed at construction. `rewardAssets()` lists it and
+`isRewardAsset(asset)` answers for one.
 
 Rewards are distributed through a cumulative index per asset and cohort, so an
 allocation writes one index and never iterates over recipients. Classic and
 Accelerant keys are all in cohort 0; a Fibonacci key is in the cohort of its
-level. Cohort ids run `0..31` (`MAX_COHORTS = 32`). A newly enrolled key starts
-at the cohort's current index and earns nothing from earlier allocations.
+level. The ledger takes any cohort id the fleet gives it, because the Fibonacci
+presets have no last level. A newly enrolled key starts at the cohort's current
+index and earns nothing from earlier allocations.
 
 Accrued rewards belong to the address that held the key while they accrued. The
 fleet settles a key to its outgoing owner immediately before every ownership
@@ -146,20 +156,20 @@ block itself. `claimable` agrees with `claim` for distinct token ids and returns
 zero where `claim` would revert with `NothingToClaim`; callers pass each id at
 most once. `accrued(asset, tokenId)` reports one key's unsettled whole units.
 
-Worst-case settlement, with all three income tokens pending on one key and every
-slot cold, measured 139,300 gas; the suite asserts a ceiling of 168,000.
+Worst-case settlement, with USDC pending on a key in cohort 40 and every slot
+cold, measured 53,026 gas; the suite asserts a ceiling of 64,000.
 
 ## Fleet
 
 `Keyfleet` is an OpenZeppelin ERC721 with 1-based, contiguous token ids.
 `tokenURI` is a fixed base plus the id; the base is set once at construction and
 is readable through `baseTokenURI()`. The constructor takes the preset, USDC,
-REGENT, the Regents revenue staking contract, the Autolaunch factory, a
-`Metadata` value (name, symbol, metadata base), a `Randomness` value (VRF
-coordinator, subscription, gas lane) and the trait table hash. It rejects a zero
-USDC, REGENT, staking or factory address, a USDC that does not report six
-decimals, a coordinator that holds no code and a zero trait table hash. It then
-deploys the fleet's `KeyfleetRewards` and `KeyfleetVotes`.
+the protocol treasury (`PROTOCOL_TREASURY`, the Regents Safe), a `Metadata`
+value (name, symbol, metadata base), a `Randomness` value (VRF coordinator,
+subscription, gas lane) and the trait table hash. It rejects a zero USDC or
+treasury address, a USDC that does not report six decimals, a coordinator that
+holds no code and a zero trait table hash. It then deploys the fleet's
+`KeyfleetRewards`, `KeyfleetVotes` and `KeyfleetShards`.
 
 ### Purchases
 
@@ -168,7 +178,8 @@ created. A zero receiver mints to the caller. The deadline, the supply bound and
 the price against `maxPrice` are checked before any token moves, because the
 displayed next key is not reserved. The buyer must have approved the fleet for
 the gross price in USDC. No balance-delta check is taken around the pull: USDC is
-fixed at deployment and on Base the deployment scripts pin it to Base USDC. A
+fixed at deployment and on Ethereum the deployment scripts pin it to Ethereum
+USDC. A
 paused USDC, or one that blocks the buyer or the fleet, stops purchases until it
 lifts; that is accepted.
 
@@ -183,10 +194,13 @@ reserve, rebate)` records the split. `purchase` is guarded against reentrancy,
 so a receiver contract cannot buy again from inside `onERC721Received`, but it
 may forward the key: enrollment happens before the mint.
 
-`nextPrice()` and `quote()` give the next purchase's price and split, and both
-revert once the fleet is sold out; `remainingSupply()` counts down to zero.
-`levelOf` and `holdingLimit` report the library's answers and revert on Classic
-and Accelerant, which have no levels.
+`nextPrice()` and `quote()` give the next purchase's price and split. On Classic
+and Accelerant both revert once the fleet is sold out, and `maxSupply()` and
+`remainingSupply()` give the limit and count down to zero. Syndicate and Cascade
+never sell out, so on them `maxSupply()` and `remainingSupply()` revert with
+`NotFleetTechPreset` rather than answer with a stand-in number. `levelOf`,
+`holdingLimit` and `completedLevels` report the library's answers and revert
+with `NotFibonacciPreset` on Classic and Accelerant, which have no levels.
 
 A Cascade level completes in the transaction that mints its last key, once. Level
 1 has no predecessor, so its whole reserve becomes shared money. From level 2 the
@@ -194,7 +208,8 @@ reserve first repays the whole gross the preceding level paid, moved into the
 ledger and allocated to that level's cohort, which means whoever holds those keys
 at that moment; the rest becomes shared money and the reserve is emptied. The
 reserve always covers the repayment: a level has at least 1.5 times the keys of
-the one before at 1.2 times the price, and 98% of every purchase is reserved.
+the one before at 1.2 times the price, and 90% of every purchase is reserved, so
+the reserve is at least 1.5 × 1.2 × 0.9 = 1.62 times what is owed.
 `LevelCompleted(level, reimbursement, surplus)` records it. A level that never
 completes keeps its reserve; what happens to it is deferred.
 
@@ -204,28 +219,36 @@ applies the Fibonacci holding limit to the incoming owner, raises the key's
 `lastMovedBlock`, which is what decides whether the key can vote on a proposal.
 There is no burn.
 
-The worst primary purchase is the first one on a fresh Cascade fleet, every slot
-cold. Against a plain ERC-20 standing in for USDC and a stand-in coordinator it
-measured 391,092 gas in execution (Syndicate 366,216, Accelerant 345,518, Classic
-343,969), and the suite asserts a ceiling of 470,000. That is a regression bound
-on the fleet's own work. Real Base USDC is a proxy and costs more per transfer,
-so the figures to publish must be measured on a fork of Base.
+The costliest primary purchase is the first one of a high level on a Cascade
+fleet, every slot cold; its cost grows slowly with the level because the level
+functions walk the levels from the first. Against a plain ERC-20 standing in for
+USDC and a stand-in coordinator it measured, in execution:
+
+| Purchase | Gas |
+| --- | --- |
+| Cascade, level 1 | 383,375 |
+| Cascade, level 30 | 407,913 |
+| Cascade, level 40 | 424,033 |
+| Syndicate, level 1 | 358,492 |
+| Syndicate, level 40 | 393,304 |
+| Accelerant | 338,226 |
+| Classic | 336,629 |
+
+The suite asserts a ceiling of 509,000, the level-40 Cascade figure plus a fifth.
+That is a regression bound on the fleet's own work. Real Ethereum USDC is a proxy
+and costs more per transfer, so the figures to publish must be measured on a
+fork of Ethereum.
 
 ### The protocol share
 
-The 2% of every purchase is added to `protocolShareOwed`; a purchase never calls
-the staking contract, so a paused staking contract cannot stop a sale.
+The 10% of every purchase is added to `protocolShareOwed`; a purchase never
+sends it, so a treasury that cannot receive USDC cannot stop a sale.
 `sendProtocolShare()` is how it leaves: anyone may call it at any time, and it
-sends the whole owed amount as registered revenue with
-`depositUSDC(amount, SOURCE_TAG, PROTOCOL_SHARE_REF)`, where `SOURCE_TAG` is
-`keccak256("keyfleet")` and `PROTOCOL_SHARE_REF` is
-`keccak256("keyfleet.protocol-share")`. The call must report receiving the whole
-amount and must spend the approval it was given down to nothing, or it reverts
-with `StakingRegistrationFailed` and the amount stays owed. It emits
-`ProtocolShareSent(caller, amount)` and reverts with `ZeroAmount` when nothing is
-owed. This is the only fee a fleet ever pays. Against the mock staking contract
-the send measured 217,556 gas, most of it the mock's own bookkeeping; the suite
-asserts a ceiling of 262,000.
+transfers the whole owed amount in USDC to `PROTOCOL_TREASURY`, which is fixed
+at construction. If the transfer fails the call reverts and the amount stays
+owed. It emits `ProtocolShareSent(caller, amount)` and reverts with `ZeroAmount`
+when nothing is owed. This is the only fee a fleet ever pays. The send measured
+39,578 gas; the suite asserts a ceiling of 48,000.
 
 ### Income and shared money
 
@@ -239,8 +262,8 @@ There are no deposit functions. Money reaches a fleet by a plain transfer, and
 `recognizeSurplus(asset)` sorts it. Anyone may call it, and the class the money
 lands in depends only on the token:
 
-- An income token (USDC, REGENT, or the launched token once a launch is
-  recorded) is moved into the ledger and allocated to the keys in full, and
+- USDC, the one income token, is moved into the ledger and allocated to the
+  keys in full, and
   `IncomeRecognized(asset, caller, amount)` is emitted. Classic and Accelerant
   share it equally per key minted. The Fibonacci presets share it equally across
   the fully minted levels and then equally per key within each level; the
@@ -251,28 +274,23 @@ lands in depends only on the token:
 - Every other token becomes shared money, and
   `SharedMoneyRecognized(asset, caller, amount)` is emitted.
 
-Two receipts from the fleet's own launch are shared money although they arrive in
-income tokens, and they are booked from the launch contracts' own records before
-anything is sorted or paid, so each is booked exactly once whatever the order of
-calls:
+Sorting USDC on a Fibonacci fleet writes one ledger index per completed level,
+so its cost grows with the completed levels and never with the number of keys
+or holders. With every slot cold it measured, in execution:
 
-- At graduation the strategy sends the fleet the REGENT the auction raised that
-  the pool did not use (`currencyRaised - lpRegentUsed`), booked with
-  `GraduationHoldingsBooked(REGENT, amount)`. The strategy sends the fleet no
-  launched token at graduation.
-- After graduation, every launched token the vesting escrow releases, booked from
-  the growth of the escrow's `totalReleased` with
-  `VestingBooked(subject, amount, totalReleased)`.
+| Completed levels | Keys sold | Gas | Ceiling |
+| --- | --- | --- | --- |
+| 20 | 46,365 | 669,667 | 804,000 |
+| 30 | 5,702,884 | 969,377 | 1,164,000 |
+| 40 | 701,408,730 | 1,269,087 | 1,523,000 |
 
-Worst-case sorting, a Fibonacci fleet with all twenty levels complete and every
-slot cold, measured 677,492 gas in execution; the suite asserts a ceiling of
-813,000. The cost is bounded by the preset, never by the number of keys or
-holders.
+About 30,000 gas per completed level. Each ceiling is the measured figure plus
+a fifth.
 
 Shared money leaves only through `payFromBudget`, which only the fleet's own
 voting controller can call, on an approved Pay proposal. The Cascade reserve, the
 owed protocol share and the ledger's backing are out of a vote's reach. The only
-ways USDC leaves a fleet are the protocol share sent to staking, the Accelerant
+ways USDC leaves a fleet are the protocol share sent to the treasury, the Accelerant
 rebate, the Cascade repayment and income moved into the ledger, and a payment
 the keys voted for with its matches. No token a fleet holds is ever swapped or
 converted. Tokens that take a fee when they move, or rebase, are not supported.
@@ -296,27 +314,36 @@ a key moved stays counted after it moves, and the key's current holder or their
 delegate may withdraw it but cannot cast a new one. A batch of keys is voted or
 withdrawn whole or not at all.
 
-A proposal is approved at any moment `yesVotes * 2 > FLEET.totalMinted()`: yes
-must be more than half of all the keys sold so far, so a silent key counts
-against it. The test is live, so a later sale can take an approved proposal back
-to open. `state(proposalId)` reports `Open`, `Approved` or `Executed`.
-`execute(proposalId)` is permissionless and carries out an approved proposal
-once. The proposal is marked carried out before the fleet is called, and any
-revert inside the fleet or the factory undoes the mark with everything else, so a
-failed attempt consumes nothing and the proposal stays open.
+A Decision or Pay proposal is approved at any moment
+`yesVotes * 2 > FLEET.totalMinted()`: yes must be more than half of all the keys
+sold so far, so a silent key counts against it. A RestrictEdits proposal is
+approved at `yesVotes * 5 >= FLEET.totalMinted() * 3`: at least three fifths,
+so three of five keys pass and 599 of 1,000 do not. The test is live, so a later
+sale can take an approved proposal back to open. `state(proposalId)` reports
+`Open`, `Approved` or `Executed`. `execute(proposalId)` is permissionless and
+carries out an approved proposal once. The proposal is marked carried out before
+the fleet is called, and any revert inside the fleet undoes the mark with
+everything else, so a failed attempt consumes nothing and the proposal stays
+open.
 
 Proposing needs standing: the proposer names a key they own or are the delegate
-of. Naming a key is not a vote. There are three kinds:
+of. Naming a key is not a vote. There are three kinds, numbered in this order
+from 0:
 
 - `Decision`: `proposeDecision(tokenId, text, digest)`. Records agreement and
   has no on-chain effect beyond `DecisionRecorded`. The text is emitted in
   `ProposalCreated` and stored nowhere; the optional digest pins an exact
   artifact or commit.
-- `Autolaunch`: `proposeAutolaunch(tokenId, envelope)`, described under
-  Autolaunch below.
 - `Pay`: `proposePay(tokenId, asset, amount, recipient, text, digest)`. The
-  recipient may not be zero, the fleet, the controller or the ledger. A payment
-  may be proposed at any time, before or after a launch.
+  recipient may not be zero, the fleet, the controller or the ledger.
+- `RestrictEdits`:
+  `proposeRestrictEdits(tokenId, targetTokenId, restricted, text, digest)`.
+  Names any key already sold (`KeyNotMinted` otherwise) and whether its edits
+  should be restricted or no longer restricted. Carrying it out sets
+  `editsRestricted(targetTokenId)` and emits
+  `EditsRestrictionSet(targetTokenId, restricted, proposalId)`; the latest one
+  carried out stands. It moves no money. What a restriction stops is decided
+  off chain from this record.
 
 Every payment is matched. When a Pay is carried out, the fleet computes
 `share = ceil(amount / yesVotes)` and `matched = share * (keysSold - yesVotes)`,
@@ -330,66 +357,46 @@ stores the share and the keys sold; `collect(proposalId, tokenIds)` then pays
 has not collected, to whoever holds that key when it is collected. Anyone may
 call `collect`, and the money goes only to the key holders.
 
-This does not stop a majority. A majority of keys can approve a launch, a
-decision or a payment the rest did not want. Matching means a payment only ever
+This does not stop a majority. A majority of keys can approve a decision or a
+payment the rest did not want. Matching means a payment only ever
 spends the majority's own share; claim and reserve solvency and the owed
 protocol share hold regardless of any vote.
 
 Voting is the one call whose cost grows with what it is asked, and only with the
-number of keys named. Ten Classic keys in one vote measured 285,300 gas and each
+number of keys named. Ten Classic keys in one vote measured 284,470 gas and each
 further key about 25,400, the same on a Fibonacci fleet; the suite asserts
 ceilings of 342,000 and 31,000. A holder with more keys than a block can carry
 splits the vote across calls. Creating and carrying out a proposal cost the same
 on any size of fleet.
 
-## Autolaunch
+## Shards
 
-An `Autolaunch` proposal creates a launch through the pinned
-`RegentsAutolaunchFactoryV1`, with the fleet itself as launcher and treasury.
-The factory is fixed when the fleet is deployed. The strategy is never stored:
-the fleet reads it from the factory on every call. Only minimal interfaces are
-declared for either, so nothing of the factory's governance surface is reachable
-from a fleet. [../docs/autolaunch-target.md](../docs/autolaunch-target.md)
-describes the target.
+`KeyfleetShards` records the shards of one fleet's keys: time-limited grants a
+key's owner gives to other wallets. It is bound to its fleet for good and is
+reachable as `SHARDS()` on the fleet.
 
-The envelope carries the launched token's name, symbol, description, website and
-image, the required REGENT raise and a digest of the narrative behind the launch.
-There is no treasury field and no expiry. The envelope is stored whole and never
-edited; `keccak256(abi.encode(envelope))` is emitted in `AutolaunchProposed` and
-recorded again on the fleet when it launches.
+- `issue(tokenId, wallet, days)` is for the key's current owner only
+  (`NotKeyOwner` otherwise; an unsold key reverts with the ERC-721
+  `ERC721NonexistentToken`). A shard lasts 1 to 365 days (`DaysOutOfRange`), may
+  not go to the zero address or the owner (`WalletIsOwner`), and records the
+  key's current `ownershipEpoch`. It emits
+  `ShardIssued(tokenId, wallet, expiresAt, epoch)`.
+- A wallet holds at most one active shard in a fleet, under whichever key issued
+  it (`ShardAlreadyActive`). A key may have any number of shards. A new shard
+  replaces a wallet's inactive one.
+- `end(tokenId, wallet)` ends an active shard early. The key's current owner or
+  the shard's own wallet may call it (`NotAllowedToEnd` otherwise), and it emits
+  `ShardEnded(tokenId, wallet, by)`.
+- `shardOf(wallet)` returns the wallet's latest shard as
+  `(tokenId, expiresAt, epoch, active)`. A shard is active while it has not been
+  ended, its time has not run out, and the key's `ownershipEpoch` is still the
+  one it was issued under, so every shard of a key stops the moment the key
+  changes hands, with no call to the record, and moving the key back does not
+  revive them.
 
-`proposeAutolaunch` refuses a fleet that has not sold its preset's launch
-threshold (`LaunchNotYetEligible`), an empty metadata field or one over the
-factory's byte cap, a raise of zero or above the strategy's
-`MAX_REACHABLE_RAISE`, and a fleet whose launch has graduated. The caps and the
-raise ceiling are read from the factory and strategy in the proposing call. A
-launch may be proposed while another is running, because it can be carried out
-if that one fails.
-
-Carrying it out calls `Keyfleet.executeAutolaunch(proposalId, openedBlock,
-envelope)`, which only the fleet's controller may call. It first books the
-current launch, then refuses with `LaunchAlreadyCreated` while an auction is
-running or once a launch has graduated, and with `StaleLaunch` when the current
-launch failed and the proposal opened in or before the block that launch was
-created in. It calls the factory once and then checks the factory's own record:
-the launch must name this fleet as launcher and treasury, carry the token,
-auction and escrow the call returned, and map the token back to the same launch
-id, or it reverts with `LaunchProvenanceMismatch`. The new launch replaces any
-failed one in `launchRecord()`, and its token becomes the ledger's third income
-token. The call moves no tokens and grants no allowance.
-
-A launch is `NotCreated`, `AuctionCreated`, `Graduated` or `EconomicallyFailed`.
-`syncLaunch()` is the permissionless way to read the strategy's verdict;
-`recognizeSurplus`, `payFromBudget` and `executeAutolaunch` make the same booking
-first. An auction that has ended but has not been migrated is still
-`AuctionCreated`. Graduation records the splitter, the payment receiver, the
-pool and the locked LP position and books the graduation REGENT. Graduation is
-final; a failure lasts until another launch. `launchDistribution()` passes the
-strategy's live record through for the app.
-
-Executing an Autolaunch measured 1,458,480 gas against a mock factory, and the
-suite asserts a ceiling of 1,750,000. Most of it is the mock's own writing; the
-real factory deploys a token, an escrow and an auction and spends far more.
+A shard is a record, not a token: it cannot be moved, sold or approved, and it
+carries no vote, no money and no authority on chain. What a shard's wallet may do
+is decided off chain from this record.
 
 ## Key reveals
 
@@ -455,58 +462,54 @@ beside them.
 
 Each fleet is deployed and recorded on its own, named by `KEYFLEET_FLEET`
 (`syndicate`, `cascade`, `classic` or `accelerant`) beside `KEYFLEET_MANIFEST`
-(`base` or `anvil`). There is nothing shared to deploy first.
+(`ethereum` or `anvil`). There is nothing shared to deploy first.
 
-`script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. It
-refuses a manifest whose `chainId` is not the chain it runs on; on Base, a USDC
-other than `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, a REGENT other than
-`0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`, a VRF coordinator other than
-`0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` or a gas lane other than the 2 gwei
-lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab`; on any
-chain, a REGENT or coordinator that holds no code, an Autolaunch factory that
-holds no code (a lab manifest may waive that, and the waiver is ignored on Base),
-a gas lane or subscription the coordinator does not know, a zero trait table hash
-and an unknown fleet name.
+`script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. The
+protocol treasury comes from `KEYFLEET_PROTOCOL_TREASURY`, never from the
+manifest file, and has no default. It refuses a manifest whose `chainId` is not
+the chain it runs on; on Ethereum, a USDC other than
+`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`, a VRF coordinator other than
+`0xD7f86b4b8Cae7D942340FF628F82735b7a20893a` or a gas lane other than the 200
+gwei lane `0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9`
+(from Chainlink's VRF v2.5 supported-networks page); on any chain, a zero
+protocol treasury, a coordinator that holds no code, a gas lane or subscription
+the coordinator does not know, a zero trait table hash and an unknown fleet
+name.
 
 `script/RecordKeyfleets.s.sol` runs straight after, against the same chain,
 because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
 named fleet's, any value that differs from the manifest, a fleet the subscription
-does not list as a consumer and, on Base, a subscription the manifest's Safe does
-not own. Only then does it write `deployments/<name>.<fleet>.deployed.json`, the
-fleet's published manifest: addresses and code hashes, the deployment block, the
-numeric bounds, the reference price, the fee basis points, the Autolaunch binding
-with the factory's and strategy's code hashes, the randomness terms, the trait
-table hash, the income tokens and the terms the release discloses.
+does not list as a consumer and, on Ethereum, a subscription the protocol
+treasury does not own. Only then does it write
+`deployments/<name>.<fleet>.deployed.json`, the fleet's published manifest: the
+fleet, ledger, controller and shard record addresses, the fleet's code hash, the
+deployment block, the protocol treasury, the supply limits of Classic and
+Accelerant, the reference price, the fee basis points, the randomness terms, the
+trait table hash, the income token and the terms the release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads
-`deployments/base.json` and `deployments/anvil.json`. Their cores take and return
+`deployments/ethereum.json` and `deployments/anvil.json`. Their cores take and return
 values, so the suite runs the real deployment and the real record against local
 mocks without touching a file. [../docs/deployment.md](../docs/deployment.md) is
 how to run each step and what each refuses.
 
 `script/KeeperLab.s.sol` is no part of a release. It puts one Classic fleet, with
-stand-in USDC, staking and VRF coordinator, on a plain local anvil for the
+stand-in USDC and VRF coordinator and a fixed lab treasury, on a plain local
+anvil for the
 keeper's external test in `platform/`; [../docs/keeper.md](../docs/keeper.md)
 says how.
 
 ## Checks
 
 Run `make check-contracts` from the repository root to check formatting, build,
-and run the preset, ledger, purchase, income, treasury, voting, Autolaunch,
-reveal, trait-draw and deployment tests. Foundry must be installed; the compiler
-may be downloaded on first use. Tests need no RPC, apart from the two in
-`test/fork`, which skip themselves unless their environment is set:
-
-- `test/fork/KeyfleetLaunchIncomeFork.t.sol` needs `KEYFLEET_FORK_RPC_URL`
-  naming a chain with the Autolaunch contracts deployed and
-  `KEYFLEET_FORK_FACTORY` naming its factory. On a local fork it runs the whole
-  path: the keys vote a launch, a bidder graduates it, the unused REGENT and the
-  vested launched token become shared money, USDC and REGENT from the splitter
-  reach the keys, keys claim, and a Pay vote spends shared money.
-- `test/fork/KeyfleetRevealBaseFork.t.sol` needs `BASE_RPC_URL` and runs a
-  fleet against the real Chainlink coordinator on a fork of Base.
+and run the preset, ledger, purchase, income, treasury, voting, shard, reveal,
+trait-draw and deployment tests. Foundry must be installed; the compiler may be
+downloaded on first use. Tests need no RPC, apart from
+`test/fork/KeyfleetRevealEthereumFork.t.sol`, which skips itself unless
+`ETHEREUM_RPC_URL` is set and then runs a fleet against the real Chainlink
+coordinator and USDC on a fork of Ethereum.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run
 `git submodule update --init`.
