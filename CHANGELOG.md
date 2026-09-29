@@ -349,3 +349,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   and the served contract describe the two requests.
 - regents is pinned at `1ca65917` (Regents v112) for both `identity` and
   `agents`.
+
+## 2026-09-29 — Agent changes from any Regent site reach Keyfleet
+
+- Keyfleet starts the shared `RegentAgents.Listener` after its repository and
+  PubSub. When any Regent site pairs, renames or unpairs an agent, the change
+  reaches Keyfleet's pages as `:agents_changed` on the person's topic. It holds
+  one direct database connection of its own.
+- A refusal from the sign-in service reaches the agent with that service's own
+  message and next steps.
+- regents is pinned at `3eff63fa` (Regents v115) and elixir-utils at
+  `9ca24b0`.

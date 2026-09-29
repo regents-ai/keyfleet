@@ -15,6 +15,7 @@ defmodule Keyfleet.Application do
         {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
         {Phoenix.PubSub, name: Keyfleet.PubSub},
+        agents_listener_child(),
         # A key's profile reads its rewards wherever the site runs, so their
         # table stands apart from the fleets' readers below.
         Keyfleet.Chain.RewardsWaiting,
@@ -39,6 +40,13 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
+  end
+
+  # Agent changes announced by any Regent site, through the database, reach
+  # this site's pages; it needs the database and PubSub started first.
+  defp agents_listener_child do
+    if Application.get_env(:keyfleet, :database_startup_enabled, false),
+      do: RegentAgents.Listener
   end
 
   # Metrics are served beside the site, never by a process that only runs a task.
