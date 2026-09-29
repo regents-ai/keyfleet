@@ -46,9 +46,10 @@ defmodule Keyfleet.BrowserChain do
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
+  # Agents sign in on Base whatever chain the keys are on.
   @operator %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
-    chain_id: 1,
+    chain_id: 8_453,
     audience: "keyfleet"
   }
 
