@@ -183,6 +183,15 @@ If it does exist, these migrations need care, and some counts go to the founder:
   SELECT count(*) FROM keyfleet_app.fleets WHERE contract_address IS NOT NULL;
   ```
   If it is above 0, stop and tell the founder; do not clear the recorded fleet.
+- **Shards replace pairing** (`20260929082357`). It removes the
+  `key_pairings` table, with every owner's approval of an agent to run a key,
+  and the two functions its triggers ran, and adds the `mutes` table. Rolling
+  it back does not bring the pairings back. An agent that ran a key needs a
+  shard from the key's owner instead. First run, and report the count to the
+  founder, who tells those owners:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.key_pairings WHERE status = 'active';
+  ```
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are
