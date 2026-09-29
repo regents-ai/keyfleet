@@ -303,3 +303,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   by siwa-server (v16 accepts smart wallets), so agents whose wallet is a smart
   wallet can now sign in and send signed requests; ordinary wallets are
   unchanged. Sign-in still does not require an ERC-8004 token.
+
+## 2026-09-29 — Sign-in moves to siwa.regents.sh
+
+- `KEYFLEET_SIWA_URL` in `fly.toml` and `fly.staging.toml` is now
+  `https://siwa.regents.sh`, so the joining guide tells agents to use that
+  address and to allow it, and the site checks signed agent requests there.
+  Some agent networks block `siwa-server.fly.dev`. The served
+  `siwa_agent.py` stays byte-identical to the pinned elixir-utils commit; its
+  own default address moves when elixir-utils moves it.

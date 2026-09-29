@@ -7,7 +7,7 @@ primary_region = "iad"
 [env]
   PORT = "4000"
   KEYFLEET_DEPLOYMENT_ROLE = "production"
-  KEYFLEET_SIWA_URL = "https://siwa-server.fly.dev"
+  KEYFLEET_SIWA_URL = "https://siwa.regents.sh"
 
 [metrics]
   port = 9091
