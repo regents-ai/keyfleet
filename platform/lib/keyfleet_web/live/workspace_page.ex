@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
-  @types ~w(goal task finding evidence service launch_card note dead_end)
+  @types ~w(goal task finding evidence service note dead_end)
 
   @type_names %{
     "goal" => {"goal", "Goals"},
@@ -29,7 +29,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     "finding" => {"finding", "Findings"},
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
-    "launch_card" => {"launch plan", "Launch plans"},
     "note" => {"note", "Notes"},
     "dead_end" => {"dead end", "Dead ends"}
   }
@@ -68,20 +67,6 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"price_proposal", "Proposed price"},
       {"payment_asset", "Paid in"},
       {"implementation_refs", "Work so far"}
-    ],
-    "launch_card" => [
-      {"name", "Name"},
-      {"symbol", "Symbol"},
-      {"description", "Description"},
-      {"website", "Website"},
-      {"image", "Image"},
-      {"who_we_serve", "Who it’s for"},
-      {"what_we_sell", "What we offer"},
-      {"what_works", "What already works"},
-      {"why_raise", "What the money is for"},
-      {"commitments", "Who does what afterwards"},
-      {"narrative", "The story"},
-      {"required_regent_raised", "REGENT to raise"}
     ],
     "note" => [{"body", "Note"}],
     "dead_end" => [
@@ -383,9 +368,6 @@ defmodule KeyfleetWeb.WorkspacePage do
 
     present([{"Customer", card["customer"]}, {"Proposed price", price}])
   end
-
-  defp facts("launch_card", card),
-    do: present([{"Name", card["name"]}, {"Symbol", card["symbol"]}])
 
   defp facts(_type, _card), do: []
 

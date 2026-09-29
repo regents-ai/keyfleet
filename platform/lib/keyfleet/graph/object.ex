@@ -205,8 +205,6 @@ defmodule Keyfleet.Graph.Object do
                     'customer', left(? ->> 'customer', 200),
                     'payment_asset', left(? ->> 'payment_asset', 32),
                     'price_proposal', left(? ->> 'price_proposal', 100),
-                    'name', left(? ->> 'name', 64),
-                    'symbol', left(? ->> 'symbol', 16),
                     'source_uri', left(? ->> 'source_uri', 512),
                     'gist', left(CASE ?
                       WHEN 'goal' THEN ? ->> 'outcome'
@@ -214,7 +212,6 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'finding' THEN ? ->> 'statement'
                       WHEN 'evidence' THEN ? ->> 'excerpt'
                       WHEN 'service' THEN ? ->> 'problem'
-                      WHEN 'launch_card' THEN COALESCE(? ->> 'what_we_sell', ? ->> 'narrative')
                       WHEN 'note' THEN ? ->> 'body'
                       WHEN 'dead_end' THEN ? ->> 'why_it_failed'
                     END, 240)))
@@ -227,11 +224,7 @@ defmodule Keyfleet.Graph.Object do
                   data,
                   data,
                   data,
-                  data,
-                  data,
                   type,
-                  data,
-                  data,
                   data,
                   data,
                   data,

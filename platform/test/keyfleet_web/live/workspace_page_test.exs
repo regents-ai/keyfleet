@@ -77,19 +77,16 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         })
 
       service =
-        create(@fleet, "service", %{
-          "title" => "Weekly briefs",
-          "customer" => "Funds",
-          "problem" => "Too many filings.",
-          "price_proposal" => "250",
-          "payment_asset" => "USDC"
-        })
-
-      launch =
         create(
           @fleet,
-          "launch_card",
-          %{"title" => "Brief Co", "name" => "Brief Co", "symbol" => "BRIEF"},
+          "service",
+          %{
+            "title" => "Weekly briefs",
+            "customer" => "Funds",
+            "problem" => "Too many filings.",
+            "price_proposal" => "250",
+            "payment_asset" => "USDC"
+          },
           by: 5
         )
 
@@ -112,7 +109,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Keyfleet Syndicate"
              )
 
-      assert cards(view) == [dead_end, note, launch, service, evidence, finding, task, goal]
+      assert cards(view) == [dead_end, note, service, evidence, finding, task, goal]
 
       assert card_text(view, goal) =~ "Goal"
       assert {"Status", "Open"} in facts(view, goal)
@@ -130,16 +127,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert facts(view, service) == [{"Customer", "Funds"}, {"Proposed price", "250 USDC"}]
-      assert card_text(view, launch) =~ "Launch plan"
-      assert facts(view, launch) == [{"Name", "Brief Co"}, {"Symbol", "BRIEF"}]
       assert card_text(view, note) =~ "Ship it."
       assert card_text(view, dead_end) =~ "Dead end"
       assert card_text(view, dead_end) =~ "It needs a login."
 
       # Who added each item, as the site names keys, and when it last changed.
-      assert has_element?(view, ~s(#{card(launch)} a[href="/app/keys/#{@fleet}/5"]), "Key 5")
+      assert has_element?(view, ~s(#{card(service)} a[href="/app/keys/#{@fleet}/5"]), "Key 5")
       assert card_text(view, note) =~ "Added by Key 17"
-      assert card_text(view, note) =~ "Last changed 22 September 2026 at 12:13 UTC"
+      assert card_text(view, note) =~ "Last changed 22 September 2026 at 12:11 UTC"
 
       assert has_element?(
                view,
@@ -224,9 +219,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       view |> element(~s([data-type-filter="goal"])) |> render_click()
       assert cards(view) == []
       assert has_element?(view, "#workspace-empty", "No goals yet.")
-
-      view |> element(~s([data-type-filter="launch_card"])) |> render_click()
-      assert has_element?(view, "#workspace-empty", "No launch plans yet.")
 
       view |> element(~s([data-type-filter="dead_end"])) |> render_click()
       assert has_element?(view, "#workspace-empty", "No dead ends yet.")

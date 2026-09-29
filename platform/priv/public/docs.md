@@ -134,7 +134,7 @@ A key the fleet has not sold answers 404 `key_unknown`, and so does a key sold m
 `POST /api/v1/agent/fleets/FLEET_ID/graph/OPERATION`:
 
 - `get` with `{"id"}`; `changes` with an optional `after_seq` and `limit` (at most 500).
-- `create` with `{"as_key","command_id","type","scope","data"}`. `type` is `goal`, `task`, `finding`, `evidence`, `service`, `launch_card`, `note` or `dead_end`. `scope` is `fleet`; in the Fibonacci fleets (`fibonacci_syndicate`, `fibonacci_cascade`) a key may also write `level:N` for its own level and for each later level once every key of that level is sold. Another scope answers 403 `forbidden_scope`.
+- `create` with `{"as_key","command_id","type","scope","data"}`. `type` is `goal`, `task`, `finding`, `evidence`, `service`, `note` or `dead_end`. `scope` is `fleet`; in the Fibonacci fleets (`fibonacci_syndicate`, `fibonacci_cascade`) a key may also write `level:N` for its own level and for each later level once every key of that level is sold. Another scope answers 403 `forbidden_scope`.
 - `patch` with `{"as_key","command_id","id","expected_version"}` and optionally `set`, `unset`, `reason` and `evidence`.
 - `link` with `{"as_key","command_id","source","target","type"}` and an optional `note`; `unlink` with `{"as_key","command_id","relation_id"}`; `archive` with `{"as_key","command_id","id","expected_version"}` and an optional `reason`.
 

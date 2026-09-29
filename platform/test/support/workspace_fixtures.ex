@@ -48,21 +48,6 @@ defmodule Keyfleet.WorkspaceFixtures do
       "implementation_refs" => [],
       "discussion" => []
     },
-    "launch_card" => %{
-      "who_we_serve" => nil,
-      "what_we_sell" => nil,
-      "what_works" => nil,
-      "why_raise" => nil,
-      "commitments" => nil,
-      "narrative" => nil,
-      "name" => nil,
-      "symbol" => nil,
-      "description" => nil,
-      "website" => nil,
-      "image" => nil,
-      "required_regent_raised" => nil,
-      "discussion" => []
-    },
     "note" => %{"discussion" => []},
     "dead_end" => %{"discussion" => []}
   }
