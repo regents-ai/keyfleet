@@ -34,6 +34,10 @@ abstract contract KeyfleetManifest is Script {
     /// @notice The Ethereum VRF gas lane with the 200 gwei price cap, the only one a manifest may
     /// name there.
     bytes32 public constant ETHEREUM_VRF_KEY_HASH = 0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9;
+    /// @notice The Regents Safe on Ethereum, the only protocol treasury a manifest may name there.
+    /// It still comes from `KEYFLEET_PROTOCOL_TREASURY`, which has no default; this only refuses any
+    /// other address.
+    address public constant ETHEREUM_PROTOCOL_TREASURY = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
 
     /// @notice What one fleet is deployed with, which is exactly `Keyfleet.Metadata`.
     /// @param name ERC721 collection name.
@@ -51,7 +55,8 @@ abstract contract KeyfleetManifest is Script {
     /// must be `ETHEREUM_USDC`.
     /// @param protocolTreasury The Regents Safe, which receives the 10% protocol share of every
     /// purchase and, on Ethereum, owns the VRF subscription. Taken from
-    /// `KEYFLEET_PROTOCOL_TREASURY`, never from the file.
+    /// `KEYFLEET_PROTOCOL_TREASURY`, never from the file. On Ethereum it must be
+    /// `ETHEREUM_PROTOCOL_TREASURY`.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
     /// chain. On Ethereum the coordinator and gas lane must be `ETHEREUM_VRF_COORDINATOR` and
     /// `ETHEREUM_VRF_KEY_HASH`.
@@ -78,6 +83,8 @@ abstract contract KeyfleetManifest is Script {
     error VrfCoordinatorNotEthereum(address coordinator);
     /// @notice An Ethereum manifest names a VRF gas lane other than Ethereum's 200 gwei lane.
     error VrfKeyHashNotEthereum(bytes32 keyHash);
+    /// @notice An Ethereum manifest names a protocol treasury other than the Regents Safe.
+    error ProtocolTreasuryNotRegentsSafe(address protocolTreasury);
     /// @notice The manifest's VRF coordinator address holds no code on this chain.
     error VrfCoordinatorMissing(address coordinator);
     /// @notice The coordinator has no proving key for the manifest's gas lane.
@@ -142,7 +149,8 @@ abstract contract KeyfleetManifest is Script {
     }
 
     /// @dev The manifest must fit this chain. Its chain must be this chain. On Ethereum its USDC,
-    /// VRF coordinator and gas lane must be Ethereum's own, and on every chain the protocol
+    /// VRF coordinator and gas lane must be Ethereum's own and its protocol treasury the Regents
+    /// Safe, and on every chain the protocol
     /// treasury must not be zero and the coordinator must hold code, know the gas lane and know the
     /// subscription; a subscription it does not know reverts with the coordinator's own
     /// `InvalidSubscription`. The trait table hash must not be zero.
@@ -153,6 +161,9 @@ abstract contract KeyfleetManifest is Script {
             if (manifest.usdc != ETHEREUM_USDC) revert UsdcNotEthereumUsdc(manifest.usdc);
             if (coordinator != ETHEREUM_VRF_COORDINATOR) revert VrfCoordinatorNotEthereum(coordinator);
             if (manifest.vrf.keyHash != ETHEREUM_VRF_KEY_HASH) revert VrfKeyHashNotEthereum(manifest.vrf.keyHash);
+            if (manifest.protocolTreasury != ETHEREUM_PROTOCOL_TREASURY) {
+                revert ProtocolTreasuryNotRegentsSafe(manifest.protocolTreasury);
+            }
         }
         if (manifest.protocolTreasury == address(0)) revert Keyfleet.ZeroAddress();
         if (coordinator.code.length == 0) revert VrfCoordinatorMissing(coordinator);

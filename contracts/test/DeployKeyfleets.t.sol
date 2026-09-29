@@ -27,6 +27,7 @@ contract DeployKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant ETHEREUM_CHAIN_ID = 1;
     address private constant SAFE = address(0x5AFE);
+    address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     address private constant BUYER = address(0xB0B);
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
@@ -127,6 +128,16 @@ contract DeployKeyfleetsTest is Test {
         manifest.usdc = address(usdc);
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.UsdcNotEthereumUsdc.selector, address(usdc)));
+        script.deploy(manifest);
+    }
+
+    /// @dev Invariant: on Ethereum the protocol share of every fleet goes to the Regents Safe and
+    /// nowhere else.
+    function test_ethereumManifestNamingAnyTreasuryButTheRegentsSafeIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+        manifest.protocolTreasury = SAFE;
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.ProtocolTreasuryNotRegentsSafe.selector, SAFE));
         script.deploy(manifest);
     }
 
@@ -243,6 +254,7 @@ contract DeployKeyfleetsTest is Test {
         Keyfleet lab = script.deploy(anvil);
         assertGt(address(lab).code.length, 0, "The anvil manifest deploys on its chain");
 
+        vm.setEnv("KEYFLEET_PROTOCOL_TREASURY", vm.toString(REGENTS_SAFE));
         KeyfleetManifest.Manifest memory ethereum = script.readManifest("ethereum", "classic");
         vm.chainId(ETHEREUM_CHAIN_ID);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
@@ -251,7 +263,7 @@ contract DeployKeyfleetsTest is Test {
         ethereum.traitTableHash = TRAIT_TABLE;
         Keyfleet release = script.deploy(ethereum);
         assertGt(address(release).code.length, 0, "The Ethereum manifest deploys");
-        assertEq(release.PROTOCOL_TREASURY(), SAFE, "And sends its protocol share to the Safe");
+        assertEq(release.PROTOCOL_TREASURY(), REGENTS_SAFE, "And sends its protocol share to the Regents Safe");
     }
 
     /// @dev Puts the mock coordinator's code at Ethereum's coordinator address, registers
@@ -265,7 +277,8 @@ contract DeployKeyfleetsTest is Test {
     }
 
     /// @dev An Ethereum manifest on Ethereum, paid in Ethereum USDC and answered by Ethereum's VRF
-    /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code.
+    /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code, with the
+    /// Regents Safe as its treasury.
     function _ethereumManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(ETHEREUM_CHAIN_ID);
         vm.etch(script.ETHEREUM_USDC(), address(usdc).code);
@@ -278,6 +291,7 @@ contract DeployKeyfleetsTest is Test {
             subscriptionId: ethereumSubscription,
             keyHash: script.ETHEREUM_VRF_KEY_HASH()
         });
+        manifest.protocolTreasury = REGENTS_SAFE;
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {

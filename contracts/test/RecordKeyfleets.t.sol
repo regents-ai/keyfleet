@@ -15,6 +15,7 @@ contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant ETHEREUM_CHAIN_ID = 1;
     address private constant SAFE = address(0x5AFE);
+    address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     uint256 private constant DEPLOYMENT_BLOCK = 7;
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
@@ -203,11 +204,25 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(
             manifest,
             fleet,
-            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByTreasury.selector, address(0xBEEF), SAFE)
+            abi.encodeWithSelector(
+                RecordKeyfleets.VrfSubscriptionNotOwnedByTreasury.selector, address(0xBEEF), REGENTS_SAFE
+            )
         );
 
-        ethereum.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        ethereum.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
         recorder.record(manifest, _summary(fleet));
+    }
+
+    /// @dev Invariant: an Ethereum record never publishes a protocol treasury other than the
+    /// Regents Safe.
+    function test_recordOnEthereumRefusesAnyTreasuryButTheRegentsSafe() public {
+        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
+
+        manifest.protocolTreasury = SAFE;
+        _expectRecordRefused(
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.ProtocolTreasuryNotRegentsSafe.selector, SAFE)
+        );
     }
 
     function test_recordRefusesAManifestForAnotherChain() public {
@@ -321,7 +336,7 @@ contract RecordKeyfleetsTest is Test {
 
     /// @dev An Ethereum manifest on Ethereum, paid in Ethereum USDC and answered by Ethereum's VRF
     /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code, with the
-    /// subscription owned by the Safe.
+    /// Regents Safe as its treasury and the subscription's owner.
     function _ethereumManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(ETHEREUM_CHAIN_ID);
         vm.etch(deployer.ETHEREUM_USDC(), address(usdc).code);
@@ -333,8 +348,9 @@ contract RecordKeyfleetsTest is Test {
         manifest.usdc = deployer.ETHEREUM_USDC();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(ethereum));
         manifest.vrf.subscriptionId = ethereum.createSubscription();
-        ethereum.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        ethereum.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
         manifest.vrf.keyHash = deployer.ETHEREUM_VRF_KEY_HASH();
+        manifest.protocolTreasury = REGENTS_SAFE;
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
