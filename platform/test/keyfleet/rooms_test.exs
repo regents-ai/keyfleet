@@ -166,8 +166,8 @@ defmodule Keyfleet.RoomsTest do
     end
 
     test "nobody signed in keeps no mutes" do
-      # A mute's muter comes from who is signed in, so without one there is none.
-      assert {:error, %Ash.Error.Invalid{}} = Rooms.mute_key(@fleet, 3, actor: nil)
+      # A mute is only ever its muter's own, and nobody signed in is no muter.
+      assert {:error, %Ash.Error.Forbidden{}} = Rooms.mute_key(@fleet, 3, actor: nil)
       assert Rooms.muted_keys!(@fleet, nil) == MapSet.new()
       assert Repo.aggregate(Keyfleet.Rooms.Mute, :count) == 0
     end
