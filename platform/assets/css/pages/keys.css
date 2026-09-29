@@ -98,14 +98,9 @@
   color: var(--ash-muted);
 }
 
-.key-operator {
-  display: grid;
-  gap: 0.35rem;
-  justify-items: start;
-}
-
-.key-request-list,
-.key-history ol {
+/* A shard reads top to bottom: its agent, when it runs out and its wallet,
+   then the owner's buttons. */
+.key-shard-list {
   display: grid;
   gap: 0.5rem;
   width: 100%;
@@ -114,36 +109,22 @@
   list-style: none;
 }
 
-.key-request-list li,
-.key-history li {
-  padding: 0.75rem;
-  border: 1px solid var(--ash-line);
-}
-
-.key-history li {
-  display: grid;
-  gap: 0.25rem;
-  justify-items: start;
-}
-
-/* A request reads top to bottom: who asked, their address, then the owner's
-   check and buttons. */
-.key-request-list li {
+.key-shard-list li {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   justify-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--ash-line);
 }
 
-.key-request-list li > div:first-child {
+.key-shard-list li > div:first-child {
   display: grid;
   gap: 0.25rem;
 }
 
 /* Only the row's own lines are muted, never the words on its buttons. */
-.key-request-list li > span,
-.key-request-list li > div > span,
-.key-history span {
+.key-shard-list li > div > span {
   color: var(--ash-muted);
 }
 
@@ -160,115 +141,21 @@
   overflow-wrap: anywhere;
 }
 
-.key-address-check {
-  max-width: 56ch;
-  line-height: 1.5;
-}
-
-.key-request-actions {
+.key-shard-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.key-history {
-  grid-column: 1 / -1;
-}
-
-/* The owner's limits: read by everyone in the agent panel, written by the
-   owner before approving and changed later from the same panel. */
-.key-limits {
-  display: grid;
-  gap: 0.5rem;
-  width: 100%;
-  margin-top: 0.75rem;
-}
-
-.key-limits h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.key-limits dl {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.key-limits dt {
-  color: var(--ash-muted);
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.key-limits dd {
-  max-width: 56ch;
-  margin: 0;
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
-.key-limits-change {
-  width: 100%;
-}
-
-.key-limits-change summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.key-limits-change[open] summary {
-  margin-bottom: 0.75rem;
-}
-
-.key-limits-form {
+.key-shard-form {
   display: grid;
   gap: 0.75rem;
   width: 100%;
-  justify-items: start;
 }
 
-.key-limits-fields {
-  display: grid;
-  gap: 0.75rem;
+.key-issue-shard,
+#key-shards-action {
   width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.key-limits-fields legend {
-  padding: 0;
-  margin-bottom: 0.25rem;
-  font-weight: 600;
-}
-
-.key-limits-fields .key-detail {
-  max-width: 56ch;
-  line-height: 1.5;
-}
-
-.key-limit-field {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.key-limit-field textarea {
-  width: 100%;
-  field-sizing: content;
-  min-height: 3lh;
-  padding: 0.5rem;
-  border: 1px solid var(--ash-line);
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: inherit;
-  font-size: 1rem;
-  line-height: 1.4;
-  resize: vertical;
 }
 
 }

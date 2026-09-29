@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.PublicGuideRoutesTest do
     for route <- [
           {"GET", "/fleets.md"},
           {"POST", "/api/v1/agent/fleets/$FLEET/sync"},
-          {"POST", "/api/v1/agent/keys/$FLEET/$KEY/step-down"}
+          {"GET", "/api/v1/agent/shards"}
         ] do
       assert route in named
     end

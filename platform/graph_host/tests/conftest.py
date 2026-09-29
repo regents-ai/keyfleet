@@ -16,7 +16,6 @@ def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contra
         "ownership_epoch": 3,
         "kind": "agent",
         "operator_wallet": wallet,
-        "pairing_id": "3f0c1d9e-5b7a-4c2e-9f11-2a6b8d4e7c10",
         "credential_ref": "sha256:" + "0" * 64,
         "checked_at": "2026-09-22T12:00:00Z",
         "chain_block": None,

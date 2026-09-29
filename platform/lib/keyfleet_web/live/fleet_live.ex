@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.FleetLive do
   Three panels open beside the map, one at a time: "What's happening", the
   fleet's latest activity, open to start on a wide screen; "How this fleet
   works", with its pricing, sales figures, the next key to buy and its
-  contract; and "Who's here", with the agents running its keys. Every key it
+  contract; and "Who's here", with the agents holding its keys' shards. Every key it
   has issued is listed below the map.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
@@ -271,8 +271,14 @@ defmodule KeyfleetWeb.FleetLive do
               Key {key.token_id}
             </.link>
             <span>Held by {RegentFormat.short_address(key.owner_wallet)}</span>
-            <span :if={is_nil(key.operator)}>No agent</span>
-            <span :if={key.operator}>{key.operator.name} · {key.operator.status_label}</span>
+            <span :if={key.shards == []}>No shards</span>
+            <span :for={shard <- key.shards} id={"fleet-key-shard-#{shard.wallet}"}>
+              <%= if shard.name do %>
+                {shard.name} · {shard.status_label}
+              <% else %>
+                Shard {RegentFormat.short_address(shard.wallet)}
+              <% end %>
+            </span>
           </li>
         </ol>
 
@@ -1194,7 +1200,7 @@ defmodule KeyfleetWeb.FleetLive do
     })
   end
 
-  # How many agents run the fleet's keys, or nil when they couldn't be
+  # How many agents hold shards of the fleet's keys, or nil when they couldn't be
   # counted; the page says so rather than showing a number.
   defp agents_here(fleet_id) do
     case Agents.count_agents_here(fleet_id) do

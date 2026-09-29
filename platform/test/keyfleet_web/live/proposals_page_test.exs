@@ -332,7 +332,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert has_element?(
              view,
              "#proposal-carry-out-note-open",
-             "Yes votes aren’t yet three fifths of all the keys sold"
+             "Yes votes aren’t yet 3 of every 5 keys sold"
            )
 
     {:ok, view, _html} = live(conn, "#{@list}/2")
@@ -783,6 +783,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     buttons = [
       {"propose", "#propose-decision-button"},
       {"propose", "#propose-payment-button"},
+      {"propose", "#propose-edits-button"},
       {"delegate", "#voting-delegate-button"},
       {"clear", "#voting-delegate-clear"}
     ]
@@ -895,6 +896,52 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert text(view, "#propose-payment-action-line") ==
              "The token isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."
+
+    active!(view, "#propose-edits-action", @holder)
+
+    view
+    |> form("#propose-edits-action-form", key: "7", target: "12", text: "Too many rewrites")
+    |> render_change()
+
+    assert_push_event(view, "onchain-steps:review", %{
+      component_id: "propose-edits-action",
+      review: %{steps: [restrict]}
+    })
+
+    assert restrict.data ==
+             Call.encode("proposeRestrictEdits(uint256,uint256,bool,string,bytes32)", [
+               7,
+               12,
+               true,
+               "Too many rewrites",
+               "0x" <> String.duplicate("0", 64)
+             ])
+
+    assert text(view, "#propose-edits-action-line") ==
+             "Proposes stopping key 12 and its shards changing the workspace, with key 7. " <>
+               "Needs 3 of every 5 keys sold."
+
+    view
+    |> form("#propose-edits-action-form", restricted: "false", text: "Settled down")
+    |> render_change()
+
+    assert_push_event(view, "onchain-steps:review", %{
+      component_id: "propose-edits-action",
+      review: %{steps: [allow]}
+    })
+
+    assert allow.data ==
+             Call.encode("proposeRestrictEdits(uint256,uint256,bool,string,bytes32)", [
+               7,
+               12,
+               false,
+               "Settled down",
+               "0x" <> String.duplicate("0", 64)
+             ])
+
+    assert text(view, "#propose-edits-action-line") ==
+             "Proposes letting key 12 and its shards change the workspace again, with key 7. " <>
+               "Needs 3 of every 5 keys sold."
   end
 
   test "letting another wallet vote is built for the wallet typed, and clearing names no wallet",

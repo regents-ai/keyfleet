@@ -19,6 +19,7 @@ defmodule Keyfleet.WalletSteps.Build do
 
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
+  alias Keyfleet.Keys
   alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps
   alias Keyfleet.WalletSteps.Typed
@@ -30,6 +31,8 @@ defmodule Keyfleet.WalletSteps.Build do
   @purchase_seconds 600
   # The zero address: a contract reads it as no wallet at all.
   @no_wallet "0x" <> String.duplicate("0", 40)
+  # How long a renewed shard lasts, in days.
+  @renew_days 30
 
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
@@ -209,6 +212,69 @@ defmodule Keyfleet.WalletSteps.Build do
     end
   end
 
+  # A proposal to restrict one key's workspace edits, or to allow them again.
+  defp steps(:propose_edits, fleet, _signer, inputs, _arguments) do
+    restricted = field(inputs, "restricted") == "true"
+
+    with {:ok, key} <- typed(inputs, "key", &Typed.key/1, %{restricted: restricted}),
+         {:ok, target} <-
+           typed(inputs, "target", &Typed.target/1, %{key: key, restricted: restricted}),
+         figures = %{key: key, target: target, restricted: restricted},
+         {:ok, digest} <- typed(inputs, "digest", &Typed.document_code/1, figures) do
+      {:ok,
+       [
+         Review.step(
+           "propose",
+           fleet.votes_address,
+           Call.encode(
+             "proposeRestrictEdits(uint256,uint256,bool,string,bytes32)",
+             [key, target, restricted, text(inputs), digest]
+           )
+         )
+       ], figures}
+    end
+  end
+
+  # --- shards ------------------------------------------------------------
+
+  # A shard of the key for the wallet typed, for the days typed. Issuing
+  # again to a wallet that holds a shard of this key renews it.
+  defp steps(:issue_shard, fleet, _signer, inputs, %{token_id: token_id}) do
+    with {:ok, wallet} <-
+           typed(
+             inputs,
+             "wallet",
+             &Typed.address(&1, :shard_wallet_unreadable),
+             %{token_id: token_id}
+           ),
+         {:ok, days} <-
+           typed(inputs, "days", &Typed.days/1, %{token_id: token_id, wallet: wallet}) do
+      {:ok, [Review.step("issue", fleet.shards_address, issue(token_id, wallet, days))],
+       %{token_id: token_id, wallet: wallet, days: days}}
+    end
+  end
+
+  # For each of the key's active shards, ending it now and renewing it.
+  defp steps(:end_shard, fleet, _signer, _inputs, %{token_id: token_id}) do
+    wallets = fleet.id |> Keys.active_shards_of_keys!([token_id]) |> Enum.map(& &1.wallet)
+
+    {:ok,
+     Enum.flat_map(wallets, fn wallet ->
+       [
+         Review.step(
+           "end-#{wallet}",
+           fleet.shards_address,
+           Call.encode("end(uint256,address)", [token_id, wallet])
+         ),
+         Review.step(
+           "renew-#{wallet}",
+           fleet.shards_address,
+           issue(token_id, wallet, @renew_days)
+         )
+       ]
+     end), %{token_id: token_id, wallets: wallets, renew_days: @renew_days}}
+  end
+
   # --- voting for another ----------------------------------------------
 
   # "clear" names no wallet (the zero address), which leaves only the holder
@@ -329,6 +395,9 @@ defmodule Keyfleet.WalletSteps.Build do
       error -> error
     end
   end
+
+  defp issue(token_id, wallet, days),
+    do: Call.encode("issue(uint256,address,uint16)", [token_id, wallet, days])
 
   defp vote(proposal, keys, support),
     do: Call.encode("vote(uint256,uint256[],bool)", [proposal, keys, support])

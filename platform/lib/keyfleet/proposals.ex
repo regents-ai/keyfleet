@@ -74,7 +74,7 @@ defmodule Keyfleet.Proposals do
 
     * `:executed` once its execution is recorded;
     * `:approved` while enough of all the keys sold have yes as their latest
-      vote for it to be carried out now: at least three fifths for a vote to
+      vote for it to be carried out now: 3 of every 5 keys sold for a vote to
       restrict or restore a key's edits, and more than half for every other
       kind;
     * `:open` otherwise. A key that has not voted counts against it, and so

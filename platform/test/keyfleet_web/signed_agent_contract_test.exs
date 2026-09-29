@@ -25,9 +25,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
   @join "/api/v1/agent/join/status"
   @update "/api/v1/agent/profile/update"
-  @pairings "/api/v1/agent/pairings"
-  @pairing "/api/v1/agent/keys/{fleet_id}/{token_id}/pairing"
-  @step_down "/api/v1/agent/keys/{fleet_id}/{token_id}/step-down"
+  @shards "/api/v1/agent/shards"
+  @mutes "/api/v1/agent/fleets/{fleet_id}/mutes"
+  @mute "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute"
+  @unmute "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/unmute"
   @rooms "/api/v1/agent/fleets/{fleet_id}/rooms"
   @create "/api/v1/agent/fleets/{fleet_id}/rooms/create"
   @topic "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic"
@@ -56,10 +57,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "service_ideas" => ["briefs"],
        "current_status" => "probing"
      }},
-    {"GET", @pairings, [], %{}},
-    {"POST", @pairing, [], %{}},
-    {"DELETE", @pairing, [], %{}},
-    {"POST", @step_down, [], %{}},
+    {"GET", @shards, [], %{}},
+    {"GET", @mutes, [], %{}},
+    {"POST", @mute, [], %{}},
+    {"POST", @unmute, [], %{}},
     {"GET", @rooms, [], %{}},
     {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
     {"POST", @topic, [], %{"topic" => "Probe"}},
@@ -137,11 +138,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
                op <- ~w(get changes create patch link unlink archive),
                do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
-
-  # Nothing can make these happen on demand: the owner deciding a request in
-  # the moment between it being found and being taken back, or removing an
-  # agent in the moment between it being found and stepping down.
-  @unforced [{"DELETE", @pairing, 409}, {"POST", @step_down, 409}]
 
   setup do
     # Syncs read the workspace in a repeatable-read snapshot, which Postgres
@@ -268,7 +264,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     # Before the agent has a profile.
     answer(c, c.signer, "POST", @update, @address, %{"current_status" => "early"}, 404)
-    answer(c, c.signer, "POST", @pairing, one, %{}, 404)
 
     # Joining and editing.
     joining = %{"name" => "Probe", "declared_harness" => "local"}
@@ -278,31 +273,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @update, @address, %{"name" => String.duplicate("n", 121)}, 422)
     answer(c, stranger, "POST", @join, @address, %{joining | "name" => "Stranger"}, 200)
 
-    # Asking for keys and taking a request back.
-    assert answer(c, c.signer, "GET", @pairings, @address, %{}, 200).body["pairings"] == []
+    # Shards: none, then the one key 1's owner issued, with the transaction
+    # that ends it.
+    holder = new_signer()
+    assert answer(c, holder, "GET", @shards, @address, %{}, 200).body == %{"shards" => []}
+    ChainHelpers.issue_shard!(@fleet, 1, holder.address)
 
-    assert answer(c, c.signer, "POST", @pairing, one, %{}, 200).body["pairing"]["status"] ==
-             "requested"
+    assert [%{"fleet_id" => @fleet, "token_id" => 1, "edits_restricted" => false} = shard] =
+             answer(c, holder, "GET", @shards, @address, %{}, 200).body["shards"]
 
-    assert [_requested] =
-             answer(c, c.signer, "GET", @pairings, @address, %{}, 200).body["pairings"]
+    assert shard["step_down"]["to"] == shard["shards_contract"]
 
-    assert answer(c, c.signer, "DELETE", @pairing, one, %{}, 200).body["pairing"]["status"] ==
-             "ended"
-
-    answer(c, c.signer, "DELETE", @pairing, one, %{}, 404)
-    answer(c, c.signer, "POST", @pairing, Map.put(@address, "token_id", "99"), %{}, 404)
-    assert answer(c, c.signer, "POST", @pairing, own, %{}, 200).body["pairing"]["effective?"]
-    answer(c, c.signer, "POST", @pairing, own, %{}, 409)
-
-    # Stepping down from a key: one the agent does not run, and one it does.
-    answer(c, c.signer, "POST", @step_down, one, %{}, 404)
-
-    assert answer(c, c.signer, "POST", @step_down, own, %{}, 200).body["pairing"]["ended_reason"] ==
-             "stepped_down"
-
-    answer(c, c.signer, "POST", @step_down, own, %{}, 404)
-    assert answer(c, c.signer, "POST", @pairing, own, %{}, 200).body["pairing"]["effective?"]
+    assert shard["step_down"]["data"] ==
+             RegentChain.Call.encode("end(uint256,address)", [1, holder.address])
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
@@ -350,6 +333,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert Enum.map(read, & &1["author_kind"]) == ["human", "agent", "agent"]
     answer(c, c.signer, "POST", @read, Map.put(@address, "slug", "hull-survey"), %{}, 404)
     answer(c, c.signer, "POST", @read, @address, %{"limit" => 201}, 422)
+
+    # Muting key 1 hides its owner's post from this agent alone; the cursor
+    # still passes it. Muting twice keeps one mute, and unmuting shows it again.
+    assert answer(c, c.signer, "GET", @mutes, @address, %{}, 200).body["mutes"] == []
+    assert [%{"token_id" => 1}] = answer(c, c.signer, "POST", @mute, one, %{}, 200).body["mutes"]
+    assert [%{"token_id" => 1}] = answer(c, c.signer, "POST", @mute, one, %{}, 200).body["mutes"]
+    muted = answer(c, c.signer, "POST", @read, @address, %{}, 200).body
+    assert Enum.map(muted["messages"], & &1["author_kind"]) == ["agent", "agent"]
+    assert muted["cursor"] == List.last(muted["messages"])["seq"]
+    assert length(answer(c, stranger, "POST", @read, @address, %{}, 200).body["messages"]) == 3
+    assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
+    assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
+    assert length(answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]) == 3
 
     # A key's thread: read before its first post, written to, repeated,
     # conflicting, misplaced, for a key not sold, and by an outsider.
@@ -495,7 +491,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     answer(c, c.signer, "POST", @send, @address, %{post | "idempotency_key" => "k-4"}, 503)
     answer(c, c.signer, "POST", @key_send, own, %{post | "idempotency_key" => "k-7"}, 503)
-    answer(c, c.signer, "POST", @pairing, one, %{}, 503)
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
 
@@ -527,7 +522,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       end)
 
     documented = documented_answers()
-    assert documented -- answered == @unforced
+    assert documented -- answered == []
     assert answered -- documented == []
   end
 
@@ -579,10 +574,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     [
       {"POST", @join},
       {"POST", @update},
-      {"GET", @pairings},
-      {"POST", @pairing},
-      {"DELETE", @pairing},
-      {"POST", @step_down},
+      {"GET", @shards},
+      {"GET", @mutes},
+      {"POST", @mute},
+      {"POST", @unmute},
       {"GET", @rooms},
       {"POST", @create},
       {"POST", @topic},

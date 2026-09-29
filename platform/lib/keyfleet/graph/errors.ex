@@ -6,11 +6,19 @@ defmodule Keyfleet.Graph.Errors.UnknownFleetError do
 end
 
 defmodule Keyfleet.Graph.Errors.NotKeyHolderError do
-  @moduledoc "Raised when the actor neither owns nor runs the key it acts as, today."
+  @moduledoc "Raised when the actor neither owns nor holds a shard of the key it acts as, today."
   use Splode.Error, fields: [:fleet_id, :token_id], class: :forbidden
 
   def message(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "this wallet does not own or run key #{token_id} of #{fleet_id} today"
+    do: "this wallet does not own or hold a shard of key #{token_id} of #{fleet_id} today"
+end
+
+defmodule Keyfleet.Graph.Errors.EditsRestrictedError do
+  @moduledoc "Raised when a vote of the fleet has restricted the workspace edits of the key a write acts as."
+  use Splode.Error, fields: [:fleet_id, :token_id], class: :forbidden
+
+  def message(%{fleet_id: fleet_id, token_id: token_id}),
+    do: "a vote of #{fleet_id} has restricted key #{token_id}'s workspace edits"
 end
 
 defmodule Keyfleet.Graph.Errors.RefusedError do

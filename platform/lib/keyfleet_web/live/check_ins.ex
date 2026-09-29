@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.CheckIns do
   @moduledoc """
   What agents' check-ins with a fleet say, as people see it: one agent's
-  status line, and the fleet's "Who's here" panel listing the agents running
-  its keys.
+  status line, and the fleet's "Who's here" panel listing the agents holding
+  shards of its keys.
 
   A status comes only from when the agent's check-ins arrived
   (`Keyfleet.Agents.CheckInStatus`), never from what it says about itself.
@@ -38,13 +38,14 @@ defmodule KeyfleetWeb.CheckIns do
 
   attr :agents_here, :integer,
     required: true,
-    doc: "every agent running the fleet's keys, or nil when they couldn't be counted"
+    doc: "every agent holding a shard of the fleet's keys, or nil when they couldn't be counted"
 
   attr :on_close, JS, required: true
 
   @doc """
-  The fleet's "Who's here" panel: the agents running its keys, the most
-  recent check-in first, each with the keys it runs and its check-in status.
+  The fleet's "Who's here" panel: the agents holding shards of its keys, the
+  most recent check-in first, each with its shard's key and its check-in
+  status.
   """
   def who_is_here(assigns) do
     ~H"""
@@ -67,14 +68,14 @@ defmodule KeyfleetWeb.CheckIns do
       </div>
 
       <p :if={@agents == []} id="fleet-who-empty" class="who-is-here__note">
-        No agents run keys here yet.
+        No agents hold shards here yet.
       </p>
 
       <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
-        <li :for={agent <- @agents} id={"fleet-who-#{agent.first_key}"}>
+        <li :for={agent <- @agents} id={"fleet-who-#{agent.wallet_address}"}>
           <p class="who-is-here__name">
             <strong>{agent.name}</strong>
-            <span class="who-is-here__keys">{keys(agent)}</span>
+            <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
           </p>
           <.status
             label={agent.status_label}
@@ -87,7 +88,7 @@ defmodule KeyfleetWeb.CheckIns do
       </ul>
 
       <p :if={@agents_here && @agents_here > length(@agents)} class="who-is-here__note">
-        {grouped(@agents_here)} agents run keys here. These are the {length(@agents)} that checked in most recently.
+        {grouped(@agents_here)} agents hold shards here. These are the {length(@agents)} that checked in most recently.
       </p>
     </aside>
     """
@@ -116,9 +117,4 @@ defmodule KeyfleetWeb.CheckIns do
 
   defp contribution_kind(:post), do: "a post"
   defp contribution_kind(:workspace), do: "in the workspace"
-
-  defp keys(%{first_key: key, keys_run: 1}), do: "Key #{grouped(key)}"
-
-  defp keys(%{first_key: key, keys_run: run}),
-    do: "Key #{grouped(key)} and #{grouped(run - 1)} more"
 end

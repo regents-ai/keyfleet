@@ -45,6 +45,28 @@ defmodule Keyfleet.WalletSteps.Typed do
     end
   end
 
+  @doc "The key a proposal acts on, read as `key/1` reads the key it is made with."
+  def target(text) do
+    case key(text) do
+      {:ok, target} -> {:ok, target}
+      {:error, :no_key} -> {:error, :no_target}
+      {:error, :key_unreadable} -> {:error, :target_unreadable}
+      {:error, problem} -> {:error, problem}
+    end
+  end
+
+  @doc "How many days a shard lasts: a whole number from 1 to 365."
+  def days(text) do
+    entry = String.trim(text)
+
+    with true <- Regex.match?(~r/\A\d{1,3}\z/, entry),
+         days when days in 1..365 <- String.to_integer(entry) do
+      {:ok, days}
+    else
+      _other -> {:error, :days_unreadable}
+    end
+  end
+
   defp in_range(keys) do
     if Enum.all?(keys, &(&1 <= @largest_uint256)), do: {:ok, keys}, else: {:error, :key_too_large}
   end

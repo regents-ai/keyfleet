@@ -620,7 +620,6 @@ defmodule Keyfleet.Graph.WriterTest do
         ownership_epoch: 3,
         kind: "agent",
         operator_wallet: @wallet,
-        pairing_id: nil,
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil

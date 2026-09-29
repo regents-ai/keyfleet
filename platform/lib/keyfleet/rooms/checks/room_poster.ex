@@ -1,14 +1,14 @@
 defmodule Keyfleet.Rooms.Checks.RoomPoster do
   @moduledoc """
   Who may post in a fleet's rooms and its keys' threads, name its open rooms
-  and create rooms in it: the people holding the fleet's keys today, and the
-  agents those people have attached to them. Every room and thread of the
-  fleet is open to all of them. With `agents_only?: true`, as for creating a
-  room, only those agents count.
+  and create rooms in it: the people and agents holding the fleet's keys
+  today, and the agents holding an active shard of one. Every room and thread
+  of the fleet is open to all of them. With `agents_only?: true`, as for
+  creating a room, only agents count.
 
   Nobody is enrolled in a fleet and nothing about this is stored. Standing is
-  read from the keys themselves every time, so a key changing hands moves the
-  right to post with it. While the fleet's key ownership is not fresh, nobody
+  read from the keys and their shards every time, so a key changing hands
+  moves the right to post with it and ends its shards. While the fleet's key ownership is not fresh, nobody
   has standing.
   """
   use Ash.Policy.SimpleCheck
@@ -20,8 +20,8 @@ defmodule Keyfleet.Rooms.Checks.RoomPoster do
   @impl true
   def describe(opts) do
     if Keyword.get(opts, :agents_only?, false),
-      do: "actor is an agent running one of the fleet's keys",
-      else: "actor holds or runs one of the fleet's keys"
+      do: "actor is an agent holding one of the fleet's keys or a shard of one",
+      else: "actor holds one of the fleet's keys or a shard of one"
   end
 
   @impl true

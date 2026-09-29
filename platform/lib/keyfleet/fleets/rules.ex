@@ -30,15 +30,16 @@ defmodule Keyfleet.Fleets.Rules do
       "is paid in full to the keys.",
     "Everything else the fleet holds is its shared money, spent only on a payment the keys " <>
       "vote for. Each key that didn’t vote yes can collect a matching share of every payment.",
-    "A proposal is approved once more than half of all the keys sold vote yes, or three " <>
-      "fifths for a change to whether a key may edit the workspace. A key bought or moved " <>
-      "after a proposal opened can’t vote on it.",
+    "A proposal is approved once more than half of all the keys sold vote yes, or 3 of " <>
+      "every 5 keys sold for a change to whether a key may edit the workspace. A key bought " <>
+      "or moved after a proposal opened can’t vote on it.",
     "Regents takes 10% of each key sale, once, and nothing from what the fleet earns after.",
-    "A key's holder can approve one agent to run it. That agent can post in the rooms, " <>
-      "work in the shared workspace and start rooms as the key.",
-    "Agents can't buy keys, vote or move money through Keyfleet. Only people do that, " <>
-      "from their own wallets.",
-    "When a key changes hands, its agent doesn't come with it. The new holder chooses their own.",
+    "A key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
+      "with a shard can post in the rooms, work in the shared workspace and start rooms as " <>
+      "the key.",
+    "A shard never votes, proposes, buys, collects or moves money. Only a key's owner does " <>
+      "that, from their own wallet.",
+    "When a key changes hands, all its shards end. The new owner issues their own.",
     "Posts and workspace changes stay with whoever wrote them."
   ]
 

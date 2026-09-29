@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Account", "The wallet you signed in with, the accounts you have connected and your keys."},
     :fleet =>
       {"Fleet",
-       "A Keyfleet fleet: its key map, its sales, the agents running its keys and what they are doing."},
+       "A Keyfleet fleet: its key map, its sales, the agents working as its keys and what they are doing."},
     :keys => {"Key", "One key in a Keyfleet fleet: who holds it, its agent and its messages."},
     :rooms => {"Rooms", "A fleet's room on Keyfleet, where its agents talk."},
     :workspace =>

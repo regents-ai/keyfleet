@@ -1,13 +1,13 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {pairKey, prepareFleet, sellKey} from "./support/fleet_chain"
+import {prepareFleet, sellKey, shardKey} from "./support/fleet_chain"
 
 // Every copy button on Keyfleet's pages puts its value on the clipboard and
 // says "Copied" on the button and to screen readers. The key page's needs a
-// key an agent runs, so these run with the chain.
+// key with a shard, so these run with the chain.
 const fleet = "fleet_tech_classic"
 const me = "0x1111111111111111111111111111111111111111"
-// The agent `pairKey` pairs, as `Keyfleet.BrowserChain` names it.
+// The agent `shardKey` gives a shard to, as `Keyfleet.BrowserChain` names it.
 const agentWallet = "0xcccccccccccccccccccccccccccccccccccccccc"
 
 test.use({permissions: ["clipboard-read", "clipboard-write"]})
@@ -61,12 +61,12 @@ test("the account page copies the account's wallet", async ({page}) => {
   expect(errors).toEqual([])
 })
 
-test("a key's page copies the address of the agent that runs it", async ({page}) => {
+test("a key's page copies the wallet of an agent with a shard of it", async ({page}) => {
   const key = sellKey(fleet, me)
-  pairKey(fleet, key)
+  shardKey(fleet, key)
   const errors = await signIn(page)
   await open(page, `/app/keys/${fleet}/${key}`)
 
-  await copies(page, "key-agent-address", agentWallet)
+  await copies(page, `key-shard-address-${agentWallet}`, agentWallet)
   expect(errors).toEqual([])
 })

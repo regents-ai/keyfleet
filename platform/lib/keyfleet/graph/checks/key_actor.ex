@@ -1,11 +1,14 @@
 defmodule Keyfleet.Graph.Checks.KeyActor do
   @moduledoc """
-  Who may write a fleet's workspace as one of its keys: the person who owns
-  that key today, or the agent that person has attached to it.
+  Who may write a fleet's workspace as one of its keys: the person or agent
+  whose wallet owns that key today, or an agent holding an active shard of it
+  whose wallet owns none of the fleet's keys. Nobody writes as a key whose
+  edits a vote of the fleet has restricted, its owner included.
 
   A write names the key it acts as. Standing is read from that key every
   time, and only while the fleet's key ownership is fresh, so a key changing
-  hands moves the right to write with it and an unknown owner grants nothing.
+  hands moves the right to write with it, ends its shards, and an unknown
+  owner grants nothing.
 
   Every key writes the fleet scope. A key of a Fibonacci fleet also writes its
   own level, and a later level once every key of that level is sold, as far as
@@ -25,19 +28,26 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph.Errors.CheckExpiredError
+  alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
+  alias Keyfleet.Keys
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
   @impl true
   def describe(_opts),
-    do: "actor owns or runs the key it acts as, today, while the fleet's ownership is fresh"
+    do:
+      "actor owns or holds a shard of the key it acts as, today, while the fleet's " <>
+        "ownership is fresh and the key's edits are not restricted"
 
   @impl true
   def match?(actor, %{subject: %Ash.ActionInput{arguments: arguments}}, _opts) do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 
+    # A key whose edits are restricted passes here, so that the writer's own
+    # check refuses the write and says why.
     case command(actor, arguments.fleet_id, arguments.as_key, arguments.command_id, within) do
       {:ok, _command} -> true
+      {:error, %EditsRestrictedError{}} -> true
       {:error, _error} -> false
     end
   end
@@ -61,7 +71,8 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   defp authority(actor, fleet_id, token_id, deadline) do
     with {:ok, reading} <- fresh_reading(fleet_id, deadline),
          {:ok, key} <- key_coordinate(fleet_id, token_id, deadline),
-         {:ok, standing} <- standing(actor, fleet_id, token_id, deadline) do
+         {:ok, standing} <- standing(actor, fleet_id, token_id, deadline),
+         :ok <- unrestricted(fleet_id, token_id, deadline) do
       {:ok,
        Map.merge(standing, %{
          key: key,
@@ -98,18 +109,10 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   end
 
   defp holding(%Human{wallet_addresses: wallets} = actor, fleet_id, token_id, opts) do
-    case Keyfleet.Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
+    case Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{owner_wallet: owner} = key} ->
         if owner in wallets,
-          do:
-            {:ok,
-             %{
-               ownership_epoch: key.ownership_epoch,
-               kind: "human",
-               operator_wallet: owner,
-               pairing_id: nil,
-               credential_ref: nil
-             }},
+          do: {:ok, stamp(key.ownership_epoch, "human", owner, nil)},
           else: not_a_holder(fleet_id, token_id)
 
       {:ok, nil} ->
@@ -121,18 +124,14 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   end
 
   defp holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
-    case Keyfleet.Keys.current_operator(fleet_id, token_id, [actor: actor] ++ opts) do
-      {:ok, %{operator_wallet: ^wallet} = pairing} ->
-        {:ok,
-         %{
-           ownership_epoch: pairing.ownership_epoch,
-           kind: "agent",
-           operator_wallet: wallet,
-           pairing_id: pairing.id,
-           credential_ref: actor.credential_ref
-         }}
+    case Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
+      {:ok, %{owner_wallet: ^wallet} = key} ->
+        {:ok, stamp(key.ownership_epoch, "agent", wallet, actor.credential_ref)}
 
-      {:ok, _not_running} ->
+      {:ok, %{}} ->
+        shard_holding(actor, fleet_id, token_id, opts)
+
+      {:ok, nil} ->
         not_a_holder(fleet_id, token_id)
 
       error ->
@@ -141,6 +140,43 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   end
 
   defp holding(_actor, fleet_id, token_id, _opts), do: not_a_holder(fleet_id, token_id)
+
+  # A wallet that owns one of the fleet's keys acts as its own key, never as
+  # a shard.
+  defp shard_holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
+    read = [actor: actor] ++ opts
+
+    with {:ok, nil} <- Keys.held_identity_key(fleet_id, [wallet], read),
+         {:ok, %{token_id: ^token_id} = shard} <- Keys.active_shard(fleet_id, wallet, read) do
+      {:ok, stamp(shard.ownership_epoch, "agent", wallet, actor.credential_ref)}
+    else
+      {:ok, _other} -> not_a_holder(fleet_id, token_id)
+      error -> error
+    end
+  end
+
+  defp stamp(ownership_epoch, kind, wallet, credential_ref),
+    do: %{
+      ownership_epoch: ownership_epoch,
+      kind: kind,
+      operator_wallet: wallet,
+      credential_ref: credential_ref
+    }
+
+  defp unrestricted(fleet_id, token_id, deadline) do
+    with {:ok, opts} <- within(deadline, fleet_id) do
+      case Keys.edits_restricted?(fleet_id, token_id, opts) do
+        {:ok, false} ->
+          :ok
+
+        {:ok, true} ->
+          {:error, EditsRestrictedError.exception(fleet_id: fleet_id, token_id: token_id)}
+
+        error ->
+          error
+      end
+    end
+  end
 
   # Read once the standing is known, so the key has an owner on record.
   defp writable_scopes(fleet_id, token_id, deadline) do

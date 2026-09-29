@@ -133,7 +133,10 @@ defmodule Keyfleet.MixProject do
         # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
         # The router adds one: its pipelines read the content security policies as they compile.
         # The early-access list adds two: its domain and the SystemActor check.
-        "xref graph --label compile-connected --fail-above 67",
+        # Shards add four: the ShardEvent and EditsRestriction records, each with its
+        # domain and the SystemActor check, in place of the four pairing had.
+        # Mutes add two: their domain and the OwnMute check.
+        "xref graph --label compile-connected --fail-above 69",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

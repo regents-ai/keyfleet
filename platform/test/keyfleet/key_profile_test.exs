@@ -70,8 +70,9 @@ defmodule Keyfleet.KeyProfileTest do
         Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "hermes"}, actor: runner)
 
       Agents.edit_my_profile!(profile, %{current_status: "Surveying hulls"}, actor: runner)
-      request = Keys.request_pairing!(@fleet, 12, %{}, actor: runner)
-      Keys.approve_pairing!(request, Keys.default_limits(), actor: human("e"))
+      ChainHelpers.issue_shard!(@fleet, 12, wallet("c"))
+      # A shard issued to a wallet no agent has signed in with yet.
+      ChainHelpers.issue_shard!(@fleet, 12, wallet("d"), 60)
 
       reveal!(12, Traits.keccak256("golden-1"))
       %{received: received}
@@ -108,12 +109,23 @@ defmodule Keyfleet.KeyProfileTest do
                %{trait: "Mark", value: "Star", share: 0.9}
              ]
 
-      assert %{
-               name: "Orbit runner",
-               harness: "hermes",
-               status: "Surveying hulls",
-               status_updated_at: %DateTime{}
-             } = profile.operator
+      c = wallet("c")
+      d = wallet("d")
+
+      assert [
+               %{
+                 wallet: ^c,
+                 expires_at: %DateTime{},
+                 agent: %{
+                   name: "Orbit runner",
+                   harness: "hermes",
+                   status: "Surveying hulls",
+                   status_updated_at: %DateTime{},
+                   check_in: %{status: :never_checked_in}
+                 }
+               },
+               %{wallet: ^d, agent: nil}
+             ] = profile.shards
 
       assert Enum.map(profile.recent_posts, & &1.body) == ["Three", "Two", "One"]
       assert Enum.map(profile.thread, &{&1.body, &1.as_key}) == [{"Hello, twelve", 3}]
@@ -144,12 +156,12 @@ defmodule Keyfleet.KeyProfileTest do
     refute Profile.held_any?(@fleet, wallet("a"), [])
   end
 
-  test "a key still revealing, run by nobody and never written to" do
+  test "a key still revealing, with no shards and never written to" do
     epoch!(@fleet, 4, 1, wallet("a"))
 
     assert %{
              traits: nil,
-             operator: nil,
+             shards: [],
              changed_hands: 0,
              votes_cast: 0,
              posts: 0,

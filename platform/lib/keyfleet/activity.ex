@@ -1,8 +1,8 @@
 defmodule Keyfleet.Activity do
   @moduledoc """
   What has been happening in a fleet, newest first, read from the records the
-  fleet already keeps: its rooms, its workspace, its keys, the agents running
-  them and its proposals. Nothing is stored for it; every page is read fresh.
+  fleet already keeps: its rooms, its workspace, its keys, their shards and
+  its proposals. Nothing is stored for it; every page is read fresh.
 
   `page/3` answers a page of items and the cursor to read the next one with;
   `headline/2` answers the one item a fleet's card features.
@@ -14,9 +14,8 @@ defmodule Keyfleet.Activity do
   about it needs, with names already looked up. Three shapes recur:
 
     * a key: `%{token_id: 7, agent: "Ada" | nil}`. `agent` is the agent that
-      did the thing, for posts and workspace changes; for a key a task was
-      given to, the agent running that key now. `nil` means a person, or no
-      agent.
+      did the thing, for posts and workspace changes. `nil` means a person,
+      and always for a key a task was given to.
     * an item of the workspace: `%{id: "task#4", type: "task", title: title | nil}`,
       `title` nil when the item is no longer there; a finding also carries
       `confidence`.
@@ -47,11 +46,13 @@ defmodule Keyfleet.Activity do
       produces the target.
     * `:sale`: `token_ids`, the keys bought one after another, lowest first.
     * `:transfer`: `token_id`, a key that changed hands.
-    * `:agent_started`: `agent` (`%{id: id, name: name}`), `token_id`.
-    * `:agent_stopped`: `agent`, `token_id`, `ended_reason` as the pairing
-      recorded it, and `now_runs`: `%{fleet_id: id, fleet_name: name,
-      token_id: n}` when the agent was taken on for a key in another fleet
-      afterwards and runs it still, otherwise nil.
+    * `:shard_issued`: `token_id`, `wallet`, `agent` (`%{id: id, name: name}`,
+      or nil while no agent has signed in with the wallet) and `expires_at`.
+      Issuing again to a wallet renews its shard, and reads the same.
+    * `:shard_ended`: `token_id`, `wallet`, `agent`, and `stepped_down?`:
+      true when the wallet ended its own shard, false when the key's owner
+      did. A shard that runs out, or whose key changes hands, ends without an
+      item.
     * `:proposed`: `number`, `kind` (`:decision`, `:pay` or
       `:restrict_edits`), `proposer` (`%{wallet: wallet, token_id: n |
       nil}`, the lowest key the wallet holds today), `gist` (the first 160
@@ -68,11 +69,10 @@ defmodule Keyfleet.Activity do
 
   ## Times
 
-  Chain records (key sales, proposals, votes and executions) carry no block
-  time, only when they were read, so records read together, as in a
+  Chain records (key sales, shards, proposals, votes and executions) carry
+  no block time, only when they were read, so records read together, as in a
   backfill, share one time. Workspace changes carry the time the workspace
-  logged them, posts the time they were written, and an agent starting or
-  stopping the time it was approved or ended.
+  logged them, and posts the time they were written.
 
   ## Paging
 
@@ -85,9 +85,8 @@ defmodule Keyfleet.Activity do
   a cursor means more is left; nil means nothing older is.
 
   The first page fixes where the walk begins for every source: the time it
-  was read for posts (by the database's clock, which stamps them) and for
-  agents starting and stopping (by this server's clock, which stamps them),
-  and one past the newest record it read for the workspace, keys and
+  was read for posts (by the database's clock, which stamps them), and one
+  past the newest record it read for the workspace, keys, shards and
   proposals. Everything recorded after the first page is left to a fresh
   read, so walking the pages with the cursors answered gives every item
   once, in the same order as one larger read made when the first page was.
@@ -117,14 +116,13 @@ defmodule Keyfleet.Activity do
           posts: position(),
           graph: position(),
           keys: position(),
-          arrivals: position(),
-          departures: position(),
+          shards: position(),
           proposals: position()
         }
   @type item :: %{id: String.t(), at: DateTime.t(), kind: atom(), facts: map()}
 
   # The sources, in the order they come in when their items share a time.
-  @sources [:proposals, :keys, :departures, :arrivals, :graph, :posts]
+  @sources [:proposals, :keys, :shards, :graph, :posts]
   @page 30
   # Grouped sources read more rows than a page holds, and a group is capped
   # below the rows read, so a full read always holds a whole group to keep.
@@ -174,26 +172,21 @@ defmodule Keyfleet.Activity do
     %{items: name(taken, fleet_id), cursor: next_cursor(streams)}
   end
 
-  # Where a walk begins in each source. The sources kept in time order are
-  # read up to now by the clock that stamps them (the database's for posts,
-  # this server's for agents starting and stopping), each place one
-  # microsecond past so that the time itself is included. The sources kept in
-  # record order begin just past the newest record their first read finds.
+  # Where a walk begins in each source. Posts are read up to now by the
+  # database's clock, which stamps them, one microsecond past so that the time
+  # itself is included. The sources kept in record order begin just past the
+  # newest record their first read finds.
   defp start do
     %Postgrex.Result{rows: [[written]]} = Repo.query!("SELECT clock_timestamp()")
-    stamped = DateTime.utc_now()
 
     %{
-      posts: just_after(written),
+      posts: {DateTime.add(written, 1, :microsecond), nil},
       graph: nil,
       keys: nil,
-      arrivals: just_after(stamped),
-      departures: just_after(stamped),
+      shards: nil,
       proposals: nil
     }
   end
-
-  defp just_after(at), do: {DateTime.add(at, 1, :microsecond), nil}
 
   @doc """
   The item a fleet features at `now`, by the first rule that finds one:
@@ -333,43 +326,9 @@ defmodule Keyfleet.Activity do
     {group_epochs(epochs), length(epochs) == @keys_read, top(epochs, :record_seq)}
   end
 
-  defp read(:arrivals, fleet_id, {at, id}, limit) do
-    pairings = Keys.arrivals_before!(fleet_id, at, id, limit + 1)
-
-    entries =
-      Enum.map(pairings, fn pairing ->
-        entry(
-          "arrival:#{pairing.id}",
-          pairing.approved_at,
-          :agent_started,
-          {pairing.approved_at, pairing.id},
-          %{agent: agent(pairing.agent_profile), token_id: pairing.token_id}
-        )
-      end)
-
-    {entries, length(pairings) > limit, nil}
-  end
-
-  defp read(:departures, fleet_id, {at, id}, limit) do
-    pairings = Keys.departures_before!(fleet_id, at, id, limit + 1)
-
-    entries =
-      Enum.map(pairings, fn pairing ->
-        entry(
-          "departure:#{pairing.id}",
-          pairing.ended_at,
-          :agent_stopped,
-          {pairing.ended_at, pairing.id},
-          %{
-            agent: agent(pairing.agent_profile),
-            token_id: pairing.token_id,
-            ended_reason: pairing.ended_reason,
-            now_runs: {:elsewhere, pairing.agent_profile_id, pairing.ended_at}
-          }
-        )
-      end)
-
-    {entries, length(pairings) > limit, nil}
+  defp read(:shards, fleet_id, seq, limit) do
+    events = Keys.shard_events_recorded_before!(fleet_id, seq, limit + 1, load: [:agent_profile])
+    {Enum.map(events, &shard_entry/1), length(events) > limit, top(events, :record_seq)}
   end
 
   defp read(:proposals, fleet_id, seq, limit) do
@@ -393,6 +352,24 @@ defmodule Keyfleet.Activity do
 
     {group_records(complete), floor > 0, top(records, :record_seq)}
   end
+
+  defp shard_entry(%{kind: :issued} = event),
+    do:
+      entry("shard:#{event.record_seq}", event.observed_at, :shard_issued, event.record_seq, %{
+        token_id: event.token_id,
+        wallet: event.wallet,
+        agent: event.agent_profile && agent(event.agent_profile),
+        expires_at: event.expires_at
+      })
+
+  defp shard_entry(%{kind: :ended} = event),
+    do:
+      entry("shard:#{event.record_seq}", event.observed_at, :shard_ended, event.record_seq, %{
+        token_id: event.token_id,
+        wallet: event.wallet,
+        agent: event.agent_profile && agent(event.agent_profile),
+        stepped_down?: event.ended_by == event.wallet
+      })
 
   defp top([], _field), do: 1
   defp top([newest | _], field), do: Map.fetch!(newest, field) + 1
@@ -618,7 +595,7 @@ defmodule Keyfleet.Activity do
       "assignee_key" in brief["fields"] ->
         case values["assignee_key"] do
           %{"new" => token_id} when is_integer(token_id) ->
-            {:claimed, Map.put(item, :to, {:runner, token_id})}
+            {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
 
           _unset ->
             {:unclaimed, item}
@@ -655,9 +632,8 @@ defmodule Keyfleet.Activity do
   defp agent(profile), do: %{id: profile.id, name: profile.name}
 
   # Naming: the facts hold references (`{:actor, token_id, wallet}`,
-  # `{:runner, token_id}`, `{:holder, wallet}`, `{:item, id}`,
-  # `{:elsewhere, agent_profile_id, ended_at}` and `{:assets, asset}`), looked
-  # up together for the whole page, a batch per kind of reference.
+  # `{:holder, wallet}`, `{:item, id}` and `{:assets, asset}`), looked up
+  # together for the whole page, a batch per kind of reference.
   defp name([], _fleet_id), do: []
 
   defp name(entries, fleet_id) do
@@ -676,7 +652,7 @@ defmodule Keyfleet.Activity do
 
   defp refs(ref)
        when is_tuple(ref) and
-              elem(ref, 0) in [:actor, :runner, :holder, :item, :elsewhere, :assets],
+              elem(ref, 0) in [:actor, :holder, :item, :assets],
        do: [ref]
 
   defp refs(_value), do: []
@@ -684,10 +660,8 @@ defmodule Keyfleet.Activity do
   defp lookup(refs, fleet_id) do
     %{
       actor: agents_by_wallet(refs[:actor]),
-      runner: runners(fleet_id, refs[:runner]),
       holder: holders(fleet_id, refs[:holder]),
       item: items(fleet_id, refs[:item]),
-      elsewhere: elsewhere(fleet_id, refs[:elsewhere]),
       assets: assets(fleet_id, refs[:assets])
     }
   end
@@ -700,17 +674,6 @@ defmodule Keyfleet.Activity do
     |> Enum.uniq()
     |> Agents.agents_by_wallets!()
     |> Map.new(&{&1.wallet_address, &1.name})
-  end
-
-  defp runners(_fleet_id, nil), do: %{}
-
-  defp runners(fleet_id, refs) do
-    refs
-    |> Enum.map(&elem(&1, 1))
-    |> Enum.uniq()
-    |> Enum.chunk_every(100)
-    |> Enum.flat_map(&Keys.fleet_operators!(fleet_id, &1))
-    |> Map.new(&{&1.token_id, &1.agent_profile.name})
   end
 
   defp holders(_fleet_id, nil), do: %{}
@@ -733,26 +696,6 @@ defmodule Keyfleet.Activity do
     |> Map.new(&{&1.id, &1})
   end
 
-  defp elsewhere(_fleet_id, nil), do: %{}
-
-  defp elsewhere(fleet_id, refs) do
-    ids = refs |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
-    after_at = refs |> Enum.map(&elem(&1, 2)) |> Enum.min_by(&stamp/1)
-    fleets = Map.new(Fleets.catalog(), &{&1.id, &1.name})
-
-    fleet_id
-    |> Keys.runs_elsewhere!(ids, after_at)
-    |> Map.new(fn pairing ->
-      {pairing.agent_profile_id,
-       %{
-         fleet_id: pairing.fleet_id,
-         fleet_name: Map.fetch!(fleets, pairing.fleet_id),
-         token_id: pairing.token_id,
-         approved_at: pairing.approved_at
-       }}
-    end)
-  end
-
   # The page's payments' assets are read once for all of them.
   defp assets(_fleet_id, nil), do: nil
 
@@ -769,9 +712,6 @@ defmodule Keyfleet.Activity do
   defp resolve({:actor, token_id, wallet}, names),
     do: %{token_id: token_id, agent: names.actor[wallet]}
 
-  defp resolve({:runner, token_id}, names),
-    do: %{token_id: token_id, agent: names.runner[token_id]}
-
   defp resolve({:holder, wallet}, names), do: %{wallet: wallet, token_id: names.holder[wallet]}
 
   defp resolve({:item, id}, names) do
@@ -781,16 +721,6 @@ defmodule Keyfleet.Activity do
       nil -> %{id: id, type: type, title: nil}
       %{type: "finding"} = object -> finding(object)
       object -> %{id: id, type: object.type, title: object.title}
-    end
-  end
-
-  defp resolve({:elsewhere, agent_profile_id, ended_at}, names) do
-    case names.elsewhere[agent_profile_id] do
-      %{approved_at: approved_at} = runs ->
-        if DateTime.after?(approved_at, ended_at), do: Map.delete(runs, :approved_at)
-
-      nil ->
-        nil
     end
   end
 

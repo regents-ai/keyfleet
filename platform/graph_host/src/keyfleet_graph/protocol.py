@@ -108,7 +108,6 @@ MAX_WRITABLE_SCOPES = 21
 Id = Annotated[str, StringConstraints(min_length=1, max_length=128), single_line]
 Name = Annotated[str, StringConstraints(max_length=64), single_line]
 Reason = Annotated[str, StringConstraints(max_length=1000), multi_line]
-Uuid = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
 Sha256Ref = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
 UtcTimestamp = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$")]
 
@@ -124,7 +123,6 @@ class Auth(_Shape):
     ownership_epoch: Epoch
     kind: Literal["human", "agent"]
     operator_wallet: Address
-    pairing_id: Optional[Uuid]
     credential_ref: Optional[Sha256Ref]
     checked_at: UtcTimestamp
     chain_block: Optional[Count]

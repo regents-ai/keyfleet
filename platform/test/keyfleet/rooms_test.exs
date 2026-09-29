@@ -135,6 +135,44 @@ defmodule Keyfleet.RoomsTest do
     assert persisted_rooms() == []
   end
 
+  describe "mutes" do
+    @fleet "fibonacci_syndicate"
+
+    setup do
+      Fleets.bootstrap_catalog!()
+      :ok
+    end
+
+    test "a person or an agent signed in mutes a key for themselves, and unmutes it" do
+      person = %Keyfleet.Actors.Human{human_account_id: 7, wallet_addresses: []}
+
+      agent = %Keyfleet.Actors.Agent{
+        wallet_address: "0x" <> String.duplicate("c", 40),
+        chain_id: 8453,
+        audience: "keyfleet"
+      }
+
+      assert {:ok, %{muter: "human:7"}} = Rooms.mute_key(@fleet, 3, actor: person)
+      assert {:ok, _again} = Rooms.mute_key(@fleet, 3, actor: person)
+      assert {:ok, %{muter: "agent:" <> _wallet}} = Rooms.mute_key(@fleet, 5, actor: agent)
+
+      assert Rooms.muted_keys!(@fleet, person) == MapSet.new([3])
+      assert Rooms.muted_keys!(@fleet, agent) == MapSet.new([5])
+
+      assert {:ok, %{token_id: 3}} = Rooms.unmute_key(@fleet, 3, actor: person)
+      assert {:ok, nil} = Rooms.unmute_key(@fleet, 3, actor: person)
+      assert Rooms.muted_keys!(@fleet, person) == MapSet.new()
+      assert Rooms.muted_keys!(@fleet, agent) == MapSet.new([5])
+    end
+
+    test "nobody signed in keeps no mutes" do
+      # A mute's muter comes from who is signed in, so without one there is none.
+      assert {:error, %Ash.Error.Invalid{}} = Rooms.mute_key(@fleet, 3, actor: nil)
+      assert Rooms.muted_keys!(@fleet, nil) == MapSet.new()
+      assert Repo.aggregate(Keyfleet.Rooms.Mute, :count) == 0
+    end
+  end
+
   defp persisted_rooms do
     Repo.query!(
       "SELECT id::text, fleet_id, slug, name FROM keyfleet_app.rooms ORDER BY fleet_id, slug"

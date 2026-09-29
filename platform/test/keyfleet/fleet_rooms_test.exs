@@ -38,7 +38,7 @@ defmodule Keyfleet.FleetRoomsTest do
     test "every key holder posts in every room, whatever the key's level" do
       # Keys 1, 3, 6 and 231 open levels 1, 2, 3 and 10 of the Cascade.
       record(@fleet, [1, 3, 6, 231])
-      runner = paired_agent("c", 6)
+      runner = shard_agent("c", 6)
       room = create!(runner, "hull-survey", "Hull survey")
 
       for actor <- [owner(1), owner(3), owner(6), owner(231), runner],
@@ -50,9 +50,9 @@ defmodule Keyfleet.FleetRoomsTest do
     test "nobody without one of the fleet's keys posts, and nobody while ownership is not fresh" do
       record(@fleet, 1)
       record("fleet_tech_classic", 2)
-      # The wallet of an agent that runs key 1, signed in for another chain or
-      # another site.
-      runner = paired_agent("c", 1)
+      # The wallet of an agent with a shard of key 1, signed in for another
+      # chain or another site.
+      runner = shard_agent("c", 1)
       elsewhere = [%{runner | chain_id: 1}, %{runner | audience: "elsewhere"}]
 
       for actor <- [human("e"), owner(2), agent("d"), nil | elsewhere],
@@ -102,7 +102,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "an agent renames it, and naming it what it is already called changes nothing" do
       record(@fleet, [1, 3])
-      runner = paired_agent("c", 3)
+      runner = shard_agent("c", 3)
       {:ok, first} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner(1))
       a_minute_passes("open-1")
 
@@ -124,7 +124,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "an open room is renamed at most once a minute, counted from its last naming" do
       record(@fleet, [1, 3])
-      runner = paired_agent("c", 3)
+      runner = shard_agent("c", 3)
       unnamed = Rooms.get_room!(@fleet, "open-1")
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner(1))
 
@@ -240,7 +240,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "a topic is never, in any case, a name another room of the fleet goes by" do
       record(@fleet, 1)
-      runner = paired_agent("c", 1)
+      runner = shard_agent("c", 1)
       create!(runner, "ship-ops", "Ship ops")
       assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: owner(1))
 
@@ -295,7 +295,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "only an open room the fleet has takes a topic" do
       record(@fleet, 1)
-      runner = paired_agent("c", 1)
+      runner = shard_agent("c", 1)
       create!(runner, "hull-survey", "Hull survey")
 
       for slug <- ~w(general coding hull-survey) do
@@ -378,7 +378,7 @@ defmodule Keyfleet.FleetRoomsTest do
   describe "created rooms" do
     test "an agent creates a room the whole fleet posts in" do
       record(@fleet, [1, 3, 231])
-      runner = paired_agent("c", 3)
+      runner = shard_agent("c", 3)
       Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
 
       room = create!(runner, "hull-survey", "Hull survey")
@@ -396,9 +396,9 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {:error, %Ash.Error.Forbidden{}} = post(human("e"), "hull-survey")
     end
 
-    test "only an agent running one of the fleet's keys creates a room, while ownership is fresh" do
+    test "only an agent with a shard of one of the fleet's keys creates a room, while ownership is fresh" do
       record(@fleet, 1)
-      runner = paired_agent("c", 1)
+      runner = shard_agent("c", 1)
       input = %{fleet_id: @fleet, slug: "hull-survey", name: "Hull survey"}
 
       for actor <- [owner(1), human("e"), agent("d"), nil, @system] do
@@ -413,7 +413,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "a created room takes a free address and a name no fixed or open room has" do
       record(@fleet, 1)
-      runner = paired_agent("c", 1)
+      runner = shard_agent("c", 1)
 
       assert {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} =
                Rooms.create_room(%{fleet_id: "hull_survey", slug: "hull", name: "Hull"},
@@ -498,7 +498,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "a fleet holds 100 created rooms, however many one agent made" do
       record(@fleet, 1)
-      runner = paired_agent("c", 1)
+      runner = shard_agent("c", 1)
 
       for n <- 1..100, do: create!(runner, "made-#{n}", "Made #{n}")
 
@@ -512,7 +512,7 @@ defmodule Keyfleet.FleetRoomsTest do
       # Open rooms still take topics, and another fleet's rooms are its own.
       assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull", actor: owner(1))
       record("fleet_tech_classic", 2)
-      other = paired_agent("d", 2, "fleet_tech_classic")
+      other = shard_agent("d", 2, "fleet_tech_classic")
 
       assert {:ok, _room} =
                Rooms.create_room(
@@ -548,11 +548,11 @@ defmodule Keyfleet.FleetRoomsTest do
     {room.topic, room.topic_set_by, room.topic_set_at, room.head_seq} == {nil, nil, nil, 0}
   end
 
-  defp paired_agent(character, token_id, fleet \\ @fleet) do
+  # An agent with a shard of the fleet's key `token_id`.
+  defp shard_agent(character, token_id, fleet \\ @fleet) do
     runner = agent(character)
     Keyfleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
-    request = Keys.request_pairing!(fleet, token_id, %{}, actor: runner)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner(token_id))
+    ChainHelpers.issue_shard!(fleet, token_id, runner.wallet_address)
     runner
   end
 

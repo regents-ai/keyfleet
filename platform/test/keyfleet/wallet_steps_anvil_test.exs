@@ -209,23 +209,36 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     end
   end
 
-  describe "a launch" do
-    test "a launch proposed before the fleet has sold enough keys is refused by the contract",
-         %{url: url} do
-      proposed =
-        build!(:propose_launch, @buyer,
-          inputs: %{
-            "key" => "1",
-            "name" => "Lab",
-            "symbol" => "LAB",
-            "description" => "A lab launch",
-            "website" => "https://example.com",
-            "image" => "https://example.com/lab.png",
-            "raise" => "1000"
-          }
-        )
+  describe "a key's shards" do
+    test "issued by the key's owner, renewed and ended; each press reaches the chain",
+         %{url: url, lab: lab} do
+      issued = build!(:issue_shard, @buyer, token_id: 1, inputs: shard_inputs(@third))
+      assert pressed(url, issued, "issue") == {:ok, :confirmed}
+      assert shard_active?(url, lab, @third)
 
-      assert pressed(url, proposed, "propose") == {:ok, :reverted}
+      # Only the key's owner may issue, and a wallet holds one key's shard.
+      stranger = build!(:issue_shard, @second, token_id: 1, inputs: shard_inputs(@third))
+      assert pressed(url, stranger, "issue") == {:ok, :reverted}
+      other_key = build!(:issue_shard, @buyer, token_id: 2, inputs: shard_inputs(@third))
+      assert pressed(url, other_key, "issue") == {:ok, :reverted}
+
+      ChainHelpers.issue_shard!(@fleet_id, 1, @third)
+      shards = build!(:end_shard, @buyer, token_id: 1)
+      assert names(shards) == ["end-#{@third}", "renew-#{@third}"]
+
+      assert pressed(url, shards, "renew-#{@third}") == {:ok, :confirmed}
+      assert pressed(url, shards, "end-#{@third}") == {:ok, :confirmed}
+      refute shard_active?(url, lab, @third)
+      assert pressed(url, shards, "end-#{@third}") == {:ok, :reverted}
+    end
+
+    test "the shard's wallet steps down with the call the agent API hands it",
+         %{url: url, lab: lab} do
+      issued = build!(:issue_shard, @buyer, token_id: 1, inputs: shard_inputs(@third))
+      assert pressed(url, issued, "issue") == {:ok, :confirmed}
+
+      send!(url, @third, lab.shards, Call.encode("end(uint256,address)", [1, @third]))
+      refute shard_active?(url, lab, @third)
     end
   end
 
@@ -312,6 +325,8 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp vote_steps!(proposal, keys),
     do: build!(:vote, @buyer, proposal: proposal, inputs: %{"keys" => keys})
 
+  defp shard_inputs(wallet), do: %{"wallet" => wallet, "days" => "30"}
+
   defp names(%{review: review}), do: Enum.map(review.steps, & &1.step)
 
   # A press of `name`, sent from the wallet the steps were built for, and
@@ -347,6 +362,12 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp address!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)
     "0x" <> String.slice(hex, -40, 40)
+  end
+
+  # The last of the four words `shardOf` returns says whether it is active.
+  defp shard_active?(url, lab, wallet) do
+    "0x" <> words = view!(url, lab.shards, "shardOf(address)", [wallet])
+    String.to_integer(String.slice(words, -64, 64), 16) == 1
   end
 
   defp view!(url, to, signature, arguments),

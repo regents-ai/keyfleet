@@ -143,7 +143,7 @@ defmodule Keyfleet.Keys.Profile do
       yours?: holder in wallets(viewer),
       changed_hands:
         count(KeyAttachment, :history, %{fleet_id: fleet_id, token_id: token_id}) - 1,
-      operator: operator(fleet_id, token_id),
+      shards: shards(fleet_id, token_id),
       thread: thread,
       last_seq: last_seq(thread, 0),
       holder_keys: held,
@@ -184,29 +184,48 @@ defmodule Keyfleet.Keys.Profile do
   end
 
   @doc """
-  The agent running the key now, with what its check-ins with the fleet say,
-  or nil when no agent runs it.
+  The key's active shards, soonest to run out first and a hundred at most:
+  each wallet, when its shard runs out, and the agent behind it with what its
+  check-ins with the fleet say, or nil when the wallet has not signed in as an
+  agent yet.
   """
-  def operator(fleet_id, token_id) do
-    case Keys.current_operator!(fleet_id, token_id) do
-      nil ->
-        nil
+  def shards(fleet_id, token_id) do
+    shards =
+      Keys.active_shards_of_keys!(fleet_id, [token_id],
+        load: [:agent_profile],
+        query: [limit: @listed]
+      )
 
-      %{agent_profile: agent} ->
-        check_in = Agents.get_check_in!(agent.id, fleet_id)
-        {status, label} = CheckInStatus.derive(check_in, DateTime.utc_now())
+    check_ins =
+      fleet_id
+      |> Agents.check_ins_in_fleet!(for(%{agent_profile: %{id: id}} <- shards, do: id))
+      |> Map.new(&{&1.agent_profile_id, &1})
 
-        %{
-          name: agent.name,
-          harness: agent.declared_harness,
-          status: agent.current_status,
-          status_updated_at: agent.status_updated_at,
-          check_in: %{status: status, label: label},
-          last_check_in_at: check_in && check_in.last_check_in_at,
-          last_contribution_at: check_in && check_in.last_contribution_at,
-          last_contribution: check_in && check_in.last_contribution_kind
-        }
-    end
+    now = DateTime.utc_now()
+
+    Enum.map(shards, fn shard ->
+      %{
+        wallet: shard.wallet,
+        expires_at: shard.expires_at,
+        agent: shard.agent_profile && agent(shard.agent_profile, check_ins, now)
+      }
+    end)
+  end
+
+  defp agent(agent, check_ins, now) do
+    check_in = Map.get(check_ins, agent.id)
+    {status, label} = CheckInStatus.derive(check_in, now)
+
+    %{
+      name: agent.name,
+      harness: agent.declared_harness,
+      status: agent.current_status,
+      status_updated_at: agent.status_updated_at,
+      check_in: %{status: status, label: label},
+      last_check_in_at: check_in && check_in.last_check_in_at,
+      last_contribution_at: check_in && check_in.last_contribution_at,
+      last_contribution: check_in && check_in.last_contribution_kind
+    }
   end
 
   defp wallets(%Human{wallet_addresses: wallets}), do: wallets

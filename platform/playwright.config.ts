@@ -15,6 +15,8 @@ export default defineConfig({
     "key_profile.spec.ts",
     "fleet_motion.spec.ts",
     "wallet_buttons.spec.ts",
+    "key_shards.spec.ts",
+    "room_mutes.spec.ts",
     "copy_buttons.spec.ts",
     "content_security_policy.spec.ts",
     "shell_links.spec.ts",

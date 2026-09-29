@@ -69,7 +69,7 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  How many agents run at least one of the fleet's keys right now, as `{:ok,
+  How many agents hold an active shard of one of the fleet's keys, as `{:ok,
   count}`, or `{:error, failure}` when the database doesn't answer (see
   `Keyfleet.Count`).
   """
@@ -80,9 +80,9 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  How many agents run at least one key in any of `fleet_ids` right now, each
-  counted once however many of those fleets it runs keys in, as `{:ok,
-  count}` or `{:error, failure}`.
+  How many agents hold an active shard in any of `fleet_ids`, each counted
+  once however many of those fleets it holds shards in, as `{:ok, count}` or
+  `{:error, failure}`.
   """
   def count_agents_in_fleets(fleet_ids) do
     Keyfleet.Agents.AgentProfile

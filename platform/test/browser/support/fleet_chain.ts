@@ -57,8 +57,16 @@ export const moveKey = (fleet: string, key: number, owner: string) => void call(
 export const offerRewards = (fleet: string, key: number, atoms: number) =>
   void call("offer_rewards!", [fleet, key, atoms])
 
-/** An agent asks to run a key, and its owner approves. */
-export const pairKey = (fleet: string, key: number) => void call("pair!", [fleet, key])
+/** A key's owner gives the browser agent a shard of the key for 30 days. */
+export const shardKey = (fleet: string, key: number) => void call("shard!", [fleet, key])
+
+/** The chain records a key's owner issuing `wallet` a shard of the key for `days`. */
+export const issueShard = (fleet: string, key: number, wallet: string, days: number) =>
+  void call("issue_shard!", [fleet, key, wallet, days])
+
+/** The chain records the shard `wallet` holds of a key ended by `by`. */
+export const endShard = (fleet: string, key: number, wallet: string, by: string) =>
+  void call("end_shard!", [fleet, key, wallet, by])
 
 /** `owner` has allowed every fleet `atoms` USDC from now on. */
 export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
@@ -79,3 +87,7 @@ export type SentTransaction = {from: string; to: string; data: string; value: st
 /** The step sent as `transaction` is included under `hash`; it did what it asked when `succeeded`. */
 export const landStep = (hash: string, transaction: SentTransaction, succeeded: boolean) =>
   void call("land!", [hash, transaction, succeeded])
+
+/** Sells the fleet's next key to `owner`, who says `body` in the General room; returns the key. */
+export const sayInGeneral = (fleet: string, owner: string, body: string) =>
+  Number(call("say!", [fleet, owner, body]))

@@ -12,7 +12,6 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   alias Keyfleet.Rooms
 
   @join_path "/api/v1/agent/join/status"
-  @pairing_path "/api/v1/agent/keys/fibonacci_syndicate/1/pairing"
   @rooms_path "/api/v1/agent/fleets/fibonacci_syndicate/rooms"
   @read_general "/api/v1/agent/fleets/fibonacci_syndicate/rooms/general/messages/read"
   @send_general "/api/v1/agent/fleets/fibonacci_syndicate/rooms/general/messages/send"
@@ -168,9 +167,9 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"POST", "#{fleet}/graph/changes", "{}"},
           {"POST", "#{fleet}/graph/create",
            ~s({"as_key":1,"command_id":"c-1","type":"note","scope":"fleet","data":{}})},
-          {"POST", "#{key}/pairing", "{}"},
-          {"DELETE", "#{key}/pairing", "{}"},
-          {"POST", "#{key}/step-down", "{}"},
+          {"GET", "#{fleet}/mutes", "{}"},
+          {"POST", "#{fleet}/keys/{token_id}/mute", "{}"},
+          {"POST", "#{fleet}/keys/{token_id}/unmute", "{}"},
           {"POST", "#{key}/messages/read", "{}"},
           {"POST", "#{key}/messages/send", send_body("Hello", "k-2")}
         ] do
@@ -205,8 +204,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert "general" in Enum.map(answer.body["rooms"], & &1["slug"])
   end
 
-  test "a paired agent posts once however often it sends the same post", c do
-    pair(c)
+  test "an agent with a shard posts once however often it sends the same post", c do
+    shard(c)
 
     sent = send_signed(c, "POST", @send_general, send_body("Hull survey started", "k-1"))
     assert sent.status == 201
@@ -255,8 +254,46 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Enum.map(send_signed(c, "POST", @read_general).body["messages"], & &1["seq"]) == [1]
   end
 
+  test "a mute hides a key's posts from the muting agent's reads and syncs, and from nobody else",
+       c do
+    sell!("fibonacci_syndicate", [2])
+    shard(c, "fibonacci_syndicate", 2)
+    person = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    mute_path = "/api/v1/agent/fleets/fibonacci_syndicate/keys/1/"
+
+    Rooms.send_message!(
+      %{
+        fleet_id: "fibonacci_syndicate",
+        slug: "general",
+        body: "From key 1",
+        idempotency_key: "h-1"
+      },
+      actor: person
+    )
+
+    assert send_signed(c, "POST", @send_general, send_body("From key 2", "k-1")).status == 201
+
+    muted = send_signed(c, "POST", mute_path <> "mute")
+    assert muted.status == 200
+    assert [%{"token_id" => 1}] = muted.body["mutes"]
+
+    read = send_signed(c, "POST", @read_general)
+    assert Enum.map(read.body["messages"], & &1["body"]) == ["From key 2"]
+    assert read.body["cursor"] == 2
+
+    synced = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0}))
+    assert [%{"cursor" => 2, "messages" => [%{"as_key" => 2}]}] = synced.body["rooms"]
+    assert Keyfleet.ContractSchema.errors(synced.body, "FleetSync") == []
+
+    assert {:ok, [_key_one, _key_two]} =
+             Rooms.read_messages("fibonacci_syndicate", "general", %{}, actor: person)
+
+    assert send_signed(c, "POST", mute_path <> "unmute").body["mutes"] == []
+    assert length(send_signed(c, "POST", @read_general).body["messages"]) == 2
+  end
+
   test "an agent that is behind is given each post once and told where it now stands", c do
-    pair(c)
+    shard(c)
 
     for n <- 1..3 do
       assert send_signed(c, "POST", @send_general, send_body("General #{n}", "g-#{n}")).status ==
@@ -350,7 +387,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   end
 
   test "only the canonical signed room path and body reach the room actions", c do
-    pair(c)
+    shard(c)
 
     for {method, path, body} <- [
           {"GET", @rooms_path, ~s({"after_seq":0})},
@@ -400,7 +437,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
   test "a place no room can reach, a schedule outside its range and a room named twice are refused as bad requests",
        c do
-    pair(c)
+    shard(c)
 
     for {path, body} <- [
           {@read_general, ~s({"after_seq":#{2 ** 70}})},
@@ -435,7 +472,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   end
 
   test "an agent reads and writes a key's thread by the key's number", c do
-    pair(c)
+    shard(c)
     sell!("fibonacci_syndicate", 2..5)
 
     empty = key_thread(c, 5, "read")
@@ -532,7 +569,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     # Reading stays open to everyone.
     assert key_thread(c, 1, "read").status == 200
 
-    pair(c)
+    shard(c)
 
     ChainHelpers.seed_cursor!("fibonacci_syndicate",
       observed_at: DateTime.add(DateTime.utc_now(), -3600)
@@ -544,7 +581,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   end
 
   test "only a key's path and a post's body reach a key's thread", c do
-    pair(c)
+    shard(c)
     send_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/send"
     read_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/read"
 
@@ -598,7 +635,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     end
 
     test "an agent creates a room every member posts in", c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
 
       created = create_room(c, %{slug: "hull-survey", name: "Hull survey"})
 
@@ -675,7 +712,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     end
 
     test "an agent names an open room, and the room says who named it", c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
 
       named = name_room(c, "open-2", "Hull survey")
       assert named.status == 200
@@ -751,7 +788,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     test "while key ownership is not fresh, an agent neither posts, creates nor names a room",
          c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
       ChainHelpers.seed_cursor!(@cascade, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
       for {path, body} <- [
@@ -768,7 +805,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     end
 
     test "a room the database refuses for a reason of its own is answered, not a crash", c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
 
       Keyfleet.Repo.query!(
         "ALTER TABLE keyfleet_app.rooms ADD CONSTRAINT refuse_hull CHECK (slug <> 'hull') NOT VALID"
@@ -779,7 +816,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       assert create_room(c, %{slug: "keel", name: "Keel"}).status == 201
     end
 
-    test "an agent running no key creates no room and names none", c do
+    test "an agent with neither a key nor a shard creates no room and names none", c do
       assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
       refused = create_room(c, %{slug: "hull", name: "Hull"})
@@ -791,7 +828,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     # Five fixed rooms, five open rooms and a hundred created ones: 110 rooms.
     test "a full fleet creates no more rooms, and one catch-up reads all of its rooms", c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
 
       # Who may create a room is shown above; these only fill the fleet.
       for n <- 1..100 do
@@ -825,7 +862,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do
-      pair(c, @cascade, 3)
+      shard(c, @cascade, 3)
       topic = cascade_topic("open-1")
 
       for {method, path, body} <- [
@@ -903,22 +940,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     end
   end
 
-  defp pair(c, fleet, token_id) do
+  # The test's agent, joined and holding a shard of the fleet's key.
+  defp shard(c, fleet \\ "fibonacci_syndicate", token_id \\ 1) do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
-    assert send_signed(c, "POST", "/api/v1/agent/keys/#{fleet}/#{token_id}/pairing").status == 200
-
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    [request] = Keys.list_pairing_requests!(fleet, token_id, actor: owner)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
-  end
-
-  defp pair(c) do
-    assert send_signed(c, "POST", @join_path, @join_body).status == 200
-    assert send_signed(c, "POST", @pairing_path).status == 200
-
-    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-    [request] = Keys.list_pairing_requests!("fibonacci_syndicate", 1, actor: owner)
-    Keys.approve_pairing!(request, Keys.default_limits(), actor: owner)
+    ChainHelpers.issue_shard!(fleet, token_id, c.signer.address)
   end
 
   defp key_thread(c, token_id, action, body \\ "{}", fleet \\ "fibonacci_syndicate"),

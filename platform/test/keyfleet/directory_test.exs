@@ -28,16 +28,19 @@ defmodule Keyfleet.DirectoryTest do
     :ok
   end
 
-  test "only agents running one of the fleet's keys right now are here, each once" do
-    two_keys = agent("b", "Bosun")
-    attach!(two_keys, 2)
-    attach!(two_keys, 1)
+  test "only agents holding an active shard of one of the fleet's keys are here" do
+    # Bosun's shard is renewed, and counts once.
+    attach!(agent("b", "Bosun"), 1)
+    attach!(agent("b", "Bosun"), 1)
     attach!(agent("c", "Able"), 3)
 
-    # Waiting for the owner, removed by the owner, and attached under the
-    # key's owner before the one who holds it now.
-    request!(agent("d", "Waiting"), 4)
-    Keys.detach_operator!(attach!(agent("e", "Removed"), 5), %{}, actor: owner())
+    # A wallet with no shard, a shard its owner ended, one that ran out, and
+    # one issued under the key's owner before the one who holds it now.
+    agent("d", "Waiting")
+    attach!(agent("e", "Removed"), 5)
+    ChainHelpers.end_shard!(@fleet, 5, wallet("e"), @owner)
+    agent("9", "Expired")
+    ChainHelpers.issue_shard!(@fleet, 4, wallet("9"), -1)
     attach!(agent("f", "Former"), 6)
     epoch!(6, 2, "0x" <> String.duplicate("9", 40))
 
@@ -59,15 +62,13 @@ defmodule Keyfleet.DirectoryTest do
                name: "Able",
                declared_harness: "Hermes Agent",
                wallet_address: wallet("c"),
-               keys_run: 1,
-               first_key: 3
+               key: 3
              }),
              Map.merge(never, %{
                name: "Bosun",
                declared_harness: "Hermes Agent",
                wallet_address: wallet("b"),
-               keys_run: 2,
-               first_key: 1
+               key: 1
              })
            ]
   end
@@ -248,11 +249,8 @@ defmodule Keyfleet.DirectoryTest do
     actor
   end
 
-  defp request!(actor, token_id), do: Keys.request_pairing!(@fleet, token_id, %{}, actor: actor)
-
   defp attach!(actor, token_id),
-    do:
-      actor |> request!(token_id) |> Keys.approve_pairing!(Keys.default_limits(), actor: owner())
+    do: ChainHelpers.issue_shard!(@fleet, token_id, actor.wallet_address)
 
   defp post!(slug, body) do
     Rooms.send_message!(
