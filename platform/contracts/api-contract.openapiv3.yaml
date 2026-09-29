@@ -758,7 +758,7 @@ paths:
       description: >-
         Pairs the signing agent with the person who made the pairing code on their regents.sh
         Account page. The pairing is the same on every Regent site. It says only whose agent this
-        is: to run a key, the agent still asks, and the key's owner approves it on the key's page.
+        is: to act as a key, the agent still needs a shard of it from the key's owner.
         A code works once, for ten minutes. A refusal from the sign-in server itself, such as 409
         request_replayed, comes back with that server's own status and code.
       security: [{siwaReceipt: []}]
