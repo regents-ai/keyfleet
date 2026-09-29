@@ -7,8 +7,8 @@ key, bought in USDC. Key holders talk in the fleet's rooms, share work in the
 fleet's workspace, and vote on proposals that record a decision, pay from the
 fleet's shared money or restrict a key's edits. A key's owner can give other
 wallets time-limited shards of the key. A keeper inside the
-site sends the few routine transactions anyone may send, such as key reveals and
-income sweeps.
+site sends the few routine transactions anyone may send: asking again for a
+key's reveal, and sending the protocol share owed to the Regents Safe.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
@@ -54,17 +54,19 @@ On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before the
   contracts are complete and deployed on Ethereum.
-- Before any deploy: the Regents Safe on Ethereum chosen, an outside audit, and
-  the founder's go.
+- Before any deploy: an outside audit and the founder's go. The protocol
+  treasury of every fleet is the Regents Safe on Ethereum,
+  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, a required deploy input with no
+  default.
 - Deferred until each fleet type is next: Fibonacci late-entry capture and the
   Cascade reserve of a level that never completes.
 - Every wallet button sends a step the server built before anyone pressed, and
   the server follows each sent step until the chain answers.
 - There is no Fly app yet; it is created at launch.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
-- The `failed_launch_block` column on treasury readings is approved for
-  production. The migrations that add required columns need no existing rows in
-  production, and migration `20260927072219` cannot be rolled back. The
+- The migrations that add required columns need no existing rows in
+  production. Migration `20260927072219` cannot be rolled back, and rolling
+  back `20260929064211` does not bring back the launch tables it deletes. The
   [deploy checklist](docs/deploy-checklist.md#5-the-shared-database-before-the-first-deploy)
   has the counts to run first.
 

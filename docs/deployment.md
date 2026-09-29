@@ -59,7 +59,7 @@ And from the environment:
 
 | Variable | What it fixes |
 | --- | --- |
-| `KEYFLEET_PROTOCOL_TREASURY` | The Regents Safe on Ethereum. It receives the whole owed 10% protocol share whenever anyone calls `sendProtocolShare()`, and on Ethereum it must own the randomness subscription. Fixed in each fleet for good. Required, never zero, no default. |
+| `KEYFLEET_PROTOCOL_TREASURY` | The Regents Safe on Ethereum, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, the same for every fleet (the founder's choice of 29 September 2026). It receives the whole owed 10% protocol share whenever anyone calls `sendProtocolShare()`, and on Ethereum it must own the randomness subscription. Fixed in each fleet for good. Required, never zero, no default: on Ethereum the deployment and record steps refuse any other address (`ETHEREUM_PROTOCOL_TREASURY` in `contracts/script/KeyfleetManifest.sol`). |
 
 The key price is not a manifest value: it is fixed in the contracts (see D6).
 Each fleet carries its own `baseTokenURI`: all four mint token ids from 1, so a
@@ -188,11 +188,13 @@ Ethereum is the same commands with the Ethereum manifest, the Regents Safe as
 the treasury and a signer that keeps its key in hardware:
 
 ```sh
-KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<Regents Safe> \
+KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic \
+  KEYFLEET_PROTOCOL_TREASURY=0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e \
   forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
   --rpc-url "$ETHEREUM_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
 
-KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic KEYFLEET_PROTOCOL_TREASURY=<Regents Safe> \
+KEYFLEET_MANIFEST=ethereum KEYFLEET_FLEET=classic \
+  KEYFLEET_PROTOCOL_TREASURY=0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e \
   forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$ETHEREUM_RPC_URL"
 ```
 
@@ -260,6 +262,8 @@ for a run in one block.
 - A manifest whose `chainId` is not the chain it is running on.
 - A zero protocol treasury. `KEYFLEET_PROTOCOL_TREASURY` unset stops the run
   before anything is deployed.
+- On Ethereum, a protocol treasury other than the Regents Safe
+  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`.
 - On Ethereum, a `usdc` other than Ethereum USDC
   `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`. Every key price is written in
   six-decimal USDC, so a look-alike with other decimals would misprice every key.
@@ -390,9 +394,12 @@ gas lane the 200 gwei one. Every fleet fixes the trait table's hash at construct
 each trait is drawn by weight from the key's seed as the contracts README
 describes.
 
-**The Regents Safe.** Not yet chosen on Ethereum. It is given to each run as
-`KEYFLEET_PROTOCOL_TREASURY`, receives the protocol share, owns the randomness
-subscription, and holds nothing in any fleet.
+**The Regents Safe (29 September 2026).** On Ethereum it is
+`0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, the protocol treasury of every
+fleet. It is still given to each run as `KEYFLEET_PROTOCOL_TREASURY`, which has
+no default; the scripts only refuse any other address on Ethereum. It receives
+the protocol share, owns the randomness subscription, and holds nothing in any
+fleet.
 
 The fully owned fleet, key price and random-trait decisions are built into the
 contracts. The others are inputs to the manifest only: none of them changes a
