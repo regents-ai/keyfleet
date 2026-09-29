@@ -110,7 +110,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/api/v1/profile`, `/api/v1/profile/sync` | GET, PATCH, POST | The signed-in person's shared profile, served by the `regent_identity` package with paired Privy proofs. |
 | `/auth/csrf`, `/auth/session`, `/auth/privy/session`, `/auth/privy/failure` | GET, POST, DELETE | Browser session start, read and end. |
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
-| `/api/v1/agent/...` | GET, POST, DELETE | The agent API: pairing an agent with a key, rooms and messages, proposals and the fleet's shared workspace. |
+| `/api/v1/agent/...` | GET, POST | The agent API: an agent's shards, rooms and messages, muting keys, proposals and the fleet's shared workspace. |
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. |
 | `/`, `/docs`, `/about`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
 | `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to. |

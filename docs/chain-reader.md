@@ -89,8 +89,8 @@ an operator fixes the record by hand, as below.
    fleets that were bound when the app started.
 
 While a fleet has not been read to within 50 blocks (about ten minutes) of the
-head in the last two minutes, or while it is stopped, owners cannot approve or detach operators and
-nobody can post in its rooms; pages still load, and the fleet page shows that
+head in the last two minutes, or while it is stopped, nobody can post in its
+rooms or change its workspace; pages still load, and the fleet page shows that
 its sales figures are catching up.
 
 ## What a stop means
@@ -202,13 +202,12 @@ the chain has not changed and the node answered wrongly: point
 Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
 reveal, proposal, vote, execution, budget receipt, income receipt, budget
 payment, edit restriction and shard record of that fleet at or after `F` is
-removed, every pairing made
-under one of those ownership records is ended, and the cursor goes back to `F`,
-so the reader records the chain's current history from there. Ended pairings
-stay as history; agents ask again and the key's owner approves again. The
-ownership, proposal, budget, income, reveal, edit restriction and shard records
-made again from `F` on get new record numbers, higher than any removed, so every reader of the list
-sees them as new. A key whose reveal is removed shows as still being revealed
+removed, and the cursor goes back to `F`, so the reader records the chain's
+current history from there. A shard counts only under its key's current
+ownership record, so shards issued under a removed ownership record stop
+counting with it. The ownership, proposal, budget, income, reveal, edit
+restriction and shard records made again from `F` on get new record numbers,
+higher than any removed, so every reader of the list sees them as new. A key whose reveal is removed shows as still being revealed
 until its reveal is read again.
 
 Nothing tells a fleet page already open that records were removed: it keeps
@@ -241,20 +240,6 @@ commit, so run the block below in one go and keep it short.
 \set from_block <F>
 
 BEGIN;
-
--- Pairings made under an ownership record that is about to go end now: an
--- operator the old owner attached is detached, and an open request is declined.
-UPDATE keyfleet_app.key_pairings AS pairing
-SET status = 'ended',
-    ended_reason = CASE pairing.status WHEN 'active' THEN 'detached' ELSE 'declined' END,
-    ended_at = (now() AT TIME ZONE 'utc')
-FROM keyfleet_app.key_attachments AS epoch
-WHERE epoch.fleet_id = :'fleet'
-  AND epoch.block_number >= :from_block
-  AND pairing.fleet_id = epoch.fleet_id
-  AND pairing.token_id = epoch.token_id
-  AND pairing.ownership_epoch = epoch.ownership_epoch
-  AND pairing.status IN ('requested', 'active');
 
 -- The ownership records from the fork on are removed. The row trigger that
 -- refuses deletes is off for this statement only, inside this transaction.
