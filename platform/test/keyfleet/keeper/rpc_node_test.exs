@@ -89,7 +89,7 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
   test "the latest block, nonces, balance and fees are read as numbers", %{config: config} do
     node!(config, fn
       %{"method" => "eth_chainId"} ->
-        result("0x2105")
+        result("0x1")
 
       %{"method" => "eth_getBlockByNumber", "params" => ["latest", false]} ->
         result(%{"number" => "0x64", "timestamp" => "0x6b49d200", "baseFeePerGas" => "0x4c4b40"})
@@ -107,7 +107,7 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
         result("0xf4240")
     end)
 
-    assert RpcNode.chain_id() == {:ok, 8_453}
+    assert RpcNode.chain_id() == {:ok, 1}
 
     assert RpcNode.latest_block() ==
              {:ok, %{number: 100, timestamp: 1_800_000_000, base_fee: 5_000_000}}
@@ -132,7 +132,7 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
       assert RpcNode.receipt(tx_hash()) == {:ok, nil}
     end
 
-    test "carries its status, cost, Base's L1 fee and logs", %{config: config} do
+    test "carries its status, cost and logs", %{config: config} do
       log = %{"address" => @fleet, "topics" => [], "data" => "0x"}
 
       node!(config, fn %{"method" => "eth_getTransactionReceipt"} ->
@@ -146,7 +146,6 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
                   block_number: 101,
                   gas_used: 60_000,
                   effective_gas_price: 6_000_000,
-                  l1_fee: 2_000,
                   logs: [log]
                 }}
 
@@ -154,14 +153,10 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
       assert hash == tx_hash()
     end
 
-    test "has no L1 fee on a chain without one, and a status of 0 when it reverted", %{
-      config: config
-    } do
-      node!(config, fn _request ->
-        result(receipt(%{"status" => "0x0"}) |> Map.delete("l1Fee"))
-      end)
+    test "has a status of 0 when it reverted", %{config: config} do
+      node!(config, fn _request -> result(receipt(%{"status" => "0x0"})) end)
 
-      assert {:ok, %{status: 0, l1_fee: nil}} = RpcNode.receipt(tx_hash())
+      assert {:ok, %{status: 0}} = RpcNode.receipt(tx_hash())
     end
 
     test "is refused when it is not a receipt", %{config: config} do
@@ -185,7 +180,6 @@ defmodule Keyfleet.Keeper.RpcNodeTest do
         "blockNumber" => "0x65",
         "gasUsed" => "0xea60",
         "effectiveGasPrice" => "0x5b8d80",
-        "l1Fee" => "0x7d0",
         "logs" => []
       },
       overrides

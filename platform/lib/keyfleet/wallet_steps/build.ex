@@ -13,7 +13,7 @@ defmodule Keyfleet.WalletSteps.Build do
 
   Reads go to the site's own node through `Keyfleet.Chain.Client`, at the
   latest block. Key sales need a fleet the site has recorded as deployed,
-  which is how they stay off: no fleet is recorded on Base yet.
+  which is how they stay off: no fleet is recorded on Ethereum yet.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -28,9 +28,6 @@ defmodule Keyfleet.WalletSteps.Build do
   # latest block's own clock, so a wallet's computer running fast or slow
   # doesn't shorten or stretch it.
   @purchase_seconds 600
-  @largest_uint128 Integer.pow(2, 128) - 1
-  # REGENT, which a launch raises, has eighteen decimals.
-  @regent_decimals 18
   # The zero address: a contract reads it as no wallet at all.
   @no_wallet "0x" <> String.duplicate("0", 40)
 
@@ -209,34 +206,6 @@ defmodule Keyfleet.WalletSteps.Build do
            )
          )
        ], %{key: key, asset: asset, amount: amount, recipient: recipient}}
-    end
-  end
-
-  defp steps(:propose_launch, fleet, _signer, inputs, _arguments) do
-    with {:ok, key} <- typed(inputs, "key", &Typed.key/1, %{}),
-         {:ok, raise} <-
-           typed(
-             inputs,
-             "raise",
-             &Typed.amount(&1, @regent_decimals, @largest_uint128),
-             %{key: key}
-           ),
-         {:ok, digest} <- typed(inputs, "digest", &Typed.document_code/1, %{key: key}) do
-      envelope =
-        {field(inputs, "name"), field(inputs, "symbol"), field(inputs, "description"),
-         field(inputs, "website"), field(inputs, "image"), raise, digest}
-
-      {:ok,
-       [
-         Review.step(
-           "propose",
-           fleet.votes_address,
-           Call.encode(
-             "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
-             [key, envelope]
-           )
-         )
-       ], %{key: key, raise: raise, digest: digest}}
     end
   end
 

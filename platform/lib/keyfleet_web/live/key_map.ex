@@ -5,8 +5,8 @@ defmodule KeyfleetWeb.KeyMap do
 
   A key's marks are whether one of the viewer's wallets holds it and whether
   an agent runs it today. Someone signed out holds nothing. Owners are never
-  sent to the map; the map draws every key sold and the next one on sale, so
-  how many are sold travels with the marks.
+  sent to the map; the map draws every key sold and the rest of the level on
+  sale, so how many are sold travels with the marks.
   """
 
   alias Keyfleet.Actors.Human
@@ -17,15 +17,16 @@ defmodule KeyfleetWeb.KeyMap do
   @reset_above 2_000
 
   @doc """
-  The map's first load: keys sold, the fleet's size, and the viewer's held
-  keys and the keys agents run as `bitset/2`s.
+  The map's first load: keys sold, the fleet's size (`nil` for a fleet whose
+  levels keep opening), and the viewer's held keys and the keys agents run as
+  `bitset/1`s.
   """
   def snapshot(fleet_id, %{total_minted: minted, max_supply: max_supply}, actor) do
     %{
       minted: minted,
       max_supply: max_supply,
-      mine: bitset(max_supply, held(fleet_id, actor, [])),
-      agent: bitset(max_supply, Enum.map(Keys.keys_run_in_fleet!(fleet_id), & &1.token_id))
+      mine: bitset(held(fleet_id, actor, [])),
+      agent: bitset(Enum.map(Keys.keys_run_in_fleet!(fleet_id), & &1.token_id))
     }
   end
 
@@ -59,29 +60,28 @@ defmodule KeyfleetWeb.KeyMap do
   next one on sale.
   """
   def choosable?(%{total_minted: minted, max_supply: max_supply}, token_id),
-    do: is_integer(token_id) and token_id in 1..min(minted + 1, max_supply)//1
+    do: is_integer(token_id) and token_id in 1..min(minted + 1, max_supply || minted + 1)//1
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level
-  with a key sold, the level of the next key on sale, and the level after it.
-  Fleets without levels have none.
+  with a key sold and the level of the next key on sale. Fleets without
+  levels have none.
   """
-  def levels(%{levels: nil}), do: []
-
-  def levels(%{levels: levels, completed_levels: completed}),
-    do: Enum.to_list(1..min(completed + 2, levels))
+  def levels(%{completed_levels: nil}), do: []
+  def levels(%{completed_levels: completed}), do: Enum.to_list(1..(completed + 1))
 
   @doc """
-  The keys numbered in `token_ids` as base64 over `ceil(max_supply / 8)`
-  bytes: key `id` is bit `(id - 1) rem 8`, least significant first, of byte
-  `(id - 1) div 8`.
+  The keys numbered in `token_ids` as base64, over as many bytes as the
+  highest of them needs: key `id` is bit `(id - 1) rem 8`, least significant
+  first, of byte `(id - 1) div 8`.
   """
-  def bitset(max_supply, token_ids) do
+  def bitset(token_ids) do
     set = MapSet.new(token_ids)
+    bytes = div(Enum.max(token_ids, fn -> 0 end) + 7, 8)
 
     # Each byte is written from its most significant bit down.
     bits =
-      for byte <- 0..(div(max_supply + 7, 8) - 1)//1, bit <- 7..0//-1, into: <<>> do
+      for byte <- 0..(bytes - 1)//1, bit <- 7..0//-1, into: <<>> do
         <<flag(set, byte * 8 + bit + 1, 1)::1>>
       end
 

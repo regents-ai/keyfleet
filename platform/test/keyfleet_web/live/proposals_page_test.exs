@@ -5,16 +5,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
-  alias Keyfleet.Graph
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals
   alias Keyfleet.TestChainNode
-  alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
 
   @fleet "fibonacci_syndicate"
   @list "/app/fleets/fibonacci_syndicate/proposals"
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   @voter ProposalHelpers.wallet("e")
   @holder ProposalHelpers.wallet("1")
   @votes "0x" <> String.duplicate("9", 40)
@@ -28,7 +26,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8_453,
+        chain_id: 1,
         contract_address: @fleet_contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
@@ -54,8 +52,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.proposal!(@fleet, 4, kind: :pay)
     votes!(4, true: [1, 2, 3, 4])
     ProposalHelpers.execution!(@fleet, 4, @voter)
-    ProposalHelpers.proposal!(@fleet, 5, kind: :autolaunch)
-    votes!(5, true: [1, 2, 3, 4])
+    ProposalHelpers.proposal!(@fleet, 5, kind: :restrict_edits)
+    votes!(5, true: [1, 2, 3, 4, 5])
     ProposalHelpers.execution!(@fleet, 5, @voter)
 
     {:ok, view, html} = live(conn, @list)
@@ -64,7 +62,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     refute html =~ "Vote counts are catching up."
 
     assert cards(view) == [
-             {"5", "Launch", "Launched"},
+             {"5", "Workspace edits for a key", "Carried out"},
              {"4", "Payment from shared money", "Paid"},
              {"3", "Decision", "Open"},
              {"2", "Decision", "Approved"},
@@ -306,167 +304,49 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            ]
   end
 
-  test "a launch shows its five fields exactly as proposed, once they have been read", %{
-    conn: conn
-  } do
+  test "a vote on a key's workspace edits names the key and the change", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    proposal = ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch)
+    ProposalHelpers.keys_sold!(@fleet, 1..5)
+    ProposalHelpers.proposal!(@fleet, 1, kind: :restrict_edits)
 
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert has_element?(view, "#proposal-launch-pending", "Launch details are still being read.")
-    refute has_element?(view, "#proposal-launch")
-
-    ProposalHelpers.launch_envelope!(proposal,
-      name: "Cascade  Research",
-      description: "Line one\nLine <two>",
-      required_regent_raised: Decimal.new("250000500000000000000000")
+    ProposalHelpers.proposal!(@fleet, 2,
+      kind: :restrict_edits,
+      target_token_id: 1_234,
+      restricted: false
     )
 
+    # Three fifths of the five keys sold.
+    votes!(2, true: [1, 2, 3])
+
     {:ok, view, _html} = live(conn, "#{@list}/1")
 
-    assert fields(view, "#proposal-launch div") == [
-             {"Name", "Cascade  Research"},
-             {"Symbol", "CSR"},
-             {"Description", "Line one\nLine <two>"},
-             {"Website", "https://example.test"},
-             {"Image", "ipfs://cascade"},
-             {"REGENT to raise", "250,000.5 REGENT"}
+    assert fields(view, "#proposal-edits div") == [
+             {"Key", "Key 2"},
+             {"Change", "Stop the key’s workspace edits"}
            ]
-  end
 
-  describe "a launch's plan" do
-    setup do
-      ChainHelpers.seed_cursor!(@fleet)
-      WorkspaceFixtures.open_log(@fleet)
-      :ok
-    end
+    assert has_element?(view, "#proposal-status", "Open")
+    assert has_element?(view, "#proposal-carry-out-button", "Stop the key’s workspace edits")
 
-    test "names the plan version the launch points to, and what it says", %{conn: conn} do
-      plan = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-      launch!(1, digest(plan, 1))
+    assert has_element?(
+             view,
+             "#proposal-carry-out-note-open",
+             "Yes votes aren’t yet three fifths of all the keys sold"
+           )
 
-      {:ok, view, _html} = live(conn, "#{@list}/1")
+    {:ok, view, _html} = live(conn, "#{@list}/2")
 
-      assert has_element?(
-               view,
-               ~s|#proposal-plan-version a[href="/app/fleets/#{@fleet}/workspace/launch_card%231"]|,
-               "Cascade Research"
-             )
+    assert fields(view, "#proposal-edits div") == [
+             {"Key", "Key 1,234"},
+             {"Change", "Let the key edit the workspace again"}
+           ]
 
-      assert text(view, "#proposal-plan-version") ==
-               "This launch points to Cascade Research, version 1."
+    assert has_element?(view, "#proposal-status", "Approved")
 
-      assert fields(view, "#proposal-plan-fields div") == [
-               {"Who it’s for", "Funds that read filings"},
-               {"What we offer", "A weekly brief"},
-               {"Who does what afterwards", "Key 17 writes the brief"}
-             ]
-
-      assert text(view, "#proposal-plan-benefits") ==
-               "Who benefits: the fleet’s keys receive all of the launch’s income, and its shared money " <>
-                 "keeps the REGENT the auction raises beyond what goes into the pool, and the " <>
-                 "launched tokens as they vest."
-
-      refute has_element?(view, "#proposal-plan-mismatch")
-      refute has_element?(view, "#proposal-plan-changed")
-      refute has_element?(view, "#proposal-plan-archived")
-    end
-
-    test "says when the plan has changed or been archived since", %{conn: conn} do
-      plan = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-      launch!(1, digest(plan, 1))
-
-      # Archiving alone leaves what the plan says as it was.
-      WorkspaceFixtures.archive(@fleet, plan)
-      {:ok, view, _html} = live(conn, "#{@list}/1")
-      assert has_element?(view, "#proposal-plan-archived", "This plan has since been archived.")
-      refute has_element?(view, "#proposal-plan-changed")
-
-      other = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-      launch!(2, digest(other, 1))
-      WorkspaceFixtures.edit(@fleet, other, %{"what_we_sell" => "A daily brief"})
-
-      {:ok, view, _html} = live(conn, "#{@list}/2")
-
-      assert text(view, "#proposal-plan-changed") =~
-               "The plan has changed since; this proposal carries version 1."
-
-      assert text(view, "#proposal-plan-version") =~ "version 1."
-      assert {"What we offer", "A weekly brief"} in fields(view, "#proposal-plan-fields div")
-      refute has_element?(view, "#proposal-plan-archived")
-    end
-
-    test "lists in plain words the launch details that differ from the plan", %{conn: conn} do
-      plan = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-
-      launch!(1, digest(plan, 1),
-        name: "Cascade Research Two",
-        required_regent_raised: Decimal.new("250000000000000000000000")
-      )
-
-      {:ok, view, _html} = live(conn, "#{@list}/1")
-
-      assert text(view, "#proposal-plan-mismatch") ==
-               "These launch details differ from the plan: name, the REGENT to raise."
-    end
-
-    test "is not shown for a launch that points to no plan the workspace has", %{conn: conn} do
-      launch!(1, "0x" <> String.duplicate("e", 64))
-      launch!(2, nil)
-
-      for number <- [1, 2] do
-        {:ok, view, _html} = live(conn, "#{@list}/#{number}")
-
-        assert has_element?(
-                 view,
-                 "#proposal-no-plan",
-                 "This launch doesn’t point to a plan in the workspace."
-               )
-
-        refute has_element?(view, "#proposal-plan-version")
-      end
-
-      ProposalHelpers.proposal!(@fleet, 3)
-      {:ok, view, _html} = live(conn, "#{@list}/3")
-      refute has_element?(view, "#proposal-plan")
-    end
-
-    test "a launch can start from any plan that has all six launch details", %{conn: conn} do
-      ready = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-      WorkspaceFixtures.edit(@fleet, ready, %{"title" => "Cascade Research, revised"})
-      WorkspaceFixtures.create(@fleet, "launch_card", plan_data(%{"image" => nil}))
-      WorkspaceFixtures.create(@fleet, "launch_card", plan_data(%{"symbol" => ""}))
-      archived = WorkspaceFixtures.create(@fleet, "launch_card", plan_data())
-      WorkspaceFixtures.archive(@fleet, archived)
-
-      {:ok, view, _html} = live(conn, @list)
-
-      assert view |> element("#propose-launch-plan") |> render() |> options() == [
-               {"", "Don’t use a plan"},
-               {digest(ready, 2), "Cascade Research, revised, version 2"}
-             ]
-
-      assert has_element?(
-               view,
-               ~s|#propose-launch-plan option[value="#{digest(ready, 2)}"][data-name="Cascade Research"][data-symbol="CSR"][data-raise="250000.5"]|
-             )
-
-      # Going back to the page shows the form as new, never a plan the
-      # browser remembers with its details and digest gone.
-      assert has_element?(view, ~s|#propose-launch-plan[autocomplete="off"]|)
-
-      assert has_element?(
-               view,
-               ~s|#propose-launch-digest[type="hidden"][name="digest"][value=""][autocomplete="off"]|
-             )
-
-      refute has_element?(
-               view,
-               ~s|#propose-launch-fields input[name="digest"]:not([type="hidden"])|
-             )
-
-      assert pressable?(view, "propose", ["#propose-launch-button"])
-    end
+    # Nothing about a key's edits on another kind of proposal.
+    ProposalHelpers.proposal!(@fleet, 3)
+    {:ok, view, _html} = live(conn, "#{@list}/3")
+    refute has_element?(view, "#proposal-edits")
   end
 
   test "while votes are still being read the page says so", %{conn: conn} do
@@ -597,7 +477,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              {"Set aside for key holders", "0 WETH 0xcccc..cccc"}
            ]
 
-    assert fields(view, "#proposals-held div") == [{"Set aside for REGENT stakers", "2.5 USDC"}]
+    assert fields(view, "#proposals-held div") == [{"Set aside for Regents", "2.5 USDC"}]
 
     assert has_element?(
              view,
@@ -649,7 +529,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "#proposals-held div") == [
              {"Held for the next level", "7 USDC"},
-             {"Set aside for REGENT stakers", "0 USDC"}
+             {"Set aside for Regents", "0 USDC"}
            ]
 
     assert view
@@ -751,7 +631,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert text(view, "#proposal-vote-action-line") ==
              "Voting, changing or withdrawing uses keys 1, 3. Each key is one vote."
 
-    assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Base."
+    assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Ethereum."
   end
 
   # A vote the contract turns down says why it may have been, and the
@@ -800,30 +680,19 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.proposal!(@fleet, 1)
     ProposalHelpers.proposal!(@fleet, 2)
     ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
-    # The fleet's last launch, created in block 10, failed: a launch proposal
-    # that opened in or before that block will be refused, one opened after
-    # it won't.
-    ProposalHelpers.proposal!(@fleet, 4, kind: :autolaunch, opened_block: 10)
-    ProposalHelpers.proposal!(@fleet, 5, kind: :autolaunch)
-    ProposalHelpers.proposal!(@fleet, 6, kind: :autolaunch, opened_block: 11)
-    for number <- 2..6, do: votes!(number, true: [1])
+    ProposalHelpers.proposal!(@fleet, 4, kind: :restrict_edits)
+    ProposalHelpers.proposal!(@fleet, 5, kind: :restrict_edits, restricted: false)
+    for number <- 2..5, do: votes!(number, true: [1])
     ProposalHelpers.execution!(@fleet, 3, @voter)
     ProposalHelpers.execution!(@fleet, 5, @voter)
-    ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
-
-    {:ok, list, _html} = live(conn, @list)
-    assert {"4", "Launch", "Proposed before the last launch"} in cards(list)
-    assert {"6", "Launch", "Approved"} in cards(list)
 
     for {number, status, word, note} <- [
           {1, "Open", "Record the decision", "Yes votes aren’t yet more than half"},
           {2, "Approved", "Record the decision", nil},
           {3, "Paid", "Make the payment", "It has already been carried out"},
-          {4, "Proposed before the last launch", "Start the launch",
-           "This launch was proposed before the fleet’s last launch, which didn’t succeed, " <>
-             "so carrying it out will be refused. Propose it again to try another launch."},
-          {5, "Launched", "Start the launch", "It has already been carried out"},
-          {6, "Approved", "Start the launch", nil}
+          {4, "Approved", "Stop the key’s workspace edits", nil},
+          {5, "Carried out", "Let the key edit the workspace again",
+           "It has already been carried out"}
         ] do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
       assert has_element?(view, "#proposal-status", status), "proposal #{number}"
@@ -913,7 +782,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     buttons = [
       {"propose", "#propose-decision-button"},
       {"propose", "#propose-payment-button"},
-      {"propose", "#propose-launch-button"},
       {"delegate", "#voting-delegate-button"},
       {"clear", "#voting-delegate-clear"}
     ]
@@ -1026,39 +894,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert text(view, "#propose-payment-action-line") ==
              "The token isn’t a valid address. Copy it again in full: 0x and 40 more letters and numbers."
-
-    active!(view, "#propose-launch-action", @holder)
-
-    view
-    |> form("#propose-launch-action-form",
-      key: "7",
-      name: "Cascade Research",
-      symbol: "CSR",
-      description: "Research the fleet funds",
-      website: "https://example.test",
-      image: "ipfs://cascade",
-      raise: "250,000.5"
-    )
-    |> render_change()
-
-    assert_push_event(view, "onchain-steps:review", %{
-      component_id: "propose-launch-action",
-      review: %{steps: [launch]}
-    })
-
-    assert launch.data ==
-             Call.encode(
-               "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
-               [
-                 7,
-                 {"Cascade Research", "CSR", "Research the fleet funds", "https://example.test",
-                  "ipfs://cascade", 250_000_500_000_000_000_000_000,
-                  "0x" <> String.duplicate("0", 64)}
-               ]
-             )
-
-    assert text(view, "#propose-launch-action-line") ==
-             "Proposes a launch that raises 250,000.5 REGENT, with key 7."
   end
 
   test "letting another wallet vote is built for the wallet typed, and clearing names no wallet",
@@ -1131,7 +966,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "Sign in to send this. Nothing was sent."
   end
 
-  test "sending the stakers their share takes every press, owed or not", %{conn: conn} do
+  test "sending Regents its share takes every press, owed or not", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
     ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
@@ -1143,7 +978,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, [])])
     {:ok, view, _html} = live(conn, @list)
-    assert fields(view, "#proposals-held div") == [{"Set aside for REGENT stakers", "0 USDC"}]
+    assert fields(view, "#proposals-held div") == [{"Set aside for Regents", "0 USDC"}]
     assert pressable?(view, "send", ["#proposals-send-share"])
     refute has_element?(view, "#proposals-nothing-owed[hidden]")
 
@@ -1155,57 +990,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert pressable?(view, "send", ["#proposals-send-share"])
     assert has_element?(view, "#proposals-nothing-owed[hidden]")
 
-    active!(view, "#proposals-stakers-share", @holder)
+    active!(view, "#proposals-regents-share", @holder)
 
     assert_push_event(view, "onchain-steps:review", %{
-      component_id: "proposals-stakers-share",
+      component_id: "proposals-regents-share",
       review: %{steps: [%{step: "send", to: @fleet_contract} = send]}
     })
 
     assert send.data == Call.encode("sendProtocolShare()", [])
-  end
-
-  # Every launch detail and three of the plan's other fields filled in.
-  defp plan_data(attrs \\ %{}) do
-    Map.merge(
-      %{
-        "title" => "Cascade Research",
-        "who_we_serve" => "Funds that read filings",
-        "what_we_sell" => "A weekly brief",
-        "commitments" => "Key 17 writes the brief",
-        "name" => "Cascade Research",
-        "symbol" => "CSR",
-        "description" => "Research the fleet funds",
-        "website" => "https://example.test",
-        "image" => "ipfs://cascade",
-        "required_regent_raised" => "250000.5"
-      },
-      attrs
-    )
-  end
-
-  # The digest of `version` of plan `id`, as the workspace keeps it.
-  defp digest(id, version) do
-    [revision] =
-      Graph.current_launch_plan_revisions!(@fleet, [%{object_id: id, version: version}])
-
-    revision.digest
-  end
-
-  # Launch proposal `number` pointing to `digest`, its details read as
-  # `envelope` says, and otherwise those of `plan_data/0`.
-  defp launch!(number, digest, envelope \\ []) do
-    @fleet
-    |> ProposalHelpers.proposal!(number, kind: :autolaunch, digest: digest)
-    |> ProposalHelpers.launch_envelope!(
-      Keyword.merge(
-        [
-          description: "Research the fleet funds",
-          required_regent_raised: Decimal.new("250000500000000000000000")
-        ],
-        envelope
-      )
-    )
   end
 
   defp votes!(number, sides) do

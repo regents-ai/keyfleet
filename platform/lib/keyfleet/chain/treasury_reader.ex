@@ -4,13 +4,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
   head, and keeps them as the fleet's `Keyfleet.Treasury.Reading`.
   `Keyfleet.Chain.Repeat` runs it every minute.
 
-  A reading covers the income tokens the reward ledger lists (USDC, REGENT
-  and the launched token once there is one) and each token a payment
-  proposal not yet carried out names, and no other: a token merely sent to
-  the fleet is never read or shown. Every figure of a reading comes from that
-  one block: for each of those tokens, the shared money and the reward
-  backing, beside the Cascade reserve, the protocol share owed and, when the
-  fleet's latest launch failed, the block it was created in. A reading
+  A reading covers the income token the reward ledger lists (USDC, the only
+  one) and each token a payment proposal not yet carried out names, and no
+  other: a token merely sent to the fleet is never read or shown. Every
+  figure of a reading comes from that one block: for each of those tokens,
+  the shared money and the reward backing, beside the Cascade reserve and the
+  protocol share owed to the Regents Safe. A reading
   that fails in any part keeps nothing and is tried again at the next one. A
   reading of a later block than the one kept replaces it and is announced as
   `{:balances_changed, fleet_id}` on `Keyfleet.Proposals.topic/1`.
@@ -42,25 +41,9 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @reward_assets Call.encode("rewardAssets()", [])
   @cascade_reserve Call.encode("cascadeReserve()", [])
   @protocol_share_owed Call.encode("protocolShareOwed()", [])
-  @launch_state Call.encode("launchState()", [])
-  @launch_record Call.encode("launchRecord()", [])
   @decimals Call.encode("decimals()", [])
   @symbol Call.encode("symbol()", [])
   @system %System{}
-
-  @launch_record_types [
-    {:uint, 256},
-    {:uint, 256},
-    :address,
-    {:uint, 64},
-    :address,
-    :address,
-    :address,
-    :address,
-    :bytes32,
-    :bytes32,
-    {:uint, 256}
-  ]
 
   @doc "Reads the fleet's balances at the node's head and keeps them, then any unread token details."
   def read(fleet, client) do
@@ -79,7 +62,6 @@ defmodule Keyfleet.Chain.TreasuryReader do
     with {:ok, balances} <- balances(fleet, read_assets(fleet, rewards), at),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
-         {:ok, failed_launch_block} <- failed_launch_block(fleet, at),
          {:ok, reading} <-
            Treasury.record_reading(
              %{
@@ -89,30 +71,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
                block_time: head.timestamp,
                cascade_reserve: Decimal.new(reserve),
                protocol_share_owed: Decimal.new(owed),
-               assets: balances,
-               failed_launch_block: failed_launch_block
+               assets: balances
              },
              actor: @system
            ) do
       announce(fleet, reading)
       {:ok, reading}
-    end
-  end
-
-  # The fleet's `LaunchState` numbers the failed state 3, and its launch
-  # record holds the block the launch was created in fourth.
-  defp failed_launch_block(fleet, at) do
-    case at.(fleet.contract_address, {@launch_state, [{:uint, 8}]}) do
-      {:ok, [3]} ->
-        with {:ok, [_id, _proposal, _subject, created_at_block | _rest]} <-
-               at.(fleet.contract_address, {@launch_record, @launch_record_types}),
-             do: {:ok, created_at_block}
-
-      {:ok, [_state]} ->
-        {:ok, nil}
-
-      failure ->
-        failure
     end
   end
 

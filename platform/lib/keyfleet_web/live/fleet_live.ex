@@ -675,26 +675,36 @@ defmodule KeyfleetWeb.FleetLive do
         <dl :if={@fleet.current?} class="fleet-facts">
           <div>
             <dt>Keys issued</dt>
-            <dd>
+            <dd :if={@fleet.progress.max_supply}>
               {grouped(@fleet.progress.total_minted)} of {grouped(@fleet.progress.max_supply)}
+            </dd>
+            <dd :if={is_nil(@fleet.progress.max_supply)}>
+              {grouped(@fleet.progress.total_minted)}
             </dd>
           </div>
           <div :if={@fleet.progress.completed_levels}>
             <dt>Levels complete</dt>
-            <dd>{@fleet.progress.completed_levels} of {@fleet.progress.levels}</dd>
+            <dd>{@fleet.progress.completed_levels}</dd>
           </div>
         </dl>
+        <p
+          :if={@fleet.current? and is_nil(@fleet.progress.max_supply)}
+          id="fleet-levels-keep-opening"
+          class="fleet-detail"
+        >
+          New levels keep opening.
+        </p>
         <p :if={@fleet.current? and is_nil(@fleet.progress.next_price)} class="fleet-detail">
           Every key has been issued.
         </p>
       </section>
 
       <section aria-labelledby="fleet-contract-title">
-        <h3 id="fleet-contract-title">On Base</h3>
+        <h3 id="fleet-contract-title">On Ethereum</h3>
         <p :if={@fleet.contract_address} class="fleet-wallet">
           <a
             id="fleet-contract-link"
-            href={"https://basescan.org/address/#{@fleet.contract_address}"}
+            href={"https://etherscan.io/address/#{@fleet.contract_address}"}
             title={@fleet.contract_address}
             rel="noopener noreferrer"
             target="_blank"
@@ -702,7 +712,7 @@ defmodule KeyfleetWeb.FleetLive do
             <code>{RegentFormat.short_address(@fleet.contract_address)}</code>
           </a>
         </p>
-        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
+        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Ethereum yet</p>
       </section>
     </aside>
     """
@@ -849,7 +859,7 @@ defmodule KeyfleetWeb.FleetLive do
       >
         Sales are still being counted, so this price may already have gone up. If it has,
         the purchase is refused and no USDC is taken, though your wallet still pays the
-        Base network fee for trying.
+        Ethereum network fee for trying.
       </p>
 
       <.live_component
@@ -886,11 +896,11 @@ defmodule KeyfleetWeb.FleetLive do
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
         You can still get a key from someone who holds one: it moves like any other token on
-        Base, though a key that moves can’t vote on proposals already open.
+        Ethereum, though a key that moves can’t vote on proposals already open.
       </p>
 
       <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
+        Paid in USDC on Ethereum from your wallet. If your wallet hasn’t already allowed this
         much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
       </p>
       <p :if={@buy.price && @buy.level} class="fleet-detail">

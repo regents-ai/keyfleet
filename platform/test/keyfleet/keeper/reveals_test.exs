@@ -21,13 +21,13 @@ defmodule Keyfleet.Keeper.RevealsTest do
   @subscription_id 555
   @now 1_800_000_000
   @gwei 1_000_000_000
-  @funded 20_000_000_000_000_000
+  @funded 100_000_000_000_000_000
   @seed "0x" <> String.duplicate("5e", 32)
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
-    deploy!(@fleet_id, @fleet, 8_453)
+    deploy!(@fleet_id, @fleet, 1)
 
     test = self()
 
@@ -116,7 +116,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
       assert log =~ "#{@fleet_id}'s reveals wait an hour."
 
       assert [%{result: "reveal_refused", status: :mined}] =
-               Keeper.list_latest_txs!(8_453, address(:keeper), actor: %System{})
+               Keeper.list_latest_txs!(1, address(:keeper), actor: %System{})
 
       # The chain still shows no request; the keeper's own record holds the fleet back.
       log = info_log(fn -> run(sender, reveals) end)
@@ -125,7 +125,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
     end
 
     test "a coordinator that refuses everything costs one transaction per fleet an hour" do
-      deploy!(@other_id, @other, 8_453)
+      deploy!(@other_id, @other, 1)
       Enum.each([@fleet_id, @other_id], &ChainHelpers.seed_cursor!/1)
       two_fleets(minted: 5, mine: &refused/2)
 
@@ -198,7 +198,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
 
     test "ends a fleet's part when one of its keys cannot be read; the others go on" do
       # Its round comes after the fleet whose key cannot be read.
-      deploy!(@other_id, @other, 8_453)
+      deploy!(@other_id, @other, 1)
       Enum.each([@fleet_id, @other_id], &ChainHelpers.seed_cursor!/1)
       answers = Map.delete(two_fleets_chain(minted: 3), {@fleet, view!(:reveal_seed, [2])})
       StubNode.put_chain(calls: answering(answers))
@@ -240,7 +240,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
 
     test "on another chain than the keeper's is passed over" do
       ChainHelpers.seed_cursor!(@fleet_id)
-      put_chain(minted: 1, chain_id: 1)
+      put_chain(minted: 1, chain_id: 8_453)
 
       log = capture_log(fn -> run(started!()) end)
 
@@ -280,7 +280,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
       assert requested() == [1]
     end
 
-    test "whose subscription holds under 0.02 ETH is paused until it is funded" do
+    test "whose subscription holds under 0.1 ETH is paused until it is funded" do
       ChainHelpers.seed_cursor!(@fleet_id)
       put_chain(minted: 1, native_balance: @funded - 1)
 
@@ -292,7 +292,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
 
       assert [_alert] =
                Regex.scan(
-                 ~r/Keeper alert: #{@fleet_id}'s VRF subscription 555 holds 0.019999999999999999 ETH, under 0.02 ETH/,
+                 ~r/Keeper alert: #{@fleet_id}'s VRF subscription 555 holds 0.099999999999999999 ETH, under 0.1 ETH/,
                  log
                )
 
@@ -317,9 +317,9 @@ defmodule Keyfleet.Keeper.RevealsTest do
     end
   end
 
-  test "nothing is asked for while the base fee is above 2 gwei, alerted once" do
+  test "nothing is asked for while the base fee is above 3 gwei, alerted once" do
     ChainHelpers.seed_cursor!(@fleet_id)
-    put_chain(minted: 1, block: %{number: 1, timestamp: @now, base_fee: 2 * @gwei + 1})
+    put_chain(minted: 1, block: %{number: 1, timestamp: @now, base_fee: 3 * @gwei + 1})
 
     {{sender, reveals}, log} =
       with_log(fn ->
@@ -328,7 +328,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
       end)
 
     assert [_alert] =
-             Regex.scan(~r/Keeper alert: the base fee is 2.000000001 gwei, above 2 gwei/, log)
+             Regex.scan(~r/Keeper alert: the base fee is 3.000000001 gwei, above 3 gwei/, log)
 
     assert sent() == []
     assert runs() == [{:reveal, :paused_gas}]
@@ -343,7 +343,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
     StubNode.update(block: %{number: 2, timestamp: @now, base_fee: @gwei})
     log = info_log(fn -> run(sender, reveals) end)
 
-    assert log =~ "Keeper reveals go on: the base fee is back at or under 2 gwei."
+    assert log =~ "Keeper reveals go on: the base fee is back at or under 3 gwei."
     assert runs() == [{:reveal, :paused_gas}, {:reveal, :unpaused_gas}, {:reveal, :sent}]
     assert requested() == [1]
   end
@@ -351,7 +351,7 @@ defmodule Keyfleet.Keeper.RevealsTest do
   describe "after a restart, a pause still in force" do
     test "on the base fee is not recorded or alerted again, and is recorded when it ends" do
       ChainHelpers.seed_cursor!(@fleet_id)
-      put_chain(minted: 1, block: %{number: 1, timestamp: @now, base_fee: 2 * @gwei + 1})
+      put_chain(minted: 1, block: %{number: 1, timestamp: @now, base_fee: 3 * @gwei + 1})
       capture_log(fn -> run(started!()) end)
       assert_received {:telemetry, [:keyfleet, :keeper, :paused], _count, %{reason: :gas}}
 

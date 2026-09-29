@@ -32,17 +32,31 @@ config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interva
 # records: its name in the page's words, and the public node a wallet adds
 # it with when the wallet doesn't know it yet. The site's own node never
 # reaches a page.
-config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
+config :keyfleet, :wallet_chains, %{1 => %{name: "Ethereum", rpc_url: "https://eth.merkle.io"}}
 
 # The node the server reads each chain through, by chain id: the steps a
 # page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
 # the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
 # such as a private node or a lab fork, and this address never reaches a page.
-config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
+config :keyfleet, :chain_nodes, %{1 => "https://eth.merkle.io"}
 
-# The keeper sends through the same node, and looks for each receipt once a
-# second. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY` is set.
-config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.RpcNode, receipt_poll_ms: 1_000
+# The keeper sends through the same node, and looks for each receipt every
+# two seconds. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY`
+# is set. Its spending limits, in wei, all on Ethereum:
+#
+#   * `max_fee_wei`: the most it pays per unit of gas, and the base fee above
+#     which it sends nothing at all, reveals included;
+#   * `daily_spend_wei`: the most it may spend over any 24 hours;
+#   * `low_balance_wei`: the wallet balance under which it raises an alert;
+#   * `min_vrf_balance_wei`: the least a fleet's VRF subscription must hold
+#     before the keeper asks for that fleet's reveals again.
+config :keyfleet, Keyfleet.Keeper,
+  node: Keyfleet.Keeper.RpcNode,
+  receipt_poll_ms: 2_000,
+  max_fee_wei: 3_000_000_000,
+  daily_spend_wei: 20_000_000_000_000_000,
+  low_balance_wei: 20_000_000_000_000_000,
+  min_vrf_balance_wei: 100_000_000_000_000_000
 
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 

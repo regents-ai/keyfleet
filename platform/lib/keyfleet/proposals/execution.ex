@@ -105,7 +105,7 @@ defmodule Keyfleet.Proposals.Execution do
 
     # The fleet's executions recorded before its record number `before_seq`
     # (from the newest when nil), newest first, `limit` at most, each with
-    # what the proposal carried out paid or launched.
+    # what the proposal carried out paid or which key's edits it changed.
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
@@ -118,8 +118,16 @@ defmodule Keyfleet.Proposals.Execution do
       prepare fn query, _context ->
         proposal =
           Keyfleet.Proposals.Proposal
-          |> Ash.Query.select([:id, :number, :kind, :asset, :amount, :recipient])
-          |> Ash.Query.load(launch_envelope: Keyfleet.Proposals.Proposal.launch_name())
+          |> Ash.Query.select([
+            :id,
+            :number,
+            :kind,
+            :asset,
+            :amount,
+            :recipient,
+            :target_token_id,
+            :restricted
+          ])
 
         query
         |> Ash.Query.select([:id, :fleet_id, :proposal_id, :record_seq, :observed_at])

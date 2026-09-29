@@ -22,7 +22,7 @@ defmodule Keyfleet.DirectoryTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 8_453)
+    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 1)
     ChainHelpers.seed_cursor!(@fleet)
     for token_id <- 1..6, do: epoch!(token_id, 1, @owner)
     :ok
@@ -182,8 +182,8 @@ defmodule Keyfleet.DirectoryTest do
              on_sale: true,
              current: true,
              keys_sold: 6,
-             keys_total: 46_365,
-             keys_left: 46_359,
+             keys_total: nil,
+             keys_left: nil,
              next_key: %{token_id: 7, price_atomic_usdc: 14_400_000, level: 3, holding_limit: 1}
            }
 

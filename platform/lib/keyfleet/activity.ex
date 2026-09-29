@@ -40,7 +40,7 @@ defmodule Keyfleet.Activity do
       * `:progress`: the task's `progress` is now "todo", "doing", "blocked"
         or "done";
       * `:status`: the goal's `status` is now "open", "achieved" or "dropped";
-      * `:revised`: a goal, service or launch plan was edited;
+      * `:revised`: a goal or service was edited;
       * `:archived`.
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
@@ -52,16 +52,17 @@ defmodule Keyfleet.Activity do
       recorded it, and `now_runs`: `%{fleet_id: id, fleet_name: name,
       token_id: n}` when the agent was taken on for a key in another fleet
       afterwards and runs it still, otherwise nil.
-    * `:proposed`: `number`, `kind` (`:decision`, `:pay` or `:autolaunch`),
-      `proposer` (`%{wallet: wallet, token_id: n | nil}`, the lowest key the
-      wallet holds today), `gist` (the first 160 characters of its text, or
-      nil for a launch), `launch` (`%{name: name, symbol: symbol}` or nil) and
-      `payment` (`%{asset: address, amount: atomic units, recipient: address,
-      assets: assets}` or nil, where `assets` is the fleet's USDC and the
-      asset's symbol and decimals, as `Keyfleet.Treasury.assets/1` has them).
+    * `:proposed`: `number`, `kind` (`:decision`, `:pay` or
+      `:restrict_edits`), `proposer` (`%{wallet: wallet, token_id: n |
+      nil}`, the lowest key the wallet holds today), `gist` (the first 160
+      characters of its text), `edits` (`%{token_id: n, restricted: bool}`
+      or nil) and `payment` (`%{asset: address, amount: atomic units,
+      recipient: address, assets: assets}` or nil, where `assets` is the
+      fleet's USDC and the asset's symbol and decimals, as
+      `Keyfleet.Treasury.assets/1` has them).
     * `:votes`: consecutive votes on one proposal: `number`, and `yes` and
       `no`, each `%{count: keys, token_ids: up to three, lowest first}`.
-    * `:executed`: `number`, `kind`, `payment` and `launch` as for `:proposed`.
+    * `:executed`: `number`, `kind`, `payment` and `edits` as for `:proposed`.
     * `:open_question` (from `headline/2` only): `goal` (an item) and
       `question`, as `Keyfleet.Graph.open_question/1` finds them.
 
@@ -555,7 +556,7 @@ defmodule Keyfleet.Activity do
     %{count: length(token_ids), token_ids: Enum.take(token_ids, @listed_keys)}
   end
 
-  # What a payment pays or a launch launches.
+  # What a payment pays, or which key's edits a vote restricts or restores.
   defp offer(%{kind: :pay} = proposal) do
     %{
       payment: %{
@@ -564,20 +565,19 @@ defmodule Keyfleet.Activity do
         recipient: proposal.recipient,
         assets: {:assets, proposal.asset}
       },
-      launch: nil
+      edits: nil
     }
   end
 
-  defp offer(%{kind: :autolaunch, launch_envelope: %{} = launch}) do
+  defp offer(%{kind: :restrict_edits} = proposal) do
     %{
       payment: nil,
-      launch: %{name: text(launch.name, 64), symbol: text(launch.symbol, 16)}
+      edits: %{token_id: proposal.target_token_id, restricted: proposal.restricted}
     }
   end
 
-  defp offer(_proposal), do: %{payment: nil, launch: nil}
+  defp offer(_proposal), do: %{payment: nil, edits: nil}
 
-  defp gist(%{text_start: nil}), do: nil
   defp gist(%{text_start: bytes}), do: text(bytes, @excerpt)
 
   # Chain texts are bytes that need not be valid text.

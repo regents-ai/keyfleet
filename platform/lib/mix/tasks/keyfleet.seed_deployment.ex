@@ -8,7 +8,7 @@ defmodule Mix.Tasks.Keyfleet.SeedDeployment do
   fleet's fixed and open rooms. A release runs the same step as
   `bin/seed-deployment`.
 
-      mix keyfleet.seed_deployment ../contracts/deployments/base.classic.deployed.json
+      mix keyfleet.seed_deployment ../contracts/deployments/ethereum.classic.deployed.json
 
   Running it again with the same manifest changes nothing. A manifest naming
   different contracts for a fleet that is already bound is refused.

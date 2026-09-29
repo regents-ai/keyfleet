@@ -3,12 +3,12 @@ import {furnishFleet, prepareFleet} from "./support/fleet_chain"
 
 // Every in-app page is one live view, so a link from one of its pages to
 // another patches the page already open: the frame, the live connection and
-// the window all stay. A deployed fleet with a room message, a workspace plan
-// and a launch proposal shows every such link, and each is clicked here.
+// the window all stay. A deployed fleet with a room message, a workspace goal
+// and a proposal shows every such link, and each is clicked here.
 const fleet = "fibonacci_syndicate"
 const owner = "0x4444444444444444444444444444444444444444"
 const fleetPath = `/app/fleets/${fleet}`
-const planPath = new RegExp(`${escape(fleetPath)}/workspace/launch_card%23\\d+$`)
+const planPath = new RegExp(`${escape(fleetPath)}/workspace/goal%23\\d+$`)
 
 // The fleet is furnished once, so the specs run in order and stop at the first failure.
 test.describe.configure({mode: "serial"})
@@ -99,7 +99,10 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   const stops: [Locator, Stop][] = [
     [page.locator("#fleet-proposals-link"), proposals],
     [page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal],
-    [page.locator("#proposal-plan-version a"), plan],
+    [page.locator("#proposal-page .proposals-kicker a"), proposals],
+    [page.locator("#proposals-page .proposals-kicker a"), fleetPage],
+    [page.locator("#fleet-workspace-link"), board],
+    [page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
     [page.locator("#rooms-page .rooms-author a").first(), keyProfile],
     [page.locator("#key-profile-recent a").first(), general],
@@ -107,7 +110,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   ]
   for (const [link, stop] of stops) await walk.follow(link, stop)
 
-  // Back six stops, to the proposals list, then forward six, to the Account page.
+  // Back six stops, to the fleet page, then forward six, to the Account page.
   const visited = [fleetPage, ...stops.map(([, stop]) => stop)]
   for (let back = 1; back <= 6; back++) {
     await page.goBack()
@@ -149,11 +152,13 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   })
   await toFleet()
 
-  // A plan names the proposal that points to it; the proposal's heading leads
+  // A goal on the workspace opens on its own page. A proposal's heading leads
   // to every proposal, and that page's heading back to the fleet.
   await walk.follow(page.locator("#fleet-workspace-link"), board)
   await walk.follow(page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan)
-  await walk.follow(page.locator("#workspace-proposed a"), proposal)
+  await toFleet()
+  await walk.follow(page.locator("#fleet-proposals-link"), proposals)
+  await walk.follow(page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal)
   await walk.follow(page.locator("#proposal-page .proposals-kicker a"), proposals)
   await walk.follow(page.locator("#proposals-page .proposals-kicker a"), fleetPage)
   await walk.follow(page.locator("#fleet-proposals-link"), proposals)

@@ -1,11 +1,8 @@
 defmodule Keyfleet.Treasury.BudgetReceipt do
   @moduledoc """
   One amount the fleet's budget took in: a token that is not income, arrived
-  by bare transfer and recognized (`:recognized`, a `SharedMoneyRecognized`
-  log), the REGENT the launch sent at graduation (`:graduation`,
-  `GraduationHoldingsBooked`), or launched tokens the vesting escrow
-  released (`:vesting`, `VestingBooked`). `amount` is in the asset's atomic
-  units, any uint256. Only the chain reader writes it, and nothing ever
+  by bare transfer and recognized (a `SharedMoneyRecognized` log). `amount`
+  is in the asset's atomic units, any uint256. Only the chain reader writes it, and nothing ever
   changes it.
 
   `record_seq` is the fleet's count of proposal and budget records when it
@@ -24,10 +21,6 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      check_constraint(:kind, "budget_receipts_kind",
-        check: "kind IN ('recognized', 'graduation', 'vesting')"
-      )
-
       check_constraint(:asset, "budget_receipts_asset_shape", check: "asset ~ '^0x[0-9a-f]{40}$'")
 
       check_constraint(:amount, "budget_receipts_nonnegative_amount", check: "amount >= 0")
@@ -81,7 +74,6 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
 
       accept [
         :fleet_id,
-        :kind,
         :asset,
         :amount,
         :block_number,
@@ -129,11 +121,6 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
 
   attributes do
     uuid_primary_key :id
-
-    attribute :kind, :atom,
-      allow_nil?: false,
-      public?: true,
-      constraints: [one_of: [:recognized, :graduation, :vesting]]
 
     attribute :asset, :string,
       allow_nil?: false,

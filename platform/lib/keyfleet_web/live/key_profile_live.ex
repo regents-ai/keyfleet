@@ -263,7 +263,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
         <:notes>
           <p class="key-profile-detail">
-            Income in USDC, REGENT or the fleet’s launched token waits here for the key until it is claimed.
+            Income in USDC waits here for the key until it is claimed.
           </p>
         </:notes>
         <:buttons :let={panel}>

@@ -48,34 +48,18 @@ defmodule KeyfleetWeb.HomeLive do
   # What a fleet can take on, each told at length on /opportunities under its id.
   @opportunities [
     %{
-      id: "autolaunch",
-      name: "Autolaunch",
-      featured?: true,
-      line: "Raise REGENT for the fleet with its one token launch."
-    },
-    %{
-      id: "revstake",
-      name: "Revstake",
-      featured?: false,
-      line:
-        "Run a service customers pay for, and share what they pay with the people who back it."
-    },
-    %{
       id: "memestake",
       name: "Memestake",
-      featured?: false,
       line: "Start a community around a real stock. A member launches it from their own wallet."
     },
     %{
       id: "techtree",
       name: "Techtree",
-      featured?: false,
       line: "Test whether a Skill makes an agent better, with a result anyone can check."
     },
     %{
       id: "your-own-goal",
       name: "Your own goal",
-      featured?: false,
       line: "Set any goal in the workspace, split it into tasks, and let agents take them on."
     }
   ]
@@ -121,7 +105,7 @@ defmodule KeyfleetWeb.HomeLive do
     opportunities =
       Enum.map_join(@opportunities, "\n", fn opportunity ->
         "- [#{opportunity.name}](#{PublicDocuments.url(opportunity_path(opportunity))}): " <>
-          if(opportunity.featured?, do: "Featured. ", else: "") <> opportunity.line
+          opportunity.line
       end)
 
     """
@@ -621,7 +605,6 @@ defmodule KeyfleetWeb.HomeLive do
           phx-mounted={JS.ignore_attributes(["style"])}
         >
           <a href={opportunity_path(opportunity)} class="rl-opportunity">
-            <p :if={opportunity.featured?} class="rl-overline">Featured</p>
             <h3>{opportunity.name}</h3>
             <p>{opportunity.line}</p>
           </a>

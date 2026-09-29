@@ -15,7 +15,7 @@ defmodule Keyfleet.Keeper.Run do
     authorizers: [Ash.Policy.Authorizer]
 
   @bigint 9_223_372_036_854_775_807
-  @jobs [:reveal, :income]
+  @jobs [:reveal, :protocol_share]
   @pause_outcomes [
     :paused_gas,
     :unpaused_gas,

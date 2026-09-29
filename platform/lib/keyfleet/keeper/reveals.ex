@@ -3,13 +3,14 @@ defmodule Keyfleet.Keeper.Reveals do
   The keeper's reveal job, run every 30 seconds: it asks a fleet's VRF
   coordinator again for keys whose every request it refused.
 
-  A round sends nothing while the base fee is above 2 gwei. It then takes
-  each fleet on the keeper's chain whose key history was read recently,
-  and passes over any that is not a consumer of its VRF subscription, or
-  whose subscription holds under 0.02 ETH. Each of these holds is alerted
-  when it begins and logged when it ends; a base fee or subscription hold
-  is recorded as a pause too, and one still in force when the keeper
-  starts goes on without being recorded or alerted again.
+  A round sends nothing while the base fee is above the keeper's highest fee
+  (`max_fee_wei`). It then takes each fleet on the keeper's chain whose key
+  history was read recently, and passes over any that is not a consumer of
+  its VRF subscription, or whose subscription holds under
+  `min_vrf_balance_wei`; both are set in the keeper's configuration. Each of
+  these holds is alerted when it begins and logged when it ends; a base fee
+  or subscription hold is recorded as a pause too, and one still in force
+  when the keeper starts goes on without being recorded or alerted again.
 
   For each fleet it looks at up to 25 keys with no recorded reveal, lowest
   first, leaving out any the keeper asked for in the last hour or is still
@@ -31,8 +32,6 @@ defmodule Keyfleet.Keeper.Reveals do
   alias Keyfleet.{Chain, Keeper, Keys}
   alias Keyfleet.Keeper.{Jobs, Sender}
 
-  @max_base_fee 2_000_000_000
-  @min_vrf_balance 20_000_000_000_000_000
   @per_round 25
   @refusal_hold 3_600
   @waiting_after 120
@@ -67,7 +66,7 @@ defmodule Keyfleet.Keeper.Reveals do
 
     case sender.node.latest_block() do
       {:ok, block} ->
-        reveals = hold(reveals, :gas, block.base_fee > @max_base_fee, block)
+        reveals = hold(reveals, :gas, block.base_fee > Keeper.limits().max_fee, block)
 
         if :gas in reveals.holds,
           do: {sender, reveals},
@@ -158,7 +157,7 @@ defmodule Keyfleet.Keeper.Reveals do
       )
       |> hold(
         {:vrf_balance, fleet.id},
-        subscription.native_balance < @min_vrf_balance,
+        subscription.native_balance < Keeper.limits().min_vrf_balance,
         subscription
       )
 
@@ -276,7 +275,7 @@ defmodule Keyfleet.Keeper.Reveals do
     pause(
       :paused_gas,
       :gas,
-      "the base fee is #{gwei(block.base_fee)} gwei, above 2 gwei; reveals wait until it falls."
+      "the base fee is #{Keeper.gwei(block.base_fee)} gwei, above #{Keeper.gwei(Keeper.limits().max_fee)} gwei; reveals wait until it falls."
     )
   end
 
@@ -284,7 +283,7 @@ defmodule Keyfleet.Keeper.Reveals do
     pause(
       :paused_vrf_balance,
       :vrf_balance,
-      "#{fleet_id}'s VRF subscription #{subscription.id} holds #{Keeper.eth(subscription.native_balance)} ETH, under 0.02 ETH; its reveals wait until the subscription is funded.",
+      "#{fleet_id}'s VRF subscription #{subscription.id} holds #{Keeper.eth(subscription.native_balance)} ETH, under #{Keeper.eth(Keeper.limits().min_vrf_balance)} ETH; its reveals wait until the subscription is funded.",
       fleet_id
     )
   end
@@ -305,21 +304,17 @@ defmodule Keyfleet.Keeper.Reveals do
   end
 
   defp ended(:gas) do
-    Logger.info("Keeper reveals go on: the base fee is back at or under 2 gwei.")
-    Keeper.record_pause(:reveal, :unpaused_gas, "the base fee is back at or under 2 gwei")
+    message = "the base fee is back at or under #{Keeper.gwei(Keeper.limits().max_fee)} gwei"
+    Logger.info("Keeper reveals go on: #{message}.")
+    Keeper.record_pause(:reveal, :unpaused_gas, message)
   end
 
   defp ended({:vrf_balance, fleet_id}) do
-    Logger.info(
-      "Keeper reveals go on for #{fleet_id}: its VRF subscription holds 0.02 ETH or more."
-    )
+    message =
+      "#{fleet_id}'s VRF subscription holds #{Keeper.eth(Keeper.limits().min_vrf_balance)} ETH or more"
 
-    Keeper.record_pause(
-      :reveal,
-      :unpaused_vrf_balance,
-      "#{fleet_id}'s VRF subscription holds 0.02 ETH or more",
-      fleet_id
-    )
+    Logger.info("Keeper reveals go on: #{message}.")
+    Keeper.record_pause(:reveal, :unpaused_vrf_balance, message, fleet_id)
   end
 
   defp ended({:refused, fleet_id}) do
@@ -342,7 +337,4 @@ defmodule Keyfleet.Keeper.Reveals do
         job: :reveal,
         reason: reason
       })
-
-  defp gwei(wei),
-    do: wei |> Decimal.new() |> Decimal.div(1_000_000_000) |> Decimal.to_string(:normal)
 end

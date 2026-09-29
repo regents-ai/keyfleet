@@ -5,24 +5,25 @@ defmodule Keyfleet.Keeper.Runner do
   its `Keyfleet.Keeper.Sender`; its status shows the wallet's address and
   never the key.
 
-  It first learns the node's chain, whether it is stopped, which pauses
-  are still in force, and settles whatever it left waiting before, retrying
-  every 30 seconds while the node or the database cannot answer. Then, unless it is stopped, it runs the
-  reveal job (`Keyfleet.Keeper.Reveals`) 30 seconds after each round ends,
-  and the income job (`Keyfleet.Keeper.Income`) five minutes after it
-  starts and an hour after each round ends. A round that leaves the keeper
-  stopped schedules nothing more. `Keyfleet.Keeper.Supervisor` starts it.
+  It first learns the node's chain, whether it is stopped, which pauses are
+  still in force, and settles whatever it left waiting before, retrying
+  every 30 seconds while the node or the database cannot answer. Then,
+  unless it is stopped, it runs the reveal job (`Keyfleet.Keeper.Reveals`)
+  30 seconds after each round ends, and the protocol-share job
+  (`Keyfleet.Keeper.ProtocolShare`) five minutes after it starts and an hour
+  after each round ends. A round that leaves the keeper stopped schedules
+  nothing more. `Keyfleet.Keeper.Supervisor` starts it.
   """
   use GenServer
 
   require Logger
 
-  alias Keyfleet.Keeper.{Income, Node, Reveals, Sender, Wallet}
+  alias Keyfleet.Keeper.{Node, ProtocolShare, Reveals, Sender, Wallet}
 
   @retry_after 30_000
   @reveal_every 30_000
-  @income_first 300_000
-  @income_every 3_600_000
+  @protocol_share_first 300_000
+  @protocol_share_every 3_600_000
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -50,9 +51,9 @@ defmodule Keyfleet.Keeper.Runner do
     {:noreply, %{state | sender: sender, reveals: reveals}}
   end
 
-  def handle_info(:income, %{sender: sender} = state) do
-    sender = Income.run(sender)
-    after_round(sender, :income, @income_every)
+  def handle_info(:protocol_share, %{sender: sender} = state) do
+    sender = ProtocolShare.run(sender)
+    after_round(sender, :protocol_share, @protocol_share_every)
     {:noreply, %{state | sender: sender}}
   end
 
@@ -65,7 +66,7 @@ defmodule Keyfleet.Keeper.Runner do
          {:ok, reveals} <- Reveals.start(sender) do
       announce(sender)
       after_round(sender, :reveal, @reveal_every)
-      after_round(sender, :income, @income_first)
+      after_round(sender, :protocol_share, @protocol_share_first)
       {:noreply, %{state | sender: sender, reveals: reveals}}
     else
       {:error, reason} ->

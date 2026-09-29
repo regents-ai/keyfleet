@@ -4,14 +4,14 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   the map can be tried at its largest size without a chain or a database.
   Classic and Accelerant are sold but for their last key. Fibonacci is selling
   level 19 a few rows in: the map draws all of it, with levels 1 to 18 sold
-  out, 19 on sale and 20 next.
+  out and 19 on sale. Its levels keep opening, so it has no size.
   """
   use KeyfleetWeb, :live_view
 
   alias KeyfleetWeb.KeyMap
 
   @fleets [
-    %{layout: "fibonacci", name: "Fibonacci", max_supply: 46_365, minted: 17_768},
+    %{layout: "fibonacci", name: "Fibonacci", max_supply: nil, minted: 17_768},
     %{layout: "classic", name: "Classic", max_supply: 1_024, minted: 1_023},
     %{layout: "accelerant", name: "Accelerant", max_supply: 2_000, minted: 1_999}
   ]
@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
               value={fleet.layout}
               aria-pressed={to_string(fleet.layout == @fleet.layout)}
             >
-              {fleet.name} · {group(fleet.max_supply)} keys
+              {fleet.name} · {size(fleet.max_supply)}
             </button>
           </div>
         </section>
@@ -108,8 +108,8 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
      %{
        minted: minted,
        max_supply: max_supply,
-       mine: KeyMap.bitset(max_supply, Enum.filter(1..minted, &(rem(&1, 97) == 13))),
-       agent: KeyMap.bitset(max_supply, Enum.filter(1..minted, &(rem(&1, 7) == 3)))
+       mine: KeyMap.bitset(Enum.filter(1..minted, &(rem(&1, 97) == 13))),
+       agent: KeyMap.bitset(Enum.filter(1..minted, &(rem(&1, 7) == 3)))
      }, socket}
   end
 
@@ -121,6 +121,9 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   end
 
   def handle_event("select_key", _params, socket), do: {:noreply, socket}
+
+  defp size(nil), do: "new levels keep opening"
+  defp size(max_supply), do: "#{group(max_supply)} keys"
 
   defp group(number) do
     number

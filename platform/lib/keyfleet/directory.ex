@@ -147,7 +147,7 @@ defmodule Keyfleet.Directory do
       current: true,
       keys_sold: progress.total_minted,
       keys_total: progress.max_supply,
-      keys_left: progress.max_supply - progress.total_minted,
+      keys_left: progress.max_supply && progress.max_supply - progress.total_minted,
       next_key: next_key(id, progress)
     }
   end

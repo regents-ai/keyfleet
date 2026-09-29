@@ -1,6 +1,6 @@
 import {createCamera} from "./camera"
 import {axialToPixel, nearestCopy, pixelToAxial, SQRT3, type Cell, type Point} from "./lattice"
-import {buildMap, type KeyMapGrid, type LayoutKind} from "./layouts"
+import {buildMap, levelStart, type KeyMapGrid, type LayoutKind} from "./layouts"
 import {
   applyPatch,
   decodeSnapshot,
@@ -11,7 +11,6 @@ import {
   lastChoosable,
   levelHeading,
   levelSale,
-  levelStart,
   nextHeldKey,
   nextKey,
   onSaleLevel,
@@ -79,7 +78,6 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
   const cursorKey = () => (cursor && grid ? grid.valueAt(...cursor) : 0)
 
-  const drawn = (of: KeyMapState) => drawnKeys(options.layout, of)
   const choosable = (key: number) => key >= 1 && key <= lastChoosable(state!)
 
   const tiles = createTiles(layer, {
@@ -162,7 +160,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
   // The cursor goes to a key shown on the map, in the view's middle.
   const focusKey = (key: number) => {
-    if (grid && state && key >= 1 && key <= drawn(state)) moveCursor(nearestCell(key), true)
+    if (grid && state && key >= 1 && key <= drawnKeys(state)) moveCursor(nearestCell(key), true)
   }
 
   // Draws `next`. The view stays on the keys it was showing: the camera is
@@ -171,18 +169,18 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   // the next key.
   const show = (next: KeyMapState) => {
     const anchor = grid && keyNear(grid, centreCell())
-    const kept = anchor && grid!.valueAt(...anchor) <= drawn(next) ? anchor : null
+    const kept = anchor && grid!.valueAt(...anchor) <= drawnKeys(next) ? anchor : null
     const cursorWas = cursorKey()
     const key = kept ? grid!.valueAt(...kept) : selected || startKey(next)
     const [fromX, fromY] = kept ? axialToPixel(...kept, size) : [camera.x, camera.y]
-    grid = buildMap(options.layout, drawn(next))
+    grid = buildMap(options.layout, drawnKeys(next))
     state = next
     tiles.clear()
     placedAt = ""
     const [x, y] = axialToPixel(...grid.home(key), size)
     if (kept) camera.shift(x - fromX, y - fromY)
     else camera.jumpTo(x, y)
-    cursor = cursorWas && cursorWas <= drawn(next) ? nearestCell(cursorWas) : null
+    cursor = cursorWas && cursorWas <= drawnKeys(next) ? nearestCell(cursorWas) : null
     if (!cursor) status.textContent = ""
     render()
   }
@@ -240,7 +238,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     patch(patch) {
       if (!state) return
       const next = applyPatch(state, patch)
-      if (drawn(next) !== drawn(state)) return show(next)
+      if (drawnKeys(next) !== drawnKeys(state)) return show(next)
       state = next
       tiles.refresh()
     },

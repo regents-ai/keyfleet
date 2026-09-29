@@ -3,28 +3,27 @@ defmodule Keyfleet.Chain.VotesLog do
   Reads the proposal, vote and execution logs of a fleet's `KeyfleetVotes`
   contract into the fields `Keyfleet.Proposals` records.
 
-  A launch or payment proposal is two logs: `ProposalCreated` and, right after
-  it in the same transaction, `AutolaunchProposed` or `PayProposed`. Each is
-  read here on its own, as `{:proposal, fields}` and `{:autolaunch, %{number:
-  n, payload: fields}}` or `{:pay, %{number: n, payload: fields}}`;
-  `Keyfleet.Chain.Logs` joins them.
+  A payment or edit-restriction proposal is two logs: `ProposalCreated` and,
+  right after it in the same transaction, `PayProposed` or
+  `RestrictEditsProposed`. Each is read here on its own, as `{:proposal,
+  fields}` and `{:pay, %{number: n, payload: fields}}` or `{:restrict_edits,
+  %{number: n, payload: fields}}`; `Keyfleet.Chain.Logs` joins them.
 
   Every key is one vote, so a vote carries its keys and nothing else. A key
   may vote again, and its latest vote is the one that counts. A
   `VoteWithdrawn` log is read as a vote whose `support` is nil: the keys it
   names count for neither side until they vote again.
 
-  A Decision's or payment's text is kept up to its first 64 KiB, as raw bytes
-  that need not be valid text, beside its full length and its SHA-256. A
-  launch's text is always empty and is not kept.
+  A proposal's text is kept up to its first 64 KiB, as raw bytes that need
+  not be valid text, beside its full length and its SHA-256.
   """
 
   alias RegentChain.Abi
   alias RegentChain.Event
 
   @created Event.topic0("ProposalCreated(uint256,uint8,address,uint64,bytes32,string)")
-  @autolaunch Event.topic0("AutolaunchProposed(uint256,bytes32)")
   @pay Event.topic0("PayProposed(uint256,address,uint256,address)")
+  @restrict_edits Event.topic0("RestrictEditsProposed(uint256,uint256,bool)")
   @vote Event.topic0("VoteCast(uint256,address,bool,uint256[])")
   @withdrawn Event.topic0("VoteWithdrawn(uint256,address,uint256[])")
   @executed Event.topic0("ProposalExecuted(uint256,address)")
@@ -32,10 +31,10 @@ defmodule Keyfleet.Chain.VotesLog do
   @text_cap 65_536
   @zero_digest "0x" <> String.duplicate("0", 64)
   # The contract's `Kind` numbers, pinned in contracts/test/KeyfleetVotesTopics.t.sol.
-  @kinds %{0 => :decision, 1 => :autolaunch, 2 => :pay}
+  @kinds %{0 => :decision, 1 => :pay, 2 => :restrict_edits}
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@created, @autolaunch, @pay, @vote, @withdrawn, @executed]
+  def topics, do: [@created, @pay, @restrict_edits, @vote, @withdrawn, @executed]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
@@ -57,17 +56,8 @@ defmodule Keyfleet.Chain.VotesLog do
             opened_block: opened_block,
             digest: if(digest != @zero_digest, do: digest)
           },
-          text(kind, text)
+          text(text)
         )}}
-    else
-      _malformed -> :error
-    end
-  end
-
-  def decode(@autolaunch, [id], data) do
-    with {:ok, number} <- number(id),
-         {:ok, [envelope_hash]} <- Abi.decode(data, [:bytes32]) do
-      {:ok, {:autolaunch, %{number: number, payload: %{envelope_hash: envelope_hash}}}}
     else
       _malformed -> :error
     end
@@ -84,6 +74,18 @@ defmodule Keyfleet.Chain.VotesLog do
           number: number,
           payload: %{asset: asset, amount: Decimal.new(amount), recipient: recipient}
         }}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@restrict_edits, [id, target], data) do
+    with {:ok, number} <- number(id),
+         {:ok, target_token_id} <- number(target),
+         {:ok, [restricted]} <- Abi.decode(data, [:bool]) do
+      {:ok,
+       {:restrict_edits,
+        %{number: number, payload: %{target_token_id: target_token_id, restricted: restricted}}}}
     else
       _malformed -> :error
     end
@@ -140,9 +142,7 @@ defmodule Keyfleet.Chain.VotesLog do
     with {:ok, value} <- Abi.word(topic, {:uint, 8}), do: Map.fetch(@kinds, value)
   end
 
-  defp text(:autolaunch, _text), do: %{text: nil, text_bytes: nil, text_sha256: nil}
-
-  defp text(_kind, text) do
+  defp text(text) do
     %{
       text: binary_part(text, 0, min(byte_size(text), @text_cap)),
       text_bytes: byte_size(text),

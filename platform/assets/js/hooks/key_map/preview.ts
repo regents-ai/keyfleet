@@ -42,7 +42,7 @@ export type Preview = {viewBox: string; tiles: PreviewTile[]}
  */
 export function preview(layout: LayoutKind, minted: number): Preview {
   const state: KeyMapState = {minted, maxSupply: maxSupply[layout], mine: new Uint8Array(0), agent: new Uint8Array(0)}
-  const grid = buildMap(layout, drawnKeys(layout, state))
+  const grid = buildMap(layout, drawnKeys(state))
   const next = nextKey(state)
   const onSale = onSaleLevel(grid, state)
   const [cx, cy] = axialToPixel(...grid.home(startKey(state)), size)

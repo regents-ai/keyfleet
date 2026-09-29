@@ -31,16 +31,16 @@ defmodule Keyfleet.ProposalsTest do
 
   describe "status" do
     test "a proposal is approved once more than half of all the keys sold vote yes" do
-      assert Proposals.status(proposal(keys_sold: 6, yes_keys: 4), nil) == :approved
-      assert Proposals.status(proposal(keys_sold: 6, yes_keys: 3), nil) == :open
+      assert Proposals.status(proposal(keys_sold: 6, yes_keys: 4)) == :approved
+      assert Proposals.status(proposal(keys_sold: 6, yes_keys: 3)) == :open
 
       # Three yes and nobody against, of seven: the four that stayed silent count against.
-      assert Proposals.status(proposal(keys_sold: 7, yes_keys: 3), nil) == :open
-      assert Proposals.status(proposal(keys_sold: 0, yes_keys: 0), nil) == :open
+      assert Proposals.status(proposal(keys_sold: 7, yes_keys: 3)) == :open
+      assert Proposals.status(proposal(keys_sold: 0, yes_keys: 0)) == :open
     end
 
     test "a carried out proposal is shown as carried out, whatever its votes" do
-      assert Proposals.status(proposal(keys_sold: 7, yes_keys: 0, execution: %Execution{}), nil) ==
+      assert Proposals.status(proposal(keys_sold: 7, yes_keys: 0, execution: %Execution{})) ==
                :executed
     end
 
@@ -56,7 +56,7 @@ defmodule Keyfleet.ProposalsTest do
       ProposalHelpers.vote!(@fleet, 1, @owner, true, [2, 3])
       voted = Proposals.get_by_number(@fleet, 1)
       assert {voted.yes_keys, voted.no_keys} == {3, 0}
-      assert Proposals.status(voted, nil) == :approved
+      assert Proposals.status(voted) == :approved
     end
 
     test "a key sold after a proposal was approved counts against it until it votes" do
@@ -64,28 +64,27 @@ defmodule Keyfleet.ProposalsTest do
       for token_id <- 1..3, do: owner_of_key!(token_id)
       ProposalHelpers.vote!(@fleet, 1, @owner, true, [1, 2])
 
-      assert Proposals.status(Proposals.get_by_number(@fleet, 1), nil) == :approved
+      assert Proposals.status(Proposals.get_by_number(@fleet, 1)) == :approved
 
       owner_of_key!(4)
       assert %{keys_sold: 4} = sold = Proposals.get_by_number(@fleet, 1)
-      assert Proposals.status(sold, nil) == :open
+      assert Proposals.status(sold) == :open
     end
 
-    # The fleet refuses a launch proposal that opened in or before the block
-    # its last failed launch was created in; only launches are affected.
-    test "a launch proposed before the last failed launch is stale, and one after it is not" do
-      stale = proposal(kind: :autolaunch, opened_block: 10, keys_sold: 1, yes_keys: 1)
-      assert Proposals.status(stale, 10) == :stale
-      assert Proposals.status(stale, 9) == :approved
-      assert Proposals.status(stale, nil) == :approved
-      assert Proposals.status(%{stale | execution: %Execution{}}, 10) == :executed
-      assert Proposals.status(%{stale | kind: :decision}, 10) == :approved
-    end
+    # A vote on a key's edits needs three fifths of all the keys sold: ten
+    # sold need six yes, and five sold need three.
+    test "a vote on a key's edits is approved once three fifths of all the keys sold vote yes" do
+      edits = &proposal(Keyword.put(&1, :kind, :restrict_edits))
 
-    test "the failed launch block is the one the fleet's latest reading names" do
-      assert Proposals.failed_launch_block(@fleet) == nil
-      ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
-      assert Proposals.failed_launch_block(@fleet) == 10
+      assert Proposals.status(edits.(keys_sold: 10, yes_keys: 6)) == :approved
+      assert Proposals.status(edits.(keys_sold: 10, yes_keys: 5)) == :open
+      assert Proposals.status(edits.(keys_sold: 5, yes_keys: 3)) == :approved
+      assert Proposals.status(edits.(keys_sold: 5, yes_keys: 2)) == :open
+
+      # Four of seven is more than half, which is enough for any other kind.
+      assert Proposals.status(edits.(keys_sold: 7, yes_keys: 4)) == :open
+      assert Proposals.status(proposal(keys_sold: 7, yes_keys: 4)) == :approved
+      assert Proposals.status(proposal(kind: :pay, keys_sold: 7, yes_keys: 4)) == :approved
     end
 
     defp proposal(fields) do
@@ -94,15 +93,6 @@ defmodule Keyfleet.ProposalsTest do
   end
 
   describe "changes" do
-    test "a launch proposed before the fleet's last failed launch is read as stale" do
-      ProposalHelpers.proposal!(@fleet, 1, kind: :autolaunch, opened_block: 10)
-      ProposalHelpers.proposal!(@fleet, 2, kind: :autolaunch, opened_block: 11)
-      ProposalHelpers.treasury_reading!(@fleet, [], failed_launch_block: 10)
-
-      assert Enum.map(Proposals.changes(@fleet, 0).items, &{&1.proposal.number, &1.status}) ==
-               [{1, :stale}, {2, :open}]
-    end
-
     test "each record after the one asked for is read once, in the order the reader numbered it" do
       assert Proposals.changes(@fleet, 0) ==
                %{items: [], next_cursor: 0, head_seq: 0, has_more: false}
@@ -184,15 +174,14 @@ defmodule Keyfleet.ProposalsTest do
   test "each kind of proposal is answered as the contract describes it" do
     ProposalHelpers.proposal!(@fleet, 1, text: <<"Ship ", 0xFF>>, text_bytes: 6)
     ProposalHelpers.proposal!(@fleet, 2, kind: :pay)
-    ProposalHelpers.proposal!(@fleet, 3, kind: :autolaunch)
-    launched = ProposalHelpers.proposal!(@fleet, 4, kind: :autolaunch)
-    ProposalHelpers.launch_envelope!(launched, name: <<"Cascade ", 0xFE>>)
+    ProposalHelpers.proposal!(@fleet, 3, kind: :restrict_edits, target_token_id: 7)
+    ProposalHelpers.proposal!(@fleet, 4, kind: :restrict_edits, restricted: false)
     ProposalHelpers.proposal!(@fleet, 5)
     ProposalHelpers.execution!(@fleet, 5, @owner)
     owner_of_key!(1)
 
     for number <- 6..8 do
-      ProposalHelpers.proposal!(@fleet, number, kind: :autolaunch)
+      ProposalHelpers.proposal!(@fleet, number, kind: :restrict_edits)
       ProposalHelpers.vote!(@fleet, number, @owner, true, [1])
     end
 
@@ -214,10 +203,15 @@ defmodule Keyfleet.ProposalsTest do
     assert %{"asset" => _, "amount" => "5000000", "recipient" => _} =
              json(ProposalJSON.summary(by_number[2]))["pay"]
 
-    assert json(ProposalJSON.summary(by_number[3]))["launch"]["envelope"] == nil
+    assert json(ProposalJSON.summary(by_number[2]))["edits"] == nil
 
-    assert %{"name" => "Cascade �", "required_regent_raised" => "250000000000000000000000"} =
-             json(ProposalJSON.summary(by_number[4]))["launch"]["envelope"]
+    assert json(ProposalJSON.summary(by_number[3]))["edits"] == %{
+             "token_id" => 7,
+             "restricted" => true
+           }
+
+    assert json(ProposalJSON.detail(by_number[4].proposal, by_number[4].status))["edits"] ==
+             %{"token_id" => 2, "restricted" => false}
 
     assert %{"status" => "executed", "executed" => %{"executor" => @owner}} =
              json(ProposalJSON.summary(by_number[5]))

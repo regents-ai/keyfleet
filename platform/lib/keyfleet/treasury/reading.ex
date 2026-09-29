@@ -2,9 +2,7 @@ defmodule Keyfleet.Treasury.Reading do
   @moduledoc """
   A fleet's balances as its contracts held them at one block: the shared
   money and reward backing of each token `Keyfleet.Chain.TreasuryReader`
-  reads, the Cascade completion reserve and the protocol share owed, beside
-  the block the fleet's latest launch was created in when that launch
-  failed.
+  reads, the Cascade completion reserve and the protocol share owed.
 
   `Keyfleet.Chain.TreasuryReader` reads them every minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
@@ -27,11 +25,7 @@ defmodule Keyfleet.Treasury.Reading do
         check: "block_hash ~ '^0x[0-9a-f]{64}$'"
       )
 
-      for field <- [:block_number, :failed_launch_block] do
-        check_constraint(field, "treasury_readings_nonnegative_#{field}", check: "#{field} >= 0")
-      end
-
-      for field <- [:cascade_reserve, :protocol_share_owed] do
+      for field <- [:block_number, :cascade_reserve, :protocol_share_owed] do
         check_constraint(field, "treasury_readings_nonnegative_#{field}", check: "#{field} >= 0")
       end
     end
@@ -50,8 +44,7 @@ defmodule Keyfleet.Treasury.Reading do
         :block_time,
         :cascade_reserve,
         :protocol_share_owed,
-        :assets,
-        :failed_launch_block
+        :assets
       ]
 
       upsert? true
@@ -63,8 +56,7 @@ defmodule Keyfleet.Treasury.Reading do
         :block_time,
         :cascade_reserve,
         :protocol_share_owed,
-        :assets,
-        :failed_launch_block
+        :assets
       ]
 
       upsert_condition expr(upsert_conflict(:block_number) > block_number)
@@ -99,24 +91,16 @@ defmodule Keyfleet.Treasury.Reading do
     attribute :block_time, :utc_datetime_usec, allow_nil?: false, public?: true
 
     # USDC, in atomic units: held back for the next Cascade level, and owed to
-    # the REGENT stakers.
+    # the Regents Safe.
     for field <- [:cascade_reserve, :protocol_share_owed] do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
 
-    # The income tokens in the reward ledger's order (USDC, REGENT, then the
-    # launched token), then each token a payment proposal not yet carried out
-    # names, as `Keyfleet.Chain.TreasuryReader` reads them.
+    # USDC, the one income token, then each token a payment proposal not yet
+    # carried out names, as `Keyfleet.Chain.TreasuryReader` reads them.
     attribute :assets, {:array, Keyfleet.Treasury.AssetBalance},
       allow_nil?: false,
       public?: true
-
-    # The block the fleet's latest launch was created in, when that launch
-    # failed; nil while there is no launch or it is running or has graduated.
-    # A launch proposal that opened in or before it can't be carried out.
-    attribute :failed_launch_block, :integer,
-      public?: true,
-      constraints: [min: 0, max: @max_bigint]
   end
 
   relationships do

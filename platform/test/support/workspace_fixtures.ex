@@ -5,17 +5,15 @@ defmodule Keyfleet.WorkspaceFixtures do
 
   Each call appends one change to a made-up log: the event the graph would
   write, the command record it leaves beside it, and the object and link rows
-  the change leaves (a launch plan's revision included), all committed with
-  the cursor moved past them. Level scopes, attention notices and events of
+  the change leaves, all committed with the cursor moved past them. Level scopes, attention notices and events of
   any type can be written this way before the graph itself writes them.
   """
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Graph
-  alias Keyfleet.Graph.LaunchPlanDigest
 
   @system %System{}
-  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation, Graph.LaunchPlanRevision]
+  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
   @contract "0x" <> String.duplicate("b2", 20)
   @wallet "0x" <> String.duplicate("a1", 20)
   @start ~U[2026-09-22 12:00:00Z]
@@ -86,7 +84,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       sys = %{
         "scope" => Keyword.get(opts, :scope, "fleet"),
         "created_by" => %{
-          "key" => %{"chain_id" => 8453, "contract" => @contract, "token_id" => by(opts)},
+          "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
           "ownership_epoch" => 3,
           "kind" => "agent",
           "wallet" => @wallet
@@ -112,7 +110,6 @@ defmodule Keyfleet.WorkspaceFixtures do
         actor: @system
       )
 
-      revise(fleet_id, seq, id, type, 1, data)
       {id, "object.created", principal(opts), %{"object" => object, "id" => id}}
     end)
   end
@@ -243,8 +240,6 @@ defmodule Keyfleet.WorkspaceFixtures do
   defp timestamp(seq), do: @start |> DateTime.add(seq, :minute) |> DateTime.to_iso8601()
 
   defp project(fleet_id, seq, object, data, sys) do
-    revise(fleet_id, seq, object.id, object.type, object.version + 1, data)
-
     Graph.project_objects!(
       [
         %{
@@ -261,24 +256,6 @@ defmodule Keyfleet.WorkspaceFixtures do
       actor: @system
     )
   end
-
-  defp revise(fleet_id, seq, id, "launch_card", version, data) do
-    Graph.project_launch_plan_revisions!(
-      [
-        %{
-          fleet_id: fleet_id,
-          digest: LaunchPlanDigest.digest(fleet_id, id, version, data),
-          object_id: id,
-          version: version,
-          seq: seq,
-          data: LaunchPlanDigest.plan(data)
-        }
-      ],
-      actor: @system
-    )
-  end
-
-  defp revise(_fleet_id, _seq, _id, _type, _version, _data), do: :ok
 
   defp patch_payload(seq, object, old, set) do
     diff = Map.new(set, fn {field, new} -> {field, %{"old" => old[field], "new" => new}} end)
@@ -298,5 +275,5 @@ defmodule Keyfleet.WorkspaceFixtures do
 
   defp by(opts), do: Keyword.get(opts, :by, 17)
 
-  defp principal(opts), do: "member:8453:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
+  defp principal(opts), do: "member:1:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
 end

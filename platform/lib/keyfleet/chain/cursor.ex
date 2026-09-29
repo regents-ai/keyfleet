@@ -3,10 +3,10 @@ defmodule Keyfleet.Chain.Cursor do
   How far one fleet's key history has been read from the chain, and whether it
   can be trusted right now.
 
-  Base confirms a block in about two seconds and nothing here waits for more:
-  ownership is recorded at the head. A later reading that disagrees with what
-  was recorded sets `rescan_from` and stops the fleet there until an operator
-  has corrected the record by hand.
+  Ethereum makes a block about every twelve seconds and nothing here waits
+  for more: ownership is recorded at the head. A later reading that
+  disagrees with what was recorded sets `rescan_from` and stops the fleet
+  there until an operator has corrected the record by hand.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
   its key reveals (`reveal_seq`) and its ownership epochs (`ownership_seq`).
@@ -17,9 +17,10 @@ defmodule Keyfleet.Chain.Cursor do
     authorizers: [Ash.Policy.Authorizer]
 
   # Ownership is fresh while the head was read within this many seconds, and
-  # the record reaches to within this many blocks of it (ten minutes of Base).
+  # the record reaches to within this many blocks of it (ten minutes of
+  # Ethereum).
   @fresh_seconds 120
-  @fresh_blocks 300
+  @fresh_blocks 50
 
   postgres do
     table "chain_cursors"

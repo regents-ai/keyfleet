@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   setup do
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 8_453)
+    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 1)
     ChainHelpers.seed_cursor!(@fleet)
 
     Keys.record_epoch!(
@@ -85,12 +85,12 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
   test "each fleet's sales line gives the next key's price and how many one wallet may hold",
        %{conn: conn} do
-    KeeperHelpers.deploy!("fleet_tech_classic", "0x" <> String.duplicate("6", 40), 8_453)
+    KeeperHelpers.deploy!("fleet_tech_classic", "0x" <> String.duplicate("6", 40), 1)
     ChainHelpers.seed_cursor!("fleet_tech_classic")
 
     lines = conn |> get("/fleets.md") |> response(200) |> String.split("\n")
 
-    assert ("1 of 46,365 keys sold · 46,364 left · next key: Key 2 for 10 USDC. " <>
+    assert ("1 key sold · new levels keep opening · next key: Key 2 for 10 USDC. " <>
               "One wallet may hold 1 key of level 1.") in lines
 
     assert ("0 of 1,024 keys sold · 1,024 left · next key: Key 1 for 8 USDC. " <>

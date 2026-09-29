@@ -155,7 +155,7 @@ defmodule Keyfleet.Release do
   end
 
   defp print_keeper_runs do
-    for job <- [:reveal, :income] do
+    for job <- [:reveal, :protocol_share] do
       case Keyfleet.Keeper.last_run!(job, actor: %Keyfleet.Actors.System{}) do
         nil ->
           IO.puts("#{job}: no round recorded")
@@ -180,7 +180,8 @@ defmodule Keyfleet.Release do
 
       IO.puts(
         "Spent in the last 24 hours: #{Keyfleet.Keeper.eth(settled)} ETH, and up to " <>
-          "#{Keyfleet.Keeper.eth(waiting)} ETH more waiting (limit 0.01 ETH)"
+          "#{Keyfleet.Keeper.eth(waiting)} ETH more waiting " <>
+          "(limit #{Keyfleet.Keeper.eth(Keyfleet.Keeper.limits().daily_spend)} ETH)"
       )
 
       print_keeper_txs(chain_id, address)

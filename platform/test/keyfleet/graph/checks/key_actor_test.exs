@@ -6,7 +6,6 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.CheckExpiredError
-  alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
@@ -94,11 +93,10 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     assert {:error, _ran_out} = KeyActor.command(slow, @levelled, 1, "c-1", 1)
   end
 
-  test "a key number past the fleet's supply writes nothing" do
+  test "a key past level 20 writes its own level, as new levels keep opening" do
     sell(@levelled, [46_366])
 
-    assert {:error, %NotKeyHolderError{token_id: 46_366}} =
-             KeyActor.command(owner(46_366), @levelled, 46_366, "c-1", 1_000)
+    assert scopes(@levelled, 46_366) == ["fleet", "level:21"]
   end
 
   test "a Classic or Accelerant key writes the fleet scope only, however many keys are sold" do
@@ -205,11 +203,11 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8453,
+        chain_id: 1,
         contract_address: contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

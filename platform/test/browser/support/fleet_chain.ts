@@ -65,8 +65,8 @@ export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [
 
 /**
  * Gives a deployed fleet a key sold to `owner` that says something in the
- * General room, a launch plan discussing it and a task assigned to the key in
- * the workspace, and launch proposal 1 pointing to the plan. Returns the key.
+ * General room, a goal discussing it and a task assigned to the key in the
+ * workspace, and proposal 1. Returns the key.
  */
 export const furnishFleet = (fleet: string, owner: string) => Number(call("furnish!", [fleet, owner]))
 

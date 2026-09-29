@@ -583,8 +583,8 @@ defmodule Keyfleet.Graph.WriterTest do
     from keyfleet_graph.host import Host
 
     fleet, db, dependents, done = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-    actor = "member:8453:#{@contract}:17@3/agent:#{@wallet}"
-    key = {"chain_id": 8453, "contract": "#{@contract}", "token_id": 17}
+    actor = "member:1:#{@contract}:17@3/agent:#{@wallet}"
+    key = {"chain_id": 1, "contract": "#{@contract}", "token_id": 17}
     created_by = {"key": key, "ownership_epoch": 3, "kind": "agent", "wallet": "#{@wallet}"}
     sys_record = {"scope": "fleet", "created_by": created_by, "archived": False}
     host = Host(fleet, db)
@@ -614,9 +614,9 @@ defmodule Keyfleet.Graph.WriterTest do
 
     %{
       id: id,
-      principal: "member:8453:#{@contract}:#{token_id}@3/agent:#{@wallet}",
+      principal: "member:1:#{@contract}:#{token_id}@3/agent:#{@wallet}",
       auth: %{
-        key: %{chain_id: 8453, contract: @contract, token_id: token_id},
+        key: %{chain_id: 1, contract: @contract, token_id: token_id},
         ownership_epoch: 3,
         kind: "agent",
         operator_wallet: @wallet,

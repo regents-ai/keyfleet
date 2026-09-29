@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.ActivityLines do
       no longer there;
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
-    * `{:quote, text}`: words a member wrote, or a launch's name;
+    * `{:quote, text}`: words a member wrote;
     * `{:proposal, number}`: a proposal;
     * `{:amount, text, token}`: an amount paid in a token other than the
       fleet's USDC, as `KeyfleetWeb.ProposalsPage.amount/3` words it with
@@ -163,11 +163,8 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :executed, facts: %{kind: :pay} = f}),
     do: ["The fleet paid " | paid(f.payment)] ++ [" (", proposal(f), ")."]
 
-  def parts(%{kind: :executed, facts: %{kind: :autolaunch, launch: %{} = launch} = f}),
-    do: ["The fleet launched ", launch(launch), " (", proposal(f), ")."]
-
-  def parts(%{kind: :executed, facts: %{kind: :autolaunch} = f}),
-    do: ["The fleet launched its token (", proposal(f), ")."]
+  def parts(%{kind: :executed, facts: %{kind: :restrict_edits, edits: edits} = f}),
+    do: ["The fleet " <> edits_done(edits) <> " (", proposal(f), ")."]
 
   def parts(%{kind: :open_question, facts: f}),
     do: ["For ", item(f.goal), ": ", words(f.question)]
@@ -285,16 +282,15 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
 
-  defp proposal_gist(%{kind: :autolaunch, launch: %{} = launch}),
-    do: [" to launch ", launch(launch), "."]
+  defp proposal_gist(%{kind: :restrict_edits, edits: edits} = facts),
+    do: [" to " <> edits_asked(edits) | gist(facts)]
 
   defp proposal_gist(%{kind: :pay, payment: payment} = facts),
     do: [" to pay " | paid(payment)] ++ gist(facts)
 
   defp proposal_gist(facts), do: gist(facts)
 
-  defp gist(%{gist: gist}) when is_binary(gist), do: [": ", words(gist)]
-  defp gist(_facts), do: ["."]
+  defp gist(%{gist: gist}), do: [": ", words(gist)]
 
   # "12.5 USDC to 0x12ab..cd34".
   defp paid(payment) do
@@ -311,7 +307,17 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp amount(%{text: text, token: token, symbol?: true}), do: {:amount, visible(text), token}
 
-  defp launch(%{name: name, symbol: symbol}), do: words("#{name} (#{symbol})")
+  defp edits_asked(%{token_id: token_id, restricted: true}),
+    do: "stop key #{Rules.grouped(token_id)} editing the workspace"
+
+  defp edits_asked(%{token_id: token_id, restricted: false}),
+    do: "let key #{Rules.grouped(token_id)} edit the workspace again"
+
+  defp edits_done(%{token_id: token_id, restricted: true}),
+    do: "stopped key #{Rules.grouped(token_id)} editing the workspace"
+
+  defp edits_done(%{token_id: token_id, restricted: false}),
+    do: "let key #{Rules.grouped(token_id)} edit the workspace again"
 
   defp voted(%{count: 0}, _word), do: nil
 

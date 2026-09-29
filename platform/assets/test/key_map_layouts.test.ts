@@ -11,7 +11,10 @@ import {
 } from "../js/hooks/key_map/lattice"
 import {
   buildMap,
-  fibonacciLevelSupplies,
+  fibonacciLevelOf,
+  fibonacciLevelSupply,
+  levelEnd,
+  levelStart,
   maxSupply,
   type KeyMapGrid,
   type LayoutKind,
@@ -26,6 +29,8 @@ const fleets: [string, LayoutKind][] = [
   ["fleet_tech_accelerant", "accelerant"],
 ]
 const shownCounts = [1, 2, 7, 55, 150, 1_023, 1_024, 1_999, 2_000, 20_000, 46_364, 46_365]
+// The Fibonacci fleets have no size, so their map is tried through level 20.
+const tested: Record<LayoutKind, number> = {fibonacci: levelEnd(20), classic: 1_024, accelerant: 2_000}
 
 // A small deterministic generator, so sampled cells repeat run to run.
 function random(seed: number) {
@@ -41,13 +46,15 @@ const add = (cell: Cell, period: Cell, times = 1): Cell => [
   cell[1] + period[1] * times,
 ]
 
-// Every key of a full Fibonacci fleet on one level.
+// Every key of one Fibonacci level.
 const keysOf = (grid: KeyMapGrid, level: number) =>
-  Array.from({length: maxSupply.fibonacci}, (_, index) => index + 1).filter(key => grid.levelOf(key) === level)
+  Array.from({length: fibonacciLevelSupply(level)}, (_, index) => levelStart(level) + index).filter(
+    key => grid.levelOf(key) === level,
+  )
 
 describe("key map layouts", () => {
   // Its build time is checked in the browser, in key_map_performance.spec.ts.
-  it("builds the full Fibonacci map", async () => {
+  it("builds the Fibonacci map through level 20", async () => {
     vi.resetModules()
     const cold = await import("../js/hooks/key_map/layouts")
     const grid = cold.buildMap("fibonacci", 46_365)
@@ -55,12 +62,28 @@ describe("key map layouts", () => {
   })
 
   it("matches the four fleets' supplies", () => {
-    expect(fibonacciLevelSupplies.slice(0, 8)).toEqual([2, 3, 5, 8, 13, 21, 34, 55])
-    expect(maxSupply).toEqual({fibonacci: 46_365, classic: 1_024, accelerant: 2_000})
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map(fibonacciLevelSupply)).toEqual([2, 3, 5, 8, 13, 21, 34, 55])
+    expect([1, 2, 3, 4, 8].map(levelStart)).toEqual([1, 3, 6, 11, 87])
+    expect([1, 2, 7, 20, 21].map(levelEnd)).toEqual([2, 5, 86, 46_365, 75_022])
+    expect([1, 2, 3, 5, 6, 87, 141, 142, 46_365, 46_366].map(fibonacciLevelOf)).toEqual([1, 1, 2, 2, 3, 8, 8, 9, 20, 21])
+    expect(maxSupply).toEqual({fibonacci: null, classic: 1_024, accelerant: 2_000})
+  })
+
+  it("keeps opening Fibonacci levels past level 20, and never moves a key", async () => {
+    vi.resetModules()
+    const cold = await import("../js/hooks/key_map/layouts")
+    const small = cold.buildMap("fibonacci", 5)
+    const homes = [1, 2, 3, 5].map(key => small.home(key))
+    const grid = cold.buildMap("fibonacci", levelEnd(22))
+    expect([1, 2, 3, 5].map(key => grid.home(key))).toEqual(homes)
+    for (const key of [46_366, levelEnd(21), levelEnd(22)]) {
+      expect(grid.valueAt(...grid.home(key))).toBe(key)
+      expect(grid.levelOf(key)).toBe(fibonacciLevelOf(key))
+    }
   })
 
   it.each(fleets)("round-trips every key of %s through its cell at every size", (_fleet, kind) => {
-    for (const shown of shownCounts.filter(count => count <= maxSupply[kind])) {
+    for (const shown of shownCounts.filter(count => count <= tested[kind])) {
       const grid = buildMap(kind, shown)
       let mismatches = 0
       for (let key = 1; key <= shown; key++) {
@@ -76,7 +99,7 @@ describe("key map layouts", () => {
   })
 
   it.each(fleets)("shows each key exactly once per copy of %s", (_fleet, kind) => {
-    for (const shown of shownCounts.filter(count => count <= maxSupply[kind])) {
+    for (const shown of shownCounts.filter(count => count <= tested[kind])) {
       const grid = buildMap(kind, shown)
       const [aq, ar] = grid.periodA
       const [bq, br] = grid.periodB
@@ -96,7 +119,7 @@ describe("key map layouts", () => {
 
   it.each(fleets)("repeats %s consistently under both translations", (_fleet, kind) => {
     const next = random(kind.length)
-    for (const shown of shownCounts.filter(count => count <= maxSupply[kind])) {
+    for (const shown of shownCounts.filter(count => count <= tested[kind])) {
       const grid = buildMap(kind, shown)
       for (let sample = 0; sample < 4_000; sample++) {
         const cell: Cell = [Math.floor(next() * 20_000) - 10_000, Math.floor(next() * 20_000) - 10_000]
@@ -109,7 +132,7 @@ describe("key map layouts", () => {
   })
 
   it("lays Level 8 as 28 over 27 on one centre line, nested into each other", () => {
-    const grid = buildMap("fibonacci", maxSupply.fibonacci)
+    const grid = buildMap("fibonacci", tested.fibonacci)
     const rows = new Map<number, number[]>()
     for (const key of keysOf(grid, 8)) {
       const [q, r] = grid.home(key)
@@ -127,7 +150,7 @@ describe("key map layouts", () => {
   })
 
   it("keeps every Fibonacci row within half a cell of one centre line, later levels in the 28/27 band", () => {
-    const grid = buildMap("fibonacci", maxSupply.fibonacci)
+    const grid = buildMap("fibonacci", tested.fibonacci)
     for (let level = 1; level <= 20; level++) {
       const rows = new Map<number, number[]>()
       for (const key of keysOf(grid, level)) {
@@ -135,7 +158,7 @@ describe("key map layouts", () => {
         rows.set(r, [...(rows.get(r) ?? []), q + r / 2])
       }
       const lengths = [...rows.values()].map(xs => xs.length)
-      if (level < 8) expect(lengths).toEqual([fibonacciLevelSupplies[level - 1]])
+      if (level < 8) expect(lengths).toEqual([fibonacciLevelSupply(level)])
       else expect(lengths.slice(0, -1).every((length, index) => length === (index % 2 === 0 ? 28 : 27))).toBe(true)
       for (const xs of rows.values()) {
         // Centres in cell widths; a row off the line by half a cell is the nearest lattice position.
@@ -145,27 +168,25 @@ describe("key map layouts", () => {
   })
 
   it("heads each Fibonacci level in the blank row above its first key", () => {
-    const grid = buildMap("fibonacci", maxSupply.fibonacci)
-    let first = 1
-    fibonacciLevelSupplies.forEach((supply, index) => {
-      const [q, r] = grid.home(first)
+    const grid = buildMap("fibonacci", tested.fibonacci)
+    for (let level = 1; level <= 20; level++) {
+      const [q, r] = grid.home(levelStart(level))
       // The row above is odd-r offset: the same column one row up.
       const col = q + Math.floor(r / 2)
       const above = [col - Math.floor((r - 1) / 2), r - 1] as const
-      expect(grid.valueAt(...above)).toBe(-(index + 1))
-      first += supply
-    })
+      expect(grid.valueAt(...above)).toBe(-level)
+    }
   })
 
   it("makes every consecutive pair of Accelerant keys neighbours", () => {
-    const grid = buildMap("accelerant", maxSupply.accelerant)
-    for (let key = 2; key <= maxSupply.accelerant; key++) {
+    const grid = buildMap("accelerant", tested.accelerant)
+    for (let key = 2; key <= tested.accelerant; key++) {
       expect(areNeighbours(grid.home(key - 1), grid.home(key)), `keys ${key - 1} and ${key}`).toBe(true)
     }
   })
 
   it("closes the Classic rhombus at exactly 1,024 keys on 32 × 32", () => {
-    const grid = buildMap("classic", maxSupply.classic)
+    const grid = buildMap("classic", tested.classic)
     const cells = new Set(Array.from({length: 1_024}, (_, index) => grid.home(index + 1).join(",")))
     const rhombus = new Set(Array.from({length: 1_024}, (_, index) => `${index % 32},${Math.floor(index / 32)}`))
     expect(cells).toEqual(rhombus)
@@ -183,8 +204,8 @@ describe("key map layouts", () => {
     const gap = 6
     const size = width / SQRT3
     for (const kind of ["fibonacci", "classic", "accelerant"] as const) {
-      const grid = buildMap(kind, maxSupply[kind])
-      for (const key of [1, 2, 55, 1_024, maxSupply[kind]]) {
+      const grid = buildMap(kind, tested[kind])
+      for (const key of [1, 2, 55, 1_024, tested[kind]]) {
         const home = grid.home(key)
         const [cx, cy] = axialToPixel(...home, size)
         const hit = (distance: number, angle: number) =>
@@ -207,7 +228,7 @@ describe("key map layouts", () => {
     const next = random(7)
     const size = 96 / SQRT3
     for (const kind of ["fibonacci", "classic", "accelerant"] as const) {
-      for (const shown of [3, 1_024, 2_000, 46_365].filter(count => count <= maxSupply[kind])) {
+      for (const shown of [3, 1_024, 2_000, 46_365].filter(count => count <= tested[kind])) {
         const grid = buildMap(kind, shown)
         const a = axialToPixel(...grid.periodA, size)
         const b = axialToPixel(...grid.periodB, size)

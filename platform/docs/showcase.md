@@ -42,10 +42,11 @@ configuration as proof of real Privy sign-in.
 ## Key map working reference
 
 `/showcase/key-map` runs the fleet key map on made-up data, with no chain or
-database behind it. Buttons switch between the three fleet shapes at full size:
-Fibonacci (46,365 keys), Classic (1,024) and Accelerant (2,000), each sold out but
-for its last key. Every 97th key is marked as yours and every 7th as having an
-agent. Choosing a key, by click or by Enter, only updates the line under the map.
+database behind it. Buttons switch between the three fleet shapes: Classic
+(1,024 keys) and Accelerant (2,000), each sold out but for its last key, and
+Fibonacci, whose levels keep opening, a few rows into level 19 with 17,768 keys
+sold. The Fibonacci map draws the levels sold and the level on sale. Every 97th
+key is marked as yours and every 7th as having an agent. Choosing a key, by click or by Enter, only updates the line under the map.
 
 The map loads as its own script chunk the first time a page shows one. Its drag
 and coast are adapted from `thiings-grid`; see `THIRD_PARTY_NOTICES.md`.

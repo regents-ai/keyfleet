@@ -19,17 +19,9 @@ defmodule Keyfleet.Keeper.SenderTest do
 
   @fleet_id "fibonacci_syndicate"
   @fleet KeeperHelpers.address(:fleet)
-  @locker KeeperHelpers.address(:locker)
-  @escrow KeeperHelpers.address(:escrow)
-  @splitter KeeperHelpers.address(:splitter)
-  @receiver KeeperHelpers.address(:receiver)
-  @usdc KeeperHelpers.address(:usdc)
-  @regent KeeperHelpers.address(:regent)
-  @subject KeeperHelpers.address(:subject)
   @stranger KeeperHelpers.address(:stranger)
-  @strategy KeeperHelpers.address(:strategy)
-  @factory KeeperHelpers.address(:factory)
-  @lp_token_id KeeperHelpers.lp_token_id()
+  @other_id "fleet_tech_classic"
+  @other "0x" <> String.duplicate("c1", 20)
 
   @gwei 1_000_000_000
   @bigint 9_223_372_036_854_775_807
@@ -38,7 +30,7 @@ defmodule Keyfleet.Keeper.SenderTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
-    deploy!(@fleet_id, @fleet, 8_453)
+    deploy!(@fleet_id, @fleet, 1)
 
     test = self()
 
@@ -71,7 +63,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       # Priority 0.001 gwei, twice the 0.005 gwei base fee on top, and a
       # reveal's 200,000 gas floor over its 100,000 estimate.
       assert decode(raw) == %{
-               chain_id: 8_453,
+               chain_id: 1,
                nonce: 0,
                max_priority_fee: 1_000_000,
                max_fee: 11_000_000,
@@ -91,8 +83,7 @@ defmodule Keyfleet.Keeper.SenderTest do
                block_number: 1_001,
                gas_used: 60_000,
                effective_gas_price: 6_000_000,
-               l1_fee_wei: 2_000,
-               cost_wei: 360_000_002_000
+               cost_wei: 360_000_000_000
              } = Ash.get!(Transaction, tx.id, actor: @system)
 
       assert receipt.status == 1
@@ -103,7 +94,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert_received {:telemetry, [:keyfleet, :keeper],
                        %{
                          wallet_balance_wei: 50_000_000_000_000_000,
-                         spent_24h_wei: 360_000_002_000
+                         spent_24h_wei: 360_000_000_000
                        }, _metadata}
     end
 
@@ -150,7 +141,7 @@ defmodule Keyfleet.Keeper.SenderTest do
                  Sender.send(sender, reveal(4))
       end)
 
-      assert Enum.map(Keeper.list_latest_txs!(8_453, @keeper, actor: @system), & &1.result) ==
+      assert Enum.map(Keeper.list_latest_txs!(1, @keeper, actor: @system), & &1.result) ==
                [nil, nil, "reveal_refused", "reveal_requested"]
     end
 
@@ -170,7 +161,7 @@ defmodule Keyfleet.Keeper.SenderTest do
 
       log =
         capture_log(fn ->
-          assert {:ok, %{status: :reverted, cost_wei: 360_000_002_000}, %{status: 0}, _sender} =
+          assert {:ok, %{status: :reverted, cost_wei: 360_000_000_000}, %{status: 0}, _sender} =
                    Sender.send(sender, reveal(1))
         end)
 
@@ -181,65 +172,15 @@ defmodule Keyfleet.Keeper.SenderTest do
   end
 
   describe "a target" do
-    test "other than the call's own contract is refused, and nothing is sent" do
+    test "other than the fleet's own contract is refused, and nothing is sent" do
       sender = started!()
 
-      for request <- [
-            reveal(1, @stranger),
-            request(:recognize_surplus, @escrow, @usdc),
-            request(:send_protocol_share, @splitter, nil),
-            request(:sync_launch, @escrow, nil),
-            # Income contracts and the strategy are known only inside a round.
-            request(:release, @escrow, nil),
-            request(:sweep, @receiver, @usdc),
-            request(:migrate, @strategy, @stranger)
-          ] do
+      for request <- [reveal(1, @stranger), request(:send_protocol_share, @stranger, nil)] do
         assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
       end
 
-      assert {:ok, :refused, sender} =
-               Sender.income_round(sender, @fleet_id, fn sender, _round ->
-                 for request <- [
-                       request(:release, @splitter, nil),
-                       request(:collect, @escrow, @lp_token_id),
-                       request(:sweep, @fleet, @usdc),
-                       request(:recognize_surplus_revenue, @receiver, @usdc),
-                       request(:recognize_surplus, @splitter, @usdc),
-                       request(:migrate, @strategy, @stranger)
-                     ] do
-                   assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
-                 end
-
-                 {:refused, sender}
-               end)
-
-      assert {:ok, :refused, sender} =
-               Sender.settle_round(sender, @fleet_id, fn sender, _round ->
-                 for request <- [
-                       request(:migrate, @factory, @stranger),
-                       request(:release, @escrow, nil)
-                     ] do
-                   assert {:error, :foreign_target, _sender} = Sender.send(sender, request)
-                 end
-
-                 for request <- [
-                       request(:migrate, @strategy, @escrow),
-                       request(:recognize_surplus, @fleet, @usdc)
-                     ] do
-                   assert {:error, :foreign_argument, _sender} = Sender.send(sender, request)
-                 end
-
-                 {:refused, sender}
-               end)
-
-      # The round closes after its function: none is left open.
-      assert sender.income == %{}
-
-      assert {:error, :foreign_target, _sender} =
-               Sender.send(sender, request(:release, @escrow, nil))
-
       assert StubNode.sent() == []
-      assert Keeper.list_latest_txs!(8_453, @keeper, actor: @system) == []
+      assert Keeper.list_latest_txs!(1, @keeper, actor: @system) == []
     end
 
     test "of a fleet the site does not know, or on another chain, is refused" do
@@ -252,168 +193,42 @@ defmodule Keyfleet.Keeper.SenderTest do
                  call: call!(:request_reveal, @fleet, 1)
                })
 
-      StubNode.put_chain(chain_id: 1, calls: answering(launch()))
+      StubNode.put_chain(chain_id: 8_453)
 
       assert {:error, :wrong_chain, _sender} = Sender.send(start!(), reveal(1))
 
       assert StubNode.sent() == []
     end
 
-    test "every function the keeper may call reaches its own contract" do
+    test "every function the keeper may call reaches the fleet" do
       sender = started!()
+      requests = [reveal(1), request(:send_protocol_share, @fleet, nil)]
 
-      requests = [
-        reveal(1),
-        request(:recognize_surplus, @fleet, @usdc),
-        request(:send_protocol_share, @fleet, nil),
-        request(:sync_launch, @fleet, nil),
-        request(:release, @escrow, nil),
-        request(:collect, @locker, @lp_token_id),
-        request(:sweep, @receiver, @usdc),
-        request(:recognize_surplus_revenue, @splitter, @usdc)
-      ]
+      assert Enum.sort(Enum.map(requests, & &1.call.fn)) == Calls.functions()
 
-      settle = request(:migrate, @strategy, @stranger)
-      assert Enum.sort(Enum.map([settle | requests], & &1.call.fn)) == Calls.functions()
+      Enum.reduce(requests, sender, fn request, sender ->
+        assert {:ok, %{status: :mined}, _receipt, sender} = Sender.send(sender, request)
+        sender
+      end)
 
-      assert {:ok, round, sender} =
-               Sender.income_round(sender, @fleet_id, fn sender, round ->
-                 sender =
-                   Enum.reduce(requests, sender, fn request, sender ->
-                     assert {:ok, %{status: :mined}, _receipt, sender} =
-                              Sender.send(sender, request)
-
-                     sender
-                   end)
-
-                 {round, sender}
-               end)
-
-      assert round == %{
-               escrow: @escrow,
-               locker: @locker,
-               receiver: @receiver,
-               splitter: @splitter,
-               lp_token_id: @lp_token_id,
-               tokens: [@usdc, @regent, @subject]
-             }
-
-      assert {:ok, round, _sender} =
-               Sender.settle_round(sender, @fleet_id, fn sender, round ->
-                 assert {:ok, %{status: :mined}, _receipt, sender} = Sender.send(sender, settle)
-                 {round, sender}
-               end)
-
-      assert round == %{strategy: @strategy, auction: @stranger}
-      assert Enum.map(StubNode.sent(), &decode(&1).nonce) == Enum.to_list(0..8)
-    end
-
-    test "takes only the launch's LP position and its USDC, REGENT or subject token" do
-      sender = started!()
-
-      refused = [
-        request(:collect, @locker, @lp_token_id + 1),
-        request(:sweep, @receiver, @stranger),
-        request(:recognize_surplus_revenue, @splitter, @stranger),
-        request(:recognize_surplus, @fleet, @stranger)
-      ]
-
-      allowed = [
-        request(:sweep, @receiver, @regent),
-        request(:recognize_surplus_revenue, @splitter, @subject),
-        request(:recognize_surplus, @fleet, @regent)
-      ]
-
-      {:ok, :done, sender} =
-        Sender.income_round(sender, @fleet_id, fn sender, _round ->
-          for request <- refused do
-            assert {:error, :foreign_argument, _sender} = Sender.send(sender, request)
-          end
-
-          assert StubNode.sent() == []
-
-          sender =
-            Enum.reduce(allowed, sender, fn request, sender ->
-              assert {:ok, %{status: :mined}, _receipt, sender} = Sender.send(sender, request)
-              sender
-            end)
-
-          {:done, sender}
-        end)
-
-      # Outside a round no token is known.
-      assert {:error, :foreign_argument, _sender} =
-               Sender.send(sender, request(:recognize_surplus, @fleet, @usdc))
-    end
-
-    test "of an income round is opened only when escrow, splitter and receiver all pay the fleet" do
-      for contract <- [@escrow, @splitter, @receiver] do
-        StubNode.put_chain(calls: answering(launch(treasury: %{contract => @stranger})))
-
-        log =
-          capture_log(fn ->
-            assert {:error, :treasury_mismatch, _sender} =
-                     Sender.income_round(start!(), @fleet_id, &unreached/2)
-          end)
-
-        assert log =~ "Keeper alert: #{@fleet_id}'s"
-        assert log =~ "pays #{@stranger}, not the fleet"
-      end
-
-      assert StubNode.sent() == []
-    end
-
-    test "of an income round is opened only when the launch record and distribution agree" do
-      for distribution <- [
-            %{splitter: @stranger},
-            %{lp_token_id: @lp_token_id + 1}
-          ] do
-        StubNode.put_chain(calls: answering(launch(distribution: distribution)))
-
-        log =
-          capture_log(fn ->
-            assert {:error, :launch_mismatch, _sender} =
-                     Sender.income_round(start!(), @fleet_id, &unreached/2)
-          end)
-
-        assert log =~
-                 "Keeper alert: #{@fleet_id}'s launch record and launch distribution disagree"
-      end
-
-      StubNode.put_chain(calls: answering(launch(distribution: %{treasury: @stranger})))
-
-      log =
-        capture_log(fn ->
-          assert {:error, :treasury_mismatch, _sender} =
-                   Sender.income_round(start!(), @fleet_id, &unreached/2)
-        end)
-
-      assert log =~ "#{@fleet_id}'s launch distribution pays #{@stranger}, not the fleet"
-    end
-
-    test "of an income round is not opened when the chain does not answer" do
-      StubNode.put_chain(calls: fn _from, _to, _data -> {:error, :chain_unavailable} end)
-
-      assert {:error, :chain_unavailable, %{income: income}} =
-               Sender.income_round(start!(), @fleet_id, &unreached/2)
-
-      assert income == %{}
+      assert Enum.map(StubNode.sent(), &decode(&1).to) == [@fleet, @fleet]
+      assert Enum.map(StubNode.sent(), &decode(&1).nonce) == [0, 1]
     end
   end
 
   describe "fees and spending" do
-    test "nothing is sent while the base fee is above 2 gwei" do
-      StubNode.put_chain(block: %{number: 1, timestamp: 1, base_fee: 2 * @gwei + 1})
+    test "nothing is sent while the base fee is above 3 gwei" do
+      StubNode.put_chain(block: %{number: 1, timestamp: 1, base_fee: 3 * @gwei + 1})
       assert {:error, :base_fee_too_high, _sender} = Sender.send(start!(), reveal(1))
       assert StubNode.sent() == []
     end
 
-    test "the maximum fee is held to 2 gwei, with the priority fee under it" do
+    test "the maximum fee is held to 3 gwei, with the priority fee under it" do
       StubNode.put_chain(block: %{number: 1, timestamp: 1, base_fee: 1_500_000_000})
       assert {:ok, tx, _receipt, _sender} = Sender.send(start!(), reveal(1))
-      assert {tx.max_fee, tx.max_priority_fee} == {2 * @gwei, 1_000_000}
+      assert {tx.max_fee, tx.max_priority_fee} == {3 * @gwei, 1_000_000}
 
-      StubNode.put_chain(nonce: 1, max_priority_fee: 3 * @gwei)
+      StubNode.put_chain(nonce: 1, max_priority_fee: 4 * @gwei)
       assert {:error, :priority_fee_too_high, _sender} = Sender.send(start!(), reveal(1))
     end
 
@@ -423,12 +238,12 @@ defmodule Keyfleet.Keeper.SenderTest do
 
       assert {:error, ^revert, _sender} = Sender.send(start!(), reveal(1))
       assert StubNode.sent() == []
-      assert Keeper.list_latest_txs!(8_453, @keeper, actor: @system) == []
+      assert Keeper.list_latest_txs!(1, @keeper, actor: @system) == []
     end
 
-    test "nothing is sent that could take the day's spending past 0.01 ETH" do
-      # Already spent: 0.01 ETH less 2,000,000 gwei-gas; a reveal may cost 2.2e12 wei.
-      settled!(nonce: 90, cost_wei: 10_000_000_000_000_000 - 2_000_000_000_000)
+    test "nothing is sent that could take the day's spending past 0.02 ETH" do
+      # Already spent: 0.02 ETH less 2e12 wei; a reveal may cost 2.2e12 wei.
+      settled!(nonce: 90, cost_wei: 20_000_000_000_000_000 - 2_000_000_000_000)
       StubNode.put_chain(nonce: 91)
       sender = start!()
 
@@ -440,7 +255,7 @@ defmodule Keyfleet.Keeper.SenderTest do
         end)
 
       assert [_alert] = Regex.scan(~r/Keeper alert: sending would take/, log)
-      assert log =~ "past its 0.01 ETH limit"
+      assert log =~ "past its 0.02 ETH limit"
       assert StubNode.sent() == []
       assert runs() == [{:reveal, :paused_spend_ceiling}]
 
@@ -452,13 +267,16 @@ defmodule Keyfleet.Keeper.SenderTest do
       # A cheaper call fits, and lifts the pause.
       StubNode.update(
         block: %{number: 1, timestamp: 1, base_fee: 1_000_000},
-        receipt: %{gas_used: 60_000, effective_gas_price: 2_000_000, l1_fee: 2_000}
+        receipt: %{gas_used: 60_000, effective_gas_price: 2_000_000}
       )
 
       assert {:ok, _tx, _receipt, %{ceiling_reached?: false} = sender} =
                Sender.send(refused, request(:send_protocol_share, @fleet, nil))
 
-      assert runs() == [{:reveal, :paused_spend_ceiling}, {:income, :unpaused_spend_ceiling}]
+      assert runs() == [
+               {:reveal, :paused_spend_ceiling},
+               {:protocol_share, :unpaused_spend_ceiling}
+             ]
 
       # Only the end of a pause is recorded, not every send that fits.
       StubNode.update(nonce: 92)
@@ -467,7 +285,7 @@ defmodule Keyfleet.Keeper.SenderTest do
     end
 
     test "a spending pause in force at start is not recorded or alerted again, and ends" do
-      settled!(nonce: 90, cost_wei: 10_000_000_000_000_000 - 2_000_000_000_000)
+      settled!(nonce: 90, cost_wei: 20_000_000_000_000_000 - 2_000_000_000_000)
       StubNode.put_chain(nonce: 91)
       capture_log(fn -> Sender.send(start!(), reveal(1)) end)
       assert runs() == [{:reveal, :paused_spend_ceiling}]
@@ -488,19 +306,22 @@ defmodule Keyfleet.Keeper.SenderTest do
 
       StubNode.update(
         block: %{number: 1, timestamp: 1, base_fee: 1_000_000},
-        receipt: %{gas_used: 60_000, effective_gas_price: 2_000_000, l1_fee: 2_000}
+        receipt: %{gas_used: 60_000, effective_gas_price: 2_000_000}
       )
 
       assert {:ok, _tx, _receipt, %{ceiling_reached?: false}} =
                Sender.send(sender, request(:send_protocol_share, @fleet, nil))
 
-      assert runs() == [{:reveal, :paused_spend_ceiling}, {:income, :unpaused_spend_ceiling}]
+      assert runs() == [
+               {:reveal, :paused_spend_ceiling},
+               {:protocol_share, :unpaused_spend_ceiling}
+             ]
     end
 
     test "a replacement counts at its dearest in place of the one it replaces" do
       # Room for 3e12 wei: the reveal at 2.2e12 and its first replacement at
       # 2.75e12 fit; the second, at 3.4e12, does not.
-      settled!(nonce: 90, cost_wei: 10_000_000_000_000_000 - 3_000_000_000_000)
+      settled!(nonce: 90, cost_wei: 20_000_000_000_000_000 - 3_000_000_000_000)
       StubNode.put_chain(nonce: 91, mine: fn _n, _raw -> :pending end)
 
       {result, log} = with_log(fn -> Sender.send(start!(), reveal(1)) end)
@@ -508,7 +329,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert {:error, :spend_ceiling, %{ceiling_reached?: true}} = result
       assert log =~ "Keeper alert: sending would take"
       assert length(StubNode.sent()) == 2
-      assert length(Keeper.list_outstanding_txs!(8_453, @keeper, actor: @system)) == 2
+      assert length(Keeper.list_outstanding_txs!(1, @keeper, actor: @system)) == 2
     end
   end
 
@@ -533,7 +354,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert tx.replaces_tx_hash == hash(first_raw)
 
       assert [%{status: :mined}, %{status: :replaced, tx_hash: replaced}] =
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+               Keeper.list_latest_txs!(1, @keeper, actor: @system)
 
       assert replaced == hash(first_raw)
     end
@@ -550,7 +371,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert next.nonce == 1
 
       statuses =
-        Map.new(Keeper.list_latest_txs!(8_453, @keeper, actor: @system), &{&1.tx_hash, &1.status})
+        Map.new(Keeper.list_latest_txs!(1, @keeper, actor: @system), &{&1.tx_hash, &1.status})
 
       assert statuses[hash(first)] == :mined
       assert statuses[waiting.tx_hash] == :replaced
@@ -566,29 +387,29 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert tx.max_fee == 21_484_375
 
       assert Enum.all?(
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system),
+               Keeper.list_latest_txs!(1, @keeper, actor: @system),
                &is_nil(&1.status)
              )
     end
 
-    test "is sent again as it is where a raise would pass 2 gwei" do
+    test "is sent again as it is where a raise would pass 3 gwei" do
       StubNode.put_chain(
         mine: fn _n, _raw -> :pending end,
-        block: %{number: 1, timestamp: 1, base_fee: 999_000_000}
+        block: %{number: 1, timestamp: 1, base_fee: 1_499_000_000}
       )
 
       assert {:waiting, tx, _sender} = Sender.send(start!(), reveal(1))
 
       assert [raw, raw] = StubNode.sent()
       assert tx.tx_hash == hash(raw)
-      assert [%{max_fee: 1_999_000_000}] = Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+      assert [%{max_fee: 2_999_000_000}] = Keeper.list_latest_txs!(1, @keeper, actor: @system)
     end
 
     test "goes through once the node takes it at the highest fee" do
-      # The node refuses the first four, the last at 1.955 gwei, as a node
+      # The node refuses the first four, the last at 2.93 gwei, as a node
       # does while the wallet cannot pay; the fifth attempt is that one again.
       StubNode.put_chain(
-        block: %{number: 1, timestamp: 1, base_fee: 500_000_000},
+        block: %{number: 1, timestamp: 1, base_fee: 750_000_000},
         send: fn attempt, _raw ->
           if attempt <= 4, do: {:error, :insufficient_funds}, else: :ok
         end
@@ -613,64 +434,64 @@ defmodule Keyfleet.Keeper.SenderTest do
       refute log =~ "Keeper sent"
       assert StubNode.sent() == []
 
-      fees = Enum.map(Keeper.list_latest_txs!(8_453, @keeper, actor: @system), & &1.max_fee)
-      assert fees == [1_955_078_125, 1_564_062_500, 1_251_250_000, 1_001_000_000]
+      fees = Enum.map(Keeper.list_latest_txs!(1, @keeper, actor: @system), & &1.max_fee)
+      assert fees == [2_931_640_625, 2_345_312_500, 1_876_250_000, 1_501_000_000]
 
       {result, log} = with_log(fn -> Sender.send(sender, reveal(2)) end)
       assert {:ok, %{nonce: 1}, _receipt, _sender} = result
       assert log =~ "Keeper sent request_reveal to #{@fleet} for #{@fleet_id} at nonce 0"
 
       assert [again, next] = StubNode.sent()
-      assert decode(again).max_fee == 1_955_078_125
+      assert decode(again).max_fee == 2_931_640_625
       assert decode(next).nonce == 1
 
       assert [%{nonce: 1, status: :mined}, %{status: :mined, tx_hash: included} | replaced] =
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+               Keeper.list_latest_txs!(1, @keeper, actor: @system)
 
       assert included == hash(again)
       assert Enum.map(replaced, & &1.status) == [:replaced, :replaced, :replaced]
     end
 
     test "is raised only while its call passes the checks again" do
+      deploy!(@other_id, @other, 1)
+
       StubNode.put_chain(
-        calls: answering(launch()),
         send: fn attempt, _raw -> if attempt == 1, do: {:error, :unavailable}, else: :ok end
       )
 
       sender = start!()
+      other_reveal = %{job: :reveal, fleet_id: @other_id, call: call!(:request_reveal, @other, 1)}
 
       capture_log(fn ->
-        assert {:ok, {:error, {:send_failed, :unavailable}, _refused}, _sender} =
-                 Sender.income_round(sender, @fleet_id, fn sender, _round ->
-                   {Sender.send(sender, request(:release, @escrow, nil)), sender}
-                 end)
+        assert {:error, {:send_failed, :unavailable}, _sender} = Sender.send(sender, other_reveal)
       end)
 
-      # The escrow now pays someone else: the release is left waiting.
-      StubNode.update(calls: answering(launch(treasury: %{@escrow => @stranger})))
+      # The other fleet is no longer one the keeper knows: its reveal is left
+      # waiting.
+      sender = %{sender | fleets: Map.delete(sender.fleets, @other_id)}
 
       log =
         capture_log(fn ->
           assert {:error, :waiting, _sender} = Sender.send(sender, reveal(1))
         end)
 
-      assert log =~ "did not pass the checks again: :treasury_mismatch"
+      assert log =~ "did not pass the checks again: :unknown_fleet"
       assert StubNode.sent() == []
 
-      assert [%{function: :release, status: nil}] =
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+      assert [%{fleet_id: @other_id, status: nil}] =
+               Keeper.list_latest_txs!(1, @keeper, actor: @system)
     end
 
     test "with a receipt it cannot have is left waiting, with an alert" do
       # More gas than a reveal's 200,000 limit, a price above any maximum fee
-      # the keeper sets, and a cost past what the record holds. Each chain
+      # the keeper sets, and a block past what the record holds. Each chain
       # knows none of the others' receipts, so each sends a replacement.
-      for receipt <- [
-            %{gas_used: 200_001},
-            %{effective_gas_price: 3 * @gwei},
-            %{l1_fee: @bigint}
+      for chain <- [
+            [receipt: %{gas_used: 200_001}],
+            [receipt: %{effective_gas_price: 3 * @gwei + 1}],
+            [block: %{number: @bigint + 1, timestamp: 1, base_fee: 5_000_000}]
           ] do
-        StubNode.put_chain(receipt: receipt)
+        StubNode.put_chain(chain)
 
         {result, log} = with_log(fn -> Sender.send(start!(), reveal(1)) end)
 
@@ -679,7 +500,7 @@ defmodule Keyfleet.Keeper.SenderTest do
         assert log =~ "a receipt it cannot have"
       end
 
-      assert [_, _, _] = txs = Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+      assert [_, _, _] = txs = Keeper.list_latest_txs!(1, @keeper, actor: @system)
       assert Enum.all?(txs, &is_nil(&1.status))
     end
   end
@@ -695,7 +516,7 @@ defmodule Keyfleet.Keeper.SenderTest do
 
       statuses =
         Enum.map(
-          Keeper.list_latest_txs!(8_453, @keeper, actor: @system),
+          Keeper.list_latest_txs!(1, @keeper, actor: @system),
           &{&1.tx_hash, &1.status}
         )
 
@@ -713,12 +534,12 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert other.wallet.address == @other_keeper
       assert other.stopped == nil
       assert StubNode.sent() == sent
-      assert Keeper.list_outstanding_txs!(8_453, @other_keeper, actor: @system) == []
-      assert length(Keeper.list_outstanding_txs!(8_453, @keeper, actor: @system)) == 4
+      assert Keeper.list_outstanding_txs!(1, @other_keeper, actor: @system) == []
+      assert length(Keeper.list_outstanding_txs!(1, @keeper, actor: @system)) == 4
       assert Sender.spent_24h(other) == {:ok, 0}
 
       start!()
-      assert Keeper.list_outstanding_txs!(8_453, @keeper, actor: @system) == []
+      assert Keeper.list_outstanding_txs!(1, @keeper, actor: @system) == []
     end
 
     test "replaces what is still waiting" do
@@ -727,9 +548,9 @@ defmodule Keyfleet.Keeper.SenderTest do
 
       start!()
 
-      assert [newest | _older] = Keeper.list_latest_txs!(8_453, @keeper, actor: @system)
+      assert [newest | _older] = Keeper.list_latest_txs!(1, @keeper, actor: @system)
       assert %{status: :mined, max_fee: 26_855_469, nonce: 0} = newest
-      assert Keeper.list_outstanding_txs!(8_453, @keeper, actor: @system) == []
+      assert Keeper.list_outstanding_txs!(1, @keeper, actor: @system) == []
     end
 
     test "stops when another transaction took the nonce" do
@@ -742,7 +563,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert log =~ "Keeper alert: another transaction took nonce 0 from #{@keeper}"
 
       assert Enum.all?(
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system),
+               Keeper.list_latest_txs!(1, @keeper, actor: @system),
                &(&1.status == :replaced_externally)
              )
 
@@ -767,7 +588,7 @@ defmodule Keyfleet.Keeper.SenderTest do
       assert {:ok, nil} = Keeper.stopped()
 
       assert {hash(second), :mined} in Enum.map(
-               Keeper.list_latest_txs!(8_453, @keeper, actor: @system),
+               Keeper.list_latest_txs!(1, @keeper, actor: @system),
                &{&1.tx_hash, &1.status}
              )
     end
@@ -831,7 +652,7 @@ defmodule Keyfleet.Keeper.SenderTest do
         Sender.report(sender)
       end)
 
-    assert [_alert] = Regex.scan(~r/Keeper alert: wallet under 0.01 ETH, 0.009 ETH left/, log)
+    assert [_alert] = Regex.scan(~r/Keeper alert: wallet under 0.02 ETH, 0.009 ETH left/, log)
   end
 
   test "shows the wallet's address in place of the wallet" do
@@ -848,10 +669,8 @@ defmodule Keyfleet.Keeper.SenderTest do
     {:waiting, _tx, _sender} = Sender.send(start!(), reveal(1))
   end
 
-  defp unreached(_sender, _round), do: flunk("the round was opened")
-
   defp started! do
-    StubNode.put_chain(calls: answering(launch()))
+    StubNode.put_chain()
     start!()
   end
 
@@ -861,7 +680,7 @@ defmodule Keyfleet.Keeper.SenderTest do
     do: %{job: job(fun), fleet_id: @fleet_id, call: call!(fun, target, arg)}
 
   defp job(:request_reveal), do: :reveal
-  defp job(_fun), do: :income
+  defp job(:send_protocol_share), do: :protocol_share
 
   defp settled!(attrs) do
     attrs = Map.new(attrs)
@@ -875,7 +694,7 @@ defmodule Keyfleet.Keeper.SenderTest do
           target: @fleet,
           from_address: @keeper,
           args: %{"arg" => 1},
-          chain_id: 8_453,
+          chain_id: 1,
           nonce: attrs.nonce,
           tx_hash: "0x" <> String.duplicate("d", 63) <> Integer.to_string(rem(attrs.nonce, 10)),
           max_fee: 1,

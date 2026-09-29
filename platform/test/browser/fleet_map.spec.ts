@@ -192,9 +192,9 @@ test.describe("the fleet page's map", () => {
     await expectMarks(page, last, ["next"])
     await expect.poll(() => levelOfKey(page, last)).toEqual(["on-sale"])
     await expect.poll(() => outlinesAt(page, last)).toEqual(["on-sale 3px"])
-    await expect.poll(() => levelOfKey(page, last + 1)).toEqual(["upcoming"])
-    await expect.poll(() => outlinesAt(page, last + 1)).toEqual(["upcoming 1.5px"])
-    await expect.poll(() => headings(page)).toContain(`Level ${level + 1} (upcoming)`)
+    // The map draws the levels reached and the level on sale, and none after.
+    await expect.poll(() => levelOfKey(page, last + 1)).toEqual([])
+    await expect.poll(() => headings(page)).toEqual([`Level ${level} · on sale now (on-sale)`])
 
     expect(sellKey(levelled, someoneElse)).toBe(last)
     await expectMarks(page, last + 1, ["next"])
@@ -203,10 +203,9 @@ test.describe("the fleet page's map", () => {
     await expect.poll(() => headings(page)).toContain(`Level ${level + 1} · on sale now (on-sale)`)
     await expect.poll(() => levelOfKey(page, last)).toEqual(["sold-out"])
     await expect.poll(() => outlinesAt(page, last)).toEqual(["sold-out 1px"])
-    // Go to level offers the level after the one on sale, which the map draws.
-    await page.locator("#key-map-level-choice").selectOption(String(level + 2))
-    await page.locator("#key-map-level button[type=submit]").click()
-    await expect.poll(() => headings(page)).toContain(`Level ${level + 2} (upcoming)`)
+    // Go to level offers each level reached and the one on sale, no further.
+    await expect(page.locator("#key-map-level-choice option")).toHaveText([`Level ${level}`, `Level ${level + 1}`])
+    await expect.poll(() => levelOfKey(page, last + 4)).toEqual([])
     await page.locator("#key-map-level-choice").selectOption(String(level))
     await page.locator("#key-map-level button[type=submit]").click()
     await expect.poll(() => headings(page)).toContain(`Level ${level} · sold out (sold-out)`)

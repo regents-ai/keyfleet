@@ -2,7 +2,7 @@ defmodule Keyfleet.ActivityTest do
   use ExUnit.Case, async: false
 
   import Keyfleet.ProposalHelpers,
-    only: [proposal!: 3, vote!: 5, execution!: 3, launch_envelope!: 1, asset_details!: 4]
+    only: [proposal!: 3, vote!: 5, execution!: 3, asset_details!: 4]
 
   import Keyfleet.QueryHelpers, only: [queries_during: 1]
 
@@ -55,7 +55,7 @@ defmodule Keyfleet.ActivityTest do
       vote!(@fleet, 1, wallet("b"), false, [2])
       proposal!(@fleet, 2, kind: :pay)
       execution!(@fleet, 2, wallet("f"))
-      @fleet |> proposal!(3, kind: :autolaunch) |> launch_envelope!()
+      proposal!(@fleet, 3, kind: :restrict_edits)
 
       post!(owner, "general", "Morning")
       post!(owner, "general", "Hull survey started")
@@ -542,7 +542,7 @@ defmodule Keyfleet.ActivityTest do
           seq: seq,
           event_id: "evt_#{seq}",
           type: type,
-          actor: "member:8453:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
+          actor: "member:1:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
           timestamp: DateTime.to_iso8601(at),
           payload: payload
         }

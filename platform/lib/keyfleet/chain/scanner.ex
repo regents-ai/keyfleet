@@ -5,10 +5,11 @@ defmodule Keyfleet.Chain.Scanner do
   keys, from the fleet contract,
   and its proposals, votes and executions, from its vote contract.
 
-  Each pass reads the head, reads again the last 30 blocks it already
-  recorded, then records what happened after them up to the head. Each
-  stretch of blocks is one request for both contracts, and its records are
-  made in the order the chain made them. A stretch the node will not answer
+  Each pass reads the head, reads again the last 32 blocks it already
+  recorded (one Ethereum epoch, about six minutes), then records what
+  happened after them up to the head. Each stretch of blocks is one request
+  for both contracts, and its records are made in the order the chain made
+  them. A stretch the node will not answer
   whole, such as one whose logs are more than it sends at once, is asked for
   again in halves, down to single blocks, and each answered piece is recorded
   before the next is asked for, so a pass holds one answer at most.
@@ -64,7 +65,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
 
-  @rescan_blocks 30
+  @rescan_blocks 32
   @max_range 10_000
   @system %System{}
 

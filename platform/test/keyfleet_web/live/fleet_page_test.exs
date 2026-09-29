@@ -24,7 +24,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @stranger "0x" <> String.duplicate("b", 40)
   @operator "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 
   setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
@@ -53,10 +53,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
 
-    {rows, {:ok, view, html}} = rows_read_during(fn -> live(conn, @path) end)
+    {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @path) end)
 
     assert Enum.max(rows) <= 101
-    assert html =~ "150 of"
     assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
@@ -123,7 +122,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(
              view,
-             ~s(#fleet-about a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
+             ~s(#fleet-about a#fleet-contract-link[href="https://etherscan.io/address/#{@contract}"][title="#{@contract}"])
            )
 
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
@@ -144,7 +143,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
-    assert html =~ "Not on Base yet"
+    assert html =~ "Not on Ethereum yet"
     assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
     refute has_element?(view, "#fleet-get-key")
     refute has_element?(view, "#fleet-progress-title")
@@ -271,7 +270,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-order-line") ==
                "Key 151 costs 42.99817 USDC. First approve 42.99817 USDC for the fleet, then buy it."
 
-      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
+      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Ethereum."
       refute has_element?(view, "#buy-key-approve[hidden]")
       assert has_element?(view, "#buy-key-button[hidden]")
     end
@@ -497,7 +496,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-number") == "151"
 
       assert text(view, "#buy-key-price-may-move") ==
-               "Sales are still being counted, so this price may already have gone up. If it has, the purchase is refused and no USDC is taken, though your wallet still pays the Base network fee for trying."
+               "Sales are still being counted, so this price may already have gone up. If it has, the purchase is refused and no USDC is taken, though your wallet still pays the Ethereum network fee for trying."
 
       assert has_element?(view, "#buy-key-button")
     end
@@ -555,8 +554,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       end
     end
 
-    # Level 9 holds key 151, the next on sale, so the map goes to levels 1 to 9
-    # and level 10 after it.
+    # Level 9 holds key 151, the next on sale, so the map draws levels 1 to 9.
     test "offers the next key, the viewer's keys and each level the map draws", %{
       conn: conn
     } do
@@ -568,7 +566,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#key-map-mine", "Your keys")
 
       assert option_values(view, "#key-map-level-choice option") ==
-               Enum.map(1..10, &to_string/1)
+               Enum.map(1..9, &to_string/1)
 
       {:ok, view, _html} = live(build_conn(), @path)
       refute has_element?(view, "#key-map-mine")
@@ -579,8 +577,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#key-map-level")
     end
 
-    # Every sold key's two marks travel as bitsets small enough to send at the
-    # largest fleet's size.
+    # Every sold key's two marks travel as bitsets that reach only as far as the
+    # highest key marked, so they stay small however far the fleet has grown.
     test "loads with the keys the viewer holds and the keys agents run", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
@@ -590,7 +588,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @path)
       render_hook(view, "keymap_ready", %{})
 
-      assert_reply(view, %{minted: 151, max_supply: 46_365, mine: mine, agent: agent} = reply)
+      assert_reply(view, %{minted: 151, max_supply: nil, mine: mine, agent: agent} = reply)
       assert byte_size(Jason.encode!(reply)) <= 20_000
       assert marked(mine) == Enum.to_list(1..150)
       assert marked(agent) == [7]
@@ -605,7 +603,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       render_hook(view, "keymap_ready", %{})
 
       assert_reply(view, %{mine: mine})
-      assert Base.decode64!(mine) == <<0::size(5_796 * 8)>>
+      assert Base.decode64!(mine) == ""
     end
 
     # Every key sold and the next one can be chosen; the choice goes into the
@@ -1133,7 +1131,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 8_453,
+        chain_id: 1,
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),

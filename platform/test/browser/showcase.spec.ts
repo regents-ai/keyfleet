@@ -123,7 +123,7 @@ test("Ash validation, utility outcomes, local database and disclosure fixtures w
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   await page.locator("#showcase-facts [data-sc-copy]").click()
   await expect(page.locator("#showcase-facts [data-sc-copy]")).toHaveText("Copied")
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Network: Base\nState: Confirmed")
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Network: Ethereum\nState: Confirmed")
 
   const realAuth = page.locator("[data-sc-privy-mode]")
   await expect(realAuth).toHaveAttribute("data-sc-privy-mode", "fixture")

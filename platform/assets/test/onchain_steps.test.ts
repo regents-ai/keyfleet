@@ -16,7 +16,7 @@ const review: Review = {
   id: "review-1",
   component_id: "buy-key-order",
   signer,
-  chain: {chain_id: 8453, name: "Base", rpc_url: "https://mainnet.base.org"},
+  chain: {chain_id: 1, name: "Ethereum", rpc_url: "https://eth.merkle.io"},
   steps: [{kind: "transaction", step: "buy", to: fleet, data: "0x1234", value: "0x0"}],
   inputs: {},
 }
@@ -29,7 +29,7 @@ type Wallet = {
 // A stand-in wallet: on `chainId`, holding `account`, answering each send with
 // `answer` (a hash, or an error it throws).
 function wallet({
-  chainId = "0x2105",
+  chainId = "0x1",
   account = signer,
   switches = true,
   answer = () => hash as unknown,
@@ -98,7 +98,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
   })
 
   it("switches the wallet to the step's chain before sending", async () => {
-    const active = wallet({chainId: "0x1"})
+    const active = wallet({chainId: "0x2105"})
     replaceActiveEthereumWallet({address: signer, provider: active.provider})
     const {pushed, push} = pushes()
 
@@ -118,7 +118,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
   })
 
   it("sends nothing on the wrong chain when the wallet won't switch", async () => {
-    const active = wallet({chainId: "0x1", switches: false})
+    const active = wallet({chainId: "0x2105", switches: false})
     replaceActiveEthereumWallet({address: signer, provider: active.provider})
     const {pushed, push} = pushes()
 

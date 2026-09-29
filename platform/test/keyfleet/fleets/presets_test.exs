@@ -34,11 +34,14 @@ defmodule Keyfleet.Fleets.PresetsTest do
              {3, 11, 17_280_000}
            ]
 
-    assert %{max_supply: 46_365, completed_levels: 20, next_token_id: nil, next_price: nil} =
-             Presets.progress("fibonacci_cascade", 46_365)
+    # New levels keep opening: past level 20 the next key is on sale at level 21.
+    assert %{max_supply: nil, completed_levels: 20, next_token_id: 46_366} =
+             progress = Presets.progress("fibonacci_cascade", 46_365)
+
+    assert progress.next_price == Presets.fibonacci_level_price(21)
   end
 
-  # Levels end at keys 2, 5, 10, 18, … and 46,365.
+  # Levels end at keys 2, 5, 10, 18 and on.
   test "a Fibonacci key writes its own level, and a later level only once every key of it is sold" do
     assert Enum.map([2, 4, 5, 9, 10], &Presets.writable_levels(1, &1)) ==
              [[1], [1], [1, 2], [1, 2], [1, 2, 3]]
@@ -50,13 +53,7 @@ defmodule Keyfleet.Fleets.PresetsTest do
     assert Presets.writable_levels(6, 6) == [3]
     assert Presets.writable_levels(10, 46_365) == Enum.to_list(3..20)
     assert Presets.writable_levels(46_365, 46_365) == [20]
-
-    assert Enum.map([0, 1, 46_365, 46_366], &Presets.fibonacci_token?/1) == [
-             false,
-             true,
-             true,
-             false
-           ]
+    assert Presets.writable_levels(46_366, 46_366) == [21]
   end
 
   # Pinned to contracts/test/KeyfleetPresets.t.sol.

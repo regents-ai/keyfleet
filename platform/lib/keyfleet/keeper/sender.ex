@@ -3,32 +3,21 @@ defmodule Keyfleet.Keeper.Sender do
   The one way a keeper transaction reaches the chain.
 
   A sender holds the keeper's wallet and sends only `%Call{}`s from
-  `Keyfleet.Keeper.Calls`, each to the one contract its function belongs
-  to, with only the argument that contract is there for:
-
-    * `requestReveal`, `sendProtocolShare`, `recognizeSurplus` and
-      `syncLaunch` go to a deployed fleet, on the chain the node serves;
-    * `release`, `collect`, `sweep` and `recognizeSurplusRevenue` go to that
-      fleet's vesting escrow, LP locker, payment receiver and splitter, as
-      read inside `income_round/3`, and only once the fleet's launch record
-      and distribution agree and the distribution, escrow, splitter and
-      receiver all name the fleet as their treasury;
-    * `migrate` goes to the strategy the fleet's factory names, with only
-      the fleet's own auction, as read inside `settle_round/3`;
-    * `collect` takes only the launch's LP position, and `sweep`,
-      `recognizeSurplusRevenue` and `recognizeSurplus` only its USDC,
-      REGENT or subject token, which a round reads too.
+  `Keyfleet.Keeper.Calls`: `requestReveal` and `sendProtocolShare`, each to
+  a deployed fleet on the chain the node serves.
 
   Before it sends it settles any transaction its wallet left waiting on the
   chain; records another wallet left are never touched. It refuses while
-  the base fee is above 2 gwei, whenever the wallet's spending over the day
-  could go above 0.01 ETH, and while the node is behind a nonce the keeper
-  has already seen taken. It records each transaction before the node sees
-  it and waits for its receipt. One that does not arrive is raised by a
+  the base fee is above the keeper's highest fee, whenever the wallet's
+  spending over the day could go above its daily limit, and while the node
+  is behind a nonce the keeper has already seen taken; both limits are set
+  in the keeper's configuration (`Keyfleet.Keeper.limits/0`). It records
+  each transaction before the node sees it and waits about a minute, five
+  Ethereum blocks, for its receipt. One that does not arrive is raised by a
   quarter, at the same nonce, up to three times, each time only once its
-  call passes the checks again; where no raise is left under 2 gwei, the
-  same transaction is sent again, so one the node dropped, or refused while
-  the wallet was empty, still goes through.
+  call passes the checks again; where no raise is left under the highest
+  fee, the same transaction is sent again, so one the node dropped, or
+  refused while the wallet was empty, still goes through.
 
   A nonce the keeper did not use, or a node naming another hash than the
   keeper's own, stops it. The stop is recorded and holds across restarts
@@ -45,44 +34,22 @@ defmodule Keyfleet.Keeper.Sender do
   alias Keyfleet.Keeper.{Calls, Transaction, Wallet}
   alias Keyfleet.Keeper.Calls.Call
 
-  @gwei 1_000_000_000
-  @max_fee 2 * @gwei
-  @min_priority_fee div(@gwei, 1_000)
-  @spend_ceiling 10_000_000_000_000_000
-  @low_balance 10_000_000_000_000_000
+  @min_priority_fee div(1_000_000_000, 1_000)
   @reveal_gas_floor 200_000
   @receipt_polls 30
   @replacements 3
   @bigint 9_223_372_036_854_775_807
 
-  @fleet_functions [:request_reveal, :send_protocol_share, :recognize_surplus, :sync_launch]
-
-  # Each income function and the contract of the fleet's launch it goes to.
-  @income_contracts %{
-    release: :escrow,
-    collect: :locker,
-    sweep: :receiver,
-    recognize_surplus_revenue: :splitter
-  }
-
-  @token_functions [:sweep, :recognize_surplus_revenue, :recognize_surplus]
-
-  # The functions whose contract or argument only a round knows.
-  @round_functions [:recognize_surplus | Map.keys(@income_contracts)]
-
-  # What a fleet's launch record and distribution both say.
-  @launch_fields [:launch_id, :subject, :escrow, :splitter, :receiver, :pool_id, :lp_token_id]
-
-  @enforce_keys [:wallet, :node, :receipt_poll_ms]
+  @enforce_keys [:wallet, :node, :receipt_poll_ms, :limits]
   defstruct [
     :wallet,
     :node,
     :receipt_poll_ms,
+    :limits,
     :chain_id,
     :stopped,
     :included_nonce,
     fleets: %{},
-    income: %{},
     ceiling_reached?: false,
     low_balance?: false
   ]
@@ -95,7 +62,8 @@ defmodule Keyfleet.Keeper.Sender do
     %__MODULE__{
       wallet: wallet,
       node: node,
-      receipt_poll_ms: Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:receipt_poll_ms]
+      receipt_poll_ms: Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:receipt_poll_ms],
+      limits: Keeper.limits()
     }
   end
 
@@ -150,50 +118,6 @@ defmodule Keyfleet.Keeper.Sender do
   defp settle_at_start(sender), do: sender
 
   @doc """
-  Runs `fun` inside one income round for a fleet, and closes the round
-  after it, whatever `fun` returns.
-
-  The round reads where the fleet's launch income is collected: its launch
-  record and distribution, which must agree and name the fleet as treasury,
-  the factory's LP locker, and the splitter's USDC and REGENT, with the
-  launch's subject token. The escrow, splitter and receiver must all pay
-  the fleet too. Only inside the round may `release`, `collect`, `sweep`,
-  `recognizeSurplusRevenue` and `recognizeSurplus` be sent for the fleet.
-
-  `fun` gets the sender and the round, a map naming the `:escrow`,
-  `:locker`, `:receiver` and `:splitter`, the `:lp_token_id` and the
-  `:tokens`, and returns `{result, sender}`. Returns
-  `{:ok, result, sender}`, or `{:error, reason, sender}` without calling
-  `fun` when the round cannot be opened.
-  """
-  def income_round(%__MODULE__{} = sender, fleet_id, fun),
-    do: open_round(sender, fleet_id, &read_round/2, fun)
-
-  @doc """
-  Runs `fun` inside one settle round for a fleet whose launch is still at
-  auction, and closes the round after it, as `income_round/3` does.
-
-  The round reads the strategy the fleet's factory names and the fleet's
-  auction. Only inside the round may `migrate` be sent for the fleet, and
-  only to that strategy with that auction.
-
-  `fun` gets the sender and the round, a map naming the `:strategy` and the
-  `:auction`.
-  """
-  def settle_round(%__MODULE__{} = sender, fleet_id, fun),
-    do: open_round(sender, fleet_id, &read_settle_round/2, fun)
-
-  defp open_round(sender, fleet_id, read, fun) do
-    with {:ok, fleet} <- fleet(sender, fleet_id),
-         {:ok, round} <- read.(sender, fleet) do
-      {result, sender} = fun.(%{sender | income: Map.put(sender.income, fleet_id, round)}, round)
-      {:ok, result, %{sender | income: Map.delete(sender.income, fleet_id)}}
-    else
-      {:error, reason} -> {:error, reason, sender}
-    end
-  end
-
-  @doc """
   Sends `call` for `job` on behalf of `fleet_id` and waits for it.
 
   Returns `{:ok, tx, receipt, sender}` once it is included, with `tx`'s
@@ -205,7 +129,7 @@ defmodule Keyfleet.Keeper.Sender do
   def send(%__MODULE__{} = sender, %{job: job, fleet_id: fleet_id, call: %Call{} = call}) do
     with :ok <- running(sender),
          {:ok, fleet} <- fleet(sender, fleet_id),
-         :ok <- allowed(fleet, Map.get(sender.income, fleet_id), call),
+         :ok <- allowed(fleet, call),
          {:ok, sender} <- settle_outstanding(sender) do
       send_next(sender, %{job: job, fleet_id: fleet_id, call: call})
     else
@@ -240,7 +164,8 @@ defmodule Keyfleet.Keeper.Sender do
 
   @doc """
   Reads the wallet's balance and the day's spending, reports both as
-  metrics, and raises an alert when the balance first falls under 0.01 ETH.
+  metrics, and raises an alert when the balance first falls under the
+  keeper's low-balance mark.
   """
   def report(%__MODULE__{node: node, wallet: wallet} = sender) do
     with {:ok, balance} <- node.balance(wallet.address),
@@ -251,11 +176,11 @@ defmodule Keyfleet.Keeper.Sender do
         %{}
       )
 
-      low? = balance < @low_balance
+      low? = balance < sender.limits.low_balance
 
       if low? and not sender.low_balance? do
         Logger.error(
-          "Keeper alert: wallet under 0.01 ETH, #{Keeper.eth(balance)} ETH left in #{wallet.address}; top it up."
+          "Keeper alert: wallet under #{Keeper.eth(sender.limits.low_balance)} ETH, #{Keeper.eth(balance)} ETH left in #{wallet.address}; top it up."
         )
       end
 
@@ -291,117 +216,9 @@ defmodule Keyfleet.Keeper.Sender do
     end
   end
 
-  # A call goes to its own contract with an argument that contract is there
-  # for; `round` is the fleet's open income round, or `nil`.
-  defp allowed(fleet, round, call) do
-    with :ok <- allowed_target(fleet, round, call), do: allowed_argument(round, call)
-  end
-
-  defp allowed_target(fleet, _round, %Call{fn: fun, target: target})
-       when fun in @fleet_functions do
-    if target == fleet.contract_address, do: :ok, else: {:error, :foreign_target}
-  end
-
-  defp allowed_target(_fleet, %{strategy: strategy}, %Call{fn: :migrate, target: target}) do
-    if target == strategy, do: :ok, else: {:error, :foreign_target}
-  end
-
-  defp allowed_target(_fleet, _round, %Call{fn: :migrate}), do: {:error, :foreign_target}
-
-  defp allowed_target(_fleet, %{} = round, %Call{fn: fun, target: target}) do
-    if Map.get(round, Map.fetch!(@income_contracts, fun)) == target,
-      do: :ok,
-      else: {:error, :foreign_target}
-  end
-
-  defp allowed_target(_fleet, nil, _call), do: {:error, :foreign_target}
-
-  defp allowed_argument(%{lp_token_id: lp_token_id}, %Call{fn: :collect, arg: arg}) do
-    if arg == lp_token_id, do: :ok, else: {:error, :foreign_argument}
-  end
-
-  defp allowed_argument(%{auction: auction}, %Call{fn: :migrate, arg: arg}) do
-    if arg == auction, do: :ok, else: {:error, :foreign_argument}
-  end
-
-  defp allowed_argument(%{tokens: tokens}, %Call{fn: fun, arg: token})
-       when fun in @token_functions do
-    if token in tokens, do: :ok, else: {:error, :foreign_argument}
-  end
-
-  defp allowed_argument(_round, %Call{fn: fun}) when fun in @token_functions,
-    do: {:error, :foreign_argument}
-
-  defp allowed_argument(_round, _call), do: :ok
-
-  defp read_round(sender, fleet) do
-    with {:ok, record} <- read(sender, fleet.contract_address, :launch_record),
-         {:ok, distribution} <- read(sender, fleet.contract_address, :launch_distribution),
-         :ok <- same_launch(fleet, record, distribution),
-         {:ok, factory} <- read(sender, fleet.contract_address, :factory),
-         {:ok, strategy} <- read(sender, factory, :strategy),
-         {:ok, locker} <- read(sender, strategy, :lp_locker),
-         {:ok, usdc} <- read(sender, record.splitter, :usdc),
-         {:ok, regent} <- read(sender, record.splitter, :regent),
-         round = %{
-           escrow: record.escrow,
-           locker: locker,
-           receiver: record.receiver,
-           splitter: record.splitter,
-           lp_token_id: record.lp_token_id,
-           tokens: [usdc, regent, record.subject]
-         },
-         :ok <- treasuries(sender, fleet, round) do
-      {:ok, round}
-    end
-  end
-
-  defp read_settle_round(sender, fleet) do
-    with {:ok, record} <- read(sender, fleet.contract_address, :launch_record),
-         {:ok, factory} <- read(sender, fleet.contract_address, :factory),
-         {:ok, strategy} <- read(sender, factory, :strategy),
-         do: {:ok, %{strategy: strategy, auction: record.auction}}
-  end
-
-  defp same_launch(fleet, record, distribution) do
-    cond do
-      Map.take(record, @launch_fields) != Map.take(distribution, @launch_fields) ->
-        Logger.error(
-          "Keeper alert: #{fleet.id}'s launch record and launch distribution disagree; its income is left alone."
-        )
-
-        {:error, :launch_mismatch}
-
-      distribution.treasury != fleet.contract_address ->
-        Logger.error(
-          "Keeper alert: #{fleet.id}'s launch distribution pays #{distribution.treasury}, not the fleet; its income is left alone."
-        )
-
-        {:error, :treasury_mismatch}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp treasuries(sender, fleet, round) do
-    Enum.reduce_while([:escrow, :splitter, :receiver], :ok, fn contract, :ok ->
-      case read(sender, round[contract], :treasury) do
-        {:ok, treasury} when treasury == fleet.contract_address ->
-          {:cont, :ok}
-
-        {:ok, treasury} ->
-          Logger.error(
-            "Keeper alert: #{fleet.id}'s #{contract} #{round[contract]} pays #{treasury}, not the fleet; its income is left alone."
-          )
-
-          {:halt, {:error, :treasury_mismatch}}
-
-        {:error, reason} ->
-          {:halt, {:error, reason}}
-      end
-    end)
-  end
+  # Both of the keeper's calls go to the fleet itself.
+  defp allowed(fleet, %Call{target: target}),
+    do: if(target == fleet.contract_address, do: :ok, else: {:error, :foreign_target})
 
   @doc """
   Reads a view of `Keyfleet.Keeper.Calls` from the contract at `to`, as the
@@ -412,20 +229,6 @@ defmodule Keyfleet.Keeper.Sender do
     with {:ok, data} <- Calls.view(view, args),
          {:ok, bytes} <- node.call(wallet.address, to, data) do
       decoded(view, bytes)
-    end
-  end
-
-  @doc """
-  What `call` would return if the keeper sent it now, without sending it:
-  `collect`'s fees as `{amount0, amount1}`, or `syncLaunch`'s launch state,
-  or `{:error, reason}`, which is `{:revert, selector, args}` when the
-  contract refuses.
-  """
-  def dry_run(%__MODULE__{node: node, wallet: wallet}, %Call{fn: fun} = call)
-      when fun in [:collect, :sync_launch] do
-    with {:ok, data} <- Calls.calldata(call),
-         {:ok, bytes} <- node.call(wallet.address, call.target, data) do
-      decoded(fun, bytes)
     end
   end
 
@@ -545,14 +348,14 @@ defmodule Keyfleet.Keeper.Sender do
     end
   end
 
-  defp fees(%{node: node}) do
+  defp fees(%{node: node} = sender) do
     with {:ok, %{base_fee: base_fee}} <- node.latest_block(),
          {:ok, suggested} <- node.max_priority_fee() do
       priority = max(suggested, @min_priority_fee)
-      max_fee = min(2 * base_fee + priority, @max_fee)
+      max_fee = min(2 * base_fee + priority, sender.limits.max_fee)
 
       cond do
-        base_fee > @max_fee -> {:error, :base_fee_too_high}
+        base_fee > sender.limits.max_fee -> {:error, :base_fee_too_high}
         priority > max_fee -> {:error, :priority_fee_too_high}
         true -> {:ok, %{max_priority_fee: priority, max_fee: max_fee}}
       end
@@ -575,20 +378,16 @@ defmodule Keyfleet.Keeper.Sender do
     with {:ok, %{settled: settled, waiting: waiting}} <-
            Keeper.spend(sender.chain_id, sender.wallet.address) do
       total = settled + (waiting |> Map.put(nonce, worst_case) |> Map.values() |> Enum.sum())
+      ceiling = sender.limits.daily_spend
 
       cond do
-        total <= @spend_ceiling and sender.ceiling_reached? ->
-          Logger.info("Keeper sends again: its spending over 24 hours is back under 0.01 ETH.")
-
-          Keeper.record_pause(
-            job,
-            :unpaused_spend_ceiling,
-            "spending over 24 hours back under 0.01 ETH"
-          )
-
+        total <= ceiling and sender.ceiling_reached? ->
+          message = "spending over 24 hours back under #{Keeper.eth(ceiling)} ETH"
+          Logger.info("Keeper sends again: its #{message}.")
+          Keeper.record_pause(job, :unpaused_spend_ceiling, message)
           {:ok, %{sender | ceiling_reached?: false}}
 
-        total <= @spend_ceiling ->
+        total <= ceiling ->
           {:ok, sender}
 
         sender.ceiling_reached? ->
@@ -596,7 +395,7 @@ defmodule Keyfleet.Keeper.Sender do
 
         true ->
           message =
-            "sending would take the keeper's spending over 24 hours to #{Keeper.eth(total)} ETH, past its 0.01 ETH limit; it sends nothing until that falls."
+            "sending would take the keeper's spending over 24 hours to #{Keeper.eth(total)} ETH, past its #{Keeper.eth(ceiling)} ETH limit; it sends nothing until that falls."
 
           Logger.error("Keeper alert: " <> message)
           Keeper.record_pause(job, :paused_spend_ceiling, message)
@@ -715,8 +514,8 @@ defmodule Keyfleet.Keeper.Sender do
   end
 
   # The same call at the same nonce with both fees a quarter higher, once the
-  # call passes the checks again. Where the raise would pass 2 gwei, the
-  # newest is sent again as it is.
+  # call passes the checks again. Where the raise would pass the highest fee,
+  # the newest is sent again as it is.
   defp replace(sender, [newest | _older] = txs, replacements_left) do
     fees = %{
       max_priority_fee: raise_fee(newest.max_priority_fee),
@@ -724,7 +523,7 @@ defmodule Keyfleet.Keeper.Sender do
     }
 
     case still_allowed(sender, newest) do
-      {:ok, call} when fees.max_fee > @max_fee ->
+      {:ok, call} when fees.max_fee > sender.limits.max_fee ->
         resend(sender, txs, call)
 
       {:ok, call} ->
@@ -739,23 +538,14 @@ defmodule Keyfleet.Keeper.Sender do
     end
   end
 
-  # The fleet's own calls are checked against the deployed fleets; the others
-  # against a round read now.
+  # The call is checked against the deployed fleets again.
   defp still_allowed(sender, tx) do
     with {:ok, call} <- Calls.new(tx.function, tx.target, tx.args["arg"]),
          {:ok, fleet} <- fleet(sender, tx.fleet_id),
-         {:ok, round} <- round_for(sender, fleet, call),
-         :ok <- allowed(fleet, round, call) do
+         :ok <- allowed(fleet, call) do
       {:ok, call}
     end
   end
-
-  defp round_for(sender, fleet, %Call{fn: :migrate}), do: read_settle_round(sender, fleet)
-
-  defp round_for(sender, fleet, %Call{fn: fun}) when fun in @round_functions,
-    do: read_round(sender, fleet)
-
-  defp round_for(_sender, _fleet, _call), do: {:ok, nil}
 
   defp raise_fees(sender, [newest | _older] = txs, call, fees, replacements_left) do
     with {:ok, sender} <-
@@ -850,7 +640,6 @@ defmodule Keyfleet.Keeper.Sender do
       block_number: receipt.block_number,
       gas_used: receipt.gas_used,
       effective_gas_price: receipt.effective_gas_price,
-      l1_fee_wei: receipt.l1_fee,
       cost_wei: cost(receipt),
       result:
         if(receipt.status == 1,
@@ -859,8 +648,7 @@ defmodule Keyfleet.Keeper.Sender do
     }
   end
 
-  defp cost(receipt),
-    do: receipt.gas_used * receipt.effective_gas_price + (receipt.l1_fee || 0)
+  defp cost(receipt), do: receipt.gas_used * receipt.effective_gas_price
 
   defp settle_all(txs, outcome) do
     Enum.reduce_while(txs, :ok, fn tx, :ok ->

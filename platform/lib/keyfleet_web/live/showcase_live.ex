@@ -397,7 +397,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   <span class="rg-panel__index">Facts</span>
                 </div>
                 <dl id="showcase-facts-content" class="sc-facts">
-                  <dt>Network</dt><dd>Base</dd><dt>State</dt><dd>Confirmed</dd>
+                  <dt>Network</dt><dd>Ethereum</dd><dt>State</dt><dd>Confirmed</dd>
                 </dl>
                 <div class="sc-row">
                   <P.button variant="quiet" data-sc-copy="showcase-facts-content">Copy</P.button>

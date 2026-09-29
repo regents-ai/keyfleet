@@ -15,8 +15,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   @fleet "fleet_tech_accelerant"
   @contract "0x" <> String.duplicate("7", 40)
   @rewards "0x" <> String.duplicate("8", 40)
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-  @other "0x" <> String.duplicate("5", 40)
+  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   @junk "0x" <> String.duplicate("3", 40)
   @named "0x" <> String.duplicate("4", 40)
   @paid "0x" <> String.duplicate("6", 40)
@@ -30,8 +29,6 @@ defmodule Keyfleet.TreasuryReaderTest do
   @backed "0x595b7f21"
   @cascade_reserve "0xfc4e8964"
   @protocol_share_owed "0xc490b9c7"
-  @launch_state "0x2fcd0f25"
-  @launch_record "0xff1ac947"
   @decimals "0x313ce567"
   @symbol "0x95d89b41"
 
@@ -45,7 +42,7 @@ defmodule Keyfleet.TreasuryReaderTest do
       |> Fleets.get_fleet!()
       |> Fleets.record_deployment!(
         %{
-          chain_id: 8_453,
+          chain_id: 1,
           contract_address: @contract,
           rewards_address: @rewards,
           votes_address: "0x" <> String.duplicate("9", 40),
@@ -60,7 +57,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   end
 
   # Every figure is read at the head's block and kept together, for the
-  # income tokens the reward ledger lists and the token of each payment not
+  # income token the reward ledger lists (USDC) and the token of each payment not
   # yet carried out, and the proposal pages are told. The tokens are asked
   # what they are after, a carried-out payment's among them.
   test "a reading keeps every balance from the one block it was read at", %{fleet: fleet} do
@@ -75,26 +72,24 @@ defmodule Keyfleet.TreasuryReaderTest do
     refute_received {:proposals_changed, _fleet}
 
     requests = StubClient.call_requests()
-    assert length(requests) == 18
+    assert length(requests) == 13
     assert Enum.all?(requests, fn {_to, _data, block_hash} -> block_hash == @head_hash end)
 
-    {balances, details} = Enum.split(requests, 10)
-    assert List.last(balances) == {@contract, @launch_state, @head_hash}
+    {balances, details} = Enum.split(requests, 7)
+    assert List.last(balances) == {@contract, @protocol_share_owed, @head_hash}
     assert Enum.all?(details, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
 
     assert %{block_number: 40, block_hash: @head_hash} = reading
-    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @named]
-    [usdc, other, named] = reading.assets
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @named]
+    [usdc, named] = reading.assets
 
     assert DateTime.compare(reading.block_time, head(40).timestamp) == :eq
     assert Decimal.equal?(reading.cascade_reserve, 700)
     assert Decimal.equal?(reading.protocol_share_owed, 800)
-    assert reading.failed_launch_block == nil
 
     assert %{asset: @usdc, free_capital: 100_000_000, backed: 30_000_000} = usdc
-    assert %{free_capital: 5_000, backed: 60} = other
 
     # Every digit of the largest amount the contract can hold is kept.
     assert named.free_capital == @max_uint256
@@ -102,31 +97,9 @@ defmodule Keyfleet.TreasuryReaderTest do
     # Each token's symbol and decimals, or nothing for one it does not answer.
     assert details() == %{
              @usdc => {"USDC", 6},
-             @other => {"REGENT", 18},
              @named => {"NMD", nil},
              @paid => {nil, nil}
            }
-  end
-
-  # Once the fleet's latest launch has failed, the reading keeps the block it
-  # was created in, from the same block as every other figure.
-  test "a failed launch's block is kept with the reading", %{fleet: fleet} do
-    record = <<7::256, 3::256, 0::96, 1::160, 1_234::256>> <> :binary.copy(<<0::256>>, 7)
-
-    failed =
-      chain()
-      |> Map.put({@contract, @launch_state}, {:ok, <<3::256>>})
-      |> Map.put({@contract, @launch_record}, {:ok, record})
-
-    StubClient.put_chain(head(40), [], calls: answers(failed))
-    assert {:ok, %{failed_launch_block: 1_234}} = TreasuryReader.read(fleet, StubClient)
-
-    StubClient.put_chain(head(41), [],
-      calls: answers(Map.delete(failed, {@contract, @launch_record}))
-    )
-
-    assert TreasuryReader.read(fleet, StubClient) == {:error, {@contract, :no_answer}}
-    assert Treasury.get_reading!(@fleet).failed_launch_block == 1_234
   end
 
   # A token sent to the fleet that no payment waits on is neither read nor
@@ -137,14 +110,14 @@ defmodule Keyfleet.TreasuryReaderTest do
     ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @paid)
     StubClient.put_chain(head(40), [], calls: answers(chain()))
     assert {:ok, reading} = TreasuryReader.read(fleet, StubClient)
-    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other, @paid]
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @paid]
     refute asked?(@junk)
 
     # Once the payment naming a token is carried out, the token leaves the reading.
     ProposalHelpers.execution!(@fleet, 1, ProposalHelpers.wallet("e"))
     StubClient.put_chain(head(41), [], calls: answers(chain()))
     assert {:ok, reading} = TreasuryReader.read(fleet, StubClient)
-    assert Enum.map(reading.assets, & &1.asset) == [@usdc, @other]
+    assert Enum.map(reading.assets, & &1.asset) == [@usdc]
     refute asked?(@junk) or asked?(@paid)
 
     refute Map.has_key?(details(), @junk)
@@ -177,7 +150,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   # and no token is asked what it is until a reading is kept.
   test "a reading that fails in any part keeps nothing", %{fleet: fleet} do
     for {key, answer, reason} <- [
-          {{@rewards, @backed <> arg(@other)}, {:error, :chain_unavailable},
+          {{@rewards, @backed <> arg(@usdc)}, {:error, :chain_unavailable},
            {@rewards, :chain_unavailable}},
           {{@contract, @cascade_reserve}, {:ok, <<1, 2>>}, {@contract, :unreadable_answer}}
         ] do
@@ -210,11 +183,11 @@ defmodule Keyfleet.TreasuryReaderTest do
 
     assert log =~ "income token #{@usdc} was not read"
     assert_received {:balances_changed, @fleet}
-    assert details() == %{@other => {"REGENT", 18}}
+    assert details() == %{}
 
     StubClient.put_chain(head(41), [], calls: answers(chain()))
     assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
-    assert details() == %{@usdc => {"USDC", 6}, @other => {"REGENT", 18}}
+    assert details() == %{@usdc => {"USDC", 6}}
   end
 
   # Anyone may name a token in a payment proposal, so it is asked once: a call
@@ -357,7 +330,7 @@ defmodule Keyfleet.TreasuryReaderTest do
 
   defp chain do
     %{
-      {@rewards, @reward_assets} => {:ok, <<32::256, 2::256>> <> word(@usdc) <> word(@other)},
+      {@rewards, @reward_assets} => {:ok, <<32::256, 1::256>> <> word(@usdc)},
       {@named, @symbol} => {:ok, text("NMD")},
       {@named, @decimals} => {:error, :reverted},
       {@contract, @free_capital <> arg(@named)} => {:ok, <<@max_uint256::256>>},
@@ -370,13 +343,8 @@ defmodule Keyfleet.TreasuryReaderTest do
       {@usdc, @decimals} => {:ok, <<6::256>>},
       {@contract, @free_capital <> arg(@usdc)} => {:ok, <<100_000_000::256>>},
       {@rewards, @backed <> arg(@usdc)} => {:ok, <<30_000_000::256>>},
-      {@other, @symbol} => {:ok, text("REGENT")},
-      {@other, @decimals} => {:ok, <<18::256>>},
-      {@contract, @free_capital <> arg(@other)} => {:ok, <<5_000::256>>},
-      {@rewards, @backed <> arg(@other)} => {:ok, <<60::256>>},
       {@contract, @cascade_reserve} => {:ok, <<700::256>>},
-      {@contract, @protocol_share_owed} => {:ok, <<800::256>>},
-      {@contract, @launch_state} => {:ok, <<1::256>>}
+      {@contract, @protocol_share_owed} => {:ok, <<800::256>>}
     }
   end
 

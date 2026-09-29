@@ -19,7 +19,7 @@ defmodule Keyfleet.WalletStepsTest do
     hash: "0x" <> String.duplicate("c", 64),
     timestamp: ~U[2026-09-27 12:00:00Z]
   }
-  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -72,9 +72,9 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{token_id: 1, price: 8_000_000, approve?: true} = built.figures
 
       assert built.review.chain == %{
-               chain_id: 8_453,
-               name: "Base",
-               rpc_url: "https://mainnet.base.org"
+               chain_id: 1,
+               name: "Ethereum",
+               rpc_url: "https://eth.merkle.io"
              }
 
       deadline = DateTime.to_unix(@head.timestamp) + 600
@@ -240,41 +240,9 @@ defmodule Keyfleet.WalletStepsTest do
                  inputs: %{"key" => "2", "asset" => @usdc, "amount" => "1", "recipient" => "me"}
                )
     end
-
-    test "a launch carries its six details and the REGENT to raise in its smallest units" do
-      inputs = %{
-        "key" => "1",
-        "name" => "Fleet",
-        "symbol" => "FLT",
-        "description" => "A fleet token",
-        "website" => "https://example.com",
-        "image" => "https://example.com/a.png",
-        "raise" => "250000",
-        "digest" => ""
-      }
-
-      assert {:ok, built} = build(:propose_launch, inputs: inputs)
-      raise = 250_000 * Integer.pow(10, 18)
-      assert built.figures.raise == raise
-
-      assert steps(built)["propose"].data ==
-               Call.encode(
-                 "proposeAutolaunch(uint256,(string,string,string,string,string,uint128,bytes32))",
-                 [
-                   1,
-                   {"Fleet", "FLT", "A fleet token", "https://example.com",
-                    "https://example.com/a.png", raise, "0x" <> String.duplicate("0", 64)}
-                 ]
-               )
-
-      assert {:ok, %{problem: :amount_too_large}} =
-               build(:propose_launch,
-                 inputs: %{inputs | "raise" => Integer.to_string(Integer.pow(2, 128))}
-               )
-    end
   end
 
-  describe "voting for another and the stakers' share" do
+  describe "voting for another and Regents' share" do
     test "a typed wallet may vote for the signer; clearing names no wallet" do
       assert {:ok, built} = build(:delegate, inputs: %{"delegate" => @other})
 
@@ -290,7 +258,7 @@ defmodule Keyfleet.WalletStepsTest do
       assert Map.keys(steps(built)) == ["clear"]
     end
 
-    test "the stakers' share is sent from the fleet contract", %{fleet: fleet} do
+    test "Regents' share is sent from the fleet contract", %{fleet: fleet} do
       assert {:ok, built} = build(:send_share)
       assert steps(built)["send"].to == fleet.contract_address
       assert steps(built)["send"].data == Call.encode("sendProtocolShare()", [])

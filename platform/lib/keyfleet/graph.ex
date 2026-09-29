@@ -20,8 +20,7 @@ defmodule Keyfleet.Graph do
     Keyfleet.Graph.Cursor,
     Keyfleet.Graph.Event,
     Keyfleet.Graph.Object,
-    Keyfleet.Graph.Relation,
-    Keyfleet.Graph.LaunchPlanRevision
+    Keyfleet.Graph.Relation
   ]
 
   resources do
@@ -57,7 +56,6 @@ defmodule Keyfleet.Graph do
       define :workspace_cards, action: :cards, args: [:fleet_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_work, action: :open_work, args: [:fleet_id, :kind]
-      define :proposable_launch_plans, action: :launch_plans, args: [:fleet_id]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
       define :project_objects, action: :project
     end
@@ -68,14 +66,6 @@ defmodule Keyfleet.Graph do
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
-    end
-
-    resource Keyfleet.Graph.LaunchPlanRevision do
-      define :launch_plan_revisions, action: :for_digests, args: [:fleet_id, :digests]
-
-      define :current_launch_plan_revisions, action: :current_for, args: [:fleet_id, :plans]
-
-      define :project_launch_plan_revisions, action: :project
     end
   end
 
