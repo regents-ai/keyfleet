@@ -3,31 +3,25 @@ pragma solidity 0.8.26;
 
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
 /// @notice Step two of two: after `DeployKeyfleets` has broadcast one fleet, reads it back from
 /// the chain, checks it against the input manifest, and writes that fleet's published deployment
 /// manifest.
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
-/// the fleet and the blocks the transactions landed in. Every address and value, the income tokens
-/// and the reward-ledger bound are read from the chain through that fleet. The supply, USDC price
-/// and split constants are the ones this script was compiled with from `KeyfleetPresets`, and the
-/// fleet's runtime code hash is recorded so it can be re-verified against the deployed code.
-/// `factoryMayBeEmpty` is the manifest's waiver as it applies on this chain. A receipt that
-/// failed, a transaction with no receipt, a fleet with no code, a fleet of another preset, any
-/// value that differs from the manifest, or a fleet the VRF subscription does not yet list as a
-/// consumer stops the step before it writes. The Safe adds the consumer between the two steps, so
+/// the fleet and the blocks the transactions landed in. Every address and value and the income
+/// token are read from the chain through that fleet. The supply, USDC price and split constants
+/// are the ones this script was compiled with from `KeyfleetPresets`, and the fleet's runtime code
+/// hash is recorded so it can be re-verified against the deployed code. A receipt that failed, a
+/// transaction with no receipt, a fleet with no code, a fleet of another preset, any value that
+/// differs from the manifest, or a fleet the VRF subscription does not yet list as a consumer stops
+/// the step before it writes. The Safe adds the consumer between the two steps, so
 /// the site only ever lists a fleet whose keys can be revealed.
 ///
 /// `parseBroadcast` and `record` take values and return values, so the suite runs them against
 /// fleets deployed in the test; `run` is the only part that reads or writes a file or reads the
 /// environment.
 contract RecordKeyfleets is KeyfleetManifest {
-    /// @notice The name of the frozen ABI the fleet's Autolaunch factory is called through.
-    string public constant AUTOLAUNCH_FACTORY_ABI = "RegentsAutolaunchFactoryV1";
-
     /// @notice What the deployment step's broadcast establishes.
     /// @param fleet The fleet the broadcast created.
     /// @param deploymentBlock The lowest block any of the broadcast's transactions landed in, so a
@@ -49,14 +43,15 @@ contract RecordKeyfleets is KeyfleetManifest {
     error RecordedMismatch(string field);
     /// @notice The VRF subscription does not list the fleet as a consumer yet.
     error FleetNotVrfConsumer(address fleet);
-    /// @notice On Base, the VRF subscription is owned by someone other than the manifest's Safe.
-    error VrfSubscriptionNotOwnedBySafe(address owner, address regentSafe);
+    /// @notice On Ethereum, the VRF subscription is owned by someone other than the protocol
+    /// treasury, the Regents Safe.
+    error VrfSubscriptionNotOwnedByTreasury(address owner, address protocolTreasury);
 
     /// @notice Reads the named manifest for the named fleet and that fleet's broadcast, and writes
     /// `deployments/<manifestName>.<fleetKey>.deployed.json`.
-    /// @dev Run against the RPC the deployment was broadcast to, with the same `KEYFLEET_MANIFEST`
-    /// and `KEYFLEET_FLEET`, straight after that fleet's deployment: Forge keeps only the latest
-    /// broadcast as `run-latest.json`.
+    /// @dev Run against the RPC the deployment was broadcast to, with the same `KEYFLEET_MANIFEST`,
+    /// `KEYFLEET_FLEET` and `KEYFLEET_PROTOCOL_TREASURY`, straight after that fleet's deployment:
+    /// Forge keeps only the latest broadcast as `run-latest.json`.
     function run() external {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
         string memory fleetKey = vm.envString("KEYFLEET_FLEET");
@@ -99,8 +94,8 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice Reads the broadcast's fleet back from the chain, checks it against the manifest, and
     /// returns its deployed manifest's JSON.
     /// @dev The fleet's preset must be the manifest slot's, and every address it holds the one the
-    /// manifest names. The fleet must be a consumer of the subscription, and on Base the
-    /// subscription must be owned by the manifest's Safe.
+    /// manifest names. The fleet must be a consumer of the subscription, and on Ethereum the
+    /// subscription must be owned by the protocol treasury.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         Keyfleet fleet = summary.fleet;
@@ -108,9 +103,7 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         if (fleet.PRESET() != _presets()[manifest.slot]) revert RecordedMismatch("preset");
         if (address(fleet.USDC()) != manifest.usdc) revert RecordedMismatch("usdc");
-        if (address(fleet.REGENT()) != manifest.regent) revert RecordedMismatch("regent");
-        if (address(fleet.STAKING()) != manifest.staking) revert RecordedMismatch("staking");
-        if (address(fleet.FACTORY()) != manifest.autolaunchFactory) revert RecordedMismatch("autolaunchFactory");
+        if (fleet.PROTOCOL_TREASURY() != manifest.protocolTreasury) revert RecordedMismatch("protocolTreasury");
         _requireRandomnessMatches(manifest.vrf, fleet);
         if (fleet.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
         if (!_equal(fleet.name(), manifest.fleet.name)) revert RecordedMismatch("name");
@@ -119,23 +112,20 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         (,,, address subscriptionOwner, address[] memory consumers) =
             manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
-        if (block.chainid == BASE_CHAIN_ID && subscriptionOwner != manifest.regentSafe) {
-            revert VrfSubscriptionNotOwnedBySafe(subscriptionOwner, manifest.regentSafe);
+        if (block.chainid == ETHEREUM_CHAIN_ID && subscriptionOwner != manifest.protocolTreasury) {
+            revert VrfSubscriptionNotOwnedByTreasury(subscriptionOwner, manifest.protocolTreasury);
         }
         if (!_contains(consumers, address(fleet))) revert FleetNotVrfConsumer(address(fleet));
 
         string memory root = "deployed";
         vm.serializeUint(root, "chainId", block.chainid);
         vm.serializeUint(root, "deploymentBlock", summary.deploymentBlock);
-        vm.serializeAddress(root, "regent", address(fleet.REGENT()));
         vm.serializeAddress(root, "usdc", address(fleet.USDC()));
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
-        vm.serializeAddress(root, "staking", address(fleet.STAKING()));
-        vm.serializeAddress(root, "regentSafe", manifest.regentSafe);
+        vm.serializeAddress(root, "protocolTreasury", fleet.PROTOCOL_TREASURY());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
-        vm.serializeString(root, "bounds", _boundsJson(fleet.REWARDS()));
+        vm.serializeString(root, "bounds", _boundsJson());
         vm.serializeString(root, "fees", _feesJson());
-        vm.serializeString(root, "autolaunch", _autolaunchJson(manifest, address(fleet.FACTORY())));
         vm.serializeString(root, "vrf", _vrfJson(fleet));
         vm.serializeBytes32(root, "traitTableHash", fleet.TRAIT_TABLE_HASH());
         vm.serializeAddress(root, "incomeTokens", fleet.REWARDS().rewardAssets());
@@ -173,24 +163,19 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeBytes32(fleetJson, "codeHash", address(fleet).codehash);
         vm.serializeAddress(fleetJson, "rewards", address(fleet.REWARDS()));
         vm.serializeAddress(fleetJson, "votes", address(fleet.VOTES()));
+        vm.serializeAddress(fleetJson, "shards", address(fleet.SHARDS()));
         vm.serializeString(fleetJson, "name", fleet.name());
         vm.serializeString(fleetJson, "symbol", fleet.symbol());
-        vm.serializeString(fleetJson, "baseTokenURI", fleet.baseTokenURI());
-        return vm.serializeUint(fleetJson, "maxSupply", fleet.maxSupply());
+        return vm.serializeString(fleetJson, "baseTokenURI", fleet.baseTokenURI());
     }
 
-    /// @dev The published numeric bounds. The reward-ledger bound is read from the chain; the others
-    /// are this script's compiled `KeyfleetPresets`, which the fleet's recorded code hash lets anyone
-    /// re-verify.
-    function _boundsJson(KeyfleetRewards rewards) private returns (string memory) {
+    /// @dev The published supply limits, this script's compiled `KeyfleetPresets`, which the
+    /// fleet's recorded code hash lets anyone re-verify. Only the two Fleet.Tech presets have one;
+    /// the Fibonacci presets have no last level.
+    function _boundsJson() private returns (string memory) {
         string memory bounds = "bounds";
-        vm.serializeUint(bounds, "fibonacciLevels", KeyfleetPresets.MAX_FIBONACCI_LEVEL);
-        vm.serializeUint(bounds, "fibonacciMaxTokenId", KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
         vm.serializeUint(bounds, "classicSupply", KeyfleetPresets.CLASSIC_SUPPLY);
-        vm.serializeUint(bounds, "accelerantMaxKeys", KeyfleetPresets.MAX_ACCELERANT_KEYS);
-        vm.serializeUint(bounds, "fibonacciAutolaunchMinKeys", KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS);
-        vm.serializeUint(bounds, "fleetTechAutolaunchMinKeys", KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS);
-        return vm.serializeUint(bounds, "maxCohorts", rewards.MAX_COHORTS());
+        return vm.serializeUint(bounds, "accelerantMaxKeys", KeyfleetPresets.MAX_ACCELERANT_KEYS);
     }
 
     /// @dev The purchase split, this script's compiled `KeyfleetPresets` like the supply bounds.
@@ -199,33 +184,6 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(fees, "protocolBps", KeyfleetPresets.PROTOCOL_BPS);
         vm.serializeUint(fees, "accelerantCapitalBps", KeyfleetPresets.ACCELERANT_CAPITAL_BPS);
         return vm.serializeUint(fees, "bpsDenominator", KeyfleetPresets.BPS_DENOMINATOR);
-    }
-
-    /// @dev The factory the fleet is pinned to, the strategy it publishes, the code each holds and
-    /// the ABI they are called through, so the binding can be re-checked against the Autolaunch
-    /// ceremony's own manifest. A factory without code — which only a lab manifest's waiver lets
-    /// through — publishes no strategy, and the zero strategy is recorded as the chain reports it.
-    /// `factoryMayBeEmpty` is the waiver as it applied here, so it is never true on Base.
-    function _autolaunchJson(Manifest memory manifest, address factory) private returns (string memory) {
-        address strategy =
-            factory.code.length == 0 ? address(0) : address(IRegentsAutolaunchFactoryV1(factory).strategy());
-
-        string memory autolaunch = "autolaunch";
-        vm.serializeString(autolaunch, "abi", AUTOLAUNCH_FACTORY_ABI);
-        vm.serializeAddress(autolaunch, "factory", factory);
-        vm.serializeBytes32(autolaunch, "factoryCodeHash", factory.codehash);
-        vm.serializeAddress(autolaunch, "strategy", strategy);
-        vm.serializeBytes32(autolaunch, "strategyCodeHash", strategy.codehash);
-        vm.serializeBool(autolaunch, "factoryMayBeEmpty", _factoryMayBeEmpty(manifest));
-        return vm.serializeString(
-            autolaunch,
-            "readiness",
-            "A fleet launches by vote, one launch at a time, with itself as launcher and treasury, after"
-            " it has sold the last key of level 7 (Syndicate, Cascade) or 100 keys (Classic, Accelerant)."
-            " After a failed launch it may propose another; once one graduates, never again. Creation"
-            " is not graduation: the app reads the strategy for the lifecycle. The launched token is"
-            " an income token of the fleet from the moment the launch is created."
-        );
     }
 
     /// @dev The terms the release publishes here because it publishes them nowhere else: there is
@@ -240,14 +198,14 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(
             disclosures,
             "feeComposition",
-            "Keyfleet takes 2% of every key purchase for the Regents protocol and nothing from money a"
-            " fleet receives afterwards. Autolaunch's splitter takes its own share of the revenue it"
-            " recognizes before paying the fleet."
+            "Keyfleet takes 10% of every key purchase for the Regents protocol and nothing from money a"
+            " fleet receives afterwards."
         );
         return vm.serializeString(
             disclosures,
             "safeAuthority",
-            "The Regents Safe owns the randomness subscription only, and no fleet vote, claim, price or" " money."
+            "The Regents Safe receives the 10% protocol share and owns the randomness subscription. It"
+            " has no vote, claim or price in any fleet and cannot move a fleet's money."
         );
     }
 

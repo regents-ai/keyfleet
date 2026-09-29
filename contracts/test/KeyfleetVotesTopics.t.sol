@@ -4,11 +4,13 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
+import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
 /// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads a
-/// proposal's kind by these numbers and calls these functions, all written out there by hand. If an event's signature or the
-/// kinds change, this fails until both sides agree again.
+/// proposal's kind by these numbers and calls these functions, all written out there by hand. If an
+/// event's signature, a function's signature or the kinds change, this fails until both sides agree
+/// again.
 contract KeyfleetVotesTopicsTest is Test {
     function test_ownershipEpochTopic() public pure {
         assertEq(Keyfleet.OwnershipEpoch.selector, 0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1);
@@ -21,13 +23,6 @@ contract KeyfleetVotesTopicsTest is Test {
     function test_proposalCreatedTopic() public pure {
         assertEq(
             KeyfleetVotes.ProposalCreated.selector, 0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647
-        );
-    }
-
-    function test_autolaunchProposedTopic() public pure {
-        assertEq(
-            KeyfleetVotes.AutolaunchProposed.selector,
-            0x5814e7293d336521e3e8dbd0b0a4480cca203df470b8637a8fa51b2cced3f513
         );
     }
 
@@ -45,18 +40,10 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
-    function test_launchStateNumbers() public pure {
-        assertEq(uint8(Keyfleet.LaunchState.NotCreated), 0);
-        assertEq(uint8(Keyfleet.LaunchState.AuctionCreated), 1);
-        assertEq(uint8(Keyfleet.LaunchState.Graduated), 2);
-        assertEq(uint8(Keyfleet.LaunchState.EconomicallyFailed), 3);
-        assertEq(uint8(type(Keyfleet.LaunchState).max), 3);
-    }
-
     function test_proposalKindNumbers() public pure {
         assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
-        assertEq(uint8(KeyfleetVotes.Kind.Autolaunch), 1);
-        assertEq(uint8(KeyfleetVotes.Kind.Pay), 2);
+        assertEq(uint8(KeyfleetVotes.Kind.Pay), 1);
+        assertEq(uint8(KeyfleetVotes.Kind.RestrictEdits), 2);
         assertEq(uint8(type(KeyfleetVotes.Kind).max), 2);
     }
 
@@ -70,27 +57,12 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
-    function test_graduationHoldingsBookedTopic() public pure {
-        assertEq(
-            Keyfleet.GraduationHoldingsBooked.selector,
-            0xd8c9a3e20faa52b5fa537458d4e055db2d5d91ef401d3120ec549f8724b42355
-        );
-    }
-
-    function test_vestingBookedTopic() public pure {
-        assertEq(Keyfleet.VestingBooked.selector, 0xee00fd5e75d11a67d01f1e2c820557fb28f1e211c8119f94759d4f5b470eeee2);
-    }
-
     function test_budgetPaidTopic() public pure {
         assertEq(Keyfleet.BudgetPaid.selector, 0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e);
     }
 
     function test_collectedTopic() public pure {
         assertEq(KeyfleetVotes.Collected.selector, 0xb0204fab5c5aa6ce90e169a2f115973605e0a5bd6acfa463f8550ebaf458c9b4);
-    }
-
-    function test_launchEnvelopeSelector() public pure {
-        assertEq(KeyfleetVotes.launchEnvelope.selector, bytes4(0xb3bceadb));
     }
 
     /// @dev The treasury reader's balance reads, one call each at the same block. A public
@@ -102,13 +74,54 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet(address(0)).freeCapital.selector, bytes4(0x2b84308e));
         assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
         assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
-        assertEq(Keyfleet(address(0)).launchState.selector, bytes4(0x2fcd0f25));
-        assertEq(Keyfleet(address(0)).launchRecord.selector, bytes4(0xff1ac947));
     }
 
     function test_proposalExecutedTopic() public pure {
         assertEq(
             KeyfleetVotes.ProposalExecuted.selector, 0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24
         );
+    }
+
+    function test_restrictEditsProposedTopic() public pure {
+        assertEq(
+            KeyfleetVotes.RestrictEditsProposed.selector,
+            0x051dcf97e7396a690509aaa36720e1aeaabeff0faca865092638a5b028e2fa8f
+        );
+    }
+
+    function test_editsRestrictionSetTopic() public pure {
+        assertEq(
+            KeyfleetVotes.EditsRestrictionSet.selector,
+            0x2e8b5462cfaf90ff39c1d520552d96015e77788b57b81d3bf8dd40a847037bad
+        );
+    }
+
+    function test_protocolShareSentTopic() public pure {
+        assertEq(
+            Keyfleet.ProtocolShareSent.selector, 0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3
+        );
+    }
+
+    function test_shardIssuedTopic() public pure {
+        assertEq(
+            KeyfleetShards.ShardIssued.selector, 0x3b2824f462424cb01c09746900aff2810947c0577d310c08082c75fe40c2312a
+        );
+    }
+
+    function test_shardEndedTopic() public pure {
+        assertEq(KeyfleetShards.ShardEnded.selector, 0x22773ac65ded0957ecf7109dad0076e1968f3db974ccda1df370bfa4505092f4);
+    }
+
+    /// @dev The calls the platform builds for restricting edits, issuing and ending shards, and
+    /// sending the protocol share, and the views it reads them back through.
+    function test_restrictEditsAndShardSelectors() public view {
+        assertEq(KeyfleetVotes.proposeRestrictEdits.selector, bytes4(0xe18b7f31));
+        assertEq(KeyfleetVotes(address(0)).editsRestricted.selector, bytes4(0x547676ac));
+        assertEq(KeyfleetShards.issue.selector, bytes4(0x18d1ffc8));
+        assertEq(KeyfleetShards.end.selector, bytes4(0x96f0fa4d));
+        assertEq(KeyfleetShards.shardOf.selector, bytes4(0xf01d24e8));
+        assertEq(Keyfleet(address(0)).SHARDS.selector, bytes4(0x48db3888));
+        assertEq(Keyfleet(address(0)).PROTOCOL_TREASURY.selector, bytes4(0x6352cf24));
+        assertEq(Keyfleet.sendProtocolShare.selector, bytes4(0xcb097587));
     }
 }

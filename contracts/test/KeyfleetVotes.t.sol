@@ -3,13 +3,10 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
-import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
@@ -22,14 +19,9 @@ contract KeyfleetVotesTest is Test {
     uint256 private constant PER_KEY_VOTE_CEILING = 31_000;
 
     MockToken private usdc;
-    MockToken private regent;
     MockToken private other;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
-    /// @dev Purchases never call the staking contract, and these suites never send the owed share.
-    IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
-    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
     address private buyer = address(0xB0B0B0);
     address private bob = address(0xB0B);
@@ -49,11 +41,12 @@ contract KeyfleetVotesTest is Test {
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
     event VoteWithdrawn(uint256 indexed proposalId, address indexed caller, uint256[] tokenIds);
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
+    event RestrictEditsProposed(uint256 indexed proposalId, uint256 indexed targetTokenId, bool restricted);
+    event EditsRestrictionSet(uint256 indexed targetTokenId, bool restricted, uint256 indexed proposalId);
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
-        regent = new MockToken("Regent", "REGENT");
         other = new MockToken("Other", "OTH");
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
@@ -67,9 +60,7 @@ contract KeyfleetVotesTest is Test {
         fleet = new Keyfleet(
             preset,
             usdc,
-            IERC20(address(regent)),
-            staking,
-            factory,
+            address(0x7EA5),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -746,7 +737,209 @@ contract KeyfleetVotesTest is Test {
         votes.execute(proposalId);
     }
 
-    // --- 6. gas -------------------------------------------------------------
+    // --- 6. restricting a key's edits ---------------------------------------
+
+    /// @dev Proposes a RestrictEdits from the owner of key 1 in a fresh block, so every key bought
+    /// so far may vote on it.
+    function _proposeRestrict(KeyfleetVotes votes, uint256 target, bool restricted)
+        private
+        returns (uint256 proposalId)
+    {
+        vm.roll(block.number + 1);
+        vm.prank(votes.FLEET().ownerOf(1));
+        proposalId = votes.proposeRestrictEdits(1, target, restricted, "stop the edits", bytes32(0));
+    }
+
+    /// @dev Invariant: a RestrictEdits proposal names a key and a direction, is kind 2, stores
+    /// both and carries its reason in the creation event only. Its Pay fields stay zero.
+    function test_aRestrictEditsProposalStoresItsKeyAndDirection() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 3);
+        vm.roll(block.number + 1);
+
+        bytes32 digest = keccak256("edit log");
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, _wallet(1), uint64(block.number), digest, "spam");
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit RestrictEditsProposed(1, 3, true);
+        vm.prank(_wallet(1));
+        uint256 proposalId = votes.proposeRestrictEdits(1, 3, true, "spam", digest);
+
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(uint256(stored.kind), 2, "RestrictEdits is kind 2");
+        assertEq(stored.targetTokenId, 3);
+        assertTrue(stored.restricted);
+        assertEq(stored.digest, digest);
+        assertEq(stored.asset, address(0), "no Pay fields");
+        assertEq(stored.amount, 0);
+        assertEq(stored.recipient, address(0));
+        assertFalse(votes.editsRestricted(3), "nothing is restricted until it is carried out");
+    }
+
+    /// @dev Invariant: a RestrictEdits needs YES from at least three fifths of all the keys sold,
+    /// where a Decision needs more than half. With five keys two YES is 40% and fails, and three YES
+    /// is exactly 60% and passes; carrying it out restricts the key and says so. A key sold
+    /// afterwards counts against it, so three of six, 50%, takes it back to open.
+    function test_restrictEditsNeedsThreeFifthsOfAllKeysSold() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 5);
+        uint256 proposalId = _proposeRestrict(votes, 4, true);
+
+        _vote(votes, proposalId, 1, true);
+        _vote(votes, proposalId, 2, true);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open), "two of five is 40%");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 2, 5));
+        votes.execute(proposalId);
+
+        _vote(votes, proposalId, 3, true);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "three of five is exactly 60%");
+
+        _buyMany(fleet, 1);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open), "three of six is 50%");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 3, 6));
+        votes.execute(proposalId);
+
+        // For comparison, a Decision with the same three YES of six keys is not approved either.
+        uint256 decision = _propose(votes);
+        _vote(votes, decision, 1, true);
+        _vote(votes, decision, 2, true);
+        _vote(votes, decision, 3, true);
+        assertEq(_state(votes, decision), uint256(KeyfleetVotes.State.Open), "a Decision needs more than half too");
+
+        _vote(votes, proposalId, 5, true);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "four of six is 66.7%");
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit ProposalExecuted(proposalId, mallory);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit EditsRestrictionSet(4, true, proposalId);
+        vm.prank(mallory);
+        votes.execute(proposalId);
+
+        assertTrue(votes.editsRestricted(4), "key 4's edits are restricted");
+        assertFalse(votes.editsRestricted(1), "and no other key's");
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Executed));
+        vm.expectRevert(KeyfleetVotes.AlreadyExecuted.selector);
+        votes.execute(proposalId);
+    }
+
+    /// @dev Invariant: the three-fifths line is exact. Of a thousand keys, 599 YES is 59.9% and
+    /// fails, and 600 YES is exactly 60% and passes.
+    function test_restrictEditsFailsAtFiftyNinePointNinePercentAndPassesAtSixty() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        for (uint256 i = 0; i < 1000; ++i) {
+            _buy(fleet, dave);
+        }
+        vm.roll(block.number + 1);
+        vm.prank(dave);
+        uint256 proposalId = votes.proposeRestrictEdits(1, 1000, true, "", bytes32(0));
+
+        vm.prank(dave);
+        votes.vote(proposalId, _range(1, 599), true);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open), "599 of 1000 is 59.9%");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 599, 1000));
+        votes.execute(proposalId);
+
+        vm.prank(dave);
+        votes.vote(proposalId, _ids(600), true);
+        assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "600 of 1000 is 60%");
+        votes.execute(proposalId);
+        assertTrue(votes.editsRestricted(1000));
+    }
+
+    /// @dev Invariant: a later RestrictEdits can lift a restriction by the same three-fifths vote,
+    /// and the latest one carried out is what stands.
+    function test_aRestrictionCanBeLiftedByALaterVote() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 5);
+
+        uint256 restrict = _proposeRestrict(votes, 2, true);
+        for (uint256 tokenId = 1; tokenId <= 3; ++tokenId) {
+            _vote(votes, restrict, tokenId, true);
+        }
+        votes.execute(restrict);
+        assertTrue(votes.editsRestricted(2));
+
+        uint256 lift = _proposeRestrict(votes, 2, false);
+        assertFalse(votes.proposal(lift).restricted, "the proposal unrestricts");
+        for (uint256 tokenId = 3; tokenId <= 5; ++tokenId) {
+            _vote(votes, lift, tokenId, true);
+        }
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit EditsRestrictionSet(2, false, lift);
+        votes.execute(lift);
+        assertFalse(votes.editsRestricted(2), "the restriction is lifted");
+    }
+
+    /// @dev Invariant: only a key already sold can be named, whoever owns it, including the
+    /// proposer's own. Key zero and any key past the last one sold are refused before anything is
+    /// created.
+    function test_restrictEditsNamesOnlyAMintedKey() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 3);
+        vm.roll(block.number + 1);
+
+        vm.startPrank(_wallet(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotMinted.selector, 0));
+        votes.proposeRestrictEdits(1, 0, true, "", bytes32(0));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotMinted.selector, 4));
+        votes.proposeRestrictEdits(1, 4, true, "", bytes32(0));
+        assertEq(votes.proposalCount(), 0, "nothing was created");
+
+        votes.proposeRestrictEdits(1, 1, true, "my own key", bytes32(0));
+        votes.proposeRestrictEdits(1, 3, true, "another holder's key", bytes32(0));
+        vm.stopPrank();
+        assertEq(votes.proposalCount(), 2);
+
+        _buyMany(fleet, 1);
+        vm.prank(_wallet(1));
+        votes.proposeRestrictEdits(1, 4, true, "sold since", bytes32(0));
+        assertEq(votes.proposal(3).targetTokenId, 4, "a key sold since can be named");
+    }
+
+    /// @dev Invariant: proposing a RestrictEdits takes the same standing as any proposal: the key's
+    /// owner or the owner's voting delegate may, and nobody else.
+    function test_aVotingDelegateMayProposeRestrictEdits() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 3);
+        vm.roll(block.number + 1);
+
+        vm.prank(mallory);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
+        votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
+
+        vm.prank(_wallet(1));
+        votes.setVotingDelegate(carol);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, carol, uint64(block.number), bytes32(0), "");
+        vm.prank(carol);
+        uint256 proposalId = votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
+        assertEq(votes.proposal(proposalId).targetTokenId, 2, "the delegate proposed it");
+    }
+
+    /// @dev Invariant: a RestrictEdits moves no money and leaves nothing to collect.
+    function test_aRestrictEditsMovesNoMoney() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 3);
+        _receiveSharedMoney(fleet, other, 10_000);
+        uint256 proposalId = _proposeRestrict(votes, 3, true);
+        _vote(votes, proposalId, 1, true);
+        _vote(votes, proposalId, 2, true);
+        votes.execute(proposalId);
+
+        assertEq(fleet.freeCapital(address(other)), 10_000, "shared money is untouched");
+        assertEq(other.balanceOf(address(votes)), 0, "and nothing was set aside");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, proposalId));
+        votes.collect(proposalId, _ids(3));
+    }
+
+    // --- 7. gas -------------------------------------------------------------
 
     /// @dev Invariant: voting is the one call whose cost grows with what the caller asks of it, and
     /// it grows only with the number of keys named, never with the fleet. The per-key cost is the
@@ -795,7 +988,7 @@ contract KeyfleetVotesTest is Test {
         used = before - gasleft();
     }
 
-    // --- 7. fuzz invariant ---------------------------------------------------
+    // --- 8. fuzz invariant ---------------------------------------------------
 
     /// @dev Invariant: across random votes, changes of vote and withdrawals on a Fibonacci fleet
     /// spanning three levels, with keys still being sold, each side's tally is always exactly the number of keys

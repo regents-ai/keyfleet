@@ -9,13 +9,9 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IAutolaunchAuction} from "./interfaces/IAutolaunchAuction.sol";
-import {IAutolaunchEscrow} from "./interfaces/IAutolaunchEscrow.sol";
-import {IRegentLBPStrategy} from "./interfaces/IRegentLBPStrategy.sol";
-import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
+import {KeyfleetShards} from "./KeyfleetShards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 import {IVRFCoordinatorV2Plus} from "./vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol";
@@ -28,35 +24,28 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// in its constructor, and the tokens backing an obligation are moved into that ledger in the same
 /// transaction that records it.
 ///
-/// The 2% protocol share of every purchase is set aside here in `protocolShareOwed`, and anyone may
-/// send the whole of it with `sendProtocolShare` to be registered as revenue with the Regents
-/// staking contract. A paused staking contract delays that send and never a purchase. It is the
-/// only fee this fleet ever pays.
+/// The 10% protocol share of every purchase is set aside here in `protocolShareOwed`, and anyone may
+/// send the whole of it with `sendProtocolShare` to the fixed `PROTOCOL_TREASURY`. It is the only
+/// fee this fleet ever pays.
 ///
 /// Money that reaches the fleet other than through a purchase is sorted by `recognizeSurplus`,
 /// and the class it lands in depends only on the token, never on who sent it or when anyone called:
-/// - income tokens — USDC, REGENT, and the fleet's launched token once its launch is recorded — go
-///   to the keys in full, by the ledger's cohort formula;
-/// - every other token becomes shared money;
-/// - two receipts from the fleet's own launch are shared money although they arrive in income
-///   tokens: the REGENT the strategy sends the fleet at graduation, and every SUBJECT the vesting
-///   escrow releases. Both are booked from the strategy's and the escrow's own records before any
-///   money is sorted or paid, so each is booked exactly once whatever the order of calls.
+/// USDC, the one income token, goes to the keys in full by the ledger's cohort formula, and every
+/// other token becomes shared money.
 ///
 /// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
-/// itself in its constructor. It is the only caller of `executeAutolaunch` and `payFromBudget`. The
-/// only tokens a vote can move are shared money: the Cascade completion reserve, the owed protocol
-/// share and the ledger's reward backing are all out of its reach. Every payment is matched: the
-/// keys that voted YES can pay out at most their own share of an asset's shared money, and in the
-/// same call the fleet moves the matches, the payment over the YES votes rounded up for every other
-/// key sold, out of its shared money and into the voting controller, which pays each match to
-/// whoever holds that key when it is collected. Payments assume an asset that moves exactly the
-/// amount asked; a token that takes a fee when it moves, or rebases, is not supported.
+/// itself in its constructor. It is the only caller of `payFromBudget`. The only tokens a vote can
+/// move are shared money: the Cascade completion reserve, the owed protocol share and the ledger's
+/// reward backing are all out of its reach. Every payment is matched: the keys that voted YES can
+/// pay out at most their own share of an asset's shared money, and in the same call the fleet
+/// moves the matches, the payment over the YES votes rounded up for every other key sold, out of
+/// its shared money and into the voting controller, which pays each match to whoever holds that
+/// key when it is collected. Payments assume an asset that moves exactly the amount asked; a token
+/// that takes a fee when it moves, or rebases, is not supported.
 ///
-/// An approved Autolaunch proposal calls the pinned `RegentsAutolaunchFactoryV1`, with this fleet as
-/// both launcher and treasury, and records what the factory says it created. That call moves no
-/// tokens and grants no allowance. A launch whose auction failed can be followed by another; a
-/// graduated launch is the fleet's last.
+/// A key's owner may give wallets time-limited shards of the key in the `KeyfleetShards` record
+/// this contract deploys for itself in its constructor. A shard lasts only while the key's
+/// `ownershipEpoch` is the one it was issued under, so every shard of a key ends when the key moves.
 ///
 /// Every key's traits come from one Chainlink VRF v2.5 answer. A purchase asks the pinned coordinator
 /// for one random word and never waits for it or fails because of it; the coordinator answers a few
@@ -66,81 +55,12 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// or replace a seed.
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
-/// this contract are the owed protocol share sent to the staking contract, the Accelerant rebate
+/// this contract are the owed protocol share sent to the protocol treasury, the Accelerant rebate
 /// paid into the ledger, the Cascade reimbursement paid into the ledger, income paid into the
 /// ledger for the keys, and a payment of shared money the keys voted for with its matches, which
 /// move to the voting controller.
 contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
-
-    /// @notice How far this fleet's current Autolaunch has got.
-    /// @dev `AuctionCreated` covers everything between the factory call and the strategy's terminal
-    /// record, including an auction that has ended but has not been migrated yet. `Graduated` is
-    /// final. `EconomicallyFailed` lasts until the keys carry out another launch, which starts again
-    /// at `AuctionCreated`.
-    enum LaunchState {
-        NotCreated,
-        AuctionCreated,
-        Graduated,
-        EconomicallyFailed
-    }
-
-    /// @notice The exact launch the keys approve, fixed when the proposal is created.
-    /// @dev There is no treasury field: the fleet passes itself, so no proposal can name anyone
-    /// else. The chain, the factory and the schedule are not here either — the factory and the
-    /// strategy fix all three, and pretending they were per-launch choices would be a lie the vote
-    /// could not enforce.
-    /// The five metadata strings and the raise are bounded by the factory and the strategy, which
-    /// publish those figures; the voting controller reads them from the target when a proposal is
-    /// made rather than holding a copy of them.
-    /// @param name SUBJECT name, nonempty and within the factory's `MAX_NAME_BYTES`.
-    /// @param symbol SUBJECT symbol, nonempty and within the factory's `MAX_SYMBOL_BYTES`.
-    /// @param description SUBJECT description, nonempty and within `MAX_DESCRIPTION_BYTES`.
-    /// @param website SUBJECT website, nonempty and within the factory's `MAX_WEBSITE_BYTES`.
-    /// @param image SUBJECT image reference, nonempty and within the factory's `MAX_IMAGE_BYTES`.
-    /// @param requiredRegentRaised The REGENT raise the auction must reach to graduate, positive and
-    /// within the strategy's `MAX_REACHABLE_RAISE`.
-    /// @param narrativeDigest Digest of the content-addressed narrative behind the launch; it also
-    /// becomes the proposal's digest, and zero means none.
-    struct LaunchEnvelope {
-        string name;
-        string symbol;
-        string description;
-        string website;
-        string image;
-        uint128 requiredRegentRaised;
-        bytes32 narrativeDigest;
-    }
-
-    /// @notice What the factory and the strategy say this fleet's launch is.
-    /// @dev Every address here is read back from the pinned factory or the strategy it is bound to;
-    /// none of them is ever taken from a proposal, a caller or an event. The four graduation fields
-    /// stay zero until `syncLaunch` reads a graduated distribution.
-    /// @param launchId The factory's id for this launch.
-    /// @param proposalId The proposal that authorized it, so the authorising vote can be read back
-    /// on chain without replaying an event.
-    /// @param subject The SUBJECT token the factory created.
-    /// @param createdAtBlock Block the launch was created in.
-    /// @param auction The canonical auction, and the key every strategy read uses.
-    /// @param escrow The escrow holding the pending allocation.
-    /// @param splitter The revenue splitter, recorded at graduation.
-    /// @param receiver The canonical payment receiver, recorded at graduation.
-    /// @param envelopeHash `keccak256(abi.encode(envelope))` of the approved envelope.
-    /// @param poolId The official pool, recorded at graduation.
-    /// @param lpTokenId The locked LP position, recorded at graduation.
-    struct LaunchRecord {
-        uint256 launchId;
-        uint256 proposalId;
-        address subject;
-        uint64 createdAtBlock;
-        address auction;
-        address escrow;
-        address splitter;
-        address receiver;
-        bytes32 envelopeHash;
-        bytes32 poolId;
-        uint256 lpTokenId;
-    }
 
     /// @notice The ERC721 identity a fleet is deployed with, fixed for its lifetime.
     /// @param name ERC721 collection name.
@@ -169,38 +89,29 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     error Expired(uint256 deadline);
     /// @notice The next price exceeded the maximum the buyer authorized.
     error PriceAboveMax(uint256 price, uint256 maxPrice);
-    /// @notice Every primary key of this fleet has been minted.
+    /// @notice Every primary key of this Fleet.Tech fleet has been minted.
     error SoldOut();
     /// @notice The recipient already holds as many keys of this level as the preset allows.
     error HoldingLimitExceeded(address account, uint256 level, uint256 limit);
     /// @notice Levels exist only on the two Fibonacci presets.
     error NotFibonacciPreset();
+    /// @notice A supply limit exists only on the two Fleet.Tech presets; the Fibonacci presets have
+    /// no last level.
+    error NotFleetTechPreset();
     /// @notice The supplied USDC does not report the six decimals every price here is written in.
     error UsdcDecimalsWrong(uint8 decimals);
     /// @notice A protocol-share send with nothing owed is rejected.
     error ZeroAmount();
-    /// @notice The staking contract did not register the whole USDC amount it was given, so the
-    /// protocol-share send is refused.
-    error StakingRegistrationFailed(uint256 amount, uint256 received);
     /// @notice No cohort can receive income yet: no key is minted, or no Fibonacci level is complete.
     error NoEligibleKeys();
-    /// @notice Only this fleet's own voting controller may create its launch or spend shared money.
+    /// @notice Only this fleet's own voting controller may spend shared money.
     error OnlyVotes();
-    /// @notice This fleet's launch is still running or has graduated, so no other can be made.
-    error LaunchAlreadyCreated();
-    /// @notice This fleet has not created a launch, so there is nothing to sync or read.
-    error LaunchNotCreated();
     /// @notice The payment is more than the YES keys' share of this asset's shared money: with every
     /// match, it does not fit in the shared money.
     /// @param amount The payment.
     /// @param matched The matches it would set aside for the keys that did not vote YES.
     /// @param available The asset's shared money.
     error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available);
-    /// @notice The launch proposal opened in or before the block this fleet's failed launch was
-    /// created in, so it cannot be carried out.
-    error StaleLaunch(uint256 proposalId);
-    /// @notice The factory does not record the launch it just said it created.
-    error LaunchProvenanceMismatch();
     /// @notice The VRF coordinator address holds no code.
     error CoordinatorMissing(address coordinator);
     /// @notice No trait table was named.
@@ -217,7 +128,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param buyer The caller, who paid the USDC.
     /// @param receiver The address the key was minted to.
     /// @param gross The USDC price paid.
-    /// @param protocol USDC set aside for the staking contract in `protocolShareOwed`.
+    /// @param protocol USDC set aside for the protocol treasury in `protocolShareOwed`.
     /// @param capital USDC added to this fleet's shared money.
     /// @param reserve USDC added to the Cascade completion reserve.
     /// @param rebate USDC credited to the holder of the preceding key in the ledger.
@@ -242,25 +153,16 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param surplus USDC released to shared money.
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
 
-    /// @notice The whole owed protocol share was registered with the staking contract.
+    /// @notice The whole owed protocol share was sent to the protocol treasury.
     /// @param caller Whoever sent it; anyone may.
-    /// @param amount The USDC the staking contract registered, which was the whole owed amount.
+    /// @param amount The USDC sent, which was the whole owed amount.
     event ProtocolShareSent(address indexed caller, uint256 amount);
 
-    /// @notice An income token's unaccounted balance was paid to the keys through the ledger.
+    /// @notice Unaccounted USDC was paid to the keys through the ledger.
     event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
 
     /// @notice Another token's unaccounted balance became shared money.
     event SharedMoneyRecognized(address indexed asset, address indexed caller, uint256 amount);
-
-    /// @notice The REGENT the strategy sent this fleet at graduation was booked as shared money.
-    /// @param amount The auction's raise less the REGENT the strategy put into the pool.
-    event GraduationHoldingsBooked(address indexed asset, uint256 amount);
-
-    /// @notice SUBJECT the vesting escrow released to this fleet was booked as shared money.
-    /// @param amount SUBJECT released since the last booking.
-    /// @param totalReleased Everything the escrow has released so far, all of it now booked.
-    event VestingBooked(address indexed asset, uint256 amount, uint256 totalReleased);
 
     /// @notice An approved Pay proposal paid shared money out of this fleet, and set aside the
     /// match for every key that did not vote YES.
@@ -270,15 +172,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param matched `share` times the keys that did not vote YES, sent to the voting controller
     /// for them to collect. No longer shared money.
     event BudgetPaid(address indexed asset, address indexed recipient, uint256 amount, uint256 share, uint256 matched);
-
-    /// @notice An approved Autolaunch proposal created this fleet's current launch. The four launch
-    /// addresses are the factory's own, read back after the call and not the proposal's.
-    event AutolaunchExecuted(
-        uint256 indexed proposalId, uint256 indexed launchId, address indexed subject, address auction, address escrow
-    );
-
-    /// @notice A sync recorded a terminal launch state. An unsettled launch emits nothing.
-    event LaunchSynced(LaunchState state);
 
     /// @notice The coordinator accepted a request for a key's random word.
     event RevealRequested(uint256 indexed tokenId, uint256 indexed requestId);
@@ -292,10 +185,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param seed `keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, word))`.
     event KeyRevealed(uint256 indexed tokenId, uint256 indexed requestId, bytes32 seed);
 
-    /// @notice Revenue source label every fleet reports to the staking contract.
-    bytes32 public constant SOURCE_TAG = keccak256("keyfleet");
-    /// @notice Source reference every protocol-share send reports to the staking contract.
-    bytes32 public constant PROTOCOL_SHARE_REF = keccak256("keyfleet.protocol-share");
     /// @notice Domain tag of every key seed.
     bytes32 public constant TRAIT_SEED_TAG = keccak256("keyfleet.trait-seed");
     /// @notice Blocks the coordinator waits before answering, so a shallow reorg of the purchase
@@ -310,27 +199,22 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
-    /// @notice The USDC every primary purchase is paid in, and an income token. The constructor
-    /// requires it to report six decimals; the deployment scripts require it to be Base USDC
-    /// `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` on Base.
+    /// @notice The USDC every primary purchase is paid in, and the one income token. The
+    /// constructor requires it to report six decimals; the deployment scripts require it to be
+    /// `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` on Ethereum.
     IERC20 public immutable USDC;
-    /// @notice REGENT, an income token and the currency of the fleet's Autolaunch. The deployment
-    /// scripts require it to be Base REGENT `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07` on Base.
-    IERC20 public immutable REGENT;
+    /// @notice Where `sendProtocolShare` sends the 10% protocol share of every purchase: the Regents
+    /// Safe.
+    address public immutable PROTOCOL_TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
     /// @notice The voting controller this fleet deployed for itself and the only caller of
-    /// `executeAutolaunch` and `payFromBudget`.
+    /// `payFromBudget`.
     KeyfleetVotes public immutable VOTES;
-    /// @notice The Regents revenue staking contract that registers this fleet's 2% protocol share
-    /// of every purchase as revenue.
-    IRegentRevenueStaking public immutable STAKING;
-    /// @notice The one Autolaunch factory this fleet may ever launch through. The strategy is read
-    /// from it on every call rather than stored, so a fleet can never disagree with its factory
-    /// about which strategy is canonical.
-    IRegentsAutolaunchFactoryV1 public immutable FACTORY;
-    /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On Base
-    /// the deployment scripts require `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`.
+    /// @notice The shard record this fleet deployed for itself.
+    KeyfleetShards public immutable SHARDS;
+    /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On
+    /// Ethereum the deployment scripts require `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a`.
     IVRFCoordinatorV2Plus public immutable VRF_COORDINATOR;
     /// @notice The VRF subscription every request is paid from, in ETH.
     uint256 public immutable VRF_SUBSCRIPTION_ID;
@@ -347,14 +231,13 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
     /// @notice Shared money held by this fleet, per asset. Purchases and Cascade level completions
-    /// write the USDC entry; `recognizeSurplus` writes the entry of every token that is not an income
-    /// token; the launch bookings write the REGENT and SUBJECT entries. The only way out is
-    /// `payFromBudget`, on an approved Pay proposal.
+    /// write the USDC entry; `recognizeSurplus` writes the entry of every other token. The only way
+    /// out is `payFromBudget`, on an approved Pay proposal.
     mapping(address asset => uint256 amount) public freeCapital;
     /// @notice Cascade only: USDC held back for the next level completion. Never shared money.
     uint256 public cascadeReserve;
-    /// @notice USDC set aside from purchases as staking revenue and not yet sent to the staking
-    /// contract. Never shared money and never surplus.
+    /// @notice USDC set aside from purchases as the protocol share and not yet sent to the
+    /// protocol treasury. Never shared money and never surplus.
     uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
@@ -368,47 +251,33 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Cascade only: whether a level has been fully minted and its reserve released. A level
     /// completes once; resales never reset it.
     mapping(uint256 level => bool completed) public levelCompleted;
-    /// @notice How far this fleet's current Autolaunch has got.
-    LaunchState public launchState;
-    /// @notice SUBJECT released by the vesting escrow that is already booked as shared money.
-    uint256 public vestingBooked;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
 
     string private _baseTokenURI;
-    LaunchRecord private _launch;
     mapping(uint256 requestId => uint256 tokenId) private _requestToken;
 
-    /// @notice Deploys a fleet and, atomically, the reward ledger and voting controller bound to it.
-    /// @dev Both satellites are constructed here rather than passed in, so there is no window in
-    /// which a fleet points at a ledger or a controller bound to someone else. The ledger is bound
-    /// to USDC and REGENT, the two income tokens a fleet has from its first block.
+    /// @notice Deploys a fleet and, atomically, the reward ledger, voting controller and shard
+    /// record bound to it.
+    /// @dev All three are constructed here rather than passed in, so there is no window in which a
+    /// fleet points at a ledger, a controller or a shard record bound to someone else.
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param usdc The USDC every key is paid in, reporting six decimals.
-    /// @param regent The REGENT token.
-    /// @param staking The Regents revenue staking contract that registers the protocol share.
-    /// @param factory The one Autolaunch factory this fleet may launch through.
+    /// @param protocolTreasury Where the protocol share is sent. Not zero.
     /// @param metadata The ERC721 name, symbol and metadata base.
     /// @param randomness The VRF coordinator, subscription and gas lane.
     /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte. Not zero.
     constructor(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
-        IERC20 regent,
-        IRegentRevenueStaking staking,
-        IRegentsAutolaunchFactoryV1 factory,
+        address protocolTreasury,
         Metadata memory metadata,
         Randomness memory randomness,
         bytes32 traitTableHash
     ) ERC721(metadata.name, metadata.symbol) {
-        if (
-            address(usdc) == address(0) || address(regent) == address(0) || address(staking) == address(0)
-                || address(factory) == address(0)
-        ) {
-            revert ZeroAddress();
-        }
+        if (address(usdc) == address(0) || protocolTreasury == address(0)) revert ZeroAddress();
         uint8 decimals = IERC20Metadata(address(usdc)).decimals();
         if (decimals != KeyfleetPresets.USDC_DECIMALS) revert UsdcDecimalsWrong(decimals);
         // A coordinator without code would make the request in `purchase` revert past its `catch`.
@@ -418,9 +287,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         if (traitTableHash == bytes32(0)) revert TraitTableHashZero();
         PRESET = preset;
         USDC = usdc;
-        REGENT = regent;
-        STAKING = staking;
-        FACTORY = factory;
+        PROTOCOL_TREASURY = protocolTreasury;
         VRF_COORDINATOR = randomness.coordinator;
         VRF_SUBSCRIPTION_ID = randomness.subscriptionId;
         VRF_KEY_HASH = randomness.keyHash;
@@ -428,8 +295,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         _baseTokenURI = metadata.baseTokenURI;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = KeyfleetPresets.Q_USDC;
 
-        REWARDS = new KeyfleetRewards(address(this), address(usdc), address(regent));
+        REWARDS = new KeyfleetRewards(address(this), address(usdc));
         VOTES = new KeyfleetVotes(this);
+        SHARDS = new KeyfleetShards(this);
     }
 
     // --- views -----------------------------------------------------------
@@ -439,27 +307,30 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         return _baseTokenURI;
     }
 
-    /// @notice Primary keys this fleet will ever mint.
+    /// @notice Primary keys this Fleet.Tech fleet will ever mint: 1,024 on Classic, 2,000 on
+    /// Accelerant. Reverts on the two Fibonacci presets, which have no last level.
     function maxSupply() public view returns (uint256) {
         if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.CLASSIC_SUPPLY;
         if (PRESET == KeyfleetPresets.Preset.FleetTechAccelerant) return KeyfleetPresets.MAX_ACCELERANT_KEYS;
-        return KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID;
+        revert NotFleetTechPreset();
     }
 
-    /// @notice Primary keys still available.
+    /// @notice Primary keys this Fleet.Tech fleet still has to sell. Reverts on the two Fibonacci
+    /// presets, which have no last level.
     function remainingSupply() external view returns (uint256) {
         return maxSupply() - totalMinted;
     }
 
-    /// @notice USDC price of the next primary key. Reverts once the fleet is sold out.
+    /// @notice USDC price of the next primary key. Reverts once a Fleet.Tech fleet is sold out; a
+    /// Fibonacci fleet never sells out.
     /// @dev The displayed next slot is not reserved: another purchase in an earlier block can move
     /// the Fibonacci level or step the Accelerant price, which is what `maxPrice` guards against.
     function nextPrice() public view returns (uint256) {
         uint256 minted = totalMinted;
+        if (_isFibonacci()) return KeyfleetPresets.fibonacciLevelPrice(KeyfleetPresets.fibonacciLevelOf(minted + 1));
         if (minted >= maxSupply()) revert SoldOut();
         if (PRESET == KeyfleetPresets.Preset.FleetTechAccelerant) return currentPrice;
-        if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.classicPrice(minted + 1);
-        return KeyfleetPresets.fibonacciLevelPrice(KeyfleetPresets.fibonacciLevelOf(minted + 1));
+        return KeyfleetPresets.classicPrice(minted + 1);
     }
 
     /// @notice How the next purchase would be divided.
@@ -468,9 +339,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     }
 
     /// @notice Fibonacci level that owns a token id.
-    /// @dev Reverts on the two Fleet.Tech presets, which have no levels, and outside
-    /// `1..FIBONACCI_MAX_TOKEN_ID`. The level of an id is fixed by the id alone, so this answers for
-    /// ids that have not been minted yet.
+    /// @dev Reverts on the two Fleet.Tech presets, which have no levels, and for token id zero. The
+    /// level of an id is fixed by the id alone, so this answers for ids that have not been minted
+    /// yet.
     function levelOf(uint256 tokenId) public view returns (uint256) {
         if (!_isFibonacci()) revert NotFibonacciPreset();
         return KeyfleetPresets.fibonacciLevelOf(tokenId);
@@ -505,8 +376,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     }
 
     /// @notice Balance of an asset that has arrived and not yet been sorted by `recognizeSurplus`.
-    /// @dev Until the next `recognizeSurplus`, `payFromBudget` or `syncLaunch` books them, the
-    /// graduation REGENT and any SUBJECT the escrow has released are counted here too.
     function surplus(address asset) public view returns (uint256) {
         return IERC20(asset).balanceOf(address(this)) - accountedBalance(asset);
     }
@@ -521,13 +390,13 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Buys the next primary key with USDC.
     /// @dev The caller must have approved this contract for the gross price. No balance-delta check
     /// is taken around the pull: `USDC` is fixed at construction, where it must report six
-    /// decimals, and the deployment scripts pin it to Base USDC on Base, which is neither rebasing
+    /// decimals, and the deployment scripts pin it to USDC on Ethereum, which is neither rebasing
     /// nor fee-charging, so the transferred amount is the credited amount by construction. A paused
     /// USDC, or one that blacklists the caller or this fleet, stops purchases until it lifts; that
     /// is accepted.
     ///
-    /// The 2% protocol share is added to `protocolShareOwed` and nothing is sent: the staking
-    /// contract is never called from a purchase, so a paused staking contract cannot stop one.
+    /// The 10% protocol share is added to `protocolShareOwed` and nothing is sent: the protocol
+    /// treasury is paid only by `sendProtocolShare`.
     ///
     /// The key is enrolled in the ledger before it is minted, so a receiver contract may forward it
     /// straight on from inside `onERC721Received`: that transfer settles a freshly enrolled key,
@@ -658,26 +527,22 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is shared
     /// money plus, for USDC, the Cascade completion reserve and the owed protocol share. Reward
     /// backing sits in the ledger and is not part of this balance at all, so no recorded liability
-    /// can be reclassified, an incomplete level's reserve can never be drawn on, and the stakers'
-    /// share can never be swept into shared money.
+    /// can be reclassified, an incomplete level's reserve can never be drawn on, and the owed
+    /// protocol share can never be swept into shared money.
     ///
-    /// The launch is booked first: a launch the strategy has settled is synced, the REGENT it sent
-    /// at graduation is booked as shared money, and so is every SUBJECT the escrow has released since
-    /// the last booking. What remains is then sorted by the token alone. An income token goes to the
-    /// keys in full through `_allocateToKeys`, which follows the ledger's rules: while no key, or no
-    /// Fibonacci level, can receive it the call reverts with `NoEligibleKeys`, and below one atomic
-    /// unit per eligible Fibonacci level it cannot be divided and reverts with the ledger's
-    /// `ZeroAmount`; either way the balance waits for a later call. Every other token becomes
-    /// shared money. A balance of zero after the booking returns zero and keeps the booking.
+    /// USDC goes to the keys in full through `_allocateToKeys`, which follows the ledger's rules:
+    /// while no key, or no Fibonacci level, can receive it the call reverts with `NoEligibleKeys`,
+    /// and below one atomic unit per eligible Fibonacci level it cannot be divided and reverts with
+    /// the ledger's `ZeroAmount`; either way the balance waits for a later call. Every other token
+    /// becomes shared money. A balance of zero returns zero.
     /// @param asset The asset to sort.
-    /// @return amount What was sorted: paid to the keys for an income token, shared money otherwise.
+    /// @return amount What was sorted: paid to the keys for USDC, shared money otherwise.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 amount) {
-        _bookLaunch();
         amount = surplus(asset);
         if (amount == 0) return 0;
 
-        if (REWARDS.isRewardAsset(asset)) {
-            _allocateToKeys(asset, amount);
+        if (asset == address(USDC)) {
+            _allocateToKeys(amount);
             emit IncomeRecognized(asset, msg.sender, amount);
         } else {
             freeCapital[asset] += amount;
@@ -688,9 +553,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Pays shared money out of this fleet on the authority of an approved Pay proposal, and
     /// sets aside the same amount per key for every key that did not vote YES.
     /// @dev The voting controller this fleet deployed is the only caller. It passes the proposal's
-    /// YES votes, which it has just checked are more than half of the keys sold. The launch is booked
-    /// first, exactly as `recognizeSurplus` books it, so shared money the launch has already
-    /// delivered counts.
+    /// YES votes, which it has just checked are more than half of the keys sold.
     ///
     /// With `S` the asset's shared money, `N` the keys sold and `y` the YES votes, every key that
     /// did not vote YES is matched with `share = A / y`, rounded up, so a payment never rounds a
@@ -723,7 +586,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         returns (uint256 share)
     {
         if (msg.sender != address(VOTES)) revert OnlyVotes();
-        _bookLaunch();
 
         uint256 available = freeCapital[asset];
         share = Math.ceilDiv(amount, yesVotes);
@@ -736,207 +598,22 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         if (matched != 0) IERC20(asset).safeTransfer(address(VOTES), matched);
     }
 
-    /// @notice Sends the whole owed protocol share to the Regents staking contract as registered
-    /// revenue.
+    /// @notice Sends the whole owed protocol share to the protocol treasury.
     /// @dev Permissionless and all-or-nothing: anyone may call it at any time, and it always sends
-    /// exactly `protocolShareOwed`. The owed figure is zeroed before the staking call and restored
-    /// by the revert if registration fails, so a paused, under-reporting or non-pulling staking
-    /// contract leaves the whole amount owed for a later call, while purchases carry on adding to
-    /// it. Guarded, so a staking contract that calls back cannot reach another entry point while
-    /// this one is half done.
-    /// @return amount The USDC registered with the staking contract.
+    /// exactly `protocolShareOwed`. A USDC that refuses the transfer reverts the call and leaves the
+    /// whole amount owed for a later one, while purchases carry on adding to it.
+    /// @return amount The USDC sent.
     function sendProtocolShare() external nonReentrant returns (uint256 amount) {
         amount = protocolShareOwed;
         if (amount == 0) revert ZeroAmount();
         protocolShareOwed = 0;
-        _registerWithStaking(amount, PROTOCOL_SHARE_REF);
         emit ProtocolShareSent(msg.sender, amount);
-    }
-
-    /// @dev Registers `amount` of this fleet's USDC with the staking contract under `SOURCE_TAG`.
-    /// Registration requires both a received amount equal to `amount` and the approval it was given
-    /// to be spent down to nothing. A paused, under-reporting or non-pulling staking contract
-    /// therefore reverts the caller rather than letting a plain transfer pass as registered revenue
-    /// or leaving an unspent approval and unpulled USDC behind, which a later call would otherwise
-    /// recognize as surplus.
-    function _registerWithStaking(uint256 amount, bytes32 sourceRef) private {
-        USDC.forceApprove(address(STAKING), amount);
-        uint256 received = STAKING.depositUSDC(amount, SOURCE_TAG, sourceRef);
-        if (received != amount || USDC.allowance(address(this), address(STAKING)) != 0) {
-            revert StakingRegistrationFailed(amount, received);
-        }
-    }
-
-    // --- autolaunch ------------------------------------------------------
-
-    /// @notice What the factory and the strategy say this fleet's current launch is.
-    /// @dev All-zero until an Autolaunch executes, and replaced whole by a launch that follows a
-    /// failed one; the four graduation fields stay zero until a sync reads a graduated distribution.
-    function launchRecord() external view returns (LaunchRecord memory) {
-        return _launch;
-    }
-
-    /// @notice The strategy's complete record of this fleet's auction, read live.
-    /// @dev A pass-through for the app: this contract stores nothing from it except the four
-    /// artifacts `syncLaunch` records at graduation. Reverts before a launch exists.
-    function launchDistribution() external view returns (IRegentLBPStrategy.Distribution memory) {
-        if (launchState == LaunchState.NotCreated) revert LaunchNotCreated();
-        return FACTORY.strategy().distribution(_launch.auction);
-    }
-
-    /// @notice Creates this fleet's launch, on the authority of an approved vote.
-    /// @dev The voting controller this fleet deployed is the only caller, and it passes the exact
-    /// envelope the keys approved. `treasury` is `address(this)` and there is no field a proposal
-    /// could put anything else in. Nothing is approved and no token moves: the factory charges the
-    /// caller gas and nothing more.
-    ///
-    /// The current launch is synced first, so a failure the strategy has recorded counts whether or
-    /// not anyone synced it. A fleet with no launch, or whose launch failed, may launch; while a
-    /// launch is running, or once one has graduated, this reverts with `LaunchAlreadyCreated`. A new
-    /// launch replaces the failed one's record, and its SUBJECT replaces the failed SUBJECT as the
-    /// ledger's third income token. No key ever earned any of the failed SUBJECT: the strategy
-    /// records a failure only once the escrow has proved it holds the whole supply and retired it.
-    ///
-    /// Every address recorded here is read back from the factory after the call, never taken from
-    /// the return values alone and never from an event: the recorded launch must name this fleet as
-    /// both launcher and treasury and must carry the same three addresses the call returned, and
-    /// the factory must map the SUBJECT back to the same launch id. Anything else reverts the whole
-    /// execution.
-    ///
-    /// Every revert here — a launch that already exists, a paused factory, a raise the strategy
-    /// refuses — reverts the controller's execution with it, including the mark that the proposal
-    /// was carried out. The proposal therefore stays open and consumes nothing, which is what lets a
-    /// fleet wait for the factory to open and try again. The first approved Autolaunch carried out
-    /// wins; another can follow only if that launch fails. A launch proposal that opened in or
-    /// before the block the failed launch was created in cannot be carried out; it reverts with
-    /// `StaleLaunch`.
-    ///
-    /// Guarded, so a launch artifact that calls back cannot reach another entry point while this
-    /// one is half done.
-    /// @param proposalId The proposal being executed, recorded in the launch record and the event.
-    /// @param openedBlock The block the proposal opened in.
-    /// @param envelope The exact launch the keys approved.
-    function executeAutolaunch(uint256 proposalId, uint64 openedBlock, LaunchEnvelope calldata envelope)
-        external
-        nonReentrant
-    {
-        if (msg.sender != address(VOTES)) revert OnlyVotes();
-        _bookLaunch();
-        LaunchState state = launchState;
-        if (state == LaunchState.AuctionCreated || state == LaunchState.Graduated) revert LaunchAlreadyCreated();
-        if (state == LaunchState.EconomicallyFailed && openedBlock <= _launch.createdAtBlock) {
-            revert StaleLaunch(proposalId);
-        }
-
-        (uint256 launchId, address subject, address auction, address escrow) = FACTORY.launch(
-            IRegentsAutolaunchFactoryV1.LaunchParams({
-                name: envelope.name,
-                symbol: envelope.symbol,
-                description: envelope.description,
-                website: envelope.website,
-                image: envelope.image,
-                treasury: address(this),
-                requiredRegentRaised: envelope.requiredRegentRaised
-            })
-        );
-
-        IRegentsAutolaunchFactoryV1.Launch memory recorded = FACTORY.launches(launchId);
-        if (
-            recorded.launcher != address(this) || recorded.treasury != address(this) || recorded.subject != subject
-                || recorded.auction != auction || recorded.escrow != escrow
-                || FACTORY.launchIdOfSubject(subject) != launchId
-        ) {
-            revert LaunchProvenanceMismatch();
-        }
-
-        _launch = LaunchRecord({
-            launchId: launchId,
-            proposalId: proposalId,
-            subject: subject,
-            createdAtBlock: uint64(block.number),
-            auction: auction,
-            escrow: escrow,
-            splitter: address(0),
-            receiver: address(0),
-            envelopeHash: keccak256(abi.encode(envelope)),
-            poolId: bytes32(0),
-            lpTokenId: 0
-        });
-        launchState = LaunchState.AuctionCreated;
-        REWARDS.setLaunchedToken(subject);
-
-        emit AutolaunchExecuted(proposalId, launchId, subject, auction, escrow);
-    }
-
-    /// @notice Books this fleet's launch: records the strategy's verdict once it has one, and books
-    /// the launch's receipts as shared money.
-    /// @dev Permissionless, because it only ever copies what the strategy and the escrow already
-    /// recorded. It cannot replace the recorded SUBJECT, auction or escrow, cannot redirect the
-    /// treasury and cannot authorize another launch. `recognizeSurplus` and `payFromBudget` make
-    /// the same booking first, so nobody has to call this for the money to be sorted right.
-    ///
-    /// An auction that has ended but has not been migrated is still `Active` on the strategy, which
-    /// is deliberately not economic failure: the state stays `AuctionCreated` until the strategy
-    /// settles. Graduation additionally records the splitter, the canonical receiver, the pool and
-    /// the locked LP position, and books the REGENT the strategy sent this fleet. After graduation
-    /// every call books the SUBJECT the escrow has released since the last one.
-    /// @return state The state after this call.
-    function syncLaunch() external nonReentrant returns (LaunchState state) {
-        if (launchState == LaunchState.NotCreated) revert LaunchNotCreated();
-        _bookLaunch();
-        return launchState;
+        USDC.safeTransfer(PROTOCOL_TREASURY, amount);
     }
 
     // --- internals -------------------------------------------------------
 
-    /// @dev Books the launch's shared money, in an order no caller can change: first the
-    /// strategy's verdict, and with graduation the REGENT sent at graduation; then, on a graduated
-    /// launch, whatever the escrow's `totalReleased` has grown by since the last booking. Both
-    /// figures come from the strategy's, the auction's and the escrow's own records, never from a
-    /// balance, so each unit is booked exactly once however the release, the booking and every
-    /// other receipt are ordered.
-    function _bookLaunch() private {
-        LaunchState state = launchState;
-        if (state == LaunchState.AuctionCreated) state = _syncLaunch();
-        if (state != LaunchState.Graduated) return;
-
-        uint256 released = IAutolaunchEscrow(_launch.escrow).totalReleased();
-        uint256 fresh = released - vestingBooked;
-        if (fresh == 0) return;
-        vestingBooked = released;
-        freeCapital[_launch.subject] += fresh;
-        emit VestingBooked(_launch.subject, fresh, released);
-    }
-
-    /// @dev Moves an `AuctionCreated` launch to the strategy's terminal verdict, when there is one,
-    /// and returns the state after it. At graduation the strategy sweeps exactly the auction's
-    /// `currencyRaised` of REGENT, puts `lpRegentUsed` of it into the pool and sends the rest to
-    /// this fleet in the same transaction, so that difference is booked as shared money here. The
-    /// strategy sends this fleet no SUBJECT at graduation: every unused unit goes to the escrow.
-    function _syncLaunch() private returns (LaunchState state) {
-        IRegentLBPStrategy.Distribution memory distribution = FACTORY.strategy().distribution(_launch.auction);
-        if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Graduated) {
-            _launch.splitter = distribution.splitter;
-            _launch.receiver = distribution.receiver;
-            _launch.poolId = distribution.poolId;
-            _launch.lpTokenId = distribution.lpTokenId;
-            state = LaunchState.Graduated;
-
-            uint256 raised = IAutolaunchAuction(_launch.auction).lbpInitializationParams().currencyRaised;
-            uint256 held = raised - distribution.lpRegentUsed;
-            freeCapital[address(REGENT)] += held;
-            emit GraduationHoldingsBooked(address(REGENT), held);
-        } else if (distribution.lifecycle == IRegentLBPStrategy.Lifecycle.Failed) {
-            state = LaunchState.EconomicallyFailed;
-        } else {
-            return LaunchState.AuctionCreated;
-        }
-
-        launchState = state;
-        emit LaunchSynced(state);
-    }
-
-    /// @dev Moves `amount` of an asset this fleet holds into the ledger and allocates all of it to
+    /// @dev Moves `amount` of this fleet's USDC into the ledger and allocates all of it to
     /// the keys in the same transaction, so an obligation is never recorded without the tokens
     /// behind it. Allocation writes one index per eligible cohort and never iterates over keys or
     /// holders.
@@ -946,13 +623,14 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// and then equally per key within each level; an unfinished level receives nothing, and keys
     /// minted later start at the index this allocation left behind. The remainder of the equal
     /// split is added to the last completed level, and the ledger keeps its own division dust as
-    /// backing, so the whole amount is backed and nothing is stranded in the fleet. At most twenty
-    /// levels can be eligible. Refused with `NoEligibleKeys` while no key is minted or no Fibonacci
-    /// level is complete.
+    /// backing, so the whole amount is backed and nothing is stranded in the fleet. The cost grows
+    /// by one ledger write per completed level and never with the number of keys or holders; a
+    /// fleet needs 701 million keys sold to complete forty levels. Refused with `NoEligibleKeys`
+    /// while no key is minted or no Fibonacci level is complete.
     ///
-    /// An amount smaller than the number of eligible Fibonacci levels cannot be split equally and
-    /// reverts with the ledger's `ZeroAmount`; that bites below twenty atomic units of the asset.
-    function _allocateToKeys(address asset, uint256 amount) private {
+    /// An amount smaller than the number of completed Fibonacci levels cannot be split equally and
+    /// reverts with the ledger's `ZeroAmount`, and waits for more.
+    function _allocateToKeys(uint256 amount) private {
         bool fibonacci = _isFibonacci();
         uint256 levels;
         if (fibonacci) {
@@ -962,15 +640,15 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
             revert NoEligibleKeys();
         }
 
-        IERC20(asset).safeTransfer(address(REWARDS), amount);
+        USDC.safeTransfer(address(REWARDS), amount);
 
         if (fibonacci) {
             uint256 share = amount / levels;
             for (uint256 level = 1; level <= levels; ++level) {
-                REWARDS.allocateToCohort(asset, level, level == levels ? amount - share * (levels - 1) : share);
+                REWARDS.allocateToCohort(address(USDC), level, level == levels ? amount - share * (levels - 1) : share);
             }
         } else {
-            REWARDS.allocateToCohort(asset, 0, amount);
+            REWARDS.allocateToCohort(address(USDC), 0, amount);
         }
     }
 
@@ -978,9 +656,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// reserve becomes shared money. Above that, the reserve first repays the preceding level's
     /// whole original gross mint cost to whoever holds those keys at this moment, and the rest
     /// becomes shared money. The reserve always covers it: a level has at least 1.5 times the keys
-    /// of the one before at 1.2 times the price, and 98% of every purchase is reserved, so the
-    /// reserve is at least 1.76 times what the preceding level is owed. The reserve is always
-    /// emptied, and a level completes exactly once.
+    /// of the one before at no less than 1.2 times the price, and at least 90% of every purchase is
+    /// reserved, so the reserve is at least 1.5 x 1.2 x 0.9 = 1.62 times what the preceding level
+    /// is owed. The reserve is always emptied, and a level completes exactly once.
     function _completeLevel(uint256 level) private {
         levelCompleted[level] = true;
         uint256 reserve = cascadeReserve;

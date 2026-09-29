@@ -5,18 +5,20 @@ import {Test} from "forge-std/Test.sol";
 import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
-import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 
-/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as USDC does, because a fleet refuses a USDC with any other.
+/// `setBlocked` reproduces USDC's blacklist: every transfer to the blocked address reverts.
 contract MockToken is ERC20 {
+    error Blocked(address account);
+
+    address public blocked;
+
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
     function decimals() public pure override returns (uint8) {
@@ -26,91 +28,29 @@ contract MockToken is ERC20 {
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }
-}
 
-/// @dev Stands in for the deployed Regents revenue staking contract. It reproduces the two
-/// behaviours the protocol-share send depends on: it pulls the USDC itself with `transferFrom` and
-/// it reports how much it observed arriving. `setPaused` reproduces `whenNotPaused`, `setShortfall`
-/// reproduces a contract that accepts the tokens but reports less than it took, `setCreditWithoutPulling`
-/// reproduces one that reports the whole amount without ever pulling it, and `setCallback` reproduces
-/// one that calls back into a chosen fleet entry point while the fleet is mid-registration. Like the
-/// live contract, it refuses to register an amount of zero.
-contract MockStaking is IRegentRevenueStaking {
-    using SafeERC20 for IERC20;
-
-    error StakingPaused();
-
-    IERC20 private immutable USDC;
-
-    bool public paused;
-    bool public creditWithoutPulling;
-    uint256 public shortfall;
-    uint256 public registered;
-    uint256 public lastAmount;
-    bytes32 public lastTag;
-    bytes32 public lastRef;
-    address public lastPayer;
-    uint256 public callCount;
-
-    Keyfleet private _callbackFleet;
-    bytes4 private _callbackTarget;
-
-    constructor(IERC20 usdc) {
-        USDC = usdc;
+    function setBlocked(address account) external {
+        blocked = account;
     }
 
-    function setPaused(bool value) external {
-        paused = value;
-    }
-
-    function setShortfall(uint256 value) external {
-        shortfall = value;
-    }
-
-    function setCreditWithoutPulling(bool value) external {
-        creditWithoutPulling = value;
-    }
-
-    /// @dev `target` is the selector of the fleet entry point to call back into.
-    function setCallback(Keyfleet fleet, bytes4 target) external {
-        _callbackFleet = fleet;
-        _callbackTarget = target;
-    }
-
-    function depositUSDC(uint256 amount, bytes32 sourceTag, bytes32 sourceRef) external returns (uint256 received) {
-        require(amount != 0, "AMOUNT_ZERO");
-        if (paused) revert StakingPaused();
-        if (_callbackTarget == Keyfleet.purchase.selector) {
-            _callbackFleet.purchase(address(this), type(uint256).max, block.timestamp);
-        } else if (_callbackTarget == Keyfleet.sendProtocolShare.selector) {
-            _callbackFleet.sendProtocolShare();
-        }
-
-        if (creditWithoutPulling) {
-            received = amount;
-        } else {
-            uint256 beforeBalance = USDC.balanceOf(address(this));
-            USDC.safeTransferFrom(msg.sender, address(this), amount);
-            received = USDC.balanceOf(address(this)) - beforeBalance - shortfall;
-        }
-
-        registered += received;
-        lastAmount = amount;
-        lastTag = sourceTag;
-        lastRef = sourceRef;
-        lastPayer = msg.sender;
-        callCount += 1;
+    function _update(address from, address to, uint256 value) internal override {
+        if (to != address(0) && to == blocked) revert Blocked(to);
+        super._update(from, to, value);
     }
 }
 
-/// @dev A token that calls back into a chosen fleet entry point the first time it moves after being
-/// armed, from inside the transfer the fleet is in the middle of.
+/// @dev A six-decimal token that calls back into a chosen fleet entry point the first time it moves
+/// after being armed, from inside the transfer the fleet is in the middle of.
 contract ReenteringToken is ERC20 {
     Keyfleet private _fleet;
     bytes4 private _target;
     bool private _entered;
 
     constructor() ERC20("Reenter", "RE") {}
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
@@ -131,21 +71,18 @@ contract ReenteringToken is ERC20 {
     }
 }
 
-/// @dev How money that reaches a fleet is sorted. USDC, REGENT and, once launched, the fleet's own
-/// token are income, and all of it goes to the keys; every other token is shared money. The owed
-/// protocol share, the Cascade reserve and reward backing are never surplus.
+/// @dev How money that reaches a fleet is sorted. USDC is income, and all of it goes to the keys;
+/// every other token is shared money. The owed protocol share, the Cascade reserve and reward
+/// backing are never surplus.
 contract KeyfleetIncomeTest is Test {
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
-    MockToken private regent;
     MockToken private usdc;
     MockToken private other;
-    MockStaking private staking;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
-    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
 
+    address private treasury = address(0x7EA5);
     address private buyer = address(0xB0B0B0);
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
@@ -155,10 +92,8 @@ contract KeyfleetIncomeTest is Test {
     event ProtocolShareSent(address indexed caller, uint256 amount);
 
     function setUp() public {
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
         other = new MockToken("Other", "OTH");
-        staking = new MockStaking(usdc);
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
     }
@@ -166,16 +101,14 @@ contract KeyfleetIncomeTest is Test {
     // --- helpers ---------------------------------------------------------
 
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
-        fleet = _deployWith(preset, regent);
+        fleet = _deployWith(preset, usdc);
     }
 
-    function _deployWith(KeyfleetPresets.Preset preset, IERC20 regentToken) private returns (Keyfleet fleet) {
+    function _deployWith(KeyfleetPresets.Preset preset, IERC20 usdcToken) private returns (Keyfleet fleet) {
         fleet = new Keyfleet(
             preset,
-            usdc,
-            regentToken,
-            staking,
-            factory,
+            usdcToken,
+            treasury,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -227,37 +160,33 @@ contract KeyfleetIncomeTest is Test {
 
     // --- 1. income goes to the keys -----------------------------------------
 
-    /// @dev Invariant: USDC and REGENT that reach a fleet are income and go to the keys in full,
-    /// equally per key on Classic. Nothing is kept as shared money and nothing is taken off the top.
-    function test_usdcAndRegentIncomeGoesWhollyToTheKeys() public {
-        MockToken[2] memory incomeTokens = [usdc, regent];
-        for (uint256 i = 0; i < incomeTokens.length; ++i) {
-            MockToken token = incomeTokens[i];
-            Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-            KeyfleetRewards rewards = fleet.REWARDS();
-            uint256 first = _buy(fleet, alice);
-            uint256 second = _buy(fleet, bob);
-            uint256 third = _buy(fleet, bob);
-            uint256 capitalBefore = fleet.freeCapital(address(token));
+    /// @dev Invariant: USDC that reaches a fleet is income and goes to the keys in full, equally per
+    /// key on Classic. Nothing is kept as shared money and nothing is taken off the top.
+    function test_usdcIncomeGoesWhollyToTheKeys() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        uint256 first = _buy(fleet, alice);
+        uint256 second = _buy(fleet, bob);
+        uint256 third = _buy(fleet, bob);
+        uint256 capitalBefore = fleet.freeCapital(address(usdc));
 
-            token.mint(address(fleet), 10_000);
-            vm.expectEmit(true, true, true, true, address(fleet));
-            emit IncomeRecognized(address(token), bob, 10_000);
-            vm.prank(bob);
-            assertEq(fleet.recognizeSurplus(address(token)), 10_000, "the whole receipt is sorted");
+        usdc.mint(address(fleet), 10_000);
+        vm.expectEmit(true, true, true, true, address(fleet));
+        emit IncomeRecognized(address(usdc), bob, 10_000);
+        vm.prank(bob);
+        assertEq(fleet.recognizeSurplus(address(usdc)), 10_000, "the whole receipt is sorted");
 
-            assertEq(rewards.accrued(address(token), first), 3_333);
-            assertEq(rewards.accrued(address(token), second), 3_333);
-            assertEq(rewards.accrued(address(token), third), 3_333);
-            assertEq(rewards.backed(address(token)), 10_000, "the whole receipt is backed, dust included");
-            assertEq(token.balanceOf(address(rewards)), 10_000, "and the tokens are actually there");
-            assertEq(fleet.freeCapital(address(token)), capitalBefore, "income never becomes shared money");
-            assertEq(fleet.surplus(address(token)), 0, "nothing is left unsorted");
-        }
+        assertEq(rewards.accrued(address(usdc), first), 3_333);
+        assertEq(rewards.accrued(address(usdc), second), 3_333);
+        assertEq(rewards.accrued(address(usdc), third), 3_333);
+        assertEq(rewards.backed(address(usdc)), 10_000, "the whole receipt is backed, dust included");
+        assertEq(usdc.balanceOf(address(rewards)), 10_000, "and the tokens are actually there");
+        assertEq(fleet.freeCapital(address(usdc)), capitalBefore, "income never becomes shared money");
+        assertEq(fleet.surplus(address(usdc)), 0, "nothing is left unsorted");
     }
 
-    /// @dev Invariant: any token that is not an income token becomes shared money in full, and
-    /// nothing of it reaches the keys or the ledger.
+    /// @dev Invariant: any token other than USDC becomes shared money in full, and nothing of it
+    /// reaches the keys or the ledger.
     function test_anyOtherTokenBecomesSharedMoney() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -283,15 +212,15 @@ contract KeyfleetIncomeTest is Test {
         _buyMany(fleet, 5);
         assertEq(fleet.completedLevels(), 2, "levels 1 and 2 are fully minted");
 
-        _receive(fleet, regent, 10_000);
+        _receive(fleet, usdc, 10_000);
 
         // 10_000 splits 5_000 to level 1 across two keys and 5_000 to level 2 across three.
-        assertEq(rewards.accrued(address(regent), 1), 2_500);
-        assertEq(rewards.accrued(address(regent), 2), 2_500);
-        assertEq(rewards.accrued(address(regent), 3), 1_666);
-        assertEq(rewards.accrued(address(regent), 4), 1_666);
-        assertEq(rewards.accrued(address(regent), 5), 1_666);
-        assertEq(rewards.backed(address(regent)), 10_000, "the whole receipt is backed");
+        assertEq(rewards.accrued(address(usdc), 1), 2_500);
+        assertEq(rewards.accrued(address(usdc), 2), 2_500);
+        assertEq(rewards.accrued(address(usdc), 3), 1_666);
+        assertEq(rewards.accrued(address(usdc), 4), 1_666);
+        assertEq(rewards.accrued(address(usdc), 5), 1_666);
+        assertEq(rewards.backed(address(usdc)), 10_000, "the whole receipt is backed");
     }
 
     /// @dev Invariant: an unfinished level earns nothing, and the keys already minted into it start
@@ -302,19 +231,19 @@ contract KeyfleetIncomeTest is Test {
         _buyMany(fleet, 6); // key 6 opens level 3, which has five keys.
         assertEq(fleet.completedLevels(), 2, "level 3 is still open");
 
-        _receive(fleet, regent, 10_000);
-        assertEq(rewards.accrued(address(regent), 6), 0, "the open level earned nothing");
-        assertEq(rewards.cohortIndex(address(regent), 3), 0, "its index never moved");
+        _receive(fleet, usdc, 10_000);
+        assertEq(rewards.accrued(address(usdc), 6), 0, "the open level earned nothing");
+        assertEq(rewards.cohortIndex(address(usdc), 3), 0, "its index never moved");
 
         _buyMany(fleet, 4); // completes level 3 with keys 7 to 10.
         assertEq(fleet.completedLevels(), 3);
-        assertEq(rewards.accrued(address(regent), 10), 0, "a key minted later starts from here");
+        assertEq(rewards.accrued(address(usdc), 10), 0, "a key minted later starts from here");
 
-        _receive(fleet, regent, 10_000);
+        _receive(fleet, usdc, 10_000);
         // 10_000 over three levels: 3_333 each, and the last level absorbs the remainder.
-        assertEq(rewards.accrued(address(regent), 6), 666, "level 3 keys share only the second receipt");
-        assertEq(rewards.accrued(address(regent), 10), 666, "the late key earns the same as its level mates");
-        assertEq(rewards.accrued(address(regent), 1), 4_166, "level 1 keeps its first-receipt share");
+        assertEq(rewards.accrued(address(usdc), 6), 666, "level 3 keys share only the second receipt");
+        assertEq(rewards.accrued(address(usdc), 10), 666, "the late key earns the same as its level mates");
+        assertEq(rewards.accrued(address(usdc), 1), 4_166, "level 1 keeps its first-receipt share");
     }
 
     /// @dev Invariant: the remainder of the equal split across levels is allocated to the last
@@ -324,16 +253,17 @@ contract KeyfleetIncomeTest is Test {
         KeyfleetRewards rewards = fleet.REWARDS();
         _buyMany(fleet, 10);
         assertEq(fleet.completedLevels(), 3);
+        uint256 held = usdc.balanceOf(address(fleet));
 
-        _receive(fleet, regent, 10_000);
+        _receive(fleet, usdc, 10_000);
 
         uint256 precision = rewards.PRECISION();
         // 10_000 over three levels is 3_333 each with 1 left over, which level 3 takes.
-        assertEq(rewards.cohortIndex(address(regent), 1), (3_333 * precision) / 2);
-        assertEq(rewards.cohortIndex(address(regent), 2), (3_333 * precision) / 3);
-        assertEq(rewards.cohortIndex(address(regent), 3), (3_334 * precision) / 5);
-        assertEq(rewards.backed(address(regent)), 10_000, "every unit is backed");
-        assertEq(regent.balanceOf(address(fleet)), 0, "and none of it is left in the fleet");
+        assertEq(rewards.cohortIndex(address(usdc), 1), (3_333 * precision) / 2);
+        assertEq(rewards.cohortIndex(address(usdc), 2), (3_333 * precision) / 3);
+        assertEq(rewards.cohortIndex(address(usdc), 3), (3_334 * precision) / 5);
+        assertEq(rewards.backed(address(usdc)), 10_000, "every unit is backed");
+        assertEq(usdc.balanceOf(address(fleet)), held, "and none of it is left in the fleet");
     }
 
     /// @dev Invariant: income no key can receive yet is refused rather than kept as shared money,
@@ -354,12 +284,12 @@ contract KeyfleetIncomeTest is Test {
         Keyfleet fibonacci = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         _buy(fibonacci, alice);
         assertEq(fibonacci.completedLevels(), 0, "level 1 is not complete with one of its two keys");
-        regent.mint(address(fibonacci), 10_000);
+        usdc.mint(address(fibonacci), 10_000);
         vm.expectRevert(Keyfleet.NoEligibleKeys.selector);
-        fibonacci.recognizeSurplus(address(regent));
+        fibonacci.recognizeSurplus(address(usdc));
 
         _buy(fibonacci, bob);
-        assertEq(fibonacci.recognizeSurplus(address(regent)), 10_000, "a completed level can receive it");
+        assertEq(fibonacci.recognizeSurplus(address(usdc)), 10_000, "a completed level can receive it");
     }
 
     /// @dev Invariant: an amount too small to divide across the eligible levels is refused rather
@@ -368,12 +298,12 @@ contract KeyfleetIncomeTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         _buyMany(fleet, 10);
 
-        regent.mint(address(fleet), 2);
+        usdc.mint(address(fleet), 2);
         vm.expectRevert(KeyfleetRewards.ZeroAmount.selector);
-        fleet.recognizeSurplus(address(regent));
+        fleet.recognizeSurplus(address(usdc));
 
-        regent.mint(address(fleet), 1);
-        assertEq(fleet.recognizeSurplus(address(regent)), 3, "three units split across three levels");
+        usdc.mint(address(fleet), 1);
+        assertEq(fleet.recognizeSurplus(address(usdc)), 3, "three units split across three levels");
     }
 
     /// @dev Invariant: sorting with nothing to sort is harmless. It returns zero and emits nothing,
@@ -416,14 +346,14 @@ contract KeyfleetIncomeTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetRewards rewards = fleet.REWARDS();
         _buy(fleet, alice);
-        _receive(fleet, regent, 10_000);
+        _receive(fleet, usdc, 10_000);
 
-        assertEq(regent.balanceOf(address(fleet)), 0, "income left the fleet entirely");
-        assertEq(fleet.recognizeSurplus(address(regent)), 0, "so there is nothing to sort");
-        assertEq(rewards.backed(address(regent)), 10_000, "the obligation is unchanged");
+        assertEq(fleet.surplus(address(usdc)), 0, "income left the fleet entirely");
+        assertEq(fleet.recognizeSurplus(address(usdc)), 0, "so there is nothing to sort");
+        assertEq(rewards.backed(address(usdc)), 10_000, "the obligation is unchanged");
     }
 
-    /// @dev Invariant: keys are paid in USDC and USDC is also an income token, yet shared money,
+    /// @dev Invariant: keys are paid in USDC and USDC is also the income token, yet shared money,
     /// the Cascade completion reserve, the owed protocol share and reward backing stay separate
     /// figures. USDC income moves only backing, and the repayment a level completion makes lands
     /// beside it in the ledger without disturbing it.
@@ -433,27 +363,27 @@ contract KeyfleetIncomeTest is Test {
         _buy(fleet, alice);
         _buy(fleet, bob);
         _buy(fleet, _wallet(3));
-        assertEq(fleet.freeCapital(address(usdc)), 19_600_000, "level 1 released its reserve to shared money");
-        assertEq(fleet.cascadeReserve(), 11_760_000, "key 3 opened the level 2 reserve");
+        assertEq(fleet.freeCapital(address(usdc)), 18_000_000, "level 1 released its reserve to shared money");
+        assertEq(fleet.cascadeReserve(), 10_800_000, "key 3 opened the level 2 reserve");
 
         _receive(fleet, usdc, 1_000e6);
         assertEq(rewards.backed(address(usdc)), 1_000e6, "income moves only backing");
         assertEq(rewards.accrued(address(usdc), 1), 500e6, "shared across level 1's two keys");
-        assertEq(fleet.freeCapital(address(usdc)), 19_600_000, "and leaves shared money alone");
-        assertEq(fleet.cascadeReserve(), 11_760_000, "and the reserve");
+        assertEq(fleet.freeCapital(address(usdc)), 18_000_000, "and leaves shared money alone");
+        assertEq(fleet.cascadeReserve(), 10_800_000, "and the reserve");
 
         _buy(fleet, _wallet(4));
         _buy(fleet, _wallet(5));
         assertTrue(fleet.levelCompleted(2), "level 2 completed");
         assertEq(fleet.cascadeReserve(), 0);
         assertEq(
-            fleet.freeCapital(address(usdc)), 19_600_000 + 15_280_000, "only what the repayment left is shared money"
+            fleet.freeCapital(address(usdc)), 18_000_000 + 12_400_000, "only what the repayment left is shared money"
         );
         assertEq(rewards.backed(address(usdc)), 1_000e6 + 20_000_000, "the repayment joins the income");
         assertEq(rewards.accrued(address(usdc), 1), 500e6 + 10_000_000, "key 1 earned income and repayment");
 
-        uint256 owed = 2 * 200_000 + 3 * 240_000;
-        assertEq(fleet.protocolShareOwed(), owed, "the owed share is 2% of each purchase");
+        uint256 owed = 2 * 1_000_000 + 3 * 1_200_000;
+        assertEq(fleet.protocolShareOwed(), owed, "the owed share is 10% of each purchase");
         assertEq(
             usdc.balanceOf(address(fleet)),
             fleet.freeCapital(address(usdc)) + owed,
@@ -462,7 +392,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds only backing");
 
         fleet.sendProtocolShare();
-        assertEq(staking.registered(), owed, "staking registered exactly the owed share");
+        assertEq(usdc.balanceOf(treasury), owed, "the treasury received exactly the owed share");
         assertEq(usdc.balanceOf(address(fleet)), fleet.freeCapital(address(usdc)), "leaving the fleet shared money");
 
         vm.prank(alice);
@@ -472,22 +402,32 @@ contract KeyfleetIncomeTest is Test {
 
     // --- 3. guards and invariants -----------------------------------------
 
-    /// @dev Invariant: sorting income moves it into the ledger, so an income token that calls back
-    /// mid-transfer must meet the guard, whichever guarded entry point it tries.
-    function test_anIncomeTokenThatCallsBackIsRefused() public {
+    /// @dev Invariant: sorting income and sending the protocol share both move USDC, so a USDC that
+    /// calls back mid-transfer must meet the guard, whichever guarded entry point it tries.
+    function test_aUsdcThatCallsBackIsRefused() public {
         bytes4[2] memory targets = [Keyfleet.recognizeSurplus.selector, Keyfleet.sendProtocolShare.selector];
         for (uint256 i = 0; i < targets.length; ++i) {
             ReenteringToken token = new ReenteringToken();
             Keyfleet fleet = _deployWith(KeyfleetPresets.Preset.FleetTechClassic, IERC20(address(token)));
-            _buy(fleet, alice);
+            uint256 price = fleet.nextPrice();
+            token.mint(buyer, price);
+            vm.startPrank(buyer);
+            token.approve(address(fleet), price);
+            fleet.purchase(alice, price, block.timestamp);
+            vm.stopPrank();
+            uint256 owed = fleet.protocolShareOwed();
             token.mint(address(fleet), 100_000);
             token.arm(fleet, targets[i]);
 
             vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
             fleet.recognizeSurplus(address(token));
-
             assertEq(fleet.surplus(address(token)), 100_000, "nothing was sorted");
             assertEq(fleet.REWARDS().backed(address(token)), 0, "and nothing was backed");
+
+            vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
+            fleet.sendProtocolShare();
+            assertEq(fleet.protocolShareOwed(), owed, "and the share is still owed");
+            assertEq(token.balanceOf(treasury), 0, "and nothing reached the treasury");
         }
     }
 
@@ -517,7 +457,7 @@ contract KeyfleetIncomeTest is Test {
     /// @dev Invariant: whatever receipts it sees in whatever tokens, the fleet always holds at least
     /// what it has booked, the ledger holds exactly what it has backed, and every unit received is
     /// either still unsorted, shared money or backing.
-    function testFuzz_balancesAlwaysCoverEveryBookedFigure(uint96 usdcIn, uint96 regentIn, uint96 otherIn) public {
+    function testFuzz_balancesAlwaysCoverEveryBookedFigure(uint96 usdcIn, uint96 otherIn) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetRewards rewards = fleet.REWARDS();
         // Three Cascade keys: level 1 completes and empties its reserve, and key 3 starts refilling
@@ -529,24 +469,19 @@ contract KeyfleetIncomeTest is Test {
         uint256 usdcBacked = rewards.backed(address(usdc));
 
         usdc.mint(address(fleet), usdcIn);
-        regent.mint(address(fleet), regentIn);
         other.mint(address(fleet), otherIn);
         _assertCovered(fleet, usdc);
-        _assertCovered(fleet, regent);
         _assertCovered(fleet, other);
 
         fleet.recognizeSurplus(address(usdc));
-        fleet.recognizeSurplus(address(regent));
         fleet.recognizeSurplus(address(other));
 
         assertEq(fleet.cascadeReserve(), reserve, "the reserve survived sorting");
         assertEq(fleet.protocolShareOwed(), owed, "and so did the owed share");
         assertEq(fleet.freeCapital(address(usdc)), usdcCapital, "USDC income never becomes shared money");
         assertEq(rewards.backed(address(usdc)), usdcBacked + usdcIn, "all of it is backed");
-        assertEq(rewards.backed(address(regent)), regentIn, "and so is all the REGENT");
         assertEq(fleet.freeCapital(address(other)), otherIn, "every other token is shared money");
         _assertCovered(fleet, usdc);
-        _assertCovered(fleet, regent);
         _assertCovered(fleet, other);
 
         fleet.sendProtocolShare();
@@ -566,12 +501,11 @@ contract KeyfleetIncomeTest is Test {
     // --- 4. protocol share -------------------------------------------------
 
     /// @dev Invariant: on every preset, anyone at all, holding no key, may send the whole owed share,
-    /// and it reaches the staking contract as registered revenue under the fleet's source tag and the
-    /// protocol-share reference, with the approval fully consumed. Nothing is left owed and the fleet
-    /// is left holding exactly its capital and reserve. A second send has nothing to send.
-    function test_anyoneSendsTheWholeOwedShareToStaking() public {
+    /// and it reaches the protocol treasury in full. Nothing is left owed and the fleet is left
+    /// holding exactly its capital and reserve. A second send has nothing to send.
+    function test_anyoneSendsTheWholeOwedShareToTheTreasury() public {
         address stranger = address(0x5791);
-        uint256 registeredBefore;
+        uint256 receivedBefore;
         for (uint256 p = 0; p < 4; ++p) {
             Keyfleet fleet = _deploy(KeyfleetPresets.Preset(p));
             _buyMany(fleet, 5);
@@ -584,20 +518,14 @@ contract KeyfleetIncomeTest is Test {
             vm.prank(stranger);
             assertEq(fleet.sendProtocolShare(), owed, "the whole owed share was sent");
 
-            assertEq(staking.registered(), registeredBefore + owed, "staking registered exactly the owed share");
-            assertEq(staking.lastAmount(), owed, "in one registration");
-            assertEq(staking.lastTag(), keccak256("keyfleet"), "under the keyfleet source tag");
-            assertEq(staking.lastRef(), keccak256("keyfleet.protocol-share"), "carrying the protocol-share reference");
-            assertEq(fleet.PROTOCOL_SHARE_REF(), keccak256("keyfleet.protocol-share"));
-            assertEq(staking.lastPayer(), address(fleet), "paid by the fleet itself");
-            assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval is left behind");
+            assertEq(usdc.balanceOf(treasury), receivedBefore + owed, "the treasury received exactly the owed share");
             assertEq(fleet.protocolShareOwed(), 0, "nothing is owed any more");
             assertEq(
                 usdc.balanceOf(address(fleet)),
                 fleet.freeCapital(address(usdc)) + fleet.cascadeReserve(),
                 "the fleet holds only capital and reserve"
             );
-            registeredBefore = staking.registered();
+            receivedBefore = usdc.balanceOf(treasury);
 
             vm.prank(stranger);
             vm.expectRevert(Keyfleet.ZeroAmount.selector);
@@ -605,23 +533,22 @@ contract KeyfleetIncomeTest is Test {
         }
     }
 
-    /// @dev Invariant: a paused staking contract stops the send and never a purchase. The whole
-    /// share stays owed, purchases keep adding to it, and once staking reopens one send registers
-    /// everything that built up.
-    function test_pausedStakingStopsTheSendButNeverAPurchase() public {
+    /// @dev Invariant: a USDC that refuses to pay the treasury stops the send and never a purchase.
+    /// The whole share stays owed, purchases keep adding to it, and once the transfer goes through
+    /// one send delivers everything that built up.
+    function test_aRefusedSendLeavesTheShareOwedAndNeverStopsAPurchase() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buy(fleet, alice);
         uint256 owed = fleet.protocolShareOwed();
-        staking.setPaused(true);
+        usdc.setBlocked(treasury);
 
-        vm.expectRevert(MockStaking.StakingPaused.selector);
+        vm.expectRevert(abi.encodeWithSelector(MockToken.Blocked.selector, treasury));
         fleet.sendProtocolShare();
         assertEq(fleet.protocolShareOwed(), owed, "the whole share is still owed");
-        assertEq(usdc.allowance(address(fleet), address(staking)), 0, "no approval survives the revert");
 
-        uint256 secondShare = fleet.nextPrice() / 50;
+        uint256 secondShare = fleet.nextPrice() / 10;
         _buy(fleet, bob);
-        assertEq(fleet.totalMinted(), 2, "a purchase goes through while staking is paused");
+        assertEq(fleet.totalMinted(), 2, "a purchase goes through while the send is refused");
         assertEq(fleet.protocolShareOwed(), owed + secondShare, "and adds its share on top");
         assertEq(
             usdc.balanceOf(address(fleet)),
@@ -629,57 +556,10 @@ contract KeyfleetIncomeTest is Test {
             "the fleet holds capital and the owed share"
         );
 
-        staking.setPaused(false);
-        assertEq(fleet.sendProtocolShare(), owed + secondShare, "one send registers everything that built up");
-        assertEq(staking.registered(), owed + secondShare);
+        usdc.setBlocked(address(0));
+        assertEq(fleet.sendProtocolShare(), owed + secondShare, "one send delivers everything that built up");
+        assertEq(usdc.balanceOf(treasury), owed + secondShare);
         assertEq(fleet.protocolShareOwed(), 0);
-    }
-
-    /// @dev Invariant: the send believes the staking contract only when it reports receiving the
-    /// whole owed share and has spent its approval, so one that under-reports or credits without
-    /// pulling is refused, the share stays owed, and a later purchase still accrues on top.
-    function test_stakingThatMisreportsTheShareIsRefusedAndTheShareStaysOwed() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buy(fleet, alice);
-        uint256 owed = fleet.protocolShareOwed();
-
-        staking.setShortfall(1);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, owed, owed - 1));
-        fleet.sendProtocolShare();
-        assertEq(fleet.protocolShareOwed(), owed, "an under-report leaves the share owed");
-        staking.setShortfall(0);
-
-        staking.setCreditWithoutPulling(true);
-        vm.expectRevert(abi.encodeWithSelector(Keyfleet.StakingRegistrationFailed.selector, owed, owed));
-        fleet.sendProtocolShare();
-        assertEq(fleet.protocolShareOwed(), owed, "a credit without a pull leaves the share owed");
-        assertEq(usdc.allowance(address(fleet), address(staking)), 0, "and no approval behind");
-
-        uint256 secondShare = fleet.nextPrice() / 50;
-        _buy(fleet, bob);
-        assertEq(fleet.protocolShareOwed(), owed + secondShare, "a later purchase accrues on top");
-        assertEq(staking.registered(), 0, "nothing was ever registered");
-        assertEq(usdc.balanceOf(address(staking)), 0, "and nothing was ever taken");
-    }
-
-    /// @dev Invariant: the send calls the staking contract, so the guard has to hold against it. A
-    /// staking contract that called back into a purchase or into a second send could otherwise act
-    /// on a fleet whose owed share it had not finished taking.
-    function test_reentryFromTheStakingContractDuringASendIsRejected() public {
-        bytes4[2] memory targets = [Keyfleet.purchase.selector, Keyfleet.sendProtocolShare.selector];
-        for (uint256 i = 0; i < targets.length; ++i) {
-            Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-            _buy(fleet, alice);
-            uint256 owed = fleet.protocolShareOwed();
-            staking.setCallback(fleet, targets[i]);
-
-            vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-            fleet.sendProtocolShare();
-
-            assertEq(fleet.protocolShareOwed(), owed, "the share is still owed");
-            assertEq(fleet.totalMinted(), 1, "no key was bought from inside the send");
-        }
-        assertEq(staking.registered(), 0, "nothing was registered");
     }
 
     /// @dev Invariant: the owed share is accounted for, so it is never surplus. A stray transfer
@@ -715,60 +595,116 @@ contract KeyfleetIncomeTest is Test {
         usdc.mint(address(fleet), 10_000);
 
         assertEq(fleet.sendProtocolShare(), owed, "the send reports the owed share");
-        assertEq(staking.registered(), owed, "staking registered exactly the owed share");
-        assertEq(usdc.balanceOf(address(staking)), owed, "and took exactly that");
+        assertEq(usdc.balanceOf(treasury), owed, "the treasury received exactly the owed share");
         assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still surplus");
         assertEq(fleet.freeCapital(address(usdc)), capital, "and shared money is unchanged");
         assertEq(usdc.balanceOf(address(fleet)), capital + 10_000);
     }
 }
 
-/// @dev The worst case of sorting income is a Fibonacci fleet with every level complete: twenty
-/// cohort indexes move and every slot it touches is cold. The state is built in `setUp`, which runs
-/// as its own transaction, and the measured call additionally cools every account it reads.
+/// @dev The cost of sorting income grows by one ledger write per completed Fibonacci level, and
+/// never with the number of keys or holders. It is measured here at twenty, thirty and forty
+/// completed levels, the last of which takes 701 million keys sold. Each state is built with one
+/// key per level, bought at the level's first token id, and the mint count is then written straight
+/// to the level's end, so the cohorts have members without minting every key. The measured call
+/// cools every account it reads.
 contract KeyfleetIncomeGasTest is Test {
     using stdStorage for StdStorage;
 
     /// @dev Each ceiling is the measured execution gas plus twenty percent, rounded up to the
     /// nearest thousand.
-    uint256 private constant SEND_CEILING = 262_000;
-    uint256 private constant SORT_CEILING = 813_000;
+    uint256 private constant SEND_CEILING = 48_000;
+    uint256 private constant SORT_20_CEILING = 804_000;
+    uint256 private constant SORT_30_CEILING = 1_164_000;
+    uint256 private constant SORT_40_CEILING = 1_523_000;
 
     StdStorage private fleetStore;
 
     MockToken private usdc;
-    MockToken private regent;
-    MockStaking private staking;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
-    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
     Keyfleet private fleet;
 
+    address private treasury = address(0x7EA5);
     address private payer = address(0xDEDE);
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
-        regent = new MockToken("Regent", "REGENT");
-        staking = new MockStaking(usdc);
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FibonacciSyndicate,
             usdc,
-            regent,
-            staking,
-            factory,
+            treasury,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             _randomness(),
             keccak256("trait table")
         );
         vrf.addConsumer(vrfSubscription, address(fleet));
+    }
 
-        // One key in every level, bought at that level's first token id, so all twenty cohorts have
-        // members. Minting all 46,365 keys would take the same cohort sizes an hour to reach.
-        for (uint256 level = 1; level <= KeyfleetPresets.MAX_FIBONACCI_LEVEL; ++level) {
-            uint256 start = _levelStart(level);
+    /// @dev A send touches one fleet slot and one USDC transfer. It is measured with the fleet and
+    /// USDC cold, against a plain ERC-20 standing in for USDC, so this is a regression bound; the
+    /// figure to publish is measured on a fork of Ethereum.
+    function test_sendProtocolShareGas() public {
+        _completeLevels(20);
+        uint256 owed = fleet.protocolShareOwed();
+        assertGt(owed, 0, "the purchases left a share owed");
+
+        vm.cool(address(fleet));
+        vm.cool(address(usdc));
+
+        uint256 before = gasleft();
+        fleet.sendProtocolShare();
+        uint256 used = before - gasleft();
+
+        emit log_named_uint("sendProtocolShare gas", used);
+        assertLt(used, SEND_CEILING, "the send stays under its ceiling");
+        assertEq(usdc.balanceOf(treasury), owed, "the whole owed share reached the treasury");
+    }
+
+    /// @dev Invariant: with twenty levels complete, sorting income pays all twenty.
+    function test_incomeAtTwentyCompletedLevels() public {
+        _measureSort(20, SORT_20_CEILING);
+    }
+
+    /// @dev Invariant: with thirty levels complete, sorting income pays all thirty.
+    function test_incomeAtThirtyCompletedLevels() public {
+        _measureSort(30, SORT_30_CEILING);
+    }
+
+    /// @dev Invariant: with forty levels complete, sorting income pays all forty, well inside one
+    /// block.
+    function test_incomeAtFortyCompletedLevels() public {
+        _measureSort(40, SORT_40_CEILING);
+    }
+
+    function _measureSort(uint256 levels, uint256 ceiling) private {
+        _completeLevels(levels);
+        assertEq(fleet.completedLevels(), levels, "every level is complete");
+        usdc.mint(address(fleet), 1_000_000e6);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        uint256 backedBefore = rewards.backed(address(usdc));
+
+        vm.cool(address(fleet));
+        vm.cool(address(rewards));
+        vm.cool(address(usdc));
+
+        uint256 before = gasleft();
+        fleet.recognizeSurplus(address(usdc));
+        uint256 used = before - gasleft();
+
+        emit log_named_uint(string.concat("recognizeSurplus gas at ", vm.toString(levels), " levels"), used);
+        assertLt(used, ceiling, "sorting stays under its ceiling");
+        assertEq(rewards.backed(address(usdc)), backedBefore + 1_000_000e6, "the whole receipt is backed");
+        assertGt(rewards.cohortIndex(address(usdc), levels), 0, "the last level was paid");
+    }
+
+    /// @dev Buys the first key of every level up to `levels`, then writes the mint count to the
+    /// last token id of that level.
+    function _completeLevels(uint256 levels) private {
+        for (uint256 level = 1; level <= levels; ++level) {
+            uint256 start = KeyfleetPresets.fibonacciLevelStart(level);
             fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(start - 1);
             uint256 price = fleet.nextPrice();
             usdc.mint(payer, price);
@@ -778,30 +714,7 @@ contract KeyfleetIncomeGasTest is Test {
             vm.stopPrank();
             assertEq(tokenId, start, "bought the first key of the level");
         }
-        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-
-        regent.mint(address(fleet), 1_000_000e18);
-    }
-
-    /// @dev A send touches one fleet slot and one registration. It is measured with the fleet, USDC
-    /// and the staking stand-in all cold, against the mock staking contract, whose own bookkeeping
-    /// is most of the figure, so this is a regression bound; the figure to publish is measured on
-    /// a fork of Base.
-    function test_sendProtocolShareGas() public {
-        uint256 owed = fleet.protocolShareOwed();
-        assertGt(owed, 0, "the twenty purchases left a share owed");
-
-        vm.cool(address(fleet));
-        vm.cool(address(usdc));
-        vm.cool(address(staking));
-
-        uint256 before = gasleft();
-        fleet.sendProtocolShare();
-        uint256 used = before - gasleft();
-
-        emit log_named_uint("sendProtocolShare gas", used);
-        assertLt(used, SEND_CEILING, "the send stays under its ceiling");
-        assertEq(staking.registered(), owed, "the whole owed share was registered");
+        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(KeyfleetPresets.fibonacciLevelEnd(levels));
     }
 
     /// @dev A fleet's randomness: the mock coordinator and the suite's subscription.
@@ -811,39 +724,5 @@ contract KeyfleetIncomeGasTest is Test {
             subscriptionId: vrfSubscription,
             keyHash: keccak256("key hash")
         });
-    }
-
-    function _levelStart(uint256 level) private pure returns (uint256) {
-        if (level == 1) return 1;
-        uint256 previous = 1;
-        uint256 current = 2;
-        uint256 total = 2;
-        for (uint256 i = 1; i < level - 1; ++i) {
-            (previous, current) = (current, previous + current);
-            total += current;
-        }
-        return total + 1;
-    }
-
-    /// @dev Invariant: the cost of sorting income is bounded by the twenty-level preset and does not
-    /// grow with the number of keys or holders, so income can always reach the keys however large
-    /// the fleet gets.
-    function test_worstCaseIncomeAtTwentyCompletedLevels() public {
-        assertEq(fleet.completedLevels(), 20, "every level is complete");
-
-        vm.cool(address(fleet));
-        vm.cool(address(fleet.REWARDS()));
-        vm.cool(address(regent));
-
-        uint256 before = gasleft();
-        fleet.recognizeSurplus(address(regent));
-        uint256 used = before - gasleft();
-
-        emit log_named_uint("worst-case recognizeSurplus gas", used);
-        assertLt(used, SORT_CEILING, "worst-case sorting stays under the published ceiling");
-
-        KeyfleetRewards rewards = fleet.REWARDS();
-        assertEq(rewards.backed(address(regent)), 1_000_000e18, "the whole receipt is backed");
-        assertGt(rewards.cohortIndex(address(regent), 20), 0, "the twentieth level was paid");
     }
 }

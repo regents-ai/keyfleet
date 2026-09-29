@@ -8,10 +8,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /// @notice Per-fleet reward ledger. One instance is permanently bound to one fleet contract.
 /// @dev The fleet is the sole writer. There is no admin, no upgrade path, and no exit other
-/// than `claim`. The ledger pays exactly the fleet's income tokens: USDC, REGENT, and the
-/// fleet's launched token once the fleet records its launch. Rewards are distributed through
-/// per-cohort cumulative indexes, so allocation never iterates over recipients; settlement
-/// iterates over at most those three tokens.
+/// than `claim`. The ledger pays exactly one income token, the fleet's USDC. Rewards are
+/// distributed through per-cohort cumulative indexes, so allocation never iterates over
+/// recipients. Cohort membership is the fleet's decision: cohort 0 on Classic and Accelerant, and
+/// the key's level on the two Fibonacci presets, which have no last level.
 /// Accrued rewards belong permanently to the address that held the key while they accrued: the
 /// fleet settles a key to its outgoing owner before every ownership change, and the incoming
 /// owner continues from the cohort's current index.
@@ -21,7 +21,6 @@ contract KeyfleetRewards is ReentrancyGuard {
     error ZeroAddress();
     error OnlyFleet();
     error UnknownAsset();
-    error CohortOutOfBounds();
     error KeyAlreadyEnrolled();
     error KeyNotEnrolled();
     error NoEligibleKeys();
@@ -30,20 +29,13 @@ contract KeyfleetRewards is ReentrancyGuard {
     error NotKeyOwner();
     error NothingToClaim();
 
-    /// @notice Cohort ids run 0..MAX_COHORTS-1. Cohort membership is the fleet's decision.
-    uint256 public constant MAX_COHORTS = 32;
     /// @notice Fixed-point scale of every cumulative index.
     uint256 public constant PRECISION = 1e27;
 
     /// @notice The fleet contract that owns this ledger and holds the keys.
     address public immutable FLEET;
-    /// @notice USDC, an income token from deployment.
+    /// @notice USDC, the one income token.
     address public immutable USDC;
-    /// @notice REGENT, an income token from deployment.
-    address public immutable REGENT;
-    /// @notice The launched token of the fleet's current launch, an income token once the fleet
-    /// records that launch; zero before.
-    address public launchedToken;
 
     /// @notice Tokens reserved for credits, unsettled index accruals, and retained rounding dust.
     mapping(address asset => uint256 amount) public backed;
@@ -61,18 +53,16 @@ contract KeyfleetRewards is ReentrancyGuard {
     /// being dropped on every settlement.
     mapping(uint256 tokenId => mapping(address asset => uint256 index)) private _keyIndex;
 
-    event LaunchedTokenSet(address indexed asset);
     event KeyEnrolled(uint256 indexed tokenId, uint256 indexed cohortId);
     event Allocated(address indexed asset, uint256 indexed cohortId, uint256 amount, uint256 newIndex);
     event Credited(address indexed asset, address indexed account, uint256 amount);
     event Settled(uint256 indexed tokenId, address indexed asset, address indexed owner, uint256 amount);
     event Claimed(address indexed asset, address indexed account, address indexed to, uint256 amount);
 
-    constructor(address fleet, address usdc, address regent) {
-        if (fleet == address(0) || usdc == address(0) || regent == address(0)) revert ZeroAddress();
+    constructor(address fleet, address usdc) {
+        if (fleet == address(0) || usdc == address(0)) revert ZeroAddress();
         FLEET = fleet;
         USDC = usdc;
-        REGENT = regent;
     }
 
     modifier onlyFleet() {
@@ -80,30 +70,15 @@ contract KeyfleetRewards is ReentrancyGuard {
         _;
     }
 
-    /// @notice Whether `asset` is one of the fleet's income tokens.
+    /// @notice Whether `asset` is the fleet's income token.
     function isRewardAsset(address asset) public view returns (bool) {
-        return asset != address(0) && (asset == USDC || asset == REGENT || asset == launchedToken);
+        return asset == USDC;
     }
 
-    /// @notice The income tokens: USDC, REGENT, then the launched token once it is recorded.
+    /// @notice The income tokens: USDC alone.
     function rewardAssets() public view returns (address[] memory assets) {
-        address launched = launchedToken;
-        assets = new address[](launched == address(0) ? 2 : 3);
+        assets = new address[](1);
         assets[0] = USDC;
-        assets[1] = REGENT;
-        if (launched != address(0)) assets[2] = launched;
-    }
-
-    /// @notice Records the launched token of the fleet's current launch as its third income token.
-    /// @dev The fleet calls this for its first launch and again for a launch that follows a failed
-    /// one. Each launch creates its SUBJECT, so no allocation in it can exist before this call and
-    /// every key's watermark and every cohort index start together at zero. The failed SUBJECT it
-    /// replaces never had an allocation either: the whole of a failed launch's supply is retired
-    /// without any of it reaching the fleet.
-    function setLaunchedToken(address asset) external onlyFleet {
-        if (asset == address(0)) revert ZeroAddress();
-        launchedToken = asset;
-        emit LaunchedTokenSet(asset);
     }
 
     /// @notice Cohort id of an enrolled key.
@@ -114,15 +89,10 @@ contract KeyfleetRewards is ReentrancyGuard {
     /// @notice Enrolls a key into a cohort at that cohort's current indexes, so it earns nothing
     /// from earlier allocations. Enrollment is permanent and happens at most once per key.
     function enrollKey(uint256 tokenId, uint256 cohortId) external onlyFleet {
-        if (cohortId >= MAX_COHORTS) revert CohortOutOfBounds();
         if (_keyCohortPlusOne[tokenId] != 0) revert KeyAlreadyEnrolled();
         _keyCohortPlusOne[tokenId] = cohortId + 1;
         cohortSize[cohortId] += 1;
-        address[] memory assets = rewardAssets();
-        for (uint256 i = 0; i < assets.length; ++i) {
-            address asset = assets[i];
-            _keyIndex[tokenId][asset] = cohortIndex[asset][cohortId];
-        }
+        _keyIndex[tokenId][USDC] = cohortIndex[USDC][cohortId];
         emit KeyEnrolled(tokenId, cohortId);
     }
 
@@ -132,7 +102,6 @@ contract KeyfleetRewards is ReentrancyGuard {
     /// still counted as backed, so the reserve is never optimistic.
     function allocateToCohort(address asset, uint256 cohortId, uint256 amount) external onlyFleet {
         if (!isRewardAsset(asset)) revert UnknownAsset();
-        if (cohortId >= MAX_COHORTS) revert CohortOutOfBounds();
         if (amount == 0) revert ZeroAmount();
         uint256 size = cohortSize[cohortId];
         if (size == 0) revert NoEligibleKeys();
@@ -156,16 +125,11 @@ contract KeyfleetRewards is ReentrancyGuard {
         emit Credited(asset, account, amount);
     }
 
-    /// @notice Converts a key's index accruals into pull credits for `owner`, for every income
-    /// token. The fleet calls this before every ownership change so the outgoing owner keeps what
+    /// @notice Converts a key's index accruals into pull credits for `owner`. The fleet calls this before every ownership change so the outgoing owner keeps what
     /// the key earned under them.
     function settleKey(uint256 tokenId, address owner) external onlyFleet {
         if (owner == address(0)) revert ZeroAddress();
-        uint256 cohortId = _cohortOf(tokenId);
-        address[] memory assets = rewardAssets();
-        for (uint256 i = 0; i < assets.length; ++i) {
-            _settle(tokenId, assets[i], cohortId, owner);
-        }
+        _settle(tokenId, USDC, _cohortOf(tokenId), owner);
     }
 
     /// @notice Whole units a key has accrued for one asset and not yet had settled.

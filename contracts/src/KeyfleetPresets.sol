@@ -3,11 +3,14 @@ pragma solidity 0.8.26;
 
 import {KeyfleetClassicPrices} from "./KeyfleetClassicPrices.sol";
 
-/// @notice Supply, price, holding-limit, purchase-split and launch-threshold arithmetic for the four
+/// @notice Supply, price, holding-limit and purchase-split arithmetic for the four
 ///         fleet presets.
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
 ///      the published product contract and is reproduced in the deployment manifest. All arithmetic is
-///      checked; the bounds below keep every intermediate product far inside 256 bits.
+///      checked. The two Fibonacci presets have no last level: supply and price carry on by the same rule
+///      for ever, and a level or token id so large that its arithmetic would leave 256 bits reverts. No
+///      fleet can reach one: a level's price passes a billion USDC at level 103, while the Fibonacci
+///      sums first leave 256 bits at level 367.
 ///
 ///      Every price here is in atomic USDC, millionths of one USDC, and is what a fleet charges.
 library KeyfleetPresets {
@@ -20,7 +23,7 @@ library KeyfleetPresets {
     }
 
     /// @notice How a single gross purchase amount is divided. The four parts always sum to gross.
-    /// @param protocol Protocol share for the Regents staking contract, taken once on every purchase.
+    /// @param protocol Protocol share for the Regents protocol treasury, taken once on every purchase.
     /// @param capital Share that becomes the fleet's shared money.
     /// @param reserve Level-completion reserve, used by Fibonacci Cascade only.
     /// @param rebate Share paid to the holder of the preceding key, used by Accelerant primary mints after the first only.
@@ -31,10 +34,10 @@ library KeyfleetPresets {
         uint256 rebate;
     }
 
-    /// @notice Fibonacci level is rejected outside `1 <= level <= MAX_FIBONACCI_LEVEL`.
+    /// @notice Fibonacci level zero is rejected; levels start at 1.
     error LevelOutOfBounds();
-    /// @notice Token id is rejected outside the preset's range: `1 <= tokenId <= FIBONACCI_MAX_TOKEN_ID`
-    ///         for Fibonacci, `1 <= tokenId <= CLASSIC_SUPPLY` for Classic.
+    /// @notice Token id is rejected outside the preset's range: zero for Fibonacci, and outside
+    ///         `1 <= tokenId <= CLASSIC_SUPPLY` for Classic.
     error TokenIdOutOfBounds();
     /// @notice Accelerant mint index is rejected at or above `MAX_ACCELERANT_KEYS`.
     error MintIndexOutOfBounds();
@@ -48,10 +51,6 @@ library KeyfleetPresets {
     /// @notice The decimals `Q_USDC` is written in. A fleet refuses a USDC reporting any other.
     uint8 internal constant USDC_DECIMALS = 6;
 
-    /// @notice Highest Fibonacci level, whose supply is 17711 keys.
-    uint256 internal constant MAX_FIBONACCI_LEVEL = 20;
-    /// @notice Cumulative Fibonacci supply through `MAX_FIBONACCI_LEVEL`, and so the highest token id.
-    uint256 internal constant FIBONACCI_MAX_TOKEN_ID = 46_365;
     /// @notice Highest level whose per-wallet holding limit is a single key.
     uint256 internal constant FIBONACCI_SINGLE_KEY_MAX_LEVEL = 7;
     /// @notice Above `FIBONACCI_SINGLE_KEY_MAX_LEVEL` the holding limit is the level supply over this divisor.
@@ -71,16 +70,10 @@ library KeyfleetPresets {
     uint256 internal constant ACCELERANT_STEP_NUMERATOR = 105;
     uint256 internal constant ACCELERANT_STEP_DENOMINATOR = 100;
 
-    /// @notice Keys a Fibonacci fleet must have minted before it may propose its Autolaunch: every key
-    ///         through the last key of level 7, which is `fibonacciTotalSupplyThrough(7)`.
-    uint256 internal constant FIBONACCI_AUTOLAUNCH_MIN_KEYS = 86;
-    /// @notice Keys a Classic or Accelerant fleet must have minted before it may propose its Autolaunch.
-    uint256 internal constant FLEET_TECH_AUTOLAUNCH_MIN_KEYS = 100;
-
-    /// @notice Protocol share of gross for the Regents staking contract, in basis points: 2%.
-    uint256 internal constant PROTOCOL_BPS = 200;
-    /// @notice Capital share of gross on Accelerant purchases with a predecessor, in basis points.
-    uint256 internal constant ACCELERANT_CAPITAL_BPS = 1000;
+    /// @notice Protocol share of gross for the Regents protocol treasury, in basis points: 10%.
+    uint256 internal constant PROTOCOL_BPS = 1000;
+    /// @notice Capital share of gross on Accelerant purchases with a predecessor, in basis points: 20%.
+    uint256 internal constant ACCELERANT_CAPITAL_BPS = 2000;
     /// @notice Basis-point denominator.
     uint256 internal constant BPS_DENOMINATOR = 10_000;
 
@@ -129,7 +122,7 @@ library KeyfleetPresets {
 
     /// @notice Level that owns a Fibonacci token id.
     function fibonacciLevelOf(uint256 tokenId) internal pure returns (uint256) {
-        if (tokenId == 0 || tokenId > FIBONACCI_MAX_TOKEN_ID) revert TokenIdOutOfBounds();
+        if (tokenId == 0) revert TokenIdOutOfBounds();
         uint256 previous = 1;
         uint256 current = 2;
         uint256 cumulative = 2;
@@ -219,6 +212,6 @@ library KeyfleetPresets {
     }
 
     function _requireLevel(uint256 level) private pure {
-        if (level == 0 || level > MAX_FIBONACCI_LEVEL) revert LevelOutOfBounds();
+        if (level == 0) revert LevelOutOfBounds();
     }
 }
