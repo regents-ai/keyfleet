@@ -4,18 +4,17 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IRegentsAutolaunchFactoryV1} from "./interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {Keyfleet} from "./Keyfleet.sol";
-import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 
 /// @notice The one fixed vote of a fleet: a proposal that stays open until it is carried out, and a
-/// single approval rule.
+/// fixed approval rule for each kind.
 /// @dev One instance is permanently bound to one fleet, which deploys it in its own constructor.
 /// There are no councils, no moderators, no rule amendments and no configurable presets, and no
-/// windows, delays, expiries, periods or caps. A proposal is approved at any moment its YES votes
-/// are more than half of all the keys sold so far, `yesVotes * 2 > FLEET.totalMinted()`, so a key
-/// that stays silent counts against it. Anyone may carry out an approved proposal, and until
-/// someone does it stays open.
+/// windows, delays, expiries, periods or caps. A Decision or a Pay is approved at any moment its
+/// YES votes are more than half of all the keys sold so far, `yesVotes * 2 > FLEET.totalMinted()`;
+/// a RestrictEdits is approved at any moment its YES votes are at least three fifths of them,
+/// `yesVotes * 5 >= FLEET.totalMinted() * 3`. Either way a key that stays silent counts against
+/// it. Anyone may carry out an approved proposal, and until someone does it stays open.
 ///
 /// Every key is one vote on every kind of proposal, whatever the preset. A key may vote on a
 /// proposal only if it last moved — its mint or its latest transfer — in a block before the one
@@ -28,12 +27,11 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 ///
 /// There are three kinds. A `Decision` records agreement and has no external side effect; its
 /// text is carried in the creation event only and an optional digest pins the exact artifact or
-/// commit. An `Autolaunch` carries the exact launch envelope the keys approve and, once carried
-/// out, has the fleet call the pinned Autolaunch factory with itself as launcher and treasury; a
-/// fleet may propose one only once it has sold the keys its preset requires. The first one carried
-/// out wins; another can be carried out only if that launch's auction fails, and none once a launch
-/// has graduated. A `Pay` carries an asset, an amount and a recipient, with its reason in the
-/// creation event, and, once carried out, has the fleet pay that amount of its shared money.
+/// commit. A `Pay` carries an asset, an amount and a recipient, with its reason in the creation
+/// event, and, once carried out, has the fleet pay that amount of its shared money. A
+/// `RestrictEdits` names a key and whether its edits are to be restricted or unrestricted, and,
+/// once carried out, records that in `editsRestricted`, which is read off chain to decide whether
+/// the key and its shards may write the fleet's workspace.
 ///
 /// Every payment is matched. When it is carried out, every key sold that did not vote YES — it
 /// voted NO, stayed silent, withdrew its vote, or could not vote — is matched with the payment
@@ -50,8 +48,8 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 /// at creation, and any change to a payload is a new proposal rather than an edit.
 ///
 /// There is no administrator, no upgrade path, no pause, no cancellation, no quorum tuning and no
-/// delegation by signature. A majority of keys can approve a launch, a decision or a payment the
-/// rest of the fleet did not want, and no hidden signer is introduced to prevent that; matching
+/// delegation by signature. A majority of keys can approve a decision or a payment the rest of
+/// the fleet did not want, and no hidden signer is introduced to prevent that; matching
 /// means a payment only ever spends the majority's own share. The only tokens a vote can move are
 /// the fleet's shared money, so claim and reserve solvency hold regardless of any vote.
 contract KeyfleetVotes is ReentrancyGuard {
@@ -60,8 +58,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @notice What a proposal does once it is carried out.
     enum Kind {
         Decision,
-        Autolaunch,
-        Pay
+        Pay,
+        RestrictEdits
     }
 
     /// @notice Where a proposal stands right now.
@@ -80,10 +78,9 @@ contract KeyfleetVotes is ReentrancyGuard {
     }
 
     /// @notice One proposal. Its payload is fixed at creation; only the tallies move.
-    /// @dev An Autolaunch proposal's payload is not here: it is a whole envelope, kept in its own
-    /// mapping so the record every proposal shares stays one fixed-size read. A Pay proposal's three
-    /// fields are here, and are zero on every other kind.
-    /// @param kind Decision, Autolaunch or Pay.
+    /// @dev A Pay proposal's fields and a RestrictEdits proposal's two fields are zero on every
+    /// other kind.
+    /// @param kind Decision, Pay or RestrictEdits.
     /// @param proposer The address that created it.
     /// @param openedBlock Block of creation. Keys that last moved before it may vote.
     /// @param yesVotes Keys whose current vote is YES.
@@ -96,6 +93,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     /// @param share Pay only, once carried out: what each key that did not vote YES may collect.
     /// @param keysSold Pay only, once carried out: the keys sold at that moment. Keys `1..keysSold`
     /// that did not vote YES may collect.
+    /// @param targetTokenId RestrictEdits only: the key whose edits it restricts or unrestricts.
+    /// @param restricted RestrictEdits only: true to restrict, false to unrestrict.
     struct Proposal {
         Kind kind;
         address proposer;
@@ -109,6 +108,8 @@ contract KeyfleetVotes is ReentrancyGuard {
         address recipient;
         uint256 share;
         uint256 keysSold;
+        uint256 targetTokenId;
+        bool restricted;
     }
 
     /// @notice The fleet address supplied at construction, or a Pay proposal's asset, was zero.
@@ -120,8 +121,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     error RecipientNotAllowed(address recipient);
     /// @notice No proposal carries this id.
     error UnknownProposal(uint256 proposalId);
-    /// @notice The fleet has not sold the keys its preset requires before it may propose a launch.
-    error LaunchNotYetEligible(uint256 minted, uint256 required);
+    /// @notice No key with this id has been sold.
+    error KeyNotMinted(uint256 tokenId);
     /// @notice The key moved in or after the block this proposal opened in, so it cannot vote on it;
     /// or it was sold after the payment was carried out, so it has no match to collect.
     error KeyNotEligible(uint256 tokenId);
@@ -133,18 +134,8 @@ contract KeyfleetVotes is ReentrancyGuard {
     error NoKeys();
     /// @notice The proposal has already been carried out. Every proposal is carried out at most once.
     error AlreadyExecuted();
-    /// @notice YES is not more than half of all the keys sold so far.
+    /// @notice YES is not enough of all the keys sold so far for this kind of proposal.
     error NotApproved(uint256 yesVotes, uint256 totalMinted);
-    /// @notice One of the launch envelope's five metadata strings was empty. Fields are numbered
-    /// `0..4` in the order name, symbol, description, website, image, as the factory numbers them.
-    error EmptyMetadataField(uint256 field);
-    /// @notice One of the launch envelope's five metadata strings was over its byte cap.
-    error MetadataFieldTooLong(uint256 field, uint256 maximum, uint256 found);
-    /// @notice The required raise was zero or above the largest raise the strategy says an auction
-    /// can reach.
-    error RaiseOutOfBounds(uint128 requiredRegentRaised);
-    /// @notice This proposal is not an Autolaunch, so it carries no launch envelope.
-    error NotAnAutolaunch(uint256 proposalId);
     /// @notice Nothing can be collected from this proposal: it is not a carried-out payment.
     error NothingToCollect(uint256 proposalId);
     /// @notice The key has no vote on this proposal to withdraw.
@@ -156,7 +147,7 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     /// @notice A proposal was created. `text` is carried here and stored nowhere.
     /// @param proposalId The new proposal.
-    /// @param kind Decision, Autolaunch or Pay.
+    /// @param kind Decision, Pay or RestrictEdits.
     /// @param proposer The address that created it.
     /// @param openedBlock Block of creation; keys that last moved before it may vote.
     /// @param digest Optional exact artifact or commit digest; zero means none.
@@ -170,13 +161,11 @@ contract KeyfleetVotes is ReentrancyGuard {
         string text
     );
 
-    /// @notice The payload of an Autolaunch proposal, emitted beside its `ProposalCreated`.
-    /// @param envelopeHash `keccak256(abi.encode(envelope))`, which fixes exactly what was approved.
-    /// The envelope itself is stored and readable with `launchEnvelope`.
-    event AutolaunchProposed(uint256 indexed proposalId, bytes32 envelopeHash);
-
     /// @notice The payload of a Pay proposal, emitted beside its `ProposalCreated`.
     event PayProposed(uint256 indexed proposalId, address indexed asset, uint256 amount, address indexed recipient);
+
+    /// @notice The payload of a RestrictEdits proposal, emitted beside its `ProposalCreated`.
+    event RestrictEditsProposed(uint256 indexed proposalId, uint256 indexed targetTokenId, bool restricted);
 
     /// @notice An owner set or cleared the address that may vote their keys for them.
     event VotingDelegateSet(address indexed owner, address indexed delegate);
@@ -190,6 +179,9 @@ contract KeyfleetVotes is ReentrancyGuard {
 
     /// @notice An approved Decision was recorded. Nothing else happens on chain.
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
+
+    /// @notice An approved RestrictEdits set whether a key's edits are restricted.
+    event EditsRestrictionSet(uint256 indexed targetTokenId, bool restricted, uint256 indexed proposalId);
 
     /// @notice A proposal was carried out. It can never be carried out again.
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
@@ -210,9 +202,11 @@ contract KeyfleetVotes is ReentrancyGuard {
     mapping(uint256 proposalId => mapping(uint256 tokenId => Choice choice)) public voteOf;
     /// @notice Whether a key's match of a carried-out payment has been collected.
     mapping(uint256 proposalId => mapping(uint256 tokenId => bool paid)) public collected;
+    /// @notice Whether the keys voted to restrict a key's edits, as the latest carried-out
+    /// RestrictEdits for that key left it.
+    mapping(uint256 tokenId => bool restricted) public editsRestricted;
 
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
-    mapping(uint256 proposalId => Keyfleet.LaunchEnvelope envelope) private _envelopes;
 
     /// @notice Binds this controller to the fleet that deploys it.
     /// @param fleet The fleet whose keys vote here.
@@ -228,20 +222,13 @@ contract KeyfleetVotes is ReentrancyGuard {
         return _require(proposalId);
     }
 
-    /// @notice The exact launch envelope an Autolaunch proposal approves.
-    /// @dev Fixed at creation and never edited: changing anything in it means a new proposal.
-    function launchEnvelope(uint256 proposalId) external view returns (Keyfleet.LaunchEnvelope memory) {
-        if (_require(proposalId).kind != Kind.Autolaunch) revert NotAnAutolaunch(proposalId);
-        return _envelopes[proposalId];
-    }
-
     /// @notice Where a proposal stands: open, approved and ready to be carried out, or carried out.
     /// @dev `Approved` is the whole test for a Decision's approval as well as the test `execute`
     /// applies, and it is read at this moment: a later sale can take a proposal back to `Open`.
     function state(uint256 proposalId) external view returns (State) {
         Proposal storage stored = _require(proposalId);
         if (stored.executed) return State.Executed;
-        return _approved(stored.yesVotes, FLEET.totalMinted()) ? State.Approved : State.Open;
+        return _approved(stored.kind, stored.yesVotes, FLEET.totalMinted()) ? State.Approved : State.Open;
     }
 
     // --- delegation ------------------------------------------------------
@@ -269,64 +256,6 @@ contract KeyfleetVotes is ReentrancyGuard {
         returns (uint256 proposalId)
     {
         return _propose(tokenId, Kind.Decision, text, digest);
-    }
-
-    /// @notice Proposes the exact launch the fleet would create through the pinned Autolaunch
-    /// factory, with itself as launcher and treasury.
-    /// @dev A fleet may propose a launch only once it has sold the keys its preset requires: a
-    /// Fibonacci fleet the last key of level 7, `FIBONACCI_AUTOLAUNCH_MIN_KEYS`, and a Classic or
-    /// Accelerant fleet `FLEET_TECH_AUTOLAUNCH_MIN_KEYS`. Anything earlier is refused with
-    /// `LaunchNotYetEligible`, before the factory is asked anything.
-    ///
-    /// Everything that could make the approved call impossible on its own terms is checked
-    /// here, so the keys are never asked to vote on a launch that could never happen: the five
-    /// metadata strings against the byte caps, the raise against the largest one an auction can
-    /// reach, and a fleet whose launch has graduated, which can never launch again. A launch may be
-    /// proposed while another is running, because it can be carried out if that one fails.
-    ///
-    /// The caps and the raise ceiling are not copied into this repository. They are read from the
-    /// pinned factory and from the strategy it is bound to, in this call, so the figures a proposal
-    /// is judged by are always the ones the target itself publishes and this controller can never
-    /// hold a stale opinion of what the target will accept. The factory and the strategy check
-    /// their own rules again on the call itself and remain the authority on both of theirs.
-    ///
-    /// Nothing about the factory's own state is checked here, because it is not this fleet's to
-    /// predict: a factory that is paused when the proposal is made may well be open when it
-    /// executes, and the execution reverts harmlessly if it is not.
-    ///
-    /// The envelope's narrative digest becomes the proposal's digest, which is what pins the launch
-    /// to the content-addressed narrative the keys read. The envelope itself is stored whole and
-    /// never edited; any change to it is a new proposal.
-    /// @param tokenId A key the caller owns or is the registered delegate of.
-    /// @param envelope The exact launch to approve.
-    /// @return proposalId The new proposal.
-    function proposeAutolaunch(uint256 tokenId, Keyfleet.LaunchEnvelope calldata envelope)
-        external
-        returns (uint256 proposalId)
-    {
-        uint256 minted = FLEET.totalMinted();
-        uint256 required = _isFibonacci()
-            ? KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS
-            : KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS;
-        if (minted < required) revert LaunchNotYetEligible(minted, required);
-
-        IRegentsAutolaunchFactoryV1 factory = FLEET.FACTORY();
-        _requireBytes(0, bytes(envelope.name).length, factory.MAX_NAME_BYTES());
-        _requireBytes(1, bytes(envelope.symbol).length, factory.MAX_SYMBOL_BYTES());
-        _requireBytes(2, bytes(envelope.description).length, factory.MAX_DESCRIPTION_BYTES());
-        _requireBytes(3, bytes(envelope.website).length, factory.MAX_WEBSITE_BYTES());
-        _requireBytes(4, bytes(envelope.image).length, factory.MAX_IMAGE_BYTES());
-        if (
-            envelope.requiredRegentRaised == 0
-                || envelope.requiredRegentRaised > factory.strategy().MAX_REACHABLE_RAISE()
-        ) {
-            revert RaiseOutOfBounds(envelope.requiredRegentRaised);
-        }
-        if (FLEET.launchState() == Keyfleet.LaunchState.Graduated) revert Keyfleet.LaunchAlreadyCreated();
-
-        proposalId = _propose(tokenId, Kind.Autolaunch, "", envelope.narrativeDigest);
-        _envelopes[proposalId] = envelope;
-        emit AutolaunchProposed(proposalId, keccak256(abi.encode(envelope)));
     }
 
     /// @notice Proposes paying an amount of one asset from the fleet's shared money to a recipient.
@@ -364,6 +293,34 @@ contract KeyfleetVotes is ReentrancyGuard {
         stored.amount = amount;
         stored.recipient = recipient;
         emit PayProposed(proposalId, asset, amount, recipient);
+    }
+
+    /// @notice Proposes restricting or unrestricting a key's edits.
+    /// @dev Approved only when at least three fifths of all the keys sold vote YES. The key named
+    /// must have been sold; it may be the proposer's own. The text is emitted and never stored,
+    /// exactly as a Decision's is.
+    /// @param tokenId A key the caller owns or is the registered delegate of.
+    /// @param targetTokenId The key whose edits to restrict or unrestrict.
+    /// @param restricted True to restrict, false to unrestrict.
+    /// @param text The reason, for readers.
+    /// @param digest Optional exact artifact or commit digest.
+    /// @return proposalId The new proposal.
+    function proposeRestrictEdits(
+        uint256 tokenId,
+        uint256 targetTokenId,
+        bool restricted,
+        string calldata text,
+        bytes32 digest
+    ) external returns (uint256 proposalId) {
+        if (targetTokenId == 0 || targetTokenId > FLEET.totalMinted()) {
+            revert KeyNotMinted(targetTokenId);
+        }
+
+        proposalId = _propose(tokenId, Kind.RestrictEdits, text, digest);
+        Proposal storage stored = _proposals[proposalId];
+        stored.targetTokenId = targetTokenId;
+        stored.restricted = restricted;
+        emit RestrictEditsProposed(proposalId, targetTokenId, restricted);
     }
 
     // --- voting ----------------------------------------------------------
@@ -443,37 +400,41 @@ contract KeyfleetVotes is ReentrancyGuard {
     // --- execution -------------------------------------------------------
 
     /// @notice Carries out an approved proposal.
-    /// @dev Permissionless: the result is the vote's, not the caller's. The approval rule is
-    /// `yesVotes * 2 > FLEET.totalMinted()` at this moment, so YES must be more than half of all
-    /// the keys sold so far and every key that stayed silent counts against it.
+    /// @dev Permissionless: the result is the vote's, not the caller's. The approval rule is read
+    /// at this moment against all the keys sold so far: YES must be more than half of them for a
+    /// Decision or a Pay and at least three fifths of them for a RestrictEdits, and every key that
+    /// stayed silent counts against it.
     ///
     /// A Pay has the fleet pay the recipient and match every key sold that did not vote YES, and
-    /// records the match per key and the keys sold, which is what `collect` pays out against.
+    /// records the match per key and the keys sold, which is what `collect` pays out against. A
+    /// RestrictEdits sets `editsRestricted` for its key.
     ///
-    /// The proposal is marked carried out before the fleet is called, so a launch artifact or a
-    /// paid asset that calls back can never carry it out twice. Any revert inside the fleet or the
-    /// factory — a paused factory, a raise the strategy refuses, a running or graduated launch, a
-    /// launch proposal that opened in or before the block a failed launch was created in, a payment
-    /// whose matches do not fit — undoes the mark with everything else, so the attempt consumes
-    /// nothing and the proposal stays open.
+    /// The proposal is marked carried out before the fleet is called, so a paid asset that calls
+    /// back can never carry it out twice. A revert inside the fleet, such as a payment whose matches
+    /// do not fit, undoes the mark with everything else, so the attempt consumes nothing and the
+    /// proposal stays open.
     /// @param proposalId The proposal to carry out.
     function execute(uint256 proposalId) external nonReentrant {
         Proposal storage stored = _require(proposalId);
         if (stored.executed) revert AlreadyExecuted();
         uint256 keys = FLEET.totalMinted();
         uint256 yesVotes = stored.yesVotes;
-        if (!_approved(yesVotes, keys)) revert NotApproved(yesVotes, keys);
+        Kind kind = stored.kind;
+        if (!_approved(kind, yesVotes, keys)) revert NotApproved(yesVotes, keys);
 
         stored.executed = true;
         emit ProposalExecuted(proposalId, msg.sender);
 
-        if (stored.kind == Kind.Decision) {
+        if (kind == Kind.Decision) {
             emit DecisionRecorded(proposalId, stored.digest);
-        } else if (stored.kind == Kind.Autolaunch) {
-            FLEET.executeAutolaunch(proposalId, stored.openedBlock, _envelopes[proposalId]);
-        } else {
+        } else if (kind == Kind.Pay) {
             stored.keysSold = keys;
             stored.share = FLEET.payFromBudget(stored.asset, stored.amount, stored.recipient, yesVotes);
+        } else {
+            uint256 target = stored.targetTokenId;
+            bool restricted = stored.restricted;
+            editsRestricted[target] = restricted;
+            emit EditsRestrictionSet(target, restricted, proposalId);
         }
     }
 
@@ -552,15 +513,6 @@ contract KeyfleetVotes is ReentrancyGuard {
         emit ProposalCreated(proposalId, kind, msg.sender, uint64(block.number), digest, text);
     }
 
-    /// @dev One metadata field against the factory's own rule: nonempty and within the byte cap the
-    /// factory published. Solidity strings are bytes, and the caps are byte caps, so a field of
-    /// multi-byte characters holds fewer of them than the number suggests. Nothing is normalized,
-    /// shortened or checked for content here; the factory does not do any of that either.
-    function _requireBytes(uint256 field, uint256 length, uint256 maximum) private pure {
-        if (length == 0) revert EmptyMetadataField(field);
-        if (length > maximum) revert MetadataFieldTooLong(field, maximum, length);
-    }
-
     /// @dev The caster of a key is its current owner or that owner's registered delegate. A token id
     /// that is not a minted key reverts in `ownerOf`.
     function _requireCaster(uint256 tokenId) private view {
@@ -568,18 +520,15 @@ contract KeyfleetVotes is ReentrancyGuard {
         if (msg.sender != owner && votingDelegate[owner] != msg.sender) revert NotAuthorizedForKey(tokenId, owner);
     }
 
-    /// @dev YES must be more than half of all the keys sold so far, so an abstention counts against.
-    function _approved(uint256 yesVotes, uint256 keysSold) private pure returns (bool) {
+    /// @dev A RestrictEdits needs YES from at least three fifths of all the keys sold so far; every
+    /// other kind needs YES from more than half of them. An abstention counts against either way.
+    function _approved(Kind kind, uint256 yesVotes, uint256 keysSold) private pure returns (bool) {
+        if (kind == Kind.RestrictEdits) return yesVotes * 5 >= keysSold * 3;
         return yesVotes * 2 > keysSold;
     }
 
     function _require(uint256 proposalId) private view returns (Proposal storage stored) {
         if (proposalId == 0 || proposalId > proposalCount) revert UnknownProposal(proposalId);
         return _proposals[proposalId];
-    }
-
-    function _isFibonacci() private view returns (bool) {
-        KeyfleetPresets.Preset preset = FLEET.PRESET();
-        return preset == KeyfleetPresets.Preset.FibonacciSyndicate || preset == KeyfleetPresets.Preset.FibonacciCascade;
     }
 }

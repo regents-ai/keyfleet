@@ -8,37 +8,27 @@ import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockToken, StrategyPublishingFactory} from "./DeployKeyfleets.t.sol";
+import {MockToken} from "./DeployKeyfleets.t.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
-
-/// @dev Stands in for the Autolaunch strategy: the record step reads only its address and its code.
-contract StandInStrategy {}
 
 contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
-    uint256 private constant BASE_CHAIN_ID = 8453;
+    uint256 private constant ETHEREUM_CHAIN_ID = 1;
     address private constant SAFE = address(0x5AFE);
-    address private constant STAKING = address(0x57A1);
     uint256 private constant DEPLOYMENT_BLOCK = 7;
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
 
     DeployKeyfleets private deployer;
     RecordKeyfleets private recorder;
-    MockToken private regent;
     MockToken private usdc;
-    StandInStrategy private strategy;
-    StrategyPublishingFactory private factory;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
 
     function setUp() public {
         deployer = new DeployKeyfleets();
         recorder = new RecordKeyfleets();
-        regent = new MockToken("Regent", "REGENT");
         usdc = new MockToken("USD Coin", "USDC");
-        strategy = new StandInStrategy();
-        factory = new StrategyPublishingFactory(address(strategy));
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
@@ -52,17 +42,16 @@ contract RecordKeyfleetsTest is Test {
 
         assertEq(vm.parseJsonUint(json, ".chainId"), ANVIL_CHAIN_ID, "Chain");
         assertEq(vm.parseJsonUint(json, ".deploymentBlock"), DEPLOYMENT_BLOCK, "Deployment block");
-        assertEq(vm.parseJsonAddress(json, ".regent"), address(regent), "REGENT");
         assertEq(vm.parseJsonAddress(json, ".usdc"), address(usdc), "USDC");
         assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "The reference price Q");
-        assertEq(vm.parseJsonAddress(json, ".staking"), STAKING, "Staking");
-        assertEq(vm.parseJsonAddress(json, ".regentSafe"), SAFE, "Regents Safe");
+        assertEq(vm.parseJsonAddress(json, ".protocolTreasury"), SAFE, "Protocol treasury");
 
         assertEq(vm.parseJsonString(json, ".fleet.slot"), "classic", "The key the manifest names the fleet by");
         assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
         assertEq(vm.parseJsonBytes32(json, ".fleet.codeHash"), address(fleet).codehash, "Fleet code");
         assertEq(vm.parseJsonAddress(json, ".fleet.rewards"), address(fleet.REWARDS()), "Ledger");
         assertEq(vm.parseJsonAddress(json, ".fleet.votes"), address(fleet.VOTES()), "Controller");
+        assertEq(vm.parseJsonAddress(json, ".fleet.shards"), address(fleet.SHARDS()), "Shard record");
         assertEq(vm.parseJsonString(json, ".fleet.name"), manifest.fleet.name, "Name");
         assertEq(vm.parseJsonString(json, ".fleet.symbol"), manifest.fleet.symbol, "Symbol");
         assertEq(
@@ -70,32 +59,18 @@ contract RecordKeyfleetsTest is Test {
             manifest.fleet.baseTokenURI,
             "Metadata base read from the fleet"
         );
-        assertEq(vm.parseJsonUint(json, ".fleet.maxSupply"), 1024, "Classic's supply");
 
         address[] memory incomeTokens = vm.parseJsonAddressArray(json, ".incomeTokens");
-        assertEq(incomeTokens.length, 2, "Two income tokens before any launch");
+        assertEq(incomeTokens.length, 1, "One income token");
         assertEq(incomeTokens[0], address(usdc), "USDC");
-        assertEq(incomeTokens[1], address(regent), "REGENT");
 
-        assertEq(vm.parseJsonUint(json, ".bounds.fibonacciLevels"), 20, "Levels");
-        assertEq(vm.parseJsonUint(json, ".bounds.fibonacciMaxTokenId"), 46_365, "Highest token id");
         assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 1024, "Classic keys");
-        assertEq(vm.parseJsonUint(json, ".bounds.accelerantMaxKeys"), 2000, "Accelerant cap");
-        assertEq(vm.parseJsonUint(json, ".bounds.fibonacciAutolaunchMinKeys"), 86, "Launch after level 7");
-        assertEq(vm.parseJsonUint(json, ".bounds.fleetTechAutolaunchMinKeys"), 100, "Launch after 100 keys");
-        assertEq(vm.parseJsonUint(json, ".bounds.maxCohorts"), 32, "Cohort bound");
+        assertEq(vm.parseJsonUint(json, ".bounds.accelerantMaxKeys"), 2000, "Accelerant limit");
+        assertEq(vm.parseJsonKeys(json, ".bounds").length, 2, "Only the Fleet.Tech presets have a limit");
 
-        assertEq(vm.parseJsonUint(json, ".fees.protocolBps"), 200, "Protocol bps");
-        assertEq(vm.parseJsonUint(json, ".fees.accelerantCapitalBps"), 1000, "Accelerant capital bps");
+        assertEq(vm.parseJsonUint(json, ".fees.protocolBps"), 1000, "Protocol bps");
+        assertEq(vm.parseJsonUint(json, ".fees.accelerantCapitalBps"), 2000, "Accelerant capital bps");
         assertEq(vm.parseJsonUint(json, ".fees.bpsDenominator"), 10_000, "Bps denominator");
-
-        assertEq(vm.parseJsonString(json, ".autolaunch.abi"), "RegentsAutolaunchFactoryV1", "Factory ABI");
-        assertEq(vm.parseJsonAddress(json, ".autolaunch.factory"), address(factory), "Autolaunch factory");
-        assertEq(vm.parseJsonBytes32(json, ".autolaunch.factoryCodeHash"), address(factory).codehash, "Factory code");
-        assertEq(vm.parseJsonAddress(json, ".autolaunch.strategy"), address(strategy), "Strategy read off the factory");
-        assertEq(vm.parseJsonBytes32(json, ".autolaunch.strategyCodeHash"), address(strategy).codehash, "Strategy code");
-        assertFalse(vm.parseJsonBool(json, ".autolaunch.factoryMayBeEmpty"), "No waiver in force");
-        assertTrue(bytes(vm.parseJsonString(json, ".autolaunch.readiness")).length > 0, "Readiness");
 
         assertEq(vm.parseJsonString(json, ".disclosures.chat"), "Rooms and messages are public to read.", "Chat");
         assertEq(
@@ -104,7 +79,12 @@ contract RecordKeyfleetsTest is Test {
             "Refunds"
         );
         assertEq(vm.parseJsonString(json, ".disclosures.serviceRewardEligibility"), "Keys only.", "Eligibility");
-        assertTrue(bytes(vm.parseJsonString(json, ".disclosures.feeComposition")).length > 0, "Fee composition");
+        assertEq(
+            vm.parseJsonString(json, ".disclosures.feeComposition"),
+            "Keyfleet takes 10% of every key purchase for the Regents protocol and nothing from money a fleet"
+            " receives afterwards.",
+            "Fee composition"
+        );
         assertTrue(bytes(vm.parseJsonString(json, ".disclosures.safeAuthority")).length > 0, "Safe authority");
 
         assertEq(vm.parseJsonAddress(json, ".vrf.coordinator"), address(vrf), "VRF coordinator");
@@ -118,11 +98,10 @@ contract RecordKeyfleetsTest is Test {
         assertTrue(vm.parseJsonBool(json, ".vrf.nativePayment"), "Paid in ETH");
     }
 
-    /// @dev Each fleet records on its own, straight after its own deployment, under its own key
-    /// and with its own supply, whichever fleets are on chain already.
+    /// @dev Each fleet records on its own, straight after its own deployment, under its own key,
+    /// whichever fleets are on chain already.
     function test_eachFleetRecordsOnItsOwn() public {
         string[4] memory keys = ["syndicate", "cascade", "classic", "accelerant"];
-        uint256[4] memory supplies = [uint256(46_365), 46_365, 1024, 2000];
         KeyfleetManifest.Manifest memory manifest = _manifest();
 
         for (uint8 order = 0; order < 4; ++order) {
@@ -138,7 +117,6 @@ contract RecordKeyfleetsTest is Test {
 
             assertEq(vm.parseJsonString(json, ".fleet.slot"), keys[slot], "Key");
             assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
-            assertEq(vm.parseJsonUint(json, ".fleet.maxSupply"), supplies[slot], "Supply");
         }
     }
 
@@ -156,19 +134,6 @@ contract RecordKeyfleetsTest is Test {
         recorder.record(manifest, _summary(fleet));
     }
 
-    function test_recordOfALabWithoutTheAutolaunchFactoryRecordsNoStrategy() public {
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.autolaunchFactory = address(0xFAC7);
-        manifest.autolaunchFactoryMayBeEmpty = true;
-        Keyfleet fleet = _deployAndAddConsumer(manifest);
-
-        string memory json = recorder.record(manifest, _summary(fleet));
-
-        assertEq(vm.parseJsonAddress(json, ".autolaunch.strategy"), address(0), "No strategy to read");
-        assertEq(vm.parseJsonBytes32(json, ".autolaunch.factoryCodeHash"), bytes32(0), "No factory code");
-        assertTrue(vm.parseJsonBool(json, ".autolaunch.factoryMayBeEmpty"), "The lab shape is recorded");
-    }
-
     function test_recordRefusesEveryValueThatDiffersFromTheManifest() public {
         Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest;
@@ -183,16 +148,8 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, fleet, _released("usdc"));
 
         manifest = _manifest();
-        manifest.regent = address(usdc);
-        _expectRecordRefused(manifest, fleet, _released("regent"));
-
-        manifest = _manifest();
-        manifest.staking = address(0xBEEF);
-        _expectRecordRefused(manifest, fleet, _released("staking"));
-
-        manifest = _manifest();
-        manifest.autolaunchFactory = address(regent);
-        _expectRecordRefused(manifest, fleet, _released("autolaunchFactory"));
+        manifest.protocolTreasury = address(0xBEEF);
+        _expectRecordRefused(manifest, fleet, _released("protocolTreasury"));
 
         manifest = _manifest();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(_otherCoordinatorKnowing(manifest)));
@@ -234,76 +191,46 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, fleet, abi.encodeWithSelector(Keyfleet.TraitTableHashZero.selector));
     }
 
-    /// @dev Invariant: on Base a fleet is published only while the Regents Safe owns the
-    /// subscription that pays for its reveals, so nobody else can remove the fleet or cancel it.
-    function test_recordOnBaseRefusesASubscriptionTheSafeDoesNotOwn() public {
-        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+    /// @dev Invariant: on Ethereum a fleet is published only while the protocol treasury, the
+    /// Regents Safe, owns the subscription that pays for its reveals, so nobody else can remove the
+    /// fleet or cancel it.
+    function test_recordOnEthereumRefusesASubscriptionTheTreasuryDoesNotOwn() public {
+        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
-        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
+        MockVRFCoordinatorV2Plus ethereum = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
 
-        base.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
+        ethereum.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
         _expectRecordRefused(
             manifest,
             fleet,
-            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedBySafe.selector, address(0xBEEF), SAFE)
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByTreasury.selector, address(0xBEEF), SAFE)
         );
 
-        base.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        ethereum.openSubscription(manifest.vrf.subscriptionId, SAFE);
         recorder.record(manifest, _summary(fleet));
     }
 
     function test_recordRefusesAManifestForAnotherChain() public {
         Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.chainId = BASE_CHAIN_ID;
+        manifest.chainId = ETHEREUM_CHAIN_ID;
 
         _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, BASE_CHAIN_ID, ANVIL_CHAIN_ID)
+            manifest,
+            fleet,
+            abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, ETHEREUM_CHAIN_ID, ANVIL_CHAIN_ID)
         );
     }
 
-    function test_emptyFactoryWaiverIsNeverRecordedOnBase() public {
-        KeyfleetManifest.Manifest memory manifest = _baseManifest();
-        manifest.autolaunchFactoryMayBeEmpty = true;
-        Keyfleet fleet = _deployAndAddConsumer(manifest);
-
-        string memory json = recorder.record(manifest, _summary(fleet));
-
-        assertFalse(vm.parseJsonBool(json, ".autolaunch.factoryMayBeEmpty"), "Base ignores the waiver");
-    }
-
-    /// @dev Invariant: a Base record never publishes a USDC or a REGENT other than Base's own, even
+    /// @dev Invariant: an Ethereum record never publishes a USDC other than Ethereum's own, even
     /// for a release that was deployed correctly.
-    function test_recordOnBaseRefusesAnyUsdcOrRegentButBase() public {
-        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+    function test_recordOnEthereumRefusesAnyUsdcButEthereums() public {
+        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         manifest.usdc = address(usdc);
         _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc))
-        );
-
-        manifest = _baseManifest();
-        manifest.regent = address(regent);
-        _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.RegentNotBaseRegent.selector, address(regent))
-        );
-    }
-
-    /// @dev Invariant: the REGENT a record publishes always holds code, so a zero or mistyped
-    /// address is never published into `regent`.
-    function test_recordRefusesARegentWithoutCode() public {
-        Keyfleet fleet = _deployAndAddConsumer(_manifest());
-        KeyfleetManifest.Manifest memory manifest = _manifest();
-
-        manifest.regent = address(0xBEEF);
-        _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0xBEEF))
-        );
-
-        manifest.regent = address(0);
-        _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.RegentMissing.selector, address(0))
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.UsdcNotEthereumUsdc.selector, address(usdc))
         );
     }
 
@@ -358,7 +285,7 @@ contract RecordKeyfleetsTest is Test {
     }
 
     /// @dev Deploys, then adds the fleet to the manifest's subscription as its owner does between
-    /// the two steps: the Safe on Base, the test contract on a lab chain.
+    /// the two steps: the Safe on Ethereum, the test contract on a lab chain.
     function _deployAndAddConsumer(KeyfleetManifest.Manifest memory manifest) private returns (Keyfleet fleet) {
         fleet = deployer.deploy(manifest);
         (,,, address owner,) = manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
@@ -392,34 +319,28 @@ contract RecordKeyfleetsTest is Test {
         return RecordKeyfleets.BroadcastSummary({fleet: fleet, deploymentBlock: DEPLOYMENT_BLOCK});
     }
 
-    /// @dev A Base manifest on Base, paid in Base USDC, naming Base REGENT and answered by Base's
-    /// VRF coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
+    /// @dev An Ethereum manifest on Ethereum, paid in Ethereum USDC and answered by Ethereum's VRF
+    /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code, with the
     /// subscription owned by the Safe.
-    function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
-        vm.chainId(BASE_CHAIN_ID);
-        vm.etch(deployer.BASE_USDC(), address(usdc).code);
-        vm.etch(deployer.BASE_REGENT(), address(regent).code);
-        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(deployer.BASE_VRF_COORDINATOR());
-        vm.etch(address(base), address(vrf).code);
-        base.addProvingKey(deployer.BASE_VRF_KEY_HASH(), 2 gwei);
+    function _ethereumManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
+        vm.chainId(ETHEREUM_CHAIN_ID);
+        vm.etch(deployer.ETHEREUM_USDC(), address(usdc).code);
+        MockVRFCoordinatorV2Plus ethereum = MockVRFCoordinatorV2Plus(deployer.ETHEREUM_VRF_COORDINATOR());
+        vm.etch(address(ethereum), address(vrf).code);
+        ethereum.addProvingKey(deployer.ETHEREUM_VRF_KEY_HASH(), 200 gwei);
         manifest = _manifest();
-        manifest.chainId = BASE_CHAIN_ID;
-        manifest.usdc = deployer.BASE_USDC();
-        manifest.regent = deployer.BASE_REGENT();
-        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(base));
-        manifest.vrf.subscriptionId = base.createSubscription();
-        base.openSubscription(manifest.vrf.subscriptionId, SAFE);
-        manifest.vrf.keyHash = deployer.BASE_VRF_KEY_HASH();
+        manifest.chainId = ETHEREUM_CHAIN_ID;
+        manifest.usdc = deployer.ETHEREUM_USDC();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(ethereum));
+        manifest.vrf.subscriptionId = ethereum.createSubscription();
+        ethereum.openSubscription(manifest.vrf.subscriptionId, SAFE);
+        manifest.vrf.keyHash = deployer.ETHEREUM_VRF_KEY_HASH();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = ANVIL_CHAIN_ID;
-        manifest.regent = address(regent);
         manifest.usdc = address(usdc);
-        manifest.staking = STAKING;
-        manifest.regentSafe = SAFE;
-        manifest.autolaunchFactory = address(factory);
-        manifest.autolaunchFactoryMayBeEmpty = false;
+        manifest.protocolTreasury = SAFE;
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

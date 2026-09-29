@@ -4,14 +4,11 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {DeployKeyfleets} from "../../script/DeployKeyfleets.s.sol";
 import {IVRFProvingKeys} from "../../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
-import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 
 /// @notice The coordinator's public table of accepted requests, which the vendored interface does
@@ -20,12 +17,12 @@ interface IVRFRequestCommitments {
     function s_requestCommitments(uint256 requestId) external view returns (bytes32);
 }
 
-/// @dev A fleet against the real Chainlink VRF v2.5 coordinator on a fork of Base. It runs only
-/// when `BASE_RPC_URL` is set in the environment, and skips itself otherwise; the URL is never
+/// @dev A fleet against the real Chainlink VRF v2.5 coordinator on a fork of Ethereum. It runs
+/// only when `ETHEREUM_RPC_URL` is set in the environment, and skips itself otherwise; the URL is never
 /// printed. It proves that the real coordinator accepts the fleet's request on its exact terms,
 /// that a fleet not yet on the subscription still sells, and that an answer delivered as the
 /// coordinator delivers it fits the callback gas.
-contract KeyfleetRevealBaseForkTest is Test {
+contract KeyfleetRevealEthereumForkTest is Test {
     address private constant BUYER = address(0xB0B0B0);
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
     bytes32 private constant RANDOM_WORDS_REQUESTED =
@@ -41,7 +38,7 @@ contract KeyfleetRevealBaseForkTest is Test {
     Keyfleet private fleet;
 
     function setUp() public {
-        string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
+        string memory rpc = vm.envOr("ETHEREUM_RPC_URL", string(""));
         if (bytes(rpc).length == 0) {
             vm.skip(true);
             return;
@@ -49,9 +46,9 @@ contract KeyfleetRevealBaseForkTest is Test {
         vm.createSelectFork(rpc);
 
         DeployKeyfleets script = new DeployKeyfleets();
-        coordinator = IVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
-        keyHash = script.BASE_VRF_KEY_HASH();
-        usdc = IERC20Metadata(script.BASE_USDC());
+        coordinator = IVRFCoordinatorV2Plus(script.ETHEREUM_VRF_COORDINATOR());
+        keyHash = script.ETHEREUM_VRF_KEY_HASH();
+        usdc = IERC20Metadata(script.ETHEREUM_USDC());
 
         subscriptionId = coordinator.createSubscription();
         vm.deal(address(this), 1 ether);
@@ -60,9 +57,7 @@ contract KeyfleetRevealBaseForkTest is Test {
         fleet = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            IERC20(script.BASE_REGENT()),
-            IRegentRevenueStaking(address(0x57A1)),
-            IRegentsAutolaunchFactoryV1(address(0xFAC7)),
+            address(0x7EA5),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({coordinator: coordinator, subscriptionId: subscriptionId, keyHash: keyHash}),
             TRAIT_TABLE
@@ -72,9 +67,9 @@ contract KeyfleetRevealBaseForkTest is Test {
         usdc.approve(address(fleet), type(uint256).max);
     }
 
-    function test_theBaseGasLaneExists() public view {
+    function test_theEthereumGasLaneExists() public view {
         (bool exists,) = IVRFProvingKeys(address(coordinator)).s_provingKeys(keyHash);
-        assertTrue(exists, "the 2 gwei gas lane is registered on the Base coordinator");
+        assertTrue(exists, "the 200 gwei gas lane is registered on the Ethereum coordinator");
     }
 
     /// @dev The fleet is sold before it is a consumer, then added, then retried, then answered.

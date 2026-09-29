@@ -79,20 +79,19 @@ contract ReenteringERC20 is ERC20 {
 
 contract KeyfleetRewardsTest is Test {
     uint256 private constant PRECISION = 1e27;
-    uint256 private constant SETTLE_GAS_CEILING = 168_000;
+    /// @dev The measured worst-case settlement plus twenty percent, rounded up to the nearest
+    /// thousand.
+    uint256 private constant SETTLE_GAS_CEILING = 64_000;
 
     MockFleet private fleet;
     KeyfleetRewards private rewards;
     MockERC20 private usdc;
-    /// @dev Stands in for REGENT, the ledger's second income token.
-    MockERC20 private other;
 
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCAC01);
     address private payout = address(0xDECAF);
 
-    event LaunchedTokenSet(address indexed asset);
     event KeyEnrolled(uint256 indexed tokenId, uint256 indexed cohortId);
     event Allocated(address indexed asset, uint256 indexed cohortId, uint256 amount, uint256 newIndex);
     event Credited(address indexed asset, address indexed account, uint256 amount);
@@ -102,13 +101,7 @@ contract KeyfleetRewardsTest is Test {
     function setUp() public {
         fleet = new MockFleet();
         usdc = new MockERC20("USD Coin", "USDC");
-        other = new MockERC20("Regent", "REGENT");
-        rewards = new KeyfleetRewards(address(fleet), address(usdc), address(other));
-    }
-
-    function _setLaunchedToken(address asset) private {
-        vm.prank(address(fleet));
-        rewards.setLaunchedToken(asset);
+        rewards = new KeyfleetRewards(address(fleet), address(usdc));
     }
 
     // --- helpers ---------------------------------------------------------
@@ -142,30 +135,24 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 1. only the fleet writes ----------------------------------------
 
-    function test_constructorBindsFleetAndIncomeTokensAndRejectsZero() public {
+    function test_constructorBindsFleetAndIncomeTokenAndRejectsZero() public {
         assertEq(rewards.FLEET(), address(fleet), "fleet binding is permanent");
         assertEq(rewards.USDC(), address(usdc), "USDC binding is permanent");
-        assertEq(rewards.REGENT(), address(other), "REGENT binding is permanent");
         vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(address(0), address(usdc), address(other));
+        new KeyfleetRewards(address(0), address(usdc));
         vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(address(fleet), address(0), address(other));
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(address(fleet), address(usdc), address(0));
+        new KeyfleetRewards(address(fleet), address(0));
     }
 
-    function test_publishedBoundsAndIndexScaleAreFixed() public view {
-        assertEq(rewards.MAX_COHORTS(), 32, "cohort id space");
+    function test_indexScaleIsFixed() public view {
         assertEq(rewards.PRECISION(), PRECISION, "index scale integrators read is 1e27");
     }
 
-    function testFuzz_onlyFleetCanSetTheLaunchedTokenEnrollAllocateCreditAndSettle(address caller) public {
+    function testFuzz_onlyFleetCanEnrollAllocateCreditAndSettle(address caller) public {
         vm.assume(caller != address(fleet) && caller != address(vm));
         _enroll(1, 0, alice);
 
         vm.startPrank(caller);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
-        rewards.setLaunchedToken(address(0xFEED));
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
         rewards.enrollKey(2, 0);
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
@@ -176,42 +163,20 @@ contract KeyfleetRewardsTest is Test {
         rewards.settleKey(1, caller);
         vm.stopPrank();
 
-        assertEq(rewards.rewardAssets().length, 2, "no income token added by a stranger");
         assertEq(rewards.cohortSize(0), 1, "no key enrolled by a stranger");
         assertEq(rewards.cohortIndex(address(usdc), 0), 0, "no allocation by a stranger");
         assertEq(rewards.credits(address(usdc), caller), 0, "no credit by a stranger");
     }
 
-    // --- 2. the income tokens are fixed -----------------------------------
+    // --- 2. USDC is the one income token ---------------------------------
 
-    function test_incomeTokensAreUsdcAndRegentThenTheCurrentLaunchedToken() public {
-        address[] memory before = rewards.rewardAssets();
-        assertEq(before.length, 2, "two income tokens from deployment");
-        assertEq(before[0], address(usdc), "USDC first");
-        assertEq(before[1], address(other), "REGENT second");
+    function test_usdcIsTheOneIncomeToken() public view {
+        address[] memory assets = rewards.rewardAssets();
+        assertEq(assets.length, 1, "one income token");
+        assertEq(assets[0], address(usdc), "USDC");
+        assertTrue(rewards.isRewardAsset(address(usdc)));
         assertFalse(rewards.isRewardAsset(address(0xFEED)), "nothing else is an income token");
         assertFalse(rewards.isRewardAsset(address(0)), "the zero address never is");
-
-        vm.startPrank(address(fleet));
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        rewards.setLaunchedToken(address(0));
-        vm.expectEmit(true, true, true, true, address(rewards));
-        emit LaunchedTokenSet(address(0xFEED));
-        rewards.setLaunchedToken(address(0xFEED));
-        vm.stopPrank();
-
-        address[] memory later = rewards.rewardAssets();
-        assertEq(later.length, 3, "the launched token joins");
-        assertEq(later[2], address(0xFEED), "launched token third");
-        assertTrue(rewards.isRewardAsset(address(0xFEED)), "launched token is an income token");
-
-        // A launch that follows a failed one brings its own token, which takes the third place.
-        vm.prank(address(fleet));
-        rewards.setLaunchedToken(address(0xBEEF));
-        address[] memory relaunched = rewards.rewardAssets();
-        assertEq(relaunched.length, 3, "still three income tokens");
-        assertEq(relaunched[2], address(0xBEEF), "the new launched token third");
-        assertFalse(rewards.isRewardAsset(address(0xFEED)), "the failed launch's token no longer is one");
     }
 
     function test_theLedgerRefusesEveryTokenThatIsNotAnIncomeToken() public {
@@ -225,21 +190,6 @@ contract KeyfleetRewardsTest is Test {
         vm.expectRevert(KeyfleetRewards.UnknownAsset.selector);
         rewards.credit(address(stray), alice, 1e18);
         vm.stopPrank();
-    }
-
-    function test_keysEnrolledBeforeTheLaunchEarnTheLaunchedTokenLikeLaterKeys() public {
-        MockERC20 subject = new MockERC20("Subject", "SUB");
-        _enroll(1, 0, alice);
-        _setLaunchedToken(address(subject));
-        _enroll(2, 0, bob);
-
-        _fundAndAllocate(subject, 0, 10e18);
-        assertEq(rewards.accrued(address(subject), 1), 5e18, "a key from before the launch earns its share");
-        assertEq(rewards.accrued(address(subject), 2), 5e18, "a key from after the launch earns the same");
-
-        vm.prank(address(fleet));
-        rewards.settleKey(1, alice);
-        assertEq(rewards.credits(address(subject), alice), 5e18, "settlement covers the launched token");
     }
 
     // --- 3. allocation math and retained dust -----------------------------
@@ -309,8 +259,6 @@ contract KeyfleetRewardsTest is Test {
         rewards.allocateToCohort(address(usdc), 0, 0);
         vm.expectRevert(KeyfleetRewards.UnknownAsset.selector);
         rewards.allocateToCohort(address(0xBEEF), 0, 1);
-        vm.expectRevert(KeyfleetRewards.CohortOutOfBounds.selector);
-        rewards.allocateToCohort(address(usdc), 32, 1);
         vm.stopPrank();
     }
 
@@ -409,20 +357,25 @@ contract KeyfleetRewardsTest is Test {
         assertEq(rewards.keyCohort(1), 0, "enrolled key reports its cohort");
     }
 
-    function test_enrollmentIsPermanentAndBoundedToThirtyTwoCohorts() public {
+    /// @dev Cohort ids are the fleet's levels, which have no last one, so the ledger takes any
+    /// cohort id the fleet names.
+    function test_enrollmentIsPermanentAndTakesAnyCohort() public {
         _enroll(1, 0, alice);
         vm.startPrank(address(fleet));
         vm.expectRevert(KeyfleetRewards.KeyAlreadyEnrolled.selector);
         rewards.enrollKey(1, 0);
         vm.expectRevert(KeyfleetRewards.KeyAlreadyEnrolled.selector);
         rewards.enrollKey(1, 5);
-        vm.expectRevert(KeyfleetRewards.CohortOutOfBounds.selector);
-        rewards.enrollKey(2, 32);
-        rewards.enrollKey(2, 31);
+        rewards.enrollKey(2, 41);
+        rewards.enrollKey(3, 1_000);
         vm.stopPrank();
-        assertEq(rewards.keyCohort(2), 31, "last cohort id is usable");
+        assertEq(rewards.keyCohort(2), 41, "level 41 is a cohort like any other");
+        assertEq(rewards.keyCohort(3), 1_000);
         assertEq(rewards.cohortSize(0), 1, "one key in cohort 0");
-        assertEq(rewards.cohortSize(31), 1, "one key in cohort 31");
+        assertEq(rewards.cohortSize(41), 1, "one key in cohort 41");
+
+        _fundAndAllocate(usdc, 41, 3e18);
+        assertEq(rewards.accrued(address(usdc), 2), 3e18, "and earns like any other");
     }
 
     // --- 6. late enrollment earns nothing from earlier allocations --------
@@ -479,30 +432,21 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 8. worst-case settlement gas -------------------------------------
 
-    /// @dev Worst case: all three income tokens, every one with a pending accrual, and every
-    /// per-key slot cold and moving from zero. The ceiling is the measured figure plus 20%.
-    function test_worstCaseSettlementGasWithThreeIncomeTokensStaysUnderCeiling() public {
-        MockERC20[] memory assets = new MockERC20[](3);
-        assets[0] = usdc;
-        assets[1] = other;
-        assets[2] = new MockERC20("Subject", "SUB");
-        _setLaunchedToken(address(assets[2]));
+    /// @dev Worst case: a pending accrual in a high cohort, and every per-key slot cold and moving
+    /// from zero. The ceiling is the measured figure plus 20%, rounded up to the nearest thousand.
+    function test_worstCaseSettlementGasStaysUnderCeiling() public {
+        _enroll(1, 40, alice);
+        _fundAndAllocate(usdc, 40, 1e18);
 
-        _enroll(1, 3, alice);
-        for (uint256 i = 0; i < 3; ++i) {
-            _fundAndAllocate(assets[i], 3, (i + 1) * 1e18);
-        }
-
+        vm.cool(address(rewards));
         vm.prank(address(fleet));
         uint256 before = gasleft();
         rewards.settleKey(1, alice);
         uint256 used = before - gasleft();
-        console2.log("worst-case settleKey gas (3 income tokens, cold slots):", used);
+        console2.log("worst-case settleKey gas (cold slots):", used);
 
         assertLt(used, SETTLE_GAS_CEILING, "worst-case settlement stays under the ceiling");
-        for (uint256 i = 0; i < 3; ++i) {
-            assertEq(rewards.credits(address(assets[i]), alice), (i + 1) * 1e18, "every asset settled");
-        }
+        assertEq(rewards.credits(address(usdc), alice), 1e18, "the accrual settled");
     }
 
     // --- 9. claim semantics ------------------------------------------------
@@ -571,68 +515,54 @@ contract KeyfleetRewardsTest is Test {
         rewards.claim(address(0xBEEF), _none(), address(0));
     }
 
-    function test_oneFailingTokenCannotBlockAnotherAssetsClaim() public {
+    /// @dev Invariant: a USDC that refuses a payout, as a paused or blocklisting USDC does, reverts
+    /// the claim and leaves the credit and its backing exactly as they were, to be claimed once the
+    /// transfer goes through.
+    function test_aRefusedPayoutLeavesTheCreditIntact() public {
         RevertingERC20 stuck = new RevertingERC20();
-        _setLaunchedToken(address(stuck));
-
-        _enroll(1, 0, alice);
-        stuck.mint(address(rewards), 7e18);
-        vm.prank(address(fleet));
-        rewards.allocateToCohort(address(stuck), 0, 7e18);
-        _fundAndAllocate(usdc, 0, 3e18);
+        KeyfleetRewards ledger = new KeyfleetRewards(address(fleet), address(stuck));
+        fleet.setOwner(1, alice);
+        stuck.mint(address(ledger), 7e18);
+        vm.startPrank(address(fleet));
+        ledger.enrollKey(1, 0);
+        ledger.allocateToCohort(address(stuck), 0, 7e18);
+        vm.stopPrank();
 
         stuck.setTransfersFail(true);
         vm.prank(alice);
         vm.expectRevert(RevertingERC20.TransferDisabled.selector);
-        rewards.claim(address(stuck), _ids(1), address(0));
-
-        // The failed asset left nothing behind and did not block the healthy one.
-        vm.prank(alice);
-        assertEq(rewards.claim(address(usdc), _ids(1), address(0)), 3e18, "asset Y claims independently");
-        assertEq(usdc.balanceOf(alice), 3e18, "paid in asset Y");
-
-        assertEq(rewards.accrued(address(stuck), 1), 7e18, "the blocked credit is preserved untouched");
-        assertEq(rewards.backed(address(stuck)), 7e18, "still fully reserved");
+        ledger.claim(address(stuck), _ids(1), address(0));
+        assertEq(ledger.accrued(address(stuck), 1), 7e18, "the accrual is preserved untouched");
+        assertEq(ledger.backed(address(stuck)), 7e18, "still fully reserved");
 
         stuck.setTransfersFail(false);
         vm.prank(alice);
-        assertEq(rewards.claim(address(stuck), _ids(1), address(0)), 7e18, "claimable again once the token works");
-        assertEq(stuck.balanceOf(alice), 7e18, "paid in asset X");
-        assertEq(rewards.backed(address(stuck)), 0, "reserve released only by the payout");
-    }
-
-    function test_claimSettlesOnlyTheAssetItPays() public {
-        _enroll(1, 0, alice);
-        _fundAndAllocate(usdc, 0, 6e18);
-        _fundAndAllocate(other, 0, 8e18);
-
-        vm.prank(alice);
-        assertEq(rewards.claim(address(usdc), _ids(1), address(0)), 6e18, "usdc paid");
-        assertEq(rewards.accrued(address(usdc), 1), 0, "usdc settled");
-        assertEq(rewards.accrued(address(other), 1), 8e18, "the other asset is untouched by that claim");
-        assertEq(other.balanceOf(address(rewards)), 8e18, "and its tokens stay put");
+        assertEq(ledger.claim(address(stuck), _ids(1), address(0)), 7e18, "claimable again once the token works");
+        assertEq(stuck.balanceOf(alice), 7e18);
+        assertEq(ledger.backed(address(stuck)), 0, "reserve released only by the payout");
     }
 
     // --- 10. reentrancy ----------------------------------------------------
 
     function test_reentrantClaimDuringTransferIsRejectedByTheGuard() public {
         ReenteringERC20 evil = new ReenteringERC20();
-        _setLaunchedToken(address(evil));
+        KeyfleetRewards ledger = new KeyfleetRewards(address(fleet), address(evil));
 
-        _enroll(1, 0, alice);
-        evil.mint(address(rewards), 10e18);
+        fleet.setOwner(1, alice);
+        evil.mint(address(ledger), 10e18);
         vm.startPrank(address(fleet));
-        rewards.allocateToCohort(address(evil), 0, 6e18);
-        rewards.credit(address(evil), address(evil), 4e18);
+        ledger.enrollKey(1, 0);
+        ledger.allocateToCohort(address(evil), 0, 6e18);
+        ledger.credit(address(evil), address(evil), 4e18);
         vm.stopPrank();
 
-        evil.setRewards(rewards);
+        evil.setRewards(ledger);
         vm.prank(alice);
         vm.expectRevert(ReentrancyGuard.ReentrancyGuardReentrantCall.selector);
-        rewards.claim(address(evil), _ids(1), address(0));
+        ledger.claim(address(evil), _ids(1), address(0));
 
-        assertEq(evil.balanceOf(address(rewards)), 10e18, "nothing left the contract");
-        assertEq(rewards.backed(address(evil)), 10e18, "reserve intact");
+        assertEq(evil.balanceOf(address(ledger)), 10e18, "nothing left the contract");
+        assertEq(ledger.backed(address(evil)), 10e18, "reserve intact");
     }
 
     // --- 11. fractional carry ---------------------------------------------
@@ -666,13 +596,12 @@ contract KeyfleetRewardsTest is Test {
         assertLe(paidToBob - paidToAlice, 1, "settling often costs no more than settling once");
     }
 
-    function test_carryIsPerKeyAndPerAssetNotShared() public {
+    function test_carryIsPerKeyNotShared() public {
         _enroll(1, 0, alice);
         _enroll(2, 0, bob);
         _enroll(3, 0, carol);
 
         _fundAndAllocate(usdc, 0, 2); // 0.666.. per key
-        _fundAndAllocate(other, 0, 2);
         assertEq(rewards.accrued(address(usdc), 1), 0, "a sub-unit accrual pays nothing yet");
 
         vm.prank(address(fleet));
@@ -681,7 +610,7 @@ contract KeyfleetRewardsTest is Test {
 
         _fundAndAllocate(usdc, 0, 2); // now 1.333.. per key
         assertEq(rewards.accrued(address(usdc), 1), 1, "the carried fraction pushes it over one unit");
-        assertEq(rewards.accrued(address(other), 1), 0, "the other asset carries its own fraction");
+        assertEq(rewards.accrued(address(usdc), 2), 1, "and each other key carries its own");
     }
 
     // --- 12. fuzz invariant -------------------------------------------------

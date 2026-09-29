@@ -5,6 +5,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 
 interface Vm {
     function expectRevert(bytes4 selector) external;
+    function expectRevert(bytes calldata revertData) external;
 }
 
 /// @dev Exposes the internal library externally so reverts can be asserted with `vm.expectRevert`.
@@ -67,8 +68,11 @@ contract KeyfleetPresetsTest {
 
     /// @dev Ten USDC in atomic units, the first key of every ladder.
     uint256 private constant Q_USDC = 10_000_000;
-    uint256 private constant MAX_LEVEL = 20;
-    uint256 private constant MAX_TOKEN_ID = 46_365;
+    /// @dev The levels the written-out tables cover. There is no last level; this is only how far the
+    ///      tables go.
+    uint256 private constant TABLE_LEVELS = 20;
+    /// @dev The highest level the loops below walk, which takes 701,408,730 keys sold to complete.
+    uint256 private constant HIGH_LEVEL = 40;
     uint256 private constant BPS = 10_000;
 
     PresetsHarness private presets;
@@ -133,54 +137,63 @@ contract KeyfleetPresetsTest {
 
     // --- 1. supply tables ----------------------------------------------------------------------
 
-    /// @dev Invariant: each level holds the sum of the two levels before it, and the cumulative
-    ///      supply through level 20 is the highest token id.
+    /// @dev Invariant: each level holds the sum of the two levels before it, and token ids run on
+    ///      through every level without a last one.
     function testFibonacciSupplyAndCumulativeTablesMatchThePublishedValues() public view {
         uint256[20] memory supplies = _supplyTable();
         uint256[20] memory cumulative = _cumulativeTable();
-        for (uint256 level = 1; level <= MAX_LEVEL; ++level) {
+        for (uint256 level = 1; level <= TABLE_LEVELS; ++level) {
             require(presets.fibonacciLevelSupply(level) == supplies[level - 1], "Level supply");
             require(presets.fibonacciTotalSupplyThrough(level) == cumulative[level - 1], "Cumulative supply");
-            if (level >= 3) {
-                require(
-                    supplies[level - 1] == supplies[level - 2] + supplies[level - 3], "Level is sum of two before it"
-                );
-            }
+        }
+        for (uint256 level = 3; level <= HIGH_LEVEL; ++level) {
+            require(
+                presets.fibonacciLevelSupply(level)
+                    == presets.fibonacciLevelSupply(level - 1) + presets.fibonacciLevelSupply(level - 2),
+                "Level is sum of two before it"
+            );
+            require(
+                presets.fibonacciTotalSupplyThrough(level)
+                    == presets.fibonacciTotalSupplyThrough(level - 1) + presets.fibonacciLevelSupply(level),
+                "Cumulative adds the level"
+            );
         }
         require(presets.fibonacciLevelSupply(1) == 2, "Level 1 holds two keys");
         require(presets.fibonacciLevelSupply(8) == 55, "Level 8 holds 55 keys");
-        require(presets.fibonacciLevelSupply(MAX_LEVEL) == 17_711, "Level 20 holds 17711 keys");
-        require(presets.fibonacciTotalSupplyThrough(MAX_LEVEL) == MAX_TOKEN_ID, "Highest token id");
-        require(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID == MAX_TOKEN_ID, "Published highest token id");
-        require(KeyfleetPresets.MAX_FIBONACCI_LEVEL == MAX_LEVEL, "Published highest level");
+        require(presets.fibonacciLevelSupply(21) == 28_657, "Level 21 follows level 20");
+        require(presets.fibonacciLevelSupply(30) == 2_178_309, "Level 30 holds 2,178,309 keys");
+        require(presets.fibonacciTotalSupplyThrough(30) == 5_702_884, "5,702,884 keys through level 30");
+        require(presets.fibonacciLevelSupply(40) == 267_914_296, "Level 40 holds 267,914,296 keys");
+        require(presets.fibonacciTotalSupplyThrough(40) == 701_408_730, "701,408,730 keys through level 40");
     }
 
-    /// @dev Invariant: level 0 and any level above 20 are rejected by every level-taking function.
-    function testLevelsOutsideOneThroughTwentyAreRejected() public {
+    /// @dev Invariant: level 0 is rejected by every level-taking function, and levels start at 1.
+    function testLevelZeroIsRejected() public {
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciLevelSupply(0);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelSupply(21);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciTotalSupplyThrough(0);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciTotalSupplyThrough(21);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciLevelStart(0);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelStart(21);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciLevelEnd(0);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelEnd(21);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciHoldingLimit(0);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciHoldingLimit(21);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
         presets.fibonacciLevelPrice(0);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        presets.fibonacciLevelPrice(21);
+    }
+
+    /// @dev Invariant: there is no last level, and the arithmetic reverts rather than wraps where it
+    ///      would leave 256 bits. The cumulative supply first does so at level 367, where a key would
+    ///      cost more than 10^29 USDC.
+    function testLevelsHaveNoLastOneAndTheArithmeticNeverWraps() public {
+        require(presets.fibonacciTotalSupplyThrough(366) > presets.fibonacciTotalSupplyThrough(365), "Level 366");
+        require(presets.fibonacciLevelSupply(368) > presets.fibonacciLevelSupply(367), "Level 368 supply");
+        require(presets.fibonacciLevelPrice(367) > 1e35, "Level 367 costs more than 10^29 USDC");
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
+        presets.fibonacciTotalSupplyThrough(367);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
+        presets.fibonacciLevelSupply(369);
     }
 
     // --- 2. token to level boundaries ----------------------------------------------------------
@@ -194,31 +207,30 @@ contract KeyfleetPresetsTest {
         require(presets.fibonacciLevelOf(5) == 2, "Token 5 is level 2");
         require(presets.fibonacciLevelOf(6) == 3, "Token 6 is level 3");
         require(presets.fibonacciLevelOf(10) == 3, "Token 10 is level 3");
-        require(presets.fibonacciLevelOf(MAX_TOKEN_ID) == MAX_LEVEL, "Highest token is level 20");
+        require(presets.fibonacciLevelOf(46_365) == 20, "Token 46,365 ends level 20");
+        require(presets.fibonacciLevelOf(46_366) == 21, "Token 46,366 starts level 21");
+        require(presets.fibonacciLevelOf(701_408_730) == 40, "Token 701,408,730 ends level 40");
+        require(presets.fibonacciLevelOf(701_408_731) == 41, "and the next starts level 41");
 
-        for (uint256 level = 1; level <= MAX_LEVEL; ++level) {
+        for (uint256 level = 1; level <= HIGH_LEVEL; ++level) {
             uint256 start = presets.fibonacciLevelStart(level);
             uint256 end = presets.fibonacciLevelEnd(level);
             require(presets.fibonacciLevelOf(start) == level, "Level start round-trips");
             require(presets.fibonacciLevelOf(end) == level, "Level end round-trips");
             require(end - start + 1 == presets.fibonacciLevelSupply(level), "Level span equals supply");
+            require(presets.fibonacciLevelOf(end + 1) == level + 1, "Id after end is next level");
             if (level > 1) {
                 require(start == presets.fibonacciLevelEnd(level - 1) + 1, "Levels are contiguous");
                 require(presets.fibonacciLevelOf(start - 1) == level - 1, "Id before start is previous level");
-            }
-            if (level < MAX_LEVEL) {
-                require(presets.fibonacciLevelOf(end + 1) == level + 1, "Id after end is next level");
             }
         }
         require(presets.fibonacciLevelStart(1) == 1, "Token ids are 1-based");
     }
 
-    /// @dev Invariant: token id 0 and anything past the highest minted id are rejected.
-    function testTokenIdsOutsideTheMintedRangeAreRejected() public {
+    /// @dev Invariant: token id 0 is rejected; token ids start at 1.
+    function testTokenIdZeroIsRejected() public {
         vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
         presets.fibonacciLevelOf(0);
-        vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
-        presets.fibonacciLevelOf(MAX_TOKEN_ID + 1);
     }
 
     // --- 3. fibonacci prices -------------------------------------------------------------------
@@ -232,8 +244,12 @@ contract KeyfleetPresetsTest {
         require(presets.fibonacciLevelPrice(3) == 14_400_000, "Level 3 literal");
         require(presets.fibonacciLevelPrice(4) == 17_280_000, "Level 4 literal");
         require(presets.fibonacciLevelPrice(5) == 20_736_000, "Level 5 literal");
-        require(presets.fibonacciLevelPrice(MAX_LEVEL) == 319_480_010, "Level 20 literal");
-        for (uint256 level = 1; level <= MAX_LEVEL; ++level) {
+        require(presets.fibonacciLevelPrice(20) == 319_480_010, "Level 20 literal");
+        require(presets.fibonacciLevelPrice(30) == 1_978_136_019, "Level 30 costs about 1,978 USDC");
+        require(presets.fibonacciLevelPrice(40) == 12_248_096_849, "Level 40 costs about 12,248 USDC");
+        require(presets.fibonacciLevelPrice(102) < 1e15, "Level 102 costs under a billion USDC");
+        require(presets.fibonacciLevelPrice(103) > 1e15, "Level 103 costs over a billion USDC");
+        for (uint256 level = 1; level <= HIGH_LEVEL; ++level) {
             require(presets.fibonacciLevelPrice(level) == _referenceFibonacciPrice(level), "Price ladder");
         }
     }
@@ -254,8 +270,9 @@ contract KeyfleetPresetsTest {
         require(presets.fibonacciHoldingLimit(8) == 5, "Level 8 allows 5");
         require(presets.fibonacciHoldingLimit(9) == 8, "Level 9 allows 8");
         require(presets.fibonacciHoldingLimit(10) == 14, "Level 10 allows 14");
-        require(presets.fibonacciHoldingLimit(MAX_LEVEL) == 1771, "Level 20 allows 1771");
-        for (uint256 level = 8; level <= MAX_LEVEL; ++level) {
+        require(presets.fibonacciHoldingLimit(20) == 1771, "Level 20 allows 1771");
+        require(presets.fibonacciHoldingLimit(40) == 26_791_429, "Level 40 allows 26,791,429");
+        for (uint256 level = 8; level <= HIGH_LEVEL; ++level) {
             require(presets.fibonacciHoldingLimit(level) == presets.fibonacciLevelSupply(level) / 10, "Tenth of supply");
         }
     }
@@ -344,19 +361,20 @@ contract KeyfleetPresetsTest {
 
     // --- 8. purchase split ---------------------------------------------------------------------
 
-    /// @dev Invariant: Syndicate and Classic send everything after the 2% protocol share to capital.
+    /// @dev Invariant: Syndicate and Classic send everything after the 10% protocol share to capital.
     function testSyndicateAndClassicSendEverythingAfterTheProtocolShareToCapital() public view {
+        require(KeyfleetPresets.PROTOCOL_BPS == 1000, "Published protocol share");
         KeyfleetPresets.PurchaseSplit memory syndicate =
             presets.splitPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 10_000, true);
-        require(syndicate.protocol == 200, "Protocol 2%");
-        require(syndicate.capital == 9800, "Capital 98%");
+        require(syndicate.protocol == 1000, "Protocol 10%");
+        require(syndicate.capital == 9000, "Capital 90%");
         require(syndicate.reserve == 0, "No reserve");
         require(syndicate.rebate == 0, "No rebate");
 
         KeyfleetPresets.PurchaseSplit memory classic =
             presets.splitPurchase(KeyfleetPresets.Preset.FleetTechClassic, 10_000, true);
-        require(classic.protocol == 200, "Classic protocol 2%");
-        require(classic.capital == 9800, "Classic capital 98%");
+        require(classic.protocol == 1000, "Classic protocol 10%");
+        require(classic.capital == 9000, "Classic capital 90%");
         require(classic.reserve == 0 && classic.rebate == 0, "Classic has no reserve or rebate");
     }
 
@@ -364,31 +382,38 @@ contract KeyfleetPresetsTest {
     function testCascadeSendsEverythingAfterTheProtocolShareToTheReserve() public view {
         KeyfleetPresets.PurchaseSplit memory split =
             presets.splitPurchase(KeyfleetPresets.Preset.FibonacciCascade, 10_000, false);
-        require(split.protocol == 200, "Protocol 2%");
-        require(split.reserve == 9800, "Reserve 98%");
+        require(split.protocol == 1000, "Protocol 10%");
+        require(split.reserve == 9000, "Reserve 90%");
         require(split.capital == 0, "No capital");
         require(split.rebate == 0, "No rebate");
     }
 
-    /// @dev Invariant: an Accelerant purchase with a predecessor pays capital 10% and rebates the rest,
-    ///      while the very first mint sends everything after the protocol share to capital.
+    /// @dev Invariant: an Accelerant purchase with a predecessor pays capital 20% and rebates the
+    ///      remaining 70%, while the very first mint sends everything after the protocol share to
+    ///      capital.
     function testAccelerantRebatesThePredecessorOnlyWhenThereIsOne() public view {
+        require(KeyfleetPresets.ACCELERANT_CAPITAL_BPS == 2000, "Published Accelerant capital share");
         KeyfleetPresets.PurchaseSplit memory later =
             presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, true);
-        require(later.protocol == 200, "Protocol 2%");
-        require(later.capital == 1000, "Capital 10%");
-        require(later.rebate == 8800, "Rebate 88%");
+        require(later.protocol == 1000, "Protocol 10%");
+        require(later.capital == 2000, "Capital 20%");
+        require(later.rebate == 7000, "Rebate 70%");
         require(later.reserve == 0, "No reserve");
+
+        KeyfleetPresets.PurchaseSplit memory dusty =
+            presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_009, true);
+        require(dusty.protocol == 1000 && dusty.capital == 2001, "Both shares floored");
+        require(dusty.rebate == 7008, "The rebate takes the dust");
 
         KeyfleetPresets.PurchaseSplit memory firstMint =
             presets.splitPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 10_000, false);
-        require(firstMint.protocol == 200, "First mint protocol 2%");
-        require(firstMint.capital == 9800, "First mint sends the rest to capital");
+        require(firstMint.protocol == 1000, "First mint protocol 10%");
+        require(firstMint.capital == 9000, "First mint sends the other 90% to capital");
         require(firstMint.rebate == 0, "Nobody to rebate");
         require(firstMint.reserve == 0, "No reserve");
     }
 
-    /// @dev Invariant: the four parts always sum to gross, the protocol share is always 2% floored,
+    /// @dev Invariant: the four parts always sum to gross, the protocol share is always 10% floored,
     ///      reserve belongs to Cascade alone and rebate to Accelerant primary mints with a
     ///      predecessor alone.
     function testFuzzSplitAlwaysSumsToGrossAndKeepsEachPartToItsPreset(
@@ -401,7 +426,7 @@ contract KeyfleetPresetsTest {
         KeyfleetPresets.PurchaseSplit memory split = presets.splitPurchase(preset, gross, hasPredecessor);
 
         require(split.protocol + split.capital + split.reserve + split.rebate == gross, "Parts sum to gross");
-        require(split.protocol == (gross * 200) / BPS, "Protocol is 2% floored");
+        require(split.protocol == (gross * 1000) / BPS, "Protocol is 10% floored");
 
         bool isCascade = preset == KeyfleetPresets.Preset.FibonacciCascade;
         require(isCascade == (split.reserve > 0), "Reserve belongs to Cascade alone");
@@ -412,7 +437,7 @@ contract KeyfleetPresetsTest {
             "Rebate belongs to Accelerant mints with a predecessor alone"
         );
         if (isAccelerantWithPredecessor) {
-            require(split.capital == (gross * 1000) / BPS, "Capital is 10% floored");
+            require(split.capital == (gross * 2000) / BPS, "Capital is 20% floored");
         } else if (!isCascade) {
             require(split.capital == gross - split.protocol, "Capital absorbs the dust");
         } else {
@@ -436,23 +461,11 @@ contract KeyfleetPresetsTest {
 
     /// @dev Invariant: each Fibonacci step rounds up, never down, and never by more than one unit.
     function testFibonacciStepAlwaysRoundsUpByLessThanOneUnit() public view {
-        for (uint256 level = 2; level <= MAX_LEVEL; ++level) {
+        for (uint256 level = 2; level <= HIGH_LEVEL; ++level) {
             uint256 previous = presets.fibonacciLevelPrice(level - 1);
             uint256 current = presets.fibonacciLevelPrice(level);
             require(current * 100 >= previous * 120, "Never rounds down");
             require(current * 100 - previous * 120 < 100, "Never rounds up by a whole unit");
         }
-    }
-
-    // --- 10. autolaunch thresholds -------------------------------------------------------------
-
-    /// @dev Invariant: a Fibonacci fleet may propose its launch once the last key of level 7 is sold,
-    ///      and a Classic or Accelerant fleet once it has sold 100 keys, which both ladders can reach.
-    function testAutolaunchThresholdsAreTheLastKeyOfLevelSevenAndOneHundredKeys() public view {
-        require(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS == presets.fibonacciTotalSupplyThrough(7), "Level 7");
-        require(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS == presets.fibonacciLevelEnd(7), "Its last key");
-        require(presets.fibonacciLevelOf(KeyfleetPresets.FIBONACCI_AUTOLAUNCH_MIN_KEYS + 1) == 8, "Then level 8");
-        require(KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS == 100, "One hundred keys");
-        require(KeyfleetPresets.FLEET_TECH_AUTOLAUNCH_MIN_KEYS <= KeyfleetPresets.CLASSIC_SUPPLY, "Classic reaches it");
     }
 }

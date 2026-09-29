@@ -12,12 +12,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
-import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 
-/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as USDC does, because a fleet refuses a USDC with any other.
 contract MockERC20 is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
@@ -141,23 +139,22 @@ contract KeyfleetTest is Test {
 
     /// @dev The reference price, 10 USDC in atomic units.
     uint256 private constant Q = KeyfleetPresets.Q_USDC;
-    /// @dev The 2% protocol share of a ten-USDC purchase.
-    uint256 private constant Q_PROTOCOL = Q / 50;
-    uint256 private constant PURCHASE_GAS_CEILING = 470_000;
+    /// @dev The 10% protocol share of a ten-USDC purchase.
+    uint256 private constant Q_PROTOCOL = Q / 10;
+    /// @dev The measured cost of the first purchase at Cascade level 40, the costliest measured,
+    /// plus twenty percent, rounded up to the nearest thousand.
+    uint256 private constant PURCHASE_GAS_CEILING = 509_000;
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
 
     StdStorage private fleetStore;
 
     MockERC20 private usdc;
     MockERC20 private other;
-    MockERC20 private regent;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
 
     address private buyer = address(0xB0B0B0);
-    IRegentRevenueStaking private staking = IRegentRevenueStaking(address(0x57A1));
-    /// @dev These suites never launch; the Autolaunch factory is exercised in its own suite.
-    IRegentsAutolaunchFactoryV1 private factory = IRegentsAutolaunchFactoryV1(address(0xFAC7));
+    address private treasury = address(0x7EA5);
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
@@ -179,7 +176,6 @@ contract KeyfleetTest is Test {
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC");
         other = new MockERC20("Other", "OTH");
-        regent = new MockERC20("Regent", "REGENT");
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
     }
@@ -190,9 +186,7 @@ contract KeyfleetTest is Test {
         fleet = new Keyfleet(
             preset,
             usdc,
-            regent,
-            staking,
-            factory,
+            treasury,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -248,20 +242,21 @@ contract KeyfleetTest is Test {
 
     // --- 1. deployment and wiring ----------------------------------------
 
-    /// @dev Invariant: a fleet and its ledger are born together and correctly bound, so no
-    /// deployment step can leave a fleet writing into someone else's ledger.
-    function test_constructorDeploysAndBindsItsOwnRewardLedger() public {
+    /// @dev Invariant: a fleet, its ledger, its voting controller and its shard record are born
+    /// together and correctly bound, so no deployment step can leave a fleet writing into someone
+    /// else's ledger.
+    function test_constructorDeploysAndBindsItsOwnLedgerControllerAndShardRecord() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetRewards rewards = fleet.REWARDS();
 
         assertEq(rewards.FLEET(), address(fleet), "ledger bound to this fleet");
+        assertEq(address(fleet.VOTES().FLEET()), address(fleet), "controller bound to this fleet");
+        assertEq(address(fleet.SHARDS().FLEET()), address(fleet), "shard record bound to this fleet");
         address[] memory assets = rewards.rewardAssets();
-        assertEq(assets.length, 2, "USDC and REGENT are the income tokens before a launch");
-        assertEq(assets[0], address(usdc), "USDC is the first income token");
-        assertEq(assets[1], address(regent), "REGENT is the second");
+        assertEq(assets.length, 1, "USDC is the one income token");
+        assertEq(assets[0], address(usdc));
         assertEq(address(fleet.USDC()), address(usdc));
-        assertEq(address(fleet.REGENT()), address(regent));
-        assertEq(address(fleet.STAKING()), address(staking));
+        assertEq(fleet.PROTOCOL_TREASURY(), treasury);
         assertEq(uint256(fleet.PRESET()), uint256(KeyfleetPresets.Preset.FibonacciSyndicate));
         assertEq(fleet.totalMinted(), 0);
         assertEq(fleet.currentPrice(), 0, "only Accelerant persists a price");
@@ -271,27 +266,16 @@ contract KeyfleetTest is Test {
     /// can be changed afterwards.
     function test_constructorRejectsZeroAddresses() public {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(IERC20(address(0)), regent, staking, factory);
+        _construct(IERC20(address(0)), treasury);
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, IERC20(address(0)), staking, factory);
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, regent, IRegentRevenueStaking(address(0)), factory);
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, regent, staking, IRegentsAutolaunchFactoryV1(address(0)));
+        _construct(usdc, address(0));
     }
 
-    function _construct(
-        IERC20 usdc_,
-        IERC20 regent_,
-        IRegentRevenueStaking staking_,
-        IRegentsAutolaunchFactoryV1 factory_
-    ) private returns (Keyfleet) {
+    function _construct(IERC20 usdc_, address treasury_) private returns (Keyfleet) {
         return new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc_,
-            regent_,
-            staking_,
-            factory_,
+            treasury_,
             Keyfleet.Metadata("n", "s", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -304,7 +288,7 @@ contract KeyfleetTest is Test {
         EighteenDecimalToken eighteen = new EighteenDecimalToken();
 
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.UsdcDecimalsWrong.selector, uint8(18)));
-        _construct(IERC20(address(eighteen)), regent, staking, factory);
+        _construct(IERC20(address(eighteen)), treasury);
     }
 
     /// @dev Invariant: only the fleet may write to the ledger it deployed.
@@ -315,10 +299,6 @@ contract KeyfleetTest is Test {
         vm.prank(alice);
         vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
         rewards.enrollKey(1, 0);
-
-        vm.prank(alice);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
-        rewards.setLaunchedToken(address(other));
     }
 
     // --- 2. purchase authorization ---------------------------------------
@@ -348,7 +328,7 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
-    /// 8 USDC to 80 USDC, and 2% of every sale is owed to staking.
+    /// 8 USDC to 80 USDC, and 10% of every sale is owed to the protocol treasury.
     function test_classicSellsExactlyOneThousandTwentyFourKeysAlongItsPriceCurve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         assertEq(fleet.maxSupply(), 1024);
@@ -363,8 +343,8 @@ contract KeyfleetTest is Test {
         }
 
         assertEq(paid, 32_032_450_000, "the whole fleet cost 32,032.45 USDC");
-        assertEq(fleet.protocolShareOwed(), paid / 50, "2% of every sale is owed to staking");
-        assertEq(fleet.freeCapital(address(usdc)), paid - paid / 50, "and the rest is shared money");
+        assertEq(fleet.protocolShareOwed(), paid / 10, "10% of every sale is owed to the treasury");
+        assertEq(fleet.freeCapital(address(usdc)), paid - paid / 10, "and the rest is shared money");
         _assertBalanceInvariant(fleet);
 
         assertEq(fleet.remainingSupply(), 0);
@@ -407,32 +387,39 @@ contract KeyfleetTest is Test {
         fleet.purchase(alice, type(uint256).max, block.timestamp);
     }
 
-    /// @dev Invariant: the Fibonacci bound is the cumulative supply through level 20. Reaching it by
-    /// minting is not practical, so the counter is written directly and the bound checked there.
-    function test_fibonacciStopsAtTheCumulativeLevelTwentySupply() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        assertEq(fleet.maxSupply(), KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
+    /// @dev Invariant: a Fibonacci fleet has no last level and never sells out. Supply limits are a
+    /// Fleet.Tech notion, so the two supply views refuse to answer rather than invent a number.
+    /// Minting 701 million keys is not practical, so the counter is written directly to the end of
+    /// level 40, and the next purchase opens level 41 at its own price.
+    function test_fibonacciHasNoLastLevelAndNeverSellsOut() public {
+        for (uint256 p = 0; p < 2; ++p) {
+            Keyfleet fleet = _deploy(KeyfleetPresets.Preset(p));
+            vm.expectRevert(Keyfleet.NotFleetTechPreset.selector);
+            fleet.maxSupply();
+            vm.expectRevert(Keyfleet.NotFleetTechPreset.selector);
+            fleet.remainingSupply();
 
-        fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-        assertEq(fleet.totalMinted(), KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID);
-        assertEq(fleet.remainingSupply(), 0);
+            uint256 endOfForty = KeyfleetPresets.fibonacciLevelEnd(40);
+            assertEq(endOfForty, 701_408_730, "701,408,730 keys fill levels 1 to 40");
+            fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(endOfForty);
+            assertEq(fleet.completedLevels(), 40, "forty levels complete");
+            assertEq(fleet.levelOf(endOfForty + 1), 41, "the next key opens level 41");
+            assertEq(fleet.nextPrice(), KeyfleetPresets.fibonacciLevelPrice(41), "at level 41's price");
+            assertEq(fleet.holdingLimit(41), KeyfleetPresets.fibonacciLevelSupply(41) / 10, "by the same limit rule");
 
-        vm.expectRevert(Keyfleet.SoldOut.selector);
-        fleet.nextPrice();
-
-        usdc.mint(buyer, type(uint128).max);
-        vm.startPrank(buyer);
-        usdc.approve(address(fleet), type(uint256).max);
-        vm.expectRevert(Keyfleet.SoldOut.selector);
-        fleet.purchase(alice, type(uint256).max, block.timestamp);
-        vm.stopPrank();
+            uint256 tokenId = _buy(fleet, alice);
+            assertEq(tokenId, endOfForty + 1);
+            assertEq(fleet.ownerOf(tokenId), alice, "the purchase goes through");
+            assertEq(fleet.heldPerLevel(alice, 41), 1);
+            assertEq(fleet.REWARDS().keyCohort(tokenId), 41, "and the key joins its level's cohort");
+        }
     }
 
     // --- 3. Syndicate and Classic ledgers ---------------------------------
 
-    /// @dev Invariant: 2% is owed to REGENT stakers and every remaining unit is free capital; the
-    /// fleet's USDC balance is exactly those two figures.
-    function test_syndicatePurchaseOwesStakersTwoPercentAndBooksTheRestAsCapital() public {
+    /// @dev Invariant: 10% is owed to the protocol treasury and every remaining unit is free
+    /// capital; the fleet's USDC balance is exactly those two figures.
+    function test_syndicatePurchaseOwesTheTreasuryTenPercentAndBooksTheRestAsCapital() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
 
         uint256 price = _fundNext(fleet);
@@ -441,8 +428,8 @@ contract KeyfleetTest is Test {
         vm.prank(buyer);
         fleet.purchase(alice, 2 * price, block.timestamp);
 
-        assertEq(fleet.protocolShareOwed(), Q_PROTOCOL, "2% owed to stakers");
-        assertEq(fleet.freeCapital(address(usdc)), Q - Q_PROTOCOL, "98% to capital");
+        assertEq(fleet.protocolShareOwed(), Q_PROTOCOL, "10% owed to the treasury");
+        assertEq(fleet.freeCapital(address(usdc)), Q - Q_PROTOCOL, "90% to capital");
         assertEq(fleet.cascadeReserve(), 0, "Syndicate holds no reserve");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no reward backing from a Syndicate purchase");
         _assertBalanceInvariant(fleet);
@@ -487,11 +474,11 @@ contract KeyfleetTest is Test {
         _assertBalanceInvariant(fleet);
     }
 
-    /// @dev Invariant: on every preset each purchase adds exactly 2% of its gross, floored, to the
-    /// protocol share owed to stakers, and the fleet and its ledger together still hold every unit
+    /// @dev Invariant: on every preset each purchase adds exactly 10% of its gross, floored, to the
+    /// protocol share owed to the treasury, and the fleet and its ledger together still hold every unit
     /// paid: the fleet's balance is capital plus reserve plus the owed share, and the ledger's
     /// balance is exactly what it has backed.
-    function test_everyPresetOwesStakersTwoPercentOfEachPurchase() public {
+    function test_everyPresetOwesTheTreasuryTenPercentOfEachPurchase() public {
         for (uint256 p = 0; p < 4; ++p) {
             Keyfleet fleet = _deploy(KeyfleetPresets.Preset(p));
             KeyfleetRewards rewards = fleet.REWARDS();
@@ -499,8 +486,8 @@ contract KeyfleetTest is Test {
             for (uint256 i = 0; i < 12; ++i) {
                 uint256 price = fleet.nextPrice();
                 _buy(fleet, _wallet(i));
-                owed += (price * 200) / 10_000;
-                assertEq(fleet.protocolShareOwed(), owed, "each purchase adds its floored 2%");
+                owed += (price * 1000) / 10_000;
+                assertEq(fleet.protocolShareOwed(), owed, "each purchase adds its floored 10%");
                 _assertBalanceInvariant(fleet);
                 assertEq(
                     usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds its backing"
@@ -519,7 +506,7 @@ contract KeyfleetTest is Test {
 
         _buy(fleet, alice);
 
-        assertEq(fleet.freeCapital(address(usdc)), Q - Q_PROTOCOL, "98% to capital");
+        assertEq(fleet.freeCapital(address(usdc)), Q - Q_PROTOCOL, "90% to capital");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no rebate on the first mint");
         _assertBalanceInvariant(fleet);
     }
@@ -557,21 +544,21 @@ contract KeyfleetTest is Test {
         fleet.transferFrom(alice, bob, 1);
 
         uint256 price = fleet.nextPrice();
-        uint256 protocol = price / 50;
-        uint256 capital = price / 10;
+        uint256 protocol = price / 10;
+        uint256 capital = price / 5;
         uint256 rebate = price - protocol - capital;
         _buy(fleet, carol);
 
         assertEq(rewards.credits(address(usdc), bob), rebate, "the current holder is rebated");
         assertEq(rewards.credits(address(usdc), alice), 0, "the original minter is not");
         assertEq(usdc.balanceOf(address(rewards)), rebate, "the rebate is backed in the ledger");
-        assertEq(fleet.freeCapital(address(usdc)), (Q - Q_PROTOCOL) + capital, "capital takes its 10%");
+        assertEq(fleet.freeCapital(address(usdc)), (Q - Q_PROTOCOL) + capital, "capital takes its 20%");
         _assertBalanceInvariant(fleet);
     }
 
     /// @dev Invariant: each Accelerant rebate goes to the holder of the key immediately before the
     /// new one, never to the holder of the first key. The third mint costs 11,025,000 and rebates
-    /// 88% of it, 9,702,000, to the holder of key 2.
+    /// 70% of it, 7,717,500, to the holder of key 2.
     function test_accelerantThirdMintRebatesTheHolderOfKeyTwoNotKeyOne() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -582,7 +569,7 @@ contract KeyfleetTest is Test {
         assertEq(fleet.nextPrice(), 11_025_000, "third mint price");
         _buy(fleet, carol);
 
-        assertEq(rewards.credits(address(usdc), bob), 9_702_000, "the holder of key 2 is rebated");
+        assertEq(rewards.credits(address(usdc), bob), 7_717_500, "the holder of key 2 is rebated");
         assertEq(rewards.credits(address(usdc), alice), aliceAfterTwo, "the holder of key 1 gains nothing");
         assertEq(rewards.credits(address(usdc), carol), 0, "the new holder rebates no one");
         _assertBalanceInvariant(fleet);
@@ -602,7 +589,7 @@ contract KeyfleetTest is Test {
         assertEq(receiver.buy(), 1);
 
         uint256 price = fleet.nextPrice();
-        uint256 rebate = price - price / 50 - price / 10;
+        uint256 rebate = price - price / 10 - price / 5;
         receiver.setForward(alice, 1);
         assertEq(receiver.buy(), 2);
 
@@ -650,7 +637,7 @@ contract KeyfleetTest is Test {
 
         uint256 levelTwoPrice = fleet.nextPrice();
         assertEq(levelTwoPrice, (Q * 120) / 100, "level 2 costs 20% more");
-        uint256 levelTwoReserve = 3 * (levelTwoPrice - levelTwoPrice / 50);
+        uint256 levelTwoReserve = 3 * (levelTwoPrice - levelTwoPrice / 10);
         uint256 reimbursement = 2 * Q;
         uint256 surplus = levelTwoReserve - reimbursement;
 
@@ -709,12 +696,12 @@ contract KeyfleetTest is Test {
         _assertBalanceInvariant(fleet);
     }
 
-    /// @dev Invariant: across all twenty levels, completing each level repays every key of the level
-    /// before it its whole gross price, never a part of it, and releases the rest of the reserve to
-    /// capital. Every key is bought, so every completion the preset can make is made. Buying all
-    /// 46,365 keys costs far more gas than one test may spend, so gas is not metered here; what
-    /// a purchase costs is measured by `test_firstPurchaseOnAFreshFleetIsTheWorstCase`.
-    function test_cascadeRepaysEveryCompletedLevelInFullAcrossAllTwentyLevels() public {
+    /// @dev Invariant: across the first twenty levels, completing each level repays every key of the
+    /// level before it its whole gross price, never a part of it, and releases the rest of the
+    /// reserve to capital. Every key through level 20 is bought, so every completion is made by real
+    /// purchases. Buying all 46,365 keys costs far more gas than one test may spend, so gas is not
+    /// metered here; what a purchase costs is measured by `test_purchaseGasStaysUnderTheCeiling`.
+    function test_cascadeRepaysEveryCompletedLevelInFullAcrossTwentyLevels() public {
         vm.pauseGasMetering();
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -723,7 +710,7 @@ contract KeyfleetTest is Test {
         usdc.approve(address(fleet), type(uint256).max);
 
         uint256 repaid;
-        for (uint256 level = 1; level <= KeyfleetPresets.MAX_FIBONACCI_LEVEL; ++level) {
+        for (uint256 level = 1; level <= 20; ++level) {
             uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
             uint256 perWallet = KeyfleetPresets.fibonacciHoldingLimit(level);
             for (uint256 i = 0; i < supply; ++i) {
@@ -746,8 +733,9 @@ contract KeyfleetTest is Test {
             _assertBalanceInvariant(fleet);
         }
 
-        assertEq(fleet.totalMinted(), KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID, "every key was sold");
+        assertEq(fleet.totalMinted(), 46_365, "every key through level 20 was sold");
         assertEq(usdc.balanceOf(address(rewards)), repaid, "the ledger holds every repayment in full");
+        assertEq(fleet.levelOf(fleet.totalMinted() + 1), 21, "and level 21 is open");
     }
 
     /// @dev Invariant: a level completes exactly once; later resales of its keys cannot re-run the
@@ -1011,7 +999,7 @@ contract KeyfleetTest is Test {
         uint256 price = _fundNext(fleet);
 
         assertEq(next.protocol + next.capital + next.reserve + next.rebate, price, "sums to gross");
-        assertEq(next.rebate, price - price / 50 - price / 10, "88% rebate");
+        assertEq(next.rebate, price - price / 10 - price / 5, "70% rebate");
 
         vm.expectEmit(true, true, true, true, address(fleet));
         emit Purchased(2, buyer, bob, price, next.protocol, next.capital, 0, next.rebate);
@@ -1040,14 +1028,16 @@ contract KeyfleetTest is Test {
         assertEq(fleet.levelOf(1), 1);
         assertEq(fleet.levelOf(2), 1);
         assertEq(fleet.levelOf(3), 2);
-        assertEq(fleet.levelOf(KeyfleetPresets.FIBONACCI_MAX_TOKEN_ID), 20);
+        assertEq(fleet.levelOf(46_365), 20);
+        assertEq(fleet.levelOf(46_366), 21);
         assertEq(fleet.holdingLimit(7), 1);
         assertEq(fleet.holdingLimit(20), KeyfleetPresets.fibonacciLevelSupply(20) / 10);
+        assertEq(fleet.holdingLimit(40), KeyfleetPresets.fibonacciLevelSupply(40) / 10);
 
         vm.expectRevert(KeyfleetPresets.TokenIdOutOfBounds.selector);
         fleet.levelOf(0);
         vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        fleet.holdingLimit(21);
+        fleet.holdingLimit(0);
     }
 
     // --- 10. gas ----------------------------------------------------------
@@ -1062,11 +1052,15 @@ contract KeyfleetTest is Test {
         vm.cool(receiver);
     }
 
-    /// @dev Measures the first purchase on a fresh fleet, which is the most expensive primary
-    /// purchase: every accounting slot it touches, the owed protocol share included, is written
-    /// from zero, and every account the purchase touches starts cold.
-    function _measureFirstPurchase(KeyfleetPresets.Preset preset) private returns (uint256 used) {
+    /// @dev Measures the first purchase of `level` on a fresh fleet, with the mint count written to
+    /// the key before the level's first. Every accounting slot the purchase touches, the owed
+    /// protocol share included, is written from zero, and every account it touches starts cold.
+    function _measureFirstPurchase(KeyfleetPresets.Preset preset, uint256 level) private returns (uint256 used) {
         Keyfleet fleet = _deploy(preset);
+        if (level > 1) {
+            uint256 before_ = KeyfleetPresets.fibonacciLevelStart(level) - 1;
+            fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(before_);
+        }
 
         uint256 price = fleet.nextPrice();
         usdc.mint(buyer, price);
@@ -1079,29 +1073,40 @@ contract KeyfleetTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev The published execution-gas ceiling covers the worst primary purchase: the first one on
-    /// a fresh Cascade fleet, with every account it touches starting cold. It is measured against
-    /// the plain ERC-20 mock standing in for USDC and the mock VRF coordinator, whose request writes
-    /// what the real coordinator's writes, and the ceiling is the measured figure plus twenty
-    /// percent, rounded up to the nearest thousand. The first purchase after each
-    /// `sendProtocolShare` pays the write of the owed share from zero again. That makes it a
-    /// regression bound on the fleet's own work, not the figure to publish: real Base USDC is a
-    /// proxy and costs more per transfer, so the figures to publish are measured on a fork of Base.
-    /// The level-completing Cascade purchase is measured alongside it for information; it is cheaper,
-    /// because by then the buckets it writes are warm.
-    function test_firstPurchaseOnAFreshFleetIsTheWorstCase() public {
-        uint256 cascade = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade);
-        uint256 syndicate = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciSyndicate);
-        uint256 accelerant = _measureFirstPurchase(KeyfleetPresets.Preset.FleetTechAccelerant);
-        uint256 classic = _measureFirstPurchase(KeyfleetPresets.Preset.FleetTechClassic);
+    /// @dev The published execution-gas ceiling covers the first purchase of a level on a fresh
+    /// Cascade fleet, with every account it touches starting cold. A Fibonacci purchase walks the
+    /// levels up to its own a few times, so its cost grows slowly with the level; it is measured at
+    /// levels 1, 30 and 40, and the ceiling is the level-40 figure plus twenty percent, rounded up to
+    /// the nearest thousand. Level 40 takes 701 million keys sold to reach. Measured against the
+    /// plain ERC-20 mock standing in for USDC and the mock VRF coordinator, whose request writes
+    /// what the real coordinator's writes. The first purchase after each `sendProtocolShare` pays
+    /// the write of the owed share from zero again. That makes it a regression bound on the fleet's
+    /// own work, not the figure to publish: real USDC is a proxy and costs more per transfer, so the
+    /// figures to publish are measured on a fork of Ethereum. The level-completing Cascade purchase
+    /// is measured alongside it for information; it is cheaper, because by then the buckets it
+    /// writes are warm.
+    function test_purchaseGasStaysUnderTheCeiling() public {
+        uint256 cascade = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade, 1);
+        uint256 cascade30 = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade, 30);
+        uint256 cascade40 = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade, 40);
+        uint256 syndicate40 = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 40);
+        uint256 syndicate = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciSyndicate, 1);
+        uint256 accelerant = _measureFirstPurchase(KeyfleetPresets.Preset.FleetTechAccelerant, 1);
+        uint256 classic = _measureFirstPurchase(KeyfleetPresets.Preset.FleetTechClassic, 1);
 
-        console2.log("first purchase gas, Cascade:", cascade);
-        console2.log("first purchase gas, Syndicate:", syndicate);
+        console2.log("first purchase gas, Cascade level 1:", cascade);
+        console2.log("first purchase gas, Cascade level 30:", cascade30);
+        console2.log("first purchase gas, Cascade level 40:", cascade40);
+        console2.log("first purchase gas, Syndicate level 1:", syndicate);
+        console2.log("first purchase gas, Syndicate level 40:", syndicate40);
         console2.log("first purchase gas, Accelerant:", accelerant);
         console2.log("first purchase gas, Classic:", classic);
 
-        assertLt(cascade, PURCHASE_GAS_CEILING, "the worst primary purchase stays under the published ceiling");
-        assertGt(cascade, syndicate, "Cascade is the most expensive preset");
+        assertLt(cascade40, PURCHASE_GAS_CEILING, "the worst primary purchase stays under the published ceiling");
+        assertGt(cascade40, cascade30, "a higher level costs a little more");
+        assertGt(cascade30, cascade);
+        assertGt(cascade40, syndicate40, "Cascade is the most expensive preset");
+        assertGt(cascade, syndicate);
         assertGt(cascade, accelerant);
         assertGt(cascade, classic);
 
@@ -1128,7 +1133,7 @@ contract KeyfleetTest is Test {
 
     /// @dev Invariant: across random purchase and transfer sequences on any preset, the fleet's
     /// USDC balance is always exactly its free capital plus its Cascade reserve plus the protocol
-    /// share owed to stakers. Reward backing sits in the ledger, so nothing else can hide here.
+    /// share owed to the treasury. Reward backing sits in the ledger, so nothing else can hide here.
     function testFuzz_usdcBalanceAlwaysEqualsCapitalPlusReservePlusOwedShare(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset(seed % 4));
         usdc.mint(buyer, 1e30);

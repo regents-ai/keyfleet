@@ -5,19 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
-import {IRegentsAutolaunchFactoryV1} from "../src/interfaces/IRegentsAutolaunchFactoryV1.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "../src/vendor/chainlink/libraries/VRFV2PlusClient.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as Ethereum USDC does, because a fleet refuses a USDC with any other.
 contract RevealUsdc is ERC20 {
     constructor() ERC20("USD Coin", "USDC") {}
 
@@ -53,13 +50,11 @@ abstract contract RevealFixture is Test {
     address internal constant BUYER = address(0xB0B0B0);
 
     RevealUsdc internal usdc;
-    RevealUsdc internal regent;
     MockVRFCoordinatorV2Plus internal vrf;
     uint256 internal subscriptionId;
 
     function _setUpFixture() internal {
         usdc = new RevealUsdc();
-        regent = new RevealUsdc();
         vrf = new MockVRFCoordinatorV2Plus();
         subscriptionId = vrf.createSubscription();
         vm.warp(1_000_000);
@@ -79,9 +74,7 @@ abstract contract RevealFixture is Test {
         return new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            IERC20(address(regent)),
-            IRegentRevenueStaking(address(0x57A1)),
-            IRegentsAutolaunchFactoryV1(address(0xFAC7)),
+            address(0x7EA5),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             randomness,
             traitTableHash
