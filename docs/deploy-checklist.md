@@ -61,8 +61,8 @@ The three `KEYFLEET_DATABASE_*` values are not secret; the migration step
 refuses to run without exactly these. `KEYFLEET_DEPLOYMENT_ROLE`, `KEYFLEET_SIWA_URL`
 and `PORT` are already in `fly.toml`.
 
-Leave `KEYFLEET_KEEPER_PRIVATE_KEY` and `KEYFLEET_RPC_URL` unset. They belong to
-the chain side, which has nothing to do until a deployment is recorded.
+Leave `KEYFLEET_RPC_URL` unset. It belongs to the chain side, which has
+nothing to do until a deployment is recorded.
 
 ## 4. Outside Keyfleet
 
@@ -199,6 +199,14 @@ If it does exist, these migrations need care, and some counts go to the founder:
   SELECT count(*) FROM keyfleet_app.graph_objects WHERE type = 'launch_card';
   ```
   If it is above 0, stop and tell the founder.
+- **No keeper records** (`20260929231809`). The site no longer sends
+  transactions itself. It removes the `keeper_txs` and `keeper_runs` tables
+  and the two functions their triggers ran. Rolling it back does not bring
+  them back. First run, and expect `0` for both:
+  ```sql
+  SELECT (SELECT count(*) FROM keyfleet_app.keeper_txs), (SELECT count(*) FROM keyfleet_app.keeper_runs);
+  ```
+  If either is above 0, stop and tell the founder.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are

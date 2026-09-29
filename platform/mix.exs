@@ -74,7 +74,6 @@ defmodule Keyfleet.MixProject do
       {:sentry, "~> 13.0"},
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.12"},
-      {:ex_secp256k1, "~> 0.8.0"},
       {:ex_keccak, "~> 0.7.8"},
       {:req, "== 0.7.4"},
       {:bandit, "~> 1.12.1"},
@@ -128,7 +127,6 @@ defmodule Keyfleet.MixProject do
         "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
         # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
         # floor: each resource adds its domain's edge and one per policy check module.
-        # The keeper's transaction record adds one more: its functions come from Calls.
         # Agents' check-in records add two: their domain and the OwnProfile check.
         # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
         # The router adds one: its pipelines read the content security policies as they compile.
@@ -136,7 +134,7 @@ defmodule Keyfleet.MixProject do
         # Shards add four: the ShardEvent and EditsRestriction records, each with its
         # domain and the SystemActor check, in place of the four pairing had.
         # Mutes add two: their domain and the OwnMute check.
-        "xref graph --label compile-connected --fail-above 69",
+        "xref graph --label compile-connected --fail-above 65",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

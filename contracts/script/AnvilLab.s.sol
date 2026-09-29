@@ -9,8 +9,8 @@ import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoor
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A six-decimal stand-in for USDC, as a fleet requires, that mints to whoever asks.
-contract KeeperLabUsdc is ERC20 {
-    constructor() ERC20("Keeper Lab USDC", "USDC") {}
+contract AnvilLabUsdc is ERC20 {
+    constructor() ERC20("Anvil Lab USDC", "USDC") {}
 
     function decimals() public pure override returns (uint8) {
         return 6;
@@ -21,24 +21,24 @@ contract KeeperLabUsdc is ERC20 {
     }
 }
 
-/// @notice Puts one fleet on a plain local anvil for the keeper's external test in `platform/`,
-/// which then drives the keeper against it. Nothing here is for a real network: the sender is an
-/// account anvil has unlocked, and no private key is read.
+/// @notice Puts one fleet on a plain local anvil for the anvil tests in `platform/`: the wallet
+/// buttons' steps and the rewards a key has waiting. Nothing here is for a real network: the
+/// sender is an account anvil has unlocked, and no private key is read.
 /// @dev The fleet is a Classic fleet whose protocol treasury is a fixed lab address, on a
-/// stand-in VRF coordinator whose subscription holds 0.1 ETH, the least the keeper asks from. Two
-/// keys are sold while the coordinator refuses every request, so neither key's reveal was ever
-/// accepted, and then the coordinator takes requests again. The fleet owes the protocol share of
-/// both sales, and the buyer holds and has approved the USDC for a third key, for the test to buy.
-contract KeeperLab is Script {
-    bytes32 private constant KEY_HASH = keccak256("keeper lab key hash");
-    bytes32 private constant TRAIT_TABLE = keccak256("keeper lab trait table");
+/// stand-in VRF coordinator whose subscription holds 0.1 ETH. Two keys are sold while the
+/// coordinator refuses every request, so neither key's reveal was ever accepted, and then the
+/// coordinator takes requests again. The fleet owes the protocol share of both sales, and the
+/// buyer holds and has approved the USDC for a third key, for the test to buy.
+contract AnvilLab is Script {
+    bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
+    bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
     address private constant TREASURY = address(0x7EA5);
 
     /// @notice Builds the lab, broadcast from `--sender`, which owns the subscription and buys
     /// both keys.
     function run() external returns (address fleet, address treasury, address shards) {
         vm.startBroadcast();
-        KeeperLabUsdc usdc = new KeeperLabUsdc();
+        AnvilLabUsdc usdc = new AnvilLabUsdc();
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
         uint256 subscriptionId = vrf.createSubscription();
         vrf.fundSubscriptionWithNative{value: 0.1 ether}(subscriptionId);
@@ -47,7 +47,7 @@ contract KeeperLab is Script {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             TREASURY,
-            Keyfleet.Metadata("Keeper Lab Classic", "KLC", "https://keyfleet.ai/metadata/keeper-lab/"),
+            Keyfleet.Metadata("Anvil Lab Classic", "ALC", "https://keyfleet.ai/metadata/anvil-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
             }),

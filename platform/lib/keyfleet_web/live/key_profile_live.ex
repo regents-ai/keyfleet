@@ -71,6 +71,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
+          <.reveal :if={is_nil(@profile.traits)} profile={@profile} fleet={@fleet} actor={@actor} />
           <.claim :if={@profile.yours?} profile={@profile} fleet={@fleet} actor={@actor} />
           <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
@@ -290,6 +291,51 @@ defmodule KeyfleetWeb.KeyProfileLive do
             data-onchain-step={"claim-#{waiting.asset}"}
           >
             <span data-press-label>Claim {WalletWords.token_amount(waiting)}</span>
+          </Regent.Primitives.button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  attr :profile, :map, required: true
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+
+  # A key whose request for its random draw was turned down has no traits
+  # until someone asks again, which anyone may do. The server reads whether
+  # it was turned down, and Try again appears only then.
+  defp reveal(assigns) do
+    ~H"""
+    <section
+      id="key-profile-reveal"
+      class="key-profile__section"
+      aria-labelledby="key-profile-reveal-title"
+    >
+      <h3 id="key-profile-reveal-title">Drawing traits</h3>
+      <.live_component
+        module={WalletPanel}
+        id="key-profile-reveal-action"
+        flow={:reveal}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+        token_id={@profile.token_id}
+      >
+        <:notes :let={panel}>
+          <p :if={is_nil(@actor)} class="key-profile-detail">
+            This key’s traits are still being drawn. Sign in to ask again if its draw was turned down.
+          </p>
+          <p :if={WalletPanel.has_step?(panel, "reveal")} class="key-profile-detail">
+            This key’s traits haven’t been drawn yet, because the request for its random draw was turned down. Anyone can ask again.
+          </p>
+        </:notes>
+        <:buttons :let={panel}>
+          <Regent.Primitives.button
+            :if={WalletPanel.has_step?(panel, "reveal")}
+            id="key-profile-reveal-again"
+            data-onchain-step="reveal"
+          >
+            <span data-press-label>Try again</span>
           </Regent.Primitives.button>
         </:buttons>
       </.live_component>

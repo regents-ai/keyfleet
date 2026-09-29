@@ -119,6 +119,13 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:nothing_waiting), do: "Nothing is waiting for this key right now."
   defp problem(:sold_out), do: "Every key in this fleet has been sold."
 
+  defp problem(:reveal_requested),
+    do:
+      "The request for this key’s random draw was accepted. The draw is on its way, and " <>
+        "the key’s traits show here when it arrives."
+
+  defp problem(:revealed), do: "This key’s traits have been drawn. They show here in a moment."
+
   @doc "A sent step's title, from the review it was sent from."
   def title(%{name: "approve"}), do: "Approve USDC"
   def title(%{name: "buy"}), do: "Buy key"
@@ -132,6 +139,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "clear"}), do: "Stop any wallet voting for you"
   def title(%{name: "send"}), do: "Send Regents its share"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
+  def title(%{name: "reveal"}), do: "Ask again for the draw"
   def title(%{name: "issue"}), do: "Issue a shard"
   def title(%{name: "end-" <> _wallet}), do: "End a shard"
   def title(%{name: "renew-" <> _wallet}), do: "Renew a shard"
@@ -175,6 +183,11 @@ defmodule KeyfleetWeb.WalletWords do
   defp confirmed("clear"), do: "Done. No other wallet can vote your keys now."
   defp confirmed("send"), do: "Done. Regents’ share has been sent to Regents."
   defp confirmed("claim-" <> _asset), do: "Done. It was paid to your wallet."
+
+  defp confirmed("reveal"),
+    do:
+      "Sent. If the draw was accepted this time, the key’s traits show here once it " <>
+        "arrives; if it was turned down again, Try again is back."
 
   defp confirmed("issue"),
     do: "Done. The shard is issued, and this page shows it in a few seconds."
@@ -234,6 +247,9 @@ defmodule KeyfleetWeb.WalletWords do
     do:
       "Nothing was claimed. The key may not be held by the wallet that sent this, or nothing " <>
         "is waiting for it any more."
+
+  defp reverted("reveal"),
+    do: "Nothing was asked. The key’s draw may already be on its way, or its traits drawn."
 
   defp reverted("issue"),
     do:

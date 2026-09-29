@@ -1,6 +1,6 @@
 defmodule Keyfleet.RewardsWaitingAnvilTest do
   # A key's rewards waiting read from a real node: a local anvil, never a real
-  # network, with the fleet `KeeperLab.s.sol` puts on it, whose buyer holds
+  # network, with the fleet `AnvilLab.s.sol` puts on it, whose buyer holds
   # keys 1 and 2.
   use ExUnit.Case, async: false
 

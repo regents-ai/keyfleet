@@ -5,8 +5,6 @@ defmodule Keyfleet.Application do
 
   use Application
 
-  require Logger
-
   @impl true
   def start(_type, _args) do
     children =
@@ -20,7 +18,6 @@ defmodule Keyfleet.Application do
         # table stands apart from the fleets' readers below.
         Keyfleet.Chain.RewardsWaiting,
         chain_child(),
-        keeper_child(),
         graph_children(),
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
         # {Keyfleet.Worker, arg},
@@ -60,32 +57,6 @@ defmodule Keyfleet.Application do
   defp chain_child do
     if Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:rpc_url],
       do: Keyfleet.Chain.Supervisor
-  end
-
-  # The keeper signs only with its key, which only production reads, and
-  # keeps its records in the database. It runs under its own supervisor,
-  # which the site never restarts: a keeper that keeps crashing gives up and
-  # leaves the site running.
-  @doc false
-  def keeper_child do
-    cond do
-      is_nil(Application.fetch_env!(:keyfleet, Keyfleet.Keeper)[:private_key]) ->
-        Logger.info(
-          "Keeper off: no KEYFLEET_KEEPER_PRIVATE_KEY in production; nothing on this site sends transactions."
-        )
-
-        nil
-
-      Application.get_env(:keyfleet, :database_startup_enabled, false) ->
-        Supervisor.child_spec(Keyfleet.Keeper.Supervisor, restart: :temporary)
-
-      true ->
-        Logger.info(
-          "Keeper off: the database is not enabled; nothing on this site sends transactions."
-        )
-
-        nil
-    end
   end
 
   # The projectors read each fleet's log through its writer, so they start

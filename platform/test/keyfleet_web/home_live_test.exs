@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, KeeperHelpers, Keys}
+  alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
 
@@ -85,7 +85,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "a card shows its fleet's newest open goal and what it features, once connected",
        %{conn: conn} do
-    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@cascade)
     goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
     Workspace.edit(@classic, goal("Ship the site"), %{"status" => "dropped"})
 
@@ -115,7 +115,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "a notice about one fleet refreshes that fleet's card alone, after a pause",
        %{conn: conn} do
-    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@cascade)
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
@@ -142,7 +142,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     classic = "fleet_tech_classic"
 
     for fleet <- [@syndicate, @cascade],
-        do: KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 1)
+        do: ChainHelpers.deploy!(fleet)
 
     ChainHelpers.seed_cursor!(@syndicate)
     ChainHelpers.seed_cursor!(@cascade, head_block: 5_000, next_block: 1_000)
@@ -168,7 +168,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   test "the hero counts every fleet's agents and keys once the cards have read them",
        %{conn: conn} do
     for fleet <- [@syndicate, @cascade] do
-      KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 1)
+      ChainHelpers.deploy!(fleet)
       ChainHelpers.seed_cursor!(fleet)
     end
 
@@ -194,7 +194,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "the hero counts an agent holding shards in two fleets once", %{conn: conn} do
     for fleet <- [@syndicate, @cascade] do
-      KeeperHelpers.deploy!(fleet, "0x" <> String.duplicate("7", 40), 1)
+      ChainHelpers.deploy!(fleet)
       ChainHelpers.seed_cursor!(fleet)
       issue!(fleet, 1)
       shard!(fleet, 1, 1)
@@ -217,7 +217,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "the hero leaves keys out of its count while a fleet's sales are catching up",
        %{conn: conn} do
-    KeeperHelpers.deploy!(@syndicate, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@syndicate)
     ChainHelpers.seed_cursor!(@syndicate, head_block: 5_000, next_block: 1_000)
     for token_id <- 1..3, do: issue!(@syndicate, token_id)
 
@@ -228,7 +228,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   test "the hero's count is marked only while agents are here", %{conn: conn} do
-    KeeperHelpers.deploy!(@syndicate, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@syndicate)
     ChainHelpers.seed_cursor!(@syndicate)
     issue!(@syndicate, 1)
 
@@ -302,7 +302,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "a burst of notices is answered by one refresh of each fleet and one count of agents",
        %{conn: conn} do
-    KeeperHelpers.deploy!(@cascade, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@cascade)
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 

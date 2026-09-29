@@ -1,6 +1,6 @@
 defmodule Keyfleet.WalletStepsAnvilTest do
   # Every wallet button's steps, built by the server and sent to a real node:
-  # a local anvil, never a real network, with the fleet `KeeperLab.s.sol`
+  # a local anvil, never a real network, with the fleet `AnvilLab.s.sol`
   # puts on it. The lab's buyer holds keys 1 and 2 and has approved the USDC
   # for a third. Each test starts from the lab as it was built.
   #
@@ -13,7 +13,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{AnvilLab, ChainClient, ChainHelpers, Fleets, ProposalHelpers, Repo, WalletSteps}
   alias Keyfleet.Chain.RpcClient
-  alias RegentChain.{Call, Outcome, Review}
+  alias RegentChain.{Call, Event, Outcome, Review}
 
   @moduletag :external
   @moduletag timeout: 600_000
@@ -309,6 +309,52 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     end
   end
 
+  describe "a key's random draw" do
+    test "asked again by anyone while refused; once accepted, and once drawn, nothing is offered",
+         %{url: url, lab: lab} do
+      coordinator = address!(url, lab.fleet, "VRF_COORDINATOR()")
+
+      # The lab sold keys 1 and 2 while the coordinator refused every request.
+      built = build!(:reveal, @third, token_id: 1)
+      assert %{problem: nil, figures: %{token_id: 1}} = built
+      assert names(built) == ["reveal"]
+
+      assert %{to: fleet, data: data} = Review.find(built.review, "reveal")
+      assert fleet == lab.fleet
+      assert data == Call.encode("requestReveal(uint256)", [1])
+
+      # Refused again: the press lands, and the key is offered again.
+      send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [true]))
+      refused = press!(url, @third, built.review, "reveal")
+      assert outcome(built.review, "reveal", refused) == {:ok, :confirmed}
+      assert {:ok, {[1], []}} = reveal_log(url, refused, lab, "RevealRequestFailed(uint256)", 1)
+      assert names(build!(:reveal, @third, token_id: 1)) == ["reveal"]
+
+      # Accepted: the draw is on its way, and a repeat press is refused.
+      send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [false]))
+      accepted = press!(url, @third, built.review, "reveal")
+      assert outcome(built.review, "reveal", accepted) == {:ok, :confirmed}
+
+      assert {:ok, {[1, request_id], []}} =
+               reveal_log(url, accepted, lab, "RevealRequested(uint256,uint256)", 2)
+
+      assert %{problem: :reveal_requested, review: %{steps: []}} =
+               build!(:reveal, @third, token_id: 1)
+
+      assert pressed(url, built, "reveal") == {:ok, :reverted}
+
+      # Drawn: the coordinator answers, and there is nothing to ask for.
+      send!(
+        url,
+        @buyer,
+        coordinator,
+        Call.encode("fulfill(uint256,uint256[])", [request_id, [42]])
+      )
+
+      assert %{problem: :revealed, review: %{steps: []}} = build!(:reveal, @third, token_id: 1)
+    end
+  end
+
   # --- building and sending --------------------------------------------
 
   defp actor(wallet),
@@ -353,6 +399,13 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     do: Outcome.of(ChainClient, review, Review.find(review, name), hash)
 
   # --- reading the lab -------------------------------------------------
+
+  # The indexed words of the one `signature` log the fleet emitted in the
+  # transaction `hash`.
+  defp reveal_log(url, hash, lab, signature, indexed) do
+    %{"logs" => logs} = AnvilLab.receipt!(url, hash)
+    Event.one(logs, signature, lab.fleet, indexed, 0)
+  end
 
   defp uint!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)

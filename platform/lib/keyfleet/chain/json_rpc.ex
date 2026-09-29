@@ -1,7 +1,7 @@
 defmodule Keyfleet.Chain.JsonRpc do
   @moduledoc """
-  One JSON-RPC request to the node at `KEYFLEET_RPC_URL`, shared by the fleet
-  reader and the keeper.
+  One JSON-RPC request to the node at `KEYFLEET_RPC_URL`, for the fleet
+  reader.
 
   It logs nothing, so the node's address never reaches a log; each caller
   says what failed in its own words.

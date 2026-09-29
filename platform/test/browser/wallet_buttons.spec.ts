@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {allowUsdc, landStep, offerRewards, prepareFleet, sellKey} from "./support/fleet_chain"
+import {allowUsdc, landStep, offerRewards, prepareFleet, refuseDraw, sellKey} from "./support/fleet_chain"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 
 // Wallet buttons send the steps the server built for them, from a stand-in
@@ -14,6 +14,7 @@ const rewardsContract = "0x6666666666666666666666666666666666666666"
 const usdc = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 const approveSelector = "0x095ea7b3"
 const purchaseSelector = "0x98968f15"
+const requestRevealSelector = "0x40261cdd"
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, at its
 // Buying a key panel; returns the page's uncaught errors.
@@ -161,6 +162,49 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   landStep(claimed.hash, claimed.transaction, true)
   await expect(page.locator(`#key-profile-claim-action-sent li:has(code[title="${claimed.hash}"])`)).toContainText(
     "Done.",
+  )
+  expect(errors).toEqual([])
+})
+
+test("a key whose draw was turned down gets Try again: every press reaches the wallet, and the server says when the draw is on its way", async ({
+  page,
+}) => {
+  const key = sellKey(fleet, stranger)
+  refuseDraw(fleet, key, true)
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(`/app/fleets/${fleet}?key=${key}`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  await useStandInWallet(page, me)
+
+  // Anyone may ask again, not only the key's holder: pressed twice, both reach the wallet.
+  const again = page.locator("#key-profile-reveal-again")
+  await expect(again).toHaveText("Try again")
+  await again.click()
+  await again.click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)
+  const [first, second] = await sentByStandIn(page)
+  for (const {transaction} of [first, second]) {
+    expect(transaction.to.toLowerCase()).toBe(fleetContract)
+    expect(transaction.data).toBe(requestRevealSelector + key.toString(16).padStart(64, "0"))
+  }
+
+  // The first is accepted; the server reads that the draw is on its way.
+  refuseDraw(fleet, key, false)
+  landStep(first.hash, first.transaction, true)
+  await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${first.hash}"])`)).toContainText(
+    "Sent.",
+  )
+  await expect(page.locator("#key-profile-reveal-action-line")).toHaveText(
+    "The request for this key’s random draw was accepted. The draw is on its way, and the key’s traits show here when it arrives.",
+  )
+  await expect(again).toHaveCount(0)
+
+  // The repeat reaches the chain, which refuses it.
+  landStep(second.hash, second.transaction, false)
+  await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${second.hash}"])`)).toContainText(
+    "Nothing was asked.",
   )
   expect(errors).toEqual([])
 })

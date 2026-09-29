@@ -23,7 +23,6 @@ defmodule Keyfleet.RuntimeConfigTest do
       "SECRET_KEY_BASE",
       "KEYFLEET_APP_SURFACES",
       "KEYFLEET_RPC_URL",
-      "KEYFLEET_KEEPER_PRIVATE_KEY",
       "KEYFLEET_SIWA_URL"
     ]
 
@@ -294,76 +293,6 @@ defmodule Keyfleet.RuntimeConfigTest do
     assert get_in(config, [:keyfleet, KeyfleetWeb.Endpoint]) == nil
   end
 
-  describe "the keeper key" do
-    # Not a key that holds anything: the smallest one there is.
-    @key "0x" <> String.duplicate("0", 63) <> "1"
-    @node "https://node.example.test"
-
-    setup do
-      put_production_role()
-      put_pooled_url()
-      System.put_env("PHX_HOST", "keyfleet.example.test")
-      System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
-      :ok
-    end
-
-    test "leaves the keeper off when it is unset or blank" do
-      System.put_env("KEYFLEET_RPC_URL", @node)
-      assert production_config(Keyfleet.Keeper) == [private_key: nil]
-
-      System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", "  \n")
-      assert production_config(Keyfleet.Keeper) == [private_key: nil]
-    end
-
-    test "is configured with the node it sends through" do
-      System.put_env("KEYFLEET_RPC_URL", @node)
-      System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", @key)
-
-      assert production_config(Keyfleet.Keeper) == [private_key: @key]
-      assert production_config(Keyfleet.Chain) == [rpc_url: @node]
-    end
-
-    test "stops the boot when it is malformed, without printing it" do
-      System.put_env("KEYFLEET_RPC_URL", @node)
-
-      for key <- [
-            String.duplicate("0", 63) <> "1",
-            "0x" <> String.duplicate("0", 62) <> "1",
-            "0x" <> String.duplicate("0", 63) <> "g",
-            "0x" <> String.duplicate("0", 64),
-            "0x" <> String.duplicate("f", 64),
-            " " <> @key
-          ] do
-        System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", key)
-
-        error = assert_raise RuntimeError, fn -> production_config(Keyfleet.Keeper) end
-        assert Exception.message(error) == "KEYFLEET_KEEPER_PRIVATE_KEY is malformed"
-      end
-    end
-
-    test "stops the boot when there is no node to send through" do
-      System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", @key)
-
-      for node <- [nil, ""] do
-        restore_env("KEYFLEET_RPC_URL", node)
-
-        error = assert_raise RuntimeError, fn -> production_config(Keyfleet.Keeper) end
-
-        assert Exception.message(error) ==
-                 "KEYFLEET_KEEPER_PRIVATE_KEY is set but KEYFLEET_RPC_URL is not"
-      end
-    end
-
-    test "is never read in development or tests" do
-      System.put_env("KEYFLEET_RPC_URL", @node)
-
-      for key <- [@key, "malformed"], env <- [:dev, :test] do
-        System.put_env("KEYFLEET_KEEPER_PRIVATE_KEY", key)
-        assert env |> read_runtime_config() |> get_in([:keyfleet, Keyfleet.Keeper]) == nil
-      end
-    end
-  end
-
   # Fly applies a table until the next one begins, so a role line outside [env] --
   # under [build], or in a comment -- would never reach the machines.
   defp env_section(path) do
@@ -383,8 +312,6 @@ defmodule Keyfleet.RuntimeConfigTest do
       "postgresql://direct:secret@direct.dzx6qo6xqzvojpv5.flympg.net/keyfleet"
     )
   end
-
-  defp production_config(key), do: :prod |> read_runtime_config() |> get_in([:keyfleet, key])
 
   defp privy_config do
     runtime_config(:privy)

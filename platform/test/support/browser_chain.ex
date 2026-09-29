@@ -16,8 +16,9 @@ defmodule Keyfleet.BrowserChain do
   The pages' own chain reads are answered by one chain the server's pages
   share. The keys are paid in USDC alone; a key offered rewards
   (`offer_rewards!/3`) has them waiting, and for any other key the node
-  fails. A wallet has allowed a fleet the USDC `allow!/2` names, and none
-  until then. A step a page's wallet sent is on the chain once `land!/3`
+  fails. No key has its seed yet: a key's request for its random draw was
+  accepted until `refuse_draw!/3` says it was turned down. A wallet has
+  allowed a fleet the USDC `allow!/2` names, and none until then. A step a page's wallet sent is on the chain once `land!/3`
   puts it on the server's `Keyfleet.TestChainNode`.
   """
 
@@ -47,6 +48,8 @@ defmodule Keyfleet.BrowserChain do
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
+  @reveal_seed Call.selector("revealSeed(uint256)")
+  @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @shard_issued ShardsLog.topics() |> hd()
   @shard_ended ShardsLog.topics() |> List.last()
   # Agents sign in on Base whatever chain the keys are on.
@@ -119,6 +122,15 @@ defmodule Keyfleet.BrowserChain do
     remember({:rewards, rewards, token_id}, amount)
   end
 
+  @doc """
+  Key `token_id`'s request for its random draw was turned down when
+  `refused`, and accepted otherwise, from now on.
+  """
+  def refuse_draw!(fleet_id, token_id, refused) do
+    %{contract_address: contract} = Fleets.get_fleet!(fleet_id)
+    remember({:draw_refused, contract, token_id}, refused)
+  end
+
   @doc "`owner` has allowed every fleet `amount` atomic USDC from now on."
   def allow!(owner, amount), do: remember({:allowance, String.downcase(owner)}, amount)
 
@@ -162,6 +174,13 @@ defmodule Keyfleet.BrowserChain do
   defp answer(@usdc, @allowance <> <<owner::binary-size(64), _fleet::binary-size(64)>>, _hash) do
     amount = Map.get(answers(), {:allowance, "0x" <> String.slice(owner, -40, 40)}, 0)
     {:ok, <<amount::256>>}
+  end
+
+  defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+
+  defp answer(fleet, @reveal_requested_at <> token_id, _block_hash) do
+    refused? = Map.get(answers(), {:draw_refused, fleet, String.to_integer(token_id, 16)}, false)
+    {:ok, <<if(refused?, do: 0, else: 1)::256>>}
   end
 
   defp answer(_to, _data, _block_hash), do: {:error, :chain_unavailable}

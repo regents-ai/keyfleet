@@ -1,11 +1,11 @@
 defmodule Keyfleet.AnvilLab do
   @moduledoc """
-  A short-lived plain anvil for the keeper's external test, with the fleet
-  `contracts/script/KeeperLab.s.sol` puts on it.
+  A short-lived plain anvil for the external anvil tests, with the fleet
+  `contracts/script/AnvilLab.s.sol` puts on it.
 
   The anvil listens on a free loopback port, keeps no state history on
   disk, starts at a base fee of 0.01 gwei, and is killed when the test that
-  started it exits. For that test only, the keeper's node is pointed at it.
+  started it exits. For that test only, the site's nodes are pointed at it.
   The lab is sent from an account anvil has unlocked, so no key is handed
   to Forge, one transaction at a time: sent all at once, anvil has been
   seen to drop one and leave the rest queued behind the gap.
@@ -15,14 +15,14 @@ defmodule Keyfleet.AnvilLab do
   import ExUnit.Callbacks, only: [on_exit: 1]
 
   @contracts Path.expand("../../../contracts", __DIR__)
-  @script "script/KeeperLab.s.sol:KeeperLab"
+  @script "script/AnvilLab.s.sol:AnvilLab"
   @base_fee "10000000"
   # Anvil's own chain id.
   @chain_id 31_337
 
   @doc """
-  Starts an anvil, waits until it answers, and points the keeper's node and
-  the site's node for the lab chain (`:chain_nodes`) at it. Returns its URL.
+  Starts an anvil, waits until it answers, and points the fleet reader's node
+  and the site's node for the lab chain (`:chain_nodes`) at it. Returns its URL.
   """
   def start! do
     port = free_port()
@@ -106,7 +106,7 @@ defmodule Keyfleet.AnvilLab do
 
   @doc """
   Builds the lab on the anvil at `url`, sent from `sender`, and returns the
-  addresses `KeeperLab` returned, by name, in lower case.
+  addresses `AnvilLab` returned, by name, in lower case.
   """
   def lab!(url, sender) do
     {output, status} =
@@ -118,7 +118,7 @@ defmodule Keyfleet.AnvilLab do
         stderr_to_stdout: true
       )
 
-    assert status == 0, "KeeperLab failed:\n#{String.slice(output, -4_000, 4_000)}"
+    assert status == 0, "AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}"
 
     output
     |> String.split("\n")

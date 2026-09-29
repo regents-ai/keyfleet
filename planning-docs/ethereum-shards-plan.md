@@ -45,6 +45,10 @@ Fees and levels (29 Sep, after seeing the four fleet types):
   scrolling and repeating in every direction, so scrolling down comes back to the top.
 - The Autolaunch v2 branch stays, for when launches come back.
 
+Keeper (29 Sep, "keeper b"): the keeper is removed, so no server wallet ever sends a
+transaction. The Send button for the 10% protocol share stays on the proposals page, and a
+key whose reveal request was refused gets a Try again button anyone can press.
+
 Earlier, still standing: ERC-8004 is unrelated to shards. (Sean's ERC-8004 minting choices
 belong to the Regents chief's siwa-server work.)
 
@@ -97,5 +101,4 @@ for a shard, sign in".
 ## Open, not blocking the build
 
 - The Regents Safe address on Ethereum (the Base Safe is `0x9fa152B0…669a3e`).
-- Keeper spending limits on Ethereum.
 - Restricting marimo, Cursor Origin and ddocs (Sean is looking into it).

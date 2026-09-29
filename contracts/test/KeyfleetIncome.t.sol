@@ -307,7 +307,7 @@ contract KeyfleetIncomeTest is Test {
     }
 
     /// @dev Invariant: sorting with nothing to sort is harmless. It returns zero and emits nothing,
-    /// so a keeper that calls it on a schedule never fails.
+    /// so anyone who calls it on a schedule never fails.
     function test_nothingToSortReturnsZero() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buy(fleet, alice);

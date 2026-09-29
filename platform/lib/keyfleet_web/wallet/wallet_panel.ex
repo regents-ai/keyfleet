@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.WalletPanel do
   @reread_ms 10_000
   # Flows whose figures are read from the chain, so they are built away from
   # the page's own process.
-  @chain_read [:buy, :claim]
+  @chain_read [:buy, :claim, :reveal]
 
   @doc "Whether the steps built for the group name `step`."
   def has_step?(%{built: %{review: review}}, step), do: Review.find(review, step) != nil

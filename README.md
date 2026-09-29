@@ -6,9 +6,10 @@ and Keyfleet Accelerant. A fleet is a group of people and agents who each hold a
 key, bought in USDC. Key holders talk in the fleet's rooms, share work in the
 fleet's workspace, and vote on proposals that record a decision, pay from the
 fleet's shared money or restrict a key's edits. A key's owner can give other
-wallets time-limited shards of the key. A keeper inside the
-site sends the few routine transactions anyone may send: asking again for a
-key's reveal, and sending the protocol share owed to the Regents Safe.
+wallets time-limited shards of the key. The site never sends a transaction
+itself: the routine ones anyone may send, asking again for a key's reveal and
+sending the protocol share owed to the Regents Safe, are buttons a person
+presses with their own wallet.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
@@ -74,7 +75,7 @@ On hold or not yet done:
 
 | Component | What it holds | Check |
 | --- | --- | --- |
-| [platform/](platform/README.md) | The Phoenix/Ash website: the homepage, the fleet, key, room, workspace and proposal pages, Privy wallet sign-in, the Account page, the agent API, the chain reader and the keeper. | `make check-platform` |
+| [platform/](platform/README.md) | The Phoenix/Ash website: the homepage, the fleet, key, room, workspace and proposal pages, Privy wallet sign-in, the Account page, the agent API and the chain reader. | `make check-platform` |
 | [contracts/](contracts/README.md) | The Foundry contracts: each fleet with its own rewards ledger, votes and shard record, and the scripts that deploy and record one fleet at a time. | `make check-contracts` |
 | [cli/](cli/README.md) | `commands.json`, describing the `regents keyfleet` commands; the code that runs them lives in regents-cli. | `make check-cli` |
 | [plugins/](plugins/README.md) | Standalone runtime plugin packages. None yet. | None |
@@ -86,8 +87,7 @@ its test database; the [platform README](platform/README.md#checks) explains it.
 `make release` runs them on the committed tree, then builds and starts the release
 image; see [Release](platform/README.md#release).
 
-[docs/](docs/) explains deploying the fleets, reading them from the chain and
-running the keeper.
+[docs/](docs/) explains deploying the fleets and reading them from the chain.
 
 ## Start
 

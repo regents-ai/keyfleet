@@ -33,7 +33,6 @@ config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,
 # or a lab chain's anvil (`Keyfleet.AnvilLab`).
 config :keyfleet, :chain_nodes, %{}
-config :keyfleet, Keyfleet.Keeper, node: Keyfleet.Keeper.StubNode, receipt_poll_ms: 0
 
 config :keyfleet, Keyfleet.Traits,
   directory: Path.expand("../test/support/fixtures/trait_tables", __DIR__)

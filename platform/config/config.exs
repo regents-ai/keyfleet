@@ -40,24 +40,6 @@ config :keyfleet, :wallet_chains, %{1 => %{name: "Ethereum", rpc_url: "https://e
 # such as a private node or a lab fork, and this address never reaches a page.
 config :keyfleet, :chain_nodes, %{1 => "https://eth.merkle.io"}
 
-# The keeper sends through the same node, and looks for each receipt every
-# two seconds. It signs only in production, where `KEYFLEET_KEEPER_PRIVATE_KEY`
-# is set. Its spending limits, in wei, all on Ethereum:
-#
-#   * `max_fee_wei`: the most it pays per unit of gas, and the base fee above
-#     which it sends nothing at all, reveals included;
-#   * `daily_spend_wei`: the most it may spend over any 24 hours;
-#   * `low_balance_wei`: the wallet balance under which it raises an alert;
-#   * `min_vrf_balance_wei`: the least a fleet's VRF subscription must hold
-#     before the keeper asks for that fleet's reveals again.
-config :keyfleet, Keyfleet.Keeper,
-  node: Keyfleet.Keeper.RpcNode,
-  receipt_poll_ms: 2_000,
-  max_fee_wei: 3_000_000_000,
-  daily_spend_wei: 20_000_000_000_000_000,
-  low_balance_wei: 20_000_000_000_000_000,
-  min_vrf_balance_wei: 100_000_000_000_000_000
-
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
@@ -72,7 +54,6 @@ config :keyfleet,
     Keyfleet.Proposals,
     Keyfleet.Treasury,
     Keyfleet.Graph,
-    Keyfleet.Keeper,
     Keyfleet.WalletSteps,
     Keyfleet.Early
   ],

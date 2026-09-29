@@ -460,3 +460,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Renew or End just after the shard appears, now asks the server for its step
   and sends it, instead of sending nothing. Buttons with fields already did
   this when the fields had changed.
+
+## 2026-09-29 — The site never sends transactions itself
+
+- The site no longer runs anything that sends transactions from a wallet of
+  its own: the keeper, its wallet key setting, its status and resume commands,
+  its figures on the metrics port and its guide are gone. Founder decision.
+- The Send button for Regents' 10% share stays on the proposals page, for
+  anyone to press.
+- A key whose request for its random draw was turned down shows a Try again
+  button on its page, which anyone signed in can press to ask again from their
+  own wallet. While the request is on its way, the page says so.
+- Migration `20260929231809` removes the keeper's two record tables and the
+  two functions their triggers ran; rolling it back does not bring them back.
+  Production had no rows in either table.
+- The contracts' local lab script is now `AnvilLab.s.sol`, and the GitHub
+  workflow is gone; every check runs locally with `make check`.

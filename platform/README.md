@@ -13,8 +13,8 @@ until each one's deployment is recorded (`Keyfleet.Fleets.coming_soon?/2`). From
 holders reach its rooms, its shared workspace and its proposals. A signed-in
 person's keys are on the Account page (`/account`). The site also serves Privy
 wallet sign-in, the public pages, the agent API, health and metrics. Inside it,
-the chain reader follows the fleets on Ethereum and the keeper sends their routine
-transactions (see [the keeper guide](../docs/keeper.md)).
+the chain reader follows the fleets on Ethereum. The site never sends a
+transaction itself.
 
 ## Shared dependencies
 
@@ -150,8 +150,8 @@ the system picks. `/healthz` stays public on the site's own port.
 
 ```text
 lib/keyfleet/           Ash domains: accounts, fleets, keys, rooms, proposals,
-                        treasury, the workspace graph, agents, the chain
-                        reader and the keeper
+                        treasury, the workspace graph, agents and the chain
+                        reader
 lib/keyfleet_web/       Endpoint, router, live pages, controllers, components
 lib/mix/tasks/          Local setup, contract sync and route-handoff checks
 contracts/              The OpenAPI contract
@@ -197,7 +197,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
 | `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, and that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
-| `mix test.external` | Runs the tests that need tools outside the hermetic suite: the keeper, rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
+| `mix test.external` | Runs the tests that need tools outside the hermetic suite: the rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
 
 The test database name carries whatever `MIX_TEST_PARTITION` holds, just
 before its `_test` ending. Give each test run its own value whenever more than
@@ -279,7 +279,7 @@ hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
 `bin/migrate` and `bin/pending-migrations` (which must print `none`), then the
 server with an empty `/data`, whose `/healthz`, home page, fingerprinted
 stylesheet, graph host Python and own database connection it checks. The
-server gets no chain node, keeper key or Privy app, and a sign-in server
+server gets no chain node or Privy app, and a sign-in server
 address that never resolves. It removes the database, the network and the
 context afterwards, keeps the image, and prints the app commit, the
 shared-library commits from `mix.lock`, the graph host supply and the image

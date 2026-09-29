@@ -57,6 +57,10 @@ export const moveKey = (fleet: string, key: number, owner: string) => void call(
 export const offerRewards = (fleet: string, key: number, atoms: number) =>
   void call("offer_rewards!", [fleet, key, atoms])
 
+/** A key's request for its random draw was turned down, or accepted, from now on. */
+export const refuseDraw = (fleet: string, key: number, refused: boolean) =>
+  void call("refuse_draw!", [fleet, key, refused])
+
 /** A key's owner gives the browser agent a shard of the key for 30 days. */
 export const shardKey = (fleet: string, key: number) => void call("shard!", [fleet, key])
 

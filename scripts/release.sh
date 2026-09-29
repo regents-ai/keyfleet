@@ -17,9 +17,8 @@
 # the health endpoint, the home page, a built stylesheet, the graph host's
 # Python and the running server's database connection. It runs as staging
 # because that role admits only the staging database hostnames, which the
-# throwaway database answers to on its network. The server gets no chain node,
-# keeper key or Privy app, so it reads no chain, sends nothing and offers no
-# sign-in.
+# throwaway database answers to on its network. The server gets no chain node
+# or Privy app, so it reads no chain and offers no sign-in.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

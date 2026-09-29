@@ -496,11 +496,9 @@ values, so the suite runs the real deployment and the real record against local
 mocks without touching a file. [../docs/deployment.md](../docs/deployment.md) is
 how to run each step and what each refuses.
 
-`script/KeeperLab.s.sol` is no part of a release. It puts one Classic fleet, with
+`script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet, with
 stand-in USDC and VRF coordinator and a fixed lab treasury, on a plain local
-anvil for the
-keeper's external test in `platform/`; [../docs/keeper.md](../docs/keeper.md)
-says how.
+anvil for the anvil tests in `platform/` (`mix test.external`).
 
 ## Checks
 

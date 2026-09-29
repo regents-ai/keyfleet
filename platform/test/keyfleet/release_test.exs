@@ -208,8 +208,6 @@ defmodule Keyfleet.ReleaseTest do
              "graph_objects",
              "graph_relations",
              "income_receipts",
-             "keeper_runs",
-             "keeper_txs",
              "key_attachments",
              "key_reveals",
              "linked_identities",

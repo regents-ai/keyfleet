@@ -241,6 +241,87 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
   end
 
+  describe "asking again for a key's draw" do
+    @contract "0x" <> String.duplicate("7", 40)
+
+    test "a key whose draw was turned down offers anyone Try again, built on the server",
+         %{conn: conn} do
+      signer = wallet("f")
+      draw_answer(0)
+
+      {:ok, view, _html} = conn |> signed_in_as(signer) |> live(@path <> "?key=12")
+
+      view
+      |> with_target("#key-profile-reveal-action")
+      |> render_hook("onchain_active_wallet", %{"address" => signer})
+
+      render_async(view)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        component_id: "key-profile-reveal-action",
+        review: %{signer: ^signer, steps: [reveal]}
+      })
+
+      assert reveal.step == "reveal"
+      assert reveal.to == @contract
+      assert reveal.data == Call.encode("requestReveal(uint256)", [12])
+
+      assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
+      refute has_element?(view, "#key-profile-reveal-again[phx-click]")
+      assert text(view, "#key-profile-reveal-again") == "Try again"
+
+      assert text(view, "#key-profile-reveal .key-profile-detail") ==
+               "This key’s traits haven’t been drawn yet, because the request for its " <>
+                 "random draw was turned down. Anyone can ask again."
+    end
+
+    test "a request that was accepted says the draw is on its way", %{conn: conn} do
+      draw_answer(1_800_000_000)
+
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+      render_async(view)
+
+      refute has_element?(view, "#key-profile-reveal-again")
+
+      assert text(view, "#key-profile-reveal-action-line") ==
+               "The request for this key’s random draw was accepted. The draw is on its way, " <>
+                 "and the key’s traits show here when it arrives."
+    end
+
+    test "shows while the key is revealing, and goes once its draw is recorded", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+
+      assert text(view, "#key-profile-reveal-title") == "Drawing traits"
+      refute has_element?(view, "#key-profile-reveal-again")
+
+      assert text(view, "#key-profile-reveal .key-profile-detail") ==
+               "This key’s traits are still being drawn. Sign in to ask again if its draw " <>
+                 "was turned down."
+
+      Keys.record_reveal!(
+        %{
+          fleet_id: @fleet,
+          token_id: 12,
+          request_id: 7,
+          seed: Traits.keccak256("golden-1"),
+          block_number: 500,
+          block_hash: "0x" <> String.duplicate("c", 64),
+          transaction_hash: Traits.keccak256("#{@fleet}/12/reveal"),
+          log_index: 0
+        },
+        actor: @system
+      )
+
+      keys_changed([12])
+
+      refute has_element?(view, "#key-profile-reveal")
+      assert has_element?(view, ".key-profile__card .key-profile-traits li")
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      refute has_element?(view, "#key-profile-reveal")
+    end
+  end
+
   describe "who may write to a key" do
     test "a visitor is asked to sign in", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
@@ -443,6 +524,19 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     )
   end
 
+  # What the fleet answers for key 12's seed, which it has none of, and for
+  # when its request for a draw was accepted; anything else is zero.
+  defp draw_answer(requested_at) do
+    seed = Call.encode("revealSeed(uint256)", [12])
+    requested = Call.encode("revealRequestedAt(uint256)", [12])
+
+    rewards_answer(fn
+      _to, ^seed, _hash -> {:ok, <<0::256>>}
+      _to, ^requested, _hash -> {:ok, <<requested_at::256>>}
+      _to, _data, _hash -> {:ok, <<0::256>>}
+    end)
+  end
+
   defp deploy! do
     @fleet
     |> Fleets.get_fleet!()
@@ -455,7 +549,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
         shards_address: "0x" <> String.duplicate("6", 40),
         usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
+        trait_table_hash: "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
       },
       actor: @system
     )

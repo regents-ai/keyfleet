@@ -7,7 +7,6 @@ defmodule Keyfleet.DirectoryTest do
   alias Keyfleet.Directory
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
-  alias Keyfleet.KeeperHelpers
   alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
@@ -22,7 +21,7 @@ defmodule Keyfleet.DirectoryTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
     for token_id <- 1..6, do: epoch!(token_id, 1, @owner)
     :ok

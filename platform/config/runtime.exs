@@ -62,34 +62,6 @@ if config_env() != :test and rpc_url do
   config :keyfleet, :chain_nodes, Map.put(nodes, chain_id, rpc_url)
 end
 
-# Only production reads the keeper's key, and signs through the same node;
-# development and tests never start the keeper. The key is never printed,
-# not even when it is malformed.
-if config_env() == :prod do
-  keeper_key =
-    case System.get_env("KEYFLEET_KEEPER_PRIVATE_KEY") do
-      nil ->
-        nil
-
-      key ->
-        cond do
-          String.trim(key) == "" ->
-            nil
-
-          Keyfleet.Keeper.Wallet.private_key(key) == :error ->
-            raise "KEYFLEET_KEEPER_PRIVATE_KEY is malformed"
-
-          is_nil(rpc_url) ->
-            raise "KEYFLEET_KEEPER_PRIVATE_KEY is set but KEYFLEET_RPC_URL is not"
-
-          true ->
-            key
-        end
-    end
-
-  config :keyfleet, Keyfleet.Keeper, private_key: keeper_key
-end
-
 # Each fleet's trait table ships with the release, named by its hash; the
 # tests keep theirs with the other fixtures.
 if config_env() != :test do

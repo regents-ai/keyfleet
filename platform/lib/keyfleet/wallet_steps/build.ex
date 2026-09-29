@@ -33,6 +33,8 @@ defmodule Keyfleet.WalletSteps.Build do
   @no_wallet "0x" <> String.duplicate("0", 40)
   # How long a renewed shard lasts, in days.
   @renew_days 30
+  # A key's seed before its random draw arrives.
+  @no_seed "0x" <> String.duplicate("0", 64)
 
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
@@ -120,6 +122,48 @@ defmodule Keyfleet.WalletSteps.Build do
       end
     else
       _unread -> {:problem, :unread, %{token_id: token_id, waiting: []}}
+    end
+  end
+
+  # --- a key's random draw ----------------------------------------------
+
+  # Asking again for a key's random draw, which anyone may do while its
+  # request was refused: it has no seed, and no request was ever accepted.
+  defp steps(:reveal, fleet, _signer, _inputs, %{token_id: token_id}) do
+    client = Chain.Client.configured()
+    figures = %{token_id: token_id}
+
+    with {:ok, head} <- client.head(),
+         {:ok, seed} <-
+           read(client, fleet.contract_address, "revealSeed(uint256)", [token_id], head, :bytes32),
+         {:ok, requested_at} <-
+           read(
+             client,
+             fleet.contract_address,
+             "revealRequestedAt(uint256)",
+             [token_id],
+             head,
+             {:uint, 64}
+           ) do
+      cond do
+        seed != @no_seed ->
+          {:problem, :revealed, figures}
+
+        requested_at != 0 ->
+          {:problem, :reveal_requested, figures}
+
+        true ->
+          {:ok,
+           [
+             Review.step(
+               "reveal",
+               fleet.contract_address,
+               Call.encode("requestReveal(uint256)", [token_id])
+             )
+           ], figures}
+      end
+    else
+      _unread -> {:problem, :unread, figures}
     end
   end
 

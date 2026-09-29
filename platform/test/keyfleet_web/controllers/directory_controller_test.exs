@@ -9,7 +9,6 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
-  alias Keyfleet.KeeperHelpers
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
@@ -21,7 +20,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   setup do
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    KeeperHelpers.deploy!(@fleet, "0x" <> String.duplicate("7", 40), 1)
+    ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
 
     Keys.record_epoch!(
@@ -83,7 +82,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
   test "each fleet's sales line gives the next key's price and how many one wallet may hold",
        %{conn: conn} do
-    KeeperHelpers.deploy!("fleet_tech_classic", "0x" <> String.duplicate("6", 40), 1)
+    ChainHelpers.deploy!("fleet_tech_classic")
     ChainHelpers.seed_cursor!("fleet_tech_classic")
 
     lines = conn |> get("/fleets.md") |> response(200) |> String.split("\n")

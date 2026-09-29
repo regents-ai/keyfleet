@@ -135,12 +135,11 @@ requests block both removing a consumer and cancelling the subscription until
 they are answered, so an empty subscription cannot simply be closed and
 replaced.
 
-Regent's retry job, which asks again for keys still waiting on a seed, does not
-retry while the subscription is below the alert level or while Ethereum gas is
-above the 200 gwei lane's price cap, since a request made then would only wait
-too. Anyone can still ask again with `requestReveal(tokenId)`; the rule governs
-Regent's own job. That job is the keeper, and [keeper.md](keeper.md) is how to
-run it.
+Nothing on the site asks again by itself for keys still waiting on a seed.
+Anyone can ask again with `requestReveal(tokenId)`: a key whose request was
+refused shows a Try again button on its page, which sends that call from the
+visitor's own wallet. Asking while the subscription is below the alert level or
+while Ethereum gas is above the 200 gwei lane's price cap only waits too.
 
 On a fork of Ethereum the coordinator is Ethereum's own, so a rehearsal creates
 and funds its own subscription on the fork from the lab account, writes that id
