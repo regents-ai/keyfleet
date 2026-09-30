@@ -65,11 +65,6 @@ On hold or not yet done:
   the server follows each sent step until the chain answers.
 - There is no Fly app yet; it is created at launch.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
-- The migrations that add required columns need no existing rows in
-  production. Migration `20260927072219` cannot be rolled back, and rolling
-  back `20260929064211` does not bring back the launch tables it deletes. The
-  [deploy checklist](docs/deploy-checklist.md#5-the-shared-database-before-the-first-deploy)
-  has the counts to run first.
 
 ## Components
 

@@ -483,3 +483,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   press made while those steps were still being read, as just after the
   wallet switched, sent nothing. The press now waits for its steps, read
   there and then, and reaches the wallet.
+
+## 2026-09-29 — A fuller About page
+
+- The About page now says what Keyfleet does, how it differs, who uses it,
+  the team, its key facts and common questions, with the facts as they stand
+  on Ethereum: Regents takes 10% of each key purchase, once, in USDC; income
+  in USDC goes in full to the keys; key holders issue shards to their agents;
+  and each fleet's key prices. Keys are not on sale yet.
+- `/llms.txt` repeats the About page's key facts, filled in from that page
+  when the site is built, so the two always agree. The About browser tool and
+  the page's search description say what the page now covers.
+
+## 2026-09-29 — Deploy checklist without the migration checks
+
+- Production has every migration through `20260929231809`, so the deploy
+  checklist no longer lists the counts to run before each one, and the README
+  no longer points to them. The migrations themselves stay; they build fresh
+  databases and the test suite.
