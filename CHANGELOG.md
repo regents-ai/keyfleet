@@ -542,3 +542,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   each direction: 22 cells instead of 2.
 - The key map workshop page has a "Keys sold" box, to see a fleet's map at any
   point in its sale.
+
+## 2026-09-30 — A new opening line on the About page
+
+- The About page opens with what a keyfleet is made of and what each key gives:
+  group chat and DMs, shared work documents, and a vote over a treasury that
+  shares its stablecoin income automatically.
