@@ -7,8 +7,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   alias __MODULE__.{
     Entry,
     RouteTarget,
-    SidebarHeading,
     SidebarModel,
+    SidebarSection,
     Spec
   }
 
@@ -35,6 +35,13 @@ defmodule KeyfleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :account
+    },
+    %Entry{
+      path_pattern: "/how-it-works",
+      live_action: :how_it_works,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :how_it_works
     },
     %Entry{
       path_pattern: "/app/fleets/:fleet_id",
@@ -90,6 +97,9 @@ defmodule KeyfleetWeb.RouteCatalog do
   @specs %{
     home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
     account: {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, %{}},
+    how_it_works:
+      {:how_it_works, :product, "Keyfleet", "How it works", "/", [:profile_actions], :product,
+       %{}},
     fleet: {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, %{}},
     keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
     rooms: {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, %{}},
@@ -113,7 +123,7 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   def design_handoff do
     json =
-      %{"schema_version" => 1, "routes" => Enum.map(@entries, &handoff_route/1)}
+      %{"schema_version" => 2, "routes" => Enum.map(@entries, &handoff_route/1)}
       |> ordered_json_value()
       |> Jason.encode!()
 
@@ -158,17 +168,27 @@ defmodule KeyfleetWeb.RouteCatalog do
     }
   end
 
-  defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
+  defp sidebar_model(nil), do: %SidebarModel{id: :public, sections: []}
 
-  # The four fleets' pages, then the account page.
+  # The four fleets' pages under their heading, then How it works and Account.
   defp sidebar_model(:product) do
     fleets =
-      for %{id: id, name: name} <- Fleets.catalog(),
-          do: %RouteTarget{route_id: :fleet, label: name, path: "/app/fleets/#{id}"}
+      for %{id: id, menu_label: label} <- Fleets.catalog(),
+          do: %RouteTarget{route_id: :fleet, label: label, path: "/app/fleets/#{id}"}
 
     %SidebarModel{
       id: :product,
-      targets: fleets ++ [%RouteTarget{route_id: :account, label: "Account", path: "/account"}]
+      sections: [
+        %SidebarSection{id: :fleets, heading: "Fleets", targets: fleets},
+        %SidebarSection{
+          id: :site,
+          heading: nil,
+          targets: [
+            %RouteTarget{route_id: :how_it_works, label: "How it works", path: "/how-it-works"},
+            %RouteTarget{route_id: :account, label: "Account", path: "/account"}
+          ]
+        }
+      ]
     }
   end
 
@@ -197,20 +217,19 @@ defmodule KeyfleetWeb.RouteCatalog do
   end
 
   defp sidebar_handoff(sidebar) do
-    %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &sidebar_target_handoff/1)}
+    %{"id" => sidebar.id, "sections" => Enum.map(sidebar.sections, &sidebar_section_handoff/1)}
   end
 
-  defp sidebar_target_handoff(%RouteTarget{} = target) do
+  defp sidebar_section_handoff(%SidebarSection{} = section) do
     %{
-      "type" => "route",
-      "route_id" => target.route_id,
-      "label" => target.label,
-      "destination" => target.path
+      "id" => section.id,
+      "heading" => section.heading,
+      "targets" => Enum.map(section.targets, &sidebar_target_handoff/1)
     }
   end
 
-  defp sidebar_target_handoff(%SidebarHeading{} = heading) do
-    %{"type" => "heading", "label" => heading.label}
+  defp sidebar_target_handoff(%RouteTarget{} = target) do
+    %{"route_id" => target.route_id, "label" => target.label, "destination" => target.path}
   end
 
   # A value is written into the path the way a browser sends it, so an item

@@ -31,6 +31,7 @@ type Request = (signal: AbortSignal | undefined) => Promise<Reply>
 // gets when it asks for that page.
 const requests: Record<string, Request> = {
   about: signal => read("/about", signal),
+  how_it_works: signal => read("/how-it-works", signal),
   docs: signal => read("/docs", signal),
 }
 

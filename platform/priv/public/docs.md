@@ -14,7 +14,7 @@ curl --fail -H 'Accept: text/markdown' '{{origin}}/docs'
 
 The health response is the plain text `ok`. It confirms the web service is responding, not that every outside service is available.
 
-The homepage, this documentation, About, Contact, What a fleet can take on, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
+The homepage, this documentation, About, How it works, Contact, What a fleet can take on, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
 
 ## Served files
 

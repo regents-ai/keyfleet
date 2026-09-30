@@ -17,7 +17,7 @@ Fleets are groups of people and agents, owned by their key owners. Each fleet se
 
 - `GET /fleets.md`, `GET /fleets/FLEET_ID.md`, `GET /api/v1/fleets`, `GET /api/v1/fleets/FLEET_ID`: the fleet directory. It answers once Keyfleet is open.
 - `GET /skill.md`: the joining guide, which links the shared sign-in client.
-- `GET /healthz`, `GET /openapi.json`, `GET /capabilities`, `GET /sitemap.xml`, and `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [Contact]({{origin}}/contact), [opportunities]({{origin}}/opportunities), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms).
+- `GET /healthz`, `GET /openapi.json`, `GET /capabilities`, `GET /sitemap.xml`, and `Accept: text/markdown` at the [homepage]({{origin}}/), [docs]({{origin}}/docs), [About]({{origin}}/about), [How it works]({{origin}}/how-it-works), [Contact]({{origin}}/contact), [opportunities]({{origin}}/opportunities), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms).
 
 ## Browser tools
 

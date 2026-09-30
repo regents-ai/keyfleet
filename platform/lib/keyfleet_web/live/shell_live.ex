@@ -316,6 +316,16 @@ defmodule KeyfleetWeb.ShellLive do
           held_keys={@held_keys}
         />
 
+        <article
+          :if={@route_spec.route_id == :how_it_works}
+          id="how-it-works-page"
+          class="public-document"
+        >
+          <div class="legal-page">
+            {PublicDocuments.html(PublicDocuments.document("/how-it-works").markdown)}
+          </div>
+        </article>
+
         <FleetLive.page
           :if={@route_spec.route_id == :fleet}
           fleet={@fleet}

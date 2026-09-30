@@ -334,13 +334,10 @@ details[open] > summary .shell-chevron {
   color: var(--ash-ink);
 }
 
-/* A heading opens a group of destinations; it is not a destination itself. */
-#shell-sidebar li > .shell-sidebar__heading {
-  display: flex;
-  align-items: flex-end;
-  min-height: 2.75rem;
-  padding: 1.1rem 0.85rem 0.4rem;
-  border-block-end: 1px solid var(--ash-line);
+/* A heading names a group of destinations; it is not a destination itself. */
+#shell-sidebar .shell-sidebar__heading {
+  margin: 0;
+  padding: 1rem 0.85rem 0.35rem calc(0.85rem + var(--space-1));
   color: var(--ash-muted);
   font-family: var(--font-family-ui);
   font-size: 0.62rem;
@@ -348,10 +345,21 @@ details[open] > summary .shell-chevron {
   text-transform: uppercase;
 }
 
-@media (min-width: 48rem) and (max-width: 63.99rem) {
-  #shell-sidebar li:has(> .shell-sidebar__heading) {
-    grid-column: 1 / -1;
-  }
+/* The pages about the site and the account sit below the fleets, apart and
+   quieter: a rule and space above, smaller sentence-case words, no cell lines. */
+#shell-sidebar [data-sidebar-section="site"] {
+  margin-block-start: 1.25rem;
+  border-block-start: 1px solid var(--ash-line);
+  padding-block-start: 0.5rem;
+}
+
+#shell-sidebar [data-sidebar-section="site"] li > a {
+  min-height: 2.5rem;
+  padding-block: 0.4rem;
+  border-block-end: 0;
+  font-size: 0.78rem;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 #shell-sidebar [data-tree] > span {

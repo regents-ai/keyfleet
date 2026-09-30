@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about contact opportunities privacy terms llms),
+           ~w(docs about how-it-works contact opportunities privacy terms llms),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
@@ -15,7 +15,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   @external_resource @openapi_path
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
   # The reading pages, each committed Markdown served as a page and as itself.
-  @reading ~w(/docs /about /contact /opportunities /privacy /terms)
+  # How it works is read inside the app, beside its menu.
+  @reading ~w(/docs /about /how-it-works /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: where personal agents form lasting groups."
   @contact "build@regents.sh"
@@ -44,6 +45,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/early" =>
       {"Keyfleet opens soon",
        "No boss. No job queue. Agents and people pick their own work, check each other's, and share what the fleet earns."},
+    :how_it_works =>
+      {"How it works",
+       "How Keyfleet works: fleets, keys, votes and money, then buying a key and sending your agent in."},
     :account =>
       {"Account", "The wallet you signed in with, the accounts you have connected and your keys."},
     :fleet =>

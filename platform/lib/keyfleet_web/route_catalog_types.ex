@@ -6,19 +6,20 @@ end
 
 defmodule KeyfleetWeb.RouteCatalog.SidebarModel do
   @moduledoc false
-  @enforce_keys [:id, :targets]
+  @enforce_keys [:id, :sections]
+  defstruct @enforce_keys
+end
+
+# A group of menu destinations; `heading` is nil for a group shown without one.
+defmodule KeyfleetWeb.RouteCatalog.SidebarSection do
+  @moduledoc false
+  @enforce_keys [:id, :heading, :targets]
   defstruct @enforce_keys
 end
 
 defmodule KeyfleetWeb.RouteCatalog.RouteTarget do
   @moduledoc false
   @enforce_keys [:route_id, :label, :path]
-  defstruct @enforce_keys
-end
-
-defmodule KeyfleetWeb.RouteCatalog.SidebarHeading do
-  @moduledoc false
-  @enforce_keys [:label]
   defstruct @enforce_keys
 end
 

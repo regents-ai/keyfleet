@@ -4,7 +4,6 @@ defmodule KeyfleetWeb.Components.Shell do
   use Phoenix.Component
 
   alias KeyfleetWeb.Components.RegentLinks
-  alias KeyfleetWeb.RouteCatalog.{RouteTarget, SidebarHeading}
   alias Phoenix.LiveView.JS
 
   attr(:route_spec, :map, required: true)
@@ -78,11 +77,29 @@ defmodule KeyfleetWeb.Components.Shell do
         >
           Close navigation
         </Regent.Primitives.button>
-        <ul>
-          <li :for={target <- @route_spec.sidebar_model.targets}>
-            <.sidebar_target target={target} route_spec={@route_spec} />
-          </li>
-        </ul>
+        <div
+          :for={section <- @route_spec.sidebar_model.sections}
+          class="shell-sidebar__section"
+          data-sidebar-section={section.id}
+        >
+          <p
+            :if={section.heading}
+            id={"shell-sidebar-#{section.id}"}
+            class="shell-sidebar__heading"
+          >
+            {section.heading}
+          </p>
+          <ul aria-labelledby={section.heading && "shell-sidebar-#{section.id}"}>
+            <li :for={target <- section.targets}>
+              <.link
+                patch={target.path}
+                aria-current={if @route_spec.destination == target.path, do: "page"}
+              >
+                {target.label}
+              </.link>
+            </li>
+          </ul>
+        </div>
       </nav>
 
       <Regent.Primitives.button
@@ -190,30 +207,6 @@ defmodule KeyfleetWeb.Components.Shell do
     <div id={@id} class="theme-control" phx-update="ignore">
       <Regent.ThemeToggle.button id={"#{@id}-button"} data-theme-toggle />
     </div>
-    """
-  end
-
-  attr(:target, :map, required: true)
-  attr(:route_spec, :map, required: true)
-
-  defp sidebar_target(%{target: %RouteTarget{} = target} = assigns) do
-    assigns = assign(assigns, :target, target)
-
-    ~H"""
-    <.link
-      patch={@target.path}
-      aria-current={if @route_spec.destination == @target.path, do: "page"}
-    >
-      {@target.label}
-    </.link>
-    """
-  end
-
-  defp sidebar_target(%{target: %SidebarHeading{} = heading} = assigns) do
-    assigns = assign(assigns, :heading, heading)
-
-    ~H"""
-    <span class="shell-sidebar__heading">{@heading.label}</span>
     """
   end
 
