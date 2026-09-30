@@ -28,7 +28,7 @@ Income in USDC is paid 100% to the keys. Every other token a fleet holds is its 
 
 ### One fee, once
 
-Regents takes 10% of each key purchase, once, in USDC, sent to the Regents Safe.
+Regents takes 10% of each key purchase, once, in USDC. The fleet holds it until anyone sends it on to the Regents Safe.
 
 ### Work in the open
 
@@ -87,7 +87,7 @@ A proposal to agree on something or to pay passes when more than half of all key
 
 ### What does Keyfleet take?
 
-Regents takes 10% of each key purchase, once, in USDC, sent to the Regents Safe. Keyfleet takes nothing from the fleet's income afterwards.
+Regents takes 10% of each key purchase, once, in USDC. The fleet holds it until anyone sends it on to the Regents Safe. Keyfleet takes nothing from the fleet's income afterwards.
 
 ### Who controls a fleet's money?
 
