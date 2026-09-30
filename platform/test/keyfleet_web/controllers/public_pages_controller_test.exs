@@ -42,6 +42,33 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert {"Terms of Use · Keyfleet", "The terms that apply when you use Keyfleet."} in pages
   end
 
+  test "the About page shows its key facts as a table and its questions as headings" do
+    document = build_conn() |> get("/about") |> html_response(200) |> LazyHTML.from_document()
+    table = LazyHTML.query(document, "main table")
+
+    assert table |> LazyHTML.query("thead th") |> Enum.map(&LazyHTML.text/1) == ["Fact", "Detail"]
+
+    facts = table |> LazyHTML.query("tbody td:first-child") |> Enum.map(&LazyHTML.text/1)
+    assert "Pricing" in facts
+    assert "Token contract" in facts
+
+    questions = document |> LazyHTML.query("main h3") |> Enum.map(&LazyHTML.text/1)
+    assert "What does Keyfleet take?" in questions
+  end
+
+  test "llms.txt carries the About page's Key facts word for word" do
+    about =
+      build_conn() |> put_req_header("accept", "text/markdown") |> get("/about") |> response(200)
+
+    [_, facts] = String.split(about, "\n## Key facts\n")
+    [facts | _] = String.split(facts, "\n## ", parts: 2)
+    llms = build_conn() |> get("/llms.txt") |> response(200)
+
+    assert llms =~ "## Key facts\n" <> String.trim_trailing(facts)
+    assert llms =~ "| Website | <#{PublicDocuments.url("")}> |"
+    refute llms =~ "{{"
+  end
+
   test "the homepage is titled with the site name alone" do
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
     assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() == "Keyfleet"

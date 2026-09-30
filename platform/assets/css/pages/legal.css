@@ -35,6 +35,12 @@
   overflow-wrap: normal;
 }
 
+/* A long link or code in a table, such as an address, breaks anywhere so the
+   table fits a phone. */
+.public-document td :is(a, code) {
+  overflow-wrap: anywhere;
+}
+
 .public-document .legal-page {
   overflow-wrap: anywhere;
 }
