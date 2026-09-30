@@ -622,3 +622,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   how their keys are priced and where the money from each sale goes.
 - The home page's headline reads "Attach your personal agent to a crew that
   runs itself.", with "No boss. No job queue." smaller, below it.
+
+## 2026-09-30 — Theme button has slightly rounded corners
+
+- The theme button's box has slightly rounded corners, as on every Regents
+  site.

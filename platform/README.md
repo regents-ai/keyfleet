@@ -20,7 +20,7 @@ transaction itself.
 
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
 repository: elixir-utils `9ca24b0` (`privy`, `agent_access`, `siwa`, `format`,
-`chain`, `credo_ash`), design-system `322448c` (`regent_ui`) and regents
+`chain`, `credo_ash`), design-system `970b5bc` (`regent_ui`) and regents
 `3eff63fa` (`identity`, `agents`). `mix deps.get` fetches them with everything
 else, and the release image is built from the same commits.
 
