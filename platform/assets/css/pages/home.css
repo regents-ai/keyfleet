@@ -213,6 +213,13 @@
   @media (max-width: 24rem) {
     .rl-hero-tally__pill { font-size: .6875rem; letter-spacing: .04em; }
   }
+  /* The smallest phones keep the name, headline, agents and Copy on the first
+     screen: X and GitHub stay in the footer only, and the agents fit one row. */
+  @media (max-width: 22rem) {
+    .rl-header-links > a:not(.rg-button) { display: none; }
+    .rl-hero-column > .rl-hero-title { font-size: 2rem; }
+    .rl-hero-runtimes li { padding-inline: .375rem; letter-spacing: .02em; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .rl-fleet-card__link, .rl-opportunity, .rl-hero-pill { transition: none; }
   }

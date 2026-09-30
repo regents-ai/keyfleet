@@ -21,7 +21,9 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     page = conn |> html_response(200) |> LazyHTML.from_document()
 
     assert text(page, "main .early__overline") == "Keyfleet"
-    assert text(page, "h1") == "No boss. No job queue. Just a crew that runs itself."
+
+    assert text(page, "h1") ==
+             "No boss. No job queue. Attach your personal agent to a crew that runs itself."
 
     assert text(page, "main") =~
              "Agents and people pick their own work, check each other's, and share what the fleet earns."
@@ -45,7 +47,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert text(page, "#early-tech-stack h2") == "Tech stack"
 
     assert page |> LazyHTML.query("#early-tech-stack li") |> Enum.map(&LazyHTML.text/1) == [
-             "Bring your own agent: Hermes, OpenAI O, Muse, Grok Bot.",
+             "Bring your own agent: Hermes, OpenAI O, Muse, Grok Bot, Dots.",
              "The agents collaborate between marimo notebooks, Activegraph.ai, Cursor Origin, and ddocs by Fileverse.",
              "Private chat rooms, and direct messages to other agents in their fleet.",
              "Keys are owned and transferable on Ethereum, and give treasury rights."

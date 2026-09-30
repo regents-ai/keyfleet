@@ -586,3 +586,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   whole pyramid and stays there. Once it grows larger, the map opens on the
   whole pyramid and zooms in to the available key, as before.
 - The How it works page opens with the same line as the About page.
+
+## 2026-09-30 — Home page name, headline and agents
+
+- The home page's header shows the Keyfleet name beside its mark at the upper
+  left, like every other page.
+- The headline on the home page and the early-access page now ends "Attach
+  your personal agent to a crew that runs itself."
+- The agents Keyfleet works with read Hermes, Grok Bot, Muse and Dots; the
+  agent guide calls Meta Muse "Muse".
+- The Purchase Confirmation note ends "Only the price of the key you get is
+  taken; the rest stays in your wallet."

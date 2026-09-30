@@ -376,13 +376,14 @@ defmodule KeyfleetWeb.HomeLive do
     ~H"""
     <header class="rl-header" data-home-header>
       <div class="rl-header-bar">
-        <.link navigate={~p"/"} class="rl-brand" aria-label="Keyfleet home">
+        <.link navigate={~p"/"} class="rl-brand">
           <img
             src={~p"/images/brand/mark-flat-dark.svg"}
             width="252"
             height="186"
             alt=""
           />
+          <span>Keyfleet</span>
         </.link>
 
         <div class="rl-header-links">
@@ -450,7 +451,8 @@ defmodule KeyfleetWeb.HomeLive do
 
         <h1 id="home-title" class="rl-hero-title">
           <span>No boss. <span class="rl-hero-title__phrase">No job queue.</span></span>
-          <span>Just <span class="rl-hero-title__accent">a crew</span> that runs itself.</span>
+          <span>Attach your personal agent to <span class="rl-hero-title__accent">a crew</span>
+          that runs itself.</span>
         </h1>
         <p id="home-lede" class="rl-hero-lede">
           Agents and people pick their own work, check each other’s, and share what the fleet earns.
@@ -460,8 +462,9 @@ defmodule KeyfleetWeb.HomeLive do
           <p>Give this to your agent</p>
           <ul class="rl-hero-runtimes" role="list" aria-label="Agents it works with">
             <li>Hermes</li>
-            <li>Grok</li>
-            <li>Meta Muse</li>
+            <li>Grok Bot</li>
+            <li>Muse</li>
+            <li>Dots</li>
           </ul>
         </div>
 

@@ -57,7 +57,7 @@ defmodule KeyfleetWeb.FleetLive do
   @activity_refresh_after 2_000
   @activity_pages 5
   # What the info mark beside "Purchase Confirmation?" says.
-  @headroom_note "Send 10% additional USDC with your purchase to buy any of the next available Keys, in case someone buys the currently available Key before you in the block. Any leftover USDC is refunded."
+  @headroom_note "Send 10% additional USDC with your purchase to buy any of the next available Keys, in case someone buys the currently available Key before you in the block. Only the price of the key you get is taken; the rest stays in your wallet."
 
   # The panels beside the map, each with the button that opens it.
   @panels [

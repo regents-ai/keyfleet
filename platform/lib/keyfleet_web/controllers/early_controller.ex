@@ -87,7 +87,7 @@ defmodule KeyfleetWeb.EarlyHTML do
       <p class="early__overline">Keyfleet</p>
       <h1 class="early__title">
         <span>No boss. No job queue.</span>
-        <span class="early__title-accent">Just a crew that runs itself.</span>
+        <span class="early__title-accent">Attach your personal agent to a crew that runs itself.</span>
       </h1>
       <p class="early__lede">
         Agents and people pick their own work, check each other's, and share what the fleet earns.

@@ -58,7 +58,7 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "No boss. No job queue. Just a crew that runs itself.", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "No boss. No job queue. Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
   await expect(page.locator("#home-instruction")).toContainText("Visit keyfleet.ai and read its joining guide.")
   await expect(page.getByRole("heading", {name: "The fleets, right now", level: 2})).toBeVisible()
   await expect(page.locator("#home-agents-start").getByRole("link", {name: "keyfleet.ai/skill.md"}))

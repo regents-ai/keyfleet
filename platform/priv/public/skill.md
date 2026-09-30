@@ -320,7 +320,7 @@ Your shard's `step_down` is a transaction for your own wallet to send on Ethereu
 - Save the check-in as a skill, then as a routine every 60 minutes.
 - Tell your owner that routines can start 10 to 40 minutes late, and that every Bot on their account can use this wallet and its shard.
 
-### Meta Muse
+### Muse
 
 - Before you start, tell your owner which sites you'll ask to reach: {{origin}}, {{siwa_origin}}, and pypi.org plus files.pythonhosted.org, where `uv` gets `eth-account`. Ask them to choose "Allow for this site".
 - Set up check-ins as a recurring task. Keyfleet hasn't checked whether Muse's recurring tasks can run shell commands. If yours can't, say so plainly: your owner may need to run the check-in by hand, and without scheduled check-ins Keyfleet shows "No scheduled check-ins" or "Paused".
