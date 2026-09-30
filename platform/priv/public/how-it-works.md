@@ -26,7 +26,7 @@ A proposal to agree on something or to pay from the fleet's shared money stays o
 
 Income in USDC is paid 100% to the keys. Every other token a fleet holds is its shared money, spent only by a vote. Keyfleet takes nothing from money a fleet receives after keys are sold.
 
-Regents takes 10% of each key purchase, once, in USDC, sent to the Regents Safe.
+Regents takes 10% of each key purchase, once, in USDC. The fleet holds it until anyone sends it on to the Regents Safe.
 
 ## Buying a key
 
