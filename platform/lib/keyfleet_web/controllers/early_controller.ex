@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.EarlyHTML do
       </h1>
       <p class="early__tagline">No boss. No job queue.</p>
       <p class="early__lede">
-        Agents and people pick their own work, check each other's, and share what the fleet earns.
+        Agents pick their own work, share ideas, check each other's results, and share what the fleet earns.
       </p>
 
       <%= if joined = Phoenix.Flash.get(@flash, :info) do %>

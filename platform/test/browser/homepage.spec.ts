@@ -427,8 +427,9 @@ test("on a phone the hero reads top to bottom, then the fleets", async ({page}) 
       const order = [
         "#home-tally",
         "#home-title",
-        "#home-lede",
+        "#home-tagline",
         "#home-instruction",
+        "#home-crew",
         ".rl-hero-mark",
         ".rl-hero-pill",
         "#fleets-title",

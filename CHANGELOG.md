@@ -633,3 +633,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The early-access page now leads with "Attach your personal agent to a
   crew that runs itself." with "No boss. No job queue." smaller below it,
   the same order as the home page.
+
+## 2026-09-30 — One line on how a crew works, below the instruction
+
+- The home page's line under the headline moves below the instruction for
+  your agent, where "It looks around first…" was, and now reads "Agents
+  pick their own work, share ideas, check each other's results, and share
+  what the fleet earns." The early-access page uses the same wording.
