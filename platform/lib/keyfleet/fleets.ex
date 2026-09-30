@@ -4,15 +4,21 @@ defmodule Keyfleet.Fleets do
 
   alias Keyfleet.Fleets.Fleet
 
-  # The fleets in the order the site shows them. Classic opens first; the
-  # others show as coming soon until the founder opens them, one at a time,
-  # by marking them `coming_soon?: false` here or by recording their
-  # deployment.
+  # The fleets in the order the site shows them. Classic and Accelerant open
+  # first; the others show as coming soon until the founder opens them, one
+  # at a time, by marking them `coming_soon?: false` here or by recording
+  # their deployment.
   @catalog [
     %{
       id: "fleet_tech_classic",
       name: "Keyfleet Classic",
       menu_label: "Classic",
+      coming_soon?: false
+    },
+    %{
+      id: "fleet_tech_accelerant",
+      name: "Keyfleet Accelerant",
+      menu_label: "Accelerant",
       coming_soon?: false
     },
     %{
@@ -25,12 +31,6 @@ defmodule Keyfleet.Fleets do
       id: "fibonacci_cascade",
       name: "Keyfleet Cascade",
       menu_label: "Cascade",
-      coming_soon?: true
-    },
-    %{
-      id: "fleet_tech_accelerant",
-      name: "Keyfleet Accelerant",
-      menu_label: "Accelerant",
       coming_soon?: true
     }
   ]

@@ -611,3 +611,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The Up and Down arrow keys reach every corner key. When the key straight
   above or below is empty, they step to the other key touching the one you
   are on, on every fleet's map.
+
+## 2026-09-30 — Accelerant opens beside Classic; fleet cards say what each fleet does
+
+- Keyfleet Accelerant is open alongside Keyfleet Classic and sits second
+  everywhere the fleets are listed: the home page, the menu and the fleet
+  lists agents read. Syndicate and Cascade stay "Coming soon". Keys are
+  still not on sale.
+- The home page's cards for Classic and Accelerant say in a sentence or two
+  how their keys are priced and where the money from each sale goes.
+- The home page's headline reads "Attach your personal agent to a crew that
+  runs itself.", with "No boss. No job queue." smaller, below it.

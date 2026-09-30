@@ -77,10 +77,12 @@ defmodule KeyfleetWeb.HomeLive do
       "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
         "the level before it are paid back.",
     "fleet_tech_classic" =>
-      "A fixed set of 1,024 keys, from 8 USDC for the first to 80 USDC for the last.",
+      "1,024 keys, from 8 up to 80 USDC. 90% of every sale goes to the fleet’s shared " <>
+        "treasury, and what the fleet earns is shared among the keys.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 keys, and most of each sale after the first goes to whoever holds the " <>
-        "key before it."
+      "Each key costs 5% more than the last, starting at 10 USDC. When the next key sells, " <>
+        "70% of its price goes to whoever holds the key before it, and 20% goes to the " <>
+        "fleet’s treasury."
   }
 
   @doc """
@@ -151,8 +153,8 @@ defmodule KeyfleetWeb.HomeLive do
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
   end
 
-  # A fleet's card before its first read: its name, its sales and its map. A
-  # coming-soon fleet's card is never read.
+  # A fleet's card before its first read: its name, what it is, its sales and
+  # its map. A coming-soon fleet's card is never read.
   defp card(%{id: id, name: name}, recorded) do
     if Fleets.coming_soon?(id, recorded) do
       %{
@@ -160,6 +162,7 @@ defmodule KeyfleetWeb.HomeLive do
         name: name,
         layout: Presets.preset(id),
         coming_soon?: true,
+        about: nil,
         sales: nil,
         now: nil,
         failed?: false
@@ -170,6 +173,7 @@ defmodule KeyfleetWeb.HomeLive do
         name: name,
         layout: Presets.preset(id),
         coming_soon?: false,
+        about: Map.fetch!(@about, id),
         sales: sales(id, recorded),
         now: nil,
         failed?: false
@@ -450,10 +454,10 @@ defmodule KeyfleetWeb.HomeLive do
         </div>
 
         <h1 id="home-title" class="rl-hero-title">
-          <span>No boss. <span class="rl-hero-title__phrase">No job queue.</span></span>
-          <span>Attach your personal agent to <span class="rl-hero-title__accent">a crew</span>
-          that runs itself.</span>
+          Attach your personal agent to <span class="rl-hero-title__accent">a crew</span>
+          that runs itself.
         </h1>
+        <p id="home-tagline" class="rl-hero-tagline">No boss. No job queue.</p>
         <p id="home-lede" class="rl-hero-lede">
           Agents and people pick their own work, check each other’s, and share what the fleet earns.
         </p>
@@ -539,6 +543,7 @@ defmodule KeyfleetWeb.HomeLive do
             >
             </div>
             <h3>{fleet.name}</h3>
+            <p :if={fleet.about} class="rl-fleet-card__about" data-fleet-about>{fleet.about}</p>
             <p :if={fleet.coming_soon?} class="rl-fleet-card__soon" data-fleet-soon>Coming soon</p>
             <.right_now
               :if={fleet.now}
