@@ -93,6 +93,42 @@ async function fling(page: Page, from: Point, dx: number) {
   await page.mouse.up()
 }
 
+// How large the map is drawn: 1, but during Classic's opening zoom.
+const zoomOf = (page: Page) =>
+  page.locator(".km-layer").evaluate(layer => Number(/scale\(([^)]+)\)/.exec((layer as HTMLElement).style.transform)![1]))
+
+// Opens Classic and, on its first frame, reads how large it is drawn and
+// which keys have their middles inside the stage.
+async function openClassic(page: Page) {
+  await page.goto("/showcase/key-map")
+  await expect(page.locator(".key-map.key-map--ready")).toBeVisible()
+  // Classic's stage takes the place of the first, with its middle on screen.
+  await page.locator(".key-map").evaluate(stage => stage.scrollIntoView({block: "center"}))
+  await page.getByRole("button", {name: /^Classic/}).click()
+  return page.evaluate(
+    () =>
+      new Promise<{zoom: number; keys: number}>(done => {
+        const look = () => {
+          const stage = document.querySelector<HTMLElement>("#key-map-classic.key-map--ready")
+          const layer = stage?.querySelector<HTMLElement>(".km-layer")
+          if (!stage || !layer?.style.transform) return requestAnimationFrame(look)
+          const box = stage.getBoundingClientRect()
+          const keys = new Set(
+            [...stage.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")]
+              .filter(tile => {
+                const rect = tile.getBoundingClientRect()
+                const [x, y] = [rect.left + rect.width / 2, rect.top + rect.height / 2]
+                return x > box.left && x < box.right && y > box.top && y < box.bottom
+              })
+              .map(tile => tile.dataset.key),
+          )
+          done({zoom: Number(/scale\(([^)]+)\)/.exec(layer.style.transform)![1]), keys: keys.size})
+        }
+        look()
+      }),
+  )
+}
+
 
 test.describe("key map", () => {
   test("a click chooses the key under it", async ({page}) => {
@@ -149,7 +185,7 @@ test.describe("key map", () => {
     const {stage} = await openMap(page, "Fibonacci")
     const centre = await stageCentre(page)
     await page.mouse.move(centre.x, centre.y)
-    // The map opens on the next key, the sixth in a 28-key row of level 19.
+    // The map opens on the available key, the sixth in a 28-key row of level 19.
     // Eight 96 px cells across and 36 rows down is the middle of that level,
     // where every cell holds a key.
     await page.mouse.wheel(768, 3_000)
@@ -190,7 +226,7 @@ test.describe("key map", () => {
       expect(here.length).toBeGreaterThan(10)
       // Every key matches the page's made-up owners and agents.
       for (const {key, state} of here) {
-        const expected = [key === 2_000 && "next", key % 97 === 13 && "mine", key % 7 === 3 && "agent", key === 1_999 && "selected"]
+        const expected = [key === 2_000 && "available", key % 97 === 13 && "mine", key % 7 === 3 && "agent", key === 1_999 && "selected"]
         expect(state, `key ${key}`).toBe(expected.filter(Boolean).join(" "))
         state.split(" ").forEach(mark => marks.add(mark))
       }
@@ -209,8 +245,79 @@ test.describe("key map", () => {
     expect([...marks]).toEqual(expect.arrayContaining(["mine", "agent", "selected"]))
   })
 
+  // The pyramid is 45 rows, far taller than the stage at normal size.
+  test("Classic opens on its whole pyramid, then zooms in to the available key", async ({page}) => {
+    const first = await openClassic(page)
+    expect(first.zoom).toBeLessThan(1)
+    expect(first.keys).toBe(1_024)
+
+    const centre = await stageCentre(page)
+    await expect.poll(() => zoomOf(page)).toBe(1)
+    const available = await tile(page, 1_024)
+    expect(Math.hypot(available.x - centre.x, available.y - centre.y)).toBeLessThanOrEqual(1)
+  })
+
+  test("a press during Classic's opening zoom stops it at once, at normal size, and chooses nothing", async ({page}) => {
+    expect((await openClassic(page)).zoom).toBeLessThan(1)
+    const centre = await stageCentre(page)
+    await page.mouse.click(centre.x, centre.y)
+    await nextFrame(page)
+    expect(await zoomOf(page)).toBe(1)
+    const stopped = await mapAt(page)
+    await page.waitForTimeout(300)
+    expect(await movedSince(page, stopped)).toEqual({x: 0, y: 0})
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+  })
+
+  // Accelerant's keys run in rows of five, snaking; with 1,990 sold, keys
+  // 1,991 to 1,995 make one row from left to right.
+  test("a key that can't be bought yet says so, by mouse or arrow key, and never blocks a drag", async ({page}) => {
+    const {stage} = await openMap(page, "Accelerant")
+    await page.getByLabel("Keys sold").fill("1990")
+    await expect(stage.locator('.km-tile[data-key="1991"]:not([hidden])').first()).toHaveAttribute("data-state", /available/)
+    const note = stage.locator(".km-note")
+
+    const later = await tile(page, 1_993)
+    await page.mouse.move(later.x, later.y)
+    await expect(note).toBeVisible()
+    await expect(note).toHaveText("The preceding key must be sold.")
+    const box = (await note.boundingBox())!
+    expect(Math.abs(box.x + box.width / 2 - later.x)).toBeLessThanOrEqual(1)
+    expect(box.y + box.height).toBeLessThan(later.y)
+
+    // The available key and sold keys have no note.
+    for (const key of [1_991, 1_987]) {
+      const at = await tile(page, key)
+      await page.mouse.move(at.x, at.y)
+      await page.waitForTimeout(500)
+      await expect(note).toBeHidden()
+    }
+
+    // A drag that starts on the note moves the map.
+    await page.mouse.move(later.x, later.y)
+    await expect(note).toBeVisible()
+    const noteAt = {x: box.x + box.width / 2, y: box.y + box.height / 2}
+    const before = await mapAt(page)
+    await page.mouse.move(noteAt.x, noteAt.y)
+    await page.mouse.down()
+    await page.mouse.move(noteAt.x - 150, noteAt.y, {steps: 15})
+    await page.waitForTimeout(150)
+    await page.mouse.up()
+    expect(await movedSince(page, before)).toEqual({x: -150, y: 0})
+    await expect(selected(page)).toHaveText("No key chosen yet.")
+
+    await stage.focus()
+    await page.keyboard.press("Home")
+    await expect(note).toBeHidden()
+    await page.keyboard.press("ArrowRight")
+    await expect(stage.locator("[aria-live=polite]")).toHaveText("Key 1,992, not sold yet.")
+    await expect(note).toBeVisible()
+    await page.keyboard.press("ArrowLeft")
+    await expect(note).toBeHidden()
+  })
+
   test.describe("on a tall screen", () => {
-    // The stage is 820 px tall, so six rows around the next key all fit.
+    // The stage is 820 px tall, so six rows around the available key all fit.
     test.use({viewport: {width: 1280, height: 1200}})
 
     test("Classic draws its pyramid to three rows below the row on sale", async ({page}) => {
@@ -218,18 +325,19 @@ test.describe("key map", () => {
       const status = stage.locator("[aria-live=polite]")
       const drawn = async () => [...new Set((await onScreen(page)).map(({key}) => key))].sort((a, b) => a - b)
       const upTo = (last: number) => Array.from({length: last}, (_, index) => index + 1)
-      const next = (key: number) => expect(stage.locator(`.km-tile[data-key="${key}"]`).first()).toHaveAttribute("data-state", /next/)
+      const available = (key: number) =>
+        expect(stage.locator(`.km-tile[data-key="${key}"]:not([hidden])`).first()).toHaveAttribute("data-state", /available/)
 
       // Nothing sold: key 1 is on sale and rows 1 to 4 are drawn.
       await page.getByLabel("Keys sold").fill("0")
-      await next(1)
+      await available(1)
       await expect.poll(drawn).toEqual(upTo(10))
       // Key 5, in row 3, is on sale: rows 1 to 6 are drawn.
       await page.getByLabel("Keys sold").fill("4")
-      await next(5)
+      await available(5)
       await stage.focus()
       await page.keyboard.press("Home")
-      await expect(status).toHaveText("Next key, 5.")
+      await expect(status).toHaveText("Available key, 5.")
       await expect.poll(drawn).toEqual(upTo(21))
       // Row 3 is 4 5 6.
       await page.keyboard.press("ArrowRight")
@@ -248,7 +356,7 @@ test.describe("key map", () => {
     const status = stage.locator("[aria-live=polite]")
     await stage.focus()
     await page.keyboard.press("Home")
-    await expect(status).toHaveText("Next key, 2,000.")
+    await expect(status).toHaveText("Available key, 2,000.")
     await page.keyboard.press("ArrowRight")
     await expect(status).toHaveText("Key 1,999.")
     await page.keyboard.press("ArrowUp")
@@ -273,14 +381,14 @@ test.describe("key map", () => {
     expect(await page.evaluate(() => scrollY)).toBe(scrolled)
     await expect(selected(page)).toHaveText("Key 1,993 chosen.")
 
-    // Home brings the next key back to the middle from anywhere.
+    // Home brings the available key back to the middle from anywhere.
     const centre = await stageCentre(page)
     await page.mouse.move(centre.x, centre.y)
     await page.mouse.wheel(900, 0)
     await page.keyboard.press("Home")
     await expect.poll(async () => {
-      const [next] = await copiesOf(page, 2_000)
-      return next ? Math.round(Math.hypot(next.x - centre.x, next.y - centre.y)) : Infinity
+      const [available] = await copiesOf(page, 2_000)
+      return available ? Math.round(Math.hypot(available.x - centre.x, available.y - centre.y)) : Infinity
     }).toBeLessThanOrEqual(1)
   })
 
@@ -299,7 +407,7 @@ test.describe("key map", () => {
   test.describe("with reduced motion", () => {
     test.use({contextOptions: {reducedMotion: "reduce"}})
 
-    test("a throw stops on release and Home jumps straight to the next key", async ({page}) => {
+    test("a throw stops on release and Home jumps straight to the available key", async ({page}) => {
       const {stage} = await openMap(page, "Accelerant")
       expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true)
       const centre = await stageCentre(page)
@@ -310,13 +418,20 @@ test.describe("key map", () => {
 
       await stage.focus()
       await page.keyboard.press("Home")
-      // One frame later the next key is already in the middle, and stays there.
+      // One frame later the available key is already in the middle, and stays there.
       await page.evaluate(() => new Promise(requestAnimationFrame))
-      const next = await tile(page, 2_000)
-      expect(Math.hypot(next.x - centre.x, next.y - centre.y)).toBeLessThanOrEqual(1)
+      const available = await tile(page, 2_000)
+      expect(Math.hypot(available.x - centre.x, available.y - centre.y)).toBeLessThanOrEqual(1)
       const landed = await mapAt(page)
       await page.waitForTimeout(200)
       expect(await movedSince(page, landed)).toEqual({x: 0, y: 0})
+    })
+
+    test("Classic lands straight on the available key", async ({page}) => {
+      expect((await openClassic(page)).zoom).toBe(1)
+      const centre = await stageCentre(page)
+      const available = await tile(page, 1_024)
+      expect(Math.hypot(available.x - centre.x, available.y - centre.y)).toBeLessThanOrEqual(1)
     })
   })
 })

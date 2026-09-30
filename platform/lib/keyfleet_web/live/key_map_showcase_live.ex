@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
           <p class="sc-eyebrow">Working reference</p>
           <h1>Key map</h1>
           <p id="key-map-help">
-            Drag, scroll or use the arrow keys to move around. Click a key, or press Enter, to choose it. Home returns to the next key on sale.
+            Drag, scroll or use the arrow keys to move around. Click a key, or press Enter, to choose it. Home returns to the available key.
           </p>
           <div class="key-map-reference__fleets" role="group" aria-label="Fleet">
             <button
@@ -100,7 +100,10 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
           <ul>
             <li>An orange rim is a key you hold.</li>
             <li>A blue dot is a key with an agent.</li>
-            <li>The outlined key marked Next is the one on sale.</li>
+            <li>The outlined key marked Available is the one on sale.</li>
+            <li>
+              Keys sell in number order: pointing at a later key says the one before it must be sold first.
+            </li>
             <li>The filled key is the one you chose.</li>
             <li>Faint keys are not sold yet.</li>
             <li>
@@ -150,7 +153,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
      }, socket}
   end
 
-  # Every drawn key can be chosen: the sold ones and the next one on sale.
+  # Every drawn key can be chosen: the sold ones and the available one.
   def handle_event("select_key", %{"token_id" => token_id}, socket) when is_integer(token_id) do
     if token_id in 1..(socket.assigns.fleet.minted + 1)//1,
       do: {:noreply, assign(socket, :selected, token_id)},

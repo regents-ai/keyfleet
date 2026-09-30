@@ -89,15 +89,44 @@ test.describe("the fleet page's map", () => {
     prepareFleet(fleet)
   })
 
-  test("a key sold appears as yours and the next key moves on, without a reload", async ({page}) => {
+  test("a key sold appears as yours and the available key moves on, without a reload", async ({page}) => {
     const onSale = prepareFleet(fleet) + 1
     const errors = await openFleet(page)
-    await expectMarks(page, onSale, ["next"], ["mine"])
+    await expectMarks(page, onSale, ["available"], ["mine"])
 
     expect(sellKey(fleet, me)).toBe(onSale)
-    await expectMarks(page, onSale, ["mine"], ["next"])
-    await expectMarks(page, onSale + 1, ["next"])
+    await expectMarks(page, onSale, ["mine"], ["available"])
+    await expectMarks(page, onSale + 1, ["available"])
     expect(await stillOpen(page)).toBe(true)
+    expect(errors).toEqual([])
+  })
+
+  // "What's happening" opens over the map's right-hand side on a wide screen.
+  test("the available key sits in the middle of the part of the map the side panel leaves open", async ({page}) => {
+    const onSale = prepareFleet(fleet) + 1
+    const errors = await openFleet(page)
+    await expectMarks(page, onSale, ["available"])
+    const open = await page.evaluate(() => {
+      const stage = document.querySelector(".key-map")!.getBoundingClientRect()
+      const panel = document.querySelector("#fleet-now")!.getBoundingClientRect()
+      const whole = stage.left + stage.width / 2
+      return {x: (stage.left + panel.left) / 2, y: stage.top + stage.height / 2, whole}
+    })
+    expect(open.x).toBeLessThan(open.whole - 100)
+    const offCentre = async (middle: {x: number; y: number}) => {
+      const at = await tileAt(page, onSale)
+      return at ? Math.round(Math.hypot(at.x - middle.x, at.y - middle.y)) : Infinity
+    }
+    expect(await offCentre(open)).toBeLessThanOrEqual(1)
+
+    // With the panel closed, Available key centres it in the whole map.
+    await page.locator("#fleet-now-close").click()
+    await page.locator("#key-map-available").click()
+    const whole = await page.locator(".key-map").evaluate(stage => {
+      const rect = stage.getBoundingClientRect()
+      return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2}
+    })
+    await expect.poll(() => offCentre(whole)).toBeLessThanOrEqual(1)
     expect(errors).toEqual([])
   })
 
@@ -128,21 +157,21 @@ test.describe("the fleet page's map", () => {
   test("a page that lost its connection catches up when it comes back, cursor and all", async ({page}) => {
     const onSale = prepareFleet(fleet) + 1
     const errors = await openFleet(page)
-    await expectMarks(page, onSale, ["next"])
-    // Home puts the keyboard cursor on the key on sale.
+    await expectMarks(page, onSale, ["available"])
+    // Home puts the keyboard cursor on the available key.
     await page.locator(`#key-map-${fleet}`).focus()
     await page.keyboard.press("Home")
-    await expectMarks(page, onSale, ["next", "cursor"])
+    await expectMarks(page, onSale, ["available", "cursor"])
 
     await page.evaluate(() => (window as unknown as Socket).liveSocket.disconnect())
     expect(sellKey(fleet, me)).toBe(onSale)
     // Nothing reaches a page without its connection.
     await page.waitForTimeout(500)
-    await expectMarks(page, onSale, ["next"], ["mine"])
+    await expectMarks(page, onSale, ["available"], ["mine"])
 
     await page.evaluate(() => (window as unknown as Socket).liveSocket.connect())
-    await expectMarks(page, onSale, ["mine", "cursor"], ["next"])
-    await expectMarks(page, onSale + 1, ["next"])
+    await expectMarks(page, onSale, ["mine", "cursor"], ["available"])
+    await expectMarks(page, onSale + 1, ["available"])
     expect(await stillOpen(page)).toBe(true)
     expect(errors).toEqual([])
   })
@@ -189,7 +218,7 @@ test.describe("the fleet page's map", () => {
     const [level, last] = fillLevel(levelled, someoneElse)
     expect([level, last]).toEqual([1, 2])
     const errors = await openFleet(page, levelled)
-    await expectMarks(page, last, ["next"])
+    await expectMarks(page, last, ["available"])
     await expect.poll(() => levelOfKey(page, last)).toEqual(["on-sale"])
     await expect.poll(() => outlinesAt(page, last)).toEqual(["on-sale 3px"])
     // The map draws the levels reached and the level on sale, and none after.
@@ -197,7 +226,7 @@ test.describe("the fleet page's map", () => {
     await expect.poll(() => headings(page)).toEqual([`Level ${level} · on sale now (on-sale)`])
 
     expect(sellKey(levelled, someoneElse)).toBe(last)
-    await expectMarks(page, last + 1, ["next"])
+    await expectMarks(page, last + 1, ["available"])
     await expect.poll(() => levelOfKey(page, last + 1)).toEqual(["on-sale"])
     await expect.poll(() => outlinesAt(page, last + 1)).toEqual(["on-sale 3px"])
     await expect.poll(() => headings(page)).toContain(`Level ${level + 1} · on sale now (on-sale)`)

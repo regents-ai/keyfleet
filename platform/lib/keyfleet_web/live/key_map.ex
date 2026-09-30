@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.KeyMap do
   A key's marks are whether one of the viewer's wallets holds it and whether
   it has an active shard today. Someone signed out holds nothing. Owners are never
   sent to the map. The map works out from how many are sold which keys it
-  draws (every key sold and a little beyond the next key on sale), so that
+  draws (every key sold and a little beyond the available key), so that
   count travels with the marks.
   """
 
@@ -57,14 +57,14 @@ defmodule KeyfleetWeb.KeyMap do
 
   @doc """
   Whether key `token_id` can be chosen on the map: every key sold, and the
-  next one on sale.
+  available one.
   """
   def choosable?(%{total_minted: minted, max_supply: max_supply}, token_id),
     do: is_integer(token_id) and token_id in 1..min(minted + 1, max_supply || minted + 1)//1
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level
-  with a key sold and the level of the next key on sale. Fleets without
+  with a key sold and the level of the available key. Fleets without
   levels have none.
   """
   def levels(%{completed_levels: nil}), do: []

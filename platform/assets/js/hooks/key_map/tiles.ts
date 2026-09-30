@@ -84,7 +84,9 @@ function edgePath(edges: number, size: number) {
  * 96 px cells) needs at most 19 × 12 = 228 against a budget of 400, and the
  * phone stage (378 × 587 at 76 px) at most 9 × 13 = 117 against 160. A stage
  * wider than about 2,300 px would pass 400; the browser tests hold both
- * measured counts to their budgets.
+ * measured counts to their budgets. Classic's opening zoom shows the whole
+ * pyramid at once, so its pool grows to about the pyramid's size, some 1,050
+ * elements once all 1,024 keys are drawn; they stay hidden after.
  */
 export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
   let placed = new Map<number, Tile>()

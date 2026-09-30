@@ -48,7 +48,10 @@ Fibonacci, whose levels keep opening, a few rows into level 19 with 17,768 keys
 sold. The Fibonacci map draws the levels sold and the level on sale; the Classic
 pyramid draws its rows down to three below the row on sale. "Keys sold" sets how
 many keys of the fleet shown are sold, from none to the whole fleet (Fibonacci up
-to the end of level 20), and redraws the map. Every 97th
+to the end of level 20), and redraws the map. Classic opens on its whole
+pyramid and zooms in to the available key. Pointing at a key that can't be
+bought yet, or reaching it with the arrow keys, shows a note that the key
+before it must be sold first. Every 97th
 key is marked as yours and every 7th as having an agent. Choosing a key, by click or by Enter, only updates the line under the map.
 
 The map loads as its own script chunk the first time a page shows one. Its drag

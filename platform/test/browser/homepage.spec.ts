@@ -83,7 +83,7 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
   await context.close()
 })
 
-test("each card draws its fleet's map, with the next key on sale marked", async ({page}) => {
+test("each card draws its fleet's map, with the available key marked", async ({page}) => {
   await page.goto("/")
   await waitForHomepage(page)
   await waitForPreviews(page)
@@ -91,9 +91,9 @@ test("each card draws its fleet's map, with the next key on sale marked", async 
   for (const [id] of fleets) {
     const preview = page.locator(`#home-fleet-preview-${id}`)
     await expect(preview.locator("svg")).toHaveCount(1)
-    // No fleet in the test data has sold out, so each shows its next key on sale; the
-    // map wraps around, so a young fleet's next key can show more than once.
-    await expect(preview.locator('polygon[data-state="next"]').first()).toBeAttached()
+    // No fleet in the test data has sold out, so each shows its available key; the
+    // map wraps around, so a young fleet's available key can show more than once.
+    await expect(preview.locator('polygon[data-state="available"]').first()).toBeAttached()
   }
 
   // Only the fleets with levels colour their keys by level.

@@ -22,6 +22,27 @@
   --km-sale-3: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 58.5%, var(--palette-powder-blue)) 37.6%, var(--ash-ground));
   --km-sold-out-line: var(--ash-line-strong);
   --km-on-sale-line: var(--ash-accent);
+  /* A sold key of a fleet without levels: tone 0 on the light ground, and a
+     step lighter on the dark one, so it stays above the keys not sold yet. */
+  --km-tone-plain: light-dark(
+    color-mix(in oklch, var(--ash-ink) 11%, var(--ash-ground)),
+    color-mix(in oklch, var(--ash-ink) 30%, var(--ash-ground))
+  );
+}
+
+/* A key not sold yet: faint on the light ground, where it still shows. On the
+   dark ground a faint key all but vanishes, so there it takes a face of its
+   own, 1.5:1 against the ground, with a rim round it. */
+.km-tile,
+.key-map-preview polygon {
+  --km-unsold-face: light-dark(
+    color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground)),
+    color-mix(in oklch, var(--ash-ink) 22%, var(--ash-ground))
+  );
+  --km-unsold-rim: light-dark(
+    color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground)),
+    color-mix(in oklch, var(--ash-ink) 34%, var(--ash-ground))
+  );
 }
 
 .key-map {
@@ -79,7 +100,7 @@
 }
 
 .key-map-preview polygon {
-  --km-tone: var(--km-tone-0);
+  --km-tone: var(--km-tone-plain);
   --km-sale: var(--km-sale-0);
   --km-face: var(--km-tone);
   --km-rim: var(--km-face);
@@ -93,8 +114,8 @@
 .key-map-preview polygon[data-tone="3"] { --km-tone: var(--km-tone-3); --km-sale: var(--km-sale-3); }
 .key-map-preview polygon[data-tone] { --km-rim: color-mix(in oklch, var(--ash-ink) 16%, var(--km-tone)); }
 .key-map-preview polygon[data-level="on-sale"] { --km-face: var(--km-sale); }
-.key-map-preview polygon[data-state="unsold"] { --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground)); --km-rim: var(--km-face); }
-.key-map-preview polygon[data-state="next"] { --km-rim: var(--palette-tangerine-tango); --km-face: var(--ash-ground); stroke-width: 2.5; }
+.key-map-preview polygon[data-state="unsold"] { --km-face: var(--km-unsold-face); --km-rim: var(--km-unsold-rim); }
+.key-map-preview polygon[data-state="available"] { --km-rim: var(--palette-tangerine-tango); --km-face: var(--ash-ground); stroke-width: 2.5; }
 
 .km-layer {
   position: absolute;
@@ -116,7 +137,7 @@
 }
 
 .km-tile {
-  --km-tone: var(--km-tone-0);
+  --km-tone: var(--km-tone-plain);
   --km-sale: var(--km-sale-0);
   --km-face: var(--km-tone);
   --km-rim: var(--km-face);
@@ -159,8 +180,8 @@
 
 /* A key not sold yet is faint. */
 .km-tile[data-state~="unsold"] {
-  --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground));
-  --km-rim: var(--km-face);
+  --km-face: var(--km-unsold-face);
+  --km-rim: var(--km-unsold-rim);
   color: var(--ash-muted);
 }
 
@@ -211,13 +232,13 @@
 
 .km-tile[data-state~="mine"] { --km-rim: var(--palette-tangerine-tango); }
 
-.km-tile[data-state~="next"] {
+.km-tile[data-state~="available"] {
   --km-rim: var(--palette-tangerine-tango);
   --km-face: var(--ash-ground);
   color: var(--palette-tangerine-tango);
 }
 
-.km-tile[data-state~="next"] > span:last-child { color: inherit; }
+.km-tile[data-state~="available"] > span:last-child { color: inherit; }
 
 .km-tile[data-state~="selected"] {
   --km-face: var(--palette-tangerine-tango);
@@ -258,6 +279,26 @@
   font-weight: 600;
 }
 
+/* The note above a key that can't be bought yet, in the style of the site's
+   small panels. It never takes a press, so the map under it still drags,
+   scrolls and chooses. */
+.km-note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  margin: 0;
+  translate: -50% calc(-100% - 6px);
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--ash-panel);
+  color: var(--ash-ink);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 @media (max-width: 767.98px) {
   .km-tile { font-size: 11px; }
 }
@@ -277,7 +318,7 @@
   .km-tile > span:last-child { color: inherit; }
   .km-tile[data-state~="unsold"] { --km-rim: GrayText; color: GrayText; }
   .km-tile[data-state~="mine"],
-  .km-tile[data-state~="next"],
+  .km-tile[data-state~="available"],
   .km-tile[data-state~="cursor"] { --km-rim: Highlight; }
   .km-tile[data-state~="selected"] { --km-face: Highlight; color: HighlightText; }
   .km-tile[data-state~="agent"] > span:first-of-type::before { background: CanvasText; }

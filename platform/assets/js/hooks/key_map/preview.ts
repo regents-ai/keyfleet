@@ -1,10 +1,10 @@
 import {axialToPixel, SQRT3} from "./lattice"
 import {buildMap, maxSupply, type LayoutKind} from "./layouts"
 import {
+  availableKey,
   drawnKeys,
   levelSale,
   levelTone,
-  nextKey,
   onSaleLevel,
   startKey,
   type KeyMapState,
@@ -30,20 +30,20 @@ export type PreviewTile = {
   /** The level's tone and sale, for a fleet with levels. */
   tone?: number
   level?: LevelSale
-  mark?: "next" | "unsold"
+  mark?: "available" | "unsold"
 }
 
 export type Preview = {viewBox: string; tiles: PreviewTile[]}
 
 /**
  * A still picture of a fleet's map as it opens, once `minted` keys are sold:
- * the keys around the next key on sale (key 1 once sold out), in the map's own
+ * the keys around the available key (key 1 once sold out), in the map's own
  * layout, tones and marks.
  */
 export function preview(layout: LayoutKind, minted: number): Preview {
   const state: KeyMapState = {minted, maxSupply: maxSupply[layout], mine: new Uint8Array(0), agent: new Uint8Array(0)}
   const grid = buildMap(layout, drawnKeys(layout, state))
-  const next = nextKey(state)
+  const available = availableKey(state)
   const onSale = onSaleLevel(grid, state)
   const [cx, cy] = axialToPixel(...grid.home(startKey(state)), size)
   const tiles: PreviewTile[] = []
@@ -63,7 +63,7 @@ export function preview(layout: LayoutKind, minted: number): Preview {
         tile.tone = levelTone(level)
         tile.level = levelSale(onSale, level)
       }
-      if (key === next) tile.mark = "next"
+      if (key === available) tile.mark = "available"
       else if (key > minted) tile.mark = "unsold"
       tiles.push(tile)
     }

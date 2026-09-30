@@ -3,24 +3,24 @@ import {describe, expect, it} from "vitest"
 import {preview} from "../js/hooks/key_map/preview"
 
 const marked = (minted: number, layout: Parameters<typeof preview>[0]) =>
-  preview(layout, minted).tiles.filter(tile => tile.mark === "next").map(tile => tile.key)
+  preview(layout, minted).tiles.filter(tile => tile.mark === "available").map(tile => tile.key)
 
 describe("a fleet's still preview", () => {
-  it("frames the next key on sale, marked as the map marks it", () => {
+  it("frames the available key, marked as the map marks it", () => {
     for (const layout of ["fibonacci", "classic", "accelerant"] as const) {
       expect(new Set(marked(0, layout))).toEqual(new Set([1]))
       expect(new Set(marked(40, layout))).toEqual(new Set([41]))
     }
   })
 
-  it("marks sold keys plainly, keys after the next one as unsold, and draws no level headings", () => {
+  it("marks sold keys plainly, keys after the available one as unsold, and draws no level headings", () => {
     const {tiles} = preview("accelerant", 12)
 
     expect(tiles.length).toBeGreaterThan(0)
     expect(tiles.every(tile => tile.key > 0)).toBe(true)
     for (const tile of tiles) {
       if (tile.key <= 12) expect(tile.mark).toBeUndefined()
-      else if (tile.key === 13) expect(tile.mark).toBe("next")
+      else if (tile.key === 13) expect(tile.mark).toBe("available")
       else expect(tile.mark).toBe("unsold")
     }
   })
@@ -28,7 +28,7 @@ describe("a fleet's still preview", () => {
   it("gives a levelled fleet's keys their level's tone and sale, and other fleets none", () => {
     const levelled = preview("fibonacci", 3).tiles
     expect(levelled.find(tile => tile.key === 1)).toMatchObject({tone: 0, level: "sold-out"})
-    expect(levelled.find(tile => tile.key === 4)).toMatchObject({tone: 1, level: "on-sale", mark: "next"})
+    expect(levelled.find(tile => tile.key === 4)).toMatchObject({tone: 1, level: "on-sale", mark: "available"})
 
     expect(preview("classic", 3).tiles.every(tile => tile.tone === undefined && tile.level === undefined)).toBe(true)
   })

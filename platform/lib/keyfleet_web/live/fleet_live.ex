@@ -758,11 +758,11 @@ defmodule KeyfleetWeb.FleetLive do
       <div class="fleet-map-controls">
         <Regent.Primitives.button
           :if={@fleet.progress.next_token_id}
-          id="key-map-next"
+          id="key-map-available"
           variant="secondary"
-          phx-click={JS.dispatch("keymap:next", to: @map)}
+          phx-click={JS.dispatch("keymap:available", to: @map)}
         >
-          Next key
+          Available key
         </Regent.Primitives.button>
         <Regent.Primitives.button
           :if={@fleet.signed_in?}
@@ -793,6 +793,7 @@ defmodule KeyfleetWeb.FleetLive do
         phx-update="ignore"
         data-layout={@fleet.layout}
         data-selected={@fleet.chosen_key}
+        data-covered-by="#fleet-now, #fleet-about, #fleet-who"
         tabindex="0"
         role="application"
         aria-roledescription="key map"

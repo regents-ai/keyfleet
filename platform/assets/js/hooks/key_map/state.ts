@@ -71,12 +71,12 @@ export function applyPatch(state: KeyMapState, patch: KeyMapPatch): KeyMapState 
   return {...state, minted: patch.minted, mine, agent}
 }
 
-/** The last key that can be chosen: the next key, or the last key once the fleet is sold out. */
+/** The last key that can be chosen: the available key, or the last key once the fleet is sold out. */
 export const lastChoosable = (state: KeyMapState) =>
   state.maxSupply === null ? state.minted + 1 : Math.min(state.minted + 1, state.maxSupply)
 
-/** The key on sale, or 0 once the fleet is sold out. */
-export const nextKey = (state: KeyMapState) =>
+/** The key on sale, the one available now, or 0 once the fleet is sold out. */
+export const availableKey = (state: KeyMapState) =>
   state.maxSupply === null || state.minted < state.maxSupply ? state.minted + 1 : 0
 
 // How many rows of Classic's pyramid are drawn below the row on sale.
@@ -90,16 +90,16 @@ const rowsAhead = 3
  * whole.
  */
 export function drawnKeys(layout: LayoutKind, state: KeyMapState) {
-  const next = nextKey(state)
-  if (state.maxSupply === null) return levelEnd(fibonacciLevelOf(next))
-  if (layout !== "classic" || !next) return state.maxSupply
-  return Math.min(pyramidRowEnd(pyramidRowOf(next) + rowsAhead), state.maxSupply)
+  const available = availableKey(state)
+  if (state.maxSupply === null) return levelEnd(fibonacciLevelOf(available))
+  if (layout !== "classic" || !available) return state.maxSupply
+  return Math.min(pyramidRowEnd(pyramidRowOf(available) + rowsAhead), state.maxSupply)
 }
 
 /** The level of the key on sale, or 0 once the fleet is sold out or for a fleet without levels. */
 export const onSaleLevel = (grid: KeyMapGrid, state: KeyMapState) => {
-  const next = nextKey(state)
-  return next ? grid.levelOf(next) : 0
+  const available = availableKey(state)
+  return available ? grid.levelOf(available) : 0
 }
 
 /** How a level stands: sold out, or on sale now. No level after the one on sale is drawn. */
@@ -118,12 +118,12 @@ export const levelTone = (level: number) => (level - 1) % levelTones
 export const levelHeading = (level: number, sale: LevelSale) =>
   sale === "sold-out" ? `Level ${level} · sold out` : `Level ${level} · on sale now`
 
-/** Where the map opens and where Home goes: the next key, or key 1 once sold out. */
-export const startKey = (state: KeyMapState) => nextKey(state) || 1
+/** Where the map opens and where Home goes: the available key, or key 1 once sold out. */
+export const startKey = (state: KeyMapState) => availableKey(state) || 1
 
 /**
  * The first key after `after` that is yours, coming back round to key 1 past
- * the next key, or 0 when you hold none.
+ * the available key, or 0 when you hold none.
  */
 export function nextHeldKey(state: KeyMapState, after: number) {
   const shown = lastChoosable(state)
@@ -134,13 +134,16 @@ export function nextHeldKey(state: KeyMapState, after: number) {
   return 0
 }
 
-/** A key drawn but not sold, other than the next key, which can't be chosen yet. */
-const unsold = (state: KeyMapState, key: number) => key > state.minted + 1
+/**
+ * A key drawn but not sold, other than the available key: keys sell in number
+ * order, so it can't be chosen or bought yet.
+ */
+export const unsold = (state: KeyMapState, key: number) => key > state.minted + 1
 
 /** A tile's marks, for `data-state`. */
 export function keyMarks(state: KeyMapState, key: number, selected: number, cursor: number) {
   const marks: string[] = []
-  if (key === nextKey(state)) marks.push("next")
+  if (key === availableKey(state)) marks.push("available")
   if (unsold(state, key)) marks.push("unsold")
   if (hasBit(state.mine, key)) marks.push("mine")
   if (hasBit(state.agent, key)) marks.push("agent")
@@ -159,7 +162,7 @@ export const grouped = (value: number) => grouping.format(value)
 /** What the map reads out when the keyboard cursor lands on a key. */
 export function describeKey(grid: KeyMapGrid, state: KeyMapState, key: number) {
   const level = grid.levelOf(key)
-  const parts = [key === nextKey(state) ? `Next key, ${grouped(key)}` : `Key ${grouped(key)}`]
+  const parts = [key === availableKey(state) ? `Available key, ${grouped(key)}` : `Key ${grouped(key)}`]
   if (level) parts.push(`level ${level}`)
   if (hasBit(state.mine, key)) parts.push("yours")
   if (hasBit(state.agent, key)) parts.push("has an agent")

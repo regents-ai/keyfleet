@@ -14,17 +14,29 @@ const velocityScale = 16
 const friction = 0.997
 const minVelocity = 0.05
 const focusDuration = 400
+// The opening zoom holds the wide view a moment, then eases in to normal size.
+const zoomHold = 600
+const zoomDuration = 1_200
 // How far a press may travel and still count as a tap.
 const tapTravel: Record<string, number> = {mouse: 6, pen: 6, touch: 10}
 
 export type Camera = {
-  /** The world point at the centre of the stage. */
+  /** The world point at the middle of the stage's uncovered part. */
   x: number
   y: number
+  /** How large the map is drawn: 1 but during the opening zoom. */
+  zoom: number
   /** Moves the camera now. */
   jumpTo(x: number, y: number): void
   /** Eases the camera to a point, or jumps there under reduced motion. */
   glideTo(x: number, y: number): void
+  /**
+   * Shows the map at `zoom` around one point, then eases in to another at
+   * normal size, or jumps there under reduced motion.
+   */
+  zoomIn(fromX: number, fromY: number, zoom: number, toX: number, toY: number): void
+  /** Ends any glide, zoom or coast where the view is, at normal size. */
+  stop(): void
   /** Moves the camera by a whole copy of the map, which the viewer never sees. */
   shift(dx: number, dy: number): void
   /** Rescales every position, glide included, when the cell size changes. */
@@ -53,7 +65,19 @@ type Drag = {
   stoppedTheMap: boolean
 }
 
-type Glide = {fromX: number; fromY: number; toX: number; toY: number; start: number}
+type Glide = {
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  fromZoom: number
+  start: number
+  duration: number
+  ease: (t: number) => number
+}
+
+const easeOut = (t: number) => 1 - (1 - t) ** 3
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (2 - 2 * t) ** 3 / 2)
 
 export function createCamera(stage: HTMLElement, options: CameraOptions): Camera {
   let drag: Drag | null = null
@@ -72,10 +96,14 @@ export function createCamera(stage: HTMLElement, options: CameraOptions): Camera
     const dt = Math.min(64, Math.max(0, now - lastFrame))
     lastFrame = now
     if (glide) {
-      const t = Math.min(1, (now - glide.start) / focusDuration)
-      const eased = 1 - (1 - t) ** 3
-      camera.x = glide.fromX + (glide.toX - glide.fromX) * eased
-      camera.y = glide.fromY + (glide.toY - glide.fromY) * eased
+      // The zoom grows by a steady factor, and the destination's distance
+      // from the middle of the view, as drawn, shrinks with the easing.
+      const t = Math.min(1, Math.max(0, (now - glide.start) / glide.duration))
+      const eased = glide.ease(t)
+      camera.zoom = glide.fromZoom ** (1 - eased)
+      const left = (glide.fromZoom * (1 - eased)) / camera.zoom
+      camera.x = glide.toX - (glide.toX - glide.fromX) * left
+      camera.y = glide.toY - (glide.toY - glide.fromY) * left
       if (t === 1) glide = null
     } else if (!drag && coasting()) {
       camera.x -= (vx * dt) / velocityScale
@@ -92,27 +120,43 @@ export function createCamera(stage: HTMLElement, options: CameraOptions): Camera
     if (!frame) frame = requestAnimationFrame(tick)
   }
 
-  const stop = () => {
-    vx = 0
-    vy = 0
-    glide = null
+  const startGlide = (next: Glide) => {
+    glide = next
+    lastFrame = performance.now()
+    schedule()
   }
 
   const camera: Camera = {
     x: 0,
     y: 0,
+    zoom: 1,
     jumpTo(x, y) {
-      stop()
+      camera.stop()
       camera.x = x
       camera.y = y
       schedule()
     },
     glideTo(x, y) {
       if (options.reducedMotion()) return camera.jumpTo(x, y)
+      camera.stop()
+      const {x: fromX, y: fromY} = camera
+      startGlide({fromX, fromY, toX: x, toY: y, fromZoom: 1, start: performance.now(), duration: focusDuration, ease: easeOut})
+    },
+    zoomIn(fromX, fromY, zoom, toX, toY) {
+      if (options.reducedMotion()) return camera.jumpTo(toX, toY)
+      camera.stop()
+      camera.x = fromX
+      camera.y = fromY
+      camera.zoom = zoom
+      const start = performance.now() + zoomHold
+      startGlide({fromX, fromY, toX, toY, fromZoom: zoom, start, duration: zoomDuration, ease: easeInOut})
+    },
+    stop() {
       vx = 0
       vy = 0
-      glide = {fromX: camera.x, fromY: camera.y, toX: x, toY: y, start: performance.now()}
-      lastFrame = performance.now()
+      glide = null
+      if (camera.zoom === 1) return
+      camera.zoom = 1
       schedule()
     },
     scale(factor) {
@@ -153,7 +197,7 @@ export function createCamera(stage: HTMLElement, options: CameraOptions): Camera
     if (drag) release()
     const stoppedTheMap = coasting() || glide !== null
     dragged = false
-    stop()
+    camera.stop()
     stage.setPointerCapture(event.pointerId)
     stage.classList.add("key-map--dragging")
     drag = {
@@ -238,7 +282,7 @@ export function createCamera(stage: HTMLElement, options: CameraOptions): Camera
     event.preventDefault()
     const page = event.deltaMode === WheelEvent.DOM_DELTA_PAGE
     const line = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1
-    stop()
+    camera.stop()
     camera.x += event.deltaX * (page ? stage.clientWidth : line)
     camera.y += event.deltaY * (page ? stage.clientHeight : line)
     schedule()

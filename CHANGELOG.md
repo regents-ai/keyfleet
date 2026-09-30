@@ -548,3 +548,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The About page opens with what a keyfleet is made of and what each key gives:
   group chat and DMs, shared work documents, and a vote over a treasury that
   shares its stablecoin income automatically.
+
+## 2026-09-30 — The key map: clearer dark keys, an opening view of Classic, and "Available"
+
+- In the dark theme, unsold keys now stand out from the background with a
+  visible edge, and their numbers are easy to read. The light theme is as it
+  was, and the key on sale keeps its orange outline.
+- The key on sale is now labelled "Available", and the button that brings it
+  back into view is "Available key".
+- The map centres keys in the part of it left open by the side panels, such
+  as "What's happening", on every fleet.
+- Keyfleet Classic opens on its whole pyramid, then zooms in to the available
+  key over about two seconds. Anyone who asked for less motion lands straight
+  on the key, and any drag, scroll, click, touch or key press stops the zoom at
+  once.
+- Pointing at a key that can't be bought yet, or reaching it with the arrow
+  keys, shows a small note: "The preceding key must be sold." Keys already
+  sold and the available key show none, and the note never gets in the way of
+  moving the map.

@@ -3,6 +3,7 @@ import {describe, expect, it} from "vitest"
 import {buildMap, type KeyMapGrid} from "../js/hooks/key_map/layouts"
 import {
   applyPatch,
+  availableKey,
   decodeSnapshot,
   describeKey,
   drawnKeys,
@@ -14,7 +15,6 @@ import {
   levelTone,
   lastChoosable,
   nextHeldKey,
-  nextKey,
   onSaleLevel,
   type KeyMapState,
 } from "../js/hooks/key_map/state"
@@ -109,7 +109,7 @@ describe("key map controls", () => {
     expect(nextHeldKey(accelerant(20, bits()), 7)).toBe(0)
   })
 
-  it("never goes to a key of yours past the next key", () => {
+  it("never goes to a key of yours past the available key", () => {
     expect(nextHeldKey(accelerant(20, bits(30)), 0)).toBe(0)
   })
 })
@@ -122,7 +122,7 @@ describe("key map levels", () => {
   })
 
   // Level 7 is keys 53 to 86 and level 8 keys 87 to 141.
-  it("sells the level of the next key, and moves on when that level sells out", () => {
+  it("sells the level of the available key, and moves on when that level sells out", () => {
     const grid = buildMap("fibonacci", drawnKeys("fibonacci", fibonacci(141)))
     expect(onSaleLevel(grid, fibonacci(60))).toBe(7)
     expect(onSaleLevel(grid, fibonacci(85))).toBe(7)
@@ -158,16 +158,16 @@ describe("key map levels", () => {
   })
 
   it("never runs out of keys to sell in a fleet whose levels keep opening", () => {
-    expect(nextKey(fibonacci(46_365))).toBe(46_366)
+    expect(availableKey(fibonacci(46_365))).toBe(46_366)
     expect(lastChoosable(fibonacci(46_365))).toBe(46_366)
-    expect(nextKey(accelerant(2_000, bits()))).toBe(0)
+    expect(availableKey(accelerant(2_000, bits()))).toBe(0)
     expect(lastChoosable(accelerant(2_000, bits()))).toBe(2_000)
   })
 
-  it("marks keys not sold yet, other than the next, and says so", () => {
+  it("marks keys not sold yet, other than the available one, and says so", () => {
     const state = fibonacci(60)
     const grid = buildMap("fibonacci", drawnKeys("fibonacci", state))
-    expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "next", "unsold", "unsold"])
+    expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "available", "unsold", "unsold"])
     expect(describeKey(grid, state, 80)).toBe("Key 80, level 7, not sold yet.")
   })
 

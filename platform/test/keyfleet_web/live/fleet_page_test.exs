@@ -555,14 +555,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # Level 9 holds key 151, the next on sale, so the map draws levels 1 to 9.
-    test "offers the next key, the viewer's keys and each level the map draws", %{
+    test "offers the available key, the viewer's keys and each level the map draws", %{
       conn: conn
     } do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(view, "#key-map-next", "Next key")
+      assert has_element?(view, "#key-map-available", "Available key")
       assert has_element?(view, "#key-map-mine", "Your keys")
 
       assert option_values(view, "#key-map-level-choice option") ==
