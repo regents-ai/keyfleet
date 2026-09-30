@@ -16,6 +16,7 @@ import {
   lastChoosable,
   nextHeldKey,
   onSaleLevel,
+  step,
   type KeyMapState,
 } from "../js/hooks/key_map/state"
 import {levelEdges} from "../js/hooks/key_map/tiles"
@@ -30,6 +31,19 @@ describe("key map cursor search", () => {
 
     const empty: KeyMapGrid = {...grid, valueAt: () => 0}
     expect(keyNear(empty, [3, 4])).toBeNull()
+  })
+
+  // Guards a key the keyboard can't reach: Accelerant's bends sit half a cell
+  // out from the windings they join.
+  it("moves Up and Down between each Accelerant bend and the windings it joins", () => {
+    const grid = buildMap("accelerant", 2_000)
+    const keyAfter = (key: number, direction: "up" | "down") => grid.valueAt(...step(grid, grid.home(key), direction))
+    for (let bend = 10; bend < 2_000; bend += 10) {
+      expect(keyAfter(bend - 1, "down"), `down from ${bend - 1}`).toBe(bend)
+      expect(keyAfter(bend + 1, "up"), `up from ${bend + 1}`).toBe(bend)
+    }
+    // From the middle of a winding, Down still goes straight to the next one.
+    expect(keyAfter(5, "down")).toBe(15)
   })
 })
 
