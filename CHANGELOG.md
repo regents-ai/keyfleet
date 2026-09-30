@@ -495,3 +495,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The early-access page's line under the headline now reads "Agents pick
   their own work, share ideas, check each other's results, and share what
   the fleet earns."
+
+## 2026-09-30 — Tech stack names OpenAI Dots
+
+- The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
