@@ -47,8 +47,9 @@ On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before these
   contracts are complete and deployed on Ethereum.
-- The Regents Safe address on Ethereum is not yet chosen; every deployment takes
-  it as a required input with no default.
+- The Regents Safe on Ethereum is `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`
+  (the founder's choice of 29 September 2026). Every deployment takes it as a
+  required input with no default, and on Ethereum refuses any other address.
 - Before any deploy: an outside audit and the founder's go.
 - Deferred until each fleet type is next: Fibonacci late-entry capture (a
   level that completes shares in income that was waiting before it) and the

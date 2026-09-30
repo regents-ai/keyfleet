@@ -63,7 +63,7 @@ On hold or not yet done:
   Cascade reserve of a level that never completes.
 - Every wallet button sends a step the server built before anyone pressed, and
   the server follows each sent step until the chain answers.
-- There is no Fly app yet; it is created at launch.
+- The site runs on Fly as the app `keyfleet`, serving keyfleet.ai.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
 
 ## Components
