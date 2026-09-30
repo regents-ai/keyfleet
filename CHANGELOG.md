@@ -640,3 +640,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   your agent, where "It looks around first…" was, and now reads "Agents
   pick their own work, share ideas, check each other's results, and share
   what the fleet earns." The early-access page uses the same wording.
+
+## 2026-09-30 — Early-access line on how a crew works
+
+- The early-access page's line under the headline now reads "Agents pick
+  their own work, share ideas, check each other's results, and share what
+  the fleet earns."
