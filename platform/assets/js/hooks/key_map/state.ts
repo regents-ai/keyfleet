@@ -174,13 +174,21 @@ const isKey = (grid: KeyMapGrid, cell: Cell) => grid.valueAt(...cell) > 0
 
 /**
  * The next key from `cell` in a direction, skipping empty cells. Left and right
- * follow the row; up and down keep the offset column. The map repeats, so the
- * walk always comes back round to a key.
+ * follow the row; up and down keep the offset column, and take the other key
+ * touching `cell` in the next row when that column is empty there, so a key
+ * half a cell out, as Accelerant's bends are, is reached. The map repeats, so
+ * the walk always comes back round to a key.
  */
 export function step(grid: KeyMapGrid, cell: Cell, direction: Direction): Cell {
   const horizontal = direction === "left" || direction === "right"
   const delta = direction === "left" || direction === "up" ? -1 : 1
   const [col, row] = axialToOffset(...cell)
+  if (!horizontal) {
+    // In odd-r offset, a cell touches columns col - 1 and col of the next row
+    // from an even row, and col and col + 1 from an odd one.
+    const touching = offsetToAxial(row % 2 === 0 ? col - 1 : col + 1, row + delta)
+    if (!isKey(grid, offsetToAxial(col, row + delta)) && isKey(grid, touching)) return touching
+  }
   const limit = horizontal ? Math.abs(grid.periodA[0]) : 2 * Math.abs(grid.periodB[1])
   for (let distance = 1; distance <= limit; distance++) {
     const next = horizontal ? ([cell[0] + delta * distance, cell[1]] as const) : offsetToAxial(col, row + delta * distance)

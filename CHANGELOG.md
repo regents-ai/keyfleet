@@ -597,3 +597,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the home page all show the chain. The home picture shows the chain's whole
   width and four runs with their corners.
 - Classic's pyramid and the two Fibonacci fleets look as they did.
+- The Up and Down arrow keys reach every corner key. When the key straight
+  above or below is empty, they step to the other key touching the one you
+  are on, on every fleet's map.
