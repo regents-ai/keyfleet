@@ -35,9 +35,9 @@
   overflow-wrap: normal;
 }
 
-/* A long link or code in a table, such as an address, breaks anywhere so the
-   table fits a phone. */
-.public-document td :is(a, code) {
+/* A long value in a table's last column, such as an address, breaks anywhere
+   so the table fits a phone. */
+.public-document td:last-child {
   overflow-wrap: anywhere;
 }
 
