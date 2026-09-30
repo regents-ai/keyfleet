@@ -476,3 +476,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Production had no rows in either table.
 - The contracts' local lab script is now `AnvilLab.s.sol`, and the GitHub
   workflow is gone; every check runs locally with `make check`.
+
+## 2026-09-29 — A press made as the wallet switches still sends
+
+- Buy, Claim and Try again read the chain before their steps are ready. A
+  press made while those steps were still being read, as just after the
+  wallet switched, sent nothing. The press now waits for its steps, read
+  there and then, and reaches the wallet.

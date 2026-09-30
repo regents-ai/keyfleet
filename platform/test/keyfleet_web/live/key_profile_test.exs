@@ -275,6 +275,35 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
                  "random draw was turned down. Anyone can ask again."
     end
 
+    test "Try again pressed as the wallet becomes active is answered with its step",
+         %{conn: conn} do
+      signer = wallet("f")
+      draw_answer(0)
+
+      {:ok, view, _html} = conn |> signed_in_as(signer) |> live(@path <> "?key=12")
+      render_async(view)
+      panel = with_target(view, "#key-profile-reveal-action")
+
+      # The press reaches the server while the steps for the new wallet are
+      # still being read: the first read from now on takes its time.
+      reads = :atomics.new(1, [])
+      seed = Call.encode("revealSeed(uint256)", [12])
+
+      rewards_answer(fn
+        _to, ^seed, _hash ->
+          if :atomics.add_get(reads, 1, 1) == 1, do: Process.sleep(2_000)
+          {:ok, <<0::256>>}
+
+        _to, _data, _hash ->
+          {:ok, <<0::256>>}
+      end)
+
+      render_hook(panel, "onchain_active_wallet", %{"address" => signer})
+      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
+
+      assert_reply(view, %{send: "reveal", review: %{signer: ^signer, steps: [%{step: "reveal"}]}})
+    end
+
     test "a request that was accepted says the draw is on its way", %{conn: conn} do
       draw_answer(1_800_000_000)
 

@@ -106,10 +106,11 @@ defmodule KeyfleetWeb.WalletPanel do
 
   # A press made before its step reached the page, or before the steps caught
   # up with the form: the form is taken as the page's own, and the reply
-  # carries the steps built from it.
+  # carries the steps built from it, read now even where the chain is read,
+  # so the press never waits on steps still being read elsewhere.
   def handle_event("prepare_and_send", %{"form" => form, "step" => step}, socket)
       when is_map(form) and is_binary(step) do
-    socket = socket |> take_inputs(form) |> sync()
+    socket = socket |> take_inputs(form) |> sync_now()
 
     case socket.assigns.review do
       %{} = review -> {:reply, %{review: review, send: step}, socket}
@@ -174,9 +175,24 @@ defmodule KeyfleetWeb.WalletPanel do
   # are built for that wallet, or for the account's own while another is
   # active; the page is given steps only for the wallet that may send them.
   defp sync(socket) do
+    {socket, figures_wallet} = follow_signer(socket)
+    build(socket, figures_wallet)
+  end
+
+  # As `sync/1`, but built before it returns. A build still being read lands
+  # later with the same steps, and the page keeps every review a press was
+  # sent from.
+  defp sync_now(socket) do
+    {socket, figures_wallet} = follow_signer(socket)
+
+    if figures_wallet,
+      do: show(socket, build_steps!(request(socket, figures_wallet))),
+      else: build(socket, nil)
+  end
+
+  defp follow_signer(socket) do
     linked = linked(socket)
     signer = OnchainSteps.signer(linked, socket.assigns.active)
-    figures_wallet = signer || List.first(linked || [])
 
     socket =
       socket
@@ -186,7 +202,7 @@ defmodule KeyfleetWeb.WalletPanel do
       )
       |> drop_other_signer(signer)
 
-    build(socket, figures_wallet)
+    {socket, signer || List.first(linked || [])}
   end
 
   # Steps built for a wallet that may no longer send leave the page at once,
