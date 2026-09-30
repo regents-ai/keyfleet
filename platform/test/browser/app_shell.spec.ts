@@ -424,6 +424,60 @@ for (const device of ["dark", "light"] as const) {
   })
 }
 
+// The theme button is a small prism beside the X and GitHub icons, with no cell
+// or rule of its own, 16px from the icons as they are from each other. Pointing
+// at it shows the other theme's laser. On a phone the icons move to the footer.
+for (const [layout, viewport] of [
+  ["desktop", {width: 1280, height: 800}],
+  ["phone", {width: 375, height: 812}],
+] as const) {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`${layout} ${scheme} header: the prism sits beside the icons`, async ({page}) => {
+      await page.setViewportSize(viewport)
+      // Reduced motion turns off the colour fade, so each colour read is final.
+      await page.emulateMedia({colorScheme: scheme, reducedMotion: "reduce"})
+      await page.goto("/account")
+      await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+
+      const toggle = page.locator("#theme-control [data-theme-toggle]")
+      const stage = toggle.locator(".theme-toggle__stage")
+      const laser = toggle.locator(".theme-toggle__laser")
+      const box = (await stage.boundingBox())!
+      expect(box.width).toBeCloseTo(28, 0)
+      expect(box.height).toBeCloseTo(28, 0)
+      expect(await toggle.evaluate(button => getComputedStyle(button).borderInlineStartWidth)).toBe("0px")
+
+      const icons = page.locator("#shell-header .rl-header-links svg")
+      if (layout === "desktop") {
+        const [x, github] = [(await icons.nth(0).boundingBox())!, (await icons.nth(1).boundingBox())!]
+        for (const icon of [x, github]) {
+          expect(icon.width).toBeCloseTo(24, 0)
+          expect(icon.height).toBeCloseTo(24, 0)
+        }
+        expect(x.x - (box.x + box.width)).toBeCloseTo(16, 0)
+        expect(github.x - (x.x + x.width)).toBeCloseTo(16, 0)
+      } else {
+        await expect(icons.first()).toBeHidden()
+      }
+
+      const other = scheme === "light" ? "dark" : "light"
+      const laserColour = () => laser.evaluate(element => getComputedStyle(element).backgroundColor)
+      const stageColour = () => stage.evaluate(element => getComputedStyle(element).backgroundColor)
+      const [resting, restingStage] = [await laserColour(), await stageColour()]
+      await toggle.hover()
+      await expect.poll(laserColour).not.toBe(resting)
+      await expect.poll(stageColour).not.toBe(restingStage)
+      const pointed = await laserColour()
+      await page.mouse.move(0, viewport.height - 1)
+      await expect.poll(laserColour).toBe(resting)
+      await page.emulateMedia({colorScheme: other})
+      await expect.poll(laserColour).toBe(pointed)
+
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+    })
+  }
+}
+
 for (const width of [320, 390]) {
   test(`${width}px drawer contains focus and cleans up every close path`, async ({page}) => {
     await page.setViewportSize({width, height: 720})
