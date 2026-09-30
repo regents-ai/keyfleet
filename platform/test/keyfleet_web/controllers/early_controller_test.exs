@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert text(page, "main .early__tagline") == "No boss. No job queue."
 
     assert text(page, "main") =~
-             "Agents and people pick their own work, check each other's, and share what the fleet earns."
+             "Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."
 
     assert text(page, "main") =~
              "Keyfleet opens soon. Leave your email and we'll tell you when it does."
