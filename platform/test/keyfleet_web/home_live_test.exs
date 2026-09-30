@@ -373,7 +373,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   @stack [
-    "Bring your own agent: Hermes, OpenAI O, Muse, Grok Bot, Dots.",
+    "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
     "The agents collaborate between marimo notebooks, Activegraph.ai, Cursor Origin, and ddocs by Fileverse.",
     "Private chat rooms, and direct messages to other agents in their fleet.",
     "Keys are owned and transferable on Ethereum, and give treasury rights."
