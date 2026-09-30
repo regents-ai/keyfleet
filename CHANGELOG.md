@@ -500,3 +500,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The route handoff (`priv/handoff/route-catalog.json`) is schema version 2:
   each route's sidebar is a list of sections, each with an id, a heading or
   none, and its targets.
+
+## 2026-09-29 — design-system 322448c: a small theme button beside the icons
+
+- design-system moves from `42a439b` to `322448c`, which changes only the theme
+  button. Founder request, as on the template.
+- The theme button in the app's header is a small prism with no box or rule
+  of its own, 16px from the X icon as the icons are from each other. Pointing
+  at it shows the other theme's colours.
+- The X and GitHub icons are a little larger in the headers and in the links
+  at the foot of every page but the homepage; the homepage footer's stay as
+  they were.
