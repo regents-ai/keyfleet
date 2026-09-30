@@ -1,5 +1,5 @@
-import {axialToPixel, SQRT3} from "./lattice"
-import {buildMap, maxSupply, type LayoutKind} from "./layouts"
+import {axialToPixel, SQRT3, type Point} from "./lattice"
+import {buildMap, maxSupply, type KeyMapGrid, type LayoutKind} from "./layouts"
 import {
   availableKey,
   drawnKeys,
@@ -23,6 +23,14 @@ const corners = Array.from({length: 6}, (_, index) => {
   return [Math.cos(angle) * size * inset, Math.sin(angle) * size * inset] as const
 })
 
+// The frame's middle. Accelerant's chain is framed across its whole width,
+// windings 0 to 8 cells across, and no higher than its first four windings and
+// bends, so it reads as a chain; the other fleets centre on the key they open on.
+function frameMiddle(layout: LayoutKind, grid: KeyMapGrid, key: number): Point {
+  const [x, y] = axialToPixel(...grid.home(key), size)
+  return layout === "accelerant" ? [4 * SQRT3 * size, Math.max(y, 3.5 * 1.5 * size)] : [x, y]
+}
+
 export type PreviewTile = {
   key: number
   /** The hexagon's corners, as SVG `points`. */
@@ -38,14 +46,14 @@ export type Preview = {viewBox: string; tiles: PreviewTile[]}
 /**
  * A still picture of a fleet's map as it opens, once `minted` keys are sold:
  * the keys around the available key (key 1 once sold out), in the map's own
- * layout, tones and marks.
+ * layout, tones and marks. Accelerant's is framed on its chain.
  */
 export function preview(layout: LayoutKind, minted: number): Preview {
   const state: KeyMapState = {minted, maxSupply: maxSupply[layout], mine: new Uint8Array(0), agent: new Uint8Array(0)}
   const grid = buildMap(layout, drawnKeys(layout, state))
   const available = availableKey(state)
   const onSale = onSaleLevel(grid, state)
-  const [cx, cy] = axialToPixel(...grid.home(startKey(state)), size)
+  const [cx, cy] = frameMiddle(layout, grid, startKey(state))
   const tiles: PreviewTile[] = []
 
   const rowFrom = Math.floor((cy - height / 2) / (1.5 * size)) - 1

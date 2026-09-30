@@ -586,3 +586,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   whole pyramid and stays there. Once it grows larger, the map opens on the
   whole pyramid and zooms in to the available key, as before.
 - The How it works page opens with the same line as the About page.
+
+## 2026-09-30 — Keyfleet Accelerant's map is a chain
+
+- Accelerant's 2,000 keys now form a chain instead of a solid block. Nine keys
+  run straight across, then one key turns the corner in the empty row below,
+  and the next nine run back the other way, and so on down the map. Every key
+  sits beside the key before it.
+- The fleet page's map, the key map workshop and Accelerant's small picture on
+  the home page all show the chain. The home picture shows the chain's whole
+  width and four runs with their corners.
+- Classic's pyramid and the two Fibonacci fleets look as they did.

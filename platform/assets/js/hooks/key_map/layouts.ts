@@ -29,7 +29,8 @@ const gutter = 22
 // Level 8's 55 keys make one 28 + 27 band; every later level repeats it.
 const wideRow = 28
 const narrowRow = 27
-const snakeWidth = 5
+// Accelerant's chain: windings of nine keys, each followed by one bend key.
+const windingLength = 9
 const classicSupply = 1_024
 const accelerantSupply = 2_000
 
@@ -116,13 +117,20 @@ const fibonacciSeats = (count: number) => {
   })
 }
 
-// Rows of five in a snake, so every key is a neighbour of the one before it.
+// A chain, starting at the top: windings of nine keys straight across, each
+// followed by one bend key alone in the blank row below it, half a cell out
+// past the winding's last key. The windings run left to right and right to
+// left in turn, so every key is a neighbour of the one before it. In odd-r
+// offset columns a winding spans 0 to 8 and a bend sits at 8 on the right or
+// −1 on the left.
 const accelerantSeats = () =>
   seatTable(accelerantSupply, push => {
     for (let index = 0; index < accelerantSupply; index++) {
-      const row = Math.floor(index / snakeWidth)
-      const k = index % snakeWidth
-      push(row % 2 === 0 ? k : snakeWidth - 1 - k, row, 0)
+      const winding = Math.floor(index / (windingLength + 1))
+      const k = index % (windingLength + 1)
+      const rightward = winding % 2 === 0
+      if (k === windingLength) push(rightward ? windingLength - 1 : -1, 2 * winding + 1, 0)
+      else push(rightward ? k : windingLength - 1 - k, 2 * winding, 0)
     }
   })
 
