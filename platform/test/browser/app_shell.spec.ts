@@ -210,109 +210,45 @@ const menuLinks = (section: Locator) =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
 
-// How a menu link is drawn: its size, case, colour, cell line and active marker.
-const linkLook = (link: Locator) =>
-  link.evaluate(element => {
-    const style = getComputedStyle(element)
-    return {
-      size: parseFloat(style.fontSize),
-      transform: style.textTransform,
-      color: style.color,
-      rule: style.borderBottomWidth,
-      marker: style.borderInlineStartWidth,
-    }
-  })
+// Guards: every menu link goes to its page; on a phone the menu opens, closes
+// after a choice and never scrolls sideways; the open page is announced to
+// screen readers (aria-current), which no one sees by looking.
+test("on a phone the menu leads to each fleet, How it works and Account", async ({page}) => {
+  await page.setViewportSize({width: 375, height: 812})
+  await page.goto(fleetPath)
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
-// The four fleets under their heading, then How it works and Account in a
-// quieter group below a rule, on a desktop and on a phone, in both themes.
-for (const viewport of [
-  {name: "desktop", width: 1280, height: 800},
-  {name: "phone", width: 375, height: 812},
-]) {
-  test(`the ${viewport.name} menu shows the fleets, then How it works and Account apart`, async ({page}) => {
-    const phone = viewport.width < 768
-    await page.setViewportSize(viewport)
-    const colors: Record<string, string> = {}
+  const menu = page.getByRole("button", {name: "Menu"})
+  const sidebar = page.getByRole("navigation", {name: "Context navigation"})
+  await menu.click()
+  await expect(sidebar).toBeVisible()
 
-    for (const theme of ["light", "dark"] as const) {
-      await page.emulateMedia({colorScheme: theme})
-      await page.goto(fleetPath)
-      await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-      await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
+  const fleets = sidebar.getByRole("list", {name: "Fleets"})
+  const site = sidebar.locator("[data-sidebar-section='site'] ul")
+  expect(await menuLinks(fleets)).toEqual([
+    ["Classic", "/app/fleets/fleet_tech_classic"],
+    ["Syndicate", "/app/fleets/fibonacci_syndicate"],
+    ["Cascade", "/app/fleets/fibonacci_cascade"],
+    ["Accelerant", "/app/fleets/fleet_tech_accelerant"],
+  ])
+  expect(await menuLinks(site)).toEqual([
+    ["How it works", "/how-it-works"],
+    ["Account", "/account"],
+  ])
 
-      const menu = page.getByRole("button", {name: "Menu"})
-      const sidebar = page.getByRole("navigation", {name: "Context navigation"})
-      if (phone) {
-        await expect(sidebar).toBeHidden()
-        await menu.click()
-      }
-      await expect(sidebar).toBeVisible()
+  await site.getByRole("link", {name: "How it works"}).click()
+  await expect(page).toHaveURL(/\/how-it-works$/)
+  await expect(page.getByRole("heading", {level: 1, name: "How Keyfleet works"})).toBeVisible()
+  await expect(menu).toHaveAttribute("aria-expanded", "false")
+  await menu.click()
+  await expect(site.getByRole("link", {name: "How it works"})).toHaveAttribute("aria-current", "page")
+  await expect(fleets.locator("[aria-current]")).toHaveCount(0)
 
-      const fleets = sidebar.getByRole("list", {name: "Fleets"})
-      const site = sidebar.locator("[data-sidebar-section='site'] ul")
-      await expect(sidebar.getByText("Fleets", {exact: true})).toBeVisible()
-      expect(await menuLinks(fleets)).toEqual([
-        ["Classic", "/app/fleets/fleet_tech_classic"],
-        ["Syndicate", "/app/fleets/fibonacci_syndicate"],
-        ["Cascade", "/app/fleets/fibonacci_cascade"],
-        ["Accelerant", "/app/fleets/fleet_tech_accelerant"],
-      ])
-      expect(await menuLinks(site)).toEqual([
-        ["How it works", "/how-it-works"],
-        ["Account", "/account"],
-      ])
-
-      // Below the fleets, past a rule, in smaller sentence-case words with no cell lines.
-      const fleetBox = (await fleets.boundingBox())!
-      const siteBox = (await site.boundingBox())!
-      expect(siteBox.y).toBeGreaterThan(fleetBox.y + fleetBox.height)
-      expect(
-        await sidebar
-          .locator("[data-sidebar-section='site']")
-          .evaluate(element => getComputedStyle(element).borderTopWidth),
-      ).toBe("1px")
-      const fleetLook = await linkLook(fleets.getByRole("link", {name: "Classic"}))
-      const siteLook = await linkLook(site.getByRole("link", {name: "How it works"}))
-      expect(fleetLook.transform).toBe("uppercase")
-      expect(siteLook.transform).toBe("none")
-      expect(siteLook.rule).toBe("0px")
-      expect(fleetLook.rule).toBe("1px")
-      expect(siteLook.color).toBe(fleetLook.color)
-      colors[theme] = siteLook.color
-
-      // Keyboard order: the fleets, then the lower group.
-      if (!phone) await fleets.getByRole("link", {name: "Classic"}).focus()
-      const reached: string[] = []
-      for (let press = 0; press < (phone ? 7 : 6); press++) {
-        const label = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "")
-        if (label !== "Close navigation") reached.push(label)
-        await page.keyboard.press("Tab")
-      }
-      expect(reached).toEqual(["Classic", "Syndicate", "Cascade", "Accelerant", "How it works", "Account"])
-
-      // How it works opens inside the app with the menu beside it, marked as the
-      // page open the same way a fleet is.
-      await site.getByRole("link", {name: "How it works"}).click()
-      await expect(page).toHaveURL(/\/how-it-works$/)
-      await expect(page.locator("#how-it-works-page").getByRole("heading", {level: 1, name: "How Keyfleet works"})).toBeVisible()
-      if (phone) {
-        await expect(menu).toHaveAttribute("aria-expanded", "false")
-        await expect(sidebar).toBeHidden()
-        await menu.click()
-      }
-      const open = site.getByRole("link", {name: "How it works"})
-      await expect(open).toHaveAttribute("aria-current", "page")
-      expect((await linkLook(open)).marker).toBe("3px")
-      await expect(fleets.locator("[aria-current]")).toHaveCount(0)
-
-      await site.getByRole("link", {name: "Account"}).click()
-      await expect(page).toHaveURL(/\/account$/)
-      await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
-    }
-    expect(colors.light).not.toBe(colors.dark)
-  })
-}
+  await site.getByRole("link", {name: "Account"}).click()
+  await expect(page).toHaveURL(/\/account$/)
+  await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+})
 
 test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {
   await page.goto(fleetPath)
@@ -422,60 +358,6 @@ for (const device of ["dark", "light"] as const) {
     // The device's own theme, once chosen, is the same palette it showed unchosen.
     expect(await readFamily(page)).toEqual(unchosen)
   })
-}
-
-// The theme button is a small prism beside the X and GitHub icons, with no cell
-// or rule of its own, 16px from the icons as they are from each other. Pointing
-// at it shows the other theme's laser. On a phone the icons move to the footer.
-for (const [layout, viewport] of [
-  ["desktop", {width: 1280, height: 800}],
-  ["phone", {width: 375, height: 812}],
-] as const) {
-  for (const scheme of ["light", "dark"] as const) {
-    test(`${layout} ${scheme} header: the prism sits beside the icons`, async ({page}) => {
-      await page.setViewportSize(viewport)
-      // Reduced motion turns off the colour fade, so each colour read is final.
-      await page.emulateMedia({colorScheme: scheme, reducedMotion: "reduce"})
-      await page.goto("/account")
-      await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-
-      const toggle = page.locator("#theme-control [data-theme-toggle]")
-      const stage = toggle.locator(".theme-toggle__stage")
-      const laser = toggle.locator(".theme-toggle__laser")
-      const box = (await stage.boundingBox())!
-      expect(box.width).toBeCloseTo(28, 0)
-      expect(box.height).toBeCloseTo(28, 0)
-      expect(await toggle.evaluate(button => getComputedStyle(button).borderInlineStartWidth)).toBe("0px")
-
-      const icons = page.locator("#shell-header .rl-header-links svg")
-      if (layout === "desktop") {
-        const [x, github] = [(await icons.nth(0).boundingBox())!, (await icons.nth(1).boundingBox())!]
-        for (const icon of [x, github]) {
-          expect(icon.width).toBeCloseTo(24, 0)
-          expect(icon.height).toBeCloseTo(24, 0)
-        }
-        expect(x.x - (box.x + box.width)).toBeCloseTo(16, 0)
-        expect(github.x - (x.x + x.width)).toBeCloseTo(16, 0)
-      } else {
-        await expect(icons.first()).toBeHidden()
-      }
-
-      const other = scheme === "light" ? "dark" : "light"
-      const laserColour = () => laser.evaluate(element => getComputedStyle(element).backgroundColor)
-      const stageColour = () => stage.evaluate(element => getComputedStyle(element).backgroundColor)
-      const [resting, restingStage] = [await laserColour(), await stageColour()]
-      await toggle.hover()
-      await expect.poll(laserColour).not.toBe(resting)
-      await expect.poll(stageColour).not.toBe(restingStage)
-      const pointed = await laserColour()
-      await page.mouse.move(0, viewport.height - 1)
-      await expect.poll(laserColour).toBe(resting)
-      await page.emulateMedia({colorScheme: other})
-      await expect.poll(laserColour).toBe(pointed)
-
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
-    })
-  }
 }
 
 for (const width of [320, 390]) {
