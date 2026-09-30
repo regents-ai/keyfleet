@@ -85,6 +85,7 @@ const plan: Stop = {path: planPath, shows: "#workspace-item-page"}
 const proposals: Stop = {path: `${fleetPath}/proposals`, shows: "#proposals-page"}
 const proposal: Stop = {path: `${fleetPath}/proposals/1`, shows: "#proposal-page"}
 const account: Stop = {path: "/account", shows: "#account-page"}
+const howItWorks: Stop = {path: "/how-it-works", shows: "#how-it-works-page"}
 
 test("the walk from home through every page, back, forward and the sidebar keeps one shell", async ({page}) => {
   const sidebar = page.locator("#shell-sidebar")
@@ -121,12 +122,13 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     await walk.arrive(visited[visited.length - 1 - back])
   }
 
-  // The sidebar's links: this fleet, another fleet, and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Keyfleet Syndicate"}), fleetPage)
-  await walk.follow(sidebar.getByRole("link", {name: "Keyfleet Classic"}), {
+  // The sidebar's links: this fleet, another fleet, How it works and the Account page.
+  await walk.follow(sidebar.getByRole("link", {name: "Syndicate"}), fleetPage)
+  await walk.follow(sidebar.getByRole("link", {name: "Classic"}), {
     path: "/app/fleets/fleet_tech_classic",
     shows: "#fleet-view",
   })
+  await walk.follow(sidebar.getByRole("link", {name: "How it works"}), howItWorks)
   await walk.follow(sidebar.getByRole("link", {name: "Account"}), account)
 
   await walk.settled()
@@ -135,7 +137,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
 test("the links between a fleet's pages each patch the open page", async ({page}) => {
   await page.goto(fleetPath)
   const walk = await enterShell(page)
-  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Keyfleet Syndicate"}), fleetPage)
+  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Syndicate"}), fleetPage)
 
   // The fleet's rooms, workspace and proposals.
   await page.locator("#fleet-rooms-toggle").click()

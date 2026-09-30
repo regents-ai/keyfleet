@@ -2,11 +2,12 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   use ExUnit.Case, async: true
 
   alias KeyfleetWeb.{RouteCatalog, Router}
-  alias KeyfleetWeb.RouteCatalog.RouteTarget
+  alias KeyfleetWeb.RouteCatalog.{RouteTarget, SidebarModel, SidebarSection}
 
   @paths [
     "/",
     "/account",
+    "/how-it-works",
     "/app/fleets/:fleet_id",
     "/app/keys/:fleet_id/:token_id",
     "/app/fleets/:fleet_id/rooms/:slug",
@@ -55,7 +56,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert home.header_controls == []
     assert home.background_slot == :home
     assert home.sidebar_model.id == :public
-    assert home.sidebar_model.targets == []
+    assert home.sidebar_model.sections == []
   end
 
   test "one key's page names the key it was asked for" do
@@ -146,33 +147,50 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.local_state == %{}
   end
 
-  test "the product sidebar lists the four fleets, Classic first, and Account on every product route" do
+  test "the product sidebar lists the four fleets, Classic first, then How it works and Account, on every product route" do
     for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
       assert RouteCatalog.fetch!(entry.live_action, sample_params(entry)).sidebar_model ==
-               %RouteCatalog.SidebarModel{
+               %SidebarModel{
                  id: :product,
-                 targets: [
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Keyfleet Classic",
-                     path: "/app/fleets/fleet_tech_classic"
+                 sections: [
+                   %SidebarSection{
+                     id: :fleets,
+                     heading: "Fleets",
+                     targets: [
+                       %RouteTarget{
+                         route_id: :fleet,
+                         label: "Classic",
+                         path: "/app/fleets/fleet_tech_classic"
+                       },
+                       %RouteTarget{
+                         route_id: :fleet,
+                         label: "Syndicate",
+                         path: "/app/fleets/fibonacci_syndicate"
+                       },
+                       %RouteTarget{
+                         route_id: :fleet,
+                         label: "Cascade",
+                         path: "/app/fleets/fibonacci_cascade"
+                       },
+                       %RouteTarget{
+                         route_id: :fleet,
+                         label: "Accelerant",
+                         path: "/app/fleets/fleet_tech_accelerant"
+                       }
+                     ]
                    },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Keyfleet Syndicate",
-                     path: "/app/fleets/fibonacci_syndicate"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Keyfleet Cascade",
-                     path: "/app/fleets/fibonacci_cascade"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Keyfleet Accelerant",
-                     path: "/app/fleets/fleet_tech_accelerant"
-                   },
-                   %RouteTarget{route_id: :account, label: "Account", path: "/account"}
+                   %SidebarSection{
+                     id: :site,
+                     heading: nil,
+                     targets: [
+                       %RouteTarget{
+                         route_id: :how_it_works,
+                         label: "How it works",
+                         path: "/how-it-works"
+                       },
+                       %RouteTarget{route_id: :account, label: "Account", path: "/account"}
+                     ]
+                   }
                  ]
                }
     end
@@ -207,11 +225,12 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 9
+    assert length(decoded["routes"]) == 10
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
              "account",
+             "how_it_works",
              "fleet",
              "keys",
              "rooms",
@@ -221,28 +240,28 @@ defmodule KeyfleetWeb.RouteCatalogTest do
              "proposal"
            ]
 
-    assert decoded["schema_version"] == 1
+    assert decoded["schema_version"] == 2
     assert first.digest == Base.encode16(:crypto.hash(:sha256, first.json), case: :lower)
 
-    targets =
-      decoded["routes"]
-      |> Enum.flat_map(& &1["sidebar_model"]["targets"])
+    sections = Enum.flat_map(decoded["routes"], & &1["sidebar_model"]["sections"])
+    assert sections != []
 
-    assert targets != []
+    assert Enum.all?(sections, fn
+             %{"id" => id, "heading" => heading, "targets" => [_ | _] = targets}
+             when is_binary(id) and (is_binary(heading) or is_nil(heading)) ->
+               Enum.all?(targets, fn
+                 %{"destination" => path, "route_id" => route_id, "label" => label} ->
+                   is_binary(path) and is_binary(route_id) and is_binary(label)
 
-    assert Enum.all?(targets, fn
-             %{"type" => "route", "destination" => path, "route_id" => route_id}
-             when is_binary(path) and is_binary(route_id) ->
-               true
+                 _target ->
+                   false
+               end)
 
-             %{"type" => "heading", "label" => label} when is_binary(label) ->
-               true
-
-             _target ->
+             _section ->
                false
            end)
 
-    assert %{"sidebar_model" => %{"targets" => []}} =
+    assert %{"sidebar_model" => %{"sections" => []}} =
              Enum.find(decoded["routes"], &(&1["route_id"] == "home"))
 
     assert %{"destination" => "/app/keys/:fleet_id/:token_id"} =

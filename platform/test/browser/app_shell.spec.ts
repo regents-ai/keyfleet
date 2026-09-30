@@ -1,4 +1,4 @@
-import {expect, test, type Page} from "@playwright/test"
+import {expect, test, type Locator, type Page} from "@playwright/test"
 import {
   installAuthenticatedPrivy,
   matchesAuthenticatedPrivyBridgeUrl,
@@ -205,28 +205,114 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await auth.expectCounts({documents: 2, sessionChecks: 2, syncs: 2})
 })
 
-test("the sidebar lists the four fleets, Classic first, then the Account page", async ({page}) => {
-  await page.goto(fleetPath)
-  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
-
-  const sidebar = page.locator("#shell-sidebar")
-  const links = await sidebar.locator("a[href^='/app/fleets/'], a[href='/account']").evaluateAll(elements =>
+const menuLinks = (section: Locator) =>
+  section.locator("a").evaluateAll(elements =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
-  expect(links).toEqual([
-    ["Keyfleet Classic", "/app/fleets/fleet_tech_classic"],
-    ["Keyfleet Syndicate", "/app/fleets/fibonacci_syndicate"],
-    ["Keyfleet Cascade", "/app/fleets/fibonacci_cascade"],
-    ["Keyfleet Accelerant", "/app/fleets/fleet_tech_accelerant"],
-    ["Account", "/account"],
-  ])
 
-  await sidebar.getByRole("link", {name: "Account"}).click()
-  await expect(page).toHaveURL(/\/account$/)
-  await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
-  await expect(page.getByRole("heading", {level: 2, name: "Sign in to see your account"})).toBeVisible()
-})
+// How a menu link is drawn: its size, case, colour, cell line and active marker.
+const linkLook = (link: Locator) =>
+  link.evaluate(element => {
+    const style = getComputedStyle(element)
+    return {
+      size: parseFloat(style.fontSize),
+      transform: style.textTransform,
+      color: style.color,
+      rule: style.borderBottomWidth,
+      marker: style.borderInlineStartWidth,
+    }
+  })
+
+// The four fleets under their heading, then How it works and Account in a
+// quieter group below a rule, on a desktop and on a phone, in both themes.
+for (const viewport of [
+  {name: "desktop", width: 1280, height: 800},
+  {name: "phone", width: 375, height: 812},
+]) {
+  test(`the ${viewport.name} menu shows the fleets, then How it works and Account apart`, async ({page}) => {
+    const phone = viewport.width < 768
+    await page.setViewportSize(viewport)
+    const colors: Record<string, string> = {}
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({colorScheme: theme})
+      await page.goto(fleetPath)
+      await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+      await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
+
+      const menu = page.getByRole("button", {name: "Menu"})
+      const sidebar = page.getByRole("navigation", {name: "Context navigation"})
+      if (phone) {
+        await expect(sidebar).toBeHidden()
+        await menu.click()
+      }
+      await expect(sidebar).toBeVisible()
+
+      const fleets = sidebar.getByRole("list", {name: "Fleets"})
+      const site = sidebar.locator("[data-sidebar-section='site'] ul")
+      await expect(sidebar.getByText("Fleets", {exact: true})).toBeVisible()
+      expect(await menuLinks(fleets)).toEqual([
+        ["Classic", "/app/fleets/fleet_tech_classic"],
+        ["Syndicate", "/app/fleets/fibonacci_syndicate"],
+        ["Cascade", "/app/fleets/fibonacci_cascade"],
+        ["Accelerant", "/app/fleets/fleet_tech_accelerant"],
+      ])
+      expect(await menuLinks(site)).toEqual([
+        ["How it works", "/how-it-works"],
+        ["Account", "/account"],
+      ])
+
+      // Below the fleets, past a rule, in smaller sentence-case words with no cell lines.
+      const fleetBox = (await fleets.boundingBox())!
+      const siteBox = (await site.boundingBox())!
+      expect(siteBox.y).toBeGreaterThan(fleetBox.y + fleetBox.height)
+      expect(
+        await sidebar
+          .locator("[data-sidebar-section='site']")
+          .evaluate(element => getComputedStyle(element).borderTopWidth),
+      ).toBe("1px")
+      const fleetLook = await linkLook(fleets.getByRole("link", {name: "Classic"}))
+      const siteLook = await linkLook(site.getByRole("link", {name: "How it works"}))
+      expect(fleetLook.transform).toBe("uppercase")
+      expect(siteLook.transform).toBe("none")
+      expect(siteLook.rule).toBe("0px")
+      expect(fleetLook.rule).toBe("1px")
+      expect(siteLook.color).toBe(fleetLook.color)
+      colors[theme] = siteLook.color
+
+      // Keyboard order: the fleets, then the lower group.
+      if (!phone) await fleets.getByRole("link", {name: "Classic"}).focus()
+      const reached: string[] = []
+      for (let press = 0; press < (phone ? 7 : 6); press++) {
+        const label = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "")
+        if (label !== "Close navigation") reached.push(label)
+        await page.keyboard.press("Tab")
+      }
+      expect(reached).toEqual(["Classic", "Syndicate", "Cascade", "Accelerant", "How it works", "Account"])
+
+      // How it works opens inside the app with the menu beside it, marked as the
+      // page open the same way a fleet is.
+      await site.getByRole("link", {name: "How it works"}).click()
+      await expect(page).toHaveURL(/\/how-it-works$/)
+      await expect(page.locator("#how-it-works-page").getByRole("heading", {level: 1, name: "How Keyfleet works"})).toBeVisible()
+      if (phone) {
+        await expect(menu).toHaveAttribute("aria-expanded", "false")
+        await expect(sidebar).toBeHidden()
+        await menu.click()
+      }
+      const open = site.getByRole("link", {name: "How it works"})
+      await expect(open).toHaveAttribute("aria-current", "page")
+      expect((await linkLook(open)).marker).toBe("3px")
+      await expect(fleets.locator("[aria-current]")).toHaveCount(0)
+
+      await site.getByRole("link", {name: "Account"}).click()
+      await expect(page).toHaveURL(/\/account$/)
+      await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+    }
+    expect(colors.light).not.toBe(colors.dark)
+  })
+}
 
 test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {
   await page.goto(fleetPath)

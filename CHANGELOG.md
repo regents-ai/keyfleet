@@ -483,3 +483,20 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   press made while those steps were still being read, as just after the
   wallet switched, sent nothing. The press now waits for its steps, read
   there and then, and reaches the wallet.
+
+## 2026-09-29 — The app's menu has a Fleets group and a quieter group below
+
+- The menu beside every page in the app lists the fleets as Classic,
+  Syndicate, Cascade and Accelerant under a small "Fleets" heading. Their
+  names everywhere else still begin with Keyfleet. Founder request.
+- Below the fleets, past a rule, a quieter group in smaller sentence-case
+  words holds a new How it works page and Account.
+- How it works (`/how-it-works`) is a short guide to fleets, keys, prices,
+  votes and money, then the steps for buying a key and for sending your
+  agent in, using the buttons' own names. Founder decision. It opens inside
+  the app with the menu beside it, and like About it answers
+  `Accept: text/markdown`, is in the sitemap, and is one of the browser
+  tools (`how_it_works`).
+- The route handoff (`priv/handoff/route-catalog.json`) is schema version 2:
+  each route's sidebar is a list of sections, each with an id, a heading or
+  none, and its targets.

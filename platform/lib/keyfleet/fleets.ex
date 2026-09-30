@@ -9,10 +9,30 @@ defmodule Keyfleet.Fleets do
   # by marking them `coming_soon?: false` here or by recording their
   # deployment.
   @catalog [
-    %{id: "fleet_tech_classic", name: "Keyfleet Classic", coming_soon?: false},
-    %{id: "fibonacci_syndicate", name: "Keyfleet Syndicate", coming_soon?: true},
-    %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon?: true},
-    %{id: "fleet_tech_accelerant", name: "Keyfleet Accelerant", coming_soon?: true}
+    %{
+      id: "fleet_tech_classic",
+      name: "Keyfleet Classic",
+      menu_label: "Classic",
+      coming_soon?: false
+    },
+    %{
+      id: "fibonacci_syndicate",
+      name: "Keyfleet Syndicate",
+      menu_label: "Syndicate",
+      coming_soon?: true
+    },
+    %{
+      id: "fibonacci_cascade",
+      name: "Keyfleet Cascade",
+      menu_label: "Cascade",
+      coming_soon?: true
+    },
+    %{
+      id: "fleet_tech_accelerant",
+      name: "Keyfleet Accelerant",
+      menu_label: "Accelerant",
+      coming_soon?: true
+    }
   ]
 
   resources do
@@ -25,9 +45,12 @@ defmodule Keyfleet.Fleets do
   end
 
   @doc """
-  The fixed catalog's fleets as `%{id: id, name: name, coming_soon?: marked}`,
-  in the order the site shows them. `coming_soon?` is the catalog's mark
-  alone; `coming_soon?/2` says whether a fleet is coming soon.
+  The fixed catalog's fleets as
+  `%{id: id, name: name, menu_label: label, coming_soon?: marked}`, in the
+  order the site shows them. `menu_label` is the fleet's name in the app's
+  menu, which lists the fleets under a "Fleets" heading. `coming_soon?` is
+  the catalog's mark alone; `coming_soon?/2` says whether a fleet is coming
+  soon.
   """
   def catalog, do: @catalog
 

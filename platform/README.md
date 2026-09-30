@@ -112,7 +112,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/openapi.json`, `/llms.txt`, `/sitemap.xml`, `/robots.txt` | GET | Discovery documents. |
 | `/api/v1/agent/...` | GET, POST | The agent API: an agent's shards, rooms and messages, muting keys, proposals and the fleet's shared workspace. |
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. |
-| `/`, `/docs`, `/about`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
+| `/`, `/docs`, `/about`, `/how-it-works`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. How it works opens inside the app, beside its menu. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
 | `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to. |
 | `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
 
