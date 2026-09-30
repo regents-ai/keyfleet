@@ -209,15 +209,18 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
   // Keyfleet Classic opens on its whole pyramid, every row drawn, fitted into
   // the uncovered part of the stage with half a cell to spare on every side
-  // and never drawn larger than normal, then zooms in to (x, y).
-  const zoomInFromWhole = (x: number, y: number) => {
+  // and never drawn larger than normal. A pyramid that fits at normal size
+  // stays there; a larger one zooms in to (x, y).
+  const openOnWhole = (x: number, y: number) => {
     let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity]
     for (let key = 1; key <= drawn(state!); key++) {
       const [px, py] = axialToPixel(...grid!.home(key), size)
       ;[minX, minY, maxX, maxY] = [Math.min(minX, px), Math.min(minY, py), Math.max(maxX, px), Math.max(maxY, py)]
     }
     const zoom = Math.min(1, across / (maxX - minX + 2 * SQRT3 * size), height / (maxY - minY + 2 * size + SQRT3 * size))
-    camera.zoomIn((minX + maxX) / 2, (minY + maxY) / 2, zoom, x, y)
+    const [middleX, middleY] = [(minX + maxX) / 2, (minY + maxY) / 2]
+    if (zoom === 1) camera.jumpTo(middleX, middleY)
+    else camera.zoomIn(middleX, middleY, zoom, x, y)
   }
 
   // The cursor goes to a key shown on the map, in the view's middle.
@@ -228,7 +231,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   // Draws `next`. The view stays on the keys it was showing: the camera is
   // held as an offset from the key nearest the middle, then restored from
   // that key's home cell. The first drawing opens on the chosen key, or else
-  // the available key; Classic's zooms in to it from the whole pyramid.
+  // the available key; Classic's opens on its whole pyramid.
   const show = (next: KeyMapState) => {
     const first = !grid
     const anchor = grid && keyNear(grid, centreCell())
@@ -242,7 +245,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     placedAt = ""
     const [x, y] = axialToPixel(...grid.home(key), size)
     if (kept) camera.shift(x - fromX, y - fromY)
-    else if (first && options.layout === "classic") zoomInFromWhole(x, y)
+    else if (first && options.layout === "classic") openOnWhole(x, y)
     else camera.jumpTo(x, y)
     cursor = cursorWas && cursorWas <= drawn(next) ? nearestCell(cursorWas) : null
     if (!cursor) status.textContent = ""

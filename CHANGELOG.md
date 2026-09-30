@@ -579,3 +579,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   take.
 - Unticked, buying works exactly as before.
 - The How it works page explains the box.
+
+## 2026-09-30 — Classic opens whole while it fits, and How it works opens like About
+
+- While Keyfleet Classic's pyramid fits at normal size, its map opens on the
+  whole pyramid and stays there. Once it grows larger, the map opens on the
+  whole pyramid and zooms in to the available key, as before.
+- The How it works page opens with the same line as the About page.
