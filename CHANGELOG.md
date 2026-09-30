@@ -529,3 +529,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The X and GitHub icons are a little larger in the headers and in the links
   at the foot of every page but the homepage; the homepage footer's stay as
   they were.
+
+## 2026-09-29 — Keyfleet Classic's map is a pyramid
+
+- Keyfleet Classic's keys now stand in a pyramid: key 1 on top, keys 2 and 3
+  below it, then 4, 5 and 6, and so on, each row one key longer and centred
+  under the one above. The 1,024 keys make 44 full rows and 34 keys of a 45th,
+  filled from the left.
+- The Classic map shows every row down to three rows below the row with the
+  key on sale, and the whole pyramid once every key is sold.
+- Every fleet's map now leaves a much wider empty space before it repeats in
+  each direction: 22 cells instead of 2.
+- The key map workshop page has a "Keys sold" box, to see a fleet's map at any
+  point in its sale.

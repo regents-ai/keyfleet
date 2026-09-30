@@ -25,7 +25,7 @@ export type KeyMapGrid = {
 }
 
 // Empty cells kept around the shown keys, so neighbouring copies stay apart.
-const gutter = 2
+const gutter = 22
 // Level 8's 55 keys make one 28 + 27 band; every later level repeats it.
 const wideRow = 28
 const narrowRow = 27
@@ -67,6 +67,12 @@ export function levelStart(level: number) {
 
 /** The last key of a Fibonacci level. */
 export const levelEnd = (level: number) => levelStart(level + 1) - 1
+
+/** The row of Classic's pyramid, from 1, that holds a key: row n holds n keys. */
+export const pyramidRowOf = (key: number) => Math.ceil((Math.sqrt(8 * key + 1) - 1) / 2)
+
+/** The last key of a row of Classic's pyramid. */
+export const pyramidRowEnd = (row: number) => (row * (row + 1)) / 2
 
 function seatTable(count: number, place: (push: (col: number, row: number, level: number) => void) => void): Seats {
   const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint16Array(count)}
@@ -120,21 +126,17 @@ const accelerantSeats = () =>
     }
   })
 
-// Axial rhombus shells: shell k is the far edge of a (k+1)×(k+1) rhombus, so
-// the fleet closes at exactly 32 × 32 = 1,024.
-const classicSeats = (): Seats => {
-  const count = classicSupply
-  const seats = {q: new Int32Array(count), r: new Int32Array(count), level: new Uint16Array(count)}
-  for (let key = 1; key <= count; key++) {
-    const shell = classicShell(key)
-    const i = key - 1 - shell * shell
-    seats.q[key - 1] = i <= shell ? shell : 2 * shell - i
-    seats.r[key - 1] = i <= shell ? i : shell
-  }
-  return seats
-}
-
-const classicShell = (key: number) => Math.ceil(Math.sqrt(key)) - 1
+// A pyramid: row n holds n keys, numbered left to right, so the rows run 1;
+// 2 3; 4 5 6 and on. A row of r + 1 keys suits row r's parity, so every row
+// centres exactly. 1,024 keys are 44 full rows and 34 keys of row 45, which
+// fills from where a full row would start.
+const classicSeats = () =>
+  seatTable(classicSupply, push => {
+    for (let row = 0, key = 1; key <= classicSupply; row++) {
+      const start = -mod(row, 2) / 2 - row / 2
+      for (let k = 0; k <= row && key <= classicSupply; k++, key++) push(start + k, row, 0)
+    }
+  })
 
 const seatBuilders: Record<LayoutKind, (count: number) => Seats> = {
   fibonacci: fibonacciSeats,
@@ -158,7 +160,7 @@ const seatsFor = (kind: LayoutKind, shown: number) => {
 export function buildMap(kind: LayoutKind, shown: number): KeyMapGrid {
   const seats = seatsFor(kind, shown)
   return {
-    ...(kind === "classic" ? rhombusMap(seats, shown) : rowMap(seats, shown)),
+    ...rowMap(seats, shown),
     home: key => [seats.q[key - 1], seats.r[key - 1]],
     levelOf: key => seats.level[key - 1],
   }
@@ -166,19 +168,9 @@ export function buildMap(kind: LayoutKind, shown: number): KeyMapGrid {
 
 type Repeat = Pick<KeyMapGrid, "periodA" | "periodB" | "valueAt">
 
-function rhombusMap(seats: Seats, shown: number): Repeat {
-  const period = classicShell(shown) + 1 + gutter
-  const grid = new Int32Array(period * period)
-  for (let key = 1; key <= shown; key++) grid[seats.r[key - 1] * period + seats.q[key - 1]] = key
-  return {
-    periodA: [period, 0],
-    periodB: [0, period],
-    valueAt: (q, r) => grid[mod(r, period) * period + mod(q, period)],
-  }
-}
-
-// Row layouts repeat every W columns and every H rows. H is even, so a copy
-// keeps each row's parity and every copy is a pure translation on screen.
+// Every layout is laid in rows, and its map repeats every W columns and every
+// H rows. H is even, so a copy keeps each row's parity and every copy is a
+// pure translation on screen.
 function rowMap(seats: Seats, shown: number): Repeat {
   let minCol = Infinity
   let maxCol = -Infinity

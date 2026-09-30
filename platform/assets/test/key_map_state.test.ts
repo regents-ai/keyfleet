@@ -46,6 +46,13 @@ const fibonacci = (minted: number): KeyMapState => ({
   agent: new Uint8Array(0),
 })
 
+const classic = (minted: number): KeyMapState => ({
+  minted,
+  maxSupply: 1_024,
+  mine: new Uint8Array(0),
+  agent: new Uint8Array(0),
+})
+
 const accelerant = (minted: number, mine: Uint8Array, agent = bits()): KeyMapState => ({
   minted,
   maxSupply: 2_000,
@@ -116,7 +123,7 @@ describe("key map levels", () => {
 
   // Level 7 is keys 53 to 86 and level 8 keys 87 to 141.
   it("sells the level of the next key, and moves on when that level sells out", () => {
-    const grid = buildMap("fibonacci", drawnKeys(fibonacci(141)))
+    const grid = buildMap("fibonacci", drawnKeys("fibonacci", fibonacci(141)))
     expect(onSaleLevel(grid, fibonacci(60))).toBe(7)
     expect(onSaleLevel(grid, fibonacci(85))).toBe(7)
     expect(onSaleLevel(grid, fibonacci(86))).toBe(8)
@@ -127,15 +134,27 @@ describe("key map levels", () => {
   })
 
   it("draws the keys sold and the rest of the level on sale, and no level after it", () => {
-    expect(drawnKeys(fibonacci(60))).toBe(86)
-    expect(drawnKeys(fibonacci(86))).toBe(141)
-    expect(drawnKeys(fibonacci(0))).toBe(2)
-    expect(drawnKeys(fibonacci(17_768))).toBe(28_654)
+    expect(drawnKeys("fibonacci", fibonacci(60))).toBe(86)
+    expect(drawnKeys("fibonacci", fibonacci(86))).toBe(141)
+    expect(drawnKeys("fibonacci", fibonacci(0))).toBe(2)
+    expect(drawnKeys("fibonacci", fibonacci(17_768))).toBe(28_654)
     // The levels never end, so a level past 20 opens once 20 is sold.
-    expect(drawnKeys(fibonacci(46_365))).toBe(75_022)
-    // A fleet without levels is drawn whole.
-    expect(drawnKeys(accelerant(10, bits()))).toBe(2_000)
-    expect(drawnKeys({...accelerant(0, bits()), maxSupply: 1_024})).toBe(1_024)
+    expect(drawnKeys("fibonacci", fibonacci(46_365))).toBe(75_022)
+    // Accelerant is drawn whole.
+    expect(drawnKeys("accelerant", accelerant(10, bits()))).toBe(2_000)
+  })
+
+  it("draws Classic's pyramid to three rows below the row on sale, and whole once sold out", () => {
+    // Nothing sold: key 1 of row 1 is on sale, so rows 1 to 4 are drawn.
+    expect(drawnKeys("classic", classic(0))).toBe(10)
+    // Key 5 of row 3 is on sale, so rows 1 to 6 are drawn.
+    expect(drawnKeys("classic", classic(4))).toBe(21)
+    expect(drawnKeys("classic", classic(5))).toBe(21)
+    expect(drawnKeys("classic", classic(6))).toBe(28)
+    // Row 45 is the last, so the pyramid is drawn whole once row 42 is on sale.
+    expect(drawnKeys("classic", classic(860))).toBe(990)
+    expect(drawnKeys("classic", classic(861))).toBe(1_024)
+    expect(drawnKeys("classic", classic(1_024))).toBe(1_024)
   })
 
   it("never runs out of keys to sell in a fleet whose levels keep opening", () => {
@@ -147,7 +166,7 @@ describe("key map levels", () => {
 
   it("marks keys not sold yet, other than the next, and says so", () => {
     const state = fibonacci(60)
-    const grid = buildMap("fibonacci", drawnKeys(state))
+    const grid = buildMap("fibonacci", drawnKeys("fibonacci", state))
     expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "next", "unsold", "unsold"])
     expect(describeKey(grid, state, 80)).toBe("Key 80, level 7, not sold yet.")
   })

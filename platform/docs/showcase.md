@@ -45,7 +45,10 @@ configuration as proof of real Privy sign-in.
 database behind it. Buttons switch between the three fleet shapes: Classic
 (1,024 keys) and Accelerant (2,000), each sold out but for its last key, and
 Fibonacci, whose levels keep opening, a few rows into level 19 with 17,768 keys
-sold. The Fibonacci map draws the levels sold and the level on sale. Every 97th
+sold. The Fibonacci map draws the levels sold and the level on sale; the Classic
+pyramid draws its rows down to three below the row on sale. "Keys sold" sets how
+many keys of the fleet shown are sold, from none to the whole fleet (Fibonacci up
+to the end of level 20), and redraws the map. Every 97th
 key is marked as yours and every 7th as having an agent. Choosing a key, by click or by Enter, only updates the line under the map.
 
 The map loads as its own script chunk the first time a page shows one. Its drag

@@ -150,6 +150,20 @@ defmodule KeyfleetWeb.ShowcaseTest do
     render_hook(view, "keymap_ready", %{})
     assert_reply(view, %{minted: 1_023, max_supply: 1_024, mine: mine})
     assert byte_size(Base.decode64!(mine)) <= 128
+
+    # Keys sold redraws the map at the new count, up to the whole fleet.
+    assert render_hook(view, "select_key", %{"token_id" => 7}) =~ "Key 7 chosen."
+    html = view |> form("#key-map-sold", %{minted: "4"}) |> render_change()
+    assert html =~ "No key chosen yet."
+    assert_push_event(view, "keymap:reset", %{})
+    render_hook(view, "keymap_ready", %{})
+    assert_reply(view, %{minted: 4, max_supply: 1_024})
+    view |> form("#key-map-sold", %{minted: "0"}) |> render_change()
+    render_hook(view, "keymap_ready", %{})
+    assert_reply(view, %{minted: 0, mine: "", agent: ""})
+    view |> form("#key-map-sold", %{minted: "5000"}) |> render_change()
+    render_hook(view, "keymap_ready", %{})
+    assert_reply(view, %{minted: 1_024})
   end
 
   defp held?(bits, id),
