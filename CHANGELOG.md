@@ -627,3 +627,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - The theme button's box has slightly rounded corners, as on every Regents
   site.
+
+## 2026-09-30 — Early-access headline leads with the crew
+
+- The early-access page now leads with "Attach your personal agent to a
+  crew that runs itself." with "No boss. No job queue." smaller below it,
+  the same order as the home page.

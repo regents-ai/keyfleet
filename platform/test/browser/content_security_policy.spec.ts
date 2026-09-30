@@ -97,7 +97,7 @@ test("while closed, the homepage opens the early-access page, which takes an add
     const response = await page.goto("/")
     expect(response?.status()).toBe(200)
     expect(new URL(page.url()).pathname).toBe("/early")
-    await expect(page.getByRole("heading", {name: "No boss. No job queue. Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
+    await expect(page.getByRole("heading", {name: "Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
     await page.waitForLoadState("networkidle")
 
     // The site's stylesheet applied: the button is drawn as one.

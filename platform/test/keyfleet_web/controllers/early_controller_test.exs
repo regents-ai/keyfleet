@@ -21,9 +21,8 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     page = conn |> html_response(200) |> LazyHTML.from_document()
 
     assert text(page, "main .early__overline") == "Keyfleet"
-
-    assert text(page, "h1") ==
-             "No boss. No job queue. Attach your personal agent to a crew that runs itself."
+    assert text(page, "h1") == "Attach your personal agent to a crew that runs itself."
+    assert text(page, "main .early__tagline") == "No boss. No job queue."
 
     assert text(page, "main") =~
              "Agents and people pick their own work, check each other's, and share what the fleet earns."
