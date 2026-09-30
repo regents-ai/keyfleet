@@ -24,11 +24,12 @@ const corners = Array.from({length: 6}, (_, index) => {
 })
 
 // The frame's middle. Accelerant's chain is framed across its whole width,
-// windings 0 to 8 cells across, and no higher than its first four windings and
-// bends, so it reads as a chain; the other fleets centre on the key they open on.
+// windings 0 to 8 cells across with one cell to spare on each side, and never
+// higher than its first winding with the same cell to spare above, so it reads
+// as a chain; the other fleets centre on the key they open on.
 function frameMiddle(layout: LayoutKind, grid: KeyMapGrid, key: number): Point {
   const [x, y] = axialToPixel(...grid.home(key), size)
-  return layout === "accelerant" ? [4 * SQRT3 * size, Math.max(y, 3.5 * 1.5 * size)] : [x, y]
+  return layout === "accelerant" ? [4 * SQRT3 * size, Math.max(y, height / 2 - size - SQRT3 * size)] : [x, y]
 }
 
 export type PreviewTile = {
