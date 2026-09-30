@@ -30,10 +30,18 @@
     line-height: 1.04;
     letter-spacing: -.035em;
     overflow-wrap: anywhere;
+    text-wrap: balance;
   }
 
-  .early__title > span { display: block; text-wrap: balance; }
   .early__title-accent { color: var(--ash-accent-warm); }
+
+  .early__tagline {
+    margin-block-start: var(--space-2);
+    font-family: var(--font-family-title);
+    font-size: clamp(1.25rem, .9rem + 1.4vw, 2rem);
+    line-height: 1.1;
+    letter-spacing: -.02em;
+  }
 
   .early__lede {
     margin-block-start: var(--space-3);

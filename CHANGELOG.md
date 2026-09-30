@@ -483,3 +483,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   press made while those steps were still being read, as just after the
   wallet switched, sent nothing. The press now waits for its steps, read
   there and then, and reaches the wallet.
+
+## 2026-09-30 — Early-access headline leads with the crew
+
+- The early-access page now leads with "Attach your personal agent to a
+  crew that runs itself." with "No boss. No job queue." smaller below it,
+  the same order as the home page.
