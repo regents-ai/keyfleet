@@ -37,6 +37,9 @@ function recordMotion() {
           if (el.closest("main h1")) noteSplit("headline", record.addedNodes)
           continue
         }
+        // The key map sets its layer and tiles where they sit with transforms;
+        // placing them is not motion.
+        if (el.closest(".key-map")) continue
         const style = el.getAttribute("style") ?? ""
         if (!/transform|opacity/.test(style)) continue
         if (el.id === "route-content") {

@@ -63,6 +63,19 @@ const copiesOf = (page: Page, key: number) =>
       .sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y))
   }, key)
 
+// Every key drawn with its centre inside the stage: its number, marks and place.
+const onScreen = (page: Page) =>
+  page.evaluate(() => {
+    const stage = document.querySelector(".key-map")!.getBoundingClientRect()
+    return [...document.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")]
+      .map(tile => {
+        const rect = tile.getBoundingClientRect()
+        return {key: Number(tile.dataset.key), state: tile.dataset.state ?? "", x: rect.left + rect.width / 2, y: rect.top + rect.height / 2}
+      })
+      .filter(({x, y}) => x > stage.left && x < stage.right && y > stage.top && y < stage.bottom)
+      .sort((a, b) => a.key - b.key || a.y - b.y || a.x - b.x)
+  })
+
 async function tile(page: Page, key: number): Promise<Point> {
   const [copy] = await copiesOf(page, key)
   expect(copy, `key ${key} is on screen`).toBeDefined()
@@ -160,39 +173,33 @@ test.describe("key map", () => {
     }
   })
 
-  test("every copy of a key on screen carries the same marks", async ({page}) => {
-    await openMap(page, "Accelerant")
-    // Keys drawn more than once on screen, with the marks on each copy.
-    const repeated = () =>
-      page.evaluate(() => {
-        const stage = document.querySelector(".key-map")!.getBoundingClientRect()
-        const marks = new Map<string, {states: string[]; at: {x: number; y: number}}>()
-        for (const tile of document.querySelectorAll<HTMLElement>(".km-tile:not([hidden])")) {
-          const rect = tile.getBoundingClientRect()
-          const [x, y] = [rect.left + rect.width / 2, rect.top + rect.height / 2]
-          if (x < stage.left || x > stage.right || y < stage.top || y > stage.bottom) continue
-          const key = tile.dataset.key!
-          const seen = marks.get(key) ?? {states: [], at: {x, y}}
-          marks.set(key, {...seen, states: [...seen.states, tile.dataset.state ?? ""]})
-        }
-        return [...marks].filter(([, {states}]) => states.length > 1).map(([key, {states, at}]) => ({key, states, at}))
-      })
+  test("every copy of a key carries the same marks, a whole copy apart", async ({page}) => {
+    const {stage} = await openMap(page, "Accelerant")
+    const target = await tile(page, 1_999)
+    await page.mouse.click(target.x, target.y)
+    await expect(selected(page)).toHaveText("Key 1,999 chosen.")
+    // Accelerant's map is five keys wide with 22 empty cells beside it, so it
+    // repeats every 27 cells across.
+    const period = 27 * (await stage.evaluate(stage => parseFloat(getComputedStyle(stage).getPropertyValue("--km-cell"))))
+    const centre = await stageCentre(page)
+    await page.mouse.move(centre.x, centre.y)
 
-    const [{key, at}] = await repeated()
-    await page.mouse.click(at.x, at.y)
-    await expect(selected(page)).toHaveText(`Key ${Number(key).toLocaleString("en-US")} chosen.`)
-
-    // Every copy agrees, and matches the page's made-up owners and agents.
     const marks = new Set<string>()
     const check = async () => {
-      const copies = await repeated()
-      expect(copies.length).toBeGreaterThan(10)
-      for (const {key: shown, states} of copies) {
-        const id = Number(shown)
-        const expected = [id === 2_000 && "next", id % 97 === 13 && "mine", id % 7 === 3 && "agent", shown === key && "selected"]
-        expect(states, `key ${shown}`).toEqual(states.map(() => expected.filter(Boolean).join(" ")))
-        states[0].split(" ").forEach(mark => marks.add(mark))
+      const here = await onScreen(page)
+      expect(here.length).toBeGreaterThan(10)
+      // Every key matches the page's made-up owners and agents.
+      for (const {key, state} of here) {
+        const expected = [key === 2_000 && "next", key % 97 === 13 && "mine", key % 7 === 3 && "agent", key === 1_999 && "selected"]
+        expect(state, `key ${key}`).toBe(expected.filter(Boolean).join(" "))
+        state.split(" ").forEach(mark => marks.add(mark))
       }
+      // A whole copy across, the same keys sit in the same places with the same marks.
+      await page.mouse.wheel(period, 0)
+      await nextFrame(page)
+      const there = await onScreen(page)
+      expect(there.map(({key, state}) => `${key} ${state}`)).toEqual(here.map(({key, state}) => `${key} ${state}`))
+      there.forEach((copy, index) => expect(Math.hypot(copy.x - here[index].x, copy.y - here[index].y)).toBeLessThan(1))
     }
     await check()
     // Nine rows up sits 1,953, one of the keys marked as yours.
@@ -200,6 +207,40 @@ test.describe("key map", () => {
     await nextFrame(page)
     await check()
     expect([...marks]).toEqual(expect.arrayContaining(["mine", "agent", "selected"]))
+  })
+
+  test.describe("on a tall screen", () => {
+    // The stage is 820 px tall, so six rows around the next key all fit.
+    test.use({viewport: {width: 1280, height: 1200}})
+
+    test("Classic draws its pyramid to three rows below the row on sale", async ({page}) => {
+      const {stage, errors} = await openMap(page, "Classic")
+      const status = stage.locator("[aria-live=polite]")
+      const drawn = async () => [...new Set((await onScreen(page)).map(({key}) => key))].sort((a, b) => a - b)
+      const upTo = (last: number) => Array.from({length: last}, (_, index) => index + 1)
+      const next = (key: number) => expect(stage.locator(`.km-tile[data-key="${key}"]`).first()).toHaveAttribute("data-state", /next/)
+
+      // Nothing sold: key 1 is on sale and rows 1 to 4 are drawn.
+      await page.getByLabel("Keys sold").fill("0")
+      await next(1)
+      await expect.poll(drawn).toEqual(upTo(10))
+      // Key 5, in row 3, is on sale: rows 1 to 6 are drawn.
+      await page.getByLabel("Keys sold").fill("4")
+      await next(5)
+      await stage.focus()
+      await page.keyboard.press("Home")
+      await expect(status).toHaveText("Next key, 5.")
+      await expect.poll(drawn).toEqual(upTo(21))
+      // Row 3 is 4 5 6.
+      await page.keyboard.press("ArrowRight")
+      await expect(status).toHaveText("Key 6, not sold yet.")
+      await page.keyboard.press("ArrowLeft")
+      await page.keyboard.press("ArrowLeft")
+      await expect(status).toHaveText("Key 4.")
+      await page.keyboard.press("Enter")
+      await expect(selected(page)).toHaveText("Key 4 chosen.")
+      expect(errors).toEqual([])
+    })
   })
 
   test("arrow keys, Enter and Home move and choose", async ({page}) => {
@@ -238,8 +279,8 @@ test.describe("key map", () => {
     await page.mouse.wheel(900, 0)
     await page.keyboard.press("Home")
     await expect.poll(async () => {
-      const next = await tile(page, 2_000)
-      return Math.round(Math.hypot(next.x - centre.x, next.y - centre.y))
+      const [next] = await copiesOf(page, 2_000)
+      return next ? Math.round(Math.hypot(next.x - centre.x, next.y - centre.y)) : Infinity
     }).toBeLessThanOrEqual(1)
   })
 

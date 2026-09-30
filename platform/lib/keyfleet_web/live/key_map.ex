@@ -5,8 +5,9 @@ defmodule KeyfleetWeb.KeyMap do
 
   A key's marks are whether one of the viewer's wallets holds it and whether
   it has an active shard today. Someone signed out holds nothing. Owners are never
-  sent to the map; the map draws every key sold and the rest of the level on
-  sale, so how many are sold travels with the marks.
+  sent to the map. The map works out from how many are sold which keys it
+  draws (every key sold and a little beyond the next key on sale), so that
+  count travels with the marks.
   """
 
   alias Keyfleet.Actors.Human

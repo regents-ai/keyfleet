@@ -1,5 +1,12 @@
 import {axialToOffset, hexDistance, offsetToAxial, type Cell} from "./lattice"
-import {fibonacciLevelOf, levelEnd, type KeyMapGrid} from "./layouts"
+import {
+  fibonacciLevelOf,
+  levelEnd,
+  pyramidRowEnd,
+  pyramidRowOf,
+  type KeyMapGrid,
+  type LayoutKind,
+} from "./layouts"
 
 /** The server's reply to `keymap_ready`. */
 export type KeyMapSnapshot = {
@@ -72,13 +79,22 @@ export const lastChoosable = (state: KeyMapState) =>
 export const nextKey = (state: KeyMapState) =>
   state.maxSupply === null || state.minted < state.maxSupply ? state.minted + 1 : 0
 
+// How many rows of Classic's pyramid are drawn below the row on sale.
+const rowsAhead = 3
+
 /**
  * How many keys the map draws, the one place that decides it. A fleet whose
  * levels keep opening is drawn to the end of the level on sale: every level
- * reached, and no level after it. A fleet with a size is drawn whole.
+ * reached, and no level after it. Classic's pyramid is drawn to three rows
+ * below the row on sale. Accelerant, and any fleet once sold out, is drawn
+ * whole.
  */
-export const drawnKeys = (state: KeyMapState) =>
-  state.maxSupply === null ? levelEnd(fibonacciLevelOf(state.minted + 1)) : state.maxSupply
+export function drawnKeys(layout: LayoutKind, state: KeyMapState) {
+  const next = nextKey(state)
+  if (state.maxSupply === null) return levelEnd(fibonacciLevelOf(next))
+  if (layout !== "classic" || !next) return state.maxSupply
+  return Math.min(pyramidRowEnd(pyramidRowOf(next) + rowsAhead), state.maxSupply)
+}
 
 /** The level of the key on sale, or 0 once the fleet is sold out or for a fleet without levels. */
 export const onSaleLevel = (grid: KeyMapGrid, state: KeyMapState) => {

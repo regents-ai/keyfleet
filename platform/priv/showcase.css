@@ -22,6 +22,8 @@
 .key-map-reference__intro p { margin: 0; }
 .key-map-reference__fleets { display: flex; flex-wrap: wrap; gap: 8px; }
 .key-map-reference__fleets [aria-pressed="true"] { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.key-map-reference__sold { display: flex; align-items: center; gap: 8px; }
+.key-map-reference__sold input { width: 8rem; font: inherit; padding: 4px 8px; color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border); }
 .key-map-reference__notes { max-width: 48rem; padding: 24px; border: 1px solid var(--color-border); }
 #key-map-selected { margin: 0; font-family: var(--font-family-mono); }
 @media (max-width: 48rem) {

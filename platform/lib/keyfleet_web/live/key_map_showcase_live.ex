@@ -2,9 +2,12 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   @moduledoc """
   Local reference for the key map, with made-up sales, owners and agents, so
   the map can be tried at its largest size without a chain or a database.
-  Classic and Accelerant are sold but for their last key. Fibonacci is selling
-  level 19 a few rows in: the map draws all of it, with levels 1 to 18 sold
-  out and 19 on sale. Its levels keep opening, so it has no size.
+  Classic and Accelerant open sold but for their last key. Fibonacci opens
+  selling level 19 a few rows in: the map draws all of it, with levels 1 to 18
+  sold out and 19 on sale. Its levels keep opening, so it has no size.
+
+  "Keys sold" sets how many of the shown fleet's keys are sold, from none to
+  the whole fleet; Fibonacci goes up to the end of level 20.
   """
   use KeyfleetWeb, :live_view
 
@@ -15,6 +18,9 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
     %{layout: "classic", name: "Classic", max_supply: 1_024, minted: 1_023},
     %{layout: "accelerant", name: "Accelerant", max_supply: 2_000, minted: 1_999}
   ]
+
+  # The end of Fibonacci level 20, the largest map the layout tests build.
+  @fibonacci_most 46_365
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -51,6 +57,23 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
               {fleet.name} · {size(fleet.max_supply)}
             </button>
           </div>
+          <form
+            id="key-map-sold"
+            class="key-map-reference__sold"
+            phx-change="set_minted"
+            phx-submit="set_minted"
+          >
+            <label for="key-map-sold-count">Keys sold</label>
+            <input
+              id="key-map-sold-count"
+              name="minted"
+              type="number"
+              inputmode="numeric"
+              min="0"
+              max={most(@fleet)}
+              value={@fleet.minted}
+            />
+          </form>
         </section>
 
         <div
@@ -86,7 +109,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
             </li>
           </ul>
           <p>
-            The map repeats in every direction, so a key can appear more than once on screen. Every copy is the same key.
+            The map repeats in every direction, with wide empty space between the copies. Every copy of a key is the same key.
           </p>
         </section>
       </div>
@@ -101,6 +124,20 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
     end
   end
 
+  # A new count redraws the map, which drops the chosen key.
+  def handle_event("set_minted", %{"minted" => minted}, socket) do
+    case Integer.parse(minted) do
+      {minted, ""} when minted >= 0 ->
+        fleet = %{socket.assigns.fleet | minted: min(minted, most(socket.assigns.fleet))}
+
+        {:noreply,
+         socket |> assign(fleet: fleet, selected: nil) |> push_event("keymap:reset", %{})}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("keymap_ready", _params, socket) do
     %{max_supply: max_supply, minted: minted} = socket.assigns.fleet
 
@@ -108,8 +145,8 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
      %{
        minted: minted,
        max_supply: max_supply,
-       mine: KeyMap.bitset(Enum.filter(1..minted, &(rem(&1, 97) == 13))),
-       agent: KeyMap.bitset(Enum.filter(1..minted, &(rem(&1, 7) == 3)))
+       mine: KeyMap.bitset(Enum.filter(1..minted//1, &(rem(&1, 97) == 13))),
+       agent: KeyMap.bitset(Enum.filter(1..minted//1, &(rem(&1, 7) == 3)))
      }, socket}
   end
 
@@ -121,6 +158,9 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   end
 
   def handle_event("select_key", _params, socket), do: {:noreply, socket}
+
+  defp most(%{max_supply: nil}), do: @fibonacci_most
+  defp most(%{max_supply: max_supply}), do: max_supply
 
   defp size(nil), do: "new levels keep opening"
   defp size(max_supply), do: "#{group(max_supply)} keys"

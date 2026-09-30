@@ -16,6 +16,8 @@ import {
   levelEnd,
   levelStart,
   maxSupply,
+  pyramidRowEnd,
+  pyramidRowOf,
   type KeyMapGrid,
   type LayoutKind,
 } from "../js/hooks/key_map/layouts"
@@ -185,17 +187,60 @@ describe("key map layouts", () => {
     }
   })
 
-  it("closes the Classic rhombus at exactly 1,024 keys on 32 × 32", () => {
+  it("lays Classic as a centred pyramid, row n holding keys numbered left to right", () => {
     const grid = buildMap("classic", tested.classic)
-    const cells = new Set(Array.from({length: 1_024}, (_, index) => grid.home(index + 1).join(",")))
-    const rhombus = new Set(Array.from({length: 1_024}, (_, index) => `${index % 32},${Math.floor(index / 32)}`))
-    expect(cells).toEqual(rhombus)
-    for (const shown of [1, 4, 9, 16, 121, 961]) {
-      const side = Math.sqrt(shown)
-      for (let key = 1; key <= shown; key++) {
-        const [q, r] = grid.home(key)
-        expect(Math.max(q, r)).toBeLessThan(side)
-      }
+    // A key's centre in cell widths from the middle line, and its row.
+    const at = (key: number) => {
+      const [q, r] = grid.home(key)
+      return [q + r / 2, r]
+    }
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(at)).toEqual([
+      [0, 0],
+      [-0.5, 1],
+      [0.5, 1],
+      [-1, 2],
+      [0, 2],
+      [1, 2],
+      [-1.5, 3],
+      [-0.5, 3],
+      [0.5, 3],
+      [1.5, 3],
+    ])
+    // Every full row is centred on the same line; 44 of them hold 990 keys.
+    for (let row = 1; row <= 44; row++) {
+      const keys = Array.from({length: row}, (_, index) => pyramidRowEnd(row - 1) + index + 1)
+      expect(keys.map(key => at(key)[1])).toEqual(keys.map(() => row - 1))
+      expect(at(keys[0])[0] + at(keys.at(-1)!)[0]).toBe(0)
+    }
+    expect(pyramidRowEnd(44)).toBe(990)
+    // The last 34 keys fill row 45 from where a full row would start.
+    expect([991, 1_024].map(at)).toEqual([
+      [-22, 44],
+      [11, 44],
+    ])
+    expect([1, 2, 3, 4, 6, 7, 990, 991, 1_024].map(pyramidRowOf)).toEqual([1, 2, 2, 3, 3, 4, 44, 45, 45])
+  })
+
+  it("keeps 22 empty cells between neighbouring copies of every fleet's map", () => {
+    for (const [kind, shown] of [
+      ["fibonacci", 141],
+      ["classic", 10],
+      ["classic", 1_024],
+      ["accelerant", 2_000],
+    ] as const) {
+      const grid = buildMap(kind, shown)
+      const offsets = Array.from({length: shown}, (_, index) => {
+        const [q, r] = grid.home(index + 1)
+        return [q + Math.floor(r / 2), r]
+      })
+      const columns = offsets.map(([col]) => col)
+      const rows = offsets.map(([, row]) => row)
+      const width = Math.max(...columns) - Math.min(...columns) + 1
+      const height = Math.max(...rows) - Math.min(...rows) + 1
+      expect(grid.periodA, `${kind} at ${shown}`).toEqual([width + 22, 0])
+      // The rows repeat after an even count, so the gap below is 22 or 23
+      // rows. On a Fibonacci map the last of them holds level 1's heading.
+      expect(grid.periodB[1] - height, `${kind} at ${shown}`).toBeOneOf([22, 23])
     }
   })
 
