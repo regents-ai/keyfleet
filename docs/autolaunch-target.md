@@ -1,8 +1,10 @@
 # The Autolaunch target Keyfleet pins
 
 Updated 2026-09-28 for Autolaunch v2, checked against the source at `4271c25`.
-The v1 pin this replaces is in git history (the previous version of this file,
-at `985dc31`).
+Rechecked 2026-09-30 against `256d331`: no file under `contracts/revstake-v2/src`
+or `contracts/revstake-v2/abi` changed, so every interface, figure and event
+below stands. The v1 pin this replaces is in git history (the previous version
+of this file, at `985dc31`).
 
 ## Status
 
@@ -30,13 +32,26 @@ at `985dc31`).
 
 ## What `main` builds against today
 
-`RegentsAutolaunchFactoryV1` at `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`,
-with the shared strategy `RegentLBPStrategy` at
-`0x69c13CCd9312e21d66fd162896E39bFC5f886F95`, as named in Autolaunch's
-`contracts/v1/deployments/base-mainnet/deployed-manifest.json` (branch
-`feat/autolaunch-robinhood-stocks`). Its `launch` takes a
-`uint128 requiredRegentRaised` and sells 10%, pools 5% and vests 85%. The
-branch `codex/autolaunch-v2` replaces all of it with v2.
+Nothing. Since the founder's decisions of 2026-09-29 the fleets live on
+Ethereum, and `main` has no Autolaunch call, no REGENT and no launch rule; USDC
+is the one income token. This branch is kept for when launches come back
+(founder "2 b", 2026-09-29). Autolaunch v2 Revstake runs on Base, so bringing it
+back to an Ethereum fleet needs a decision on how a fleet reaches Base before
+any of the calls below apply.
+
+The v1 factory the branch replaced sold 10%, pooled 5% and vested 85%; v2
+sells 20%, pools 15% and vests 65% (65,000,000,000 tokens over 365 days).
+
+## Money a v2 launch brings the fleet
+
+Everything a launch brings the fleet is shared money, never income for the
+keys: the REGENT the strategy sends at graduation (about a quarter of the
+raise; the other three quarters go into the pool) and every token the escrow
+releases as the 65% vests. Neither is revenue to share out. What the launch's
+payment receiver and splitter send on is income for the keys: service revenue
+paid through the Revstake payment receiver, and the part of the swap fees'
+staker lane the splitter sends the fleet as treasury (see "What the treasury
+receives and may do" below).
 
 ## The contracts
 

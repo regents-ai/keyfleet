@@ -270,3 +270,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   year.
 - `mix test --only autolaunch_fork` runs a whole v2 launch through the site
   and the keeper on a local fork of a chain carrying v2.
+
+## 2026-09-30 — Autolaunch target rechecked against v2 at 256d331
+
+- `docs/autolaunch-target.md` is rechecked against Autolaunch `256d331`: no v2
+  contract or interface changed since `4271c25`. It now says `main` has no
+  Autolaunch since the move to Ethereum, sets v1's 85% vesting beside v2's
+  65%, and says in one place that the REGENT sent at graduation and the vested
+  tokens are shared money, while what the payment receiver and splitter send
+  on is income.
