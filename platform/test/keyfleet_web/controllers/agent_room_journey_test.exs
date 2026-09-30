@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
-    Enum.each(["fibonacci_syndicate", @cascade], &ChainHelpers.deploy!/1)
+    ChainHelpers.deploy!("fibonacci_syndicate")
     ChainHelpers.seed_cursor!("fibonacci_syndicate")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
@@ -152,7 +152,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   # database seeded before the fleet was marked, and are still out of reach.
   test "every agent request about a coming-soon fleet is answered that it is coming soon", c do
     joined = send_signed(c, "POST", @join_path, @join_body)
-    soon = "fleet_tech_accelerant"
+    soon = @cascade
     fleet = "/api/v1/agent/fleets/{fleet_id}"
     key = "/api/v1/agent/keys/{fleet_id}/{token_id}"
 
@@ -629,6 +629,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     # Rooms other suites create outside the sandbox would count against the
     # Syndicate's limit, so these rooms are made on the Cascade fleet.
     setup do
+      ChainHelpers.deploy!(@cascade)
       ChainHelpers.seed_cursor!(@cascade)
       sell!(@cascade, 1..4)
       :ok

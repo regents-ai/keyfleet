@@ -227,9 +227,9 @@ test("on a phone the menu leads to each fleet, How it works and Account", async 
   const site = sidebar.locator("[data-sidebar-section='site'] ul")
   expect(await menuLinks(fleets)).toEqual([
     ["Classic", "/app/fleets/fleet_tech_classic"],
+    ["Accelerant", "/app/fleets/fleet_tech_accelerant"],
     ["Syndicate", "/app/fleets/fibonacci_syndicate"],
     ["Cascade", "/app/fleets/fibonacci_cascade"],
-    ["Accelerant", "/app/fleets/fleet_tech_accelerant"],
   ])
   expect(await menuLinks(site)).toEqual([
     ["How it works", "/how-it-works"],

@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the four fleets in catalog order, Classic first, each opening its own map
   # - a fleet coming soon is a card with its name and that it is coming soon,
   #   and nothing it has sold or is doing
+  # - an open fleet's card says what the fleet does; a coming-soon card doesn't
   # - a card shows its fleet's newest open goal and featured item once connected,
   #   and the first render reads neither
   # - a card counts sold keys only once its fleet is on sale and read up to now
@@ -33,6 +34,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   the public documents, or anchors that exist
 
   @classic "fleet_tech_classic"
+  @accelerant "fleet_tech_accelerant"
   @syndicate "fibonacci_syndicate"
   @cascade "fibonacci_cascade"
   @owner "0x" <> String.duplicate("a", 40)
@@ -61,7 +63,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
 
     assert attribute(html, ".key-map-preview", "data-layout") ==
-             ~w(classic fibonacci fibonacci accelerant)
+             ~w(classic accelerant fibonacci fibonacci)
   end
 
   test "a fleet coming soon is a card with its name and that it is coming soon, and nothing more",
@@ -72,8 +74,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
 
     assert attribute(html, "[data-coming-soon]", "id") ==
-             ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
-                home-fleet-fleet_tech_accelerant)
+             ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade)
 
     assert has_element?(view, "#home-fleet-#{@cascade} h3", "Keyfleet Cascade")
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"
@@ -81,6 +82,21 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#home-fleet-#{@cascade} .rl-fleet-card__now")
     refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-soon]")
     assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+  end
+
+  # Without its line, a visitor can't tell what an open fleet does before
+  # opening it.
+  test "an open fleet's card says what the fleet does; a coming-soon card doesn't",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+
+    for id <- [@classic, @accelerant] do
+      assert text(view, "#home-fleet-#{id} [data-fleet-about]") =~ "USDC"
+    end
+
+    for id <- [@syndicate, @cascade] do
+      refute has_element?(view, "#home-fleet-#{id} [data-fleet-about]")
+    end
   end
 
   test "a card shows its fleet's newest open goal and what it features, once connected",
@@ -337,12 +353,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    [_, section] = String.split(markdown, "\n## Keyfleet Classic\n", parts: 2)
-    [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
-    assert path == "/fleets/fleet_tech_classic.md"
-    assert build_conn() |> get(path) |> response(200) =~ "Keyfleet Classic"
+    for {id, name} <- [{@classic, "Keyfleet Classic"}, {@accelerant, "Keyfleet Accelerant"}] do
+      [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
+      [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
+      assert path == "/fleets/#{id}.md"
+      assert build_conn() |> get(path) |> response(200) =~ name
+    end
 
-    for name <- ["Keyfleet Syndicate", "Keyfleet Cascade", "Keyfleet Accelerant"] do
+    for name <- ["Keyfleet Syndicate", "Keyfleet Cascade"] do
       [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
 
       [section | _] = String.split(section, "\n## ", parts: 2)

@@ -164,6 +164,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                        },
                        %RouteTarget{
                          route_id: :fleet,
+                         label: "Accelerant",
+                         path: "/app/fleets/fleet_tech_accelerant"
+                       },
+                       %RouteTarget{
+                         route_id: :fleet,
                          label: "Syndicate",
                          path: "/app/fleets/fibonacci_syndicate"
                        },
@@ -171,11 +176,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                          route_id: :fleet,
                          label: "Cascade",
                          path: "/app/fleets/fibonacci_cascade"
-                       },
-                       %RouteTarget{
-                         route_id: :fleet,
-                         label: "Accelerant",
-                         path: "/app/fleets/fleet_tech_accelerant"
                        }
                      ]
                    },

@@ -68,8 +68,8 @@ defmodule KeyfleetWeb.HomeLive do
   # after the first of them.
   @refresh_after 5_000
 
-  # One fixed sentence about each fleet for the Markdown homepage: what each
-  # fleet is doing right now is at /fleets/<id>.md.
+  # One fixed sentence about each fleet, on its card once it is open and in the
+  # Markdown homepage: what each fleet is doing right now is at /fleets/<id>.md.
   @about %{
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s shared money.",

@@ -7,9 +7,9 @@
 
 The Phoenix/Ash web application of Keyfleet. It serves the public home
 page, where a visitor chooses one of the four fleets, and each fleet's page
-(`/app/fleets/<fleet>`), which is its map of keys. Keyfleet Classic opens
-first; the other three show as coming soon, with no keys, rooms or way to join,
-until each one's deployment is recorded (`Keyfleet.Fleets.coming_soon?/2`). From a fleet's page, key
+(`/app/fleets/<fleet>`), which is its map of keys. Keyfleet Classic and
+Keyfleet Accelerant open first; the other two show as coming soon, with no keys,
+rooms or way to join, until each one's deployment is recorded (`Keyfleet.Fleets.coming_soon?/2`). From a fleet's page, key
 holders reach its rooms, its shared workspace and its proposals. A signed-in
 person's keys are on the Account page (`/account`). The site also serves Privy
 wallet sign-in, the public pages, the agent API, health and metrics. Inside it,

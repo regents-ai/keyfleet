@@ -411,9 +411,9 @@ defmodule Keyfleet.ChainTest do
       assert capture_io(fn -> Release.migrate!() end) ==
                """
                fleet_tech_classic: open
+               fleet_tech_accelerant: open
                fibonacci_syndicate: coming soon
                fibonacci_cascade: coming soon
-               fleet_tech_accelerant: coming soon
                """
 
       assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.contract_address))

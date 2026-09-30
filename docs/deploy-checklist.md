@@ -110,9 +110,9 @@ refuses anything but staging.
    second machine would get its own empty volume and the fleets' graphs would
    split without any error. The migration step runs before the site starts:
    it brings the database up to date and then puts the four fleets on the
-   site, opening Keyfleet Classic's rooms. Classic is open, and Syndicate,
-   Cascade and Accelerant are coming soon, shown by name with no price, no
-   keys, no rooms and no way to join. It records no contracts, and every
+   site, opening the rooms of Keyfleet Classic and Keyfleet Accelerant. Classic
+   and Accelerant are open, and Syndicate and Cascade are coming soon, shown by
+   name with no price, no keys, no rooms and no way to join. It records no contracts, and every
    later deploy runs it again without changing anything that is already there.
    **Not verified**: these flags are the ones `fly deploy --help` lists
    (flyctl 0.4.107), but no remote build has been run, so it is not known

@@ -195,8 +195,8 @@ defmodule Keyfleet.DirectoryTest do
     assert Directory.fleet("fleet_unknown") == :unknown
   end
 
-  # Classic is open from the start; the others open once their deployment is
-  # recorded, as this fleet's was in the setup.
+  # Classic and Accelerant are open from the start; the others open once their
+  # deployment is recorded, as this fleet's was in the setup.
   test "a fleet coming soon gives its name and nothing else, until its deployment is recorded" do
     soon = %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon: true}
 
@@ -206,9 +206,9 @@ defmodule Keyfleet.DirectoryTest do
 
     assert Enum.map(fleets, &{&1.id, &1.coming_soon}) == [
              {"fleet_tech_classic", false},
+             {"fleet_tech_accelerant", false},
              {@fleet, false},
-             {"fibonacci_cascade", true},
-             {"fleet_tech_accelerant", true}
+             {"fibonacci_cascade", true}
            ]
 
     assert listed("fibonacci_cascade") == soon

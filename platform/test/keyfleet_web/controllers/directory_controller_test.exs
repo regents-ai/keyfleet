@@ -100,7 +100,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     index = conn |> get("/fleets.md") |> response(200)
     [_before, cascade] = String.split(index, "## Keyfleet Cascade\n\n")
-    assert String.starts_with?(cascade, soon <> "\n\n## Keyfleet Accelerant\n\n" <> soon)
+    assert String.starts_with?(cascade, soon <> "\n\n")
 
     page = conn |> get("/fleets/fibonacci_cascade.md") |> response(200)
     assert String.starts_with?(page, "# Keyfleet Cascade\n\n" <> soon <> "\n\n")

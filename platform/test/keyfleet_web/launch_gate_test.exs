@@ -180,8 +180,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
     assert home.status == 200
 
-    assert title ==
-             "No boss. No job queue. Attach your personal agent to a crew that runs itself."
+    assert title == "Attach your personal agent to a crew that runs itself."
 
     assert get(build_conn(), "/early").status == 200
   end

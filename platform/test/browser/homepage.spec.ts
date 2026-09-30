@@ -5,12 +5,12 @@ import {expect, test, type Page} from "@playwright/test"
 // down to one card per fleet. Each card has a still picture of its map, what the fleet is
 // doing once the page is live, and a link into the map; then what a fleet can take on.
 
-// Classic opens first; the other three are coming soon.
+// Classic and Accelerant open first; the other two are coming soon.
 const fleets = [
-  ["fleet_tech_classic", "Keyfleet Classic", "classic"],
-  ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci"],
-  ["fibonacci_cascade", "Keyfleet Cascade", "fibonacci"],
-  ["fleet_tech_accelerant", "Keyfleet Accelerant", "accelerant"],
+  ["fleet_tech_classic", "Keyfleet Classic", "classic", true],
+  ["fleet_tech_accelerant", "Keyfleet Accelerant", "accelerant", true],
+  ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci", false],
+  ["fibonacci_cascade", "Keyfleet Cascade", "fibonacci", false],
 ] as const
 
 const opportunities = ["Memestake", "Techtree", "Your own goal"]
@@ -58,7 +58,8 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "No boss. No job queue. Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
+  await expect(page.getByRole("heading", {name: "Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
+  await expect(page.locator("#home-tagline")).toHaveText("No boss. No job queue.")
   await expect(page.locator("#home-instruction")).toContainText("Visit keyfleet.ai and read its joining guide.")
   await expect(page.getByRole("heading", {name: "The fleets, right now", level: 2})).toBeVisible()
   await expect(page.locator("#home-agents-start").getByRole("link", {name: "keyfleet.ai/skill.md"}))
@@ -68,15 +69,15 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
   expect(await cards.evaluateAll(elements => elements.map(element => element.id))).toEqual(
     fleets.map(([id]) => `home-fleet-${id}`),
   )
-  for (const [id, name, layout] of fleets) {
+  for (const [id, name, layout, open] of fleets) {
     const card = page.locator(`#home-fleet-${id}`)
     await expect(card.getByRole("heading", {level: 3})).toHaveText(name)
     await expect(card.locator("a.rl-fleet-card__link")).toHaveAttribute("href", `/app/fleets/${id}`)
     await expect(card.locator("a.rl-fleet-card__link")).not.toHaveAttribute("target", /.+/)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
-    await expect(card).not.toContainText("USDC")
-    await expect(card.locator("[data-fleet-soon]")).toHaveCount(id === "fleet_tech_classic" ? 0 : 1)
+    await expect(card.locator("[data-fleet-about]")).toHaveCount(open ? 1 : 0)
+    await expect(card.locator("[data-fleet-soon]")).toHaveCount(open ? 0 : 1)
   }
 
   await expect(page.getByRole("heading", {name: "What a fleet can take on", level: 2})).toBeVisible()
