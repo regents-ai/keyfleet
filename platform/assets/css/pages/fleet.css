@@ -167,6 +167,64 @@
   white-space: nowrap;
 }
 
+/* "Purchase Confirmation?" and its info mark, whose note shows while the
+   mark is pointed at or has keyboard focus. */
+
+.fleet-buy-headroom {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fleet-buy-headroom[hidden] {
+  display: none;
+}
+
+.fleet-buy-headroom input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--ash-accent);
+}
+
+.info-tip__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--ash-line-strong);
+  border-radius: 50%;
+  color: var(--ash-muted);
+  font: italic 600 0.75rem/1 Georgia, serif;
+  cursor: help;
+}
+
+.info-tip__note {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--ash-line-strong);
+  border-radius: 0.5rem;
+  background: var(--ash-panel);
+  color: var(--ash-ink);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease-out, visibility 0s linear 120ms;
+}
+
+.info-tip:hover .info-tip__note,
+.info-tip__icon:focus-visible + .info-tip__note {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
 /* The map, filling the rest of the view */
 
 .fleet-stage {

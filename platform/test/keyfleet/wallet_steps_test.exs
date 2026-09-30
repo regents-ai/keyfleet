@@ -100,6 +100,52 @@ defmodule Keyfleet.WalletStepsTest do
       assert built.figures.approve? == false
     end
 
+    # Guards charging or approving the wrong amount. Accelerant's fifth key
+    # costs 12.155063 USDC, whose tenth more doesn't come out whole: the most
+    # rounds up to 13.37057 USDC. An allowance of the price alone needs a
+    # new approval once the box is ticked.
+    test "Purchase Confirmation lets the purchase take and approve a tenth more, rounded up" do
+      accelerant = ChainHelpers.deploy!("fleet_tech_accelerant")
+      ChainHelpers.seed_cursor!("fleet_tech_accelerant")
+      ProposalHelpers.keys_sold!("fleet_tech_accelerant", [4])
+      answering(allowance: 12_155_063)
+      deadline = DateTime.to_unix(@head.timestamp) + 600
+
+      build = fn headroom ->
+        WalletSteps.build_steps!(
+          "fleet_tech_accelerant",
+          :buy,
+          @signer,
+          "panel",
+          %{
+            inputs: %{"headroom" => headroom}
+          },
+          actor: @actor
+        )
+      end
+
+      ticked = build.("true")
+
+      assert %{token_id: 5, price: 12_155_063, max_price: 13_370_570, approve?: true} =
+               ticked.figures
+
+      assert %{"approve" => approve, "buy" => buy} = steps(ticked)
+
+      assert approve.data ==
+               Call.encode("approve(address,uint256)", [accelerant.contract_address, 13_370_570])
+
+      assert buy.data ==
+               Call.encode("purchase(address,uint256,uint256)", [@signer, 13_370_570, deadline])
+
+      unticked = build.("false")
+      assert %{price: 12_155_063, max_price: 12_155_063, approve?: false} = unticked.figures
+      assert %{"buy" => buy} = steps(unticked)
+      assert Map.keys(steps(unticked)) == ["buy"]
+
+      assert buy.data ==
+               Call.encode("purchase(address,uint256,uint256)", [@signer, 12_155_063, deadline])
+    end
+
     test "a chain that can't be read builds nothing and says so" do
       StubClient.put_chain(@head, [],
         calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end

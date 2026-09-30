@@ -35,6 +35,9 @@ defmodule Keyfleet.WalletSteps.Build do
   @renew_days 30
   # A key's seed before its random draw arrives.
   @no_seed "0x" <> String.duplicate("0", 64)
+  # How much more than the price a purchase may take with the page's
+  # "Purchase Confirmation?" box ticked (the "headroom" input), in percent.
+  @headroom_percent 10
 
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
@@ -82,15 +85,17 @@ defmodule Keyfleet.WalletSteps.Build do
 
   # --- buying a key ----------------------------------------------------
 
-  # The key on offer at the price the page shows. The wallet approves
-  # exactly that price when its USDC allowance to the fleet is below it; the
-  # purchase names the price as its most, so a key that has since cost more
-  # is refused and no USDC is taken.
-  defp steps(:buy, fleet, signer, _inputs, _arguments) do
+  # The key on offer at the price the page shows. The purchase names the most
+  # it may take: the price, or with "headroom" ticked a tenth more, rounded up
+  # to the smallest USDC unit, so a buyer beaten to this key in the same block gets
+  # the next one. The contract takes only the price of the key sold, and
+  # refuses, taking no USDC, a key that costs more than the most. The wallet
+  # approves exactly the most when its USDC allowance to the fleet is below it.
+  defp steps(:buy, fleet, signer, inputs, _arguments) do
     progress = Chain.progress(fleet.id)
 
     if progress.next_price do
-      buy(fleet, signer, progress)
+      buy(fleet, signer, progress, field(inputs, "headroom") == "true")
     else
       {:problem, :sold_out, %{max_supply: progress.max_supply}}
     end
@@ -353,13 +358,15 @@ defmodule Keyfleet.WalletSteps.Build do
       {:ok, [Review.step("send", fleet.contract_address, Call.encode("sendProtocolShare()", []))],
        %{}}
 
-  defp buy(fleet, signer, progress) do
+  defp buy(fleet, signer, progress, headroom?) do
     client = Chain.Client.configured()
     price = progress.next_price
+    max_price = if headroom?, do: div(price * (100 + @headroom_percent) + 99, 100), else: price
 
     figures = %{
       token_id: progress.next_token_id,
       price: price,
+      max_price: max_price,
       max_supply: progress.max_supply
     }
 
@@ -374,20 +381,20 @@ defmodule Keyfleet.WalletSteps.Build do
              {:uint, 256}
            ) do
       deadline = DateTime.to_unix(head.timestamp) + @purchase_seconds
-      approve? = allowance < price
+      approve? = allowance < max_price
 
       approve =
         Review.step(
           "approve",
           fleet.usdc_address,
-          Call.encode("approve(address,uint256)", [fleet.contract_address, price])
+          Call.encode("approve(address,uint256)", [fleet.contract_address, max_price])
         )
 
       buy =
         Review.step(
           "buy",
           fleet.contract_address,
-          Call.encode("purchase(address,uint256,uint256)", [signer, price, deadline])
+          Call.encode("purchase(address,uint256,uint256)", [signer, max_price, deadline])
         )
 
       {:ok, if(approve?, do: [approve, buy], else: [buy]), Map.put(figures, :approve?, approve?)}

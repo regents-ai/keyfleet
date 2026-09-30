@@ -327,6 +327,45 @@ contract KeyfleetTest is Test {
         assertEq(tokenId, 1, "token ids start at one");
     }
 
+    /// @dev Invariant: a buyer who allows a tenth more than the price they saw, beaten to that key
+    /// by another buyer in the same block, gets the next key and pays only its price, the rest of
+    /// their USDC untouched; a buyer who allowed less than the next key's price is refused and pays
+    /// nothing.
+    function test_aBuyerBeatenToAKeyInTheSameBlockGetsTheNextWithinTheirMaximum() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        uint256 seen = fleet.nextPrice();
+        uint256 maxPrice = (seen * 110 + 99) / 100;
+        usdc.mint(alice, maxPrice);
+        usdc.mint(bob, seen);
+        vm.prank(alice);
+        usdc.approve(address(fleet), maxPrice);
+        vm.prank(bob);
+        usdc.approve(address(fleet), seen);
+        uint256 blockNumber = block.number;
+
+        assertEq(_buy(fleet, buyer), 1, "another buyer takes key 1 first");
+        uint256 next = fleet.nextPrice();
+        assertGt(next, seen, "key 2 costs more than key 1");
+        assertLe(next, maxPrice, "key 2 is within a tenth more");
+
+        uint256 fleetBefore = usdc.balanceOf(address(fleet));
+        vm.prank(alice);
+        uint256 tokenId = fleet.purchase(alice, maxPrice, block.timestamp);
+        assertEq(block.number, blockNumber, "every purchase is in one block");
+        assertEq(tokenId, 2, "the buyer beaten to key 1 gets key 2");
+        assertEq(fleet.ownerOf(2), alice);
+        assertEq(usdc.balanceOf(address(fleet)) - fleetBefore, next, "the fleet takes key 2's price");
+        assertEq(usdc.balanceOf(alice), maxPrice - next, "the rest stays in the buyer's wallet");
+        assertEq(usdc.allowance(alice, address(fleet)), maxPrice - next, "only key 2's price is drawn");
+
+        uint256 third = fleet.nextPrice();
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Keyfleet.PriceAboveMax.selector, third, seen));
+        fleet.purchase(bob, seen, block.timestamp);
+        assertEq(usdc.balanceOf(bob), seen, "a refused purchase takes nothing");
+        assertEq(fleet.totalMinted(), 2);
+    }
+
     /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
     /// 8 USDC to 80 USDC, and 10% of every sale is owed to the protocol treasury.
     function test_classicSellsExactlyOneThousandTwentyFourKeysAlongItsPriceCurve() public {
