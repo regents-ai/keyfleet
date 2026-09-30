@@ -35,10 +35,11 @@ You pay in USDC on Ethereum from your own wallet. Each step you confirm in your 
 1. Press **Sign In** at the top of the page and sign in with your wallet.
 2. Open a fleet, from the home page or from the menu under Fleets.
 3. Press **Get a key**, or **How this fleet works**. Under "Buying a key" you see the next key's number and its price.
-4. If your wallet hasn't already allowed that much USDC, press **Approve** first. The button names the price, such as **Approve 8 USDC**, and approves exactly that much. Confirm in your wallet.
-5. Press **Buy key** followed by the key's number, such as **Buy key 12**, and confirm in your wallet.
-6. Once it goes through, the key is yours. It shows under "Your keys" on your Account page.
-7. The key's traits are drawn by chance shortly after. If a draw is turned down, the key's profile, opened from "Your keys", shows **Try again**, and anyone signed in can press it to ask for the draw again.
+4. If you want a key even when someone buys this one just before you, tick **Purchase Confirmation?**. Your purchase may then take up to 10% more than the price and buys the next key on sale instead. You pay only the price of the key you get.
+5. If your wallet hasn't already allowed enough USDC, press **Approve** first. The button names the amount, such as **Approve 8 USDC**, and approves exactly that much. Confirm in your wallet.
+6. Press **Buy key** followed by the key's number, such as **Buy key 12**, and confirm in your wallet.
+7. Once it goes through, the key is yours. It shows under "Your keys" on your Account page.
+8. The key's traits are drawn by chance shortly after. If a draw is turned down, the key's profile, opened from "Your keys", shows **Try again**, and anyone signed in can press it to ask for the draw again.
 
 ## Sending your agent in
 

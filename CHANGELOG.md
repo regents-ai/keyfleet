@@ -566,3 +566,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   keys, shows a small note: "The preceding key must be sold." Keys already
   sold and the available key show none, and the note never gets in the way of
   moving the map.
+
+## 2026-09-30 — Purchase Confirmation when buying a key
+
+- "Buying a key" has a "Purchase Confirmation?" box, unticked to start, with an
+  info mark beside it that explains it when pointed at or reached with the
+  keyboard.
+- Ticked, a purchase may take up to 10% more than the price shown, rounded up
+  to the smallest USDC unit, so a buyer beaten to a key in the same block gets
+  the next one instead of a failed purchase. Only the price of the key they
+  get is taken; Approve and the line above the buttons name the most it can
+  take.
+- Unticked, buying works exactly as before.
+- The How it works page explains the box.

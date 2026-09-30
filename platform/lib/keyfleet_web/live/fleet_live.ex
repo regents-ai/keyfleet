@@ -56,6 +56,8 @@ defmodule KeyfleetWeb.FleetLive do
   # changes is read once; and how many pages of it the page shows at most.
   @activity_refresh_after 2_000
   @activity_pages 5
+  # What the info mark beside "Purchase Confirmation?" says.
+  @headroom_note "Send 10% additional USDC with your purchase to buy any of the next available Keys, in case someone buys the currently available Key before you in the block. Any leftover USDC is refunded."
 
   # The panels beside the map, each with the button that opens it.
   @panels [
@@ -829,11 +831,16 @@ defmodule KeyfleetWeb.FleetLive do
   # exception is a sold-out fleet, read from the chain by the server: a
   # purchase is then certain to fail, so Buy stays in view but can't be
   # pressed, with the count of keys sold beside it saying why.
+  # "Purchase Confirmation?", unticked to start, lets the purchase take up to
+  # a tenth more than the price, so a buyer beaten to this key in the same
+  # block gets the next one; it only changes the steps built.
   # Approve shows when the wallet's USDC allowance to the fleet is below the
-  # price; Buy shows once no approval is needed or one has been sent. The
-  # buttons stay in the page when the fleet sells out, so the buyer keeps the
-  # outcome of every purchase they sent.
+  # most the purchase may take; Buy shows once no approval is needed or one
+  # has been sent. The buttons stay in the page when the fleet sells out, so
+  # the buyer keeps the outcome of every purchase they sent.
   defp buy_key(assigns) do
+    assigns = assign(assigns, :headroom_note, @headroom_note)
+
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
       <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
@@ -876,15 +883,46 @@ defmodule KeyfleetWeb.FleetLive do
         flow={:buy}
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
+        inputs={%{"headroom" => "false"}}
         refresh={{@buy.token_id, @buy.price}}
       >
+        <:fields :let={panel}>
+          <div class="fleet-buy-headroom" hidden={is_nil(@buy.price)}>
+            <input type="hidden" name="headroom" value="false" />
+            <input
+              id="buy-key-headroom"
+              type="checkbox"
+              name="headroom"
+              value="true"
+              checked={panel.inputs["headroom"] == "true"}
+              aria-describedby="buy-key-headroom-note"
+              data-onchain-input="headroom"
+            />
+            <label for="buy-key-headroom">Purchase Confirmation?</label>
+            <span class="info-tip">
+              <span
+                id="buy-key-headroom-info"
+                class="info-tip__icon"
+                tabindex="0"
+                role="img"
+                aria-label="About Purchase Confirmation"
+                aria-describedby="buy-key-headroom-note"
+              >
+                i
+              </span>
+              <span id="buy-key-headroom-note" class="info-tip__note" role="tooltip">
+                {@headroom_note}
+              </span>
+            </span>
+          </div>
+        </:fields>
         <:buttons :let={panel}>
           <Regent.Primitives.button
             id="buy-key-approve"
             data-onchain-step="approve"
             hidden={not approve_shown?(panel)}
           >
-            <span data-press-label>Approve {@buy.price && usdc(@buy.price)}</span>
+            <span data-press-label>Approve {approving(panel)}</span>
           </Regent.Primitives.button>
           <Regent.Primitives.button
             id="buy-key-button"
@@ -907,8 +945,8 @@ defmodule KeyfleetWeb.FleetLive do
       </p>
 
       <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Ethereum from your wallet. If your wallet hasn’t already allowed this
-        much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
+        Paid in USDC on Ethereum from your wallet. If your wallet hasn’t already allowed enough
+        USDC, press Approve first: it approves exactly the amount on the button.
       </p>
       <p :if={@buy.price && @buy.level} class="fleet-detail">
         {Rules.holding_limit_sentence(@fleet.fleet_id, @buy.token_id)}
@@ -920,6 +958,10 @@ defmodule KeyfleetWeb.FleetLive do
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
   defp approve_shown?(_panel), do: false
+
+  # The USDC an approval allows: the most the purchase may take.
+  defp approving(%{built: %{figures: %{max_price: max_price}}}), do: usdc(max_price)
+  defp approving(_panel), do: nil
 
   # Buy shows when no approval is needed, or once one has been sent, so a
   # press on it before the approval lands still reaches the wallet.

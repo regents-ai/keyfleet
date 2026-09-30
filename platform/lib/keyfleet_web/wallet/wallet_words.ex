@@ -34,13 +34,23 @@ defmodule KeyfleetWeb.WalletWords do
   def line(_flow, %{problem: problem}, _inputs) when problem != nil, do: problem(problem)
   def line(flow, %{figures: figures}, _inputs), do: says(flow, figures)
 
-  defp says(:buy, %{token_id: token_id, price: price, approve?: true}),
+  # A purchase that may take the price and no more.
+  defp says(:buy, %{token_id: token_id, price: price, max_price: price, approve?: true}),
     do:
       "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}. First approve " <>
         "#{FleetLive.usdc(price)} for the fleet, then buy it."
 
-  defp says(:buy, %{token_id: token_id, price: price, approve?: false}),
+  defp says(:buy, %{token_id: token_id, price: price, max_price: price, approve?: false}),
     do: "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}, paid from your wallet."
+
+  # A purchase that may take more, for whichever key is next on sale.
+  defp says(:buy, %{token_id: token_id, price: price, max_price: max_price, approve?: true}),
+    do:
+      "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}. First approve " <>
+        "#{FleetLive.usdc(max_price)} for the fleet, then buy it. #{up_to(max_price)}"
+
+  defp says(:buy, %{token_id: token_id, price: price, max_price: max_price, approve?: false}),
+    do: "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}. #{up_to(max_price)}"
 
   defp says(:claim, %{waiting: waiting}),
     do:
@@ -84,6 +94,9 @@ defmodule KeyfleetWeb.WalletWords do
         "or stops any other wallet voting for you."
 
   defp says(_flow, _figures), do: nil
+
+  defp up_to(max_price),
+    do: "Up to #{FleetLive.usdc(max_price)}; you pay only the price of the key you get."
 
   defp problem(:no_keys), do: "Type the numbers of the keys to use, like 3, 7, 12."
   defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
