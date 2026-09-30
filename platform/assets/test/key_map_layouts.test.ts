@@ -180,8 +180,24 @@ describe("key map layouts", () => {
     }
   })
 
-  it("makes every consecutive pair of Accelerant keys neighbours", () => {
+  // Guards a broken chain: a key cut off from the one before it, or windings
+  // run together into a block.
+  it("lays Accelerant as a chain of nine-key windings joined by bend keys, each key beside the one before", () => {
     const grid = buildMap("accelerant", tested.accelerant)
+    // A key's centre in cell widths across, and its row.
+    const at = (key: number) => {
+      const [q, r] = grid.home(key)
+      return [q + r / 2, r]
+    }
+    for (let winding = 0; winding < 200; winding++) {
+      const first = 10 * winding + 1
+      const across = Array.from({length: 9}, (_, k) => k)
+      const expected = winding % 2 === 0 ? across : across.reverse()
+      expect(Array.from({length: 9}, (_, k) => at(first + k)), `winding ${winding}`).toEqual(
+        expected.map(x => [x, 2 * winding]),
+      )
+      expect(at(first + 9), `bend ${winding}`).toEqual([winding % 2 === 0 ? 8.5 : -0.5, 2 * winding + 1])
+    }
     for (let key = 2; key <= tested.accelerant; key++) {
       expect(areNeighbours(grid.home(key - 1), grid.home(key)), `keys ${key - 1} and ${key}`).toBe(true)
     }

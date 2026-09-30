@@ -1,4 +1,4 @@
-import {test, expect, type CDPSession, type Page} from "@playwright/test"
+import {test, expect, type CDPSession, type Locator, type Page} from "@playwright/test"
 import {openMap, settle} from "./support/key_map"
 
 type Point = {x: number; y: number}
@@ -75,6 +75,18 @@ const onScreen = (page: Page) =>
       .filter(({x, y}) => x > stage.left && x < stage.right && y > stage.top && y < stage.bottom)
       .sort((a, b) => a.key - b.key || a.y - b.y || a.x - b.x)
   })
+
+// Sells Accelerant to 1,990 keys. The view stays on key 2,000, at the chain's
+// left; eight cells right brings the winding of keys 1,991 to 1,999 into the
+// middle, with key 1,991 on sale.
+async function sellAccelerantTo1990(page: Page, stage: Locator) {
+  await page.getByLabel("Keys sold").fill("1990")
+  const centre = await stageCentre(page)
+  const cell = await stage.evaluate(stage => parseFloat(getComputedStyle(stage).getPropertyValue("--km-cell")))
+  await page.mouse.move(centre.x, centre.y)
+  await page.mouse.wheel(8 * cell, 0)
+  await expect(stage.locator('.km-tile[data-key="1991"]:not([hidden])').first()).toHaveAttribute("data-state", /available/)
+}
 
 async function tile(page: Page, key: number): Promise<Point> {
   const [copy] = await copiesOf(page, key)
@@ -214,9 +226,10 @@ test.describe("key map", () => {
     const target = await tile(page, 1_999)
     await page.mouse.click(target.x, target.y)
     await expect(selected(page)).toHaveText("Key 1,999 chosen.")
-    // Accelerant's map is five keys wide with 22 empty cells beside it, so it
-    // repeats every 27 cells across.
-    const period = 27 * (await stage.evaluate(stage => parseFloat(getComputedStyle(stage).getPropertyValue("--km-cell"))))
+    // Accelerant's chain is ten cells wide, nine keys and half a cell of bend
+    // on each side, with 22 empty cells beside it, so it repeats every 32
+    // cells across.
+    const period = 32 * (await stage.evaluate(stage => parseFloat(getComputedStyle(stage).getPropertyValue("--km-cell"))))
     const centre = await stageCentre(page)
     await page.mouse.move(centre.x, centre.y)
 
@@ -238,8 +251,9 @@ test.describe("key map", () => {
       there.forEach((copy, index) => expect(Math.hypot(copy.x - here[index].x, copy.y - here[index].y)).toBeLessThan(1))
     }
     await check()
-    // Nine rows up sits 1,953, one of the keys marked as yours.
-    await page.mouse.wheel(0, -700)
+    // Nine rows up and five cells right, in the chain's middle, sits 1,953,
+    // one of the keys marked as yours.
+    await page.mouse.wheel(480, -700)
     await nextFrame(page)
     await check()
     expect([...marks]).toEqual(expect.arrayContaining(["mine", "agent", "selected"]))
@@ -269,12 +283,11 @@ test.describe("key map", () => {
     await expect(selected(page)).toHaveText("No key chosen yet.")
   })
 
-  // Accelerant's keys run in rows of five, snaking; with 1,990 sold, keys
-  // 1,991 to 1,995 make one row from left to right.
+  // Accelerant's keys run in a chain of nine-key windings; with 1,990 sold,
+  // keys 1,991 to 1,999 make one winding from right to left.
   test("a key that can't be bought yet says so, by mouse or arrow key, and never blocks a drag", async ({page}) => {
     const {stage} = await openMap(page, "Accelerant")
-    await page.getByLabel("Keys sold").fill("1990")
-    await expect(stage.locator('.km-tile[data-key="1991"]:not([hidden])').first()).toHaveAttribute("data-state", /available/)
+    await sellAccelerantTo1990(page, stage)
     const note = stage.locator(".km-note")
 
     const later = await tile(page, 1_993)
@@ -286,7 +299,7 @@ test.describe("key map", () => {
     expect(box.y + box.height).toBeLessThan(later.y)
 
     // The available key and sold keys have no note.
-    for (const key of [1_991, 1_987]) {
+    for (const key of [1_991, 1_990]) {
       const at = await tile(page, key)
       await page.mouse.move(at.x, at.y)
       await page.waitForTimeout(500)
@@ -309,10 +322,10 @@ test.describe("key map", () => {
     await stage.focus()
     await page.keyboard.press("Home")
     await expect(note).toBeHidden()
-    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("ArrowLeft")
     await expect(stage.locator("[aria-live=polite]")).toHaveText("Key 1,992, not sold yet.")
     await expect(note).toBeVisible()
-    await page.keyboard.press("ArrowLeft")
+    await page.keyboard.press("ArrowRight")
     await expect(note).toBeHidden()
   })
 
@@ -351,27 +364,36 @@ test.describe("key map", () => {
     })
   })
 
+  // With 1,990 sold, keys 1,991 to 1,999 run right to left, and above them
+  // keys 1,981 to 1,989 run left to right.
   test("arrow keys, Enter and Home move and choose", async ({page}) => {
     const {stage} = await openMap(page, "Accelerant")
+    await sellAccelerantTo1990(page, stage)
     const status = stage.locator("[aria-live=polite]")
+    const centre = await stageCentre(page)
+    const availableOffCentre = async () => {
+      const [available] = await copiesOf(page, 1_991)
+      return available ? Math.round(Math.hypot(available.x - centre.x, available.y - centre.y)) : Infinity
+    }
     await stage.focus()
     await page.keyboard.press("Home")
-    await expect(status).toHaveText("Available key, 2,000.")
-    await page.keyboard.press("ArrowRight")
-    await expect(status).toHaveText("Key 1,999.")
+    await expect(status).toHaveText("Available key, 1,991.")
+    await expect.poll(availableOffCentre).toBeLessThanOrEqual(1)
+    await page.keyboard.press("ArrowLeft")
+    await expect(status).toHaveText("Key 1,992, not sold yet.")
     await page.keyboard.press("ArrowUp")
-    await expect(status).toHaveText("Key 1,992.")
-    const cursorCopies = await copiesOf(page, 1_992)
+    await expect(status).toHaveText("Key 1,988.")
+    const cursorCopies = await copiesOf(page, 1_988)
     expect(cursorCopies.length).toBeGreaterThan(0)
     for (const copy of cursorCopies) expect(copy.state.split(" ")).toContain("cursor")
     // Shortcuts with a modifier are left to the browser.
     await page.keyboard.press("Control+ArrowRight")
-    await expect(status).toHaveText("Key 1,992.")
+    await expect(status).toHaveText("Key 1,988.")
     await page.keyboard.press("Enter")
-    await expect(selected(page)).toHaveText("Key 1,992 chosen.")
+    await expect(selected(page)).toHaveText("Key 1,988 chosen.")
     await page.keyboard.press("ArrowRight")
     await page.keyboard.press(" ")
-    await expect(selected(page)).toHaveText("Key 1,993 chosen.")
+    await expect(selected(page)).toHaveText("Key 1,989 chosen.")
 
     // Without a cursor, Space neither chooses a key nor scrolls the page.
     await page.keyboard.press("Escape")
@@ -379,17 +401,13 @@ test.describe("key map", () => {
     await page.keyboard.press(" ")
     await nextFrame(page)
     expect(await page.evaluate(() => scrollY)).toBe(scrolled)
-    await expect(selected(page)).toHaveText("Key 1,993 chosen.")
+    await expect(selected(page)).toHaveText("Key 1,989 chosen.")
 
     // Home brings the available key back to the middle from anywhere.
-    const centre = await stageCentre(page)
     await page.mouse.move(centre.x, centre.y)
     await page.mouse.wheel(900, 0)
     await page.keyboard.press("Home")
-    await expect.poll(async () => {
-      const [available] = await copiesOf(page, 2_000)
-      return available ? Math.round(Math.hypot(available.x - centre.x, available.y - centre.y)) : Infinity
-    }).toBeLessThanOrEqual(1)
+    await expect.poll(availableOffCentre).toBeLessThanOrEqual(1)
   })
 
   test("the page scrolls normally outside the map", async ({page}) => {

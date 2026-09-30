@@ -48,4 +48,11 @@ describe("a fleet's still preview", () => {
     expect(x + width / 2).toBeCloseTo(0)
     expect(y + height / 2).toBeCloseTo(0)
   })
+
+  // Guards a home picture that shows half of Accelerant's chain.
+  it("frames Accelerant's first four windings and bends whole, ready to sell key 1", () => {
+    const keys = new Set(preview("accelerant", 0).tiles.map(tile => tile.key))
+
+    for (let key = 1; key <= 40; key++) expect(keys, `key ${key}`).toContain(key)
+  })
 })
