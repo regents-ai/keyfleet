@@ -35,9 +35,11 @@ of this file, at `985dc31`).
 Nothing. Since the founder's decisions of 2026-09-29 the fleets live on
 Ethereum, and `main` has no Autolaunch call, no REGENT and no launch rule; USDC
 is the one income token. This branch is kept for when launches come back
-(founder "2 b", 2026-09-29). Autolaunch v2 Revstake runs on Base, so bringing it
-back to an Ethereum fleet needs a decision on how a fleet reaches Base before
-any of the calls below apply.
+(founder "2 b", 2026-09-29). Autolaunch v2 Revstake runs on Base, and fleets
+stay on Ethereum: no fleet launches on Autolaunch this cycle (founder "13 b",
+2026-10-02). The founder will port a version of Autolaunch to Ethereum with
+TOKEN/ETH pairs instead of TOKEN/REGENT; until he does, nothing here is built
+further.
 
 The v1 factory the branch replaced sold 10%, pooled 5% and vested 85%; v2
 sells 20%, pools 15% and vests 65% (65,000,000,000 tokens over 365 days).
@@ -51,7 +53,7 @@ releases as the 65% vests. Neither is revenue to share out. What the launch's
 payment receiver and splitter send on is income for the keys: service revenue
 paid through the Revstake payment receiver, and the part of the swap fees'
 staker lane the splitter sends the fleet as treasury (see "What the treasury
-receives and may do" below).
+receives and may do" below). The founder kept that split ("14 a", 2026-10-02).
 
 ## The contracts
 
