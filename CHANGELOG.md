@@ -499,3 +499,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-09-30 — Tech stack names OpenAI Dots
 
 - The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
+
+## 2026-10-02 — Plan for the four workspace tools
+
+- Added the K-10 plan for running Fileverse dDocs, ActiveGraph, marimo and Cursor Origin
+  end to end, with the three capability checks behind it, in `docs/k10-workspace-tools.md`
+  and `docs/k10/`.
