@@ -72,24 +72,43 @@ defmodule KeyfleetWeb.Router do
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do
       plug KeyfleetWeb.Showcase.LocalOnly
+    end
+
+    # The showcase pages are HTML; only the catalog also answers JSON. Each
+    # pipeline negotiates its formats first, so a JSON request to a page is
+    # refused with 406 before any page header is sent. The showcase includes
+    # the sign-in window and frames its own preview.
+    @showcase_headers %{"content-security-policy" => ContentSecurityPolicy.showcase()}
+
+    pipeline :showcase_browser do
+      plug :accepts, ["html"]
+      plug :showcase_page
+      plug :put_secure_browser_headers, @showcase_headers
+    end
+
+    pipeline :showcase_catalog do
       plug :accepts, ["html", "json"]
+      plug :showcase_page
+      plug :put_secure_browser_headers, @showcase_headers
+    end
+
+    pipeline :showcase_page do
       plug :fetch_session
       plug :enforce_session_authority
       plug :fetch_live_flash
       plug KeyfleetWeb.Plugs.Theme
       plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
       plug :protect_from_forgery
+    end
 
-      # The showcase includes the sign-in window and frames its own preview.
-      plug :put_secure_browser_headers, %{
-        "content-security-policy" => ContentSecurityPolicy.showcase()
-      }
+    scope "/showcase", KeyfleetWeb.Showcase do
+      pipe_through [:local_showcase, :showcase_catalog]
+      get "/catalog", CatalogController, :show
+      get "/style.css", CatalogController, :style
     end
 
     scope "/showcase", KeyfleetWeb do
-      pipe_through :local_showcase
-      get "/catalog", Showcase.CatalogController, :show
-      get "/style.css", Showcase.CatalogController, :style
+      pipe_through [:local_showcase, :showcase_browser]
 
       live_session :local_showcase,
         session: {KeyfleetWeb.Live.Session, :render_context, []},

@@ -2,35 +2,21 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   @moduledoc """
   The durable authority behind one browser session lineage.
 
-  The signed cookie carries only a random 32-byte lineage, its generation and
-  the socket topic that the lineage alone determines. It never carries an
-  account: identity comes from the locked row, so no browser can assert who it
-  is. The row is keyed by the SHA-256 digest of the lineage, so a database
-  reader can never rebuild a usable cookie.
-
-  `/auth/csrf` commits an unbound generation-zero row that confers nothing until
-  a verified sign-in binds it, and first bind and every same-account refresh
-  advance the generation exactly once, so the cookie that carried the previous
-  generation is stale for every later request and mount. Revocation is terminal.
-
-  A sign-in lasts the session cookie's `max_age` (30 days) from the last bind
-  or refresh, so the cookie and the row carry the same limit: a bound row older
-  than that reads as reset, and the browser holding it is signed out until it
-  proves the person to Privy again.
-
-  Every transition runs inside one transaction that inserts the operation's row
-  when it is absent, locks it `FOR UPDATE`, and applies at most one legal
-  change, so the absent-row race and the present-row race serialize identically.
-  Provider verification, broadcasts, cookie writes and responses stay outside
-  that lock.
+  The signed cookie carries a random 32-byte lineage, its generation and the
+  socket topic the lineage determines, never an account: identity comes from the
+  row, keyed by the lineage's SHA-256 digest so a database reader cannot rebuild
+  a cookie. `/auth/csrf` commits an unbound generation-zero row; first bind and
+  every same-account refresh advance the generation once, so the previous cookie
+  is stale everywhere. Revocation is terminal, and a bound row older than the
+  cookie's `max_age` reads as reset. Every transition inserts the row when
+  absent, locks it `FOR UPDATE` and applies at most one change in one
+  transaction, so the absent-row and present-row races serialize identically.
   """
 
   use Ash.Resource,
     domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
-
-  require Ash.Query
 
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.VerifiedSession
@@ -40,7 +26,6 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   @actor %System{}
   @lineage_bytes 32
   @maximum_generation 9_223_372_036_854_775_807
-  @topic_prefix "session_authority:"
   @canonical_keys ["session_lineage", "session_generation", "live_socket_id"]
   @sign_in_lifetime_seconds Application.compile_env!(:keyfleet, [:session_options, :max_age])
 
@@ -92,9 +77,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
     end
 
     create :mint do
-      accept []
-      argument :lineage_digest, :binary, allow_nil?: false
-      change set_attribute(:lineage_digest, arg(:lineage_digest))
+      accept [:lineage_digest]
     end
 
     update :bind do
@@ -122,28 +105,23 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   policies do
     policy always() do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 
   @doc """
-  The claim `session` carries, or `nil` when it carries none the server minted.
-
-  Every canonical field must be present and internally consistent: the lineage
-  is the exact unpadded base64url encoding of 32 bytes, the generation is inside
-  the column's range, and the signed socket topic is the one this lineage
-  determines. Anything else is malformed, never a weaker claim.
+  The claim `session` carries, or `nil` when it carries none the server minted:
+  the exact unpadded base64url encoding of 32 bytes, a generation inside the
+  column's range and the socket topic this lineage determines. Anything else is
+  malformed, never a weaker claim.
   """
   @spec claim(map() | nil) :: claim() | nil
-  def claim(%{
-        "session_lineage" => lineage,
-        "session_generation" => generation,
-        "live_socket_id" => socket_topic
-      })
-      when is_binary(lineage) and is_integer(generation) and generation >= 0 and
-             generation <= @maximum_generation do
-    with true <- canonical_lineage?(lineage),
-         ^socket_topic <- topic(lineage) do
+  def claim(%{"session_lineage" => lineage, "session_generation" => generation} = session)
+      when is_binary(lineage) and is_integer(generation) and
+             generation in 0..@maximum_generation//1 do
+    with {:ok, <<raw::binary-size(@lineage_bytes)>>} <- Base.url_decode64(lineage, padding: false),
+         ^lineage <- Base.url_encode64(raw, padding: false),
+         true <- Map.get(session, "live_socket_id") == topic(lineage) do
       %{lineage: lineage, generation: generation}
     else
       _malformed -> nil
@@ -152,12 +130,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   def claim(_session), do: nil
 
-  @doc """
-  Whether `session` is trying to carry a claim at all.
-
-  A session holding any canonical field is making an authority statement, so a
-  malformed one is refused rather than read as the absence of a claim.
-  """
+  @doc "Whether `session` states a claim at all; a malformed one is refused, not read as none."
   @spec claim_shaped?(map() | nil) :: boolean()
   def claim_shaped?(session) when is_map(session),
     do: Enum.any?(@canonical_keys, &Map.has_key?(session, &1))
@@ -173,67 +146,36 @@ defmodule Keyfleet.Accounts.SessionAuthority do
       "live_socket_id" => topic(lineage)
     }
 
-  @doc "Commits one unbound generation-zero lineage for a browser that carries none."
-  @spec bootstrap() :: claim()
-  def bootstrap do
-    lineage = @lineage_bytes |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
-    Ash.create!(__MODULE__, %{lineage_digest: digest(lineage)}, action: :mint, actor: @actor)
-    %{lineage: lineage, generation: 0}
-  end
-
   @doc """
-  The exact-claim decision every request and connected mount resolves through.
-
-  `{:ok, nil}` is a valid claim bound to no account; only `{:ok, account_id}`
-  confers one, and that account is read from the row rather than the cookie.
-  """
-  @spec exact(claim() | nil) :: {:ok, integer() | nil} | {:error, :superseded | :reset}
-  def exact(%{lineage: lineage} = claim) when is_binary(lineage) do
-    row = lineage |> digest() |> row()
-
-    case state(row, claim) do
-      :exact -> {:ok, row.human_account_id}
-      :ensurable -> {:ok, nil}
-      other -> {:error, other}
-    end
-  end
-
-  def exact(_claim), do: {:error, :reset}
-
-  @doc """
-  The `/auth/csrf` state matrix.
-
-  A generation-zero claim whose row is absent is atomically ensured; a claim
-  above generation zero whose row is absent fails closed and reports the
-  invariant breach without the lineage that would identify the browser.
+  The `/auth/csrf` state matrix. A claim above generation zero whose row is
+  absent fails closed and reports the breach without the identifying lineage.
   """
   @spec renew(claim() | nil) :: {:bootstrap | :current, claim()} | {:error, :superseded | :reset}
-  def renew(%{lineage: lineage, generation: generation} = claim) when is_binary(lineage) do
+  def renew(nil) do
+    lineage = @lineage_bytes |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+    Ash.create!(__MODULE__, %{lineage_digest: digest(lineage)}, action: :mint, actor: @actor)
+    {:bootstrap, %{lineage: lineage, generation: 0}}
+  end
+
+  def renew(%{lineage: lineage, generation: generation} = claim) do
     case locked(claim, &{state(&1, claim), &1}) do
       {:exact, row} -> {:current, claim_at(lineage, row)}
       {:superseded, _row} -> {:error, :superseded}
-      {:reset, nil} -> absent_row_breach(generation)
+      {:reset, nil} -> absent_row(generation)
       {:reset, _row} -> {:error, :reset}
     end
   end
 
-  def renew(_claim), do: {:bootstrap, bootstrap()}
-
   @doc """
-  The one serialized transition a verified sign-in performs.
-
-  An exact unbound claim binds to the verified account and an exact same-account
-  claim refreshes, each advancing the generation once; the returned transition,
-  not any cookie value, says which happened. A different account is a two-step
-  cutover: the old lineage is revoked here and a replacement is only ever bound
-  by a later request.
+  The one serialized transition a verified sign-in performs: an exact unbound
+  claim binds, an exact same-account claim refreshes, and a different account
+  revokes the old lineage so a later request binds a fresh one.
   """
   @spec sign_in(claim() | nil, integer()) ::
           {:ok, :bind | :refresh, claim()}
           | {:switch, String.t()}
           | {:error, :superseded | :reset}
-  def sign_in(%{lineage: lineage} = claim, account_id)
-      when is_binary(lineage) and is_integer(account_id) do
+  def sign_in(%{lineage: lineage} = claim, account_id) do
     locked(claim, fn row ->
       case state(row, claim) do
         :exact -> transition(row, lineage, account_id)
@@ -242,65 +184,57 @@ defmodule Keyfleet.Accounts.SessionAuthority do
     end)
   end
 
-  def sign_in(_claim, _account_id), do: {:error, :reset}
+  def sign_in(nil, _account_id), do: {:error, :reset}
 
-  @doc """
-  Revokes a lineage terminally and idempotently, keeping the first revocation.
-
-  Logout accepts any integrity-valid lineage, including one whose generation a
-  concurrent refresh has already superseded, and ensures the row when a browser
-  presents a lineage this node has never seen.
-  """
+  @doc "Revokes a lineage terminally, ensuring an unseen one first; returns its socket topic."
   @spec revoke(claim() | nil) :: String.t() | nil
-  def revoke(%{lineage: lineage}) when is_binary(lineage) do
-    digest = digest(lineage)
-
-    {:ok, _revoked} =
+  def revoke(%{lineage: lineage}) do
+    {:ok, _row} =
       Repo.transaction(fn ->
-        ensure(digest, DateTime.utc_now())
-        digest |> lock() |> revoke!()
+        ensure(lineage, DateTime.utc_now())
+        lineage |> lock() |> revoke!()
       end)
 
     topic(lineage)
   end
 
-  def revoke(_claim), do: nil
+  def revoke(nil), do: nil
 
   @doc """
-  The lineage and verified account an exactly current claim resolves to.
-
-  `{nil, nil}` means the claim itself is not current; `{lineage, nil}` means it
-  is current but confers no verified account.
+  The lineage and verified account an exactly current claim resolves to:
+  `{nil, nil}` when the claim is not current, `{lineage, nil}` when it is but
+  confers no verified account.
   """
   @spec resolve(claim() | nil) :: {String.t() | nil, Ash.Resource.record() | nil}
-  def resolve(claim) do
-    case exact(claim) do
-      {:ok, account_id} -> {claim.lineage, verified(account_id)}
-      {:error, _lifecycle} -> {nil, nil}
+  def resolve(%{lineage: lineage} = claim) do
+    row = row(lineage)
+
+    case state(row, claim) do
+      :exact -> {lineage, verified(row.human_account_id)}
+      :ensurable -> {lineage, nil}
+      _lifecycle -> {nil, nil}
     end
   end
 
-  @doc """
-  The verified account a mounted lease still resolves to, or `nil`.
+  def resolve(nil), do: {nil, nil}
 
-  A same-account refresh advances the generation beneath a mounted socket, so a
-  lease revalidates the lineage, its account, its revocation, the sign-in's age
-  and the account's provider evidence rather than the generation it mounted with.
+  @doc """
+  The verified account a mounted lease still resolves to, or `nil`. A refresh
+  advances the generation beneath a mounted socket, so a lease revalidates the
+  lineage, account, revocation, sign-in age and provider evidence instead.
   """
   @spec leased_account(String.t(), integer()) :: Ash.Resource.record() | nil
-  def leased_account(lineage, account_id) when is_binary(lineage) and is_integer(account_id) do
-    row = lineage |> digest() |> row()
+  def leased_account(lineage, account_id) do
+    row = row(lineage)
 
     if match?(%{revoked_at: nil, human_account_id: ^account_id}, row) and not lapsed?(row),
       do: verified(account_id)
   end
 
-  def leased_account(_lineage, _account_id), do: nil
-
   @doc "The deterministic, lineage-stable topic every socket for a lineage mounts on."
   @spec topic(String.t()) :: String.t()
-  def topic(lineage) when is_binary(lineage),
-    do: @topic_prefix <> Base.url_encode64(digest(lineage), padding: false)
+  def topic(lineage),
+    do: "session_authority:" <> Base.url_encode64(digest(lineage), padding: false)
 
   # The four states an integrity-valid claim can hold against its row. A claim
   # ahead of its row, or above generation zero without one, is unrecoverable
@@ -308,15 +242,15 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   defp state(nil, %{generation: 0}), do: :ensurable
   defp state(nil, _claim), do: :reset
   defp state(%{revoked_at: revoked_at}, _claim) when not is_nil(revoked_at), do: :reset
-  defp state(row, claim), do: if(lapsed?(row), do: :reset, else: generation_state(row, claim))
 
-  defp generation_state(%{generation: generation}, %{generation: generation}), do: :exact
-
-  defp generation_state(%{generation: generation}, %{generation: claimed})
-       when claimed < generation,
-       do: :superseded
-
-  defp generation_state(_row, _claim), do: :reset
+  defp state(%{generation: generation} = row, %{generation: claimed}) do
+    cond do
+      lapsed?(row) -> :reset
+      claimed == generation -> :exact
+      claimed < generation -> :superseded
+      true -> :reset
+    end
+  end
 
   # Bind and refresh are the only updates a live row takes, and each is a
   # sign-in, so a bound row's `updated_at` is when the person last signed in.
@@ -334,22 +268,18 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   end
 
   defp transition(%{human_account_id: nil} = row, lineage, account_id),
-    do: {:ok, :bind, mutate(row, lineage, %{account_id: account_id}, :bind)}
+    do: {:ok, :bind, updated_claim(row, lineage, :bind, %{account_id: account_id})}
 
   defp transition(%{human_account_id: account_id} = row, lineage, account_id),
-    do: {:ok, :refresh, mutate(row, lineage, %{}, :advance)}
+    do: {:ok, :refresh, updated_claim(row, lineage, :advance, %{})}
 
   defp transition(row, lineage, _other_account_id) do
     revoke!(row)
     {:switch, topic(lineage)}
   end
 
-  defp mutate(row, lineage, input, action) do
-    row
-    |> Ash.Changeset.for_update(action, input, actor: @actor)
-    |> Ash.update!()
-    |> then(&claim_at(lineage, &1))
-  end
+  defp updated_claim(row, lineage, action, input),
+    do: claim_at(lineage, Ash.update!(row, input, action: action, actor: @actor))
 
   defp revoke!(%{revoked_at: nil} = row),
     do: Ash.update!(row, %{}, action: :revoke, actor: @actor)
@@ -359,79 +289,56 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   # Bind and refresh may ensure the unbound generation-zero row the claim names,
   # so the absent-row order of a race takes the same lock as the present-row one.
   defp locked(%{lineage: lineage, generation: generation}, callback) do
-    digest = digest(lineage)
-
     {:ok, result} =
       Repo.transaction(fn ->
-        if generation == 0, do: ensure(digest, nil)
-        digest |> lock() |> callback.()
+        if generation == 0, do: ensure(lineage, nil)
+        lineage |> lock() |> callback.()
       end)
 
     result
   end
 
-  defp ensure(digest, revoked_at) do
+  # Ash is bypassed on purpose: the seed confers nothing until a locked
+  # transition binds it, and the loser of a concurrent seed must fall through to
+  # that lock silently, which `on_conflict: :nothing` is.
+  defp ensure(lineage, revoked_at) do
     now = DateTime.utc_now()
 
-    # Ash is bypassed here on purpose: this is the unconditional, idempotent seed
-    # of a row that confers nothing until a locked transition binds it, and the
-    # loser of a concurrent seed has to fall through to that lock silently rather
-    # than raise. `on_conflict: :nothing` against the lineage-digest index is the
-    # whole behaviour, so there is no change, policy or notification to run.
-    Repo.insert_all(
-      __MODULE__,
-      [
-        %{
-          id: Ash.UUID.generate(),
-          lineage_digest: digest,
-          generation: 0,
-          revoked_at: revoked_at,
-          inserted_at: now,
-          updated_at: now
-        }
-      ],
-      on_conflict: :nothing,
-      conflict_target: :lineage_digest
-    )
+    row = %{
+      id: Ash.UUID.generate(),
+      lineage_digest: digest(lineage),
+      generation: 0,
+      revoked_at: revoked_at,
+      inserted_at: now,
+      updated_at: now
+    }
+
+    Repo.insert_all(__MODULE__, [row], on_conflict: :nothing, conflict_target: :lineage_digest)
   end
 
-  defp lock(digest),
-    do: digest |> lookup() |> Ash.Query.lock(:for_update) |> Ash.read_one!()
-
-  defp row(digest), do: digest |> lookup() |> Ash.read_one!()
-
-  defp lookup(digest),
-    do:
-      Ash.Query.for_read(__MODULE__, :by_lineage_digest, %{lineage_digest: digest}, actor: @actor)
-
-  defp verified(nil), do: nil
-
-  defp verified(account_id) do
-    with {:ok, account} when not is_nil(account) <-
-           Accounts.get_human_account(account_id, actor: %Human{human_account_id: account_id}),
-         true <- VerifiedSession.current?(account) do
-      account
-    else
-      _lapsed -> nil
-    end
-  end
-
-  defp canonical_lineage?(lineage) do
-    case Base.url_decode64(lineage, padding: false) do
-      {:ok, <<decoded::binary-size(@lineage_bytes)>>} ->
-        Base.url_encode64(decoded, padding: false) == lineage
-
-      _malformed ->
-        false
-    end
-  end
-
-  defp absent_row_breach(generation) do
+  defp absent_row(generation) do
     :telemetry.execute([:keyfleet, :session_authority, :absent_row], %{count: 1}, %{
       generation: generation
     })
 
     {:error, :reset}
+  end
+
+  defp lock(lineage),
+    do: lineage |> lookup() |> Ash.Query.lock(:for_update) |> Ash.read_one!(actor: @actor)
+
+  defp row(lineage), do: lineage |> lookup() |> Ash.read_one!(actor: @actor)
+
+  defp lookup(lineage),
+    do: Ash.Query.for_read(__MODULE__, :by_lineage_digest, %{lineage_digest: digest(lineage)})
+
+  defp verified(nil), do: nil
+
+  defp verified(account_id) do
+    case Accounts.get_human_account(account_id, actor: %Human{human_account_id: account_id}) do
+      {:ok, account} -> if VerifiedSession.current?(account), do: account
+      {:error, _unreadable} -> nil
+    end
   end
 
   defp claim_at(lineage, %{generation: generation}),

@@ -506,11 +506,9 @@ export function showAccountAuthFailure(
     request === "sign-in"
       ? {
           closed: "Sign-in closed before completion. No account was connected.",
-          provider:
-            "Your wallet responded, but Privy couldn’t finish sign-in. Reload this page before trying again.",
-          session:
-            "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
-          startup: "Sign-in is unavailable on this page. Reload it or contact support.",
+          provider: "Sign-in didn’t finish. Reload this page, then try again.",
+          session: "We couldn’t sign you in. Reload this page, then try again.",
+          startup: "Sign-in isn’t available right now. Reload this page.",
         }[signInFailure]
       : {
           "connect-wallet": "Wallet connection couldn’t start. Try again.",

@@ -7,7 +7,6 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   require Logger
 
-  @account_evidence_reasons [:missing_linked_wallet, :invalid_verified_identity]
   @browser_failure_reasons ~w(
     bridge_startup
     flow_closed
@@ -202,24 +201,31 @@ defmodule KeyfleetWeb.PrivySessionController do
     end
   end
 
-  # The account boundary's own two outcomes are named; anything else it or Ash
+  # The account boundary's own outcomes are named; anything else it or Ash
   # returns is reduced without being inspected, so no query, changeset or record
   # detail can reach the classification.
   defp establish(verified) do
     case VerifiedSession.establish(verified) do
       {:ok, _account, _conflicts} = established -> established
-      {:error, reason} when reason in @account_evidence_reasons -> account_evidence(reason)
+      {:error, :missing_linked_wallet} -> account_evidence(:missing_linked_wallet)
       _rejected -> account_evidence(:account_rejected)
     end
   end
 
   defp account_evidence(reason), do: {:error, {:account_evidence, reason}}
 
-  # Both values are fixed atoms from the classification contract, and the
-  # development formatter drops metadata, so they belong in the message itself.
-  # The refused pair is never interpolated, inspected or answered differently.
+  # Both values are fixed atoms from the classification contract, so they are
+  # safe as metric tags and belong in the message itself, since the development
+  # formatter drops metadata. The refused pair is never interpolated, inspected
+  # or answered differently.
   defp refuse(conn, stage, reason) do
-    Logger.debug("Privy session rejected stage=#{stage} reason=#{reason}")
+    Logger.info("Privy session refused stage=#{stage} reason=#{reason}")
+
+    :telemetry.execute([:keyfleet, :privy, :session_refused], %{count: 1}, %{
+      stage: stage,
+      reason: reason
+    })
+
     report_bounded_sign_in_failure(conn, "session_exchange")
     conn |> mark_recoverable(stage, reason) |> unauthorized()
   end
@@ -276,21 +282,9 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   defp verifier, do: Application.get_env(:keyfleet, :privy_verifier, RegentPrivy.Session)
 
-  defp session_payload(nil),
-    do: %{
-      authenticated: false,
-      account_control: %{
-        kind: :sign_in,
-        label: "Sign In",
-        avatar_src: nil
-      }
-    }
-
   defp session_payload(account) do
-    access_context = AccessContext.human(account)
-    control = AccessContext.account_control(access_context)
-
-    %{authenticated: true, account_control: Map.from_struct(control)}
+    control = account |> AccessContext.for_account() |> AccessContext.account_control()
+    %{authenticated: not is_nil(account), account_control: Map.from_struct(control)}
   end
 
   defp broadcast_disconnect(nil), do: :ok

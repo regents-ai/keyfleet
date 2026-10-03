@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.Live.Session do
   @moduledoc false
 
-  import Phoenix.LiveView,
-    only: [attach_hook: 4, connected?: 1, get_connect_info: 2, redirect: 2]
+  import Phoenix.Component, only: [assign: 2]
+  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, get_connect_info: 2, redirect: 2]
 
   alias Keyfleet.AccessContext
   alias Keyfleet.Accounts.SessionAuthority
@@ -10,20 +10,14 @@ defmodule KeyfleetWeb.Live.Session do
   @public_root "/"
 
   @doc """
-  What the render knew, signed into the static LiveView token.
-
-  `Phoenix.LiveView.Static.sign_token/2` signs with `Phoenix.Token`, which is
-  integrity-only and readable by anyone holding the markup, so this carries the
-  lineage-stable topic rather than the lineage itself: a digest that names the
-  browser session without being able to authenticate as it. The route travels
-  with it because a connected mount cannot otherwise learn it — `connect_info`
-  `:uri` is the transport's own `/live/websocket` address and `socket.host_uri`
-  carries no path, so only `handle_params` sees the page route, and that is too
-  late to refuse a mount.
-
-  Phoenix LiveView 1.2.7 hands `mount/3` `Map.merge(handshake_session,
-  static_token_session)`, so these keys are the render's own and can never stand
-  in for the authority the socket connected with.
+  What the render knew, signed into the static LiveView token. The token is
+  integrity-only and readable by anyone holding the markup, so it carries the
+  lineage-stable topic, a digest that names the browser session without being
+  able to authenticate as it, rather than the lineage. The route travels with it
+  because a connected mount cannot otherwise learn it before `handle_params`,
+  which is too late to refuse the mount. LiveView merges these keys over the
+  handshake session, so they can never stand in for the authority the socket
+  connected with.
   """
   def render_context(conn) do
     conn.assigns.current_lineage
@@ -35,18 +29,17 @@ defmodule KeyfleetWeb.Live.Session do
     if connected?(socket) do
       connected(socket, session, get_connect_info(socket, :session))
     else
-      {:cont, assign_principal(socket, disconnected_account(session))}
+      {_lineage, account} = session |> SessionAuthority.claim() |> SessionAuthority.resolve()
+      {:cont, assign_principal(socket, account)}
     end
   end
 
   # The cookie the socket connected with is the only authority, and a mount that
-  # cannot honour it is refused there and then rather than left to a later hook.
-  # An exactly current claim drives the socket when the page was rendered for its
-  # lineage; when it was not, one full request for the same route realigns them.
-  # Anything else — a claim-shaped handshake that will not parse, one the
-  # authority refuses, or none at all under a page that named a lineage — lands
-  # on the public root, which is outside the product shell and so cannot raise
-  # the same rejection again.
+  # cannot honour it is refused here, not left to a later hook. An exactly
+  # current claim drives the socket when the page was rendered for its lineage;
+  # otherwise one full request for the same route realigns them. Anything else
+  # lands on the public root, which is outside the product shell and so cannot
+  # raise the same rejection again.
   defp connected(socket, %{"render_topic" => rendered} = static, handshake),
     do: admit(socket, rendered, static["render_route"], SessionAuthority.claim(handshake))
 
@@ -73,53 +66,41 @@ defmodule KeyfleetWeb.Live.Session do
   # The lease holds no generation, because a same-account refresh advances it
   # beneath a live socket. Lineage, account binding, revocation and the
   # account's own provider evidence are re-read every time, and the principal is
-  # rebuilt from that read rather than from the struct the mount captured.
+  # rebuilt from that read rather than from the struct the mount captured. A
+  # lapsed lease withdraws the principal, so nothing downstream can still
+  # present it as authority.
   defp hold(socket, lineage, account) do
     lease = %{lineage: lineage, account_id: account.id}
 
     socket
     |> assign_principal(account)
     |> attach_hook(:session_authority_params, :handle_params, fn _params, _uri, socket ->
-      case leased(lease) do
-        nil -> {:halt, redirect(lapsed(socket), to: @public_root)}
-        account -> {:cont, assign_principal(socket, account)}
-      end
+      recheck(socket, lease, &redirect(&1, to: @public_root))
     end)
     |> attach_hook(:session_authority_event, :handle_event, fn _event, _params, socket ->
-      case leased(lease) do
-        nil -> {:halt, lapsed(socket)}
-        account -> {:cont, assign_principal(socket, account)}
-      end
+      recheck(socket, lease, & &1)
     end)
   end
 
-  # A lapsed lease withdraws the principal, so nothing downstream can still
-  # present it as authority.
-  defp lapsed(socket), do: assign_principal(socket, nil)
-
-  defp leased(%{lineage: lineage, account_id: account_id}),
-    do: SessionAuthority.leased_account(lineage, account_id)
+  defp recheck(socket, lease, lapsed) do
+    case SessionAuthority.leased_account(lease.lineage, lease.account_id) do
+      nil -> {:halt, socket |> assign_principal(nil) |> lapsed.()}
+      account -> {:cont, assign_principal(socket, account)}
+    end
+  end
 
   defp rendered_topic(nil), do: %{}
   defp rendered_topic(lineage), do: %{"render_topic" => SessionAuthority.topic(lineage)}
-
-  defp disconnected_account(session) do
-    {_lineage, account} = session |> SessionAuthority.claim() |> SessionAuthority.resolve()
-    account
-  end
 
   defp local_route(path, ""), do: path
   defp local_route(path, query), do: path <> "?" <> query
 
   defp assign_principal(socket, account) do
-    access_context = access_context(account)
+    context = AccessContext.for_account(account)
 
-    Phoenix.Component.assign(socket,
-      access_context: access_context,
-      account_control: AccessContext.account_control(access_context)
+    assign(socket,
+      access_context: context,
+      account_control: AccessContext.account_control(context)
     )
   end
-
-  defp access_context(nil), do: AccessContext.anonymous()
-  defp access_context(account), do: AccessContext.human(account)
 end

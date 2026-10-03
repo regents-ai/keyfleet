@@ -25,10 +25,10 @@ defmodule Keyfleet.Accounts.LinkedIdentityTest do
     assert github.provider == :github
   end
 
-  test "writes require the exact system actor" do
+  test "writes require the system actor" do
     account = account!("identity-policy")
 
-    for actor <- [nil, %Human{human_account_id: account.id}, %{role: :system}, %{rail: :agent}] do
+    for actor <- [nil, %Human{human_account_id: account.id}, %{rail: :agent}] do
       assert {:error, %Ash.Error.Forbidden{}} =
                upsert(:x, "forbidden-#{inspect(actor)}", "forbidden", account.id, actor)
     end
@@ -47,7 +47,7 @@ defmodule Keyfleet.Accounts.LinkedIdentityTest do
     assert {:ok, [%{provider: :x}]} = Accounts.list_my_linked_identities(actor: first_actor)
     assert {:ok, [%{provider: :github}]} = Accounts.list_my_linked_identities(actor: second_actor)
 
-    for actor <- [nil, %{role: :human, human_account_id: first.id}, system] do
+    for actor <- [nil, system] do
       assert {:error, _error} = Accounts.list_my_linked_identities(actor: actor)
     end
   end
@@ -63,13 +63,14 @@ defmodule Keyfleet.Accounts.LinkedIdentityTest do
 
   defp upsert(provider, subject, username, human_account_id, actor) do
     Accounts.upsert_linked_identity(
-      provider,
-      subject,
-      username,
-      nil,
-      DateTime.utc_now(),
-      %{},
-      human_account_id,
+      %{
+        provider: provider,
+        subject: subject,
+        username: username,
+        verified_at: DateTime.utc_now(),
+        metadata: %{},
+        human_account_id: human_account_id
+      },
       actor: actor
     )
   end

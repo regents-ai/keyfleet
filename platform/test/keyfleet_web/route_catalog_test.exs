@@ -235,9 +235,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
              when is_binary(path) and is_binary(route_id) ->
                true
 
-             %{"type" => "heading", "label" => label} when is_binary(label) ->
-               true
-
              _target ->
                false
            end)

@@ -1213,7 +1213,7 @@ export function startPrivyBridge(
     }
 
     root.render(
-      <PrivyProvider appId={appId} config={{loginMethods: ["wallet"]}}>
+      <PrivyProvider appId={appId} config={{loginMethods: ["wallet"], appearance: {logo: "/mark.png"}}}>
         <AccountBridge
           mode={mode}
           lifetime={controller.signal}

@@ -1,20 +1,7 @@
 defmodule KeyfleetWeb do
   @moduledoc """
-  The entrypoint for defining your web interface, such
-  as controllers, components, channels, and so on.
-
-  This can be used in your application as:
-
-      use KeyfleetWeb, :controller
-      use KeyfleetWeb, :html
-
-  The definitions below will be executed for every controller,
-  component, etc, so keep them short and clean, focused
-  on imports, uses and aliases.
-
-  Do NOT define functions inside the quoted expressions
-  below. Instead, define additional modules and import
-  those modules here.
+  The entry point for the web interface: `use KeyfleetWeb, :controller`,
+  `:html`, `:live_view`, `:live_component` or `:router`.
   """
 
   def static_paths,
@@ -22,7 +9,6 @@ defmodule KeyfleetWeb do
       ~w(assets fonts images api-contract.openapiv3.yaml apple-touch-icon.png favicon.ico favicon-32.png favicon-192.png favicon.svg mark.png)
 
   # phx.digest inserts a hash before the extension of root-level files.
-  # Keep the prefix allowlist derived from the same declared public assets.
   def digested_static_prefixes do
     for path <- static_paths(), Path.extname(path) != "", do: Path.rootname(path) <> "-"
   end
@@ -31,16 +17,9 @@ defmodule KeyfleetWeb do
     quote do
       use Phoenix.Router, helpers: false
 
-      # Import common connection and controller functions to use in pipelines
       import Plug.Conn
       import Phoenix.Controller
       import Phoenix.LiveView.Router
-    end
-  end
-
-  def channel do
-    quote do
-      use Phoenix.Channel
     end
   end
 
@@ -74,22 +53,17 @@ defmodule KeyfleetWeb do
     quote do
       use Phoenix.Component
 
-      # Import convenience functions from controllers
-      import Phoenix.Controller,
-        only: [get_csrf_token: 0, view_module: 1, view_template: 1]
+      import Phoenix.Controller, only: [get_csrf_token: 0]
 
-      # Include general helpers for rendering HTML
       unquote(html_helpers())
     end
   end
 
   defp html_helpers do
     quote do
-      # Common modules used in templates
       alias KeyfleetWeb.Layouts
       alias Phoenix.LiveView.JS
 
-      # Routes generation with the ~p sigil
       unquote(verified_routes())
     end
   end
@@ -103,10 +77,5 @@ defmodule KeyfleetWeb do
     end
   end
 
-  @doc """
-  When used, dispatch to the appropriate controller/live_view/etc.
-  """
-  defmacro __using__(which) when is_atom(which) do
-    apply(__MODULE__, which, [])
-  end
+  defmacro __using__(which) when is_atom(which), do: apply(__MODULE__, which, [])
 end

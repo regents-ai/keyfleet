@@ -17,10 +17,8 @@ defmodule KeyfleetWeb.Plugs.CanonicalHost do
   @impl Plug
   def call(%Plug.Conn{host: "www." <> host} = conn, _opts) do
     if host == Endpoint.host() do
-      conn
-      |> put_resp_header("location", Endpoint.url() <> conn.request_path <> query_suffix(conn))
-      |> send_resp(:moved_permanently, "")
-      |> halt()
+      location = Endpoint.url() <> conn.request_path <> query_suffix(conn.query_string)
+      conn |> put_resp_header("location", location) |> send_resp(:moved_permanently, "") |> halt()
     else
       conn
     end
@@ -28,6 +26,6 @@ defmodule KeyfleetWeb.Plugs.CanonicalHost do
 
   def call(conn, _opts), do: conn
 
-  defp query_suffix(%Plug.Conn{query_string: ""}), do: ""
-  defp query_suffix(%Plug.Conn{query_string: query}), do: "?" <> query
+  defp query_suffix(""), do: ""
+  defp query_suffix(query), do: "?" <> query
 end

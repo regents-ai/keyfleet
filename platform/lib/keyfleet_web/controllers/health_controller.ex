@@ -1,4 +1,5 @@
 defmodule KeyfleetWeb.HealthController do
+  @moduledoc "`/healthz`: \"ok\" only while the site's own database answers."
   use KeyfleetWeb, :controller
 
   def show(conn, _params) do
@@ -17,16 +18,12 @@ defmodule KeyfleetWeb.HealthController do
   # schema is the repository's own configured name, never request input.
   # sobelow_skip ["SQL.Query"]
   defp database_ready? do
-    case Ecto.Adapters.SQL.query(
-           Keyfleet.Repo,
-           "SELECT 1 FROM \"#{Keyfleet.Repo.default_prefix()}\".session_authorities LIMIT 0",
-           [],
-           timeout: 1_000,
-           log: false
-         ) do
-      {:ok, _result} -> true
-      {:error, _error} -> false
-    end
+    sql = "SELECT 1 FROM \"#{Keyfleet.Repo.default_prefix()}\".session_authorities LIMIT 0"
+
+    match?(
+      {:ok, _},
+      Ecto.Adapters.SQL.query(Keyfleet.Repo, sql, [], timeout: 1_000, log: false)
+    )
   rescue
     _error -> false
   catch
