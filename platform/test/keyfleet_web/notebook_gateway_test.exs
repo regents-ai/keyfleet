@@ -9,10 +9,10 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   import Plug.Conn
 
   alias Keyfleet.Accounts
-  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
   alias Keyfleet.Notebooks.Roster
+  alias KeyfleetWeb.SessionAuthorityHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
@@ -77,13 +77,29 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   # Costly failure: someone who signed out of KeyFleet, on a shared computer,
-  # leaves the fleet's notebooks open to the next person at that browser.
+  # leaves the fleet's notebooks open to the next person at that browser, in a
+  # new request or a notebook connection already open.
   test "signing out of KeyFleet signs the notebooks out too", c do
-    lineage = signed_in!(c.holder)
+    session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
+    lineage = session["session_lineage"]
     cookie = enter!(c.holder, lineage)
     assert get_notebook(@host, "/", cookie).status == 200
 
-    SessionAuthority.revoke(%{lineage: lineage, generation: 1})
+    # What an open notebook connection opened with this cookie listens on.
+    {:ok, %{"session_authority_id" => sign_in}} =
+      Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, "notebook session", cookie)
+
+    {:ok, _person, topic} = Notebooks.person(sign_in, c.holder.human_account_id)
+
+    :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+
+    signed_out =
+      build_conn()
+      |> SessionAuthorityHelpers.init_test_session(session)
+      |> delete("/auth/privy/session")
+
+    assert json_response(signed_out, 200) == %{"ok" => true}
+    assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
 
     refused = get_notebook(@host, "/", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
@@ -251,11 +267,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   ## The notebook host
 
   # The lineage of a fresh KeyFleet sign-in for `person`.
-  defp signed_in!(%Human{human_account_id: account_id}) do
-    {:bootstrap, claim} = SessionAuthority.renew(nil)
-    {:ok, :bind, %{lineage: lineage}} = SessionAuthority.sign_in(claim, account_id)
-    lineage
-  end
+  defp signed_in!(%Human{human_account_id: account_id}),
+    do: SessionAuthorityHelpers.signed_in_session(account_id)["session_lineage"]
 
   defp enter!(holder, lineage \\ nil) do
     {:ok, url} = Notebooks.open(holder, lineage || signed_in!(holder), @fleet)

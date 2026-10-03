@@ -177,8 +177,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
             "account_id" => account_id,
             "session_authority_id" => session_authority_id
           }} <- Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, token, max_age: max_age),
-         {:ok, actor} <- Notebooks.person(session_authority_id, account_id) do
-      {:ok, conn, Notebooks.subject(actor), actor}
+         {:ok, actor, sign_in_topic} <- Notebooks.person(session_authority_id, account_id) do
+      {:ok, assign(conn, :notebook_sign_in_topic, sign_in_topic), Notebooks.subject(actor), actor}
     else
       _ -> {:refused, Refusal.json(conn, 401, "notebooks_sign_in")}
     end
@@ -344,7 +344,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         |> put_protocol(upstream.protocol)
         |> WebSockAdapter.upgrade(
           NotebookSocket,
-          Map.merge(upstream, %{fleet_id: fleet_id, subject: subject}),
+          Map.merge(upstream, %{
+            fleet_id: fleet_id,
+            subject: subject,
+            sign_in_topic: conn.assigns[:notebook_sign_in_topic]
+          }),
           timeout: :infinity,
           compress: false
         )

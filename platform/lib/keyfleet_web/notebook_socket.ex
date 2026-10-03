@@ -6,14 +6,16 @@ defmodule KeyfleetWeb.NotebookSocket do
   The gateway opens the hub's side first (`connect/3`), so a hub that refuses
   is answered as a plain refusal. Once both sides are open, every frame is
   passed along as it is. The connection registers under its fleet and holder
-  (`Keyfleet.Notebooks.access_topic/2`): when the holder loses their key, it
-  closes with 1008 and says why.
+  (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the KeyFleet
+  sign-in it came from: when the holder loses their key, or the person signs
+  out of KeyFleet, it closes with 1008 and says why.
   """
   @behaviour WebSock
 
   alias Keyfleet.Notebooks
 
   @closed_reason "Your key no longer opens these notebooks."
+  @signed_out_reason "You signed out of KeyFleet."
 
   @doc """
   Opens the hub's side of the connection to `target` at `address`, waiting
@@ -66,6 +68,10 @@ defmodule KeyfleetWeb.NotebookSocket do
         Notebooks.access_topic(state.fleet_id, state.subject)
       )
 
+    # An agent signs each request and has no KeyFleet sign-in to end.
+    if state.sign_in_topic,
+      do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
+
     {:ok, conn} = Mint.HTTP.set_mode(state.conn, :active)
     state = %{state | conn: conn}
 
@@ -78,6 +84,10 @@ defmodule KeyfleetWeb.NotebookSocket do
   @impl WebSock
   def handle_info(:notebook_access_ended, state),
     do: {:stop, :normal, {1008, @closed_reason}, state}
+
+  # Signing out of KeyFleet announces "disconnect" on the sign-in's topic.
+  def handle_info(%Phoenix.Socket.Broadcast{event: "disconnect"}, state),
+    do: {:stop, :normal, {1008, @signed_out_reason}, state}
 
   def handle_info(message, state) do
     case Mint.WebSocket.stream(state.conn, message) do

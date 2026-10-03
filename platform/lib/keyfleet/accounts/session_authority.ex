@@ -240,19 +240,27 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   end
 
   @doc """
-  The verified account the sign-in with this id still resolves to, or `nil`
-  once it is signed out, switched to another account or past its lifetime.
+  The verified account the sign-in with this id still resolves to, with the
+  topic its sign-out is announced on (`{account, topic}`), or `nil` once it is
+  signed out, switched to another account or past its lifetime.
   """
-  @spec signed_in_account(String.t(), integer()) :: Ash.Resource.record() | nil
-  def signed_in_account(id, account_id) do
+  @spec signed_in(String.t(), integer()) :: {Ash.Resource.record(), String.t()} | nil
+  def signed_in(id, account_id) do
     row = Ash.get!(__MODULE__, id, actor: @actor, not_found_error?: false)
-    if current?(row, account_id), do: verified(account_id)
+
+    with true <- current?(row, account_id),
+         %{} = account <- verified(account_id) do
+      {account, digest_topic(row.lineage_digest)}
+    else
+      _signed_out -> nil
+    end
   end
 
   @doc "The deterministic, lineage-stable topic every socket for a lineage mounts on."
   @spec topic(String.t()) :: String.t()
-  def topic(lineage),
-    do: "session_authority:" <> Base.url_encode64(digest(lineage), padding: false)
+  def topic(lineage), do: lineage |> digest() |> digest_topic()
+
+  defp digest_topic(digest), do: "session_authority:" <> Base.url_encode64(digest, padding: false)
 
   # The four states an integrity-valid claim can hold against its row. A claim
   # ahead of its row, or above generation zero without one, is unrecoverable

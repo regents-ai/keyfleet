@@ -195,13 +195,14 @@ defmodule Keyfleet.Notebooks do
 
   @doc """
   The person a notebook sign-in names, while the KeyFleet sign-in it was opened
-  under is still current: `{:ok, actor}`, or `:signed_out` once they signed
-  out there, switched account or it ran out.
+  under is still current: `{:ok, actor, topic}`, where `topic` is where that
+  sign-in's ending is announced, or `:signed_out` once they signed out there,
+  switched account or it ran out.
   """
   def person(session_authority_id, account_id) do
-    case SessionAuthority.signed_in_account(session_authority_id, account_id) do
+    case SessionAuthority.signed_in(session_authority_id, account_id) do
       nil -> :signed_out
-      account -> {:ok, Human.for_account(account)}
+      {account, topic} -> {:ok, Human.for_account(account), topic}
     end
   end
 

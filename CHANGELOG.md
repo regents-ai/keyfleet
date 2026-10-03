@@ -582,8 +582,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   away, and a background job takes them off the hub and adds the new holder.
   An agent's shard running out ends its access at that moment. Every fleet's
   hub is brought in step every ten minutes as well.
-- Signing out of KeyFleet signs the notebooks out too: the next request there
-  asks the person to open them again from KeyFleet.
+- Signing out of KeyFleet signs the notebooks out too: a notebook open in that
+  browser closes, saying "You signed out of KeyFleet.", and the next request
+  there asks the person to open them again from KeyFleet.
 - Background jobs run on Oban, in this site's own database schema.
 - New settings: `KEYFLEET_HUB_FLEETS` (each fleet's hub address) and
   `KEYFLEET_HUB_SIGNING_KEY` (the key that signs passes).
