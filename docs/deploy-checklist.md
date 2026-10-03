@@ -301,6 +301,15 @@ A fleet can also be shown before it is deployed by changing its
 shows "Not on sale yet", and that release's migration step opens its rooms. Its keys
 still stay off sale until its deployment is recorded.
 
+## Fleet notebook hubs
+
+Each fleet's private notebook hub is set up on its own, with its own apps,
+bucket and private network, following
+[notebook-hub/README.md](../notebook-hub/README.md). Nothing for it goes on Fly
+without the founder's go. `make check-notebook-hub` from the monorepo root must
+succeed before any hub or runner image is pushed; it is not part of
+`make check`.
+
 ## What was checked locally
 
 On 2026-09-26 the arm64 image was built from the context script at `e21b407`

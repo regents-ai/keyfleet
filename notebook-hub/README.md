@@ -43,10 +43,12 @@ them to the hub. That part is built separately, in `platform/`.
 You need Node 24 (marimohub's version) first on your PATH, plus Docker.
 
 ```sh
-notebook-hub/scripts/check.sh        # or: make check-notebook-hub, from the repository root
+make check-notebook-hub              # from the repository root; or notebook-hub/scripts/check.sh
 ```
 
-This does four things:
+This check is not part of `make check`, because it builds a 3 GB image. It
+must succeed before any hub or runner image is pushed to Fly. It does four
+things:
 
 1. Fetches marimohub at the pinned version into `notebook-hub/.work/` (the
    first run only).
@@ -110,6 +112,8 @@ For four fleets, setting this up means:
 - **8 Fly apps**: `kf-nb-<fleet>` (the hub) and `kf-nbk-<fleet>` (its notebook
   machines) for each fleet.
 - **4 Tigris buckets**: one per fleet, holding its notebooks and results.
+- **4 private networks**: one per fleet, holding only that fleet's two apps,
+  plus one Flycast address per hub on Keyfleet's network.
 - **Tokens and secrets per fleet**:
   - a Fly token that may manage machines in `kf-nbk-<fleet>` only;
   - a key for that fleet's bucket only;
@@ -124,13 +128,19 @@ None of this exists yet, and nothing here creates it.
 
 ## Setting up one fleet
 
-Each step names the command. Check the flags against the current `flyctl`
-before running anything: none of this has run against real Fly yet.
+Each step names the command. The flags were checked against the help text of
+flyctl v0.4.107, but none of this has run against real Fly yet.
 
-1. **Build the images**: run `notebook-hub/scripts/build-images.sh`.
-2. **Create both apps**:
-   - `fly apps create kf-nbk-<fleet> --org <org>`
-   - `fly apps create kf-nb-<fleet> --org <org>`
+Each fleet's hub and runner apps share a private network of their own,
+`kf-nb-<fleet>-net`. Notebook machines therefore cannot reach the shared
+database or any other Regent app over Fly's private network, and the hub is
+reachable from Keyfleet's server only through one private (Flycast) address.
+
+1. **Check and build the images**: run `make check-notebook-hub` from the
+   repository root. It must succeed before anything is pushed.
+2. **Create both apps on the fleet's own network**:
+   - `fly apps create kf-nb-<fleet> --org <org> --network kf-nb-<fleet>-net`
+   - `fly apps create kf-nbk-<fleet> --org <org> --network kf-nb-<fleet>-net`
 3. **Push the images.** Run `fly auth docker`, then:
    - tag `keyfleet/notebook-runner:f103eb2` as `registry.fly.io/kf-nbk-<fleet>:f103eb2` and push it;
    - tag `keyfleet/notebook-hub:f103eb2` as `registry.fly.io/kf-nb-<fleet>:f103eb2` and push it.
@@ -150,21 +160,36 @@ before running anything: none of this has run against real Fly yet.
 8. **Deploy the hub, private, as one machine**:
    `fly deploy --config <copied fly.hub.toml> --no-public-ips --ha=false`.
    Nothing is deployed to `kf-nbk-<fleet>`: the hub starts its machines there.
-9. **Point Keyfleet's server at the hub**: `http://kf-nb-<fleet>.internal:3000`
-   over Fly's private network.
+9. **Give Keyfleet's server one private address for the hub**:
+   `fly ips allocate-v6 --private --network <keyfleet's network> --app kf-nb-<fleet>`.
+   This makes a Flycast address on Keyfleet's network, not the fleet's.
+   **Not verified:** the `keyfleet` app was created without `--network`, so it
+   is on the organization's default network. The flyctl help text does not say
+   what name to pass for that network. Confirm it before running this step.
+10. **Point Keyfleet's server at the hub**: `http://kf-nb-<fleet>.flycast`.
 
 ## Things to know
 
 - **The hub must not share a web address with keyfleet.ai.** In this setup,
   notebook pages are served from the hub's own web address. A notebook's page
   can therefore run scripts as that address, which is what
-  `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED` acknowledges. Give each fleet's hub
-  its own address, for example `<fleet>.notebooks.keyfleet.ai`, never a path
-  under keyfleet.ai itself.
-- **Fly's private network covers the whole organization.** Other apps in the
-  organization can reach a notebook machine's helper and notebook ports. Both
-  still need the right password, but that network is not fenced off per fleet.
-- **Notebook machines can reach the internet.**
+  `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED` acknowledges. Not even a subdomain
+  of keyfleet.ai will do, because a page there could set cookies that
+  keyfleet.ai receives. The hub needs a separate registrable domain, which is
+  Sean's decision.
+- **Each fleet has its own private network.** A fleet's notebook machines can
+  reach that fleet's hub and the fleet's other notebook machines, and nothing
+  else on Fly's private network. The hub's sign-in and each machine's helper
+  password still guard those ports.
+- **Not verified on real Fly:**
+  - that the hub, on its own network, still reaches Fly's machine service at
+    `_api.internal:4280` (if not, `MARIMOHUB_COMPUTE_FLY_API_URL` can point at
+    Fly's public machine service instead);
+  - that machine names (`<machine>.vm.kf-nbk-<fleet>.internal`) resolve
+    between the two apps on their shared network;
+  - that Keyfleet's server reaches `kf-nb-<fleet>.flycast`.
+- **Notebook machines can reach the public internet**, including any Regent
+  site's public address.
 - **Machine names.** Each machine is named after its marimohub session sandbox,
   so the hub finds an existing machine again after a restart instead of
   starting a second one.

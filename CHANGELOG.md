@@ -515,3 +515,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   hub setting. `local/run.sh` proves a full session end to end on Docker.
 - `make check` now includes `check-notebook-hub`, which needs Node 24 and
   Docker.
+
+## 2026-10-03 — Notebook hubs on their own private networks
+
+- `make check` no longer runs `check-notebook-hub`, which builds a 3 GB
+  image. Run `make check-notebook-hub` on its own; it must succeed before any
+  hub or runner image is pushed.
+- Each fleet's hub app and runner app are created on a private network of
+  their own, so notebook machines cannot reach the shared database or other
+  Regent apps over Fly's private network. Keyfleet's server reaches the hub
+  only through a Flycast address made for Keyfleet's network. The hub's Fly
+  template now has a private web service for that address.
