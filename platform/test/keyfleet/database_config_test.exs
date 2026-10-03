@@ -489,7 +489,22 @@ defmodule Keyfleet.DatabaseConfigTest do
 
       release = DatabaseConfig.release_config!(staging_env(%{"DATABASE_DIRECT_URL" => url}))
 
-      assert runtime == [url: url, socket_options: @socket_options, pool_size: @pool_size]
+      # The serving login gives up on slow statements, lock waits and idle open
+      # transactions; the release login has no such limits.
+      assert runtime ==
+               [
+                 url: url,
+                 socket_options: @socket_options,
+                 pool_size: @pool_size,
+                 show_sensitive_data_on_connection_error: false,
+                 parameters: [
+                   application_name: "keyfleet-web",
+                   statement_timeout: "15000",
+                   lock_timeout: "5000",
+                   idle_in_transaction_session_timeout: "15000"
+                 ]
+               ]
+
       assert release == [url: url, socket_options: @socket_options, pool_size: @pool_size]
     end
   end

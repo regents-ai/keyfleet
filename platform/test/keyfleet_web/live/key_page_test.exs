@@ -28,7 +28,13 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     epoch!(1, @owner)
 
-    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+    agent = %Actors.Agent{
+      wallet_address: @agent,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
+
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
     :ok
   end

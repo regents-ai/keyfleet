@@ -42,7 +42,7 @@ defmodule Keyfleet.Early.Signup do
     end
 
     policy action_type(:read) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

@@ -67,7 +67,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   test "an agent holding a shard of a key shows what its check-ins say, never what it says of itself",
        %{conn: conn} do
-    runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
+    runner = %Actors.Agent{
+      wallet_address: wallet("c"),
+      chain_id: 8_453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
     Agents.ensure_profile!(
       %{
@@ -105,7 +110,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # A status is only as honest as the time it is read at, so an open page
   # reads its agents' check-ins again as time moves on.
   test "an agent's status on an open page goes stale once time moves on", %{conn: conn} do
-    runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
+    runner = %Actors.Agent{
+      wallet_address: wallet("c"),
+      chain_id: 8_453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "Hermes Agent"},
       actor: runner

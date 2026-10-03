@@ -337,7 +337,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
     end
 
     policy action(:record_epoch) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

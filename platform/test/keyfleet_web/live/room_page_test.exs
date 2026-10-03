@@ -130,7 +130,13 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   test "an agent signs its own posts, and what anyone types is shown, not run", %{conn: conn} do
-    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+    agent = %Actors.Agent{
+      wallet_address: @agent,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
+
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
 
@@ -148,7 +154,13 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
   describe "muting a key" do
     setup do
-      agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+      agent = %Actors.Agent{
+        wallet_address: @agent,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      }
+
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
       transfer!(2, @other_owner)
@@ -420,7 +432,13 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     end
 
     test "a room an agent creates joins the list for everyone watching", %{conn: conn} do
-      agent = %Actors.Agent{wallet_address: @agent, chain_id: 8453, audience: "keyfleet"}
+      agent = %Actors.Agent{
+        wallet_address: @agent,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      }
+
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
 

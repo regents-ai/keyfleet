@@ -1,13 +1,9 @@
 defmodule KeyfleetWeb.Metrics do
   @moduledoc """
   Prometheus metrics on a listener of their own, which the public endpoint
-  never routes to.
-
-  In production it listens on the port `fly.toml` names under `[metrics]`. Fly
-  sends public traffic only to the `[http_service]` port, so this one is
-  reachable from the app's private network, where Fly's scraper reads it, and
-  not from the internet. Locally it listens on loopback, on a port the system
-  picks.
+  never routes to. In production it listens on the port `fly.toml` names under
+  `[metrics]`, which Fly sends no public traffic to, so only the app's private
+  network reaches it. Locally it listens on loopback, on a port the system picks.
   """
 
   @behaviour Plug

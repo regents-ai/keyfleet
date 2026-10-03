@@ -14,9 +14,8 @@ defmodule KeyfleetWeb.Plugs.ContractHeaders do
   @file Application.app_dir(:keyfleet, "priv/static/api-contract.openapiv3.yaml")
   @external_resource @file
   @contract File.read!(@file)
-  @major (case Regex.run(~r/^  version:\s*(\d+)\./m, @contract) do
-            [_, major] -> major
-          end)
+  [_, major] = Regex.run(~r/^  version:\s*(\d+)\./m, @contract)
+  @major major
   @digest "sha256:" <> Base.encode16(:crypto.hash(:sha256, @contract), case: :lower)
 
   @impl Plug

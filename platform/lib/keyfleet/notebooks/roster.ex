@@ -107,7 +107,12 @@ defmodule Keyfleet.Notebooks.Roster do
       |> Enum.uniq_by(& &1.id)
       |> Enum.map(fn profile ->
         {Notebooks.agent_subject(profile.id),
-         %Agent{wallet_address: profile.wallet_address, chain_id: 8453, audience: "keyfleet"}}
+         %Agent{
+           wallet_address: profile.wallet_address,
+           chain_id: 8453,
+           verification_method: :eoa_recovery,
+           audience: "keyfleet"
+         }}
       end)
 
     Enum.reduce_while(people ++ agents, {:ok, MapSet.new()}, fn {subject, actor},

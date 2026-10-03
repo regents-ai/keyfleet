@@ -53,6 +53,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     agent = %Actors.Agent{
       wallet_address: "0x" <> String.duplicate("b", 40),
       chain_id: 8_453,
+      verification_method: :eoa_recovery,
       audience: "keyfleet"
     }
 
@@ -127,6 +128,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     agent = %Actors.Agent{
       wallet_address: "0x" <> String.duplicate("b", 40),
       chain_id: 8_453,
+      verification_method: :eoa_recovery,
       audience: "keyfleet"
     }
 

@@ -178,13 +178,15 @@ defmodule KeyfleetWeb.ShellLiveTest do
              )
 
     Accounts.upsert_linked_identity!(
-      :x,
-      "account-x-subject",
-      "account_user",
-      "Account User",
-      DateTime.utc_now(),
-      %{},
-      account.id,
+      %{
+        provider: :x,
+        subject: "account-x-subject",
+        username: "account_user",
+        display_name: "Account User",
+        verified_at: DateTime.utc_now(),
+        metadata: %{},
+        human_account_id: account.id
+      },
       actor: %System{}
     )
 
@@ -277,13 +279,15 @@ defmodule KeyfleetWeb.ShellLiveTest do
     account = register_account("account-outcomes", wallet)
 
     Accounts.upsert_linked_identity!(
-      :x,
-      "outcome-x-subject",
-      "outcome_user",
-      nil,
-      DateTime.utc_now(),
-      %{},
-      account.id,
+      %{
+        provider: :x,
+        subject: "outcome-x-subject",
+        username: "outcome_user",
+        display_name: nil,
+        verified_at: DateTime.utc_now(),
+        metadata: %{},
+        human_account_id: account.id
+      },
       actor: %System{}
     )
 

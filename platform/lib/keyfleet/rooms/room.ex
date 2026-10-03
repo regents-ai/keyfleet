@@ -243,7 +243,7 @@ defmodule Keyfleet.Rooms.Room do
     end
 
     policy action([:bootstrap, :open_key_thread]) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
 
     # People name the open rooms; creating rooms is for the agents that own

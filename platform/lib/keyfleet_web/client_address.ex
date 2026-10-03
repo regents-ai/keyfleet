@@ -1,22 +1,19 @@
 defmodule KeyfleetWeb.ClientAddress do
   @moduledoc """
-  The address a request's rate limits are keyed by.
-
-  Production runs only behind Fly's proxy, which terminates the connection, so
-  the peer is the proxy and the client address arrives in the one header the
-  proxy sets itself, replacing any value a client sent. Anywhere else nothing
-  replaces that header, so the direct peer decides and no request header is
-  read. `X-Forwarded-For` is never read: a client writes its first entries.
+  The address a request's rate limits are keyed by. Production runs only behind
+  Fly's proxy, which terminates the connection, so the peer is the proxy and the
+  client address arrives in the one header the proxy sets itself, replacing any
+  value a client sent. Anywhere else nothing replaces that header, so the direct
+  peer decides and no request header is read. `X-Forwarded-For` is never read: a
+  client writes its first entries.
   """
 
   @behind_fly_proxy Application.compile_env!(:keyfleet, :behind_fly_proxy)
 
   @doc """
-  The limiter key for `conn` and where it came from.
-
-  Behind Fly, anything but exactly one parseable `Fly-Client-IP` keys the
-  proxy-wide peer bucket rather than a second header a client could forge
-  itself a private budget with.
+  The limiter key for `conn` and where it came from. Behind Fly, anything but
+  exactly one parseable `Fly-Client-IP` keys the proxy-wide peer bucket rather
+  than a second header a client could forge itself a private budget with.
   """
   @spec key(Plug.Conn.t()) :: {:inet.ip_address(), :client_header | :peer | :peer_fallback}
   def key(conn) do

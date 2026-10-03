@@ -1,5 +1,5 @@
 defmodule KeyfleetWeb.Plugs.SignedAgent do
-  @moduledoc "Captures bounded signed agent requests before any parser or method rewrite."
+  @moduledoc "Captures bounded signed agent requests before any parser."
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
@@ -69,6 +69,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "archive" =>
       {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
        %{"reason" => :text}}
+  }
+  @verification_methods %{
+    "eoa_recovery" => :eoa_recovery,
+    "erc1271" => :erc1271,
+    "erc6492" => :erc6492
   }
   @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
@@ -147,7 +152,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         %{
           "verified" => true,
           "walletAddress" => wallet,
-          "chainId" => 8453,
+          "chainId" => chain_id,
+          "verificationMethod" => method,
           "keyId" => wallet,
           "receiptExpiresAt" => expires,
           "requiredHeaders" => required_headers,
@@ -157,29 +163,46 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
             %{
               "kind" => "wallet",
               "wallet_address" => wallet,
-              "chain_id" => 8453,
+              "chain_id" => chain_id,
               "audience" => "keyfleet"
             } = principal
         } = data,
         _context
       )
-      when map_size(data) == 9 and map_size(principal) == 4 and is_binary(expires) and
+      when map_size(data) == 10 and map_size(principal) == 4 and is_binary(expires) and
+             is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
     actor = %Agent{
       wallet_address: wallet,
-      chain_id: 8453,
+      chain_id: chain_id,
+      verification_method: Map.fetch!(@verification_methods, method),
       audience: "keyfleet",
       credential_ref: credential_ref(conn)
     }
 
-    if Agent.valid?(actor),
-      do: {:ok, assign(conn, :agent_actor, actor)},
-      else: invalid_principal()
+    admit(conn, actor)
   end
 
   def accept(_conn, _data, _context), do: invalid_principal()
+
+  defp admit(conn, actor) do
+    cond do
+      Agent.valid?(actor) -> {:ok, assign(conn, :agent_actor, actor)}
+      smart_wallet_on_base?(actor) -> {:error, %{reason: :smart_wallet_on_base}}
+      true -> invalid_principal()
+    end
+  end
+
   defp invalid_principal, do: {:error, %{reason: :invalid_principal}}
+
+  # A smart wallet proven on Base says nothing about the same address on
+  # Ethereum, where the keys are. Signing in again on Base can't fix it, so the
+  # agent is told to sign in on Ethereum instead.
+  defp smart_wallet_on_base?(%Agent{chain_id: 8453, verification_method: method}),
+    do: method in [:erc1271, :erc6492]
+
+  defp smart_wallet_on_base?(_actor), do: false
 
   # The receipt and key id each appear exactly once; `before_verify` saw to it.
   defp credential_ref(conn) do
@@ -189,6 +212,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
+  def deny(conn, %{reason: :smart_wallet_on_base}),
+    do: answer(conn, 401, "smart_wallet_on_base")
+
   def deny(conn, metadata) do
     unavailable? =
       metadata[:reason] in [:broker_unavailable, :siwa_request_failed] or

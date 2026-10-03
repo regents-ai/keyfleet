@@ -240,7 +240,12 @@ defmodule Keyfleet.DirectoryTest do
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 
   defp actor(character),
-    do: %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+    do: %Actors.Agent{
+      wallet_address: wallet(character),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp agent(character, name) do
     actor = actor(character)

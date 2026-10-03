@@ -33,7 +33,6 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
 
-  @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
   @room_events ~w(send_message name_room mute_key unmute_key)
@@ -123,7 +122,7 @@ defmodule KeyfleetWeb.ShellLive do
         socket
       ) do
     with %Human{} <- human_actor(socket),
-         {:ok, provider} <- linked_identity_provider(provider),
+         {:ok, provider} <- Providers.parse(provider),
          {:ok, request} <-
            identity_request(action, provider, socket.assigns.verified_connections.value) do
       {:noreply,
@@ -591,7 +590,7 @@ defmodule KeyfleetWeb.ShellLive do
     notice =
       with %Read{state: state, value: identities} when state in [:ready, :empty] <-
              assigns.verified_connections,
-           {:ok, provider} <- linked_identity_provider(params["provider"]),
+           {:ok, provider} <- Providers.parse(params["provider"]),
            {:ok, action} <- identity_action(params["action"]) do
         connection_outcome(params["error"], action, provider, identities)
       else
@@ -605,13 +604,6 @@ defmodule KeyfleetWeb.ShellLive do
     do: assign(socket, :held_keys, AccountLive.held_keys(human_actor(socket)))
 
   defp load_held_keys(socket, _route_spec), do: assign(socket, :held_keys, [])
-
-  defp linked_identity_provider(provider) do
-    case Map.fetch(@identity_providers, provider) do
-      {:ok, provider} -> {:ok, provider}
-      :error -> {:error, :invalid_provider}
-    end
-  end
 
   defp identity_request("link", provider, _identities) do
     {:ok, %{action: :link, provider: provider}}
