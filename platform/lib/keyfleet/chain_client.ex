@@ -17,7 +17,7 @@ defmodule Keyfleet.ChainClient do
 
   @doc """
   One JSON-RPC request to the chain's node. Every request that gets no answer
-  is counted in `keyfleet.chain.failure.total` (`KeyfleetWeb.Telemetry`).
+  is counted in `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`).
   """
   def rpc(%{chain_id: chain_id} = chain, method, params) do
     url = :keyfleet |> Application.fetch_env!(:chain_nodes) |> Map.fetch!(chain_id)

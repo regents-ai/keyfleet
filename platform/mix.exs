@@ -70,7 +70,6 @@ defmodule Keyfleet.MixProject do
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
-      {:telemetry_poller, "~> 1.0"},
       {:sentry, "~> 13.0"},
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.12"},

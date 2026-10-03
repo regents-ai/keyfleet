@@ -215,11 +215,18 @@ defmodule KeyfleetWeb.PrivySessionController do
 
   defp account_evidence(reason), do: {:error, {:account_evidence, reason}}
 
-  # Both values are fixed atoms from the classification contract, and the
-  # development formatter drops metadata, so they belong in the message itself.
-  # The refused pair is never interpolated, inspected or answered differently.
+  # Both values are fixed atoms from the classification contract, so they are
+  # safe as metric tags and belong in the message itself, since the development
+  # formatter drops metadata. The refused pair is never interpolated, inspected
+  # or answered differently.
   defp refuse(conn, stage, reason) do
-    Logger.debug("Privy session rejected stage=#{stage} reason=#{reason}")
+    Logger.info("Privy session refused stage=#{stage} reason=#{reason}")
+
+    :telemetry.execute([:keyfleet, :privy, :session_refused], %{count: 1}, %{
+      stage: stage,
+      reason: reason
+    })
+
     report_bounded_sign_in_failure(conn, "session_exchange")
     conn |> mark_recoverable(stage, reason) |> unauthorized()
   end

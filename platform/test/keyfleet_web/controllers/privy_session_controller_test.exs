@@ -727,7 +727,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   # The one rendered diagnostic line; this repository's development formatter
   # drops metadata, so the whole classification lives in the message.
-  @classification ~r/Privy session rejected [^\n]+/
+  @classification ~r/Privy session refused [^\n]+/
 
   test "COMPLETE_PAIR_REQUIRED: a half, blank, duplicated or unverifiable pair is refused before a write",
        %{conn: conn} do
@@ -803,23 +803,23 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   test "REDACTED_CLASSIFICATION: the controller names the two stages it owns itself" do
     assert classification(put_headers(browser(), [{"privy-id-token", @identity}])) ==
-             "Privy session rejected stage=request_pair reason=missing_access_token"
+             "Privy session refused stage=request_pair reason=missing_access_token"
 
     assert classification(put_headers(browser(), [{"authorization", "Bearer valid"}])) ==
-             "Privy session rejected stage=request_pair reason=missing_identity_token"
+             "Privy session refused stage=request_pair reason=missing_identity_token"
 
     # Lapsed wallet evidence is the account boundary's own outcome, not a
     # verification failure, and keeps its own name.
     assert classification(put_privy_pair(browser(), "no-wallet")) ==
-             "Privy session rejected stage=account_evidence reason=missing_linked_wallet"
+             "Privy session refused stage=account_evidence reason=missing_linked_wallet"
   end
 
   test "REDACTED_CLASSIFICATION: the two access-verification reasons keep their own names" do
     assert classification(put_privy_pair(browser(), "stale-access")) ==
-             "Privy session rejected stage=access_verification reason=token_verification_failed"
+             "Privy session refused stage=access_verification reason=token_verification_failed"
 
     assert classification(put_privy_pair(browser(), "unverifiable")) ==
-             "Privy session rejected stage=access_verification reason=invalid_token"
+             "Privy session refused stage=access_verification reason=invalid_token"
   end
 
   test "ONE_MARKED_REFUSAL: only an unverifiable access token invites a fresh provider login" do
@@ -893,7 +893,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     log = refusal_log(put_privy_pair(browser(), "unverifiable"))
 
     assert Regex.run(@classification, log) ==
-             ["Privy session rejected stage=access_verification reason=invalid_token"]
+             ["Privy session refused stage=access_verification reason=invalid_token"]
 
     refute log =~ "unverifiable"
   end
@@ -903,13 +903,13 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     classification
   end
 
-  # Raises the primary Logger level for the one refused request, because this
-  # repository logs at warning under test and the diagnostic is deliberately
-  # debug-level. Every case in this synchronous file runs alone, so nothing else
-  # observes the change, and everything logged meanwhile is captured.
+  # Lowers the primary Logger level for the one refused request, because this
+  # repository logs at warning under test and the diagnostic is info-level.
+  # Every case in this synchronous file runs alone, so nothing else observes
+  # the change, and everything logged meanwhile is captured.
   defp refusal_log(browser) do
     level = Logger.level()
-    Logger.configure(level: :debug)
+    Logger.configure(level: :info)
 
     try do
       capture_log(fn ->
