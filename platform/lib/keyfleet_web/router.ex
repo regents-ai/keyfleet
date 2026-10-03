@@ -76,15 +76,20 @@ defmodule KeyfleetWeb.Router do
 
     # The showcase pages are HTML; only the catalog also answers JSON. Each
     # pipeline negotiates its formats first, so a JSON request to a page is
-    # refused with 406 before any page header is sent.
+    # refused with 406 before any page header is sent. The showcase includes
+    # the sign-in window and frames its own preview.
+    @showcase_headers %{"content-security-policy" => ContentSecurityPolicy.showcase()}
+
     pipeline :showcase_browser do
       plug :accepts, ["html"]
       plug :showcase_page
+      plug :put_secure_browser_headers, @showcase_headers
     end
 
     pipeline :showcase_catalog do
       plug :accepts, ["html", "json"]
       plug :showcase_page
+      plug :put_secure_browser_headers, @showcase_headers
     end
 
     pipeline :showcase_page do
@@ -94,11 +99,6 @@ defmodule KeyfleetWeb.Router do
       plug KeyfleetWeb.Plugs.Theme
       plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
       plug :protect_from_forgery
-
-      # The showcase includes the sign-in window and frames its own preview.
-      plug :put_secure_browser_headers, %{
-        "content-security-policy" => ContentSecurityPolicy.showcase()
-      }
     end
 
     scope "/showcase", KeyfleetWeb.Showcase do
