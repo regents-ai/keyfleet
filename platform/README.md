@@ -226,18 +226,20 @@ and `package-lock.json`. The Fly configuration lives in `fly.toml` and
 `fly.staging.toml`, and [the deploy checklist](../docs/deploy-checklist.md)
 lists the launch steps in order.
 
-The image can only be built from that context folder, so every deploy names
-it, with Fly's remote builder (the context script prints this with the folder
-filled in; use `fly.staging.toml` for staging):
+Deploy from the monorepo root with `scripts/deploy.sh production` (or
+`staging`, which uses `fly.staging.toml`). It refuses any uncommitted change
+and any commit not on `origin/main`, assembles the context folder for amd64
+from that commit, and deploys it with Fly's remote builder, labelling the
+image with the short commit:
 
 ```sh
 fly deploy <folder> --config <folder>/platform/fly.toml \
   --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-  --remote-only --ha=false
+  --remote-only --ha=false --image-label <short commit>
 ```
 
-The context is built from this repository's last commit; the script warns
-when there are uncommitted changes, which it leaves out.
+The image can only be built from that context folder, so a plain `fly deploy`
+from `platform/` cannot work.
 
 The migration step every deploy runs (`/app/bin/migrate`) also puts the four
 fleets on the site and opens the rooms of the fleets that are not coming soon,
