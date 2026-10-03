@@ -1,0 +1,9 @@
+# One fleet's notebook runner app. Copy per fleet and replace <fleet> and <region>.
+# The app is created on the fleet's own private network (kf-nb-<fleet>-net), so its
+# machines can reach only the fleet's hub and each other, never the shared database
+# or other Regent apps. It holds only the runner image and the machines the hub
+# starts through the Fly Machines API, one per notebook session. Nothing is deployed
+# to it and it has no services or public IP: machines stop when their session ends
+# (or at their lifetime cap) and Fly then deletes them.
+app = "kf-nbk-<fleet>"
+primary_region = "<region>"

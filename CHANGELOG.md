@@ -540,6 +540,33 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the same behaviour; unused code (a loading placeholder, a sidebar heading
   nothing builds, a metrics poller with nothing to poll) is gone.
 
+## 2026-10-03 — Notebook hub runner pieces for one private hub per fleet
+
+- New `notebook-hub/` folder: everything needed to run one private marimohub
+  notebook hub per fleet on Fly, with each notebook session on its own
+  short-lived Fly machine. Nothing is on Fly yet.
+- `compute-fly/` starts, finds and deletes notebook machines through Fly's
+  machine service. Each hub sees only its own machines, and machines get no
+  public address, no bucket keys and none of the hub's passwords.
+- `runner/` is the notebook machine image: marimohub's notebook image at the
+  pinned version plus a helper and a private-network relay. Notebook code runs
+  as an ordinary user that cannot read the helper's password.
+- `hub/` holds the hub image, the two Fly app templates and a list of every
+  hub setting. `local/run.sh` proves a full session end to end on Docker.
+- `make check` now includes `check-notebook-hub`, which needs Node 24 and
+  Docker.
+
+## 2026-10-03 — Notebook hubs on their own private networks
+
+- `make check` no longer runs `check-notebook-hub`, which builds a 3 GB
+  image. Run `make check-notebook-hub` on its own; it must succeed before any
+  hub or runner image is pushed.
+- Each fleet's hub app and runner app are created on a private network of
+  their own, so notebook machines cannot reach the shared database or other
+  Regent apps over Fly's private network. Keyfleet's server reaches the hub
+  only through a Flycast address made for Keyfleet's network. The hub's Fly
+  template now has a private web service for that address.
+
 ## 2026-10-03 — Each fleet's private notebooks
 
 - A fleet's workspace has an "Open notebooks" button. A key holder who presses
