@@ -81,8 +81,7 @@ defmodule KeyfleetWeb.Endpoint do
     json_decoder: Phoenix.json_library()
 
   plug Plug.Head
-  plug KeyfleetWeb.Plugs.RuntimeSession
-
+  plug :runtime_session
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
@@ -109,4 +108,10 @@ defmodule KeyfleetWeb.Endpoint do
 
   defp allow_page_tools(conn, _opts),
     do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
+
+  # Production sets the cookie's `secure` flag in runtime.exs, after this module compiles.
+  defp runtime_session(conn, _opts) do
+    options = Application.fetch_env!(:keyfleet, :session_options)
+    Plug.Session.call(conn, Plug.Session.init(options))
+  end
 end
