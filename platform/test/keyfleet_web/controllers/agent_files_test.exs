@@ -13,7 +13,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
   test "the guide is the same at both of its addresses, with every placeholder filled in",
        %{conn: conn} do
     guide = conn |> get("/skill.md")
-    skill = build_conn() |> get("/.well-known/skills/keyfleet/SKILL.md")
+    skill = build_conn() |> get("/.well-known/agent-skills/keyfleet/SKILL.md")
 
     assert response(guide, 200) == response(skill, 200)
     refute response(guide, 200) =~ "{{"
@@ -35,12 +35,27 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert String.length(body) < 24_000
 
     assert %{"skills" => [listed]} =
-             build_conn() |> get("/.well-known/skills/index.json") |> json_response(200)
+             build_conn() |> get("/.well-known/agent-skills/index.json") |> json_response(200)
 
-    assert listed == %{
-             "name" => skill["name"],
-             "description" => skill["description"],
-             "files" => ["SKILL.md"]
-           }
+    assert %{"name" => name, "description" => description, "type" => "archive"} = listed
+    assert {name, description} == {skill["name"], skill["description"]}
+  end
+
+  test "the skills index names a zip whose digest matches, holding the guide as it is served",
+       %{conn: conn} do
+    guide = conn |> get("/skill.md") |> response(200)
+
+    assert %{"$schema" => "https://schemas.agentskills.io/discovery/0.2.0/schema.json"} =
+             index =
+             build_conn() |> get("/.well-known/agent-skills/index.json") |> json_response(200)
+
+    [%{"url" => url, "digest" => "sha256:" <> digest}] = index["skills"]
+    zip = build_conn() |> get(url)
+
+    assert Base.encode16(:crypto.hash(:sha256, response(zip, 200)), case: :lower) == digest
+    assert get_resp_header(zip, "content-type") == ["application/zip"]
+
+    assert {:ok, [{~c"SKILL.md", ^guide}]} =
+             :zip.extract(response(zip, 200), [:memory])
   end
 end

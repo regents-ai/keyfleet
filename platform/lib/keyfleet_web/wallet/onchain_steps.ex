@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.OnchainSteps do
   @moduledoc """
-  The server half of a wallet-button component. `skills/onchain-buttons` has the
-  rules; `KeyfleetWeb.WalletPanel` uses every function here.
+  The server half of a wallet-button component. The ash-template repository's
+  `skills/onchain-buttons` has the rules; `KeyfleetWeb.WalletPanel` uses every
+  function here.
 
   The component builds a `RegentChain.Review` for the eligible signer and hands
   it to `put_review/2`, which remembers it and pushes it to the page before

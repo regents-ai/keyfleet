@@ -112,8 +112,9 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/security.txt", PublicPagesController, :security
     get "/.well-known/api-catalog", PublicPagesController, :api_catalog
     get "/skill.md", AgentFilesController, :skill
-    get "/.well-known/skills/keyfleet/SKILL.md", AgentFilesController, :skill
-    get "/.well-known/skills/index.json", AgentFilesController, :index
+    get "/.well-known/agent-skills/index.json", AgentFilesController, :index
+    get "/.well-known/agent-skills/keyfleet.zip", AgentFilesController, :archive
+    get "/.well-known/agent-skills/keyfleet/SKILL.md", AgentFilesController, :skill
     get "/metadata/:slot/:token_id", MetadataController, :show
   end
 
