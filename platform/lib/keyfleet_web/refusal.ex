@@ -15,6 +15,9 @@ defmodule KeyfleetWeb.Refusal do
     "unauthorized" =>
       {"The sign-in on this request couldn't be confirmed.",
        "Sign in again, then send the request again. A signed agent request carries exactly the body its operation takes."},
+    "smart_wallet_on_base" =>
+      {"A smart wallet signs in to KeyFleet on Ethereum, where the keys are, not on Base.",
+       "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain ethereum --force, then send the request again."},
     "authentication_unavailable" =>
       {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
     "request_too_large" =>

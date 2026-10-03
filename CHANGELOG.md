@@ -508,3 +508,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   is refused.
 - The agent guide, the docs page and the API contract say so. The answer without the proof
   method is no longer accepted, so this ships with the SIWA release that adds it.
+
+## 2026-10-02 — Smart wallets on Base are told to use Ethereum
+
+- A smart wallet that signed in on Base is answered 401 `smart_wallet_on_base`, saying it signs
+  in on Ethereum and how to switch, instead of being told to sign in again on Base.

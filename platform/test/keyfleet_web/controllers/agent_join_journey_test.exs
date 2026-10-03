@@ -387,8 +387,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
         Map.put(good, "chainId", 1),
         Map.delete(good, "verificationMethod"),
         Map.put(good, "verificationMethod", "passkey"),
-        signed_in.(8453, "erc1271"),
-        signed_in.(8453, "erc6492"),
         signed_in.(10, "eoa_recovery"),
         Map.put(good, "principal", nil),
         Map.put(good, "extra", true)
@@ -405,6 +403,18 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     for data <- invalid do
       assert {:error, _} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, data, nil)
+    end
+
+    # Signing in again on Base can't help a smart wallet, so it is told to use
+    # Ethereum rather than to sign in again.
+    for method <- ["erc1271", "erc6492"] do
+      assert {:error, %{reason: :smart_wallet_on_base} = refusal} =
+               KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(8453, method), nil)
+
+      reply = KeyfleetWeb.Plugs.SignedAgent.deny(conn, refusal)
+
+      assert {reply.status, Jason.decode!(reply.resp_body)} ==
+               {401, refused("smart_wallet_on_base")}
     end
   end
 
