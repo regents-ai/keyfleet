@@ -12,19 +12,22 @@ defmodule Keyfleet.Notebooks.Roster do
   suspended in that hub, so nothing they hold there still lets them in. Someone
   who holds a key again is let back in.
 
-  It runs whenever a key changes hands or a shard is issued or ended
-  (`Keyfleet.Notebooks.Changes.UpdateRoster`), and for every fleet every ten
-  minutes (`Keyfleet.Notebooks.Reconcile`). Every step is safe to repeat, and a
+  It runs whenever a key changes hands or a shard is issued or ended, and
+  again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
+  and for every fleet every ten minutes (`Keyfleet.Notebooks.Reconcile`). Every step is safe to repeat, and a
   run that fails part way is run again from the start. While the fleet's key
   ownership is still being read, it waits.
 
-  One run per fleet waits at a time; a change made while one runs queues the
-  next, so the last run always reads the latest owners.
+  Runs go one at a time (the `notebook_hubs` queue runs one job). One run per
+  fleet waits to start at a time; a change made while one runs queues the
+  next, so the last run always reads the latest owners. A run booked for when
+  a shard runs out doesn't count as waiting, so it never holds back a run
+  wanted now.
   """
   use Oban.Worker,
     queue: :notebook_hubs,
     max_attempts: 20,
-    unique: [keys: [:fleet_id], period: :infinity, states: [:available, :scheduled, :retryable]]
+    unique: [keys: [:fleet_id], period: :infinity, states: [:available, :retryable]]
 
   require Ash.Query
 

@@ -188,6 +188,26 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            }
   end
 
+  # Costly failure: an agent whose shard has run out keeps working in the
+  # fleet's notebooks until the next ten-minute check, and a run booked for
+  # that moment holds back the run a key changing hands needs now.
+  test "a shard issued books a hub run for the moment it runs out" do
+    %{expires_at: ends_at} =
+      ChainHelpers.issue_shard!(@fleet, 1, "0x" <> String.duplicate("c", 40), 2)
+
+    assert_enqueued(worker: Roster, args: %{fleet_id: @fleet}, scheduled_at: ends_at)
+    assert %{success: 1, failure: 0} = Oban.drain_queue(queue: :notebook_hubs)
+
+    epoch!(1, 2, @buyer_wallet)
+
+    assert [%{state: "available"}, %{state: "scheduled", scheduled_at: booked}] =
+             [worker: Roster, args: %{fleet_id: @fleet}]
+             |> all_enqueued()
+             |> Enum.sort_by(& &1.state)
+
+    assert DateTime.compare(DateTime.truncate(booked, :second), ends_at) == :eq
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do

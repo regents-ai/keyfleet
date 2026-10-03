@@ -104,8 +104,9 @@ config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
   # Calls to the fleets' notebook hubs wait on another server, so they have
-  # their own queue.
-  queues: [default: 5, notebook_hubs: 2],
+  # their own queue. It runs one job at a time (the site runs on one
+  # machine), so two roster runs never set up or change one hub together.
+  queues: [default: 5, notebook_hubs: 1],
   cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
   pruner: [max_age: 7 * 24 * 60 * 60],
   lifeline: [rescue_after: :timer.minutes(30)]
