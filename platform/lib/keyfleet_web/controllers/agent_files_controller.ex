@@ -39,7 +39,10 @@ defmodule KeyfleetWeb.AgentFilesController do
     |> String.replace("{{origin}}", PublicDocuments.url(""))
   end
 
-  def skill(conn, _params), do: send_cached(conn, "text/markdown", guide())
+  def skill(conn, _params) do
+    guide = guide()
+    conn |> cached(guide) |> put_resp_content_type("text/markdown") |> send_resp(200, guide)
+  end
 
   def index(conn, _params) do
     index =
@@ -59,10 +62,13 @@ defmodule KeyfleetWeb.AgentFilesController do
         pretty: true
       )
 
-    send_cached(conn, "application/json", index)
+    conn |> cached(index) |> put_resp_content_type("application/json") |> send_resp(200, index)
   end
 
-  def archive(conn, _params), do: send_cached(conn, "application/zip", zip(), nil)
+  def archive(conn, _params) do
+    zip = zip()
+    conn |> cached(zip) |> put_resp_content_type("application/zip", nil) |> send_resp(200, zip)
+  end
 
   # The skill's folder as one zip: its `SKILL.md`, dated and moded the same
   # every time, so the digest the index names changes only with the guide.
@@ -92,13 +98,11 @@ defmodule KeyfleetWeb.AgentFilesController do
     zip
   end
 
-  defp send_cached(conn, type, body, charset \\ "utf-8") do
+  defp cached(conn, body) do
     conn
     |> put_resp_header("etag", ~s("#{sha256(body)}"))
     |> put_resp_header("cache-control", "public, max-age=300")
     |> put_resp_header("access-control-allow-origin", "*")
-    |> put_resp_content_type(type, charset)
-    |> send_resp(200, body)
   end
 
   defp sha256(body), do: Base.encode16(:crypto.hash(:sha256, body), case: :lower)
