@@ -291,7 +291,7 @@ for (const viewport of retryViewports) {
     await expect.poll(() => bridgeRequests.length).toBe(1)
     await expect(status).toBeVisible()
     await expect(status).toContainText(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
     await expectStatusAnchored(page, headerHeight ?? 0)
     await expect(page.locator("#account-control").getByRole("button", {name: "Sign In"})).toBeDisabled()
@@ -304,7 +304,7 @@ for (const viewport of retryViewports) {
     expect(bridgeRequests).toHaveLength(1)
     await expect(status).toBeVisible()
     await expect(status).toContainText(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
     await expectStatusAnchored(page, headerHeight ?? 0)
 
@@ -344,7 +344,7 @@ test("the bounded failure report survives the recommended immediate reload exact
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
   await expect(page.locator("#account-auth-status")).toContainText(
-    "Sign-in is unavailable on this page. Reload it or contact support.",
+    "Sign-in isn’t available right now. Reload this page.",
   )
 
   await page.reload()
