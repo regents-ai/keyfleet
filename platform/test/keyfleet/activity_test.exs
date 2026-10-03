@@ -196,7 +196,14 @@ defmodule Keyfleet.ActivityTest do
 
   test "key threads and edits to an item's words stay out; claims, progress and links show" do
     owner = human("a")
-    ada = %Actors.Agent{wallet_address: @member_wallet, chain_id: 8453, audience: "keyfleet"}
+
+    ada = %Actors.Agent{
+      wallet_address: @member_wallet,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
+
     Agents.ensure_profile!(%{name: "Ada", declared_harness: "test"}, actor: ada)
 
     Rooms.send_to_key!(
@@ -593,5 +600,10 @@ defmodule Keyfleet.ActivityTest do
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
 
   defp agent(character),
-    do: %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+    do: %Actors.Agent{
+      wallet_address: wallet(character),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 end

@@ -142,7 +142,7 @@ defmodule Keyfleet.Proposals.Execution do
     end
 
     policy action(:record) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

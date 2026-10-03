@@ -10,22 +10,13 @@ defmodule Mix.Tasks.Keyfleet.RouteHandoff do
   def run(args) do
     handoff = KeyfleetWeb.RouteCatalog.design_handoff()
     expected = %{@json_path => handoff.json, @digest_path => handoff.digest <> "\n"}
-
-    if "--check" in args do
-      check!(expected)
-    else
-      write!(expected)
-    end
+    if "--check" in args, do: check!(expected), else: write!(expected)
   end
 
   defp check!(expected) do
-    stale = Enum.reject(expected, fn {path, contents} -> File.read(path) == {:ok, contents} end)
-
-    if stale == [] do
-      IO.puts("Route handoff is current")
-    else
-      paths = Enum.map_join(stale, ", ", &elem(&1, 0))
-      Mix.raise("Route handoff is stale: #{paths}")
+    case for({path, contents} <- expected, File.read(path) != {:ok, contents}, do: path) do
+      [] -> IO.puts("Route handoff is current")
+      stale -> Mix.raise("Route handoff is stale: #{Enum.join(stale, ", ")}")
     end
   end
 

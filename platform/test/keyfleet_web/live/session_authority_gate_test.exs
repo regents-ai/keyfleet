@@ -318,7 +318,7 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     data
   end
 
-  defp other_lineage, do: SessionAuthority.bootstrap().lineage
+  defp other_lineage, do: fresh_claim().lineage
 
   defp put_valid_csrf(conn) do
     token = Plug.CSRFProtection.get_csrf_token()

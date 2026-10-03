@@ -97,8 +97,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   test "BROWSER_FAILURE_DIAGNOSTIC: emits one bounded telemetry event after admission", %{
     conn: conn
   } do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     handler = "privy-browser-failure-#{Elixir.System.unique_integer([:positive])}"
     parent = self()
 
@@ -165,8 +165,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "BROWSER_FAILURE_DIAGNOSTIC: accepts every report but logs at most twenty per IP" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
 
     log =
       capture_log(fn ->
@@ -186,8 +186,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "BROWSER_FAILURE_DIAGNOSTIC: retryable closes cannot consume the actionable budget" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
 
     log =
       capture_log(fn ->
@@ -214,8 +214,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "SESSION_FAILURE_DIAGNOSTIC: the rejecting endpoint emits exactly once before responding" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     handler = "privy-session-failure-#{Elixir.System.unique_integer([:positive])}"
     parent = self()
 
@@ -247,8 +247,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "SESSION_FAILURE_DIAGNOSTIC: repeated rejected sessions share the actionable bound" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     handler = "bounded-session-failure-#{Elixir.System.unique_integer([:positive])}"
     parent = self()
 
@@ -327,7 +327,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert get_session(bootstrapped) |> Map.keys() |> Enum.sort() == @canonical_session_keys
     lineage = get_session(bootstrapped, :session_lineage)
     assert get_session(bootstrapped, :session_generation) == 0
-    assert SessionAuthority.exact(claim(bootstrapped)) == {:ok, nil}
+    assert authority_of(claim(bootstrapped)) == {:ok, nil}
 
     observed = bootstrapped |> recycled() |> csrf_bootstrap()
 
@@ -340,7 +340,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   test "EXACT_CSRF_MATRIX: an exact bound claim is observed without touching the cookie" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
 
     observed = csrf_bootstrap(browser)
 
@@ -348,12 +348,12 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     refute observed.private[:plug_session_info]
     refute session_cookie(observed)
     assert get_session(observed) == get_session(signed_in)
-    assert SessionAuthority.exact(claim(signed_in)) == {:ok, account_id}
+    assert authority_of(claim(signed_in)) == {:ok, account_id}
   end
 
   test "EXACT_CSRF_MATRIX: a held exact response cannot put an older generation back" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
 
     # Computed while the claim is still exact, then held in flight.
     held = csrf_bootstrap(browser)
@@ -364,13 +364,13 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     # Delivered late, the held response carries nothing to apply over the winner.
     refute session_cookie(held)
-    assert SessionAuthority.exact(winner) == {:ok, account_id}
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :superseded}
+    assert authority_of(winner) == {:ok, account_id}
+    assert authority_of(claim(signed_in)) == {:error, :superseded}
   end
 
   test "EXACT_CSRF_MATRIX: a superseded claim is refused without touching the cookie" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
 
     # Another tab refreshes the same lineage, stranding this browser's cookie.
     assert {:ok, :refresh, current} = SessionAuthority.sign_in(claim(signed_in), account_id)
@@ -379,7 +379,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     assert json_response(refused, 409) == refused("session_superseded")
     refute session_cookie(refused)
-    assert SessionAuthority.exact(current) == {:ok, account_id}
+    assert authority_of(current) == {:ok, account_id}
   end
 
   test "EXACT_CSRF_MATRIX: a revoked claim drops the cookie and only a later request mints" do
@@ -408,7 +408,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert admitted |> Enum.map(&get_session(&1, :session_lineage)) |> Enum.uniq() |> length() ==
              @limit
 
-    assert Enum.all?(admitted, &(SessionAuthority.exact(claim(&1)) == {:ok, nil}))
+    assert Enum.all?(admitted, &(authority_of(claim(&1)) == {:ok, nil}))
     assert authority_count() - before == @limit
 
     denied = bootstrap_from(@peer)
@@ -565,7 +565,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   test "ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: reads and mounts change no authority" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
     KeyfleetWeb.Endpoint.subscribe(topic)
 
@@ -578,13 +578,13 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     # Remaining signed in is not a session event: the generation this browser
     # already holds is still the current one.
-    assert SessionAuthority.exact(claim(signed_in)) == {:ok, account_id}
+    assert authority_of(claim(signed_in)) == {:ok, account_id}
     refute_receive %Phoenix.Socket.Broadcast{topic: ^topic, event: "disconnect"}
   end
 
   test "FIRST_BIND_AND_REFRESH_ROTATE: a superseded sign-in is refused and emits no cookie" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
     {browser, csrf} = refreshed_csrf(browser)
 
     # The winning tab advances the row while this request is still in flight.
@@ -599,7 +599,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     assert json_response(loser, 409) == refused("session_superseded")
     refute session_cookie(loser)
-    assert SessionAuthority.exact(current) == {:ok, account_id}
+    assert authority_of(current) == {:ok, account_id}
   end
 
   test "TWO_STEP_ACCOUNT_SWITCH: a different account revokes, drops and disconnects first", %{
@@ -626,7 +626,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert_response_sent_then_disconnect(topic)
     assert json_response(switched, 409) == refused("account_switch_required")
     assert switched.private[:plug_session_info] == :drop
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
+    assert authority_of(claim(signed_in)) == {:error, :reset}
 
     rebound =
       build_conn()
@@ -661,7 +661,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert_response_sent_then_disconnect(topic)
     assert %{"ok" => true} = json_response(deleted, 200)
     assert deleted.private[:plug_session_info] == :drop
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
+    assert authority_of(claim(signed_in)) == {:error, :reset}
 
     repeated =
       build_conn() |> init_test_session(held) |> put_valid_csrf() |> delete("/auth/privy/session")
@@ -727,12 +727,12 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   # The one rendered diagnostic line; this repository's development formatter
   # drops metadata, so the whole classification lives in the message.
-  @classification ~r/Privy session rejected [^\n]+/
+  @classification ~r/Privy session refused [^\n]+/
 
   test "COMPLETE_PAIR_REQUIRED: a half, blank, duplicated or unverifiable pair is refused before a write",
        %{conn: conn} do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
 
     assert {:ok, before_attempts} =
              Accounts.get_by_privy_did("did:privy:verified", actor: %System{})
@@ -803,28 +803,28 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
   test "REDACTED_CLASSIFICATION: the controller names the two stages it owns itself" do
     assert classification(put_headers(browser(), [{"privy-id-token", @identity}])) ==
-             "Privy session rejected stage=request_pair reason=missing_access_token"
+             "Privy session refused stage=request_pair reason=missing_access_token"
 
     assert classification(put_headers(browser(), [{"authorization", "Bearer valid"}])) ==
-             "Privy session rejected stage=request_pair reason=missing_identity_token"
+             "Privy session refused stage=request_pair reason=missing_identity_token"
 
     # Lapsed wallet evidence is the account boundary's own outcome, not a
     # verification failure, and keeps its own name.
     assert classification(put_privy_pair(browser(), "no-wallet")) ==
-             "Privy session rejected stage=account_evidence reason=missing_linked_wallet"
+             "Privy session refused stage=account_evidence reason=missing_linked_wallet"
   end
 
   test "REDACTED_CLASSIFICATION: the two access-verification reasons keep their own names" do
     assert classification(put_privy_pair(browser(), "stale-access")) ==
-             "Privy session rejected stage=access_verification reason=token_verification_failed"
+             "Privy session refused stage=access_verification reason=token_verification_failed"
 
     assert classification(put_privy_pair(browser(), "unverifiable")) ==
-             "Privy session rejected stage=access_verification reason=invalid_token"
+             "Privy session refused stage=access_verification reason=invalid_token"
   end
 
   test "ONE_MARKED_REFUSAL: only an unverifiable access token invites a fresh provider login" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
 
     {marked, marked_log} =
       with_log(fn ->
@@ -860,10 +860,10 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "ONE_MARKED_REFUSAL: the marked refusal still revokes, drops and disconnects" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
     KeyfleetWeb.Endpoint.subscribe(topic)
     {browser, csrf} = refreshed_csrf(browser)
@@ -885,7 +885,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert marked.private[:plug_session_info] == :drop
     assert_no_token_disclosure(marked)
 
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
+    assert authority_of(claim(signed_in)) == {:error, :reset}
     assert SessionAuthority.sign_in(claim(signed_in), account_id) == {:error, :reset}
   end
 
@@ -893,7 +893,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     log = refusal_log(put_privy_pair(browser(), "unverifiable"))
 
     assert Regex.run(@classification, log) ==
-             ["Privy session rejected stage=access_verification reason=invalid_token"]
+             ["Privy session refused stage=access_verification reason=invalid_token"]
 
     refute log =~ "unverifiable"
   end
@@ -903,13 +903,13 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     classification
   end
 
-  # Raises the primary Logger level for the one refused request, because this
-  # repository logs at warning under test and the diagnostic is deliberately
-  # debug-level. Every case in this synchronous file runs alone, so nothing else
-  # observes the change, and everything logged meanwhile is captured.
+  # Lowers the primary Logger level for the one refused request, because this
+  # repository logs at warning under test and the diagnostic is info-level.
+  # Every case in this synchronous file runs alone, so nothing else observes
+  # the change, and everything logged meanwhile is captured.
   defp refusal_log(browser) do
     level = Logger.level()
-    Logger.configure(level: :debug)
+    Logger.configure(level: :info)
 
     try do
       capture_log(fn ->
@@ -1033,10 +1033,10 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "STALE_LOGOUT_REVOKES: an unverifiable bearer revokes the bound lineage it was offered for" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
     topic = get_session(signed_in, :live_socket_id)
     KeyfleetWeb.Endpoint.subscribe(topic)
     {browser, csrf} = refreshed_csrf(browser)
@@ -1058,7 +1058,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     # The lineage the bearer was offered for is terminally revoked, so the
     # cookie the browser was still holding can neither authenticate nor mount.
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
+    assert authority_of(claim(signed_in)) == {:error, :reset}
     assert SessionAuthority.sign_in(claim(signed_in), account_id) == {:error, :reset}
 
     held = build_conn() |> Phoenix.ConnTest.init_test_session(get_session(signed_in))
@@ -1071,8 +1071,8 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   end
 
   test "STALE_LOGOUT_REVOKES: lapsed wallet evidence fails closed on the same rule" do
-    RequestRateLimiter.reset()
-    on_exit(&RequestRateLimiter.reset/0)
+    :ets.delete_all_objects(RequestRateLimiter)
+    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     {browser, signed_in} = signed_in_browser()
     {browser, csrf} = refreshed_csrf(browser)
 
@@ -1092,7 +1092,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert {:ok, invalidated} = Accounts.get_by_privy_did("did:privy:verified", actor: %System{})
     assert invalidated.wallet_address == nil
     assert invalidated.wallet_addresses == []
-    assert SessionAuthority.exact(claim(signed_in)) == {:error, :reset}
+    assert authority_of(claim(signed_in)) == {:error, :reset}
   end
 
   test "current provider evidence refreshes a stale former wallet without changing identity", %{
@@ -1130,13 +1130,14 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     assert {:ok, _identity} =
              Accounts.upsert_linked_identity(
-               :x,
-               "shared-x-subject",
-               "owner",
-               nil,
-               DateTime.utc_now(),
-               %{},
-               owner.id,
+               %{
+                 provider: :x,
+                 subject: "shared-x-subject",
+                 username: "owner",
+                 verified_at: DateTime.utc_now(),
+                 metadata: %{},
+                 human_account_id: owner.id
+               },
                actor: %System{}
              )
 
@@ -1151,7 +1152,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     assert get_resp_header(response, "x-ash-identity-error") == ["already-connected"]
 
     account = Accounts.get_by_privy_did!("did:privy:conflicting-social", actor: %System{})
-    assert SessionAuthority.exact(claim(response)) == {:ok, account.id}
+    assert authority_of(claim(response)) == {:ok, account.id}
     assert {:ok, []} = Accounts.list_linked_identities_for_account(account.id, actor: %System{})
 
     topic = get_session(response, :live_socket_id)
@@ -1186,7 +1187,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   # session travels only as a cookie and no test-side write marks it dirty.
   test "CENTRAL_CURRENT_ACTOR: an ordinary response under refused authority emits no Set-Cookie" do
     {browser, signed_in} = signed_in_browser()
-    {:ok, account_id} = SessionAuthority.exact(claim(signed_in))
+    {:ok, account_id} = authority_of(claim(signed_in))
     stale = get_session(signed_in)
 
     # A delayed read must never be able to overwrite the cookie a later
@@ -1233,7 +1234,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     put_req_cookie(build_conn(), "_keyfleet_key", cookie)
   end
 
-  defp unrelated_lineage, do: SessionAuthority.bootstrap().lineage
+  defp unrelated_lineage, do: fresh_claim().lineage
 
   defp signed_in_browser do
     bootstrapped = csrf_bootstrap(build_conn())
@@ -1266,11 +1267,11 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
   defp release_budget do
     raised = Application.fetch_env!(:keyfleet, :session_bootstrap_rate_limit)
     Application.put_env(:keyfleet, :session_bootstrap_rate_limit, @release_budget)
-    RequestRateLimiter.reset()
+    :ets.delete_all_objects(RequestRateLimiter)
 
     on_exit(fn ->
       Application.put_env(:keyfleet, :session_bootstrap_rate_limit, raised)
-      RequestRateLimiter.reset()
+      :ets.delete_all_objects(RequestRateLimiter)
     end)
   end
 

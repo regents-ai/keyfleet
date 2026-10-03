@@ -5,6 +5,16 @@ defmodule KeyfleetWeb.Endpoint do
   # transport must decode it with the same options the request plug runs with.
   @session_options {Application, :fetch_env!, [:keyfleet, :session_options]}
 
+  # A stylesheet, an icon or an image may be opened directly, and the browser
+  # then reads it as a page. These say what a page from this address may do,
+  # which is nothing.
+  @static_headers %{
+    "content-security-policy" => "default-src 'none'; frame-ancestors 'none'",
+    "x-content-type-options" => "nosniff",
+    "x-frame-options" => "DENY",
+    "referrer-policy" => "no-referrer"
+  }
+
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [:peer_data, :uri, session: @session_options]],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
@@ -27,7 +37,8 @@ defmodule KeyfleetWeb.Endpoint do
     gzip: not code_reloading?,
     only: KeyfleetWeb.static_paths(),
     only_matching: KeyfleetWeb.digested_static_prefixes(),
-    raise_on_missing_only: code_reloading?
+    raise_on_missing_only: code_reloading?,
+    headers: @static_headers
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
@@ -59,16 +70,18 @@ defmodule KeyfleetWeb.Endpoint do
     documents: &KeyfleetWeb.PublicDocuments.document/1,
     guide: "/llms.txt"
 
+  # The largest body the site takes is an agent's signed post or workspace
+  # write, about 50 kilobytes, which SignedAgent reads under its own limit;
+  # anything past a megabyte is refused before it is read.
   plug KeyfleetWeb.Plugs.Parsers,
     body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
-    parsers: [:urlencoded, :multipart, :json],
+    parsers: [:urlencoded, :json],
     pass: ["*/*"],
+    length: 1_000_000,
     json_decoder: Phoenix.json_library()
 
-  plug Plug.MethodOverride
   plug Plug.Head
-  plug KeyfleetWeb.Plugs.RuntimeSession
-
+  plug :runtime_session
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
@@ -95,4 +108,10 @@ defmodule KeyfleetWeb.Endpoint do
 
   defp allow_page_tools(conn, _opts),
     do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
+
+  # Production sets the cookie's `secure` flag in runtime.exs, after this module compiles.
+  defp runtime_session(conn, _opts) do
+    options = Application.fetch_env!(:keyfleet, :session_options)
+    Plug.Session.call(conn, Plug.Session.init(options))
+  end
 end

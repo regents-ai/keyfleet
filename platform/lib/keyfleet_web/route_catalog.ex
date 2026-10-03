@@ -7,7 +7,6 @@ defmodule KeyfleetWeb.RouteCatalog do
   alias __MODULE__.{
     Entry,
     RouteTarget,
-    SidebarHeading,
     SidebarModel,
     Spec
   }
@@ -207,10 +206,6 @@ defmodule KeyfleetWeb.RouteCatalog do
       "label" => target.label,
       "destination" => target.path
     }
-  end
-
-  defp sidebar_target_handoff(%SidebarHeading{} = heading) do
-    %{"type" => "heading", "label" => heading.label}
   end
 
   # A value is written into the path the way a browser sends it, so an item

@@ -133,7 +133,7 @@ defmodule Keyfleet.Graph.Relation do
     end
 
     policy action([:project, :remove]) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

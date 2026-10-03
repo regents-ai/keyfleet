@@ -614,7 +614,7 @@ describe("lazy browser authentication", () => {
     page.click("sign-in")
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
     expect(initialControls.every(control => control.disabled)).toBe(true)
     expect(initialControls.map(control => control.getAttribute("aria-disabled"))).toEqual([
@@ -632,7 +632,7 @@ describe("lazy browser authentication", () => {
     expect(handleRequest).not.toHaveBeenCalled()
     expect(replacementStatus.hidden).toBe(false)
     expect(replacementStatus.textContent).toBe(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
     expect(importer).toHaveBeenCalledOnce()
   })
@@ -652,7 +652,7 @@ describe("lazy browser authentication", () => {
 
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
+      "We couldn’t sign you in. Reload this page, then try again.",
     )
     expect(warning).toHaveBeenLastCalledWith("Privy sign-in failure", "session_exchange")
   })
@@ -741,7 +741,7 @@ describe("lazy browser authentication", () => {
     await vi.waitFor(() => expect(startPrivyBridge).toHaveBeenCalledOnce())
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Privy finished the wallet step, but this site couldn’t finish sign-in. Reload this page or contact support.",
+      "We couldn’t sign you in. Reload this page, then try again.",
     )
   })
 
@@ -756,7 +756,7 @@ describe("lazy browser authentication", () => {
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(importer).toHaveBeenCalledOnce()
     expect(page.status.textContent).toBe(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
   })
 
@@ -1147,14 +1147,14 @@ describe("lazy browser authentication", () => {
     page.click("sign-in")
     await vi.waitFor(() => expect(page.status.hidden).toBe(false))
     expect(page.status.textContent).toBe(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
 
     finishCleanup?.()
     await vi.waitFor(() => expect(finishSignOutOnly).toHaveBeenCalledOnce())
     expect(page.status.hidden).toBe(false)
     expect(page.status.textContent).toBe(
-      "Sign-in is unavailable on this page. Reload it or contact support.",
+      "Sign-in isn’t available right now. Reload this page.",
     )
   })
 

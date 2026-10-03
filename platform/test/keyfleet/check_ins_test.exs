@@ -133,7 +133,12 @@ defmodule Keyfleet.CheckInsTest do
   end
 
   test "an agent without a profile has nothing recorded" do
-    actor = %Actors.Agent{wallet_address: wallet("d"), chain_id: 8453, audience: "keyfleet"}
+    actor = %Actors.Agent{
+      wallet_address: wallet("d"),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
     assert Agents.check_in(actor, @fleet, %{"kind" => "session"}) == {:ok, nil}
     assert Agents.note_contribution(actor, @fleet, :post) == {:ok, nil}
@@ -282,7 +287,12 @@ defmodule Keyfleet.CheckInsTest do
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)
 
   defp agent(character, name) do
-    actor = %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+    actor = %Actors.Agent{
+      wallet_address: wallet(character),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
     profile =
       Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"}, actor: actor)

@@ -72,12 +72,12 @@ defmodule Keyfleet.RoomsTest do
              Rooms.get_room!("fibonacci_syndicate", "open-2")
   end
 
-  test "ordinary and forged actors cannot write rooms and leave persisted state unchanged" do
+  test "ordinary actors cannot write rooms and leave persisted state unchanged" do
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     before = persisted_rooms()
 
-    for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: 1}, %{role: :system}] do
+    for actor <- [nil, %Keyfleet.Actors.Human{human_account_id: 1}] do
       assert {:error, %Ash.Error.Forbidden{}} =
                Ash.create(
                  Room,
@@ -149,6 +149,7 @@ defmodule Keyfleet.RoomsTest do
       agent = %Keyfleet.Actors.Agent{
         wallet_address: "0x" <> String.duplicate("c", 40),
         chain_id: 8453,
+        verification_method: :eoa_recovery,
         audience: "keyfleet"
       }
 

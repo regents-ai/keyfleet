@@ -42,6 +42,6 @@ defmodule KeyfleetWeb.MetricsTest do
     body = Req.get!(url <> "/metrics", retry: false).body
 
     assert body =~
-             ~s(keyfleet_chain_failure_total{chain_id="1",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
+             ~s(health_chain_request_failures_total{chain_id="1",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
   end
 end

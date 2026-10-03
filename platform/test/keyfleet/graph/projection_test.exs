@@ -265,7 +265,12 @@ defmodule Keyfleet.Graph.ProjectionTest do
     for actor <- [
           nil,
           %Actors.Human{human_account_id: 1, wallet_addresses: [@wallet]},
-          %Actors.Agent{wallet_address: @wallet, chain_id: 8453, audience: "keyfleet"}
+          %Actors.Agent{
+            wallet_address: @wallet,
+            chain_id: 8453,
+            verification_method: :eoa_recovery,
+            audience: "keyfleet"
+          }
         ] do
       # The writes of many rows at once report why they were refused.
       opts = [actor: actor, bulk_options: [return_errors?: true]]

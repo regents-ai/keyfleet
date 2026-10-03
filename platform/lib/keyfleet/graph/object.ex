@@ -155,7 +155,7 @@ defmodule Keyfleet.Graph.Object do
     end
 
     policy action(:project) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

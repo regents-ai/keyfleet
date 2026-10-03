@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.Components.Shell do
   use Phoenix.Component
 
   alias KeyfleetWeb.Components.RegentLinks
-  alias KeyfleetWeb.RouteCatalog.{RouteTarget, SidebarHeading}
+  alias KeyfleetWeb.RouteCatalog.RouteTarget
   alias Phoenix.LiveView.JS
 
   attr(:route_spec, :map, required: true)
@@ -206,14 +206,6 @@ defmodule KeyfleetWeb.Components.Shell do
     >
       {@target.label}
     </.link>
-    """
-  end
-
-  defp sidebar_target(%{target: %SidebarHeading{} = heading} = assigns) do
-    assigns = assign(assigns, :heading, heading)
-
-    ~H"""
-    <span class="shell-sidebar__heading">{@heading.label}</span>
     """
   end
 

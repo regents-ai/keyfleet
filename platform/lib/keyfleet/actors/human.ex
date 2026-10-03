@@ -1,12 +1,8 @@
 defmodule Keyfleet.Actors.Human do
-  @moduledoc """
-  A signed-in person acting through their own account: the account's id and
-  every wallet the account links, lowercased.
-  """
+  @moduledoc "A signed-in person: the account's id and every wallet it links, lowercased."
   @enforce_keys [:human_account_id]
   defstruct [:human_account_id, wallet_addresses: [], role: :human]
 
-  @doc "The actor for a signed-in account."
   def for_account(account),
     do: %__MODULE__{human_account_id: account.id, wallet_addresses: wallets(account)}
 
