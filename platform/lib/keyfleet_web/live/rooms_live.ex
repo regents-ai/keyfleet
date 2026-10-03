@@ -26,13 +26,17 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Checks.RoomPoster
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
+  alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Muter
+  alias Keyfleet.Rooms.Room
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.ShellLive
+  alias Phoenix.Socket.Broadcast
 
   @naming_failed "That room couldn’t be named. Try again."
+  @naming_rule "Choose a name of up to 80 characters, on one line, using only visible characters."
   @mute_failed "That didn’t go through. Try again."
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
@@ -55,6 +59,11 @@ defmodule KeyfleetWeb.RoomsLive do
 
   attr :room, :map, required: true
   attr :posts, :any, required: true, doc: "the open room's posts, oldest first"
+  attr :post_form, Phoenix.HTML.Form, required: true
+  attr :naming_form, Phoenix.HTML.Form, default: nil, doc: "nil for a room that isn't named"
+
+  # The boxes hold what the person typed, as they typed it, rather than the
+  # tidied value the action would store or the name the room has now.
   attr :notice, :map, default: nil
 
   def page(assigns) do
@@ -127,23 +136,32 @@ defmodule KeyfleetWeb.RoomsLive do
           </p>
 
           <.form
-            :if={@room.kind == :open and @room.can_post?}
-            for={%{}}
-            as={:room}
+            :if={@naming_form != nil and @room.can_post?}
+            for={@naming_form}
             id="rooms-namer"
             class="rooms-composer"
+            phx-change="validate_naming"
             phx-submit="name_room"
           >
-            <label for="rooms-namer-topic">
-              {if @room.topic, do: "Rename this room", else: "Name this room"}
-            </label>
-            <input
+            <Regent.Primitives.field
+              :let={field}
               id="rooms-namer-topic"
-              name="room[topic]"
-              value={@room.naming}
-              maxlength="80"
-              required
-            />
+              class="rooms-field"
+              label={if @room.topic, do: "Rename this room", else: "Name this room"}
+              errors={naming_errors(@naming_form[:topic])}
+            >
+              <input
+                id={field.id}
+                name={@naming_form[:topic].name}
+                value={Map.get(@naming_form.params, "topic", "")}
+                maxlength="80"
+                required
+                autocomplete="off"
+                phx-debounce="300"
+                aria-invalid={field.aria_invalid}
+                aria-describedby={field.described_by != "" && field.described_by}
+              />
+            </Regent.Primitives.field>
             <Regent.Primitives.button type="submit">
               {if @room.topic, do: "Rename", else: "Name room"}
             </Regent.Primitives.button>
@@ -205,20 +223,30 @@ defmodule KeyfleetWeb.RoomsLive do
 
           <.form
             :if={@room.can_post?}
-            for={%{}}
-            as={:post}
+            for={@post_form}
             id="rooms-composer"
             class="rooms-composer"
+            phx-change="validate_post"
             phx-submit="send_message"
           >
-            <label for="rooms-composer-body">Say something</label>
-            <textarea
+            <Regent.Primitives.field
+              :let={field}
               id="rooms-composer-body"
-              name="post[body]"
-              rows="3"
-              maxlength="4000"
-              required
-            >{@room.draft}</textarea>
+              class="rooms-field"
+              label="Say something"
+              errors={errors(@post_form[:body])}
+            >
+              <textarea
+                id={field.id}
+                name={@post_form[:body].name}
+                rows="3"
+                maxlength="4000"
+                required
+                phx-debounce="300"
+                aria-invalid={field.aria_invalid}
+                aria-describedby={field.described_by != "" && field.described_by}
+              >{Phoenix.HTML.Form.normalize_value("textarea", @post_form.params["body"])}</textarea>
+            </Regent.Primitives.field>
             <Regent.Primitives.button type="submit">Post</Regent.Primitives.button>
           </.form>
 
@@ -272,14 +300,26 @@ defmodule KeyfleetWeb.RoomsLive do
   def stamp(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M")
 
   @doc "What a room's page does with a post, a name for the room, and a mute."
-  def handle_event("send_message", %{"post" => %{"body" => body}}, socket) do
-    {:noreply, post(socket, body)}
-  end
+  def handle_event("validate_post", %{"post" => params}, %{assigns: %{room: %{}}} = socket),
+    do: {:noreply, update(socket, :post_form, &AshPhoenix.Form.validate(&1, params))}
 
-  def handle_event("name_room", %{"room" => %{"topic" => topic}}, socket)
-      when is_binary(topic) do
-    {:noreply, name_room(socket, topic)}
-  end
+  def handle_event("send_message", %{"post" => params}, %{assigns: %{room: %{}}} = socket),
+    do: {:noreply, post(socket, params)}
+
+  def handle_event(
+        "validate_naming",
+        %{"room" => params},
+        %{assigns: %{naming_form: %Phoenix.HTML.Form{}}} = socket
+      ),
+      do: {:noreply, update(socket, :naming_form, &AshPhoenix.Form.validate(&1, params))}
+
+  def handle_event(
+        "name_room",
+        %{"room" => %{"topic" => topic} = params},
+        %{assigns: %{naming_form: %Phoenix.HTML.Form{}}} = socket
+      )
+      when is_binary(topic),
+      do: {:noreply, name_room(socket, params)}
 
   def handle_event("name_room", _params, socket),
     do: {:noreply, refuse_naming(socket, @naming_failed)}
@@ -298,21 +338,22 @@ defmodule KeyfleetWeb.RoomsLive do
   A room created or named in the fleet on show changes its list of rooms, and
   the room on show when it is the one named.
   """
-  def handle_info({:rooms_changed, fleet_id}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
+  def handle_info(
+        %Broadcast{event: "rooms_changed", payload: %{fleet_id: fleet_id}},
+        %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
+      ) do
     rooms = Rooms.list_rooms!(fleet_id, actor: ShellLive.human_actor(socket), load: [:fleet])
     {:noreply, update(socket, :room, &show_rooms(&1, rooms))}
   end
 
-  def handle_info({:rooms_changed, _fleet_id}, socket), do: {:noreply, socket}
-
   # A mute added or taken away on another of the muter's pages.
   def handle_info(
-        {:mutes_changed, fleet_id},
+        %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}},
         %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
       ),
       do: {:noreply, show_unmuted(socket)}
 
-  def handle_info({:mutes_changed, _fleet_id}, socket), do: {:noreply, socket}
+  def handle_info(%Broadcast{}, socket), do: {:noreply, socket}
 
   @doc "The room named in the address, with its latest posts, and the fleet's other rooms."
   def read_room(socket, fleet_id, slug) do
@@ -340,17 +381,46 @@ defmodule KeyfleetWeb.RoomsLive do
             muted: muted,
             muter?: Muter.of(actor) != nil,
             can_post?: room != nil and RoomPoster.may_post?(actor, fleet_id),
-            naming: "",
-            refreshing?: posting_paused?(actor, rooms, fleet_id),
-            draft: ""
+            refreshing?: posting_paused?(actor, rooms, fleet_id)
           },
           rooms
         ),
-      room_notice: nil,
-      send_key: Ash.UUID.generate()
+      room_notice: nil
     )
+    |> new_post_form()
+    |> new_naming_form(room)
     |> stream(:posts, Rooms.unmuted(posts, muted), reset: true, limit: -@thread_kept)
   end
+
+  # A post is written as the room's own action, with the fleet, the room and a
+  # fresh key that settles a repeat set here rather than by the browser. The key
+  # stays with the box until a post goes through, so asking again after a
+  # refusal can never post twice.
+  defp new_post_form(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket) do
+    server_side = %{
+      "fleet_id" => fleet_id,
+      "slug" => slug,
+      "idempotency_key" => Ash.UUID.generate()
+    }
+
+    form =
+      AshPhoenix.Form.for_create(Message, :send_message,
+        actor: ShellLive.human_actor(socket),
+        as: "post",
+        transform_params: fn params, _action -> Map.merge(params, server_side) end
+      )
+
+    assign(socket, :post_form, to_form(form))
+  end
+
+  # Only an open room is named.
+  defp new_naming_form(socket, %Room{kind: :open} = room),
+    do: assign(socket, :naming_form, naming_form(room, ShellLive.human_actor(socket)))
+
+  defp new_naming_form(socket, _room), do: assign(socket, :naming_form, nil)
+
+  defp naming_form(room, actor),
+    do: room |> AshPhoenix.Form.for_update(:set_topic, actor: actor, as: "room") |> to_form()
 
   defp change_mute("mute_key", fleet_id, token_id, actor),
     do: Rooms.mute_key(fleet_id, token_id, actor: actor)
@@ -434,77 +504,93 @@ defmodule KeyfleetWeb.RoomsLive do
   defp last_seq(posts, _shown), do: List.last(posts).seq
 
   # The post is written straight to the room, and the page then reads back what
-  # the room holds after the last post it was showing.
-  defp post(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, body) do
-    actor = ShellLive.human_actor(socket)
-
-    case Rooms.send_message(
-           %{
-             fleet_id: fleet_id,
-             slug: slug,
-             body: body,
-             idempotency_key: socket.assigns.send_key
-           },
-           actor: actor
-         ) do
+  # the room holds after the last post it was showing. A refused post stays in
+  # the box with its key.
+  defp post(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket, params) do
+    case AshPhoenix.Form.submit(socket.assigns.post_form, params: params) do
       {:ok, _message} ->
         socket
-        |> assign(send_key: Ash.UUID.generate(), room_notice: nil)
-        |> update(:room, &%{&1 | draft: ""})
+        |> assign(:room_notice, nil)
+        |> new_post_form()
         |> show_new_posts()
 
-      {:error, refusal} ->
+      {:error, form} ->
         socket
-        |> assign(:room_notice, %{tone: :error, message: post_refusal(refusal, fleet_id)})
-        |> update(
-          :room,
-          &%{
-            &1
-            | draft: body,
-              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
-              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
-          }
+        |> assign(
+          post_form: form,
+          room_notice: %{tone: :error, message: post_refusal(refusal(form), fleet_id)}
         )
+        |> recheck_posting()
     end
   end
 
-  defp post(socket, _body), do: socket
-
   # The room is named straight away, and the page then reads back the room and
-  # the line the naming added to it.
-  defp name_room(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, topic) do
+  # the line the naming added to it. The naming is made against the room as it
+  # stands now, not as it stood when the page was drawn: whether the name is a
+  # change, and so says so in the room, depends on the name it has now.
+  defp name_room(%{assigns: %{room: %{fleet_id: fleet_id, slug: slug}}} = socket, params) do
     actor = ShellLive.human_actor(socket)
+    %Room{} = room = Rooms.get_room!(fleet_id, slug, actor: actor)
 
-    case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
-      {:ok, _room} ->
+    case AshPhoenix.Form.submit(naming_form(room, actor), params: params) do
+      {:ok, room} ->
         rooms = Rooms.list_rooms!(fleet_id, actor: actor, load: [:fleet])
 
         socket
         |> assign(:room_notice, nil)
-        |> update(:room, &(&1 |> show_rooms(rooms) |> Map.put(:naming, "")))
+        |> update(:room, &show_rooms(&1, rooms))
+        |> new_naming_form(room)
         |> show_new_posts()
 
-      {:error, refusal} ->
+      {:error, form} ->
         socket
-        |> refuse_naming(naming_refusal(refusal, fleet_id))
-        |> update(
-          :room,
-          &%{
-            &1
-            | naming: topic,
-              can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
-              refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
-          }
-        )
+        |> assign(naming_form: form, room_notice: naming_notice(refusal(form), fleet_id))
+        |> recheck_posting()
     end
   end
 
-  defp name_room(socket, _topic), do: socket
+  # A refusal may come from a key that changed hands, or from key ownership
+  # going out of date, after the page was drawn.
+  defp recheck_posting(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
+    actor = ShellLive.human_actor(socket)
+
+    update(
+      socket,
+      :room,
+      &%{
+        &1
+        | can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
+          refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
+      }
+    )
+  end
+
+  # What turned a form down, as the one error the action would have answered.
+  defp refusal(form), do: Ash.Error.to_error_class(form.source.source.errors)
+
+  defp errors(field) do
+    if used_input?(field), do: Enum.map(field.errors, &message/1), else: []
+  end
+
+  defp message({message, values}) do
+    Enum.reduce(values, message, fn {key, value}, message ->
+      String.replace(message, "%{#{key}}", to_string(value))
+    end)
+  end
 
   defp refuse_naming(%{assigns: %{room: %{}}} = socket, refusal),
     do: assign(socket, :room_notice, %{tone: :error, message: refusal})
 
   defp refuse_naming(socket, _refusal), do: socket
+
+  # A name that breaks the rules is said under the box itself; whatever else
+  # turned the naming down is said above the room.
+  defp naming_notice(refusal, fleet_id) do
+    case naming_refusal(refusal, fleet_id) do
+      nil -> nil
+      message -> %{tone: :error, message: message}
+    end
+  end
 
   defp naming_refusal(%Ash.Error.Forbidden{}, fleet_id) do
     if Chain.fresh?(fleet_id),
@@ -521,7 +607,7 @@ defmodule KeyfleetWeb.RoomsLive do
         "This room was renamed a moment ago. Try again in a minute."
 
       Enum.any?(errors, &match?(%{field: :topic}, &1)) ->
-        "Choose a name of up to 80 characters, on one line, using only visible characters."
+        nil
 
       true ->
         @naming_failed
@@ -529,6 +615,8 @@ defmodule KeyfleetWeb.RoomsLive do
   end
 
   defp naming_refusal(_refusal, _fleet_id), do: @naming_failed
+
+  defp naming_errors(field), do: if(errors(field) == [], do: [], else: [@naming_rule])
 
   @doc "What someone is told when a post, to a room or to a key, is turned down."
   def post_refusal(%Ash.Error.Forbidden{}, fleet_id) do

@@ -11,6 +11,7 @@ defmodule Keyfleet.KeyThreadsTest do
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Phoenix.Socket.Broadcast
 
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
@@ -192,23 +193,25 @@ defmodule Keyfleet.KeyThreadsTest do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")
-    assert_receive {:room_head, room_id, 1}
+    assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
     assert room_id == opening.room_id
-    assert_receive {:key_activity, @fleet, 1}
-    assert_receive {:key_activity, @fleet, 5}
+
+    assert_receive %Broadcast{
+      event: "key_activity",
+      payload: %{fleet_id: @fleet, token_ids: [1, 5]}
+    }
 
     {:ok, _answer} = send_to_key(fifth, 5, "Glad to be here", "k-2")
-    assert_receive {:room_head, ^room_id, 2}
-    assert_receive {:key_activity, @fleet, 5}
-    refute_receive {:key_activity, @fleet, _token_id}, 100
+    assert_receive %Broadcast{event: "room_head", payload: %{room_id: ^room_id, seq: 2}}
+    assert_receive %Broadcast{event: "key_activity", payload: %{token_ids: [5]}}
+    refute_receive %Broadcast{event: "key_activity"}, 100
 
     {:ok, _again} = send_to_key(first, 5, "Welcome aboard", "k-1")
-    refute_receive {:room_head, _room_id, _seq}, 100
-    refute_receive {:key_activity, @fleet, _token_id}, 100
+    refute_receive %Broadcast{}, 100
 
     post!(first, "general", "Morning")
-    assert_receive {:key_activity, @fleet, 1}
-    refute_receive {:key_activity, @fleet, _token_id}, 100
+    assert_receive %Broadcast{event: "key_activity", payload: %{token_ids: [1]}}
+    refute_receive %Broadcast{event: "key_activity"}, 100
   end
 
   test "the database keeps a thread's address to its key and never edits a thread's posts",

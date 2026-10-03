@@ -8,6 +8,7 @@ defmodule Keyfleet.MessagesTest do
   alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Phoenix.Socket.Broadcast
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -245,12 +246,12 @@ defmodule Keyfleet.MessagesTest do
     room = Rooms.get_room!(@fleet, "general")
 
     {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
-    assert_receive {:room_head, room_id, 1}
+    assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
     assert room_id == room.id
     assert sent.seq == 1
 
     {:ok, _again} = send_as(owner, "general", "Hull survey started", "k-1")
-    refute_receive {:room_head, _room_id, _seq}, 100
+    refute_receive %Broadcast{event: "room_head"}, 100
   end
 
   test "the database refuses to edit, delete or empty posts, key ownership or shards",

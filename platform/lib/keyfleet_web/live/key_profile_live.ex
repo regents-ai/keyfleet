@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
+  alias Phoenix.Socket.Broadcast
 
   # A key's profile keeps the latest hundred messages written to it.
   @key_thread_kept 100
@@ -595,15 +596,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
   the key's new messages are read from its thread, and its posts again.
   """
   def handle_info(
-        {:key_activity, fleet_id, token_id},
+        %Broadcast{event: "key_activity", payload: %{fleet_id: fleet_id, token_ids: token_ids}},
         %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true} = profile}} = socket
       ) do
-    if token_id == profile.token_id or token_id in profile.holder_keys,
+    if Enum.any?(token_ids, &(&1 == profile.token_id or &1 in profile.holder_keys)),
       do: {:noreply, show_key_activity(socket)},
       else: {:noreply, socket}
   end
 
-  def handle_info({:key_activity, _fleet_id, _token_id}, socket), do: {:noreply, socket}
+  def handle_info(%Broadcast{event: "key_activity"}, socket), do: {:noreply, socket}
 
   @doc "What the key has waiting, once the chain answers. A read for a key no longer open is dropped."
   def handle_async(:rewards, result, %{assigns: %{key_profile: %{issued?: true}}} = socket),

@@ -10,7 +10,8 @@ defmodule Keyfleet.Rooms.Mute do
   use Ash.Resource,
     domain: Keyfleet.Rooms,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [Ash.Notifier.PubSub]
 
   @max_bigint 9_223_372_036_854_775_807
 
@@ -39,12 +40,9 @@ defmodule Keyfleet.Rooms.Mute do
       return_skipped_upsert? true
       validate Keyfleet.Graph.Validations.KnownFleet
       change Keyfleet.Rooms.Changes.SetMuter
-      change Keyfleet.Rooms.Changes.AnnounceMutes
     end
 
-    destroy :unmute do
-      change Keyfleet.Rooms.Changes.AnnounceMutes
-    end
+    destroy :unmute
 
     # The actor's mutes in a fleet, by key number.
     read :in_fleet do
@@ -61,6 +59,21 @@ defmodule Keyfleet.Rooms.Mute do
       filter expr(fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id))
       get? true
     end
+  end
+
+  # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
+  # with the event "mutes_changed" and `%{fleet_id}`, on
+  # `Keyfleet.Rooms.Muter.topic/1`, so each of the muter's own open pages shows
+  # or hides the key's posts again.
+  pub_sub do
+    module Phoenix.PubSub
+    name Keyfleet.PubSub
+    prefix "mutes"
+    broadcast_type :phoenix_broadcast
+    transform &%{fleet_id: &1.data.fleet_id}
+
+    publish :mute, [:muter], event: "mutes_changed"
+    publish :unmute, [:muter], event: "mutes_changed"
   end
 
   # A mute is made, read and undone only by its own muter: a person or an

@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
+  alias Phoenix.Socket.Broadcast
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
@@ -314,7 +315,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     send(view.pid, {:graph_head, @classic, "log_fixture", 2})
     send(view.pid, {:graph_head, @classic, "log_fixture", 3})
     send(view.pid, {:proposals_changed, @classic})
-    send(view.pid, {:rooms_changed, @cascade})
+    send(view.pid, %Broadcast{event: "rooms_changed", payload: %{fleet_id: @cascade}})
     render(view)
 
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}

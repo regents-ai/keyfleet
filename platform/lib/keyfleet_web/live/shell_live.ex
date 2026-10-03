@@ -31,11 +31,12 @@ defmodule KeyfleetWeb.ShellLive do
   }
 
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
+  alias Phoenix.Socket.Broadcast
 
   @identity_providers %{"x" => :x, "github" => :github, "farcaster" => :farcaster}
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
-  @room_events ~w(send_message name_room mute_key unmute_key)
+  @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
 
   @impl true
@@ -68,7 +69,8 @@ defmodule KeyfleetWeb.ShellLive do
        room: nil,
        room_notice: nil,
        room_topic: nil,
-       send_key: nil,
+       post_form: nil,
+       naming_form: nil,
        workspace: nil,
        workspace_params: nil,
        workspace_topic: nil,
@@ -164,15 +166,22 @@ defmodule KeyfleetWeb.ShellLive do
   # nudge to look again. The new posts are read back from the room itself.
   @impl true
   def handle_info(
-        {:room_head, room_id, seq},
+        %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
         %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
       )
       when seq > last_seq,
       do: {:noreply, RoomsLive.show_new_posts(socket)}
 
   # The page only hears about the rooms of the fleet it shows.
-  def handle_info({:room_head, _room_id, _seq}, socket),
+  def handle_info(%Broadcast{event: "room_head"}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
+
+  def handle_info(%Broadcast{event: "key_activity"} = notice, socket),
+    do: KeyProfileLive.handle_info(notice, socket)
+
+  def handle_info(%Broadcast{event: event} = notice, socket)
+      when event in ["rooms_changed", "mutes_changed"],
+      do: RoomsLive.handle_info(notice, socket)
 
   # Keys changed in the fleet on show: its sales figures, the key on offer and
   # the agents here are read again (an agent starting or stopping on a key
@@ -208,15 +217,6 @@ defmodule KeyfleetWeb.ShellLive do
        socket
        |> KeysLive.refresh_key(fleet_id, token_ids)
        |> FleetLive.refresh_activity_soon(fleet_id)}
-
-  def handle_info({:key_activity, _fleet_id, _token_id} = message, socket),
-    do: KeyProfileLive.handle_info(message, socket)
-
-  def handle_info({:rooms_changed, _fleet_id} = message, socket),
-    do: RoomsLive.handle_info(message, socket)
-
-  def handle_info({:mutes_changed, _fleet_id} = message, socket),
-    do: RoomsLive.handle_info(message, socket)
 
   # A notice that the open fleet's workspace has moved past what the page last
   # read is only a nudge to read it again, once, a moment later: the notices
@@ -339,6 +339,8 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :rooms}
           room={@room}
           posts={@streams.posts}
+          post_form={@post_form}
+          naming_form={@naming_form}
           notice={@room_notice}
         />
 
@@ -441,7 +443,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_room(socket, _route_spec, _params) do
     socket
     |> listen_to(fleet_on_show(socket))
-    |> assign(room: nil, room_notice: nil, send_key: nil)
+    |> assign(room: nil, room_notice: nil, post_form: nil, naming_form: nil)
   end
 
   defp fleet_on_show(%{assigns: %{fleet: %{fleet_id: fleet_id}}}), do: fleet_id

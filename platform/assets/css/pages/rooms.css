@@ -210,6 +210,10 @@
   justify-items: start;
 }
 
+.rooms-field {
+  width: 100%;
+}
+
 .rooms-composer textarea {
   width: 100%;
   padding: 0.5rem;
