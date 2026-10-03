@@ -20,6 +20,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Motion
+  alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
 
@@ -31,8 +32,10 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   @executed_words %{decision: "Recorded", pay: "Paid", restrict_edits: "Carried out"}
 
-  attr :page, :map, required: true
+  attr :page, :any, required: true, doc: "the proposals as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+
+  def list(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="proposals-page" />|
 
   def list(%{page: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="proposals-page" />|
@@ -115,8 +118,10 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
-  attr :page, :map, required: true
+  attr :page, :any, required: true, doc: "the proposal as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+
+  def detail(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="proposal-page" />|
 
   def detail(%{page: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="proposal-page" />|
@@ -952,6 +957,25 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :id, :string, required: true
 
   # Told the way the fleet's own page tells it.
+  defp unreadable(assigns) do
+    ~H"""
+    <article id={@id} class="proposals-page">
+      <header class="proposals-heading">
+        <p class="proposals-kicker">Fleet</p>
+        <h1 tabindex="-1">Keyfleet</h1>
+      </header>
+
+      <section id="proposals-unreadable" class="proposals-panel">
+        <h2>This page couldn’t be loaded.</h2>
+        <p>Refresh the page to try again.</p>
+      </section>
+    </article>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  # Told the way the fleet's own page tells it.
   defp missing_fleet(assigns) do
     ~H"""
     <article id={@id} class="proposals-page">
@@ -1018,16 +1042,20 @@ no, of {keys(@proposal.keys_sold)} sold</span>|
     end
   end
 
-  @doc "The proposals page the address names, read afresh."
+  @doc """
+  The proposals page the address names, read afresh; or `:unreadable` when the
+  database couldn't be read.
+  """
   def read_proposals(socket) do
-    params = socket.assigns.proposals_params
-
-    page =
-      case socket.assigns.route_spec.route_id do
-        :proposals -> ProposalsPage.list(params["fleet_id"], params)
-        :proposal -> ProposalsPage.detail(params["fleet_id"], params["number"], params)
-      end
-
-    assign(socket, proposals: page)
+    case PageRead.run("proposals", fn -> proposals(socket) end) do
+      {:ok, page} -> assign(socket, proposals: page)
+      {:error, _failure} -> assign(socket, proposals: :unreadable)
+    end
   end
+
+  defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposals}}}),
+    do: ProposalsPage.list(params["fleet_id"], params)
+
+  defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
+    do: ProposalsPage.detail(params["fleet_id"], params["number"], params)
 end

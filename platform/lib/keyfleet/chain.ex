@@ -31,8 +31,10 @@ defmodule Keyfleet.Chain do
 
   @doc "The fleet's sales so far and what its next key costs, in atomic USDC."
   def progress(fleet_id) do
-    {:ok, minted} = minted(fleet_id)
-    Presets.progress(fleet_id, minted)
+    case minted(fleet_id) do
+      {:ok, minted} -> Presets.progress(fleet_id, minted)
+      {:error, failure} -> raise failure
+    end
   end
 
   @doc """

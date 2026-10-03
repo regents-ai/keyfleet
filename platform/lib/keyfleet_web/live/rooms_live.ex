@@ -32,6 +32,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.Motion
+  alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
   alias Phoenix.Socket.Broadcast
 
@@ -57,14 +58,30 @@ defmodule KeyfleetWeb.RoomsLive do
     ]
   ]
 
-  attr :room, :map, required: true
+  attr :room, :any, required: true, doc: "the room as read, or `:unreadable`"
   attr :posts, :any, required: true, doc: "the open room's posts, oldest first"
-  attr :post_form, Phoenix.HTML.Form, required: true
+  attr :post_form, Phoenix.HTML.Form, default: nil, doc: "nil for an unreadable room"
   attr :naming_form, Phoenix.HTML.Form, default: nil, doc: "nil for a room that isn't named"
 
   # The boxes hold what the person typed, as they typed it, rather than the
   # tidied value the action would store or the name the room has now.
   attr :notice, :map, default: nil
+
+  def page(%{room: :unreadable} = assigns) do
+    ~H"""
+    <article id="rooms-page" class="rooms-page">
+      <header class="rooms-heading">
+        <p class="rooms-kicker">Keyfleet</p>
+        <h1 tabindex="-1">Rooms</h1>
+      </header>
+
+      <section id="rooms-unreadable" class="rooms-panel">
+        <h2>This page couldn’t be loaded.</h2>
+        <p>Refresh the page to try again.</p>
+      </section>
+    </article>
+    """
+  end
 
   def page(assigns) do
     ~H"""
@@ -357,6 +374,18 @@ defmodule KeyfleetWeb.RoomsLive do
 
   @doc "The room named in the address, with its latest posts, and the fleet's other rooms."
   def read_room(socket, fleet_id, slug) do
+    case PageRead.run("rooms", fn -> show_room(socket, fleet_id, slug) end) do
+      {:ok, socket} ->
+        socket
+
+      {:error, _failure} ->
+        socket
+        |> assign(room: :unreadable, room_notice: nil, post_form: nil, naming_form: nil)
+        |> stream(:posts, [], reset: true)
+    end
+  end
+
+  defp show_room(socket, fleet_id, slug) do
     actor = ShellLive.human_actor(socket)
     # A fleet outside the catalog has no rooms and no mutes, and the page says
     # it doesn't exist.
@@ -364,6 +393,7 @@ defmodule KeyfleetWeb.RoomsLive do
       case Rooms.list_rooms(fleet_id, actor: actor, load: [:fleet]) do
         {:ok, rooms} -> {rooms, Rooms.muted_keys!(fleet_id, actor)}
         {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} -> {[], MapSet.new()}
+        {:error, failure} -> raise failure
       end
 
     room = Enum.find(rooms, &(&1.slug == slug))

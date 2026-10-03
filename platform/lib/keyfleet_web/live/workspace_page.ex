@@ -301,6 +301,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp page!({:ok, page}), do: page
   defp page!({:error, %Ash.Error.Invalid{}}), do: raise(NotFoundError)
+  defp page!({:error, failure}), do: raise(failure)
 
   # A page reached by going forward always has one before it, and one reached
   # by going back always has one after it.

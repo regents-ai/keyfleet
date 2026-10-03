@@ -518,3 +518,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   name that breaks the rules is said under the name box; other refusals are
   said above the room as before. A naming is checked against the room's name
   at the moment it is sent.
+- When the database can't be read, a fleet's page, its rooms, its proposals
+  and its workspace say "This page couldn't be loaded. Refresh the page to try
+  again." instead of failing. An address that names nothing still shows "not
+  found".
