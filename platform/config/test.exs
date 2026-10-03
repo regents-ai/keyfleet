@@ -39,6 +39,9 @@ config :keyfleet, Keyfleet.Traits,
 
 config :keyfleet, :database_startup_enabled, true
 
+# Jobs run only when a test runs them (`Oban.Testing`).
+config :keyfleet, Oban, testing: :manual
+
 # Every test case here reaches one node holding one anonymous bootstrap budget
 # for the loopback address they all share, so the release-sized allowance is
 # raised rather than let unrelated cases spend one another's. The focused

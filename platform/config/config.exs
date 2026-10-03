@@ -97,6 +97,15 @@ config :keyfleet, :graph,
   catch_up_interval: 5_000,
   projection_wait: 2_000
 
+# Background work, in this site's own schema of the shared database. AshOban
+# adds the jobs of each resource's triggers (`AshOban.config/2` at start).
+config :keyfleet, Oban,
+  repo: Keyfleet.Repo,
+  prefix: "keyfleet_app",
+  queues: [default: 5],
+  pruner: [max_age: 7 * 24 * 60 * 60],
+  lifeline: [rescue_after: :timer.minutes(30)]
+
 # A sign-in lasts 30 days: the cookie expires then, and
 # `Keyfleet.Accounts.SessionAuthority` reads this same limit.
 config :keyfleet, :session_options,

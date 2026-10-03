@@ -12,6 +12,7 @@ defmodule Keyfleet.Application do
         KeyfleetWeb.Telemetry,
         {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
+        oban_child(),
         {Phoenix.PubSub, name: Keyfleet.PubSub},
         agents_listener_child(),
         # A key's profile reads its rewards wherever the site runs, so their
@@ -37,6 +38,14 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
+  end
+
+  # Background work lives in the database, so it starts with it.
+  defp oban_child do
+    if Application.get_env(:keyfleet, :database_startup_enabled, false) do
+      domains = Application.fetch_env!(:keyfleet, :ash_domains)
+      {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
+    end
   end
 
   # Agent changes announced by any Regent site, through the database, reach

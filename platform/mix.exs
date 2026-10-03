@@ -54,6 +54,8 @@ defmodule Keyfleet.MixProject do
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.33.0"},
       {:ash_postgres, "~> 2.13.0"},
+      {:oban, "~> 2.24"},
+      {:ash_oban, "~> 0.9.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
       {:regent_privy, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy"},
@@ -117,6 +119,9 @@ defmodule Keyfleet.MixProject do
         "esbuild keyfleet --minify",
         "phx.digest"
       ],
+      # The database is prepared before the site starts: its job queue starts
+      # only on a migrated database.
+      test: ["keyfleet.setup_local_auth", "test"],
       "test.external": ["test --only external"],
       precommit: [
         "compile --warnings-as-errors",

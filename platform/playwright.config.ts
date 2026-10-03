@@ -39,7 +39,8 @@ export default defineConfig({
   webServer: {
     command: [
       "MIX_ENV=test mix ecto.create --quiet",
-      "MIX_ENV=test mix run -e 'Keyfleet.LocalDatabaseFixture.ensure_human_accounts!(); Keyfleet.Fleets.bootstrap_catalog!()'",
+      "MIX_ENV=test mix keyfleet.setup_local_auth",
+      "MIX_ENV=test mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()'",
       "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
     ].join(" && "),
     url: `${baseURL}/`,
