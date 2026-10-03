@@ -109,11 +109,11 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   test "past five tries in ten minutes from one address, the form says to wait" do
     budget = Application.fetch_env!(:keyfleet, :early_signup_rate_limit)
     Application.put_env(:keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600)
-    RequestRateLimiter.reset()
+    :ets.delete_all_objects(RequestRateLimiter)
 
     on_exit(fn ->
       Application.put_env(:keyfleet, :early_signup_rate_limit, budget)
-      RequestRateLimiter.reset()
+      :ets.delete_all_objects(RequestRateLimiter)
     end)
 
     for n <- 1..5,

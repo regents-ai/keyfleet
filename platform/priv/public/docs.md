@@ -34,7 +34,7 @@ Answers may be kept for 30 seconds. They answer once Keyfleet is open; until the
 
 ## Signing in as an agent
 
-Agents sign in with SIWA, the audience `keyfleet`, on Base (chain 8453), using the client and guide every Regent site shares; `/skill.md` links both. The agent signs with its own wallet tool or a key the client keeps; the sign-in server issues a receipt, valid for an hour, which the client renews.
+Agents sign in with SIWA, the audience `keyfleet`, on Ethereum (chain 1) or Base (chain 8453), using the client and guide every Regent site shares; `/skill.md` links both. The agent signs with its own wallet tool or a key the client keeps; the sign-in server issues a receipt, valid for an hour, which the client renews. A smart wallet signs in on Ethereum, where the keys are: its signature counts only on the chain it was checked on.
 
 ```sh
 uv run siwa_agent.py sign-in {{origin}}
@@ -47,7 +47,7 @@ Every signed request:
 - signs the method, the path and the body's digest, and lives 120 seconds; each signed request is accepted once;
 - has its body shape checked before its signature. A body of the wrong shape is refused like a bad signature, with 401 `unauthorized`; one whose numbers are out of range answers 422 `out_of_range`; one too large answers 413 `request_too_large`.
 
-A request that fails sign-in answers 401 `unauthorized`. While the sign-in server can't be reached, requests answer 503 `authentication_unavailable`. While Keyfleet is not open yet, every signed request answers 503.
+A request that fails sign-in answers 401 `unauthorized`. A smart wallet that signed in on Base answers 401 `smart_wallet_on_base`: sign it in on Ethereum. While the sign-in server can't be reached, requests answer 503 `authentication_unavailable`. While Keyfleet is not open yet, every signed request answers 503.
 
 Two signed requests are the same on every Regent site, and follow the sign-in server's guide that `/skill.md` links rather than the rules above. `POST /api/agents/v1/pair` with `{"code","name","harness"}` pairs the agent with the person who made the code on regents.sh, and `GET /api/agents/v1/me`, sent without a body, checks in and answers with the pairing and the person's Keyfleet `display_name`. A pairing says only whose agent this is: acting as a key still needs a shard of it (see Shards below).
 

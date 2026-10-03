@@ -8,6 +8,15 @@ defmodule Keyfleet.Release do
   @bootstrap_role_error "bootstrap-staging requires #{@deployment_role_variable} to be exactly staging"
   @missing_migration_table_error "no schema_migrations table: run bootstrap-staging first"
 
+  @table_exists """
+  SELECT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_class AS c
+    JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+    WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind IN ('r', 'p')
+  )
+  """
+  @schema_exists "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = $1)"
+
   def migration_config!(getenv \\ &System.get_env/1) do
     Keyfleet.DatabaseConfig.release_config!(getenv)
   end
@@ -160,76 +169,42 @@ defmodule Keyfleet.Release do
     path = migrations_directory(opts)
 
     {:ok, {pending, applied_without_file}, _started} =
-      Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
-        collect_disagreements(repo, path)
-      end)
+      Ecto.Migrator.with_repo(Keyfleet.Repo, &disagreements(&1, path))
 
-    report(pending, applied_without_file)
+    if pending == [] and applied_without_file == [], do: IO.puts("none")
+    if pending != [], do: IO.puts("pending: #{Enum.join(pending, " ")}")
+
+    if applied_without_file != [],
+      do: IO.puts("applied-without-file: #{Enum.join(applied_without_file, " ")}")
   end
 
-  defp collect_disagreements(repo, path) do
-    migrations = migration_status(repo, path)
+  defp disagreements(repo, path) do
+    prefix = repo.default_prefix()
+
+    unless table_exists?(repo, prefix, migration_source(repo)),
+      do: raise(@missing_migration_table_error)
+
+    migrations =
+      Ecto.Migrator.migrations(repo, [path],
+        prefix: prefix,
+        skip_table_creation: true,
+        migration_lock: false
+      )
+
     carried = carried_versions(path)
 
     {for({:down, version, _name} <- migrations, do: version),
-     for({:up, version, _name} <- migrations, not MapSet.member?(carried, version), do: version)}
+     for({:up, version, _name} <- migrations, version not in carried, do: version)}
   end
-
-  defp migration_status(repo, path) do
-    case read_migration_status(repo, path) do
-      {:ok, migrations} -> migrations
-      :no_migration_table -> raise @missing_migration_table_error
-    end
-  end
-
-  defp read_migration_status(repo, path) do
-    {:ok,
-     Ecto.Migrator.migrations(repo, [path],
-       prefix: repo.default_prefix(),
-       skip_table_creation: true,
-       migration_lock: false
-     )}
-  rescue
-    error in Postgrex.Error ->
-      if undefined_migration_table?(error, migration_source(repo)) do
-        :no_migration_table
-      else
-        reraise error, __STACKTRACE__
-      end
-  end
-
-  defp undefined_migration_table?(
-         %Postgrex.Error{postgres: %{code: :undefined_table, message: message}},
-         source
-       ),
-       do: String.contains?(message, source)
-
-  defp undefined_migration_table?(_error, _source), do: false
 
   # Ecto names an applied version with no file after a placeholder marker. The
   # set of versions the release actually carries answers the same question
   # without depending on that marker's text.
   defp carried_versions(path) do
-    path
-    |> Path.join("*.exs")
-    |> Path.wildcard()
-    |> Enum.flat_map(fn file ->
-      case file |> Path.basename() |> Integer.parse() do
-        {version, "_" <> _name} -> [version]
-        _unversioned -> []
-      end
-    end)
-    |> MapSet.new()
-  end
-
-  defp report([], []), do: IO.puts("none")
-
-  defp report(pending, applied_without_file) do
-    if pending != [], do: IO.puts("pending: #{Enum.join(pending, " ")}")
-
-    if applied_without_file != [] do
-      IO.puts("applied-without-file: #{Enum.join(applied_without_file, " ")}")
-    end
+    for file <- Path.wildcard(Path.join(path, "*.exs")),
+        {version, "_" <> _name} <- [file |> Path.basename() |> Integer.parse()],
+        into: MapSet.new(),
+        do: version
   end
 
   defp refuse_existing_state!(repo) do
@@ -246,31 +221,12 @@ defmodule Keyfleet.Release do
   end
 
   defp table_exists?(repo, prefix, table) do
-    %{rows: [[exists?]]} =
-      Ecto.Adapters.SQL.query!(
-        repo,
-        """
-        SELECT EXISTS (
-          SELECT 1
-          FROM pg_catalog.pg_class AS c
-          JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-          WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind IN ('r', 'p')
-        )
-        """,
-        [prefix, table]
-      )
-
+    %{rows: [[exists?]]} = Ecto.Adapters.SQL.query!(repo, @table_exists, [prefix, table])
     exists?
   end
 
   defp schema_exists?(repo, schema) do
-    %{rows: [[exists?]]} =
-      Ecto.Adapters.SQL.query!(
-        repo,
-        "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = $1)",
-        [schema]
-      )
-
+    %{rows: [[exists?]]} = Ecto.Adapters.SQL.query!(repo, @schema_exists, [schema])
     exists?
   end
 
@@ -284,14 +240,7 @@ defmodule Keyfleet.Release do
     Keyword.get_lazy(opts, :migrations_path, &migrations_path/0)
   end
 
-  defp load_app do
-    case Application.load(@app) do
-      :ok -> :ok
-      {:error, {:already_loaded, @app}} -> :ok
-    end
-  end
+  defp load_app, do: :ok = Application.ensure_loaded(@app)
 
-  defp migrations_path do
-    Application.app_dir(@app, "priv/repo/migrations")
-  end
+  defp migrations_path, do: Application.app_dir(@app, "priv/repo/migrations")
 end

@@ -3,7 +3,7 @@ defmodule Keyfleet.Checks.AgentActor do
   use Ash.Policy.SimpleCheck
 
   @impl true
-  def describe(_), do: "actor is a verified Keyfleet Base wallet principal"
+  def describe(_), do: "actor is a verified Keyfleet wallet principal"
 
   @impl true
   def match?(actor, _context, _opts), do: Keyfleet.Actors.Agent.valid?(actor)

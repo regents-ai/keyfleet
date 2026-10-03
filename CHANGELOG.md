@@ -500,6 +500,73 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
 
+## 2026-10-02 — Agents sign in on Ethereum too
+
+- Agents may sign in on Ethereum (chain 1) as well as Base. The sign-in server's answer now
+  names how it proved the wallet; a plain wallet counts on either chain, and a smart wallet
+  counts only when it signed in on Ethereum, where the keys are. A smart wallet proven on Base
+  is refused.
+- The agent guide, the docs page and the API contract say so. The answer without the proof
+  method is no longer accepted, so this ships with the SIWA release that adds it.
+
+## 2026-10-02 — Smart wallets on Base are told to use Ethereum
+
+- A smart wallet that signed in on Base is answered 401 `smart_wallet_on_base`, saying it signs
+  in on Ethereum and how to switch, instead of being told to sign in again on Base.
+
+## 2026-10-03 — Template plumbing: secure connections, health numbers, tidier sign-in
+
+- The site now always answers over a secure connection, and tells browsers to
+  keep doing so. Fly's health check still reaches it directly.
+- Stylesheets, icons and images opened on their own come with headers saying
+  they may do nothing as a page. Any request body over a megabyte is refused
+  before it is read; the largest the site takes is an agent's post of about 50
+  kilobytes.
+- The running site's database connections give up on a query after 15
+  seconds, on a lock after 5, and on an idle open transaction after 15.
+- New health numbers: a refused sign-in by stage and reason, a session record
+  that should have existed but did not, failed wallet presses by reason, and
+  failed chain requests and database queue time under their health names.
+- When a wallet press is made with no wallet open, the note now names every
+  linked wallet and says nothing was sent. The button still reaches the wallet
+  on every press.
+- Sign-in failure messages are shorter and say to reload the page. The Privy
+  sign-in window shows the Keyfleet mark.
+- A JSON request to a showcase page is refused with "not acceptable" instead
+  of failing. The showcase catalog still answers JSON.
+- `scripts/deploy.sh production|staging` deploys only a clean commit that is
+  already on `origin/main`, labelled with its short commit.
+- Account, session and sign-in code follows the template's simpler shape with
+  the same behaviour; unused code (a loading placeholder, a sidebar heading
+  nothing builds, a metrics poller with nothing to poll) is gone.
+
+## 2026-10-03 — Notebook hub runner pieces for one private hub per fleet
+
+- New `notebook-hub/` folder: everything needed to run one private marimohub
+  notebook hub per fleet on Fly, with each notebook session on its own
+  short-lived Fly machine. Nothing is on Fly yet.
+- `compute-fly/` starts, finds and deletes notebook machines through Fly's
+  machine service. Each hub sees only its own machines, and machines get no
+  public address, no bucket keys and none of the hub's passwords.
+- `runner/` is the notebook machine image: marimohub's notebook image at the
+  pinned version plus a helper and a private-network relay. Notebook code runs
+  as an ordinary user that cannot read the helper's password.
+- `hub/` holds the hub image, the two Fly app templates and a list of every
+  hub setting. `local/run.sh` proves a full session end to end on Docker.
+- `make check` now includes `check-notebook-hub`, which needs Node 24 and
+  Docker.
+
+## 2026-10-03 — Notebook hubs on their own private networks
+
+- `make check` no longer runs `check-notebook-hub`, which builds a 3 GB
+  image. Run `make check-notebook-hub` on its own; it must succeed before any
+  hub or runner image is pushed.
+- Each fleet's hub app and runner app are created on a private network of
+  their own, so notebook machines cannot reach the shared database or other
+  Regent apps over Fly's private network. Keyfleet's server reaches the hub
+  only through a Flycast address made for Keyfleet's network. The hub's Fly
+  template now has a private web service for that address.
+
 ## 2026-10-03 — Standard pieces from the template
 
 - The light and dark button in the header is the design system's small prism

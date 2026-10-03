@@ -17,6 +17,7 @@ defmodule Keyfleet.GraphTest do
   @agent %Actors.Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8453,
+    verification_method: :eoa_recovery,
     audience: "keyfleet"
   }
   @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}

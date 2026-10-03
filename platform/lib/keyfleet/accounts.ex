@@ -1,18 +1,16 @@
 defmodule Keyfleet.Accounts do
+  @moduledoc "Human accounts, their verified sessions and linked social identities."
+
   use Ash.Domain
 
   resources do
     resource Keyfleet.Accounts.HumanAccount do
-      define :get_by_privy_did,
-        action: :by_privy_did,
-        args: [:privy_did],
-        not_found_error?: false
-
+      define :get_by_privy_did, action: :by_privy_did, args: [:privy_did], not_found_error?: false
       define :get_human_account, action: :read_self, args: [:id]
 
       define :register_verified,
         action: :register_verified,
-        args: [:privy_did, :wallet_address, :wallet_addresses]
+        args: [:privy_user_id, :wallet_address, :wallet_addresses]
 
       define :refresh_verified,
         action: :refresh_verified,
@@ -22,23 +20,10 @@ defmodule Keyfleet.Accounts do
     resource Keyfleet.Accounts.SessionAuthority
 
     resource Keyfleet.Accounts.LinkedIdentity do
-      define :upsert_linked_identity,
-        action: :upsert_verified,
-        args: [
-          :provider,
-          :subject,
-          :username,
-          :display_name,
-          :verified_at,
-          :metadata,
-          :human_account_id
-        ]
+      define :upsert_linked_identity, action: :upsert_verified
 
       define :list_my_linked_identities, action: :read_mine
-
-      define :list_linked_identities_for_account,
-        action: :for_account,
-        args: [:human_account_id]
+      define :list_linked_identities_for_account, action: :for_account, args: [:human_account_id]
 
       define :get_linked_identity_by_subject,
         action: :by_provider_subject,

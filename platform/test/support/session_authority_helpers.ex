@@ -26,9 +26,31 @@ defmodule KeyfleetWeb.SessionAuthorityHelpers do
     |> connects_with_own_cookie()
   end
 
+  @doc "A fresh unbound generation-zero claim, minted the way `/auth/csrf` mints one."
+  def fresh_claim do
+    {:bootstrap, claim} = SessionAuthority.renew(nil)
+    claim
+  end
+
+  @doc """
+  What `claim` confers now, read through the calls the site itself makes:
+  `{:ok, account_id}` while it is current and bound to a verified account,
+  `{:ok, nil}` while it is current and confers none, otherwise the refusal
+  `SessionAuthority.renew/1` gives it.
+  """
+  def authority_of(nil), do: {:error, :reset}
+
+  def authority_of(claim) do
+    case SessionAuthority.resolve(claim) do
+      {nil, nil} -> SessionAuthority.renew(claim)
+      {_lineage, nil} -> {:ok, nil}
+      {_lineage, account} -> {:ok, account.id}
+    end
+  end
+
   @doc "The claim fields a browser holds after `account_id` signs in on a fresh lineage."
   def signed_in_session(account_id) do
-    {:ok, :bind, claim} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account_id)
+    {:ok, :bind, claim} = SessionAuthority.sign_in(fresh_claim(), account_id)
     SessionAuthority.session(claim)
   end
 
@@ -55,7 +77,7 @@ defmodule KeyfleetWeb.SessionAuthorityHelpers do
   end
 
   defp claim(session),
-    do: Map.merge(session, SessionAuthority.session(SessionAuthority.bootstrap()))
+    do: Map.merge(session, SessionAuthority.session(fresh_claim()))
 
   defp stringify({key, value}), do: {to_string(key), value}
 end

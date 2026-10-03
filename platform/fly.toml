@@ -31,6 +31,9 @@ primary_region = "iad"
   cpus = 2
   memory_mb = 2048
 
+# The check reaches the machine directly over plain HTTP. `Host: localhost` is
+# the host force_ssl leaves alone (config/prod.exs), so the check reads the
+# health answer instead of a redirect to HTTPS.
 [[http_service.checks]]
   grace_period = "30s"
   interval = "10s"
@@ -38,3 +41,6 @@ primary_region = "iad"
   path = "/healthz"
   protocol = "http"
   timeout = "2s"
+
+  [http_service.checks.headers]
+    Host = "localhost"

@@ -52,10 +52,11 @@ defmodule Keyfleet.BrowserChain do
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @shard_issued ShardsLog.topics() |> hd()
   @shard_ended ShardsLog.topics() |> List.last()
-  # Agents sign in on Base whatever chain the keys are on.
+  # A plain wallet's sign-in on Base counts on Ethereum, where the keys are.
   @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
+    verification_method: :eoa_recovery,
     audience: "keyfleet"
   }
 

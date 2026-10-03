@@ -51,10 +51,10 @@ defmodule Keyfleet.FleetRoomsTest do
     test "nobody without one of the fleet's keys posts, and nobody while ownership is not fresh" do
       record(@fleet, 1)
       record("fleet_tech_classic", 2)
-      # The wallet of an agent with a shard of key 1, signed in for another
-      # chain or another site.
+      # The wallet of an agent with a shard of key 1, proven as a smart wallet
+      # on Base only, or signed in for another site.
       runner = shard_agent("c", 1)
-      elsewhere = [%{runner | chain_id: 1}, %{runner | audience: "elsewhere"}]
+      elsewhere = [%{runner | verification_method: :erc1271}, %{runner | audience: "elsewhere"}]
 
       for actor <- [human("e"), owner(2), agent("d"), nil | elsewhere],
           slug <- ~w(general open-1) do
@@ -564,7 +564,12 @@ defmodule Keyfleet.FleetRoomsTest do
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
 
   defp agent(character),
-    do: %Actors.Agent{wallet_address: wallet(character), chain_id: 8453, audience: "keyfleet"}
+    do: %Actors.Agent{
+      wallet_address: wallet(character),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp wallet(token_id) when is_integer(token_id),
     do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")

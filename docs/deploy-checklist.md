@@ -24,8 +24,9 @@ graph host. The build fetches the shared libraries from GitHub at the commits
    commit into an image for this computer and starts it against a throwaway
    database (see [Release](../platform/README.md#release)). It deploys nothing.
 4. `scripts/build-release-context.sh <folder> amd64` (Fly runs amd64). It refuses
-   if a supply does not match its checksums. Fly's remote builder builds the
-   deployed image from this folder in step 6.
+   if a supply does not match its checksums. The deploy script of step 6
+   assembles this same folder itself, and Fly's remote builder builds the
+   deployed image from it.
 
 ## 2. Create the app and its volume
 
@@ -225,14 +226,18 @@ refuses anything but staging.
 
 ## 6. Deploy
 
-1. From the context folder of step 1, with Fly's remote builder:
+1. Push the commit to `main`, then from the monorepo root:
+   ```sh
+   scripts/deploy.sh production
+   ```
+   It refuses any uncommitted change and any commit not on `origin/main`,
+   assembles the step-1 context folder for amd64 from that commit, and runs
    ```sh
    fly deploy <folder> --config <folder>/platform/fly.toml \
      --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-     --remote-only --ha=false
+     --remote-only --ha=false --image-label <short commit>
    ```
-   The build script prints this command with the folder filled in. A plain
-   `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
+   with Fly's remote builder. A plain `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
    second machine would get its own empty volume and the fleets' graphs would
    split without any error. The migration step runs before the site starts:
    it brings the database up to date and then puts the four fleets on the
@@ -300,6 +305,15 @@ A fleet can also be shown before it is deployed by changing its
 `coming_soon?` mark in `platform/lib/keyfleet/fleets.ex` and releasing; it then
 shows "Not on sale yet", and that release's migration step opens its rooms. Its keys
 still stay off sale until its deployment is recorded.
+
+## Fleet notebook hubs
+
+Each fleet's private notebook hub is set up on its own, with its own apps,
+bucket and private network, following
+[notebook-hub/README.md](../notebook-hub/README.md). Nothing for it goes on Fly
+without the founder's go. `make check-notebook-hub` from the monorepo root must
+succeed before any hub or runner image is pushed; it is not part of
+`make check`.
 
 ## What was checked locally
 

@@ -421,6 +421,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     agent_actor = %Actors.Agent{
       wallet_address: "0x" <> String.pad_leading(Integer.to_string(agent), 40, "c"),
       chain_id: 8_453,
+      verification_method: :eoa_recovery,
       audience: "keyfleet"
     }
 

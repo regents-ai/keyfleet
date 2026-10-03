@@ -18,10 +18,7 @@ defmodule Keyfleet.Repo do
   # schema, always wins over this default.
   def default_options(_operation), do: [prefix: @schema]
 
-  @doc """
-  Creates the product schema if needed and runs every migration in `path`
-  against it, with the ledger at `keyfleet_app.schema_migrations`.
-  """
+  @doc "Creates the product schema if needed and runs every migration in `path` against it."
   def migrate!(path) do
     Ecto.Adapters.SQL.query!(__MODULE__, "CREATE SCHEMA IF NOT EXISTS #{@schema}", [])
     Ecto.Migrator.run(__MODULE__, path, :up, all: true, prefix: @schema)

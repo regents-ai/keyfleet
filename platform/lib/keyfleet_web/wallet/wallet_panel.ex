@@ -123,6 +123,8 @@ defmodule KeyfleetWeb.WalletPanel do
   def handle_event("step_failed", params, socket) do
     case Presses.failed(params) do
       {:ok, _step, reason} ->
+        KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, reason)
+
         note =
           OnchainSteps.failure_note(
             reason,

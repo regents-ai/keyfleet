@@ -116,9 +116,10 @@ defmodule KeyfleetWeb.OnchainSteps do
       when reason in ~w(step_unknown wallet_unavailable),
       do: "Sign in to send this. Nothing was sent."
 
-  def failure_note(reason, _linked, nil, _chain_name)
+  def failure_note(reason, linked, nil, _chain_name)
       when reason in ~w(step_unknown wallet_unavailable),
-      do: "Connect your wallet, then press again. Nothing was sent."
+      do:
+        "You're signed in with #{wallets(linked, " and ")}, but your wallet app has no wallet open. Open #{wallets(linked, " or ")} there, then press again. Nothing was sent."
 
   def failure_note(reason, linked, active, _chain_name)
       when reason in ~w(step_unknown wallet_unavailable) do
@@ -154,7 +155,7 @@ defmodule KeyfleetWeb.OnchainSteps do
   """
   def mismatch_note(linked, active) when is_list(linked) and is_binary(active) do
     if signer(linked, active) == nil do
-      "You're signed in with #{Enum.map_join(linked, " and ", &short/1)}, but your wallet app has #{short(active)} open."
+      "You're signed in with #{wallets(linked, " and ")}, but your wallet app has #{short(active)} open."
     end
   end
 
@@ -192,6 +193,8 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   defp review_id(nil), do: nil
   defp review_id(%{id: id}), do: id
+
+  defp wallets(linked, joiner), do: Enum.map_join(linked, joiner, &short/1)
 
   defp short(address), do: RegentFormat.short_address(address)
 end

@@ -1173,7 +1173,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   end
 
   defp agent_actor(signer),
-    do: %Actors.Agent{wallet_address: signer.address, chain_id: 8453, audience: "keyfleet"}
+    do: %Actors.Agent{
+      wallet_address: signer.address,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp record_owner(token_id, epoch, wallet, fleet \\ @fleet) do
     Keys.record_epoch!(
@@ -1285,6 +1290,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
             verified: true,
             walletAddress: claims["sub"],
             chainId: claims["chain_id"],
+            verificationMethod: "eoa_recovery",
             keyId: claims["key_id"],
             receiptExpiresAt:
               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),

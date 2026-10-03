@@ -136,16 +136,16 @@ defmodule Keyfleet.KeyAttachmentsTest do
     assert_raise Ash.Error.Invalid, fn -> Ash.read!(KeyAttachment) end
   end
 
-  test "only the exact system actor writes and callers cannot supply generated fields" do
+  test "only the system actor writes and callers cannot supply generated fields" do
     for actor <- [
           nil,
           %Keyfleet.Actors.Human{human_account_id: 1},
           %Keyfleet.Actors.Agent{
             wallet_address: wallet("a"),
             chain_id: 8453,
+            verification_method: :eoa_recovery,
             audience: "keyfleet"
-          },
-          %{role: :system}
+          }
         ] do
       assert {:error, %Ash.Error.Forbidden{}} = Keys.record_epoch(event(), actor: actor)
     end

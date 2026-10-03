@@ -1186,7 +1186,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   defp agent_profile! do
-    agent = %Actors.Agent{wallet_address: @agent, chain_id: 8_453, audience: "keyfleet"}
+    agent = %Actors.Agent{
+      wallet_address: @agent,
+      chain_id: 8_453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
+
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
   end
 

@@ -216,7 +216,7 @@ defmodule KeyfleetWeb.ApiContractTest do
                "in" => "header",
                "name" => "x-siwa-receipt",
                "description" =>
-                 "A SIWA wallet receipt for audience keyfleet on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once."
+                 "A SIWA wallet receipt for audience keyfleet, signed in on Ethereum or Base; a smart wallet signs in on Ethereum. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once."
              }
            }
 
