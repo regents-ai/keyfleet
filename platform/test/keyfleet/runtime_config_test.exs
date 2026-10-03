@@ -97,7 +97,14 @@ defmodule Keyfleet.RuntimeConfigTest do
              ],
              url: pooled,
              socket_options: [:inet6],
-             pool_size: 5
+             pool_size: 5,
+             show_sensitive_data_on_connection_error: false,
+             parameters: [
+               application_name: "keyfleet-web",
+               statement_timeout: "15000",
+               lock_timeout: "5000",
+               idle_in_transaction_session_timeout: "15000"
+             ]
            ]
 
     endpoint = get_in(config, [:keyfleet, KeyfleetWeb.Endpoint])
