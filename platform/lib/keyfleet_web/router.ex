@@ -72,7 +72,22 @@ defmodule KeyfleetWeb.Router do
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do
       plug KeyfleetWeb.Showcase.LocalOnly
+    end
+
+    # The showcase pages are HTML; only the catalog also answers JSON. Each
+    # pipeline negotiates its formats first, so a JSON request to a page is
+    # refused with 406 before any page header is sent.
+    pipeline :showcase_browser do
+      plug :accepts, ["html"]
+      plug :showcase_page
+    end
+
+    pipeline :showcase_catalog do
       plug :accepts, ["html", "json"]
+      plug :showcase_page
+    end
+
+    pipeline :showcase_page do
       plug :fetch_session
       plug :enforce_session_authority
       plug :fetch_live_flash
@@ -86,10 +101,14 @@ defmodule KeyfleetWeb.Router do
       }
     end
 
+    scope "/showcase", KeyfleetWeb.Showcase do
+      pipe_through [:local_showcase, :showcase_catalog]
+      get "/catalog", CatalogController, :show
+      get "/style.css", CatalogController, :style
+    end
+
     scope "/showcase", KeyfleetWeb do
-      pipe_through :local_showcase
-      get "/catalog", Showcase.CatalogController, :show
-      get "/style.css", Showcase.CatalogController, :style
+      pipe_through [:local_showcase, :showcase_browser]
 
       live_session :local_showcase,
         session: {KeyfleetWeb.Live.Session, :render_context, []},
