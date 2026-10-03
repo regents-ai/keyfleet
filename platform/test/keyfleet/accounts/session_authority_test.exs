@@ -15,7 +15,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   @wallet "0x1111111111111111111111111111111111111111"
 
   test "CANONICAL_AUTHORITY_ROW: a claim parses only from canonical, self-consistent fields" do
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
     session = SessionAuthority.session(claim)
 
     assert claim |> Map.keys() |> Enum.sort() == [:generation, :lineage]
@@ -25,7 +25,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     for malformed <- [
           %{
             session
-            | "live_socket_id" => SessionAuthority.topic(SessionAuthority.bootstrap().lineage)
+            | "live_socket_id" => SessionAuthority.topic(fresh_claim().lineage)
           },
           %{session | "session_lineage" => String.replace_suffix(claim.lineage, "", "A")},
           %{session | "session_lineage" => binary_part(claim.lineage, 0, 42)},
@@ -43,7 +43,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   test "LINEAGE_STABLE_SOCKET_TOPIC: the topic is the lineage digest and nothing else" do
     account = account!("topic")
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
 
     assert SessionAuthority.topic(claim.lineage) ==
              "session_authority:" <>
@@ -57,13 +57,13 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
     assert SessionAuthority.revoke(refreshed) == SessionAuthority.topic(claim.lineage)
 
-    refute SessionAuthority.topic(SessionAuthority.bootstrap().lineage) ==
+    refute SessionAuthority.topic(fresh_claim().lineage) ==
              SessionAuthority.topic(claim.lineage)
   end
 
   test "CANONICAL_AUTHORITY_ROW: the row keeps the lineage digest and never the cookie's lineage" do
     account = account!("digest")
-    {:ok, :bind, bound} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id)
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh_claim(), account.id)
 
     row = row!(bound.lineage)
 
@@ -78,7 +78,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   end
 
   test "GENERATED_PRIVATE_SCHEMA: the database refuses a negative generation" do
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
 
     assert_raise Postgrex.Error, ~r/session_authorities_generation_nonnegative/, fn ->
       # Ash is bypassed on purpose: no action can write a negative generation, so the
@@ -89,28 +89,28 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   test "LEGAL_TRANSITIONS_ONLY: first bind and same-account refresh each advance once" do
     account = account!("advance")
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
 
     assert claim.generation == 0
-    assert SessionAuthority.exact(claim) == {:ok, nil}
+    assert authority_of(claim) == {:ok, nil}
 
     assert {:ok, :bind, %{generation: 1} = bound} = SessionAuthority.sign_in(claim, account.id)
-    assert SessionAuthority.exact(bound) == {:ok, account.id}
+    assert authority_of(bound) == {:ok, account.id}
 
     # The copied pre-bind cookie is stale the moment the lineage binds.
-    assert SessionAuthority.exact(claim) == {:error, :superseded}
+    assert authority_of(claim) == {:error, :superseded}
 
     assert {:ok, :refresh, %{generation: 2} = refreshed} =
              SessionAuthority.sign_in(bound, account.id)
 
-    assert SessionAuthority.exact(refreshed) == {:ok, account.id}
-    assert SessionAuthority.exact(bound) == {:error, :superseded}
+    assert authority_of(refreshed) == {:ok, account.id}
+    assert authority_of(bound) == {:error, :superseded}
   end
 
   test "LEGAL_TRANSITIONS_ONLY: the actions refuse revocation, replacement and unbound refresh" do
     account = account!("forbidden")
     other = account!("forbidden-other")
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
 
     assert {:error, _unbound_refresh} =
              Ash.update(authority!(claim.lineage), %{}, action: :advance, actor: %System{})
@@ -137,7 +137,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   test "LEGAL_TRANSITIONS_ONLY: generation exhaustion revokes instead of wrapping" do
     account = account!("exhaustion")
-    {:ok, :bind, bound} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id)
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh_claim(), account.id)
     # Ash is bypassed on purpose: reaching the generation ceiling through actions would
     # take 2^63 refreshes, so the row is fast-forwarded straight to the ceiling.
     Repo.update_all(digest_query(bound.lineage), set: [generation: @maximum_generation])
@@ -147,12 +147,12 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
     assert %{generation: @maximum_generation, revoked_at: revoked_at} = row!(bound.lineage)
     assert revoked_at
-    assert SessionAuthority.exact(exhausted) == {:error, :reset}
+    assert authority_of(exhausted) == {:error, :reset}
   end
 
   test "EXPLICIT_REVOCATION: revocation is terminal, idempotent and keeps its first record" do
     account = account!("revocation")
-    {:ok, :bind, bound} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id)
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh_claim(), account.id)
     topic = SessionAuthority.topic(bound.lineage)
 
     assert SessionAuthority.revoke(bound) == topic
@@ -162,7 +162,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     assert row!(bound.lineage) == revoked
     assert revoked.revoked_at
     assert revoked.generation == bound.generation
-    assert SessionAuthority.exact(bound) == {:error, :reset}
+    assert authority_of(bound) == {:error, :reset}
     refute SessionAuthority.leased_account(bound.lineage, account.id)
     assert SessionAuthority.sign_in(bound, account.id) == {:error, :reset}
   end
@@ -170,7 +170,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   test "TWO_STEP_ACCOUNT_SWITCH: a different account revokes the lineage and binds nothing" do
     first = account!("switch-first")
     second = account!("switch-second")
-    {:ok, :bind, bound} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), first.id)
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh_claim(), first.id)
 
     assert SessionAuthority.sign_in(bound, second.id) ==
              {:switch, SessionAuthority.topic(bound.lineage)}
@@ -180,26 +180,26 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
     assert still_first == first.id
     assert revoked_at
-    assert SessionAuthority.exact(bound) == {:error, :reset}
+    assert authority_of(bound) == {:error, :reset}
     # Ash is bypassed on purpose: counting the stored rows directly proves nothing was
     # bound, where a read through Ash could hide rows behind a policy filter instead.
     assert Repo.aggregate(active_rows_for(second.id), :count) == 0
 
     # Only a later bootstrap and a later sign-in produce the replacement.
     assert {:ok, :bind, replacement} =
-             SessionAuthority.sign_in(SessionAuthority.bootstrap(), second.id)
+             SessionAuthority.sign_in(fresh_claim(), second.id)
 
     refute replacement.lineage == bound.lineage
-    assert SessionAuthority.exact(replacement) == {:ok, second.id}
+    assert authority_of(replacement) == {:ok, second.id}
   end
 
   test "STALE_LOGOUT_REVOKES: logout accepts a superseded generation and an unseen lineage" do
     account = account!("stale-logout")
-    {:ok, :bind, held} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id)
+    {:ok, :bind, held} = SessionAuthority.sign_in(fresh_claim(), account.id)
     {:ok, :refresh, current} = SessionAuthority.sign_in(held, account.id)
 
     assert SessionAuthority.revoke(held) == SessionAuthority.topic(current.lineage)
-    assert SessionAuthority.exact(current) == {:error, :reset}
+    assert authority_of(current) == {:error, :reset}
     assert row!(held.lineage).generation == current.generation
 
     unseen = absent_claim(4)
@@ -237,7 +237,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   test "CENTRAL_CURRENT_ACTOR: resolution names a lineage only while its claim is current" do
     account = account!("resolve")
-    claim = SessionAuthority.bootstrap()
+    claim = fresh_claim()
 
     assert {lineage, nil} = SessionAuthority.resolve(claim)
     assert lineage == claim.lineage
@@ -257,7 +257,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
   test "MOUNTED_LEASE_POLICY_C: a lease survives drift and lapses with the account or the row" do
     account = account!("lease")
     other = account!("lease-other")
-    {:ok, :bind, bound} = SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id)
+    {:ok, :bind, bound} = SessionAuthority.sign_in(fresh_claim(), account.id)
 
     assert SessionAuthority.leased_account(bound.lineage, account.id).id == account.id
     refute SessionAuthority.leased_account(bound.lineage, other.id)
@@ -274,9 +274,9 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   test "SIGN_IN_LIFETIME: a sign-in lasts 30 days from its last bind or refresh" do
     account = account!("lifetime")
-    fresh = SessionAuthority.bootstrap()
+    fresh = fresh_claim()
     {:ok, :bind, bound} = SessionAuthority.sign_in(fresh, account.id)
-    unbound = SessionAuthority.bootstrap()
+    unbound = fresh_claim()
     lifetime = 30 * 24 * 60 * 60
 
     age!(bound.lineage, lifetime - 60)
@@ -304,7 +304,7 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     assert {:ok, :bind, bound} = release(binder)
     assert bound.generation == 1
     assert settled(revoker) == SessionAuthority.topic(claim.lineage)
-    assert unboxed(fn -> SessionAuthority.exact(bound) end) == {:error, :reset}
+    assert unboxed(fn -> authority_of(bound) end) == {:error, :reset}
     assert unboxed(fn -> row!(claim.lineage) end).human_account_id == account.id
   end
 
@@ -320,14 +320,14 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     assert release(revoker) == SessionAuthority.topic(claim.lineage)
     assert settled(binder) == {:error, :reset}
     assert unboxed(fn -> row!(claim.lineage) end).human_account_id == nil
-    assert unboxed(fn -> SessionAuthority.exact(claim) end) == {:error, :reset}
+    assert unboxed(fn -> authority_of(claim) end) == {:error, :reset}
   end
 
   test "FIRST_BIND_AND_REFRESH_ROTATE: the refresh behind a refresh is superseded, never a second winner" do
     account = shared_account!("refresh-order")
 
     {:ok, :bind, bound} =
-      unboxed(fn -> SessionAuthority.sign_in(SessionAuthority.bootstrap(), account.id) end)
+      unboxed(fn -> SessionAuthority.sign_in(fresh_claim(), account.id) end)
 
     discard_on_exit([bound])
 
@@ -338,8 +338,8 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
     assert {:ok, :refresh, advanced} = release(winner)
     assert advanced.generation == bound.generation + 1
     assert settled(loser) == {:error, :superseded}
-    assert unboxed(fn -> SessionAuthority.exact(advanced) end) == {:ok, account.id}
-    assert unboxed(fn -> SessionAuthority.exact(bound) end) == {:error, :superseded}
+    assert unboxed(fn -> authority_of(advanced) end) == {:ok, account.id}
+    assert unboxed(fn -> authority_of(bound) end) == {:error, :superseded}
     assert unboxed(fn -> row!(bound.lineage) end).generation == advanced.generation
   end
 

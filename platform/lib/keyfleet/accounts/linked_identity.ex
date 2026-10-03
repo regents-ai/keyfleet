@@ -1,32 +1,55 @@
 defmodule Keyfleet.Accounts.LinkedIdentity do
+  @moduledoc "A social account Privy verified for one human account, one per provider."
+
   use Ash.Resource,
-    otp_app: :keyfleet,
     domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
+  postgres do
+    table "linked_identities"
+    repo(Keyfleet.Repo)
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :provider, :atom,
+      allow_nil?: false,
+      public?: true,
+      constraints: [one_of: [:x, :github, :farcaster]]
+
+    attribute :subject, :string, allow_nil?: false
+    attribute :username, :string, public?: true
+    attribute :display_name, :string, public?: true
+    attribute :verified_at, :utc_datetime_usec, allow_nil?: false, public?: true
+    attribute :metadata, :map, allow_nil?: false, default: %{}
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :human_account, Keyfleet.Accounts.HumanAccount do
+      allow_nil? false
+      attribute_type :integer
+    end
+  end
+
+  identities do
+    identity :unique_provider_per_account, [:provider, :human_account_id]
+    identity :unique_subject_per_provider, [:provider, :subject]
+  end
+
   actions do
     create :upsert_verified do
-      accept []
-
-      argument :provider, :atom,
-        allow_nil?: false,
-        constraints: [one_of: [:x, :github, :farcaster]]
-
-      argument :subject, :string, allow_nil?: false
-      argument :username, :string
-      argument :display_name, :string
-      argument :verified_at, :utc_datetime_usec, allow_nil?: false
-      argument :metadata, :map, allow_nil?: false
-      argument :human_account_id, :integer, allow_nil?: false
-
-      change set_attribute(:provider, arg(:provider))
-      change set_attribute(:subject, arg(:subject))
-      change set_attribute(:username, arg(:username))
-      change set_attribute(:display_name, arg(:display_name))
-      change set_attribute(:verified_at, arg(:verified_at))
-      change set_attribute(:metadata, arg(:metadata))
-      change set_attribute(:human_account_id, arg(:human_account_id))
+      accept [
+        :provider,
+        :subject,
+        :username,
+        :display_name,
+        :verified_at,
+        :metadata,
+        :human_account_id
+      ]
 
       upsert? true
       upsert_identity :unique_provider_per_account
@@ -65,39 +88,5 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
     policy action(:read_mine) do
       authorize_if actor_attribute_equals(:role, :human)
     end
-  end
-
-  identities do
-    identity :unique_provider_per_account, [:provider, :human_account_id]
-    identity :unique_subject_per_provider, [:provider, :subject]
-  end
-
-  attributes do
-    uuid_primary_key :id
-
-    attribute :provider, :atom do
-      allow_nil? false
-      public? true
-      constraints one_of: [:x, :github, :farcaster]
-    end
-
-    attribute :subject, :string, allow_nil?: false
-    attribute :username, :string, public?: true
-    attribute :display_name, :string, public?: true
-    attribute :verified_at, :utc_datetime_usec, allow_nil?: false, public?: true
-    attribute :metadata, :map, allow_nil?: false, default: %{}
-    timestamps()
-  end
-
-  relationships do
-    belongs_to :human_account, Keyfleet.Accounts.HumanAccount do
-      allow_nil? false
-      attribute_type :integer
-    end
-  end
-
-  postgres do
-    table "linked_identities"
-    repo(Keyfleet.Repo)
   end
 end

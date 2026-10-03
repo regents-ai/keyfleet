@@ -1,4 +1,6 @@
 defmodule Keyfleet.Accounts.HumanAccount do
+  @moduledoc "A person's shared Regent account, read from the table Regents owns."
+
   use Ash.Resource,
     domain: Keyfleet.Accounts,
     data_layer: AshPostgres.DataLayer,
@@ -9,6 +11,21 @@ defmodule Keyfleet.Accounts.HumanAccount do
     schema("regent_names")
     repo(Keyfleet.Repo)
     migrate?(false)
+  end
+
+  attributes do
+    integer_primary_key :id
+    attribute :privy_user_id, :string, allow_nil?: false, sensitive?: true
+    attribute :wallet_address, :string, sensitive?: true
+    attribute :wallet_addresses, {:array, :string}, default: [], sensitive?: true
+    attribute :display_name, :string, public?: true, constraints: [max_length: 80]
+    attribute :avatar, :map
+    create_timestamp :created_at
+    update_timestamp :updated_at
+  end
+
+  identities do
+    identity :unique_privy_user_id, [:privy_user_id]
   end
 
   actions do
@@ -25,24 +42,16 @@ defmodule Keyfleet.Accounts.HumanAccount do
     end
 
     create :register_verified do
-      accept []
-      argument :privy_did, :string, allow_nil?: false
-      argument :wallet_address, :string
-      argument :wallet_addresses, {:array, :string}
-      change set_attribute(:privy_user_id, arg(:privy_did))
-      change set_attribute(:wallet_address, arg(:wallet_address))
-      change set_attribute(:wallet_addresses, arg(:wallet_addresses))
+      accept [:privy_user_id, :wallet_address, :wallet_addresses]
       upsert? true
       upsert_identity :unique_privy_user_id
       upsert_fields []
     end
 
     update :refresh_verified do
-      accept []
+      accept [:wallet_address, :wallet_addresses]
       require_atomic? false
-      argument :wallet_address, :string
-      argument :wallet_addresses, {:array, :string}
-      change Keyfleet.Accounts.Changes.RefreshWalletEvidence
+      validate present(:wallet_addresses)
     end
   end
 
@@ -54,20 +63,5 @@ defmodule Keyfleet.Accounts.HumanAccount do
     policy action(:read_self) do
       authorize_if expr(id == ^actor(:human_account_id))
     end
-  end
-
-  identities do
-    identity :unique_privy_user_id, [:privy_user_id]
-  end
-
-  attributes do
-    integer_primary_key :id
-    attribute :privy_user_id, :string, allow_nil?: false, sensitive?: true
-    attribute :wallet_address, :string, sensitive?: true
-    attribute :wallet_addresses, {:array, :string}, default: [], sensitive?: true
-    attribute :display_name, :string, public?: true, constraints: [max_length: 80]
-    attribute :avatar, :map
-    create_timestamp :created_at
-    update_timestamp :updated_at
   end
 end
