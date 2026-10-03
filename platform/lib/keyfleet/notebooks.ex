@@ -11,7 +11,8 @@ defmodule Keyfleet.Notebooks do
   (`Keyfleet.Notebooks.Pass`).
 
   A person opens the notebooks from the fleet's workspace, which hands their
-  browser a link that works once (`open/2`). When a key changes hands, a job
+  browser a link that works once (`open/3`); the notebook sign-in it sets ends
+  when their KeyFleet sign-in does. When a key changes hands, a job
   brings the fleet's hub in step (`Keyfleet.Notebooks.Roster`) and ends the
   open notebook connections of whoever lost their key (`end_access/2`).
   """
@@ -19,6 +20,7 @@ defmodule Keyfleet.Notebooks do
 
   require Ash.Query
 
+  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
@@ -125,14 +127,17 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
-  Opens the fleet's notebooks for a signed-in person: `{:ok, url}`, the
-  fleet's notebook address with a link that works once, for
-  `handoff_ttl_seconds`; `{:error, :not_holder}` when they hold none of the
-  fleet's keys; `{:error, :no_hub}` when the fleet has no notebooks; or
-  `{:error, error}` when ownership can't be read right now.
+  Opens the fleet's notebooks for a person signed in by the session `lineage`:
+  `{:ok, url}`, the fleet's notebook address with a link that works once, for
+  `handoff_ttl_seconds`; `{:error, :signed_out}` when that sign-in is no longer
+  current; `{:error, :not_holder}` when they hold none of the fleet's keys;
+  `{:error, :no_hub}` when the fleet has no notebooks; or `{:error, error}`
+  when ownership can't be read right now.
   """
-  def open(%Human{human_account_id: account_id} = actor, fleet_id) do
+  def open(%Human{human_account_id: account_id} = actor, lineage, fleet_id) do
     with true <- hub?(fleet_id) || {:error, :no_hub},
+         session_id when is_binary(session_id) <-
+           SessionAuthority.current_id(lineage, account_id) || {:error, :signed_out},
          {:ok, true} <- member?(actor, fleet_id) do
       code = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
       expires_at = DateTime.add(DateTime.utc_now(), config()[:handoff_ttl_seconds], :second)
@@ -144,6 +149,7 @@ defmodule Keyfleet.Notebooks do
           code_hash: hash(code),
           fleet_id: fleet_id,
           human_account_id: account_id,
+          session_authority_id: session_id,
           expires_at: expires_at
         },
         actor: %System{}
@@ -158,8 +164,8 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
-  Spends a link `open/2` made for the fleet: `{:ok, human_account_id}` the
-  first time, within its time, and `:error` after that, for another fleet, or
+  Spends a link `open/3` made for the fleet: `{:ok, {human_account_id,
+  session_authority_id}}` the first time, within its time, and `:error` after that, for another fleet, or
   for a code it never made. One statement checks and spends it, so two
   requests with the same code can't both get in.
   """
@@ -175,8 +181,11 @@ defmodule Keyfleet.Notebooks do
       notify?: false
     )
     |> case do
-      %Ash.BulkResult{records: [%Handoff{human_account_id: account_id}]} -> {:ok, account_id}
-      %Ash.BulkResult{records: []} -> :error
+      %Ash.BulkResult{records: [%Handoff{} = handoff]} ->
+        {:ok, {handoff.human_account_id, handoff.session_authority_id}}
+
+      %Ash.BulkResult{records: []} ->
+        :error
     end
   end
 
@@ -184,13 +193,15 @@ defmodule Keyfleet.Notebooks do
 
   defp hash(code), do: :crypto.hash(:sha256, code)
 
-  @doc "The account a notebook session names, as the person acting through it."
-  def person(account_id) do
-    case Keyfleet.Accounts.get_human_account(account_id,
-           actor: %Human{human_account_id: account_id}
-         ) do
-      {:ok, account} -> {:ok, Human.for_account(account)}
-      {:error, error} -> {:error, error}
+  @doc """
+  The person a notebook sign-in names, while the KeyFleet sign-in it was opened
+  under is still current: `{:ok, actor}`, or `:signed_out` once they signed
+  out there, switched account or it ran out.
+  """
+  def person(session_authority_id, account_id) do
+    case SessionAuthority.signed_in_account(session_authority_id, account_id) do
+      nil -> :signed_out
+      account -> {:ok, Human.for_account(account)}
     end
   end
 

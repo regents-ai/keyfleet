@@ -553,7 +553,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   The hub's personal tokens and other lasting sign-ins are refused.
 - When a key changes hands, the old holder's open notebooks close straight
   away, and a background job takes them off the hub and adds the new holder.
-  Every fleet's hub is brought in step every ten minutes as well.
+  An agent's shard running out ends its access at that moment. Every fleet's
+  hub is brought in step every ten minutes as well.
+- Signing out of KeyFleet signs the notebooks out too: the next request there
+  asks the person to open them again from KeyFleet.
 - Background jobs run on Oban, in this site's own database schema.
 - New settings: `KEYFLEET_HUB_FLEETS` (each fleet's hub address) and
   `KEYFLEET_HUB_SIGNING_KEY` (the key that signs passes).

@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   import Plug.Conn
 
   alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
   alias Keyfleet.Notebooks.Roster
@@ -59,7 +60,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   # Costly failure: someone without a key reads or writes a fleet's notebooks.
   test "a person who holds none of the fleet's keys never reaches its hub", c do
-    assert Notebooks.open(c.buyer, @fleet) == {:error, :not_holder}
+    assert Notebooks.open(c.buyer, signed_in!(c.buyer), @fleet) == {:error, :not_holder}
 
     cookie = enter!(c.holder)
     assert get_notebook(@host, "/", cookie).status == 200
@@ -75,9 +76,23 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, "/api/v1/projects", "u_" <> _, _body}
   end
 
+  # Costly failure: someone who signed out of KeyFleet, on a shared computer,
+  # leaves the fleet's notebooks open to the next person at that browser.
+  test "signing out of KeyFleet signs the notebooks out too", c do
+    lineage = signed_in!(c.holder)
+    cookie = enter!(c.holder, lineage)
+    assert get_notebook(@host, "/", cookie).status == 200
+
+    SessionAuthority.revoke(%{lineage: lineage, generation: 1})
+
+    refused = get_notebook(@host, "/", cookie)
+    assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
+    assert Notebooks.open(c.holder, lineage, @fleet) == {:error, :signed_out}
+  end
+
   # Costly failure: a copied or replayed sign-in link opens the notebooks again.
   test "an Open notebooks link works once", c do
-    {:ok, url} = Notebooks.open(c.holder, @fleet)
+    {:ok, url} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
     %URI{host: @host, path: "/_keyfleet/enter", query: query} = URI.parse(url)
 
     first = get_notebook(@host, "/_keyfleet/enter?" <> query, nil)
@@ -235,8 +250,15 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   ## The notebook host
 
-  defp enter!(holder) do
-    {:ok, url} = Notebooks.open(holder, @fleet)
+  # The lineage of a fresh KeyFleet sign-in for `person`.
+  defp signed_in!(%Human{human_account_id: account_id}) do
+    {:bootstrap, claim} = SessionAuthority.renew(nil)
+    {:ok, :bind, %{lineage: lineage}} = SessionAuthority.sign_in(claim, account_id)
+    lineage
+  end
+
+  defp enter!(holder, lineage \\ nil) do
+    {:ok, url} = Notebooks.open(holder, lineage || signed_in!(holder), @fleet)
     %URI{path: path, query: query} = URI.parse(url)
     entered = get_notebook(@host, path <> "?" <> query, nil)
     entered.resp_cookies["__Host-kf_notebooks"].value

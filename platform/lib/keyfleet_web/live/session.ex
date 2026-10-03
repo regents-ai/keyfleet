@@ -74,6 +74,8 @@ defmodule KeyfleetWeb.Live.Session do
 
     socket
     |> assign_principal(account)
+    # Opening a fleet's notebooks names the sign-in they hang on.
+    |> assign(session_lineage: lineage)
     |> attach_hook(:session_authority_params, :handle_params, fn _params, _uri, socket ->
       recheck(socket, lease, &redirect(&1, to: @public_root))
     end)

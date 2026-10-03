@@ -156,10 +156,18 @@ defmodule KeyfleetWeb.ShellLive do
   # works once; only a holder of one of the fleet's keys gets one.
   def handle_event("open_notebooks", _params, socket) do
     with %Human{} = actor <- human_actor(socket),
-         {:ok, url} <- Notebooks.open(actor, socket.assigns.workspace.fleet_id) do
+         {:ok, url} <-
+           Notebooks.open(
+             actor,
+             socket.assigns.session_lineage,
+             socket.assigns.workspace.fleet_id
+           ) do
       {:noreply, redirect(socket, external: url)}
     else
       nil ->
+        {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
+
+      {:error, :signed_out} ->
         {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
 
       {:error, :not_holder} ->

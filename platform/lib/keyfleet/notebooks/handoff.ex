@@ -1,6 +1,8 @@
 defmodule Keyfleet.Notebooks.Handoff do
   @moduledoc """
-  A link that opens a fleet's notebooks for one person, once.
+  A link that opens a fleet's notebooks for one person, once, under the
+  KeyFleet sign-in it was made in (`session_authority_id`): the notebook
+  sign-in it sets lasts only as long as that one.
 
   Only the code's SHA-256 is kept. A link is spent by the one statement that
   checks it (`Keyfleet.Notebooks.redeem/2`), and links a day past their time
@@ -18,7 +20,7 @@ defmodule Keyfleet.Notebooks.Handoff do
 
   actions do
     create :issue do
-      accept [:code_hash, :fleet_id, :human_account_id, :expires_at]
+      accept [:code_hash, :fleet_id, :human_account_id, :session_authority_id, :expires_at]
     end
 
     read :redeemable do
@@ -58,6 +60,7 @@ defmodule Keyfleet.Notebooks.Handoff do
     attribute :code_hash, :binary, allow_nil?: false, sensitive?: true
     attribute :fleet_id, :string, allow_nil?: false
     attribute :human_account_id, :integer, allow_nil?: false
+    attribute :session_authority_id, :uuid, allow_nil?: false
     attribute :expires_at, :utc_datetime_usec, allow_nil?: false
     attribute :used_at, :utc_datetime_usec
     create_timestamp :inserted_at

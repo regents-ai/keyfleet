@@ -225,10 +225,28 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   """
   @spec leased_account(String.t(), integer()) :: Ash.Resource.record() | nil
   def leased_account(lineage, account_id) do
-    row = row(lineage)
+    if current?(row(lineage), account_id), do: verified(account_id)
+  end
 
-    if match?(%{revoked_at: nil, human_account_id: ^account_id}, row) and not lapsed?(row),
-      do: verified(account_id)
+  @doc """
+  The id of the sign-in `lineage` carries while it is current for `account_id`,
+  or `nil`. Another address this site serves (a fleet's notebooks) keeps the id,
+  never the lineage, and asks `signed_in_account/2` with it.
+  """
+  @spec current_id(String.t(), integer()) :: String.t() | nil
+  def current_id(lineage, account_id) do
+    row = row(lineage)
+    if current?(row, account_id), do: row.id
+  end
+
+  @doc """
+  The verified account the sign-in with this id still resolves to, or `nil`
+  once it is signed out, switched to another account or past its lifetime.
+  """
+  @spec signed_in_account(String.t(), integer()) :: Ash.Resource.record() | nil
+  def signed_in_account(id, account_id) do
+    row = Ash.get!(__MODULE__, id, actor: @actor, not_found_error?: false)
+    if current?(row, account_id), do: verified(account_id)
   end
 
   @doc "The deterministic, lineage-stable topic every socket for a lineage mounts on."
@@ -251,6 +269,10 @@ defmodule Keyfleet.Accounts.SessionAuthority do
       true -> :reset
     end
   end
+
+  # A sign-in bound to the account, neither revoked nor past its lifetime.
+  defp current?(row, account_id),
+    do: match?(%{revoked_at: nil, human_account_id: ^account_id}, row) and not lapsed?(row)
 
   # Bind and refresh are the only updates a live row takes, and each is a
   # sign-in, so a bound row's `updated_at` is when the person last signed in.

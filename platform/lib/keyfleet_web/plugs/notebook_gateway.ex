@@ -7,8 +7,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     * `/_keyfleet/enter?code=…` spends the one-time link "Open notebooks"
       made and sets this host's own sign-in cookie, then sends the browser to
-      `/`. The cookie names the fleet and the person's account; on another
-      fleet's host it signs no one in.
+      `/`. The cookie names the fleet, the person's account and the KeyFleet
+      sign-in it came from; on another fleet's host it signs no one in, and
+      once that KeyFleet sign-in ends (signed out, another account, run out)
+      it signs no one in either, checked on every request.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
     * Anything else is the cookie's person's, or is refused.
@@ -84,8 +86,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     conn = fetch_query_params(conn)
 
     case Notebooks.redeem(fleet_id, conn.query_params["code"]) do
-      {:ok, account_id} ->
-        session = %{"fleet_id" => fleet_id, "account_id" => account_id}
+      {:ok, {account_id, session_authority_id}} ->
+        session = %{
+          "fleet_id" => fleet_id,
+          "account_id" => account_id,
+          "session_authority_id" => session_authority_id
+        }
+
         max_age = Notebooks.config()[:session_max_age]
 
         conn
@@ -164,9 +171,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     max_age = Notebooks.config()[:session_max_age]
 
     with token when is_binary(token) <- conn.cookies[@cookie],
-         {:ok, %{"fleet_id" => ^fleet_id, "account_id" => account_id}} <-
-           Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, token, max_age: max_age),
-         {:ok, actor} <- Notebooks.person(account_id) do
+         {:ok,
+          %{
+            "fleet_id" => ^fleet_id,
+            "account_id" => account_id,
+            "session_authority_id" => session_authority_id
+          }} <- Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, token, max_age: max_age),
+         {:ok, actor} <- Notebooks.person(session_authority_id, account_id) do
       {:ok, conn, Notebooks.subject(actor), actor}
     else
       _ -> {:refused, Refusal.json(conn, 401, "notebooks_sign_in")}
