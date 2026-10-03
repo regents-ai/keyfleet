@@ -99,17 +99,20 @@ config :keyfleet, :graph,
   projection_wait: 2_000
 
 # Background work, in this site's own schema of the shared database. AshOban
-# adds the jobs of each resource's triggers (`AshOban.config/2` at start).
+# adds the jobs of each resource's triggers (`AshOban.config/2` at start). The
+# serving connection goes through a pooler that drops LISTEN/NOTIFY, so queues
+# hear about new jobs through Erlang process groups instead.
 config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
+  notifier: Oban.Notifiers.PG,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
   queues: [default: 5, notebook_hubs: 1],
   cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
-  pruner: [max_age: 7 * 24 * 60 * 60],
-  lifeline: [rescue_after: :timer.minutes(30)]
+  pruner: [max_age: {7, :days}],
+  lifeline: [rescue_after: {10, :minutes}]
 
 # Each fleet has its own private notebook hub, opened only through this site.
 # A fleet's notebooks answer at https://<fleet id, hyphenated>.<host_suffix>;

@@ -60,6 +60,24 @@ defmodule KeyfleetWeb.Telemetry do
         event_name: [:keyfleet, :wallet, :failure],
         tags: [:flow, :reason],
         description: "Wallet presses the browser reported as not sent or not confirmed"
+      ),
+      # Background jobs report each run's outcome and time from Oban's own events.
+      counter("keyfleet.jobs.finished.total",
+        event_name: [:oban, :job, :stop],
+        tags: [:queue, :worker, :state],
+        description: "Job runs that ended done, cancelled or snoozed"
+      ),
+      counter("keyfleet.jobs.failed.total",
+        event_name: [:oban, :job, :exception],
+        tags: [:queue, :worker, :state],
+        description: "Job runs that failed; state says whether the job will retry"
+      ),
+      distribution("keyfleet.jobs.duration.seconds",
+        event_name: [:oban, :job, :stop],
+        measurement: :duration,
+        unit: {:native, :second},
+        tags: [:queue, :worker],
+        reporter_options: [buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60]]
       )
     ]
   end
