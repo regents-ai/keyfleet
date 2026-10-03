@@ -124,6 +124,8 @@ defmodule Keyfleet.Keys.ShardEvent do
 
       change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index], number: :shard_seq, block: :block_number}
+
+      change Keyfleet.Notebooks.Changes.UpdateRoster
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second

@@ -111,6 +111,7 @@ defmodule KeyfleetWeb.Router do
     get "/capabilities", PublicPagesController, :capabilities
     get "/.well-known/security.txt", PublicPagesController, :security
     get "/.well-known/api-catalog", PublicPagesController, :api_catalog
+    get "/.well-known/hub-jwks.json", HubJwksController, :show
     get "/skill.md", AgentFilesController, :skill
     get "/.well-known/skills/keyfleet/SKILL.md", AgentFilesController, :skill
     get "/.well-known/skills/index.json", AgentFilesController, :index

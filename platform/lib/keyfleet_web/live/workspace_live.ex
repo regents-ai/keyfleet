@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   @workspace_refresh_after 1_000
 
   attr :board, :map, required: true
+  attr :notebooks_notice, :string, default: nil
 
   def board(%{board: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="workspace-page" />|
@@ -34,6 +35,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <p class="workspace-lede">
           The goals, tasks, findings and notes this fleet is working on together, and the approaches that didn’t work.
         </p>
+        <div :if={Keyfleet.Notebooks.hub?(@board.fleet_id)} class="workspace-notebooks">
+          <Regent.Primitives.button id="open-notebooks" variant="secondary" phx-click="open_notebooks">
+            Open notebooks
+          </Regent.Primitives.button>
+          <p :if={@notebooks_notice} id="notebooks-notice" class="workspace-notebooks-notice">
+            {@notebooks_notice}
+          </p>
+        </div>
       </header>
 
       <.public_notice />

@@ -9,6 +9,10 @@ defmodule KeyfleetWeb.Endpoint do
     websocket: [connect_info: [:peer_data, :uri, session: @session_options]],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
+  # A fleet's notebook host is answered only by the gateway to that fleet's
+  # hub; nothing below sees its requests.
+  plug KeyfleetWeb.Plugs.NotebookGateway
+
   plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 

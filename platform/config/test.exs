@@ -42,6 +42,14 @@ config :keyfleet, :database_startup_enabled, true
 # Jobs run only when a test runs them (`Oban.Testing`).
 config :keyfleet, Oban, testing: :manual
 
+# Notebook hosts answer under .localhost here. The tests name each fleet's hub
+# themselves. This signing key is for the test suite only and signs nothing
+# anywhere else.
+config :keyfleet, :notebooks,
+  host_suffix: "notebooks.localhost",
+  signing_keys:
+    ~s({"keys":[{"crv":"P-256","d":"stH406oqfhU2FNxw1WOLcP4Pm9m-ruc2z-vxPp_iKI0","kty":"EC","x":"ja1FaT0GKapQdzAf5-K0t2eotYxDjdC1hi8NlZP1Obk","y":"KuMSboRZZzZgwQGhV_iu_F95lcVknJMXNQad0dTOjXQ"}]})
+
 # Every test case here reaches one node holding one anonymous bootstrap budget
 # for the loopback address they all share, so the release-sized allowance is
 # raised rather than let unrelated cases spend one another's. The focused

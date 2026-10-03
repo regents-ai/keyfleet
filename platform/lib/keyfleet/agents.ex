@@ -14,6 +14,7 @@ defmodule Keyfleet.Agents do
       define :edit_my_profile, action: :edit_my_profile
       define :agents_here, action: :here_in_fleet, args: [:fleet_id]
       define :agents_by_wallets, action: :by_wallets, args: [:wallets]
+      define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
     end
 
     resource Keyfleet.Agents.CheckIn do

@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
              {:get, "/.well-known/security.txt"},
+             {:get, "/.well-known/hub-jwks.json"},
              {:get, "/privacy"},
              {:get, "/terms"},
              {:get, "/early"},

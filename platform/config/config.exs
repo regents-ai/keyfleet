@@ -55,7 +55,8 @@ config :keyfleet,
     Keyfleet.Treasury,
     Keyfleet.Graph,
     Keyfleet.WalletSteps,
-    Keyfleet.Early
+    Keyfleet.Early,
+    Keyfleet.Notebooks
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -102,9 +103,36 @@ config :keyfleet, :graph,
 config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
-  queues: [default: 5],
+  # Calls to the fleets' notebook hubs wait on another server, so they have
+  # their own queue.
+  queues: [default: 5, notebook_hubs: 2],
+  cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
   pruner: [max_age: 7 * 24 * 60 * 60],
   lifeline: [rescue_after: :timer.minutes(30)]
+
+# Each fleet has its own private notebook hub, opened only through this site.
+# A fleet's notebooks answer at https://<fleet id, hyphenated>.<host_suffix>;
+# every request there is checked here, then forwarded to the fleet's hub with
+# a short pass signed by the first key of `signing_keys` (a JWK Set, published
+# at /.well-known/hub-jwks.json). `fleets` maps a fleet id to its hub's private
+# address; runtime.exs reads both from the environment.
+#
+# A person is checked again at most every `access_ttl_ms`; a key changing
+# hands ends their access at once. An "Open notebooks" link works once, for
+# `handoff_ttl_seconds`, and the notebook sign-in it sets lasts
+# `session_max_age` seconds.
+config :keyfleet, :notebooks,
+  issuer: "https://keyfleet.ai",
+  host_suffix: "notebooks.keyfleet.ai",
+  public_port: 443,
+  fleets: %{},
+  signing_keys: nil,
+  pass_ttl_seconds: 120,
+  access_ttl_ms: 30_000,
+  handoff_ttl_seconds: 60,
+  session_max_age: 12 * 60 * 60,
+  max_request_bytes: 32 * 1024 * 1024,
+  hub_timeout_ms: 30_000
 
 # A sign-in lasts 30 days: the cookie expires then, and
 # `Keyfleet.Accounts.SessionAuthority` reads this same limit.

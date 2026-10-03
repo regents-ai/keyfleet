@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.Notebooks
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Muter
@@ -56,6 +57,7 @@ defmodule KeyfleetWeb.ShellLive do
        shell_instance: System.unique_integer([:positive, :monotonic]),
        verified_connections: %Read{},
        verified_connections_notice: nil,
+       notebooks_notice: nil,
        connection_outcome: nil,
        held_keys: [],
        fleet: nil,
@@ -149,6 +151,30 @@ defmodule KeyfleetWeb.ShellLive do
      socket
      |> assign(connection_outcome: params, verified_connections_notice: nil)
      |> read_verified_connections()}
+  end
+
+  # The fleet's notebooks open on their own address, signed in by a link that
+  # works once; only a holder of one of the fleet's keys gets one.
+  def handle_event("open_notebooks", _params, socket) do
+    with %Human{} = actor <- human_actor(socket),
+         {:ok, url} <- Notebooks.open(actor, socket.assigns.workspace.fleet_id) do
+      {:noreply, redirect(socket, external: url)}
+    else
+      nil ->
+        {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
+
+      {:error, :not_holder} ->
+        {:noreply,
+         assign(socket,
+           notebooks_notice: "Only holders of this fleet’s keys can open its notebooks."
+         )}
+
+      {:error, _error} ->
+        {:noreply,
+         assign(socket,
+           notebooks_notice: "The notebooks can’t be opened right now. Try again in a minute."
+         )}
+    end
   end
 
   def handle_event(event, params, socket) when event in @room_events,
@@ -342,7 +368,11 @@ defmodule KeyfleetWeb.ShellLive do
           notice={@room_notice}
         />
 
-        <WorkspaceLive.board :if={@route_spec.route_id == :workspace} board={@workspace} />
+        <WorkspaceLive.board
+          :if={@route_spec.route_id == :workspace}
+          board={@workspace}
+          notebooks_notice={@notebooks_notice}
+        />
         <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
         <ProposalsLive.list
           :if={@route_spec.route_id == :proposals}
@@ -473,7 +503,7 @@ defmodule KeyfleetWeb.ShellLive do
        when route_id in [:workspace, :workspace_item] do
     socket
     |> follow_workspace(fleet_id)
-    |> assign(:workspace_params, params)
+    |> assign(workspace_params: params, notebooks_notice: nil)
     |> WorkspaceLive.read_workspace()
   end
 

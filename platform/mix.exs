@@ -55,6 +55,8 @@ defmodule Keyfleet.MixProject do
       {:ash, "~> 3.33.0"},
       {:ash_postgres, "~> 2.13.0"},
       {:oban, "~> 2.24"},
+      # The notebook gateway's connection to a fleet hub's live notebook sockets.
+      {:mint_web_socket, "~> 1.0"},
       {:ash_oban, "~> 0.9.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
@@ -139,7 +141,9 @@ defmodule Keyfleet.MixProject do
         # Shards add four: the ShardEvent and EditsRestriction records, each with its
         # domain and the SystemActor check, in place of the four pairing had.
         # Mutes add two: their domain and the OwnMute check.
-        "xref graph --label compile-connected --fail-above 65",
+        # Notebooks add four: the Hub and Handoff records, each with its domain
+        # and the SystemActor check.
+        "xref graph --label compile-connected --fail-above 69",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

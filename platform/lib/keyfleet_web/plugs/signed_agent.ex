@@ -121,18 +121,24 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(conn, _headers) do
+    if supported_request?(conn) and proof_carried?(conn),
+      do: {:ok, nil},
+      else: {:error, %{reason: :invalid_request}}
+  end
+
+  @doc """
+  Whether a request carries its raw body and each proof header exactly once,
+  and no other `x-agent-` or `x-siwa-` header.
+  """
+  def proof_carried?(conn) do
     names = Enum.map(conn.req_headers, fn {name, _} -> String.downcase(name) end)
 
-    valid? =
-      supported_request?(conn) and
-        is_binary(conn.assigns[:raw_body]) and
-        Enum.all?(@proof_headers, &(Enum.count(names, fn name -> name == &1 end) == 1)) and
-        not Enum.any?(names, fn name ->
-          (String.starts_with?(name, "x-agent-") or String.starts_with?(name, "x-siwa-")) and
-            name not in @proof_headers
-        end)
-
-    if valid?, do: {:ok, nil}, else: {:error, %{reason: :invalid_request}}
+    is_binary(conn.assigns[:raw_body]) and
+      Enum.all?(@proof_headers, &(Enum.count(names, fn name -> name == &1 end) == 1)) and
+      not Enum.any?(names, fn name ->
+        (String.starts_with?(name, "x-agent-") or String.starts_with?(name, "x-siwa-")) and
+          name not in @proof_headers
+      end)
   end
 
   @impl Siwa.AgentAuthPlug.Hooks

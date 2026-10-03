@@ -69,6 +69,28 @@ if config_env() != :test do
     directory: Application.app_dir(:keyfleet, "priv/trait_tables")
 end
 
+# The fleets' notebook hubs: KEYFLEET_HUB_FLEETS lists `fleet_id=address`
+# pairs separated by commas, each address the hub's private URL, and
+# KEYFLEET_HUB_SIGNING_KEY is the JWK Set whose first key signs every pass.
+if config_env() != :test do
+  hub_fleets =
+    "KEYFLEET_HUB_FLEETS"
+    |> System.get_env("")
+    |> String.split(",", trim: true)
+    |> Map.new(fn pair ->
+      [fleet_id, address] = pair |> String.trim() |> String.split("=", parts: 2)
+      {fleet_id, address}
+    end)
+
+  hub_signing_keys = System.get_env("KEYFLEET_HUB_SIGNING_KEY")
+
+  if hub_fleets != %{} and hub_signing_keys in [nil, ""] do
+    raise "KEYFLEET_HUB_SIGNING_KEY must be set when KEYFLEET_HUB_FLEETS names a fleet"
+  end
+
+  config :keyfleet, :notebooks, fleets: hub_fleets, signing_keys: hub_signing_keys
+end
+
 migrating? = System.get_env("KEYFLEET_RELEASE_COMMAND") == "migrate"
 
 database_config =

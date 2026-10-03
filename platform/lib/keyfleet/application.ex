@@ -12,8 +12,12 @@ defmodule Keyfleet.Application do
         KeyfleetWeb.Telemetry,
         {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
-        oban_child(),
         {Phoenix.PubSub, name: Keyfleet.PubSub},
+        # Jobs announce what they change, so they start after PubSub.
+        oban_child(),
+        # Who was let into a fleet's notebooks lately; a key changing hands
+        # clears its holder at once, through PubSub.
+        Keyfleet.Notebooks.AccessCache,
         agents_listener_child(),
         # A key's profile reads its rewards wherever the site runs, so their
         # table stands apart from the fleets' readers below.

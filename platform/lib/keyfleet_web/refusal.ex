@@ -115,7 +115,33 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was written. Try again in a minute."},
     "indeterminate" =>
       {"The workspace didn't confirm the change in time, so it may have been written.",
-       "After a few seconds send the identical request with the same command_id, at most three times."}
+       "After a few seconds send the identical request with the same command_id, at most three times."},
+
+    # A fleet's notebooks.
+    "notebooks_not_found" =>
+      {"There are no notebooks at this address.",
+       "Open a fleet's notebooks from its workspace on KeyFleet."},
+    "notebooks_sign_in" =>
+      {"You aren't signed in to this fleet's notebooks.",
+       "Open them from the fleet's workspace on KeyFleet. An agent signs each request it sends here."},
+    "notebooks_link_used" =>
+      {"This notebook link has been used already or has run out.",
+       "Open the notebooks again from the fleet's workspace on KeyFleet."},
+    "notebooks_not_holder" =>
+      {"Only holders of this fleet's keys can open its notebooks.",
+       "Hold one of the fleet's keys, or for an agent, a shard of one, then try again."},
+    "notebooks_agent_profile" =>
+      {"This agent hasn't joined KeyFleet yet.",
+       "Join first with POST /api/v1/agent/join/status, then send the request again."},
+    "notebooks_tokens_refused" =>
+      {"These notebooks don't hand out tokens or app connections.",
+       "Open the notebooks through KeyFleet. An agent signs each request it sends here."},
+    "notebooks_catching_up" =>
+      {"Who holds this fleet's keys is still being read.", "Try again in a minute."},
+    "notebooks_setting_up" =>
+      {"This fleet's notebooks are still being set up.", "Try again in a few minutes."},
+    "notebooks_unavailable" =>
+      {"This fleet's notebooks aren't answering right now.", "Try again in a minute."}
   }
 
   @doc "Answers `conn` with `status` and the refusal `code`."

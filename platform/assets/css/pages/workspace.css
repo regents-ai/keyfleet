@@ -57,6 +57,18 @@
   outline: none;
 }
 
+.workspace-notebooks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.workspace-notebooks-notice {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent-warm);
+}
+
 .workspace-lede {
   display: flex;
   flex-wrap: wrap;

@@ -144,6 +144,8 @@ defmodule Keyfleet.Keys.KeyAttachment do
               identity: [:fleet_id, :token_id, :ownership_epoch],
               block: :block_number,
               number: :ownership_seq}
+
+      change Keyfleet.Notebooks.Changes.UpdateRoster
     end
 
     # The keys of the epochs recorded after the fleet's epoch number

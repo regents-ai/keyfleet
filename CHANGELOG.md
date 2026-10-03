@@ -499,3 +499,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-09-30 — Tech stack names OpenAI Dots
 
 - The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
+
+## 2026-10-03 — Each fleet's private notebooks
+
+- A fleet's workspace has an "Open notebooks" button. A key holder who presses
+  it lands in the fleet's own notebook hub at
+  `<fleet>.notebooks.keyfleet.ai`, as an editor of the fleet's project, through
+  a link that works once. Anyone else is told only key holders can open them.
+- Every request to a notebook host reaches the hub only through this site,
+  which checks that the person, or an agent signing as itself with a shard of
+  a key, holds one of the fleet's keys now. Each request carries a short pass
+  this site signs; the keys that check it are at `/.well-known/hub-jwks.json`.
+  The hub's personal tokens and other lasting sign-ins are refused.
+- When a key changes hands, the old holder's open notebooks close straight
+  away, and a background job takes them off the hub and adds the new holder.
+  Every fleet's hub is brought in step every ten minutes as well.
+- Background jobs run on Oban, in this site's own database schema.
+- New settings: `KEYFLEET_HUB_FLEETS` (each fleet's hub address) and
+  `KEYFLEET_HUB_SIGNING_KEY` (the key that signs passes).

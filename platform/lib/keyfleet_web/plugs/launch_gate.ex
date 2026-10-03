@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     * `/early` and its form, the Privacy Policy (`/privacy`) and the Terms of
       Use (`/terms`), as pages or as Markdown;
     * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only those
-      three pages) and `/.well-known/security.txt`;
+      three pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
+      the keys the fleets' notebook hubs check this site's passes with;
     * the site's static files: its stylesheets, scripts, fonts, images and
       icons. The HTTP contract closes with the API it describes.
 
@@ -29,7 +30,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   alias KeyfleetWeb.{ContentSecurityPolicy, Refusal}
 
   @open_pages ~w(/early /privacy /terms)
-  @open_files ~w(/healthz /robots.txt /sitemap.xml /.well-known/security.txt)
+  @open_files ~w(/healthz /robots.txt /sitemap.xml /.well-known/security.txt /.well-known/hub-jwks.json)
   @static_folders ~w(assets fonts images)
   @contract "api-contract.openapiv3.yaml"
   @static_files KeyfleetWeb.static_paths() -- [@contract | @static_folders]

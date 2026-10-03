@@ -24,6 +24,22 @@ defmodule Keyfleet.Accounts.HumanAccount do
       filter expr(id == ^arg(:id))
     end
 
+    # The accounts linking any of these wallets, which are lowercase; the
+    # accounts may keep theirs in any case.
+    read :holding_wallets do
+      argument :wallets, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+
+      filter expr(
+               fragment(
+                 "lower(?) = ANY(?) OR EXISTS (SELECT 1 FROM unnest(?) AS linked(wallet) WHERE lower(linked.wallet) = ANY(?))",
+                 wallet_address,
+                 ^arg(:wallets),
+                 wallet_addresses,
+                 ^arg(:wallets)
+               )
+             )
+    end
+
     create :register_verified do
       accept []
       argument :privy_did, :string, allow_nil?: false
@@ -47,7 +63,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
   end
 
   policies do
-    policy action([:by_privy_did, :register_verified, :refresh_verified]) do
+    policy action([:by_privy_did, :holding_wallets, :register_verified, :refresh_verified]) do
       authorize_if Keyfleet.Checks.SystemActor
     end
 

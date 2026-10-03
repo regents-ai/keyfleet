@@ -9,6 +9,7 @@ defmodule Keyfleet.Accounts do
         not_found_error?: false
 
       define :get_human_account, action: :read_self, args: [:id]
+      define :accounts_holding_wallets, action: :holding_wallets, args: [:wallets]
 
       define :register_verified,
         action: :register_verified,
