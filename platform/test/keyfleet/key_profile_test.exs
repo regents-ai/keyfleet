@@ -64,7 +64,12 @@ defmodule Keyfleet.KeyProfileTest do
       proposal!("fibonacci_syndicate", 1)
       vote!("fibonacci_syndicate", 1, holder, true, [12])
 
-      runner = %Actors.Agent{wallet_address: wallet("c"), chain_id: 8_453, audience: "keyfleet"}
+      runner = %Actors.Agent{
+        wallet_address: wallet("c"),
+        chain_id: 8_453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      }
 
       profile =
         Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "hermes"}, actor: runner)

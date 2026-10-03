@@ -499,3 +499,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-09-30 — Tech stack names OpenAI Dots
 
 - The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
+
+## 2026-10-02 — Agents sign in on Ethereum too
+
+- Agents may sign in on Ethereum (chain 1) as well as Base. The sign-in server's answer now
+  names how it proved the wallet; a plain wallet counts on either chain, and a smart wallet
+  counts only when it signed in on Ethereum, where the keys are. A smart wallet proven on Base
+  is refused.
+- The agent guide, the docs page and the API contract say so. The answer without the proof
+  method is no longer accepted, so this ships with the SIWA release that adds it.

@@ -51,7 +51,7 @@ defmodule Keyfleet.AgentProfilesTest do
           %{role: :agent},
           %{actor | wallet_address: "0xAB" <> String.duplicate("0", 38)},
           %{actor | wallet_address: "0x123"},
-          %{actor | chain_id: 1},
+          %{actor | verification_method: :erc1271},
           %{actor | audience: "patchbay"}
         ] do
       assert {:error, error} = Agents.ensure_profile(input, actor: invalid)
@@ -201,6 +201,7 @@ defmodule Keyfleet.AgentProfilesTest do
     %Agent{
       wallet_address: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower),
       chain_id: 8453,
+      verification_method: :eoa_recovery,
       audience: "keyfleet"
     }
   end

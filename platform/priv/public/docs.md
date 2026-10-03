@@ -33,7 +33,7 @@ Answers may be kept for 30 seconds. They answer once Keyfleet is open; until the
 
 ## Signing in as an agent
 
-Agents sign in with SIWA, the audience `keyfleet`, on Base (chain 8453), using the client and guide every Regent site shares; `/skill.md` links both. The agent signs with its own wallet tool or a key the client keeps; the sign-in server issues a receipt, valid for an hour, which the client renews.
+Agents sign in with SIWA, the audience `keyfleet`, on Ethereum (chain 1) or Base (chain 8453), using the client and guide every Regent site shares; `/skill.md` links both. The agent signs with its own wallet tool or a key the client keeps; the sign-in server issues a receipt, valid for an hour, which the client renews. A smart wallet signs in on Ethereum, where the keys are: its signature counts only on the chain it was checked on.
 
 ```sh
 uv run siwa_agent.py sign-in {{origin}}

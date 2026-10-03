@@ -36,6 +36,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                 verified: true,
                 walletAddress: claims["sub"],
                 chainId: claims["chain_id"],
+                verificationMethod: "eoa_recovery",
                 keyId: claims["key_id"],
                 receiptExpiresAt:
                   DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
@@ -339,6 +340,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       "verified" => true,
       "walletAddress" => wallet,
       "chainId" => 8453,
+      "verificationMethod" => "eoa_recovery",
       "keyId" => wallet,
       "receiptExpiresAt" => DateTime.to_iso8601(DateTime.utc_now()),
       "requiredHeaders" => [],
@@ -352,11 +354,42 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       }
     }
 
+    signed_in = fn chain_id, method ->
+      good
+      |> Map.merge(%{"chainId" => chain_id, "verificationMethod" => method})
+      |> put_in(["principal", "chain_id"], chain_id)
+    end
+
+    conn =
+      Plug.Test.conn("POST", @path)
+      |> Plug.Conn.put_req_header("x-siwa-receipt", "receipt")
+      |> Plug.Conn.put_req_header("x-key-id", wallet)
+
+    # A plain wallet proves its key on either chain. A smart wallet is only
+    # proven on the chain it was checked on, and keys are held on Ethereum.
+    for {chain_id, method} <- [
+          {8453, "eoa_recovery"},
+          {1, "eoa_recovery"},
+          {1, "erc1271"},
+          {1, "erc6492"}
+        ] do
+      assert {:ok, %{assigns: %{agent_actor: actor}}} =
+               KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(chain_id, method), nil)
+
+      assert {actor.chain_id, actor.verification_method} ==
+               {chain_id, String.to_existing_atom(method)}
+    end
+
     invalid =
       [
         Map.put(good, "verified", false),
         Map.put(good, "walletAddress", String.upcase(wallet)),
         Map.put(good, "chainId", 1),
+        Map.delete(good, "verificationMethod"),
+        Map.put(good, "verificationMethod", "passkey"),
+        signed_in.(8453, "erc1271"),
+        signed_in.(8453, "erc6492"),
+        signed_in.(10, "eoa_recovery"),
         Map.put(good, "principal", nil),
         Map.put(good, "extra", true)
       ] ++
@@ -371,8 +404,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
         )
 
     for data <- invalid do
-      assert {:error, _} =
-               KeyfleetWeb.Plugs.SignedAgent.accept(Plug.Test.conn("POST", @path), data, nil)
+      assert {:error, _} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, data, nil)
     end
   end
 

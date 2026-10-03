@@ -149,6 +149,7 @@ defmodule Keyfleet.RoomsTest do
       agent = %Keyfleet.Actors.Agent{
         wallet_address: "0x" <> String.duplicate("c", 40),
         chain_id: 8453,
+        verification_method: :eoa_recovery,
         audience: "keyfleet"
       }
 

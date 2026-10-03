@@ -143,6 +143,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
           %Keyfleet.Actors.Agent{
             wallet_address: wallet("a"),
             chain_id: 8453,
+            verification_method: :eoa_recovery,
             audience: "keyfleet"
           },
           %{role: :system}

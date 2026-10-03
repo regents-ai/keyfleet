@@ -70,6 +70,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
        %{"reason" => :text}}
   }
+  @verification_methods %{
+    "eoa_recovery" => :eoa_recovery,
+    "erc1271" => :erc1271,
+    "erc6492" => :erc6492
+  }
   @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
@@ -141,7 +146,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         %{
           "verified" => true,
           "walletAddress" => wallet,
-          "chainId" => 8453,
+          "chainId" => chain_id,
+          "verificationMethod" => method,
           "keyId" => wallet,
           "receiptExpiresAt" => expires,
           "requiredHeaders" => required_headers,
@@ -151,18 +157,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
             %{
               "kind" => "wallet",
               "wallet_address" => wallet,
-              "chain_id" => 8453,
+              "chain_id" => chain_id,
               "audience" => "keyfleet"
             } = principal
         } = data,
         _context
       )
-      when map_size(data) == 9 and map_size(principal) == 4 and is_binary(expires) and
+      when map_size(data) == 10 and map_size(principal) == 4 and is_binary(expires) and
+             is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
     actor = %Agent{
       wallet_address: wallet,
-      chain_id: 8453,
+      chain_id: chain_id,
+      verification_method: Map.fetch!(@verification_methods, method),
       audience: "keyfleet",
       credential_ref: credential_ref(conn)
     }

@@ -771,6 +771,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
             verified: true,
             walletAddress: claims["sub"],
             chainId: claims["chain_id"],
+            verificationMethod: "eoa_recovery",
             keyId: claims["key_id"],
             receiptExpiresAt:
               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
