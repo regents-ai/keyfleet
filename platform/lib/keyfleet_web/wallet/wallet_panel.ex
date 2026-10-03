@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.WalletPanel do
   @moduledoc """
   One group of Keyfleet's wallet buttons: the form they read, the line naming
   what a press sends, the buttons, and every step sent from them with how it
-  landed. `skills/onchain-buttons` has the rules; `KeyfleetWeb.OnchainSteps`
-  holds the parts every group shares.
+  landed. The ash-template repository's `skills/onchain-buttons` has the
+  rules; `KeyfleetWeb.OnchainSteps` holds the parts every group shares.
 
   The steps are built on the server by `Keyfleet.WalletSteps` for the one
   wallet that may send them: Privy's active wallet, when the signed-in account

@@ -92,7 +92,10 @@ defmodule Keyfleet.Rooms do
   def unmuted(messages, muted),
     do: Enum.reject(messages, &(&1.kind == :post and MapSet.member?(muted, &1.as_key)))
 
-  @doc "Where a fleet says that one of its rooms has taken a new post."
+  @doc """
+  Where the fleet's rooms, posts and keys' threads publish what changed in
+  them: "room_head", "key_activity" and "rooms_changed".
+  """
   def fleet_topic(fleet_id), do: "fleet:#{fleet_id}:rooms"
 
   @doc """
@@ -244,11 +247,6 @@ defmodule Keyfleet.Rooms do
     |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
     |> Ash.Query.filter(kind == :created)
     |> Ash.count!()
-  end
-
-  @doc "Tells everyone watching the fleet's rooms that its list of rooms has changed."
-  def rooms_changed(fleet_id) do
-    Phoenix.PubSub.broadcast(Keyfleet.PubSub, fleet_topic(fleet_id), {:rooms_changed, fleet_id})
   end
 
   @doc """

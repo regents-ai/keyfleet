@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
 
@@ -18,8 +19,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # them, so a burst of writes is read once.
   @workspace_refresh_after 1_000
 
-  attr :board, :map, required: true
+  attr :board, :any, required: true, doc: "the workspace as read, or `:unreadable`"
   attr :notebooks_notice, :string, default: nil
+
+  def board(%{board: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-page" />|
 
   def board(%{board: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="workspace-page" />|
@@ -147,7 +150,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
-  attr :item, :map, required: true
+  attr :item, :any, required: true, doc: "the item as read, or `:unreadable`"
+
+  def item(%{item: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-item-page" />|
 
   def item(%{item: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="workspace-item-page" />|
@@ -297,6 +302,25 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :id, :string, required: true
 
   # Told the way the fleet's own page tells it.
+  defp unreadable(assigns) do
+    ~H"""
+    <article id={@id} class="workspace-page">
+      <header class="workspace-heading">
+        <p class="workspace-kicker">Fleet</p>
+        <h1 tabindex="-1">Keyfleet</h1>
+      </header>
+
+      <section id="workspace-unreadable" class="workspace-panel">
+        <h2>This page couldn’t be loaded.</h2>
+        <p>Refresh the page to try again.</p>
+      </section>
+    </article>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  # Told the way the fleet's own page tells it.
   defp missing_fleet(assigns) do
     ~H"""
     <article id={@id} class="workspace-page">
@@ -407,29 +431,30 @@ defmodule KeyfleetWeb.WorkspaceLive do
     end
   end
 
-  @doc "The workspace page the address names, read afresh."
-  def read_workspace(%{assigns: %{route_spec: %{route_id: :workspace}}} = socket) do
-    params = socket.assigns.workspace_params
-
-    assign(
-      socket,
-      :workspace,
-      WorkspacePage.board(params["fleet_id"], params, ShellLive.human_actor(socket))
-    )
+  @doc """
+  The workspace page the address names, read afresh; or `:unreadable` when the
+  database couldn't be read.
+  """
+  def read_workspace(socket) do
+    case PageRead.run("workspace", fn -> workspace(socket) end) do
+      {:ok, workspace} -> assign(socket, :workspace, workspace)
+      {:error, _failure} -> assign(socket, :workspace, :unreadable)
+    end
   end
 
-  def read_workspace(%{assigns: %{route_spec: %{route_id: :workspace_item}}} = socket) do
+  defp workspace(%{assigns: %{route_spec: %{route_id: :workspace}}} = socket) do
+    params = socket.assigns.workspace_params
+    WorkspacePage.board(params["fleet_id"], params, ShellLive.human_actor(socket))
+  end
+
+  defp workspace(%{assigns: %{route_spec: %{route_id: :workspace_item}}} = socket) do
     params = socket.assigns.workspace_params
 
-    assign(
-      socket,
-      :workspace,
-      WorkspacePage.item(
-        params["fleet_id"],
-        params["object_id"],
-        params,
-        ShellLive.human_actor(socket)
-      )
+    WorkspacePage.item(
+      params["fleet_id"],
+      params["object_id"],
+      params,
+      ShellLive.human_actor(socket)
     )
   end
 

@@ -35,6 +35,12 @@
   overflow-wrap: normal;
 }
 
+/* A table's last column holds the values (a web address, a contract address), so a long
+   one wraps there rather than pushing the table past a phone screen. */
+.public-document td:last-child {
+  overflow-wrap: anywhere;
+}
+
 .public-document .legal-page {
   overflow-wrap: anywhere;
 }

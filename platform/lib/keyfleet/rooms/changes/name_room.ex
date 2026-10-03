@@ -17,7 +17,6 @@ defmodule Keyfleet.Rooms.Changes.NameRoom do
       changeset
       |> Ash.Changeset.before_action(&say_so(&1, actor))
       |> Ash.Changeset.after_action(&with_line/2)
-      |> Ash.Changeset.after_transaction(&announce/2)
     else
       changeset
     end
@@ -51,18 +50,4 @@ defmodule Keyfleet.Rooms.Changes.NameRoom do
   # The room is answered with the line counted in its head.
   defp with_line(changeset, room),
     do: {:ok, %{room | head_seq: changeset.context.naming_line.seq}}
-
-  # Best effort: anyone reading the room reads it from the room itself.
-  defp announce(changeset, {:ok, room} = result) do
-    Phoenix.PubSub.broadcast(
-      Keyfleet.PubSub,
-      Rooms.fleet_topic(room.fleet_id),
-      {:room_head, room.id, changeset.context.naming_line.seq}
-    )
-
-    Rooms.rooms_changed(room.fleet_id)
-    result
-  end
-
-  defp announce(_changeset, result), do: result
 end

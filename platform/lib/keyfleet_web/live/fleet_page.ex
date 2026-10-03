@@ -39,6 +39,7 @@ defmodule KeyfleetWeb.FleetPage do
     case Keys.keys_in_fleet(fleet_id, page: key_position(params), actor: actor) do
       {:ok, page} -> page
       {:error, %Ash.Error.Invalid{}} -> raise NotFoundError
+      {:error, failure} -> raise failure
     end
   end
 

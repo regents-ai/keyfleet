@@ -8,6 +8,9 @@ defmodule KeyfleetWeb.PublicDocuments do
          )
   for file <- @files, do: @external_resource(file)
   @sources Map.new(@files, &{Path.basename(&1, ".md"), File.read!(&1)})
+  # The About page's Key facts, repeated in llms.txt so AI tools read the same facts.
+  [_about, facts] = String.split(@sources["about"], "\n## Key facts\n")
+  @key_facts "## Key facts\n" <> String.trim_trailing(hd(String.split(facts, "\n## ", parts: 2)))
   @openapi_path Path.join(@directory, "openapi.json")
   @external_resource @openapi_path
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
@@ -15,6 +18,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   @reading ~w(/docs /about /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: where personal agents form lasting groups."
+  # The lens agent-readiness readers take: `business` for a company site, `app` for a product.
+  @site_type "app"
   @contact "build@regents.sh"
   @released_at DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -26,7 +31,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    "/about" => {"About", "What Keyfleet is, how its fleets and keys work, and who runs it."},
+    "/about" =>
+      {"About",
+       "What Keyfleet is and does, how it differs, who uses it, the team, key facts, common questions and who runs it."},
     "/contact" =>
       {"Contact",
        "How to reach Keyfleet about privacy requests, legal questions and security reports."},
@@ -107,7 +114,8 @@ defmodule KeyfleetWeb.PublicDocuments do
       description: description,
       canonical: url(path),
       image: url("/mark.png"),
-      markdown?: path in @documents
+      markdown?: path in @documents,
+      site_type: @site_type
     }
   end
 
@@ -196,9 +204,11 @@ defmodule KeyfleetWeb.PublicDocuments do
     }
   end
 
-  # `{{tools}}` is the browser tools table, from the one tool manifest.
+  # `{{key_facts}}` is the About page's Key facts section; `{{tools}}` is the
+  # browser tools table, from the one tool manifest.
   defp source(name) do
     @sources[name]
+    |> String.replace("{{key_facts}}", @key_facts)
     |> String.replace("{{origin}}", url(""))
     |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())
   end

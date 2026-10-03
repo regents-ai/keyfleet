@@ -34,20 +34,12 @@
 }
 
 :root {
-  /* Background, Surface, Text and Border, taken outright. */
-  --ash-ground: var(--color-bg);
-  --ash-panel: var(--color-surface);
-  --ash-ink: var(--color-fg);
-  --ash-line: var(--color-border);
-
   /* One step past the panel, for the row the visitor is standing on and for the
      cells that carry a figure: Border folded into Surface, away from the page. */
   --ash-panel-strong: light-dark(
     color-mix(in oklab, var(--color-border) 55%, var(--color-surface)),
     color-mix(in oklab, var(--color-border) 50%, var(--color-surface))
   );
-
-  --ash-muted: color-mix(in oklch, var(--ash-ink) 65%, transparent);
 
   /* The edge of a control has to be found before the control can be used, so it
      is drawn at 3:1 against both the fill inside it and the page outside it:

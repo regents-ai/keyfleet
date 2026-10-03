@@ -11,6 +11,7 @@ defmodule Keyfleet.FleetRoomsTest do
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
+  alias Phoenix.Socket.Broadcast
 
   # Syndicate keys other suites commit outside the sandbox would count as
   # held, so these rooms are read on the Cascade fleet.
@@ -87,9 +88,9 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {line.kind, line.body, line.author_wallet, line.seq, line.inserted_at} ==
                {:room_named, "Hull survey", wallet(1), 1, named.topic_set_at}
 
-      assert_receive {:room_head, room_id, 1}
+      assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
       assert room_id == named.id
-      assert_receive {:rooms_changed, @fleet}
+      assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
 
       assert %{topic: "Hull survey", topic_set_by: set_by, head_seq: 1} =
                Rooms.get_room!(@fleet, "open-2")
@@ -386,7 +387,7 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {room.kind, room.slug, room.name, room.topic, room.head_seq} ==
                {:created, "hull-survey", "Hull survey", nil, 0}
 
-      assert_receive {:rooms_changed, @fleet}
+      assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
       assert List.last(Rooms.list_rooms!(@fleet)).slug == "hull-survey"
 
       for actor <- [owner(1), owner(3), owner(231), runner] do

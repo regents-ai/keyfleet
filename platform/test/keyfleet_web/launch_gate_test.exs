@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
           get(build_conn(), "/openapi.json"),
           get(build_conn(), "/capabilities"),
           get(build_conn(), "/.well-known/api-catalog"),
-          get(build_conn(), "/.well-known/skills/index.json"),
+          get(build_conn(), "/.well-known/agent-skills/index.json"),
           get(build_conn(), "/metadata/1/1")
         ] do
       assert json_response(conn, 503) == refused("not_open_yet"), conn.request_path
@@ -107,7 +107,8 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
     for conn <- [
           get(build_conn(), "/skill.md"),
-          get(build_conn(), "/.well-known/skills/keyfleet/SKILL.md"),
+          get(build_conn(), "/.well-known/agent-skills/keyfleet/SKILL.md"),
+          get(build_conn(), "/.well-known/agent-skills/keyfleet.zip"),
           get(build_conn(), "/llms.txt"),
           get(build_conn(), "/fleets.md"),
           get(build_conn(), "/fleets/fibonacci_syndicate.md"),

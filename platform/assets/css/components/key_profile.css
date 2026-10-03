@@ -7,8 +7,8 @@
   max-height: none;
   padding: 0;
   border: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
-  color: var(--ash-ink);
+  background: var(--color-surface);
+  color: var(--color-fg);
   overflow: hidden;
 }
 
@@ -38,7 +38,7 @@
   justify-items: center;
   gap: 1.5rem;
   padding: clamp(1rem, 3vw, 2rem);
-  border-inline-end: 1px solid var(--ash-line);
+  border-inline-end: 1px solid var(--color-border);
   overflow: auto;
 }
 
@@ -72,8 +72,8 @@
   align-items: center;
   justify-content: space-between;
   padding-block: 1rem;
-  border-block-end: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .key-profile__header h2 {
@@ -123,7 +123,7 @@
 }
 
 .key-profile-facts dt {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.875rem;
 }
 
@@ -154,7 +154,7 @@
 .key-profile-muted,
 .key-profile-status {
   margin: 0;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .key-profile-status {
@@ -170,7 +170,7 @@
 .key-profile .rooms-composer textarea {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-fg);
   font: inherit;

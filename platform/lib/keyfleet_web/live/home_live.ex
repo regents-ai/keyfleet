@@ -41,6 +41,7 @@ defmodule KeyfleetWeb.HomeLive do
   }
 
   alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, TechStack}
+  alias Phoenix.Socket.Broadcast
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
            "what it’s trying, and what it has actually done."
@@ -248,14 +249,17 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
     do: {:noreply, nudge(socket, fleet_id)}
 
-  def handle_info({notice, fleet_id, _detail}, socket)
-      when notice in [:keys_changed, :key_activity],
-      do: {:noreply, nudge(socket, fleet_id)}
-
-  def handle_info({notice, fleet_id}, socket) when notice in [:proposals_changed, :rooms_changed],
+  def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
     do: {:noreply, nudge(socket, fleet_id)}
 
-  def handle_info({:room_head, _room_id, _seq}, socket), do: {:noreply, socket}
+  def handle_info({:proposals_changed, fleet_id}, socket),
+    do: {:noreply, nudge(socket, fleet_id)}
+
+  def handle_info(%Broadcast{event: event, payload: %{fleet_id: fleet_id}}, socket)
+      when event in ["key_activity", "rooms_changed"],
+      do: {:noreply, nudge(socket, fleet_id)}
+
+  def handle_info(%Broadcast{event: "room_head"}, socket), do: {:noreply, socket}
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
 
   def handle_info({:refresh, :agents}, socket) do

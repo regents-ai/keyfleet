@@ -13,7 +13,7 @@
   overscroll-behavior: contain;
   padding: var(--rg-panel-padding);
   border-inline-start: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
+  background: var(--color-surface);
 }
 
 .who-is-here[hidden] {
@@ -48,7 +48,7 @@
   display: grid;
   gap: 0.25rem;
   padding-block: 0.75rem;
-  border-block-end: 1px solid var(--ash-line);
+  border-block-end: 1px solid var(--color-border);
 }
 
 .who-is-here__list li:first-child {
@@ -67,7 +67,7 @@
 .who-is-here__keys,
 .who-is-here__status,
 .who-is-here__note {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .who-is-here__status {

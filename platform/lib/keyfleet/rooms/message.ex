@@ -17,7 +17,8 @@ defmodule Keyfleet.Rooms.Message do
     otp_app: :keyfleet,
     domain: Keyfleet.Rooms,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [Ash.Notifier.PubSub]
 
   @bigint 9_223_372_036_854_775_807
   @max_body 4_000
@@ -135,7 +136,6 @@ defmodule Keyfleet.Rooms.Message do
 
       validate Keyfleet.Graph.Validations.KnownFleet
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
-      change Keyfleet.Rooms.Changes.AnnouncePost
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -167,13 +167,12 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Rooms.Validations.IssuedKey
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
-      change Keyfleet.Rooms.Changes.AnnouncePost
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
     # The line an open room takes when a member names it, written inside the
-    # naming itself (`Keyfleet.Rooms.Changes.NameRoom`), which tells the room's
-    # watchers once it commits. Its body is the room's new topic.
+    # naming itself (`Keyfleet.Rooms.Changes.NameRoom`), so the room's watchers
+    # hear of it once the naming commits. Its body is the room's new topic.
     create :note_room_named do
       public? false
       accept []
@@ -344,6 +343,38 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :asc, id: :asc], limit: 1)
       get? true
     end
+  end
+
+  # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
+  # on `Keyfleet.Rooms.fleet_topic/1`: "room_head" with `%{room_id, seq}` for
+  # every new line, and "key_activity" with `%{fleet_id, token_ids}` for a new
+  # post, naming the key it was written as and the key whose thread it went to.
+  # A repeat the database handed back is not announced. Best effort: anyone
+  # reading a room reads it from the room itself.
+  pub_sub do
+    module Phoenix.PubSub
+    name Keyfleet.PubSub
+    prefix "fleet"
+    broadcast_type :phoenix_broadcast
+    filter &(!Ash.Resource.get_metadata(&1.data, :upsert_skipped))
+
+    publish_all :create, [:fleet_id, "rooms"],
+      event: "room_head",
+      transform: &%{room_id: &1.data.room_id, seq: &1.data.seq}
+
+    publish :send_message, [:fleet_id, "rooms"],
+      event: "key_activity",
+      transform: &Keyfleet.Rooms.Message.key_activity/1
+
+    publish :send_to_key, [:fleet_id, "rooms"],
+      event: "key_activity",
+      transform: &Keyfleet.Rooms.Message.key_activity/1
+  end
+
+  @doc false
+  def key_activity(%{data: message, changeset: changeset}) do
+    token_ids = Enum.uniq([message.as_key, Ash.Changeset.get_argument(changeset, :token_id)])
+    %{fleet_id: message.fleet_id, token_ids: Enum.reject(token_ids, &is_nil/1)}
   end
 
   policies do

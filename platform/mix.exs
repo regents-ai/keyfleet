@@ -6,7 +6,7 @@ defmodule Keyfleet.MixProject do
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
   @elixir_utils_ref "9ca24b0485cd734644a1f790cee1d6b62938eb57"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "42a439b9e5980e1174e3da85b24f0f60c2e78339"
+  @design_system_ref "6bc26409835f76f99f91cf6e48bdebd18f1fe8eb"
   @regents "https://github.com/regents-ai/regents.git"
   @regents_ref "3eff63fa8b5a337b1bda11f9599d7b7919ae0b85"
 
@@ -53,6 +53,7 @@ defmodule Keyfleet.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.33.0"},
+      {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "~> 2.13.0"},
       {:oban, "~> 2.24"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.

@@ -41,6 +41,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.Motion
+  alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
@@ -112,7 +113,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp sold_so_far(fleet),
     do: %{deployed?: true, current?: fleet.current?, keys: fleet.progress.total_minted}
 
-  attr :fleet, :map, required: true
+  attr :fleet, :any, required: true, doc: "the fleet as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :params, :map, required: true, doc: "the page's address"
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
@@ -125,6 +126,18 @@ defmodule KeyfleetWeb.FleetLive do
     required: true,
     doc:
       ~s(what "What's happening" shows beyond its items: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
+
+  def page(%{fleet: :unreadable} = assigns) do
+    ~H"""
+    <article id="fleet-page" class="fleet-page">
+      <section id="fleet-unreadable" class="fleet-panel">
+        <h1 tabindex="-1">Keyfleet</h1>
+        <h2>This page couldn’t be loaded.</h2>
+        <p>Refresh the page to try again.</p>
+      </section>
+    </article>
+    """
+  end
 
   def page(assigns) do
     ~H"""
@@ -1004,8 +1017,18 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
 
-  @doc "The fleet named in the address, with a page of its keys and what's happening in it."
-  def read_fleet(socket, %{"fleet_id" => fleet_id} = params) do
+  @doc """
+  The fleet named in the address, with a page of its keys and what's happening
+  in it; or `:unreadable` when the database couldn't be read.
+  """
+  def read_fleet(socket, params) do
+    case PageRead.run("fleet", fn -> show_fleet(socket, params) end) do
+      {:ok, socket} -> socket
+      {:error, _failure} -> show_without_keys(socket, :unreadable, params)
+    end
+  end
+
+  defp show_fleet(socket, %{"fleet_id" => fleet_id} = params) do
     actor = ShellLive.human_actor(socket)
 
     fleet = Fleets.get_fleet!(fleet_id, actor: actor)

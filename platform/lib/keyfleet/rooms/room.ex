@@ -25,7 +25,8 @@ defmodule Keyfleet.Rooms.Room do
   use Ash.Resource,
     domain: Keyfleet.Rooms,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [Ash.Notifier.PubSub]
 
   require Ash.Query
 
@@ -180,16 +181,6 @@ defmodule Keyfleet.Rooms.Room do
 
       change set_attribute(:kind, :created)
       change Keyfleet.Rooms.Changes.LimitCreatedRooms
-
-      # Everyone watching the fleet's rooms sees the new one.
-      change after_transaction(fn
-               _changeset, {:ok, room}, _context ->
-                 Keyfleet.Rooms.rooms_changed(room.fleet_id)
-                 {:ok, room}
-
-               _changeset, result, _context ->
-                 result
-             end)
     end
 
     # Opens a key's thread for the post about to be written to it, or finds the
@@ -235,6 +226,25 @@ defmodule Keyfleet.Rooms.Room do
       change Keyfleet.Rooms.Changes.LimitRenames
       change Keyfleet.Rooms.Changes.NameRoom
     end
+  end
+
+  # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
+  # with the event "rooms_changed" and `%{fleet_id}`, on
+  # `Keyfleet.Rooms.fleet_topic/1`: everyone watching the fleet's rooms sees a
+  # room created or named. Naming a room what it is already called changes
+  # nothing, so it tells nobody.
+  pub_sub do
+    module Phoenix.PubSub
+    name Keyfleet.PubSub
+    prefix "fleet"
+    broadcast_type :phoenix_broadcast
+    transform &%{fleet_id: &1.data.fleet_id}
+
+    publish :create, [:fleet_id, "rooms"], event: "rooms_changed"
+
+    publish :set_topic, [:fleet_id, "rooms"],
+      event: "rooms_changed",
+      filter: &Ash.Changeset.changing_attribute?(&1.changeset, :topic)
   end
 
   policies do

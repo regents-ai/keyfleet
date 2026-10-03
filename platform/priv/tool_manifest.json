@@ -3,7 +3,7 @@
     {
       "name": "about",
       "title": "About Keyfleet",
-      "description": "Read the About page as Markdown: what Keyfleet is, how its fleets and keys work and who runs it. Reads only; needs no sign-in; changes nothing.",
+      "description": "Read the About page as Markdown: what Keyfleet is and does, how it differs, who uses it, the team, key facts, common questions and who runs it. Reads only; needs no sign-in; changes nothing.",
       "input_schema": {
         "type": "object",
         "properties": {},

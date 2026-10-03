@@ -21,7 +21,7 @@
     font-size: .6875rem;
     letter-spacing: .16em;
     text-transform: uppercase;
-    color: var(--ash-muted);
+    color: var(--color-fg-muted);
   }
 
   .early__title {
@@ -46,7 +46,7 @@
   .early__lede {
     margin-block-start: var(--space-3);
     max-width: 34rem;
-    color: var(--ash-muted);
+    color: var(--color-fg-muted);
     font-size: 1.0625rem;
   }
 
@@ -80,7 +80,7 @@
     font-weight: 400;
     letter-spacing: .16em;
     text-transform: uppercase;
-    color: var(--ash-muted);
+    color: var(--color-fg-muted);
   }
 
   .early__stack ul {
@@ -123,7 +123,7 @@
     display: inline-flex;
     align-items: center;
     min-height: 44px;
-    color: var(--ash-muted);
+    color: var(--color-fg-muted);
     text-decoration: none;
   }
 

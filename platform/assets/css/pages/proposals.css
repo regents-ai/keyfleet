@@ -13,8 +13,8 @@
 .proposals-heading,
 .proposals-panel {
   min-width: 0;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .proposals-page h1,
@@ -31,7 +31,7 @@
 
 .proposals-kicker,
 .proposals-kind {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   font-weight: 400;
@@ -59,16 +59,16 @@
 
 .proposals-lede {
   max-width: 56ch;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 1.05rem;
   line-height: 1.5;
 }
 
 .proposals-notice {
   padding: 0.75rem 1rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
   border-inline-start: 3px solid var(--ash-accent-warm);
-  background: var(--ash-panel);
+  background: var(--color-surface);
   line-height: 1.5;
 }
 
@@ -99,7 +99,7 @@
 .proposals-detail,
 .proposals-facts dt,
 .proposals-fields dt {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .proposals-rule {
@@ -122,7 +122,7 @@
   gap: 0.6rem;
   min-width: 0;
   padding: 0.9rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
 }
 
 .proposals-card h3 {
@@ -140,7 +140,7 @@
 .proposals-badge {
   padding: 0.1rem 0.4rem;
   border: 1px solid var(--ash-line-strong);
-  color: var(--ash-ink);
+  color: var(--color-fg);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
@@ -210,7 +210,7 @@
   gap: 0.2rem;
   min-width: 0;
   padding-block-end: 0.75rem;
-  border-bottom: 1px solid var(--ash-line);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .proposals-lines li:last-child {
@@ -221,7 +221,7 @@
 /* Each asset's figures stand apart, since each is counted in its own units. */
 .proposals-balance {
   padding-block-start: 1rem;
-  border-top: 1px solid var(--ash-line);
+  border-top: 1px solid var(--color-border);
 }
 
 .proposals-panel h3 {
