@@ -59,11 +59,11 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
 
   policies do
     policy action([:upsert_verified, :for_account, :by_provider_subject, :remove_verified]) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
 
     policy action(:read_mine) do
-      authorize_if Keyfleet.Accounts.Checks.HumanActor
+      authorize_if actor_attribute_equals(:role, :human)
     end
   end
 

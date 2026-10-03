@@ -122,7 +122,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   policies do
     policy always() do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

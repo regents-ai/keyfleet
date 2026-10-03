@@ -119,7 +119,7 @@ defmodule Keyfleet.Chain.Cursor do
     end
 
     policy action([:open, :advance, :flag_divergence, :clear_divergence]) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

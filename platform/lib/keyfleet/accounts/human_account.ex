@@ -48,7 +48,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
 
   policies do
     policy action([:by_privy_did, :register_verified, :refresh_verified]) do
-      authorize_if Keyfleet.Checks.SystemActor
+      authorize_if actor_attribute_equals(:role, :system)
     end
 
     policy action(:read_self) do
