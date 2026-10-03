@@ -70,7 +70,8 @@ if config_env() != :test do
 end
 
 # The fleets' notebook hubs: KEYFLEET_HUB_FLEETS lists `fleet_id=address`
-# pairs separated by commas, each address the hub's private URL, and
+# pairs separated by commas, each address the hub's private Flycast URL
+# (`fibonacci_syndicate=http://kf-nb-fibonacci-syndicate.flycast`), and
 # KEYFLEET_HUB_SIGNING_KEY is the JWK Set whose first key signs every pass.
 if config_env() != :test do
   hub_fleets =
