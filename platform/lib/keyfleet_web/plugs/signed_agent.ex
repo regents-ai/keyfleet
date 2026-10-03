@@ -1,5 +1,5 @@
 defmodule KeyfleetWeb.Plugs.SignedAgent do
-  @moduledoc "Captures bounded signed agent requests before any parser or method rewrite."
+  @moduledoc "Captures bounded signed agent requests before any parser."
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
