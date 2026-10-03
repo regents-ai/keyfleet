@@ -1,0 +1,7 @@
+.work
+**/node_modules
+**/dist
+**/__pycache__
+local
+**/.env
+**/.env.*

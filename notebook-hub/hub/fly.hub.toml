@@ -1,0 +1,43 @@
+# One fleet's notebook hub. Copy per fleet and replace <fleet>, <region> and <tag>.
+# Private only: there is no [http_service], and the app gets no public IP
+# (deploy with --no-public-ips). KeyFleet reaches it at kf-nb-<fleet>.internal:3000.
+# Secrets (see hub.env.example) are set with `fly secrets set`, never here.
+app = "kf-nb-<fleet>"
+primary_region = "<region>"
+
+[build]
+  image = "registry.fly.io/kf-nb-<fleet>:<tag>"
+
+[env]
+  MARIMOHUB_RUN_MAINTENANCE = "true"
+  MARIMOHUB_AUTH_BACKEND = "proxy-header"
+  MARIMOHUB_AUTH_PROXY_HEADER = "<header name>"
+  MARIMOHUB_AUTH_PROXY_JWT_ISSUER = "<issuer URL>"
+  MARIMOHUB_AUTH_PROXY_JWT_AUDIENCE = "<audience>"
+  MARIMOHUB_AUTH_PROXY_JWKS_URL = "<https URL>"
+  MARIMOHUB_AUTH_ALLOWED_EMAIL_DOMAINS = "<domain>"
+  MARIMOHUB_APP_BASE_URL = "<https URL>"
+  MARIMOHUB_DEFAULT_ROLE = "none"
+  MARIMOHUB_PROJECT_CREATION = "restricted"
+  MARIMOHUB_SUPER_ADMINS = "<KeyFleet setup identity>"
+  MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED = "true"
+  MARIMOHUB_PERSIST_WORKSPACE = "<source | workspace>"
+  MARIMOHUB_SESSION_MAX_LIFETIME_SECONDS = "<seconds>"
+  MARIMOHUB_SESSION_IDLE_TIMEOUT_SECONDS = "<seconds>"
+  MARIMOHUB_STORAGE_BACKEND = "s3"
+  MARIMOHUB_STORAGE_S3_ENDPOINT = "https://fly.storage.tigris.dev"
+  MARIMOHUB_STORAGE_S3_REGION = "auto"
+  MARIMOHUB_STORAGE_S3_BUCKET = "<bucket name>"
+  MARIMOHUB_COMPUTE_IMAGE = "registry.fly.io/kf-nbk-<fleet>:<tag>"
+  MARIMOHUB_COMPUTE_FLY_API_URL = "http://_api.internal:4280"
+  MARIMOHUB_COMPUTE_FLY_APP = "kf-nbk-<fleet>"
+  MARIMOHUB_COMPUTE_FLY_REGION = "<region>"
+  MARIMOHUB_COMPUTE_FLY_CPU_KIND = "shared"
+  MARIMOHUB_COMPUTE_FLY_CPUS = "<count>"
+  MARIMOHUB_COMPUTE_FLY_MEMORY_MB = "<megabytes>"
+  MARIMOHUB_COMPUTE_FLY_OWNER = "kf-nb-<fleet>"
+
+# One machine: the hub keeps its catalog in one bucket and runs one maintenance loop.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

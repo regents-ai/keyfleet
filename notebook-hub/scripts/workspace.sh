@@ -24,13 +24,22 @@ if [ "$head" != "$MARIMOHUB_COMMIT" ]; then
   exit 1
 fi
 
+node_want="$(cat "$work/.node-version")"
+node_have="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$node_have" != "$node_want" ]; then
+  echo "marimohub builds with Node $node_want; this shell has Node $(node -v). Put Node $node_want first on PATH." >&2
+  exit 1
+fi
+
 mkdir -p "$work/packages/compute-fly"
 rsync -a --delete --exclude node_modules --exclude dist "$here/compute-fly/" "$work/packages/compute-fly/"
 
-if git -C "$work" apply --check "$patch" 2>/dev/null; then
+# The patch only adds lines, so it would apply again on top of itself: apply it
+# only when the lockfile still matches the pinned commit.
+if git -C "$work" diff --quiet -- pnpm-lock.yaml; then
   git -C "$work" apply "$patch"
 fi
 git -C "$work" apply --reverse --check "$patch"
 
-(cd "$work" && CI=true corepack pnpm install --frozen-lockfile --reporter=silent)
+(cd "$work" && CI=true corepack pnpm install --frozen-lockfile) >&2
 echo "$work"

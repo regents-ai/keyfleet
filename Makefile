@@ -1,10 +1,10 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-platform check-required-fixes check-cli check-contracts release readiness
+.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-notebook-hub release readiness
 help:
-	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli or check-contracts for one component."
+	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli, check-contracts or check-notebook-hub for one component."
 	@echo "Run make release to run every gate, then build the committed tree into an image and start it against a throwaway database."
 	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
-check: check-platform check-required-fixes check-cli check-contracts
+check: check-platform check-required-fixes check-cli check-contracts check-notebook-hub
 check-platform:
 	cd platform && mix precommit && npm run typecheck && npm test
 # Every site runs the same check against ash-template's current main branch, so a
@@ -23,6 +23,10 @@ check-cli:
 	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
 check-contracts:
 	cd contracts && forge fmt --check && forge build && forge test
+# The fleet notebook hub: compute-fly in the pinned marimohub workspace, the hub
+# and runner images, and the runner helper's tests. Needs Node 24 and Docker.
+check-notebook-hub:
+	notebook-hub/scripts/check.sh
 # The release checks and builds exactly the committed tree, so every change must
 # be committed first. A failing gate stops it before anything is built.
 release:

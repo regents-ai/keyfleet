@@ -499,3 +499,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-09-30 — Tech stack names OpenAI Dots
 
 - The tech stack's agent list reads "Hermes, OpenAI Dots, Muse, Grok Bot."
+
+## 2026-10-03 — Notebook hub runner pieces for one private hub per fleet
+
+- New `notebook-hub/` folder: everything needed to run one private marimohub
+  notebook hub per fleet on Fly, with each notebook session on its own
+  short-lived Fly machine. Nothing is on Fly yet.
+- `compute-fly/` starts, finds and deletes notebook machines through Fly's
+  machine service. Each hub sees only its own machines, and machines get no
+  public address, no bucket keys and none of the hub's passwords.
+- `runner/` is the notebook machine image: marimohub's notebook image at the
+  pinned version plus a helper and a private-network relay. Notebook code runs
+  as an ordinary user that cannot read the helper's password.
+- `hub/` holds the hub image, the two Fly app templates and a list of every
+  hub setting. `local/run.sh` proves a full session end to end on Docker.
+- `make check` now includes `check-notebook-hub`, which needs Node 24 and
+  Docker.
