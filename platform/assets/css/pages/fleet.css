@@ -32,8 +32,8 @@
 .fleet-view,
 .fleet-panel {
   min-width: 0;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .fleet-view {
@@ -52,7 +52,7 @@
   align-items: flex-start;
   gap: 1rem 1.5rem;
   padding: 1rem var(--rg-panel-padding);
-  border-block-end: 1px solid var(--ash-line);
+  border-block-end: 1px solid var(--color-border);
 }
 
 .fleet-bar__title {
@@ -70,7 +70,7 @@
 }
 
 .fleet-bar__sales {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .fleet-bar__actions {
@@ -105,7 +105,7 @@
   overflow: auto;
   padding: 0.5rem;
   border: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
+  background: var(--color-surface);
   transform-origin: 1.5rem 0;
 }
 
@@ -125,7 +125,7 @@
 }
 
 .fleet-menu__empty {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 /* Buying a key, in "How this fleet works" */
@@ -156,7 +156,7 @@
 }
 
 .fleet-buy-facts dt {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -204,8 +204,8 @@
   gap: 0.75rem;
   width: min(28rem, calc(100% - 1.5rem));
   padding: 1.25rem 1.5rem;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .fleet-soon h2 {
@@ -214,7 +214,7 @@
 }
 
 .fleet-soon p {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 #fleet-soon .fleet-unsold {
@@ -226,8 +226,8 @@
   position: absolute;
   z-index: 1;
   max-width: calc(100% - 1.5rem);
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .fleet-map-controls {
@@ -249,9 +249,9 @@
 .fleet-map-level select {
   min-height: 2.75rem;
   padding: 0 0.75rem;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
-  color: var(--ash-ink);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
   font: inherit;
 }
 
@@ -262,7 +262,7 @@
   gap: 0.25rem;
   width: 34rem;
   padding: 0.5rem 0.75rem;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.875rem;
   pointer-events: none;
 }
@@ -282,7 +282,7 @@
   overscroll-behavior: contain;
   padding: var(--rg-panel-padding);
   border-inline-start: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
+  background: var(--color-surface);
 }
 
 .fleet-about__heading {
@@ -316,7 +316,7 @@
 }
 
 .fleet-detail {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .fleet-facts {
@@ -331,7 +331,7 @@
 }
 
 .fleet-facts dt {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .fleet-facts dd {
@@ -355,7 +355,7 @@
   overscroll-behavior: contain;
   padding: var(--rg-panel-padding);
   border-inline-start: 1px solid var(--ash-line-strong);
-  background: var(--ash-panel);
+  background: var(--color-surface);
 }
 
 @media (width < 64rem) {
@@ -435,11 +435,11 @@
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.75rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
 }
 
 .fleet-key-list span {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .fleet-pages {

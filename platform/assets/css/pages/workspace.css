@@ -13,8 +13,8 @@
 .workspace-heading,
 .workspace-panel {
   min-width: 0;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .workspace-page h1,
@@ -31,7 +31,7 @@
 
 .workspace-kicker,
 .workspace-kind {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   font-weight: 400;
@@ -63,16 +63,16 @@
   gap: 0.5rem;
   align-items: center;
   max-width: 56ch;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 1.05rem;
   line-height: 1.5;
 }
 
 .workspace-notice {
   padding: 0.75rem 1rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
   border-inline-start: 3px solid var(--ash-accent-warm);
-  background: var(--ash-panel);
+  background: var(--color-surface);
   line-height: 1.5;
 }
 
@@ -137,7 +137,7 @@
   gap: 0.6rem;
   min-width: 0;
   padding: 0.9rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
 }
 
 .workspace-card h3 {
@@ -155,7 +155,7 @@
 .workspace-badge {
   padding: 0.1rem 0.4rem;
   border: 1px solid var(--ash-line-strong);
-  color: var(--ash-ink);
+  color: var(--color-fg);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
@@ -188,7 +188,7 @@
 .workspace-facts dt,
 .workspace-fields dt,
 .workspace-detail {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .workspace-facts dd,
@@ -209,7 +209,7 @@
   gap: 0.2rem;
   min-width: 0;
   padding-block-end: 0.75rem;
-  border-bottom: 1px solid var(--ash-line);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .workspace-lines li:last-child {

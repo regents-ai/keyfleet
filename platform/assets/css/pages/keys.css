@@ -11,8 +11,8 @@
 .key-heading,
 .key-panel {
   min-width: 0;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .key-page h1,
@@ -27,7 +27,7 @@
 }
 
 .key-kicker {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   font-weight: 400;
@@ -55,7 +55,7 @@
 
 .key-lede {
   max-width: 56ch;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 1.05rem;
   line-height: 1.5;
 }
@@ -95,7 +95,7 @@
 }
 
 .key-detail {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 /* A shard reads top to bottom: its agent, when it runs out and its wallet,
@@ -115,7 +115,7 @@
   gap: 0.75rem;
   justify-items: start;
   padding: 0.75rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
 }
 
 .key-shard-list li > div:first-child {
@@ -125,7 +125,7 @@
 
 /* Only the row's own lines are muted, never the words on its buttons. */
 .key-shard-list li > div > span {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .key-address {

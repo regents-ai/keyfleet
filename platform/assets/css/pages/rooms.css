@@ -11,8 +11,8 @@
 .rooms-heading,
 .rooms-panel {
   min-width: 0;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-panel);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .rooms-page h1,
@@ -27,7 +27,7 @@
 }
 
 .rooms-kicker {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
   font-weight: 400;
@@ -55,7 +55,7 @@
 
 .rooms-lede {
   max-width: 56ch;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 1.05rem;
   line-height: 1.5;
 }
@@ -91,7 +91,7 @@
 .rooms-composer input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: inherit;
@@ -134,7 +134,7 @@
   display: grid;
   gap: 0.35rem;
   padding: 0.75rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
 }
 
 /* The note that someone named the room reads as a line of its own, not a post. */
@@ -153,7 +153,7 @@
 
 /* Who wrote as the key sits beside it, smaller and quieter than the key. */
 .rooms-writer {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.8rem;
   font-weight: 400;
 }
@@ -186,7 +186,7 @@
 }
 
 .rooms-detail {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.9rem;
 }
 
@@ -213,7 +213,7 @@
 .rooms-composer textarea {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--ash-line);
+  border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: inherit;

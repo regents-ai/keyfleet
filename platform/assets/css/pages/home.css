@@ -22,8 +22,8 @@
   .rl-brand img { width: 2rem; height: 2rem; object-fit: contain; }
   .rl-header-bar > .rl-header-links { margin-inline-start: auto; }
   .rl-header-links, .rl-footer-links { display: flex; align-items: center; gap: var(--space-2); }
-  .rl-header-links > a:not(.rg-button), .rl-footer-links a { display: inline-flex; width: 1.25rem; height: 1.25rem; }
-  .rl-header-links svg, .rl-footer-links svg { width: 1.25rem; height: 1.25rem; }
+  .rl-header-links > a:not(.rg-button), .rl-header-links svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
+  .rl-footer-links a, .rl-footer-links svg { display: inline-flex; width: 1.25rem; height: 1.25rem; }
 
   .rl-hero { min-width: 0; }
 

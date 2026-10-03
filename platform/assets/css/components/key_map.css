@@ -8,18 +8,18 @@
 .key-map,
 .key-map-preview {
   /* The level tones, in order: neighbouring levels always differ. */
-  --km-tone-0: color-mix(in oklch, var(--ash-ink) 11%, var(--ash-ground));
-  --km-tone-1: color-mix(in oklch, var(--palette-powder-blue) 42%, var(--ash-ground));
-  --km-tone-2: color-mix(in oklch, var(--ash-ink) 24%, var(--ash-ground));
-  --km-tone-3: color-mix(in oklch, var(--palette-powder-blue) 20%, var(--ash-ground));
+  --km-tone-0: color-mix(in oklch, var(--color-fg) 11%, var(--color-bg));
+  --km-tone-1: color-mix(in oklch, var(--palette-powder-blue) 42%, var(--color-bg));
+  --km-tone-2: color-mix(in oklch, var(--color-fg) 24%, var(--color-bg));
+  --km-tone-3: color-mix(in oklch, var(--palette-powder-blue) 20%, var(--color-bg));
   /* Each tone with the accent at 22%, for the level on sale. Safari stops
      drawing the page when one color-mix() takes two color-mix() colours, and
      the light accent and every tone are mixes, so each is mixed from its
      tone's own two colours instead. */
-  --km-sale-0: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 71.9%, var(--ash-ink)) 30.6%, var(--ash-ground));
-  --km-sale-1: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 40.2%, var(--palette-powder-blue)) 54.8%, var(--ash-ground));
-  --km-sale-2: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 54%, var(--ash-ink)) 40.7%, var(--ash-ground));
-  --km-sale-3: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 58.5%, var(--palette-powder-blue)) 37.6%, var(--ash-ground));
+  --km-sale-0: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 71.9%, var(--color-fg)) 30.6%, var(--color-bg));
+  --km-sale-1: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 40.2%, var(--palette-powder-blue)) 54.8%, var(--color-bg));
+  --km-sale-2: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 54%, var(--color-fg)) 40.7%, var(--color-bg));
+  --km-sale-3: color-mix(in oklch, color-mix(in oklch, var(--ash-accent) 58.5%, var(--palette-powder-blue)) 37.6%, var(--color-bg));
   --km-sold-out-line: var(--ash-line-strong);
   --km-on-sale-line: var(--ash-accent);
 }
@@ -34,9 +34,9 @@
   position: relative;
   height: clamp(420px, 70svh, 820px);
   overflow: hidden;
-  border: 1px solid var(--ash-line);
-  background: var(--ash-ground);
-  color: var(--ash-ink);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-fg);
   cursor: grab;
   touch-action: none;
   overscroll-behavior: contain;
@@ -62,14 +62,14 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 /* A still picture of a fleet's map, in the map's own tones and marks; it
    fills whatever box it is given. */
 .key-map-preview {
   overflow: hidden;
-  background: var(--ash-ground);
+  background: var(--color-bg);
 }
 
 .key-map-preview svg {
@@ -91,10 +91,10 @@
 .key-map-preview polygon[data-tone="1"] { --km-tone: var(--km-tone-1); --km-sale: var(--km-sale-1); }
 .key-map-preview polygon[data-tone="2"] { --km-tone: var(--km-tone-2); --km-sale: var(--km-sale-2); }
 .key-map-preview polygon[data-tone="3"] { --km-tone: var(--km-tone-3); --km-sale: var(--km-sale-3); }
-.key-map-preview polygon[data-tone] { --km-rim: color-mix(in oklch, var(--ash-ink) 16%, var(--km-tone)); }
+.key-map-preview polygon[data-tone] { --km-rim: color-mix(in oklch, var(--color-fg) 16%, var(--km-tone)); }
 .key-map-preview polygon[data-level="on-sale"] { --km-face: var(--km-sale); }
-.key-map-preview polygon[data-state="unsold"] { --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground)); --km-rim: var(--km-face); }
-.key-map-preview polygon[data-state="next"] { --km-rim: var(--palette-tangerine-tango); --km-face: var(--ash-ground); stroke-width: 2.5; }
+.key-map-preview polygon[data-state="unsold"] { --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--color-bg)); --km-rim: var(--km-face); }
+.key-map-preview polygon[data-state="next"] { --km-rim: var(--palette-tangerine-tango); --km-face: var(--color-bg); stroke-width: 2.5; }
 
 .km-layer {
   position: absolute;
@@ -152,16 +152,16 @@
 .km-tile[data-tone="2"] { --km-tone: var(--km-tone-2); --km-sale: var(--km-sale-2); }
 .km-tile[data-tone="3"] { --km-tone: var(--km-tone-3); --km-sale: var(--km-sale-3); }
 
-.km-tile[data-tone] { --km-rim: color-mix(in oklch, var(--ash-ink) 16%, var(--km-tone)); }
+.km-tile[data-tone] { --km-rim: color-mix(in oklch, var(--color-fg) 16%, var(--km-tone)); }
 
 /* The level on sale now is tinted with the accent. */
 .km-tile[data-level="on-sale"] { --km-face: var(--km-sale); }
 
 /* A key not sold yet is faint. */
 .km-tile[data-state~="unsold"] {
-  --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--ash-ground));
+  --km-face: color-mix(in oklch, var(--km-tone) 35%, var(--color-bg));
   --km-rim: var(--km-face);
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 /* The levels' outlines, in the gap round each tile on a level's edge: solid
@@ -202,7 +202,7 @@
 }
 
 .km-tile > span:last-child {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 10px;
   letter-spacing: 0.06em;
 }
@@ -213,7 +213,7 @@
 
 .km-tile[data-state~="next"] {
   --km-rim: var(--palette-tangerine-tango);
-  --km-face: var(--ash-ground);
+  --km-face: var(--color-bg);
   color: var(--palette-tangerine-tango);
 }
 
@@ -245,8 +245,8 @@
   margin: -0.75em 0 0 calc(var(--km-cell) / -2 + var(--km-gap) / 2);
   padding: 0.2em 0.6em;
   border: 1px solid var(--km-sold-out-line);
-  background: var(--ash-ground);
-  color: var(--ash-muted);
+  background: var(--color-bg);
+  color: var(--color-fg-muted);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -254,7 +254,7 @@
 
 .km-level[data-level="on-sale"] {
   border: 2px dashed var(--km-on-sale-line);
-  color: var(--ash-ink);
+  color: var(--color-fg);
   font-weight: 600;
 }
 

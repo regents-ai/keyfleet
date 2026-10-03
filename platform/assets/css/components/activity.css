@@ -14,7 +14,7 @@
   display: grid;
   gap: 0.2rem;
   padding-block: 0.75rem;
-  border-block-end: 1px solid var(--ash-line);
+  border-block-end: 1px solid var(--color-border);
 }
 
 .activity-line:first-child {
@@ -35,7 +35,7 @@
 }
 
 .activity-line__quote {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .activity-line[data-kind="posts"] .activity-line__quote {
@@ -43,7 +43,7 @@
 }
 
 .activity-line__time {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
   font-size: 0.875rem;
 }
 
@@ -82,14 +82,14 @@
 }
 
 .trying-now__detail {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .trying-goal {
   display: grid;
   gap: 0.2rem;
   padding-block-end: 0.6rem;
-  border-block-end: 1px solid var(--ash-line);
+  border-block-end: 1px solid var(--color-border);
 }
 
 .trying-goal__title {
@@ -104,7 +104,7 @@
   gap: 0.35rem;
   margin-block-start: 0.35rem;
   padding-inline-start: 0.75rem;
-  border-inline-start: 1px solid var(--ash-line);
+  border-inline-start: 1px solid var(--color-border);
 }
 
 .trying-problem[data-tone="disagreement"] {

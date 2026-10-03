@@ -32,7 +32,7 @@
 }
 
 .wallet-panel-note {
-  color: var(--ash-muted);
+  color: var(--color-fg-muted);
 }
 
 .wallet-panel-sent {
