@@ -5,6 +5,13 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   @path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
+  @registry_url "https://www.8004scan.io/agents/base/97609"
+  @registration %{
+    "agentId" => "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:97609",
+    "tokenId" => 97_609,
+    "profileUrl" => "https://siwa.regents.sh/agent-profiles/listing",
+    "registryUrl" => @registry_url
+  }
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -12,6 +19,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
     test = self()
+    registration = start_supervised!({Agent, fn -> nil end})
     old = Application.get_env(:keyfleet, :siwa_broker_url)
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
 
@@ -40,15 +48,14 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                 keyId: claims["key_id"],
                 receiptExpiresAt:
                   DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-                requiredHeaders:
-                  Siwa.required_authenticated_request_headers(payload["body"], :wallet),
+                requiredHeaders: Siwa.required_authenticated_request_headers(payload["body"]),
                 requiredCoveredComponents:
                   Siwa.required_authenticated_request_components(
                     payload["headers"],
-                    payload["body"],
-                    :wallet
+                    payload["body"]
                   ),
                 coveredComponents: covered,
+                agentRegistration: Agent.get(registration, & &1),
                 principal: %{
                   kind: "wallet",
                   wallet_address: claims["sub"],
@@ -65,7 +72,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
-    %{app: app, signer: signer, secret: secret}
+    %{app: app, signer: signer, secret: secret, registration: registration}
   end
 
   test "only the exact signed wallet request creates or resumes its unchanged profile", c do
@@ -92,6 +99,24 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     invalid = send_request(c, signed(c, ~s({"name":"","declared_harness":"local"})))
     assert invalid.status == 422
     assert invalid.body == refused("invalid_profile")
+  end
+
+  test "the profile keeps the agent's registry listing as its signed requests name it", c do
+    listing = fn ->
+      {:ok, profile} = Keyfleet.Agents.get_my_profile(actor: actor(c))
+      profile.registry_url
+    end
+
+    assert send_request(c, signed(c, @body)).status == 200
+    assert listing.() == nil
+
+    Agent.update(c.registration, fn _ -> @registration end)
+    assert update(c, %{name: "Listed"}).status == 200
+    assert listing.() == @registry_url
+
+    Agent.update(c.registration, fn _ -> nil end)
+    assert send_request(c, signed(c, @body)).status == 200
+    assert listing.() == nil
   end
 
   test "foreign receipt audience and chain never acquire a Keyfleet actor", c do
@@ -346,6 +371,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       "requiredHeaders" => [],
       "requiredCoveredComponents" => [],
       "coveredComponents" => [],
+      "agentRegistration" => nil,
       "principal" => %{
         "kind" => "wallet",
         "wallet_address" => wallet,
@@ -376,9 +402,17 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       assert {:ok, %{assigns: %{agent_actor: actor}}} =
                KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(chain_id, method), nil)
 
-      assert {actor.chain_id, actor.verification_method} ==
-               {chain_id, String.to_existing_atom(method)}
+      assert {actor.chain_id, actor.verification_method, actor.registry_url} ==
+               {chain_id, String.to_existing_atom(method), nil}
     end
+
+    # An agent listed in the agent registry carries its listing.
+    assert {:ok, %{assigns: %{agent_actor: %{registry_url: @registry_url}}}} =
+             KeyfleetWeb.Plugs.SignedAgent.accept(
+               conn,
+               Map.put(good, "agentRegistration", @registration),
+               nil
+             )
 
     invalid =
       [
@@ -435,6 +469,14 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       assert response.body == refused("authentication_unavailable")
     end
   end
+
+  defp actor(c),
+    do: %Keyfleet.Actors.Agent{
+      wallet_address: c.signer.address,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path) do
     {:ok, %{token: receipt}} =

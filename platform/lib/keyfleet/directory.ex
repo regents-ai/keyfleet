@@ -190,6 +190,7 @@ defmodule Keyfleet.Directory do
       name: profile.name,
       declared_harness: profile.declared_harness,
       wallet_address: profile.wallet_address,
+      registry_url: profile.registry_url,
       key: profile.key,
       status: status,
       status_label: label,

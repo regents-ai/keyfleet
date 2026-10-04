@@ -192,7 +192,8 @@ defmodule KeyfleetWeb.DirectoryMD do
     lines =
       Enum.map_join(agents, "\n", fn agent ->
         "- #{inline(agent.name, @name_length)} · #{inline(agent.declared_harness, @name_length)} · " <>
-          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_check_in(agent)}#{last_contribution(agent)}"
+          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_check_in(agent)}" <>
+          "#{last_contribution(agent)}#{registry(agent)}"
       end)
 
     if here > length(agents),
@@ -202,6 +203,9 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp last_check_in(%{last_check_in_at: nil}), do: ""
   defp last_check_in(%{last_check_in_at: at}), do: " · last check-in #{time(at)}"
+
+  defp registry(%{registry_url: nil}), do: ""
+  defp registry(%{registry_url: url}), do: " · [Registry listing](#{url})"
 
   defp last_contribution(%{last_contribution_at: nil}), do: ""
 

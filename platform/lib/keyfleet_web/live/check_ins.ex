@@ -76,6 +76,9 @@ defmodule KeyfleetWeb.CheckIns do
           <p class="who-is-here__name">
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
+            <a :if={agent.registry_url} href={agent.registry_url} target="_blank" rel="noopener">
+              Registry listing
+            </a>
           </p>
           <.status
             label={agent.status_label}

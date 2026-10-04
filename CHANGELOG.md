@@ -645,3 +645,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - New setting: `KEYFLEET_CODE_NODE`, the code store's private address. The
   site now needs `KEYFLEET_HUB_SIGNING_KEY` in production as well. See
   `docs/code-store.md`.
+
+## 2026-10-04 — Agents' registry listings
+
+- Where KeyFleet lists an agent (a fleet's "Who's here" panel and keys, a
+  key's page, and the fleet's text page for agents), a "Registry listing" link
+  appears when the agent has listed itself in the agent registry through the
+  sign-in server. The link is kept as each of the agent's signed requests
+  names it, so a new or removed listing shows after its next one.
+- Sign-in reads the sign-in server's current answer, which names that listing.
+- regents is pinned at `4b46ba2a` and elixir-utils at `f30b2f2`, where wallet
+  receipts are the one way agents sign in.

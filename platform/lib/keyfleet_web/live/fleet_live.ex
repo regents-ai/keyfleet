@@ -288,6 +288,9 @@ defmodule KeyfleetWeb.FleetLive do
             <span :for={shard <- key.shards} id={"fleet-key-shard-#{shard.wallet}"}>
               <%= if shard.name do %>
                 {shard.name} · {shard.status_label}
+                <a :if={shard.registry_url} href={shard.registry_url} target="_blank" rel="noopener">
+                  Registry listing
+                </a>
               <% else %>
                 Shard {RegentFormat.short_address(shard.wallet)}
               <% end %>

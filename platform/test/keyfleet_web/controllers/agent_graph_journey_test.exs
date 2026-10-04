@@ -1294,15 +1294,14 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
             keyId: claims["key_id"],
             receiptExpiresAt:
               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-            requiredHeaders:
-              Siwa.required_authenticated_request_headers(payload["body"], :wallet),
+            requiredHeaders: Siwa.required_authenticated_request_headers(payload["body"]),
             requiredCoveredComponents:
               Siwa.required_authenticated_request_components(
                 payload["headers"],
-                payload["body"],
-                :wallet
+                payload["body"]
               ),
             coveredComponents: covered,
+            agentRegistration: nil,
             principal: %{
               kind: "wallet",
               wallet_address: claims["sub"],

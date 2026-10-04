@@ -14,16 +14,27 @@ defmodule Keyfleet.Actors.Agent do
   A smart wallet's (`:erc1271`, `:erc6492`) proves it only on the chain it was
   checked on, and KeyFleet's keys are on Ethereum, so a smart wallet counts
   only when it signed in on Ethereum.
+
+  `registry_url` is the wallet's listing in the agent registry, as SIWA names
+  it, or nil when the agent has none.
   """
   @enforce_keys [:wallet_address, :chain_id, :verification_method, :audience]
-  defstruct [:wallet_address, :chain_id, :verification_method, :audience, :credential_ref]
+  defstruct [
+    :wallet_address,
+    :chain_id,
+    :verification_method,
+    :audience,
+    :credential_ref,
+    :registry_url
+  ]
 
   @type t :: %__MODULE__{
           wallet_address: String.t(),
           chain_id: 1 | 8453,
           verification_method: :eoa_recovery | :erc1271 | :erc6492,
           audience: String.t(),
-          credential_ref: String.t() | nil
+          credential_ref: String.t() | nil,
+          registry_url: String.t() | nil
         }
 
   def valid?(%__MODULE__{

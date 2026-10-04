@@ -12,6 +12,7 @@ defmodule Keyfleet.Agents do
       define :ensure_profile, action: :ensure_profile
       define :get_my_profile, action: :get_my_profile, not_found_error?: false
       define :edit_my_profile, action: :edit_my_profile
+      define :note_registry, action: :note_registry
       define :agents_here, action: :here_in_fleet, args: [:fleet_id]
       define :agents_by_wallets, action: :by_wallets, args: [:wallets]
       define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
@@ -109,13 +110,17 @@ defmodule Keyfleet.Agents do
     |> Keyfleet.Count.of()
   end
 
+  # The profile notes the agent's registry listing whenever its signed
+  # request names a different one.
   defp with_profile(actor, fun) do
-    case get_my_profile(actor: actor) do
-      {:ok, nil} -> {:ok, nil}
-      {:ok, profile} -> fun.(profile)
-      {:error, error} -> {:error, error}
+    with {:ok, profile} when not is_nil(profile) <- get_my_profile(actor: actor),
+         {:ok, profile} <- registry(profile, actor) do
+      fun.(profile)
     end
   end
+
+  defp registry(%{registry_url: url} = profile, %{registry_url: url}), do: {:ok, profile}
+  defp registry(profile, actor), do: note_registry(profile, actor: actor)
 
   defp write(action, profile, fleet_id, arguments, actor) do
     CheckIn

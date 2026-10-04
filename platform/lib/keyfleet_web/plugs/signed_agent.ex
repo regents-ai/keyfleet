@@ -159,6 +159,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           "requiredHeaders" => required_headers,
           "requiredCoveredComponents" => required_components,
           "coveredComponents" => covered_components,
+          "agentRegistration" => registration,
           "principal" =>
             %{
               "kind" => "wallet",
@@ -169,19 +170,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         } = data,
         _context
       )
-      when map_size(data) == 10 and map_size(principal) == 4 and is_binary(expires) and
+      when map_size(data) == 11 and map_size(principal) == 4 and is_binary(expires) and
              is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
-    actor = %Agent{
-      wallet_address: wallet,
-      chain_id: chain_id,
-      verification_method: Map.fetch!(@verification_methods, method),
-      audience: "keyfleet",
-      credential_ref: credential_ref(conn)
-    }
-
-    admit(conn, actor)
+    with {:ok, registry_url} <- registry_url(registration) do
+      admit(conn, %Agent{
+        wallet_address: wallet,
+        chain_id: chain_id,
+        verification_method: Map.fetch!(@verification_methods, method),
+        audience: "keyfleet",
+        credential_ref: credential_ref(conn),
+        registry_url: registry_url
+      })
+    end
   end
 
   def accept(_conn, _data, _context), do: invalid_principal()
@@ -195,6 +197,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp invalid_principal, do: {:error, %{reason: :invalid_principal}}
+
+  # The wallet's listing in the agent registry, which SIWA names when the
+  # agent made one through it.
+  defp registry_url(nil), do: {:ok, nil}
+  defp registry_url(%{"registryUrl" => "https://" <> _ = url}), do: {:ok, url}
+  defp registry_url(_registration), do: invalid_principal()
 
   # A smart wallet proven on Base says nothing about the same address on
   # Ethereum, where the keys are. Signing in again on Base can't fix it, so the

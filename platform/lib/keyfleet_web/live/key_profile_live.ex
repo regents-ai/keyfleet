@@ -243,6 +243,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp shard_agent(assigns) do
     ~H"""
     {@shard.agent.name} · {@shard.agent.harness}
+    <a
+      :if={@shard.agent.registry_url}
+      href={@shard.agent.registry_url}
+      target="_blank"
+      rel="noopener"
+    >
+      Registry listing
+    </a>
     <CheckIns.status
       id={"key-profile-check-in-#{@shard.wallet}"}
       class="key-profile-status"

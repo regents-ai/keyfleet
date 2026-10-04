@@ -219,6 +219,7 @@ defmodule Keyfleet.Keys.Profile do
     %{
       name: agent.name,
       harness: agent.declared_harness,
+      registry_url: agent.registry_url,
       status: agent.current_status,
       status_updated_at: agent.status_updated_at,
       check_in: %{status: status, label: label},

@@ -25,9 +25,10 @@ defmodule Keyfleet.Agents.AgentProfile do
       ]
 
       change set_attribute(:wallet_address, actor(:wallet_address))
+      change set_attribute(:registry_url, actor(:registry_url))
       upsert? true
       upsert_identity :unique_wallet
-      upsert_fields []
+      upsert_fields [:registry_url]
       return_skipped_upsert? true
     end
 
@@ -37,10 +38,19 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     # The identity an agent presents to the key owners it works for: its name,
-    # what it runs on, and what it says it is doing and since when. Nothing
-    # else leaves here.
+    # what it runs on, what it says it is doing and since when, and its
+    # listing in the agent registry. Nothing else leaves here.
     read :public_profile do
-      prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
+      prepare build(
+                select: [
+                  :id,
+                  :name,
+                  :declared_harness,
+                  :current_status,
+                  :status_updated_at,
+                  :registry_url
+                ]
+              )
     end
 
     # The agents holding an active shard of one of the fleet's keys, with
@@ -55,7 +65,7 @@ defmodule Keyfleet.Agents.AgentProfile do
         fleet_id = Ash.Query.get_argument(query, :fleet_id)
 
         query
-        |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
+        |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address, :registry_url])
         |> Ash.Query.load(
           key: %{fleet_id: fleet_id},
           check_ins: Ash.Query.filter(Keyfleet.Agents.CheckIn, fleet_id == ^fleet_id)
@@ -97,7 +107,16 @@ defmodule Keyfleet.Agents.AgentProfile do
         :current_status
       ]
 
+      change set_attribute(:registry_url, actor(:registry_url))
       change Keyfleet.Agents.Changes.TrackProfileActivity
+    end
+
+    # The agent's listing in the agent registry, as its latest signed request
+    # names it.
+    update :note_registry do
+      atomic_upgrade_with :get_my_profile
+      accept []
+      change set_attribute(:registry_url, actor(:registry_url))
     end
   end
 
@@ -106,7 +125,7 @@ defmodule Keyfleet.Agents.AgentProfile do
       authorize_if always()
     end
 
-    policy action([:ensure_profile, :get_my_profile, :edit_my_profile]) do
+    policy action([:ensure_profile, :get_my_profile, :edit_my_profile, :note_registry]) do
       authorize_if Keyfleet.Checks.AgentActor
     end
 
@@ -131,6 +150,12 @@ defmodule Keyfleet.Agents.AgentProfile do
       constraints: [min_length: 1, max_length: 120]
 
     attribute :avatar, :string, public?: true, constraints: [max_length: 2048]
+
+    attribute :registry_url, :string do
+      public? true
+      writable? false
+      constraints match: ~r/\Ahttps:\/\/\S+\z/, max_length: 2048
+    end
 
     attribute :declared_harness, :string,
       allow_nil?: false,
