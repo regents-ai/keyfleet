@@ -71,9 +71,12 @@ Give the worktree its own `MIX_TEST_PARTITION` and a unique `PORT`. Install
 locked Mix and npm dependencies, then run `mix assets.build`. A prepared test database can be
 created with `MIX_ENV=test mix ecto.create`.
 
-Run the disposable test server with that partition and port:
+Run the disposable test server with that partition and port. It answers over
+https, with a certificate made once for localhost:
 
 ```sh
+mkdir -p tmp/cert
+test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem
 env MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix run --no-halt -e 'Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :auto)'
 ```
 

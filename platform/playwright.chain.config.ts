@@ -19,7 +19,7 @@ import {defineConfig, devices} from "@playwright/test"
 // fleets.
 const port = process.env.PORT || "4002"
 const partition = `${process.env.MIX_TEST_PARTITION ?? ""}_fleet_map`
-const baseURL = `http://127.0.0.1:${port}`
+const baseURL = `https://localhost:${port}`
 
 // Workers inherit the cookie from the main process, which makes it first.
 process.env.KEYFLEET_BROWSER_COOKIE ??= randomBytes(24).toString("hex")
@@ -36,18 +36,23 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   reporter: "line",
+  // The server's certificate is one it made for itself.
   use: {
     baseURL,
+    ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   webServer: {
     command: [
+      "mkdir -p tmp/cert",
+      "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       `${env} mix ecto.create --quiet`,
       `${env} mix keyfleet.setup_local_auth`,
       `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!(); Keyfleet.TestChainNode.start!()'`,
     ].join(" && "),
     url: `${baseURL}/`,
+    ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 180_000,
   },

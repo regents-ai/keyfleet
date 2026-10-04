@@ -9,9 +9,20 @@ port = String.to_integer(System.get_env("PORT", "4002"))
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :keyfleet, KeyfleetWeb.Endpoint,
-  url: [host: "127.0.0.1", port: port],
-  http: [ip: {127, 0, 0, 1}, port: port],
-  check_origin: ["http://127.0.0.1:#{port}"],
+  # The browser-test server answers over https, as the site does, so every
+  # browser keeps the sign-in cookie, which is only ever sent securely. The
+  # certificate is made for localhost with OpenSSL before the server starts
+  # (playwright.config.ts); Chrome and Safari can't read the one
+  # `mix phx.gen.cert` makes.
+  url: [host: "localhost", port: port, scheme: "https"],
+  https: [
+    ip: {127, 0, 0, 1},
+    port: port,
+    cipher_suite: :strong,
+    certfile: Path.expand("../tmp/cert/localhost.pem", __DIR__),
+    keyfile: Path.expand("../tmp/cert/localhost_key.pem", __DIR__)
+  ],
+  check_origin: ["https://localhost:#{port}"],
   secret_key_base: "ylCJZnscmD6l7Ykq52GK0o6GrbPmb8374FAcei9yvkWU1ww5Nv+S2v/Z7ihcqZd2",
   server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 

@@ -139,13 +139,16 @@ config :keyfleet, :notebooks,
   hub_timeout_ms: 30_000
 
 # A sign-in lasts 30 days: the cookie expires then, and
-# `Keyfleet.Accounts.SessionAuthority` reads this same limit.
+# `Keyfleet.Accounts.SessionAuthority` reads this same limit. The `__Host-`
+# name makes the browser keep the cookie to this exact host, secure and for
+# every path, so a page on a fleet's notebook host can never set or replace it.
+# Chrome and Firefox keep it from http://localhost too; Safari only over https.
 config :keyfleet, :session_options,
   store: :cookie,
-  key: "_keyfleet_key",
+  key: "__Host-keyfleet",
   signing_salt: "OLoeAaio",
   same_site: "Lax",
-  secure: false,
+  secure: true,
   http_only: true,
   max_age: 30 * 24 * 60 * 60
 

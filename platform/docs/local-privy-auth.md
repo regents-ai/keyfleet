@@ -37,7 +37,7 @@ mix keyfleet.setup_local_auth
 mix phx.server
 ```
 
-Open `http://localhost:4000/account` and use **Sign In**. `localhost` is the address to use; there is no separate setup for any other spelling of it. Sign out from the account control to verify both the local session and Privy session are cleared.
+Open `http://localhost:4000/account` and use **Sign In**. `localhost` is the address to use; there is no separate setup for any other spelling of it. The sign-in cookie is only ever sent securely: Chrome and Firefox keep it from `http://localhost`, Safari keeps it only over https, so sign in locally with Chrome or Firefox. Sign out from the account control to verify both the local session and Privy session are cleared.
 
 The setup task refuses production mode, non-loopback database hosts, and database names that do not end in `_dev` or `_test`. It prepares the protected local `platform_human_users` fixture and applies the current schema only to that guarded local database. It is not a production setup path.
 

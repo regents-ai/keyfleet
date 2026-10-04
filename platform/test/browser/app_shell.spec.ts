@@ -134,7 +134,7 @@ test("anonymous Sign In stays separate from the brand link", async ({page}) => {
 })
 
 test("a signed-in account shows its account menu", async ({page}) => {
-  const ashOrigin = "http://127.0.0.1:4002"
+  const ashOrigin = "https://localhost:4002"
   const hashedBridge = "privy_bridge-0123456789abcdef0123456789abcdef.js"
   expect(
     matchesAuthenticatedPrivyBridgeUrl(

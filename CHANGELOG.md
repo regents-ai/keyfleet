@@ -616,3 +616,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - regents is pinned at `fed09882` (Regents v123) and elixir-utils at
   `de5c6c7`, the sign-in library that also accepts agents on Ethereum.
+
+## 2026-10-04 — Sign-in cookie kept to keyfleet.ai alone
+
+- The sign-in cookie is now `__Host-keyfleet`: the browser keeps it secure, for
+  every path and for keyfleet.ai alone, so a page on a fleet's notebook host
+  can't set or replace it. Everyone signs in once more after this release.
+- Local servers use the same cookie. Chrome and Firefox keep it from
+  http://localhost; Safari keeps it only over https, so the browser tests
+  run their server over https with a certificate made for localhost.

@@ -1013,23 +1013,18 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     end
   end
 
-  test "session cookies are HTTP-only locally and secure under production options", %{conn: conn} do
-    original = Application.fetch_env!(:keyfleet, :session_options)
-    on_exit(fn -> Application.put_env(:keyfleet, :session_options, original) end)
+  # A page on a fleet's notebook host runs code agents wrote. A `__Host-`
+  # cookie is one the browser lets only this exact host set, so that code can
+  # never plant a sign-in here: the browser holds it to Secure, Path=/ and no
+  # Domain, and drops it otherwise.
+  test "the sign-in cookie is a __Host- cookie, secure and HTTP-only", %{conn: conn} do
+    cookie = conn |> init_test_session(%{}) |> csrf_bootstrap() |> session_cookie()
 
-    local_cookie = conn |> init_test_session(%{}) |> csrf_bootstrap() |> session_cookie()
-    assert local_cookie =~ "; HttpOnly"
-    refute String.downcase(local_cookie) =~ "; secure"
-
-    Application.put_env(
-      :keyfleet,
-      :session_options,
-      Keyword.merge(original, secure: true, http_only: true)
-    )
-
-    secure_cookie = build_conn() |> init_test_session(%{}) |> csrf_bootstrap() |> session_cookie()
-    assert secure_cookie =~ "; HttpOnly"
-    assert String.downcase(secure_cookie) =~ "; secure"
+    assert cookie =~ ~r/^__Host-keyfleet=/
+    assert cookie =~ "; path=/"
+    assert cookie =~ "; secure"
+    assert cookie =~ "; HttpOnly"
+    refute cookie =~ ~r/; domain=/i
   end
 
   test "STALE_LOGOUT_REVOKES: an unverifiable bearer revokes the bound lineage it was offered for" do
@@ -1231,7 +1226,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
         options
       )
 
-    put_req_cookie(build_conn(), "_keyfleet_key", cookie)
+    put_req_cookie(build_conn(), "__Host-keyfleet", cookie)
   end
 
   defp unrelated_lineage, do: fresh_claim().lineage
@@ -1324,7 +1319,9 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     do: %{conn | private: Map.delete(conn.private, :plug_skip_csrf_protection)}
 
   defp session_cookie(conn) do
-    conn |> get_resp_header("set-cookie") |> Enum.find(&String.contains?(&1, "_keyfleet_key"))
+    conn
+    |> get_resp_header("set-cookie")
+    |> Enum.find(&String.starts_with?(&1, "__Host-keyfleet="))
   end
 
   defp flush_test_messages do

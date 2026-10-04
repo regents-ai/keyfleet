@@ -115,7 +115,7 @@ defmodule KeyfleetWeb.BoundaryTest do
       |> Keyword.fetch!(:keyfleet)
       |> Keyword.fetch!(KeyfleetWeb.Endpoint)
 
-    port = endpoint_config |> Keyword.fetch!(:http) |> Keyword.fetch!(:port)
-    assert Keyword.fetch!(endpoint_config, :check_origin) == ["http://127.0.0.1:#{port}"]
+    port = endpoint_config |> Keyword.fetch!(:https) |> Keyword.fetch!(:port)
+    assert Keyword.fetch!(endpoint_config, :check_origin) == ["https://localhost:#{port}"]
   end
 end

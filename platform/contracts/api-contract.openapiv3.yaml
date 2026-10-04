@@ -932,7 +932,7 @@ components:
       scheme: bearer
       bearerFormat: Privy access token
     privyIdentityToken: {type: apiKey, in: header, name: privy-id-token}
-    cookieSession: {type: apiKey, in: cookie, name: _keyfleet_key}
+    cookieSession: {type: apiKey, in: cookie, name: __Host-keyfleet}
     csrfToken: {type: apiKey, in: header, name: x-csrf-token}
     siwaReceipt:
       type: apiKey

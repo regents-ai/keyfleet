@@ -1,6 +1,6 @@
 import {defineConfig, devices} from "@playwright/test"
 
-const baseURL = `http://127.0.0.1:${process.env.PORT || "4002"}`
+const baseURL = `https://localhost:${process.env.PORT || "4002"}`
 
 export default defineConfig({
   testDir: "./test/browser",
@@ -27,8 +27,10 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   globalTeardown: "./test/browser/support/remove_browser_account.ts",
+  // The server's certificate is one it made for itself.
   use: {
     baseURL,
+    ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
@@ -38,12 +40,15 @@ export default defineConfig({
   // KEYFLEET_BROWSER_TEST, which would open the port before the server is ready.
   webServer: {
     command: [
+      "mkdir -p tmp/cert",
+      "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       "MIX_ENV=test mix ecto.create --quiet",
       "MIX_ENV=test mix keyfleet.setup_local_auth",
       "MIX_ENV=test mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()'",
       "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
     ].join(" && "),
     url: `${baseURL}/`,
+    ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 120_000,
   },

@@ -204,7 +204,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "cookieSession" => %{
                "type" => "apiKey",
                "in" => "cookie",
-               "name" => "_keyfleet_key"
+               "name" => "__Host-keyfleet"
              },
              "csrfToken" => %{
                "type" => "apiKey",

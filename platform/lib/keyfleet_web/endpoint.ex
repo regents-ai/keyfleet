@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :keyfleet
 
   # A connected mount reads the cookie the socket handshake carried, so the
-  # transport must decode it with the same options the request plug runs with.
-  @session_options {Application, :fetch_env!, [:keyfleet, :session_options]}
+  # transport decodes it with the same options the request plug runs with.
+  @session_options Application.compile_env!(:keyfleet, :session_options)
 
   # A stylesheet, an icon or an image may be opened directly, and the browser
   # then reads it as a page. These say what a page from this address may do,
@@ -85,7 +85,7 @@ defmodule KeyfleetWeb.Endpoint do
     json_decoder: Phoenix.json_library()
 
   plug Plug.Head
-  plug :runtime_session
+  plug Plug.Session, @session_options
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
@@ -112,10 +112,4 @@ defmodule KeyfleetWeb.Endpoint do
 
   defp allow_page_tools(conn, _opts),
     do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
-
-  # Production sets the cookie's `secure` flag in runtime.exs, after this module compiles.
-  defp runtime_session(conn, _opts) do
-    options = Application.fetch_env!(:keyfleet, :session_options)
-    Plug.Session.call(conn, Plug.Session.init(options))
-  end
 end
