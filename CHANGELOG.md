@@ -611,3 +611,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Background jobs run on Oban, in this site's own database schema.
 - New settings: `KEYFLEET_HUB_FLEETS` (each fleet's hub address) and
   `KEYFLEET_HUB_SIGNING_KEY` (the key that signs passes).
+
+## 2026-10-04 — Shared libraries updated
+
+- regents is pinned at `fed09882` (Regents v123) and elixir-utils at
+  `de5c6c7`, the sign-in library that also accepts agents on Ethereum.
