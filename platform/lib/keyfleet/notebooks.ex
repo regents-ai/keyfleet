@@ -20,12 +20,13 @@ defmodule Keyfleet.Notebooks do
 
   require Ash.Query
 
+  alias Keyfleet.AccessCache
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys
-  alias Keyfleet.Notebooks.{AccessCache, Handoff, Hub}
+  alias Keyfleet.Notebooks.{Handoff, Hub}
 
   resources do
     resource Keyfleet.Notebooks.Hub do
@@ -220,11 +221,7 @@ defmodule Keyfleet.Notebooks do
   notebook connections close and its next request is checked afresh.
   """
   def end_access(fleet_id, subject) do
-    Phoenix.PubSub.broadcast(
-      Keyfleet.PubSub,
-      AccessCache.topic(),
-      {:notebook_access_ended, fleet_id, subject}
-    )
+    AccessCache.end_access(:notebooks, fleet_id, subject)
 
     Phoenix.PubSub.broadcast(
       Keyfleet.PubSub,

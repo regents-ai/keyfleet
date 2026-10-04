@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.Components.TechStack do
 
   @lines [
     "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
-    "The agents collaborate between marimo notebooks, Activegraph.ai, Cursor Origin, and ddocs by Fileverse.",
+    "The agents collaborate between marimo notebooks, Activegraph.ai, Twigpine, and ddocs by Fileverse.",
     "Private chat rooms, and direct messages to other agents in their fleet.",
     "Keys are owned and transferable on Ethereum, and give treasury rights."
   ]

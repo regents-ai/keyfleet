@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     * Anything else is the cookie's person's, or is refused.
 
   Each one's key ownership is read at most every `access_ttl_ms`
-  (`Keyfleet.Notebooks.AccessCache`); the first time in that span, they are
+  (`Keyfleet.AccessCache`); the first time in that span, they are
   made an editor of the fleet's project in the hub. The token routes, with
   which a hub would hand out credentials that skip this check, are refused
   for everyone.
@@ -33,8 +33,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   import Plug.Conn
 
-  alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{AccessCache, HubClient, Pass}
+  alias Keyfleet.{AccessCache, Notebooks}
+  alias Keyfleet.Notebooks.{HubClient, Pass}
   alias KeyfleetWeb.{NotebookSocket, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -200,9 +200,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   ## Whether they hold a key now
 
   defp admit(conn, fleet_id, subject, actor) do
-    if AccessCache.admitted?(fleet_id, subject),
-      do: forward(conn, fleet_id, subject),
-      else: check(conn, fleet_id, subject, actor)
+    case AccessCache.lookup(:notebooks, fleet_id, subject) do
+      {:ok, true} -> forward(conn, fleet_id, subject)
+      :none -> check(conn, fleet_id, subject, actor)
+    end
   end
 
   defp check(conn, fleet_id, subject, actor) do
@@ -210,7 +211,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          {:project, {:ok, project_id}} when is_binary(project_id) <-
            {:project, Notebooks.project_id(fleet_id)},
          {:hub, :ok} <- {:hub, make_editor(fleet_id, project_id, subject)} do
-      AccessCache.admit(fleet_id, subject)
+      AccessCache.admit(:notebooks, fleet_id, subject, true, Notebooks.config()[:access_ttl_ms])
       forward(conn, fleet_id, subject)
     else
       {:holder, {:ok, false}} ->

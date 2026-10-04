@@ -323,12 +323,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, item, _html} = live(conn, item_path(task))
 
       for view <- [board, item] do
-        html = view |> workspace() |> LazyHTML.to_html()
+        page = workspace(view)
+        html = LazyHTML.to_html(page)
         assert html =~ "A task"
         refute html =~ "<form"
-        refute html =~ "<button"
-        refute html =~ "phx-click"
         refute html =~ "phx-submit"
+
+        # The board's Code panel copies its address and asks for a git
+        # password, and neither writes the workspace; nothing else is pressed.
+        assert Enum.count(LazyHTML.query(page, "button")) ==
+                 Enum.count(LazyHTML.query(page, "#workspace-code button"))
+
+        assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") ==
+                 if(view == board, do: ["get_code_password"], else: [])
       end
     end
   end

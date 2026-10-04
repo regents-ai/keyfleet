@@ -101,4 +101,4 @@ for a shard, sign in".
 ## Open, not blocking the build
 
 - The Regents Safe address on Ethereum (the Base Safe is `0x9fa152B0…669a3e`).
-- Restricting marimo, Cursor Origin and ddocs (Sean is looking into it).
+- Restricting marimo and ddocs (Sean is looking into it). The fleets' code is our own Twigpine store, reached only through KeyFleet (decision 16 a, 2026-10-04).

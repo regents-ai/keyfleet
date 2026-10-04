@@ -16,17 +16,27 @@ defmodule Keyfleet.Notebooks.Pass do
 
   @doc "A pass for `subject` to the fleet's hub."
   def mint(fleet_id, subject) do
+    sign(
+      %{"aud" => audience(fleet_id), "sub" => subject, "email" => Notebooks.email(subject)},
+      Notebooks.config()[:pass_ttl_seconds]
+    )
+  end
+
+  @doc """
+  `claims` signed by this site's first key, with its issuer and a life of
+  `ttl_seconds` from now. The fleets' code store takes passes signed the same
+  way (`Keyfleet.Code.Pass`).
+  """
+  def sign(claims, ttl_seconds) do
     [signer | _published] = keys()
     now = System.system_time(:second)
 
-    claims = %{
-      "iss" => Notebooks.config()[:issuer],
-      "aud" => audience(fleet_id),
-      "sub" => subject,
-      "email" => Notebooks.email(subject),
-      "iat" => now,
-      "exp" => now + Notebooks.config()[:pass_ttl_seconds]
-    }
+    claims =
+      Map.merge(claims, %{
+        "iss" => Notebooks.config()[:issuer],
+        "iat" => now,
+        "exp" => now + ttl_seconds
+      })
 
     {_fields, token} =
       signer

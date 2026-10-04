@@ -58,6 +58,8 @@ defmodule Keyfleet.MixProject do
       {:oban, "~> 2.24"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.
       {:mint_web_socket, "~> 1.0"},
+      # The code gateway streams git's request to the fleets' code store.
+      {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.9.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
@@ -142,7 +144,8 @@ defmodule Keyfleet.MixProject do
         # Shards add two: the ShardEvent and EditsRestriction records, each with its domain.
         # Mutes add two: their domain and the OwnMute check.
         # Notebooks add two: the Hub and Handoff records, each with its domain.
-        "xref graph --label compile-connected --fail-above 43",
+        # Code adds two: the Repository and Push records, each with its domain.
+        "xref graph --label compile-connected --fail-above 45",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

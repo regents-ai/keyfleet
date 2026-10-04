@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Code
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -21,6 +22,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias KeyfleetWeb.{
     AccountLive,
+    CodePassword,
     FleetLive,
     KeyMap,
     KeyProfileLive,
@@ -58,6 +60,8 @@ defmodule KeyfleetWeb.ShellLive do
        verified_connections: %Read{},
        verified_connections_notice: nil,
        notebooks_notice: nil,
+       code_password: nil,
+       code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
        fleet: nil,
@@ -74,7 +78,7 @@ defmodule KeyfleetWeb.ShellLive do
        naming_form: nil,
        workspace: nil,
        workspace_params: nil,
-       workspace_topic: nil,
+       workspace_topics: nil,
        workspace_refresh?: false,
        proposals: nil,
        proposals_params: nil,
@@ -186,6 +190,43 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
+  # A git password for the fleet's code, for a holder of one of its keys; it
+  # ends when this sign-in does.
+  def handle_event("get_code_password", _params, socket) do
+    with %Human{} = actor <- human_actor(socket),
+         {:ok, %{password: password, expires_at: expires_at}} <-
+           CodePassword.for_person(
+             actor,
+             socket.assigns.session_lineage,
+             socket.assigns.workspace.fleet_id
+           ) do
+      {:noreply,
+       assign(socket,
+         code_password: %{
+           password: password,
+           until: Calendar.strftime(expires_at, "%-d %B at %H:%M UTC")
+         },
+         code_notice: nil
+       )}
+    else
+      nil ->
+        {:noreply, assign(socket, code_notice: "Sign in to get a git password.")}
+
+      {:error, :signed_out} ->
+        {:noreply, assign(socket, code_notice: "Sign in to get a git password.")}
+
+      {:error, :not_holder} ->
+        {:noreply,
+         assign(socket, code_notice: "Only holders of this fleet’s keys can use its code.")}
+
+      {:error, _error} ->
+        {:noreply,
+         assign(socket,
+           code_notice: "A git password can’t be made right now. Try again in a minute."
+         )}
+    end
+  end
+
   def handle_event(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 
@@ -265,6 +306,15 @@ defmodule KeyfleetWeb.ShellLive do
 
   def handle_info(:refresh_workspace = message, socket),
     do: WorkspaceLive.handle_info(message, socket)
+
+  # Changes sent to the open fleet's code show in its workspace a moment later.
+  def handle_info(
+        {:code_pushed, fleet_id},
+        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+      ),
+      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+
+  def handle_info({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
 
   # A notice that the open fleet's proposal records or balances changed is a
   # nudge to read its page again, once, a moment later, like the workspace's.
@@ -381,6 +431,8 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :workspace}
           board={@workspace}
           notebooks_notice={@notebooks_notice}
+          code_password={@code_password}
+          code_notice={@code_notice}
         />
         <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
         <ProposalsLive.list
@@ -512,7 +564,12 @@ defmodule KeyfleetWeb.ShellLive do
        when route_id in [:workspace, :workspace_item] do
     socket
     |> follow_workspace(fleet_id)
-    |> assign(workspace_params: params, notebooks_notice: nil)
+    |> assign(
+      workspace_params: params,
+      notebooks_notice: nil,
+      code_password: nil,
+      code_notice: nil
+    )
     |> WorkspaceLive.read_workspace()
   end
 
@@ -523,13 +580,14 @@ defmodule KeyfleetWeb.ShellLive do
     |> assign(workspace: nil, workspace_params: nil)
   end
 
+  # The workspace's log, and changes sent to the fleet's code.
   defp follow_workspace(socket, fleet_id) do
-    topic = fleet_id && Graph.head_topic(fleet_id)
+    topics = if fleet_id, do: [Graph.head_topic(fleet_id), Code.topic(fleet_id)], else: []
 
-    if connected?(socket) and topic != socket.assigns.workspace_topic do
-      stop_listening(socket.assigns.workspace_topic)
-      start_listening(topic)
-      assign(socket, :workspace_topic, topic)
+    if connected?(socket) and topics != socket.assigns.workspace_topics do
+      Enum.each(List.wrap(socket.assigns.workspace_topics), &stop_listening/1)
+      Enum.each(topics, &start_listening/1)
+      assign(socket, :workspace_topics, topics)
     else
       socket
     end

@@ -235,6 +235,32 @@
   gap: 1rem;
 }
 
+.workspace-side {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+/* The code's address and a git password: long, unbroken, copied whole. */
+.workspace-code-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.workspace-code-line code {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.workspace-code-password {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 @media (max-width: 60rem) {
   .workspace-grid {
     grid-template-columns: minmax(0, 1fr);

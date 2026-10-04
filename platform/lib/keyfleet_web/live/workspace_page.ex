@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   alone, never from the fleet's writer.
 
   `board/3` is the fleet's items a page at a time, the most recently changed
-  first, beside its latest changes; `item/4` is one item with its fields, its
+  first, beside its latest changes and the changes sent to its code
+  (`Keyfleet.Code`); `item/4` is one item with its fields, its
   links a page at a time and its history a page at a time. Each answers
   `seen`, the log and the place in it the read tables had reached when the
   page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
@@ -15,7 +16,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias Keyfleet.Fleets
+  alias Keyfleet.{Code, Fleets}
   alias Keyfleet.Graph
   alias Keyfleet.Rooms
   alias KeyfleetWeb.NotFoundError
@@ -156,7 +157,11 @@ defmodule KeyfleetWeb.WorkspacePage do
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &line(&1, titles))
+        activity: Enum.map(activity, &line(&1, titles)),
+        code: %{
+          clone_url: Code.clone_url(fleet_id),
+          pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push/1)
+        }
       }
     else
       {:missing, name} ->
@@ -589,6 +594,19 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # The log stamps every event in UTC.
+  defp push(push) do
+    %{
+      id: push.id,
+      token_id: push.token_id,
+      what: moved(push.ref),
+      at: Calendar.strftime(push.pushed_at, "%-d %B %Y at %H:%M UTC")
+    }
+  end
+
+  defp moved("refs/heads/" <> branch), do: "changes to " <> branch
+  defp moved("refs/tags/" <> tag), do: "the tag " <> tag
+  defp moved(ref), do: ref
+
   defp at(timestamp) do
     {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
     Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")

@@ -21,6 +21,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :any, required: true, doc: "the workspace as read, or `:unreadable`"
   attr :notebooks_notice, :string, default: nil
+  attr :code_password, :map, default: nil, doc: "the git password just made, and until when"
+  attr :code_notice, :string, default: nil
 
   def board(%{board: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-page" />|
 
@@ -132,19 +134,28 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </nav>
         </section>
 
-        <section
-          class="workspace-panel workspace-activity"
-          aria-labelledby="workspace-activity-title"
-        >
-          <h2 id="workspace-activity-title">Latest changes</h2>
-          <p :if={@board.activity == []}>Nothing has changed here yet.</p>
-          <ol :if={@board.activity != []} id="workspace-activity" class="workspace-lines">
-            <li :for={line <- @board.activity} data-seq={line.seq}>
-              <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
-              <p class="workspace-detail">{line.at}</p>
-            </li>
-          </ol>
-        </section>
+        <div class="workspace-side">
+          <section
+            class="workspace-panel workspace-activity"
+            aria-labelledby="workspace-activity-title"
+          >
+            <h2 id="workspace-activity-title">Latest changes</h2>
+            <p :if={@board.activity == []}>Nothing has changed here yet.</p>
+            <ol :if={@board.activity != []} id="workspace-activity" class="workspace-lines">
+              <li :for={line <- @board.activity} data-seq={line.seq}>
+                <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
+                <p class="workspace-detail">{line.at}</p>
+              </li>
+            </ol>
+          </section>
+
+          <.code
+            fleet_id={@board.fleet_id}
+            code={@board.code}
+            password={@code_password}
+            notice={@code_notice}
+          />
+        </div>
       </div>
     </article>
     """
@@ -278,6 +289,58 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
       </div>
     </article>
+    """
+  end
+
+  attr :fleet_id, :string, required: true
+  attr :code, :map, required: true
+  attr :password, :map, default: nil
+  attr :notice, :string, default: nil
+
+  # The fleet's shared code: where git copies it from, a password for a key
+  # holder, and the changes sent lately. The code itself never shows here.
+  defp code(assigns) do
+    ~H"""
+    <section id="workspace-code" class="workspace-panel" aria-labelledby="workspace-code-title">
+      <h2 id="workspace-code-title">Code</h2>
+      <p>
+        One shared place for this fleet’s code. Holders of its keys, and their agents, copy it with git and send their changes back. Only they can read it.
+      </p>
+      <div class="workspace-code-line">
+        <code id="workspace-code-address">{@code.clone_url}</code>
+        <Regent.Primitives.copy_button id="workspace-code-address-copy" text={@code.clone_url}>
+          Copy
+        </Regent.Primitives.copy_button>
+      </div>
+      <Regent.Primitives.button
+        id="get-code-password"
+        variant="secondary"
+        phx-click="get_code_password"
+      >
+        Get a git password
+      </Regent.Primitives.button>
+      <div :if={@password} id="code-password" class="workspace-code-password">
+        <p>
+          Your git password, good until {@password.until}. Use it with any user name. It stops working sooner if you sign out or no longer hold a key.
+        </p>
+        <div class="workspace-code-line">
+          <code id="code-password-text">{@password.password}</code>
+          <Regent.Primitives.copy_button id="code-password-copy" target="code-password-text">
+            Copy
+          </Regent.Primitives.copy_button>
+        </div>
+      </div>
+      <p :if={@notice} id="code-notice" class="workspace-notebooks-notice">{@notice}</p>
+
+      <h3>Sent lately</h3>
+      <p :if={@code.pushes == []} id="code-pushes-empty">No changes have been sent yet.</p>
+      <ol :if={@code.pushes != []} id="code-pushes" class="workspace-lines">
+        <li :for={push <- @code.pushes} data-push={push.id}>
+          <p><.key fleet_id={@fleet_id} token_id={push.token_id} /> sent {push.what}</p>
+          <p class="workspace-detail">{push.at}</p>
+        </li>
+      </ol>
+    </section>
     """
   end
 
@@ -423,11 +486,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   @doc "One read, a moment later, when the log has moved past what the page last read."
   def refresh_soon(socket, seen, run_id, watermark) do
-    if moved?(seen, run_id, watermark) and not socket.assigns.workspace_refresh? do
+    if moved?(seen, run_id, watermark), do: refresh_later(socket), else: socket
+  end
+
+  @doc "One read, a moment later, answering every notice that comes meanwhile."
+  def refresh_later(socket) do
+    if socket.assigns.workspace_refresh? do
+      socket
+    else
       Process.send_after(self(), :refresh_workspace, @workspace_refresh_after)
       assign(socket, :workspace_refresh?, true)
-    else
-      socket
     end
   end
 

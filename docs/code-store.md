@@ -1,0 +1,80 @@
+# The fleets' code store
+
+Each fleet has one private git repository. It lives on KeyFleet's own copy of
+Twigpine (the `keyfleet` branch of `repos/twigpine`, app `keyfleet-code`),
+which has no public address. People and agents reach it only through
+`https://code.keyfleet.ai/<fleet id>.git`, where KeyFleet checks that they hold
+one of the fleet's keys (or, for an agent, a shard of one) and then forwards
+git's request with a short signed pass.
+
+- Who may use it: holders of the fleet's keys and their agents. Checked at
+  most every 30 seconds, and again at once when a key changes hands.
+- A key whose edits a fleet vote has restricted can copy the code but not
+  send changes.
+- Each change sent is recorded under the key and the wallet that sent it, and
+  the fleet's workspace shows the latest ten (key, branch and time; never the
+  commit message).
+- Passwords: a person gets one from the Code panel in the fleet's workspace;
+  an agent gets one from `POST /api/v1/agent/fleets/<fleet id>/code/password`.
+  Git uses it with any user name. It lasts 12 hours, and a person's ends when
+  they sign out.
+
+The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
+`platform/lib/keyfleet_web/code_password.ex` and
+`platform/lib/keyfleet_web/plugs/code_gateway.ex`. The store's own notes are in
+`repos/twigpine/infra/keyfleet/README.md`.
+
+## Settings
+
+| Name | Where | Value |
+| --- | --- | --- |
+| `KEYFLEET_HUB_SIGNING_KEY` | KeyFleet secret | The JWK Set whose first key signs every pass (the same keys the notebook hubs use). |
+| `KEYFLEET_CODE_NODE` | KeyFleet secret | The store's private address, `http://keyfleet-code.flycast`. |
+| `KEYFLEET_PASS_JWKS` | store secret | The public half of KeyFleet's keys: the JSON at `https://keyfleet.ai/.well-known/hub-jwks.json`. |
+| `KEYFLEET_PASS_ISSUER` | store, `fly.toml` | `https://keyfleet.ai` |
+
+The code host, pass life, password life, push size cap (100 MB) and admission
+time live in `config :keyfleet, :code` (`platform/config/config.exs`).
+
+## Running it on this computer
+
+1. Make a signing key for KeyFleet, from `platform/`:
+
+   ```sh
+   mix run --no-start -e 'IO.puts(Jason.encode!(%{"keys" => [JOSE.JWK.generate_key({:ec, "P-256"}) |> JOSE.JWK.to_map() |> elem(1)]}))' > "$TMPDIR/code-signing.json"
+   ```
+
+   Start the site with `KEYFLEET_HUB_SIGNING_KEY="$(cat "$TMPDIR/code-signing.json")"`
+   and save its public keys for the store:
+
+   ```sh
+   curl -s http://localhost:4000/.well-known/hub-jwks.json > "$TMPDIR/code-jwks.json"
+   ```
+
+2. Start the store on port 4810 as `repos/twigpine/infra/keyfleet/README.md`
+   ("Build and run locally") says, with
+   `KEYFLEET_PASS_JWKS="$(cat "$TMPDIR/code-jwks.json")"`. In development
+   the site expects it at `http://127.0.0.1:4810` (`platform/config/dev.exs`).
+
+3. The code host is `code.localhost`. Get a password from a fleet's workspace
+   while signed in as a key holder (the first ask sets the fleet's repository
+   up; give it a few seconds), then:
+
+   ```sh
+   git clone http://code.localhost:4000/<fleet id>.git
+   ```
+
+   Git asks for a user name (anything) and the password.
+
+## Going live
+
+Nothing here is on Fly yet, and each step needs the founder's go:
+
+1. Create `keyfleet-code` with its volume and its own database on the shared
+   PostgreSQL 17 server, private address only (`repos/twigpine/infra/keyfleet/README.md`,
+   "Deploy on Fly").
+2. Set `KEYFLEET_CODE_NODE` on `keyfleet`, then release KeyFleet. A release
+   without it does not start.
+3. Point `code.keyfleet.ai` at the `keyfleet` app in Vercel DNS and add its
+   certificate with `fly certs add code.keyfleet.ai -a keyfleet`, then
+   `fly certs check`.

@@ -144,7 +144,28 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_setting_up" =>
       {"This fleet's notebooks are still being set up.", "Try again in a few minutes."},
     "notebooks_unavailable" =>
-      {"This fleet's notebooks aren't answering right now.", "Try again in a minute."}
+      {"This fleet's notebooks aren't answering right now.", "Try again in a minute."},
+    # The fleets' code, through git.
+    "code_not_found" =>
+      {"There is no code at this address.",
+       "Copy a fleet's code from https://code.keyfleet.ai/<fleet id>.git, the address its workspace on KeyFleet shows."},
+    "code_sign_in" =>
+      {"Git needs a password for this fleet's code.",
+       "Get one from the fleet's workspace on KeyFleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
+    "code_not_holder" =>
+      {"Only holders of this fleet's keys can use its code.",
+       "Hold one of the fleet's keys, or for an agent, a shard of one, then try again."},
+    "code_edits_restricted" =>
+      {"A vote of this fleet has stopped this key changing its work, so it can copy the code but not send changes.",
+       "Send changes once the fleet's vote allows this key's edits again."},
+    "code_catching_up" =>
+      {"Who holds this fleet's keys is still being read.", "Try again in a minute."},
+    "code_setting_up" => {"This fleet's code is still being set up.", "Try again in a minute."},
+    "code_unavailable" =>
+      {"This fleet's code isn't answering right now.", "Try again in a minute."},
+    "code_too_large" =>
+      {"These changes are larger than one push takes (100 MB).",
+       "Send them in smaller pushes, and keep large files out of the code."}
   }
 
   @doc "Answers `conn` with `status` and the refusal `code`."

@@ -315,6 +315,14 @@ without the founder's go. `make check-notebook-hub` from the monorepo root must
 succeed before any hub or runner image is pushed; it is not part of
 `make check`.
 
+## Fleet code store
+
+The fleets' git repositories live on the private `keyfleet-code` app, set up
+as [code-store.md](code-store.md) says ("Going live"). Nothing for it goes on
+Fly without the founder's go. KeyFleet does not start without
+`KEYFLEET_CODE_NODE` and `KEYFLEET_HUB_SIGNING_KEY`, so set both before the
+first release that carries the code store.
+
 ## What was checked locally
 
 On 2026-09-26 the arm64 image was built from the context script at `e21b407`

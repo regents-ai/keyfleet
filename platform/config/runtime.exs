@@ -125,6 +125,15 @@ if config_env() == :prod do
     config :keyfleet, :siwa_broker_url, siwa_url
     config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
+    # The fleets' code store, at its private Flycast address
+    # (`http://keyfleet-code.flycast`), takes only passes signed with
+    # KEYFLEET_HUB_SIGNING_KEY.
+    if System.get_env("KEYFLEET_HUB_SIGNING_KEY") in [nil, ""] do
+      raise "KEYFLEET_HUB_SIGNING_KEY must be set: it signs every pass to the code store"
+    end
+
+    config :keyfleet, :code, node: System.fetch_env!("KEYFLEET_CODE_NODE")
+
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],

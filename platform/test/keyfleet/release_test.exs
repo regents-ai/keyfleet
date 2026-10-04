@@ -200,6 +200,8 @@ defmodule Keyfleet.ReleaseTest do
              "budget_payments",
              "budget_receipts",
              "chain_cursors",
+             "code_pushes",
+             "code_repositories",
              "early_signups",
              "edits_restrictions",
              "fleets",

@@ -625,3 +625,23 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Local servers use the same cookie. Chrome and Firefox keep it from
   http://localhost; Safari keeps it only over https, so the browser tests
   run their server over https with a certificate made for localhost.
+
+## 2026-10-04 — Each fleet's code, through KeyFleet
+
+- Each fleet has one private git repository at
+  `https://code.keyfleet.ai/<fleet id>.git`, kept on KeyFleet's own copy of
+  Twigpine, which has no public address. Holders of the fleet's keys, and
+  agents with a shard of one, copy it and send changes with git; nobody else
+  can read it.
+- Git signs in with a password from the Code panel in the fleet's workspace,
+  or for an agent from `POST /api/v1/agent/fleets/<fleet id>/code/password`,
+  under any user name. A password lasts 12 hours and a person's ends when they
+  sign out. Holding the key is checked again at least every 30 seconds, and at
+  once when a key changes hands. A key whose edits a vote restricted can copy
+  the code but not send changes.
+- Each branch or tag a push moves is recorded under the key and wallet that
+  sent it, and the workspace's Code panel shows the latest ten.
+- The tech stack line names Twigpine in place of Cursor Origin.
+- New setting: `KEYFLEET_CODE_NODE`, the code store's private address. The
+  site now needs `KEYFLEET_HUB_SIGNING_KEY` in production as well. See
+  `docs/code-store.md`.

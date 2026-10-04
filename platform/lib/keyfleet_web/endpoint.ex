@@ -23,6 +23,10 @@ defmodule KeyfleetWeb.Endpoint do
   # hub; nothing below sees its requests.
   plug KeyfleetWeb.Plugs.NotebookGateway
 
+  # The code host likewise: only git, only through the gateway to the fleets'
+  # code store.
+  plug KeyfleetWeb.Plugs.CodeGateway
+
   plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 

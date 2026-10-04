@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.ApiContractTest do
     assert Map.keys(contract["paths"]) |> Enum.sort() == [
              "/api/agents/v1/me",
              "/api/agents/v1/pair",
+             "/api/v1/agent/fleets/{fleet_id}/code/password",
              @graph <> "archive",
              @graph <> "changes",
              @graph <> "create",

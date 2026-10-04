@@ -88,3 +88,7 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# The fleets' code answers at code.localhost here, from a code store run on
+# this computer (see docs/code-store.md).
+config :keyfleet, :code, host: "code.localhost", node: "http://127.0.0.1:4810"

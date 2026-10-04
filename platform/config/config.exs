@@ -56,7 +56,8 @@ config :keyfleet,
     Keyfleet.Graph,
     Keyfleet.WalletSteps,
     Keyfleet.Early,
-    Keyfleet.Notebooks
+    Keyfleet.Notebooks,
+    Keyfleet.Code
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -109,7 +110,8 @@ config :keyfleet, Oban,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
-  queues: [default: 5, notebook_hubs: 1],
+  # Making fleets' repositories in the code store waits on it too.
+  queues: [default: 5, notebook_hubs: 1, code_store: 2],
   cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
   pruner: [max_age: {7, :days}],
   lifeline: [rescue_after: {10, :minutes}]
@@ -137,6 +139,24 @@ config :keyfleet, :notebooks,
   session_max_age: 12 * 60 * 60,
   max_request_bytes: 32 * 1024 * 1024,
   hub_timeout_ms: 30_000
+
+# Each fleet's code lives in one private repository in KeyFleet's own code
+# store, a Twigpine node at the private address `node` (runtime.exs reads
+# KEYFLEET_CODE_NODE), reached only through https://<host>/<fleet id>.git.
+# Requests to the store carry a pass signed with the notebook hubs' keys,
+# lasting `pass_ttl_seconds`. A holder is checked again at most every
+# `access_ttl_ms`, a git password lasts `password_ttl_seconds`, and one push
+# carries at most `max_pack_bytes`.
+config :keyfleet, :code,
+  host: "code.keyfleet.ai",
+  public_port: 443,
+  node: nil,
+  pass_ttl_seconds: 120,
+  access_ttl_ms: 30_000,
+  password_ttl_seconds: 12 * 60 * 60,
+  max_pack_bytes: 100 * 1024 * 1024,
+  node_timeout_ms: 120_000,
+  req_options: []
 
 # A sign-in lasts 30 days: the cookie expires then, and
 # `Keyfleet.Accounts.SessionAuthority` reads this same limit. The `__Host-`

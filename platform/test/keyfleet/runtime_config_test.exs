@@ -23,7 +23,10 @@ defmodule Keyfleet.RuntimeConfigTest do
       "SECRET_KEY_BASE",
       "KEYFLEET_APP_SURFACES",
       "KEYFLEET_RPC_URL",
-      "KEYFLEET_SIWA_URL"
+      "KEYFLEET_SIWA_URL",
+      "KEYFLEET_HUB_FLEETS",
+      "KEYFLEET_HUB_SIGNING_KEY",
+      "KEYFLEET_CODE_NODE"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -311,6 +314,8 @@ defmodule Keyfleet.RuntimeConfigTest do
   defp put_production_role do
     System.put_env("KEYFLEET_DEPLOYMENT_ROLE", "production")
     System.put_env("KEYFLEET_SIWA_URL", "https://siwa.example.test")
+    System.put_env("KEYFLEET_HUB_SIGNING_KEY", ~s({"keys":[]}))
+    System.put_env("KEYFLEET_CODE_NODE", "http://code-store.example.test")
   end
 
   defp put_pooled_url do

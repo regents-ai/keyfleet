@@ -5,6 +5,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.Code
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -394,6 +395,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
                Keys.topic("fibonacci_cascade"),
                Rooms.fleet_topic("fibonacci_cascade"),
                Graph.head_topic("fibonacci_cascade"),
+               Code.topic("fibonacci_cascade"),
                Proposals.topic("fibonacci_cascade")
              ])
   end
