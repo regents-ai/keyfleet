@@ -40,15 +40,15 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                 keyId: claims["key_id"],
                 receiptExpiresAt:
                   DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-                requiredHeaders:
-                  Siwa.required_authenticated_request_headers(payload["body"], :wallet),
+                requiredHeaders: Siwa.required_authenticated_request_headers(payload["body"]),
                 requiredCoveredComponents:
                   Siwa.required_authenticated_request_components(
                     payload["headers"],
-                    payload["body"],
-                    :wallet
+                    payload["body"]
                   ),
                 coveredComponents: covered,
+                agentRegistration: nil,
+                agentBook: nil,
                 principal: %{
                   kind: "wallet",
                   wallet_address: claims["sub"],
@@ -380,6 +380,14 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                {chain_id, String.to_existing_atom(method)}
     end
 
+    # What the sign-in server says beyond the fields KeyFleet uses is its own.
+    assert {:ok, %{assigns: %{agent_actor: %{wallet_address: ^wallet}}}} =
+             KeyfleetWeb.Plugs.SignedAgent.accept(
+               conn,
+               Map.merge(good, %{"agentRegistration" => nil, "agentBook" => nil}),
+               nil
+             )
+
     invalid =
       [
         Map.put(good, "verified", false),
@@ -388,8 +396,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
         Map.delete(good, "verificationMethod"),
         Map.put(good, "verificationMethod", "passkey"),
         signed_in.(10, "eoa_recovery"),
-        Map.put(good, "principal", nil),
-        Map.put(good, "extra", true)
+        Map.put(good, "principal", nil)
       ] ++
         Enum.map(
           [

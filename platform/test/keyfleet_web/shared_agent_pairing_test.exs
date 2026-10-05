@@ -43,6 +43,8 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
         "code" => "http_envelope_valid",
         "data" => %{
           "verified" => true,
+          "agentRegistration" => nil,
+          "agentBook" => nil,
           "principal" => %{
             "kind" => "wallet",
             "wallet_address" => @wallet,

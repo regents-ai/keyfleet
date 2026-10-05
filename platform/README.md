@@ -19,9 +19,9 @@ transaction itself.
 ## Shared dependencies
 
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
-repository: elixir-utils `de5c6c7` (`privy`, `agent_access`, `siwa`, `format`,
+repository: elixir-utils `f30b2f2` (`privy`, `agent_access`, `siwa`, `format`,
 `chain`, `credo_ash`), design-system `42a439b` (`regent_ui`) and regents
-`fed09882` (`identity`, `agents`). `mix deps.get` fetches them with everything
+`d1216640` (`identity`, `agents`). `mix deps.get` fetches them with everything
 else, and the release image is built from the same commits.
 
 To move a pin, change its ref in `mix.exs`, run `mix deps.update <name>` for each

@@ -146,6 +146,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       end)
   end
 
+  # The fields KeyFleet acts on; anything else the sign-in server says is
+  # its own.
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(
         conn,
@@ -159,18 +161,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           "requiredHeaders" => required_headers,
           "requiredCoveredComponents" => required_components,
           "coveredComponents" => covered_components,
-          "principal" =>
-            %{
-              "kind" => "wallet",
-              "wallet_address" => wallet,
-              "chain_id" => chain_id,
-              "audience" => "keyfleet"
-            } = principal
-        } = data,
+          "principal" => %{
+            "kind" => "wallet",
+            "wallet_address" => wallet,
+            "chain_id" => chain_id,
+            "audience" => "keyfleet"
+          }
+        },
         _context
       )
-      when map_size(data) == 10 and map_size(principal) == 4 and is_binary(expires) and
-             is_map_key(@verification_methods, method) and
+      when is_binary(expires) and is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
     actor = %Agent{

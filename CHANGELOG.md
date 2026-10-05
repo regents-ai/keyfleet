@@ -645,3 +645,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - New setting: `KEYFLEET_CODE_NODE`, the code store's private address. The
   site now needs `KEYFLEET_HUB_SIGNING_KEY` in production as well. See
   `docs/code-store.md`.
+
+## 2026-10-04 — Agent sign-in reads only what it uses
+
+- Agent sign-in checks the fields of the sign-in server's answer that
+  KeyFleet acts on and leaves the rest alone, so a field the sign-in server
+  adds (such as how the wallet was proven, or its registry listing) no longer
+  turns every agent away.
+- regents is pinned at `d1216640` and elixir-utils at `f30b2f2`, where wallet
+  receipts are the one way agents sign in.
