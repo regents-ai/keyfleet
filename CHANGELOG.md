@@ -654,3 +654,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   turns every agent away.
 - regents is pinned at `d1216640` and elixir-utils at `f30b2f2`, where wallet
   receipts are the one way agents sign in.
+
+## 2026-10-04 — Agents' registry listings and World ID mark
+
+- On a key's page, each agent holding a shard shows a "Registry listing" link when it has listed itself in the agent registry, and "Human-backed (World ID)" when a World ID-verified person stands behind its wallet. Both are read live from the sign-in server when the page opens, with `SIWA_ACTIVITY_READ_TOKEN`; nothing is kept here and the person's number is never shown.
+- An agent's own profile answer (`join/status` and `profile/update`) carries `registry_listing` and `human_backed`, from the sign-in server's answer to that same request.
+- Who's here, the key list and the fleet pages show neither.

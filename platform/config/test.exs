@@ -39,6 +39,11 @@ config :regent_agents,
   siwa: [url: siwa_url, audience: "keyfleet"],
   req_options: [plug: {Req.Test, RegentAgents.Broker}]
 
+# An agent's listing is answered by `Req.Test`.
+config :keyfleet, Keyfleet.AgentListing,
+  read_token: "test-activity-read-token",
+  req_options: [plug: {Req.Test, Keyfleet.AgentListing}]
+
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,

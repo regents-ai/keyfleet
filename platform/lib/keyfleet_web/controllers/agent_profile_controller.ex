@@ -29,8 +29,14 @@ defmodule KeyfleetWeb.AgentProfileController do
 
   defp invalid_profile(conn), do: Refusal.json(conn, 422, "invalid_profile")
 
+  # The agent's page in the agent registry and whether a World ID-verified
+  # person stands behind it, as the sign-in server said for this request.
   defp respond_profile(conn, profile) do
+    %{registry_url: registry_url, human_backed?: human_backed?} = conn.assigns.agent_listing
+
     json(conn, %{
+      registry_listing: registry_url,
+      human_backed: human_backed?,
       profile:
         Map.take(profile, [
           :id,

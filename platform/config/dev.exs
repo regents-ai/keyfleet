@@ -12,6 +12,9 @@ siwa_url = System.get_env("KEYFLEET_SIWA_URL", "http://localhost:4100")
 config :keyfleet, :siwa_broker_url, siwa_url
 config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
+# The local sign-in server's activity read token, when it has one.
+config :keyfleet, Keyfleet.AgentListing, read_token: System.get_env("SIWA_ACTIVITY_READ_TOKEN")
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

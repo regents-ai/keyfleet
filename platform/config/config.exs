@@ -18,6 +18,10 @@ config :regent_agents,
   account: {Keyfleet.Agents, :account},
   ash_domains: [RegentAgents]
 
+# An agent's registry listing and World ID mark, read live from the sign-in
+# server with its activity read token (SIWA_ACTIVITY_READ_TOKEN).
+config :keyfleet, Keyfleet.AgentListing, read_token: nil, req_options: []
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks

@@ -38,6 +38,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     epoch!(12, 2, wallet("e"))
     epoch!(3, 1, wallet("e"))
     epoch!(20, 1, wallet("e"))
+
+    # Agents have no registry listing unless a test says otherwise.
+    Req.Test.stub(Keyfleet.AgentListing, fn conn ->
+      Req.Test.json(conn, %{data: %{activity: [], agentRegistration: nil, agentBook: nil}})
+    end)
+
     :ok
   end
 
@@ -105,6 +111,69 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     assert text(view, "#key-profile-check-in-#{wallet("c")}") ==
              "Check-ins working · last check-in just now · no contributions yet"
+  end
+
+  test "an agent holding a shard shows its registry listing and World ID mark, read live",
+       %{conn: conn} do
+    listed = wallet("c")
+    plain = wallet("d")
+    human_id = "0x" <> String.duplicate("7", 64)
+
+    for {wallet, name} <- [{listed, "Orbit runner"}, {plain, "Plain runner"}] do
+      Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"},
+        actor: %Actors.Agent{
+          wallet_address: wallet,
+          chain_id: 8_453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        }
+      )
+
+      ChainHelpers.issue_shard!(@fleet, 12, wallet)
+    end
+
+    Req.Test.stub(Keyfleet.AgentListing, fn conn ->
+      assert conn.request_path == "/api/shared/siwa/activity"
+
+      assert Plug.Conn.get_req_header(conn, "authorization") == [
+               "Bearer test-activity-read-token"
+             ]
+
+      {:ok, raw, conn} = Plug.Conn.read_body(conn)
+      %{"wallet_address" => wallet, "since" => _since} = Jason.decode!(raw)
+
+      Req.Test.json(conn, %{
+        data:
+          if wallet == listed do
+            %{
+              activity: [],
+              agentRegistration: %{
+                agentId: "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:97609",
+                tokenId: "97609",
+                profileUrl: "https://siwa.regents.sh/agents/registrations/1",
+                registryUrl: "https://www.8004scan.io/agents/base/97609"
+              },
+              agentBook: %{humanId: human_id}
+            }
+          else
+            %{activity: [], agentRegistration: nil, agentBook: nil}
+          end
+      })
+    end)
+
+    {:ok, view, _html} = live(conn, @path <> "?key=12")
+    render_async(view)
+
+    assert has_element?(
+             view,
+             "#key-profile-registry-#{listed}[href='https://www.8004scan.io/agents/base/97609']",
+             "Registry listing"
+           )
+
+    assert has_element?(view, "#key-profile-human-#{listed}", "Human-backed (World ID)")
+    refute has_element?(view, "#key-profile-registry-#{plain}")
+    refute has_element?(view, "#key-profile-human-#{plain}")
+    refute render(view) =~ human_id
   end
 
   # A status is only as honest as the time it is read at, so an open page

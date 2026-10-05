@@ -26,7 +26,8 @@ defmodule Keyfleet.RuntimeConfigTest do
       "KEYFLEET_SIWA_URL",
       "KEYFLEET_HUB_FLEETS",
       "KEYFLEET_HUB_SIGNING_KEY",
-      "KEYFLEET_CODE_NODE"
+      "KEYFLEET_CODE_NODE",
+      "SIWA_ACTIVITY_READ_TOKEN"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -316,6 +317,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("KEYFLEET_SIWA_URL", "https://siwa.example.test")
     System.put_env("KEYFLEET_HUB_SIGNING_KEY", ~s({"keys":[]}))
     System.put_env("KEYFLEET_CODE_NODE", "http://code-store.example.test")
+    System.put_env("SIWA_ACTIVITY_READ_TOKEN", "activity-read-token")
   end
 
   defp put_pooled_url do

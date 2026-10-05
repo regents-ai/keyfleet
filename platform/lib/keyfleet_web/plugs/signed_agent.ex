@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.AgentListing
   alias Keyfleet.Agents.CheckInStatus
 
   @join_path "/api/v1/agent/join/status"
@@ -147,7 +148,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   # The fields KeyFleet acts on; anything else the sign-in server says is
-  # its own.
+  # its own. The agent's registry listing and World ID mark are kept for this
+  # request only, so the agent's own profile answer can show them.
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(
         conn,
@@ -161,6 +163,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           "requiredHeaders" => required_headers,
           "requiredCoveredComponents" => required_components,
           "coveredComponents" => covered_components,
+          "agentRegistration" => registration,
+          "agentBook" => book,
           "principal" => %{
             "kind" => "wallet",
             "wallet_address" => wallet,
@@ -181,7 +185,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       credential_ref: credential_ref(conn)
     }
 
-    admit(conn, actor)
+    conn
+    |> assign(:agent_listing, AgentListing.from_sign_in(registration, book))
+    |> admit(actor)
   end
 
   def accept(_conn, _data, _context), do: invalid_principal()

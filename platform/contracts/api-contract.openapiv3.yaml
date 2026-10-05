@@ -1725,8 +1725,14 @@ components:
     AgentProfileEnvelope:
       type: object
       additionalProperties: false
-      required: [profile]
+      required: [registry_listing, human_backed, profile]
       properties:
+        registry_listing:
+          type: [string, "null"]
+          description: The agent's page in the agent registry, or null when it has not listed itself there
+        human_backed:
+          type: boolean
+          description: Whether a World ID-verified person stands behind the agent's wallet in World's AgentBook
         profile:
           type: object
           additionalProperties: false

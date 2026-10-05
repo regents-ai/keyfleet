@@ -74,6 +74,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, %{signed | body: changed}).status == 401
     first = send_request(c, signed)
     assert first.status == 200
+    assert %{"registry_listing" => nil, "human_backed" => false} = first.body
     profile = first.body["profile"]
     assert profile["wallet_address"] == c.signer.address
     assert profile["name"] == "Wallet agent"
@@ -346,6 +347,8 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       "requiredHeaders" => [],
       "requiredCoveredComponents" => [],
       "coveredComponents" => [],
+      "agentRegistration" => nil,
+      "agentBook" => nil,
       "principal" => %{
         "kind" => "wallet",
         "wallet_address" => wallet,
@@ -380,13 +383,31 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                {chain_id, String.to_existing_atom(method)}
     end
 
-    # What the sign-in server says beyond the fields KeyFleet uses is its own.
-    assert {:ok, %{assigns: %{agent_actor: %{wallet_address: ^wallet}}}} =
-             KeyfleetWeb.Plugs.SignedAgent.accept(
-               conn,
-               Map.merge(good, %{"agentRegistration" => nil, "agentBook" => nil}),
-               nil
-             )
+    # The agent's registry listing and World ID mark are kept for the request,
+    # without the person's number. What the sign-in server says beyond the
+    # fields KeyFleet uses is its own.
+    listed =
+      Map.merge(good, %{
+        "agentRegistration" => %{
+          "agentId" => "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:97609",
+          "tokenId" => "97609",
+          "profileUrl" => "https://siwa.regents.sh/agents/registrations/1",
+          "registryUrl" => "https://www.8004scan.io/agents/base/97609"
+        },
+        "agentBook" => %{"humanId" => "0x" <> String.duplicate("1", 64)},
+        "somethingNew" => true
+      })
+
+    assert {:ok,
+            %{
+              assigns: %{
+                agent_actor: %{wallet_address: ^wallet},
+                agent_listing: %{
+                  registry_url: "https://www.8004scan.io/agents/base/97609",
+                  human_backed?: true
+                }
+              }
+            }} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, listed, nil)
 
     invalid =
       [
