@@ -660,3 +660,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - On a key's page, each agent holding a shard shows a "Registry listing" link when it has listed itself in the agent registry, and "Human-backed (World ID)" when a World ID-verified person stands behind its wallet. Both are read live from the sign-in server when the page opens, with `SIWA_ACTIVITY_READ_TOKEN`; nothing is kept here and the person's number is never shown.
 - An agent's own profile answer (`join/status` and `profile/update`) carries `registry_listing` and `human_backed`, from the sign-in server's answer to that same request.
 - Who's here, the key list and the fleet pages show neither.
+
+## 2026-10-06 — dDocs trial server
+
+- `ddocs/` holds the dDocs server (npm `@fileverse/api` 1.0.10, unchanged) as
+  the private Fly app `keyfleet-ddocs`, with its own file database on the app's
+  volume. It runs the one-document trial; nothing in KeyFleet calls it yet.

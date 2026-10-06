@@ -1,0 +1,8 @@
+{
+  "name": "keyfleet-ddocs",
+  "private": true,
+  "description": "The dDocs server, unchanged, as KeyFleet runs it.",
+  "dependencies": {
+    "@fileverse/api": "1.0.10"
+  }
+}

@@ -1,0 +1,44 @@
+# The dDocs server for KeyFleet's one-document trial. Reachable only over Fly's
+# private network (Flycast): it has no public IP. Deploy with
+# `fly deploy --no-public-ips`; see README.md in this folder.
+app = "keyfleet-ddocs"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8001"
+  IP = "0.0.0.0"
+  # Publishing (encrypt, upload, record on Gnosis) runs inside the server.
+  INLINE_WORKER = "true"
+  # The server's own database, a file on this app's volume.
+  DB_PATH = "/data/ddocs.sqlite"
+
+# Private service only: Flycast routes keyfleet-ddocs.flycast:80 to the server.
+[[services]]
+  protocol = "tcp"
+  internal_port = 8001
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 80
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "get"
+    path = "/ping"
+    protocol = "http"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[[mounts]]
+  source = "keyfleet_ddocs_data"
+  destination = "/data"
+  initial_size = "1gb"
