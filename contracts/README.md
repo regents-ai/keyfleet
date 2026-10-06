@@ -51,6 +51,11 @@ On hold or not yet done:
   default, and on Base refuses anything but the Regents Safe
   `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`.
 - Before any deploy: an outside audit and the founder's go.
+- `deployments/base.json` carries the final trait table's hash
+  (`0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`, eight
+  traits of sixteen values each, every trait's weights adding up to 1,000) and a
+  VRF subscription of 0, so a Base deployment is refused until the Regents
+  subscription id is written in.
 - Deferred until each fleet type is next: Fibonacci late-entry capture (a
   level that completes shares in income that was waiting before it) and the
   Cascade reserve of a level that never completes.

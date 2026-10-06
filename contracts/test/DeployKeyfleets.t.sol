@@ -31,6 +31,8 @@ contract DeployKeyfleetsTest is Test {
     address private constant BUYER = address(0xB0B);
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
+    /// @dev keccak256 of the final trait table, docs/still-pictures/table.json on keyfleet main 3119497.
+    bytes32 private constant FINAL_TRAIT_TABLE = 0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8;
 
     event RevealRequestFailed(uint256 indexed tokenId);
 
@@ -233,11 +235,12 @@ contract DeployKeyfleetsTest is Test {
         script.parseManifest(json, "Classic");
     }
 
-    /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a
-    /// zero subscription and a zero trait table until the operator writes in the subscription the
-    /// Safe owns and the final trait table's hash. Until then no fleet can be deployed; with both
-    /// written in, every other refusal passes for Classic, the fleet that opens first. Both take the
-    /// protocol treasury from the environment, never from the file.
+    /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane. The Base manifest
+    /// carries the final trait table's hash and a zero subscription until the operator writes in the
+    /// subscription the Safe owns, so until then no fleet can be deployed on Base; the anvil
+    /// manifest carries a zero trait table too. With them written in, every other refusal passes for
+    /// Classic, the fleet that opens first. Both take the protocol treasury from the environment,
+    /// never from the file.
     function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
         vm.setEnv("KEYFLEET_PROTOCOL_TREASURY", vm.toString(SAFE));
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
@@ -262,8 +265,8 @@ contract DeployKeyfleetsTest is Test {
         vm.chainId(BASE_CHAIN_ID);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
         script.deploy(base);
+        assertEq(base.traitTableHash, FINAL_TRAIT_TABLE, "The Base manifest carries the final trait table");
         base.vrf.subscriptionId = labSubscription;
-        base.traitTableHash = TRAIT_TABLE;
         Keyfleet release = script.deploy(base);
         assertGt(address(release).code.length, 0, "The Base manifest deploys");
         assertEq(release.PROTOCOL_TREASURY(), REGENTS_SAFE, "And sends its protocol share to the Regents Safe");
