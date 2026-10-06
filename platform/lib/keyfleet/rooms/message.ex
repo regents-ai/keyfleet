@@ -320,9 +320,10 @@ defmodule Keyfleet.Rooms.Message do
 
     read :in_room do
       public? false
+      argument :fleet_id, :string, allow_nil?: false
       argument :id, :uuid, allow_nil?: false
       argument :room_id, :uuid, allow_nil?: false
-      filter expr(id == ^arg(:id) and room_id == ^arg(:room_id))
+      filter expr(fleet_id == ^arg(:fleet_id) and id == ^arg(:id) and room_id == ^arg(:room_id))
       get? true
     end
 
@@ -378,9 +379,18 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   policies do
-    # Spec section 7: room history is public to read, and posting is gated.
+    # Spec section 7: the people and agents holding the fleet's keys, or a
+    # shard of one, read every room and thread of it. Anyone else reads only
+    # General and the keys' threads. Posting is for the keys alone.
     policy action_type(:read) do
-      authorize_if always()
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if expr(room.public)
+    end
+
+    # A room only the keys read is refused to anyone else, never read as empty.
+    policy action(:read_messages) do
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if Keyfleet.Rooms.Checks.PublicRoom
     end
 
     policy action([:send_message, :send_to_key, :note_room_named]) do

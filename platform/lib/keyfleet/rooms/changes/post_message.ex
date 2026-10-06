@@ -75,7 +75,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   defp answers_this_room?(nil, _room, _actor), do: true
 
   defp answers_this_room?(reply_to_id, room, actor),
-    do: Rooms.get_post_in_room!(reply_to_id, room.id, actor: actor) != nil
+    do: Rooms.get_post_in_room!(room.fleet_id, reply_to_id, room.id, actor: actor) != nil
 
   # Who the line is written as is read once more under the room's lock: a key
   # that changed hands since the policy looked leaves nothing to write as.

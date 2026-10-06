@@ -78,7 +78,7 @@ defmodule Keyfleet.ActivityTest do
         "object" => %{"id" => "note#9", "type" => "note"}
       })
 
-      %{items: items, cursor: nil} = Activity.page(@fleet, nil)
+      %{items: items, cursor: nil} = page(nil)
 
       assert Enum.map(items, & &1.kind) |> Enum.frequencies() == %{
                proposed: 3,
@@ -143,7 +143,7 @@ defmodule Keyfleet.ActivityTest do
         )
       end
 
-      %{items: first, cursor: cursor} = Activity.page(@fleet, nil)
+      %{items: first, cursor: cursor} = page(nil)
 
       # Two reads hand over four runs each; the ninth run needs a third read.
       assert Enum.map(first, &{&1.kind, &1.facts[:count]}) ==
@@ -177,7 +177,7 @@ defmodule Keyfleet.ActivityTest do
       })
 
       whole = walk(1)
-      %{items: [%{at: ^ahead}] = first, cursor: cursor} = Activity.page(@fleet, nil, limit: 1)
+      %{items: [%{at: ^ahead}] = first, cursor: cursor} = page(nil, limit: 1)
 
       # One of everything, each newer than the first page by place or time.
       Workspace.create(@fleet, "note", %{"title" => "Plates"})
@@ -190,7 +190,7 @@ defmodule Keyfleet.ActivityTest do
       ChainHelpers.issue_shard!(@fleet, 3, wallet("d"))
 
       assert walk(cursor, 1, [first]) == whole
-      assert length(Activity.page(@fleet, nil).items) > length(whole)
+      assert length(page(nil).items) > length(whole)
     end
   end
 
@@ -227,7 +227,7 @@ defmodule Keyfleet.ActivityTest do
     Workspace.edit(@fleet, task, %{"progress" => "done"})
     Workspace.link(@fleet, finding, goal, "contradicts")
 
-    %{items: items} = Activity.page(@fleet, nil)
+    %{items: items} = page(nil)
 
     assert [%{kind: :post, facts: %{excerpt: "For everyone", room: %{slug: "general"}}}] =
              Enum.filter(items, &(&1.kind in [:post, :posts]))
@@ -268,7 +268,7 @@ defmodule Keyfleet.ActivityTest do
     line!("general", at.(123))
     line!("general", at.(62))
 
-    %{items: items} = Activity.page(@fleet, nil)
+    %{items: items} = page(nil)
 
     assert Enum.map(items, &{&1.kind, &1.facts[:room][:slug], Map.get(&1.facts, :count, 1)}) ==
              chain_opening() ++
@@ -281,11 +281,22 @@ defmodule Keyfleet.ActivityTest do
                ]
   end
 
+  test "someone holding none of the fleet's keys sees only General's posts" do
+    owner = human("a")
+    post!(owner, "general", "For everyone")
+    post!(owner, "coding", "For the keys")
+
+    for actor <- [nil, human("e")] do
+      assert [%{facts: %{excerpt: "For everyone", room: %{slug: "general"}}}] =
+               for(%{kind: :post} = item <- page(nil, actor: actor).items, do: item)
+    end
+  end
+
   # A key's mint is its first ownership epoch, 1, and each transfer adds one.
   test "a key bought and then passed on is one sale and one change of hands" do
     epoch!(1, 2, "b")
 
-    %{items: items} = Activity.page(@fleet, nil)
+    %{items: items} = page(nil)
 
     assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
              [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
@@ -297,7 +308,7 @@ defmodule Keyfleet.ActivityTest do
     vote!(@fleet, 1, wallet("a"), false, [3])
     vote!(@fleet, 1, wallet("a"), nil, [2, 3])
 
-    %{items: items} = Activity.page(@fleet, nil)
+    %{items: items} = page(nil)
 
     assert [%{number: 1, yes: yes, no: no, withdrawn: withdrawn}] =
              for(%{kind: :votes, facts: facts} <- items, do: facts)
@@ -414,7 +425,7 @@ defmodule Keyfleet.ActivityTest do
     ChainHelpers.end_shard!(@fleet, 2, wallet("d"), wallet("a"))
 
     shards =
-      for %{kind: kind, facts: facts} <- Activity.page(@fleet, nil).items,
+      for %{kind: kind, facts: facts} <- page(nil).items,
           kind in [:shard_issued, :shard_ended],
           do: {kind, facts.token_id, facts.agent && facts.agent.name, facts[:stepped_down?]}
 
@@ -428,7 +439,7 @@ defmodule Keyfleet.ActivityTest do
     assert [%{expires_at: expires_at}] =
              for(
                %{kind: :shard_issued, facts: %{token_id: 1} = facts} <-
-                 Activity.page(@fleet, nil).items,
+                 page(nil).items,
                do: facts
              )
 
@@ -441,14 +452,14 @@ defmodule Keyfleet.ActivityTest do
     asset_details!(@fleet, wallet("d"), "BAR", 0)
     proposal!(@fleet, 1, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
     execution!(@fleet, 1, wallet("f"))
-    {one, _page} = queries_during(fn -> Activity.page(@fleet, nil) end)
+    {one, _page} = queries_during(fn -> page(nil) end)
 
     for number <- 2..5 do
       proposal!(@fleet, number, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
       execution!(@fleet, number, wallet("f"))
     end
 
-    {five, %{items: items}} = queries_during(fn -> Activity.page(@fleet, nil) end)
+    {five, %{items: items}} = queries_during(fn -> page(nil) end)
 
     assert five == one
 
@@ -471,7 +482,7 @@ defmodule Keyfleet.ActivityTest do
   defp walk(limit), do: walk(nil, limit, [])
 
   defp walk(cursor, limit, pages) do
-    %{items: items, cursor: next} = Activity.page(@fleet, cursor, limit: limit)
+    %{items: items, cursor: next} = page(cursor, limit: limit)
     assert length(items) in 1..limit
     pages = [items | pages]
     if next, do: walk(next, limit, pages), else: pages |> Enum.reverse() |> Enum.concat()
@@ -489,6 +500,10 @@ defmodule Keyfleet.ActivityTest do
 
   # What the setup's one key sale reads as.
   defp chain_opening, do: [{:sale, nil, 1}]
+
+  # A page as read by the holder of key 1, who reads every room.
+  defp page(cursor, opts \\ []),
+    do: Activity.page(@fleet, cursor, Keyword.put_new(opts, :actor, human("a")))
 
   defp post!(actor, slug, body) do
     Rooms.send_message!(

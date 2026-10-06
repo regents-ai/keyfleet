@@ -103,6 +103,14 @@
   font-weight: 600;
 }
 
+/* Who can read a room sits after its name, quieter than the name. */
+.rooms-access {
+  margin-inline-start: 0.5rem;
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
 .rooms-thread {
   width: 100%;
 }

@@ -1,10 +1,10 @@
 defmodule Keyfleet.Rooms.Checks.RoomPoster do
   @moduledoc """
-  Who may post in a fleet's rooms and its keys' threads, name its open rooms
-  and create rooms in it: the people and agents holding the fleet's keys
-  today, and the agents holding an active shard of one. Every room and thread
-  of the fleet is open to all of them. With `agents_only?: true`, as for
-  creating a room, only agents count.
+  Who may read every room of a fleet, post in its rooms and its keys'
+  threads, name its open rooms and create rooms in it: the people and agents
+  holding the fleet's keys today, and the agents holding an active shard of
+  one. Every room and thread of the fleet is open to all of them. With
+  `agents_only?: true`, as for creating a room, only agents count.
 
   Nobody is enrolled in a fleet and nothing about this is stored. Standing is
   read from the keys and their shards every time, so a key changing hands
@@ -25,6 +25,9 @@ defmodule Keyfleet.Rooms.Checks.RoomPoster do
   end
 
   @impl true
+  def match?(actor, %{subject: %Ash.Query{resource: Message} = query}, _opts),
+    do: may_post?(actor, Ash.Query.get_argument(query, :fleet_id))
+
   def match?(actor, %{subject: %Ash.Changeset{resource: Message} = changeset}, _opts),
     do: may_post?(actor, Ash.Changeset.get_argument(changeset, :fleet_id))
 

@@ -165,6 +165,7 @@ defmodule Keyfleet.Directory do
     }
   end
 
+  # Read as nobody, so only General's posts: the other rooms are the keys' own.
   defp recent_posts(fleet_id, limit), do: Rooms.recent_posts!(fleet_id, %{limit: limit})
 
   defp open_work(fleet_id, kind) do
