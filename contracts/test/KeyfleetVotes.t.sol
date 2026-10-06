@@ -15,10 +15,11 @@ import {MockToken} from "./KeyfleetIncome.t.sol";
 
 contract KeyfleetVotesTest is Test {
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
-    /// @dev Measured cost of voting ten Classic keys in one call, plus a fifth, rounded up.
-    uint256 private constant TEN_KEY_VOTE_CEILING = 1_199_000;
-    /// @dev Measured marginal cost of one more key in a vote, plus a fifth, rounded up.
-    uint256 private constant PER_KEY_VOTE_CEILING = 117_000;
+    /// @dev Measured cost of an agent voting ten Classic keys in one call through its shards, plus a
+    /// fifth, rounded up.
+    uint256 private constant TEN_KEY_VOTE_CEILING = 1_270_000;
+    /// @dev Measured marginal cost of one more key in an agent's vote, plus a fifth, rounded up.
+    uint256 private constant PER_KEY_VOTE_CEILING = 124_000;
 
     MockToken private usdc;
     MockVRFCoordinatorV2Plus private vrf;
@@ -40,7 +41,6 @@ contract KeyfleetVotesTest is Test {
         bytes32 digest,
         string text
     );
-    event VotingDelegateSet(address indexed owner, address indexed delegate);
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
     event VoteWithdrawn(uint256 indexed proposalId, address indexed caller, uint256[] tokenIds);
     event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
@@ -208,9 +208,9 @@ contract KeyfleetVotesTest is Test {
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open));
     }
 
-    /// @dev Invariant: proposing needs standing. The proposer names a key and must be its owner or
-    /// that owner's registered delegate, which is the same authorization voting applies. Standing is
-    /// not a vote.
+    /// @dev Invariant: proposing needs standing. The proposer names a key and must be allowed to vote
+    /// it: its owner, or a wallet holding an active shard of it while its agent voting is on, the
+    /// same authorization voting applies. Standing is not a vote.
     function test_proposingRequiresAKeyTheCallerMayVote() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -221,15 +221,16 @@ contract KeyfleetVotesTest is Test {
         votes.proposeDecision(0, "no key at all", bytes32(0));
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, 3));
         votes.proposeDecision(3, "a key nobody has bought", bytes32(0));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, carol));
         votes.proposeDecision(1, "somebody else's key", bytes32(0));
         vm.stopPrank();
 
-        vm.prank(_wallet(1));
-        votes.setVotingDelegate(carol);
+        vm.startPrank(_wallet(1));
+        fleet.SHARDS().issue(_ids(1), carol, 30);
+        vm.stopPrank();
         vm.prank(carol);
-        uint256 proposalId = votes.proposeDecision(1, "the delegate may propose", bytes32(0));
-        assertEq(votes.proposal(proposalId).proposer, carol, "the delegate is the proposer");
+        uint256 proposalId = votes.proposeDecision(1, "the key's agent may propose", bytes32(0));
+        assertEq(votes.proposal(proposalId).proposer, carol, "the agent is the proposer");
         assertEq(uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.None), "standing is not a vote");
     }
 
@@ -385,7 +386,7 @@ contract KeyfleetVotesTest is Test {
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "the borrowed votes approve it");
 
         vm.prank(mallory);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
         votes.withdrawVote(proposalId, _ids(1));
 
         vm.expectEmit(true, true, true, true, address(votes));
@@ -397,13 +398,14 @@ contract KeyfleetVotesTest is Test {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 5, 10));
         votes.execute(proposalId);
 
-        vm.prank(_wallet(2));
-        votes.setVotingDelegate(bob);
+        vm.startPrank(_wallet(2));
+        fleet.SHARDS().issue(_ids(2), bob, 30);
+        vm.stopPrank();
         vm.prank(bob);
         votes.withdrawVote(proposalId, _ids(2));
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(stored.yesVotes, 4, "a delegate withdraws for the holder too");
+        assertEq(stored.yesVotes, 4, "the key's agent withdraws for the holder too");
         assertEq(stored.noVotes, 0);
     }
 
@@ -446,18 +448,19 @@ contract KeyfleetVotesTest is Test {
         votes.withdrawVote(proposalId, _ids(1));
     }
 
-    /// @dev Invariant: an owner and their delegate share the one vote each key has. Either may set
-    /// or change it, whoever acted last decides it, and the tallies count the key once either way.
-    /// A delegate the owner replaced loses authority at once, and one id named twice in a call is
+    /// @dev Invariant: an owner and their key's agent share the one vote each key has. Either may
+    /// set or change it, whoever acted last decides it, and the tallies count the key once either
+    /// way. An agent whose shard ended loses authority at once, and one id named twice in a call is
     /// refused.
-    function test_anOwnerAndTheirDelegateShareOneVotePerKey() public {
+    function test_anOwnerAndTheirAgentShareOneVotePerKey() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         for (uint256 i = 0; i < 3; ++i) {
             _buy(fleet, carol);
         }
-        vm.prank(carol);
-        votes.setVotingDelegate(bob);
+        vm.startPrank(carol);
+        fleet.SHARDS().issue(_range(1, 3), bob, 30);
+        vm.stopPrank();
         uint256 proposalId = _propose(votes);
 
         vm.prank(bob);
@@ -471,88 +474,107 @@ contract KeyfleetVotesTest is Test {
         assertEq(stored.yesVotes + stored.noVotes, 1, "one key, one vote, whoever cast it");
         assertEq(stored.noVotes, 1, "the owner acted last");
 
-        vm.prank(carol);
-        votes.setVotingDelegate(dave);
+        vm.startPrank(carol);
+        fleet.SHARDS().end(_ids(2), bob);
+        vm.stopPrank();
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, carol));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, bob));
         votes.vote(proposalId, _ids(2), true);
-        vm.prank(dave);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, 1));
-        votes.vote(proposalId, _ids(1), false);
 
         uint256[] memory twice = new uint256[](2);
-        (twice[0], twice[1]) = (2, 2);
-        vm.prank(dave);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, 2));
+        (twice[0], twice[1]) = (3, 3);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, 3));
         votes.vote(proposalId, twice, true);
     }
 
-    /// @dev Invariant: financial authority is registered on chain and nowhere else. A delegate the
-    /// owner named may vote their keys; once the owner clears it, that address is a stranger again.
-    /// Nothing here moves a key, a reward or the owner's own right to vote.
-    function test_aRegisteredDelegateMayVoteAndAClearedOneMayNot() public {
+    /// @dev Invariant: the owner's agent-voting switch decides whether a key's agent may vote,
+    /// withdraw or propose; renewing stays open to the agent either way. A new owner starts with it
+    /// on.
+    function test_agentVotingOffStopsTheAgentVotingButNotRenewing() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 4);
-
-        uint256 first = _propose(votes);
-        vm.prank(_wallet(2));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
-        votes.vote(first, _ids(1), true);
-
-        vm.expectEmit(true, true, true, true, address(votes));
-        emit VotingDelegateSet(_wallet(1), bob);
-        vm.prank(_wallet(1));
-        votes.setVotingDelegate(bob);
-        assertEq(votes.votingDelegate(_wallet(1)), bob);
-
+        _buyMany(fleet, 3);
+        vm.startPrank(_wallet(2));
+        fleet.SHARDS().issue(_ids(2), bob, 30);
+        vm.stopPrank();
+        uint256 proposalId = _propose(votes);
         vm.prank(bob);
-        votes.vote(first, _ids(1), true);
-        assertEq(votes.proposal(first).yesVotes, 1, "the delegate voted the owner's key");
-        assertEq(fleet.ownerOf(1), _wallet(1), "and the key never moved");
+        votes.vote(proposalId, _ids(2), true);
 
-        // The owner keeps their own vote on their other keys.
-        vm.prank(_wallet(2));
-        votes.setVotingDelegate(bob);
-        vm.prank(_wallet(2));
-        votes.vote(first, _ids(2), true);
+        vm.startPrank(_wallet(2));
+        fleet.SHARDS().setAgentVoting(_ids(2), false);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, bob));
+        votes.vote(proposalId, _ids(2), false);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, bob));
+        votes.withdrawVote(proposalId, _ids(2));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, bob));
+        votes.proposeDecision(2, "not while it is off", bytes32(0));
+        votes.present(_ids(2));
+        vm.stopPrank();
+        assertEq(votes.proposal(proposalId).yesVotes, 1, "the agent's earlier vote stands");
 
-        uint256 second = _propose(votes);
-        vm.prank(_wallet(1));
-        votes.setVotingDelegate(address(0));
-        assertEq(votes.votingDelegate(_wallet(1)), address(0));
+        vm.prank(_wallet(2));
+        fleet.transferFrom(_wallet(2), carol, 2);
+        vm.startPrank(carol);
+        fleet.SHARDS().issue(_ids(2), bob, 30);
+        vm.stopPrank();
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
-        votes.vote(second, _ids(1), true);
-        vm.prank(bob);
-        votes.vote(second, _ids(2), true);
+        votes.vote(proposalId, _ids(2), false);
+        assertEq(votes.proposal(proposalId).noVotes, 1, "the new owner's agent votes with no switch");
     }
 
-    /// @dev Invariant: delegation runs one way only. Registering somebody as your own delegate
-    /// gives you nothing over their keys, so a stranger cannot point a delegation at a holder and
-    /// vote that holder's keys with it. The holder, who really is the stranger's delegate, may vote
-    /// the stranger's key, and that authority does not reach back the other way.
-    function test_delegationRunsOneWayOnly() public {
+    /// @dev Invariant: an agent holding shards of many keys, from several owners, votes them all in
+    /// one call, and its shards reach no key it holds none of, even one its owners hold.
+    function test_anAgentVotesTheKeysOfManyOwnersInOneCall() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 2);
-
-        vm.prank(_wallet(2));
-        fleet.transferFrom(_wallet(2), mallory, 2);
-        vm.prank(mallory);
-        votes.setVotingDelegate(_wallet(1));
-
+        _buyMany(fleet, 3);
+        _buy(fleet, _wallet(1)); // key 4
+        for (uint256 tokenId = 1; tokenId <= 3; ++tokenId) {
+            vm.startPrank(_wallet(tokenId));
+            fleet.SHARDS().issue(_ids(tokenId), bob, 30);
+            vm.stopPrank();
+        }
         uint256 proposalId = _propose(votes);
-        vm.prank(mallory);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
-        votes.vote(proposalId, _ids(1), true);
 
-        vm.prank(_wallet(1));
-        votes.vote(proposalId, _ids(2), true);
-        assertEq(votes.proposal(proposalId).yesVotes, 1, "exactly one key's vote moved");
-        assertEq(
-            uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.None), "the holder's key is untouched"
-        );
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 4, bob));
+        votes.vote(proposalId, _range(1, 4), true);
+
+        uint256[] memory three = _range(1, 3);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit VoteCast(proposalId, bob, true, three);
+        vm.prank(bob);
+        votes.vote(proposalId, three, true);
+        assertEq(votes.proposal(proposalId).yesVotes, 3, "three owners' keys, one call");
+        assertEq(uint256(votes.voteOf(proposalId, 4)), uint256(KeyfleetVotes.Choice.None), "key 4 is untouched");
+    }
+
+    /// @dev Invariant: a marketplace approval is not delegation. An address approved for one key or
+    /// for all of an owner's keys may move them but cannot renew, vote or propose with them.
+    function test_aMarketplaceApprovalIsNotDelegation() public {
+        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetVotes votes = fleet.VOTES();
+        _buyMany(fleet, 1);
+        _buy(fleet, _wallet(1)); // key 2
+        uint256 proposalId = _propose(votes);
+        vm.startPrank(_wallet(1));
+        fleet.approve(mallory, 1);
+        fleet.setApprovalForAll(mallory, true);
+        vm.stopPrank();
+
+        vm.startPrank(mallory);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
+        votes.present(_ids(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
+        votes.vote(proposalId, _ids(1), true);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 2, mallory));
+        votes.proposeDecision(2, "an operator's proposal", bytes32(0));
+        vm.stopPrank();
+        assertEq(votes.proposal(proposalId).yesVotes, 0);
     }
 
     /// @dev Invariant: a vote names at least one key. An empty set would otherwise record a voter
@@ -579,7 +601,7 @@ contract KeyfleetVotesTest is Test {
         uint256 proposalId = _propose(votes);
 
         vm.prank(_wallet(1));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 3, _wallet(3)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 3, _wallet(1)));
         votes.vote(proposalId, _range(1, 3), true);
         assertEq(uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.None), "nothing before the failure");
         assertEq(votes.proposal(proposalId).yesVotes, 0);
@@ -841,48 +863,53 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Invariant: proposing a RestrictEdits takes the same standing as any proposal: the key's
-    /// owner or the owner's voting delegate may, and nobody else.
-    function test_aVotingDelegateMayProposeRestrictEdits() public {
+    /// owner or the key's agent may, and nobody else.
+    function test_aKeysAgentMayProposeRestrictEdits() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
 
         vm.prank(mallory);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
         votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
 
-        vm.prank(_wallet(1));
-        votes.setVotingDelegate(carol);
+        vm.startPrank(_wallet(1));
+        fleet.SHARDS().issue(_ids(1), carol, 30);
+        vm.stopPrank();
         vm.expectEmit(true, true, true, true, address(votes));
         emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, carol, 2, uint64(block.timestamp), 1, bytes32(0), "");
         vm.prank(carol);
         uint256 proposalId = votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
-        assertEq(votes.proposal(proposalId).targetTokenId, 2, "the delegate proposed it");
+        assertEq(votes.proposal(proposalId).targetTokenId, 2, "the agent proposed it");
     }
 
     // --- 7. gas -------------------------------------------------------------
 
     /// @dev Invariant: voting is the one call whose cost grows with what the caller asks of it, and
     /// it grows only with the number of keys named, never with the fleet. The per-key cost is the
-    /// vote record, the ownership read and the key's renewal, and the preset makes no
-    /// difference to it. A holder with more keys than one block can carry splits the vote across
-    /// calls.
+    /// vote record, the authority check and the key's renewal, and the preset makes no difference
+    /// to it. It is measured for the dearer caller, an agent voting through its shards. A holder with
+    /// more keys than one block can carry splits the vote across calls.
     function test_votingCostsAFixedAmountPerKeyNamed() public {
         Keyfleet flat = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         for (uint256 i = 0; i < 40; ++i) {
             _buy(flat, _wallet(1));
         }
-        uint256 flatTen = _measureVote(flat.VOTES(), _wallet(1), 2, 10);
-        uint256 flatPerKey = (_measureVote(flat.VOTES(), _wallet(1), 12, 29) - flatTen) / 19;
+        vm.startPrank(_wallet(1));
+        flat.SHARDS().issue(_range(1, 40), bob, 30);
+        vm.stopPrank();
+        uint256 flatTen = _measureVote(flat.VOTES(), bob, 2, 10);
+        uint256 flatPerKey = (_measureVote(flat.VOTES(), bob, 12, 29) - flatTen) / 19;
 
-        // One caster for ten Fibonacci keys across three levels: each owner delegates to Bob, which
+        // One agent for ten Fibonacci keys across three levels: each owner issues Bob a shard, which
         // is also the only way a single call can name keys the holding limit spreads over wallets.
         Keyfleet levelled = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes levelledVotes = levelled.VOTES();
         _buyMany(levelled, 10);
         for (uint256 i = 1; i <= 10; ++i) {
-            vm.prank(_wallet(i));
-            levelledVotes.setVotingDelegate(bob);
+            vm.startPrank(_wallet(i));
+            levelled.SHARDS().issue(_ids(i), bob, 30);
+            vm.stopPrank();
         }
         uint256 levelledTwo = _measureVote(levelledVotes, bob, 2, 2);
         uint256 levelledPerKey = (_measureVote(levelledVotes, bob, 4, 6) - levelledTwo) / 4;

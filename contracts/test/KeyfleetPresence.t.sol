@@ -293,29 +293,34 @@ contract KeyfleetPresenceTest is Test {
 
     // --- who may renew --------------------------------------------------
 
-    /// @dev Invariant: only a key's owner or that owner's delegate may renew it. A keeper or any
-    /// stranger cannot, a batch with one such key renews none, and an empty batch is refused.
+    /// @dev Invariant: only a key's owner or a wallet holding an active shard of it may renew it,
+    /// whether or not the key's agent voting is on. A keeper, an approved operator or any stranger
+    /// cannot, a batch with one such key renews none, and an empty batch is refused.
     function test_aKeeperCannotMarkSomeoneElsePresent() public {
         Keyfleet fleet = _deploy();
         KeyfleetVotes votes = fleet.VOTES();
         _buy(fleet, alice, 2);
         _buy(fleet, mallory, 1);
 
+        vm.prank(alice);
+        fleet.setApprovalForAll(mallory, true);
         vm.startPrank(mallory);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, alice));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
         votes.present(_ids(1));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, alice));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
         votes.present(_range(1, 3));
         vm.expectRevert(KeyfleetVotes.NoKeys.selector);
         votes.present(new uint256[](0));
         vm.stopPrank();
         assertEq(_queued(votes), 0, "nothing was renewed");
 
-        vm.prank(alice);
-        votes.setVotingDelegate(bob);
+        vm.startPrank(alice);
+        fleet.SHARDS().issue(_range(1, 2), bob, 30);
+        fleet.SHARDS().setAgentVoting(_range(1, 2), false);
+        vm.stopPrank();
         vm.prank(bob);
         votes.present(_range(1, 2));
-        assertTrue(votes.isActive(1), "the owner's delegate may");
+        assertTrue(votes.isActive(1) && votes.isActive(2), "the key's agent may, with agent voting off");
     }
 
     /// @dev Invariant: only the fleet reports a key changing hands; nobody else can end a key's
@@ -354,7 +359,7 @@ contract KeyfleetPresenceTest is Test {
         assertEq(head, 2);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, bob));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, alice));
         votes.present(_ids(1));
 
         vm.expectEmit(true, true, true, true, address(votes));

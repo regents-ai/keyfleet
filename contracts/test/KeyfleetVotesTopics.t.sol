@@ -96,14 +96,24 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetShards.ShardEnded.selector, 0x22773ac65ded0957ecf7109dad0076e1968f3db974ccda1df370bfa4505092f4);
     }
 
-    /// @dev The calls the platform builds for restricting edits, issuing and ending shards, and
-    /// sending the protocol share, and the views it reads them back through.
+    function test_agentVotingSetTopic() public pure {
+        assertEq(
+            KeyfleetShards.AgentVotingSet.selector, 0xfdf7ebb0624288d5705c5fa214a210cf974c5a5598f8f65a6d616f0c420acabd
+        );
+    }
+
+    /// @dev The calls the platform builds for restricting edits, issuing and ending shards,
+    /// switching agent voting, signed renewals and votes, and sending the protocol share, and the
+    /// views it reads them back through.
     function test_restrictEditsAndShardSelectors() public view {
         assertEq(KeyfleetVotes.proposeRestrictEdits.selector, bytes4(0xe18b7f31));
         assertEq(KeyfleetVotes(address(0)).editsRestricted.selector, bytes4(0x547676ac));
-        assertEq(KeyfleetShards.issue.selector, bytes4(0x18d1ffc8));
-        assertEq(KeyfleetShards.end.selector, bytes4(0x96f0fa4d));
-        assertEq(KeyfleetShards.shardOf.selector, bytes4(0xf01d24e8));
+        assertEq(KeyfleetVotes.presentBySig.selector, bytes4(0xea783601));
+        assertEq(KeyfleetVotes.voteBySig.selector, bytes4(0xa10b9470));
+        assertEq(KeyfleetShards.issue.selector, bytes4(0x0423d500));
+        assertEq(KeyfleetShards.end.selector, bytes4(0x8dbf85b7));
+        assertEq(KeyfleetShards.shardOf.selector, bytes4(0xd6617c02));
+        assertEq(KeyfleetShards.setAgentVoting.selector, bytes4(0xbef65f32));
         assertEq(Keyfleet(address(0)).SHARDS.selector, bytes4(0x48db3888));
         assertEq(Keyfleet.sendProtocolShare.selector, bytes4(0xcb097587));
     }

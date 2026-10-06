@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetPresence} from "./KeyfleetPresence.sol";
+import {KeyfleetShards} from "./KeyfleetShards.sol";
 
 /// @notice The one fixed vote of a fleet: a proposal that stays open until it is carried out, and a
 /// fixed approval rule for each kind.
@@ -16,18 +20,19 @@ import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 /// it. Anyone may carry out an approved proposal, and until someone does it stays open.
 ///
 /// Every key is one vote on every kind of proposal, whatever the preset, and every key sold counts
-/// toward "all the keys". The key's current owner, or that owner's registered voting delegate, may
-/// vote it or change its vote until the proposal is carried out, whenever the key was bought or
-/// last moved: a key has one vote per proposal, and moving it hands that one vote to its new
-/// holder. Whoever holds a key may withdraw its vote with `withdrawVote` until the proposal is
-/// carried out. A withdrawn key has no vote and counts against the proposal, exactly as a silent
-/// one does.
+/// toward "all the keys". The key's current owner may vote it or change its vote until the
+/// proposal is carried out, whenever the key was bought or last moved: a key has one vote per
+/// proposal, and moving it hands that one vote to its new holder. So may any wallet holding an
+/// active shard of the key (`KeyfleetShards`) while the key's agent voting is on, which it is unless
+/// the owner turned it off. Whoever may vote a key may withdraw its vote with `withdrawVote` until
+/// the proposal is carried out. A withdrawn key has no vote and counts against the proposal,
+/// exactly as a silent one does.
 ///
 /// This controller also records which keys are present (`KeyfleetPresence`): a key is present for
-/// 48 hours after its owner or their delegate renews it with `present`, votes it or proposes with
-/// it, and stops being present the moment it changes hands. Opening a proposal requires every
-/// expired presence to have been swept, renews the proposer's key, and records the opening
-/// revision, time and exact count of present keys.
+/// 48 hours after its owner or any wallet holding an active shard of it renews it with `present`,
+/// or it is voted or proposed with, and stops being present the moment it changes hands. Opening a
+/// proposal requires every expired presence to have been swept, renews the proposer's key, and
+/// records the opening revision, time and exact count of present keys.
 ///
 /// There are two kinds. A `Decision` records agreement and has no external side effect; its
 /// text is carried in the creation event only and an optional digest pins the exact artifact or
@@ -37,10 +42,18 @@ import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 ///
 /// No vote moves money here. The fleet's capital is held by its `KeyfleetTreasury`.
 ///
-/// There is no administrator, no upgrade path, no pause, no cancellation, no quorum tuning and no
-/// delegation by signature. A majority of keys can approve a decision the rest of the fleet did
-/// not want, and no hidden signer is introduced to prevent that.
-contract KeyfleetVotes {
+/// Renewing and voting may also be signed and handed to anyone to submit (`presentBySig`,
+/// `voteBySig`). A signed message names its keys in ascending order and binds each key's ownership
+/// epoch and delegation revision and the signer's nonce, so a change of hands, any change to the
+/// key's shards or agent voting, or a submission of the same message twice voids it. Signatures are
+/// checked with OpenZeppelin `SignatureChecker`, which accepts ordinary wallets and contract wallets
+/// (ERC-1271). The signer must be allowed to act for every key when the message is submitted, exactly
+/// as if they had sent it themselves; the submitter needs no standing.
+///
+/// There is no administrator, no upgrade path, no pause, no cancellation and no quorum tuning. A
+/// majority of keys can approve a decision the rest of the fleet did not want, and no hidden signer
+/// is introduced to prevent that.
+contract KeyfleetVotes is EIP712, Nonces {
     using KeyfleetPresence for KeyfleetPresence.Queue;
 
     /// @notice What a proposal does once it is carried out.
@@ -103,8 +116,15 @@ contract KeyfleetVotes {
     /// @notice Expired presences are still queued after this call's sweep, so the count of present
     /// keys is not exact; `sweepExpired` must run before a proposal can open.
     error MaintenanceRequired();
-    /// @notice The caller is neither the key's owner nor that owner's registered voting delegate.
-    error NotAuthorizedForKey(uint256 tokenId, address owner);
+    /// @notice The account may not act for this key: it neither owns the key nor holds an active
+    /// shard of it, or, to vote or propose, the key's agent voting is off.
+    error NotAuthorizedForKey(uint256 tokenId, address account);
+    /// @notice A signed message's deadline has passed.
+    error SignatureExpired(uint256 deadline);
+    /// @notice The signature is not the signer's over this exact message.
+    error InvalidSignature(address signer);
+    /// @notice A signed message's keys are not in strictly ascending order.
+    error KeysNotAscending();
     /// @notice The key's current vote on this proposal is already the one asked for.
     error AlreadyVoted(uint256 tokenId);
     /// @notice A vote must name at least one key.
@@ -155,9 +175,6 @@ contract KeyfleetVotes {
     /// @notice The payload of a RestrictEdits proposal, emitted beside its `ProposalCreated`.
     event RestrictEditsProposed(uint256 indexed proposalId, uint256 indexed targetTokenId, bool restricted);
 
-    /// @notice An owner set or cleared the address that may vote their keys for them.
-    event VotingDelegateSet(address indexed owner, address indexed delegate);
-
     /// @notice Keys were voted, one vote each, or had their vote changed to this one. A key counts
     /// once in the tallies whatever its history.
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
@@ -181,15 +198,24 @@ contract KeyfleetVotes {
     /// @notice How long a renewal keeps a key present: 48 hours, in seconds.
     uint64 public constant PRESENCE_WINDOW = KeyfleetPresence.WINDOW;
 
+    /// @notice The EIP-712 type of a signed renewal. The key ids, epochs and delegation revisions
+    /// are each hashed as EIP-712 arrays.
+    bytes32 public constant PRESENT_TYPEHASH = keccak256(
+        "Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
+    );
+    /// @notice The EIP-712 type of a signed vote, a different type from a renewal. `choice` is 1 for
+    /// YES and 2 for NO.
+    bytes32 public constant BALLOT_TYPEHASH = keccak256(
+        "Ballot(uint256 proposalId,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)"
+    );
+
     /// @notice The fleet that deployed this controller and holds the keys that vote.
     Keyfleet public immutable FLEET;
+    /// @notice The fleet's shard record, which says which wallets may act for a key.
+    KeyfleetShards public immutable SHARDS;
 
     /// @notice Proposals created so far. Proposal ids are `1..proposalCount`.
     uint256 public proposalCount;
-    /// @notice The address an owner has authorized to vote their keys. Zero means nobody.
-    /// @dev An attached chat agent gets nothing from this; financial authority is registered here
-    /// and only here.
-    mapping(address owner => address delegate) public votingDelegate;
     /// @notice A key's current vote on a proposal.
     mapping(uint256 proposalId => mapping(uint256 tokenId => Choice choice)) public voteOf;
     /// @notice Whether the keys voted to restrict a key's edits, as the latest carried-out
@@ -202,9 +228,10 @@ contract KeyfleetVotes {
     /// @notice Binds this controller to its fleet.
     /// @param fleet The fleet whose keys vote here, which must name this contract's address as its
     /// voting controller.
-    constructor(Keyfleet fleet) {
+    constructor(Keyfleet fleet) EIP712("KeyfleetVotes", "1") {
         if (address(fleet.VOTES()) != address(this)) revert WrongFleet(address(fleet));
         FLEET = fleet;
+        SHARDS = fleet.SHARDS();
     }
 
     // --- views -----------------------------------------------------------
@@ -261,16 +288,29 @@ contract KeyfleetVotes {
     // --- presence --------------------------------------------------------
 
     /// @notice Renews keys: each is present for the next 48 hours unless it changes hands first.
-    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
-    /// their delegate. A key renewed again moves to the back of the queue; it is never counted
+    /// @dev The caller must own every key named or hold an active shard of it; agent voting does
+    /// not matter here. A key renewed again moves to the back of the queue; it is never counted
     /// twice. Renewing keys changes no open proposal.
     /// @param tokenIds The keys to renew, each at most once.
     function present(uint256[] calldata tokenIds) external {
-        if (tokenIds.length == 0) revert NoKeys();
-        for (uint256 i = 0; i < tokenIds.length; ++i) {
-            _requireCaster(tokenIds[i]);
-            _touch(tokenIds[i]);
-        }
+        _present(msg.sender, tokenIds);
+    }
+
+    /// @notice Renews keys on a signed message, which anyone may submit.
+    /// @dev The signer must be allowed to renew every key now, exactly as for `present`.
+    /// @param tokenIds The keys, in strictly ascending order.
+    /// @param signer The account that signed.
+    /// @param deadline The last timestamp the message may be submitted at.
+    /// @param signature The signer's signature over the EIP-712 `Present` message.
+    function presentBySig(uint256[] calldata tokenIds, address signer, uint256 deadline, bytes calldata signature)
+        external
+    {
+        (bytes32 ids, bytes32 epochs, bytes32 revisions) = _keyState(tokenIds);
+        bytes32 structHash = keccak256(
+            abi.encode(PRESENT_TYPEHASH, address(FLEET), ids, epochs, revisions, signer, _useNonce(signer), deadline)
+        );
+        _requireSigned(structHash, signer, deadline, signature);
+        _present(signer, tokenIds);
     }
 
     /// @notice Ends a key's presence because it changed hands. Only the fleet calls this, from every
@@ -289,23 +329,13 @@ contract KeyfleetVotes {
         return _sweep(limit);
     }
 
-    // --- delegation ------------------------------------------------------
-
-    /// @notice Authorizes one address to vote every key the caller owns, or clears it with zero.
-    /// @dev Delegation follows the owner, not the key: it applies to whatever keys the caller holds
-    /// when a vote is cast, and it never moves a key or a reward. The owner can always vote too.
-    function setVotingDelegate(address delegate) external {
-        votingDelegate[msg.sender] = delegate;
-        emit VotingDelegateSet(msg.sender, delegate);
-    }
-
     // --- proposals -------------------------------------------------------
 
     /// @notice Proposes a Decision: text that records agreement, with no automatic side effect.
     /// @dev The text is emitted and never stored, because nothing on chain reads it back. The digest
     /// is stored so an approved decision can be pinned to an exact artifact or commit; zero means none.
-    /// @param tokenId A key the caller owns or is the registered delegate of. It is the caller's
-    /// standing to propose and nothing else: it is not a vote.
+    /// @param tokenId A key the caller may vote. It is the caller's standing to propose and nothing
+    /// else: it is not a vote.
     /// @param text The proposal text, for readers.
     /// @param digest Optional exact artifact or commit digest.
     /// @return proposalId The new proposal.
@@ -320,7 +350,7 @@ contract KeyfleetVotes {
     /// @dev Approved only when at least three fifths of all the keys sold vote YES. The key named
     /// must have been sold; it may be the proposer's own. The text is emitted and never stored,
     /// exactly as a Decision's is.
-    /// @param tokenId A key the caller owns or is the registered delegate of.
+    /// @param tokenId A key the caller may vote.
     /// @param targetTokenId The key whose edits to restrict or unrestrict.
     /// @param restricted True to restrict, false to unrestrict.
     /// @param text The reason, for readers.
@@ -348,8 +378,8 @@ contract KeyfleetVotes {
 
     /// @notice Votes a set of keys for or against a proposal, or changes their votes, until it is
     /// carried out, and renews each key.
-    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
-    /// their delegate. A key with no vote adds one to the chosen side; a key with the other vote
+    /// @dev The caller must own every key named, or hold an active shard of it while its agent
+    /// voting is on. A key with no vote adds one to the chosen side; a key with the other vote
     /// moves from that side to this one; a key that already has this vote is refused with
     /// `AlreadyVoted`. A key that moved keeps the vote it had, and its new holder may change it.
     ///
@@ -358,6 +388,46 @@ contract KeyfleetVotes {
     /// @param tokenIds The keys to vote, each at most once.
     /// @param support True for YES, false for NO.
     function vote(uint256 proposalId, uint256[] calldata tokenIds, bool support) external {
+        _vote(msg.sender, proposalId, tokenIds, support);
+    }
+
+    /// @notice Votes keys on a signed message, which anyone may submit.
+    /// @dev The signer must be allowed to vote every key now, exactly as for `vote`, and is the
+    /// voter the vote is recorded under.
+    /// @param proposalId The proposal being voted on.
+    /// @param tokenIds The keys, in strictly ascending order.
+    /// @param support True for YES, false for NO.
+    /// @param signer The account that signed.
+    /// @param deadline The last timestamp the message may be submitted at.
+    /// @param signature The signer's signature over the EIP-712 `Ballot` message.
+    function voteBySig(
+        uint256 proposalId,
+        uint256[] calldata tokenIds,
+        bool support,
+        address signer,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        (bytes32 ids, bytes32 epochs, bytes32 revisions) = _keyState(tokenIds);
+        bytes32 structHash = keccak256(
+            abi.encode(
+                BALLOT_TYPEHASH,
+                proposalId,
+                ids,
+                epochs,
+                revisions,
+                support ? Choice.Yes : Choice.No,
+                signer,
+                _useNonce(signer),
+                deadline
+            )
+        );
+        _requireSigned(structHash, signer, deadline, signature);
+        _vote(signer, proposalId, tokenIds, support);
+    }
+
+    /// @dev Votes keys for `voter`, who has been authenticated as the caller or a signer.
+    function _vote(address voter, uint256 proposalId, uint256[] calldata tokenIds, bool support) private {
         Proposal storage stored = _require(proposalId);
         if (stored.executed) revert AlreadyExecuted();
         if (tokenIds.length == 0) revert NoKeys();
@@ -366,7 +436,7 @@ contract KeyfleetVotes {
         uint256 changed;
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
-            _requireCaster(tokenId);
+            _requireGovernor(tokenId, voter);
             _touch(tokenId);
             Choice previous = voteOf[proposalId][tokenId];
             if (previous == choice) revert AlreadyVoted(tokenId);
@@ -381,14 +451,14 @@ contract KeyfleetVotes {
             stored.noVotes += tokenIds.length;
             stored.yesVotes -= changed;
         }
-        emit VoteCast(proposalId, msg.sender, support, tokenIds);
+        emit VoteCast(proposalId, voter, support, tokenIds);
     }
 
     /// @notice Withdraws a set of keys' votes on a proposal, until it is carried out.
-    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
-    /// their delegate, and must have a vote on the proposal, whoever cast it: a key that moved after
-    /// voting can have that vote withdrawn by whoever holds it now. A withdrawn key has no vote, so
-    /// it counts against the proposal until it votes again.
+    /// @dev The caller must be allowed to vote every key named, as for `vote`, and each must have a
+    /// vote on the proposal, whoever cast it: a key that moved after voting can have that vote
+    /// withdrawn by whoever may vote it now. A withdrawn key has no vote, so it counts against the
+    /// proposal until it votes again.
     ///
     /// The whole call reverts if any one id fails, so a caller never half-withdraws a set by accident.
     /// @param proposalId The proposal the votes were cast on.
@@ -401,7 +471,7 @@ contract KeyfleetVotes {
         uint256 yes;
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
-            _requireCaster(tokenId);
+            _requireGovernor(tokenId, msg.sender);
             Choice previous = voteOf[proposalId][tokenId];
             if (previous == Choice.None) revert NoVote(tokenId);
             if (previous == Choice.Yes) ++yes;
@@ -444,8 +514,8 @@ contract KeyfleetVotes {
 
     // --- internals -------------------------------------------------------
 
-    /// @dev Records a proposal and its opening. The standing check is the caster check `vote`
-    /// applies: the caller owns the named key or is the registered delegate of whoever does. Up to
+    /// @dev Records a proposal and its opening. The standing check is the one `vote` applies: the
+    /// caller owns the named key, or holds an active shard of it while its agent voting is on. Up to
     /// `SWEEP_IN_PROPOSE` expired presences are swept first, and if any are still due the call
     /// reverts with `MaintenanceRequired` rather than record a count that includes expired keys.
     /// The proposer's key is renewed, and then the opening revision, time and the exact count of
@@ -454,7 +524,7 @@ contract KeyfleetVotes {
         private
         returns (uint256 proposalId)
     {
-        _requireCaster(tokenId);
+        _requireGovernor(tokenId, msg.sender);
         (, bool due) = _sweep(SWEEP_IN_PROPOSE);
         if (due) revert MaintenanceRequired();
         _touch(tokenId);
@@ -487,11 +557,56 @@ contract KeyfleetVotes {
         emit Present(tokenId, uint64(block.timestamp), uint64(block.number), FLEET.ownershipEpoch(tokenId));
     }
 
-    /// @dev The caster of a key is its current owner or that owner's registered delegate. A token id
-    /// that is not a minted key reverts in `ownerOf`.
-    function _requireCaster(uint256 tokenId) private view {
-        address owner = FLEET.ownerOf(tokenId);
-        if (msg.sender != owner && votingDelegate[owner] != msg.sender) revert NotAuthorizedForKey(tokenId, owner);
+    /// @dev Renews keys for `account`, who has been authenticated as the caller or a signer.
+    function _present(address account, uint256[] calldata tokenIds) private {
+        if (tokenIds.length == 0) revert NoKeys();
+        for (uint256 i = 0; i < tokenIds.length; ++i) {
+            uint256 tokenId = tokenIds[i];
+            if (account != FLEET.ownerOf(tokenId) && !SHARDS.isActive(tokenId, account)) {
+                revert NotAuthorizedForKey(tokenId, account);
+            }
+            _touch(tokenId);
+        }
+    }
+
+    /// @dev Who may vote a key and propose with it: its current owner, or a wallet holding an
+    /// active shard of it while the key's agent voting is on. A token id that is not a minted key
+    /// reverts in `ownerOf`.
+    function _requireGovernor(uint256 tokenId, address account) private view {
+        if (account != FLEET.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
+            revert NotAuthorizedForKey(tokenId, account);
+        }
+    }
+
+    /// @dev The EIP-712 encoding of a signed message's keys: the ids, then each key's ownership
+    /// epoch and delegation revision now, each array hashed as EIP-712 hashes an array. The ids
+    /// must be strictly ascending, so one set of keys has exactly one encoding.
+    function _keyState(uint256[] calldata tokenIds) private view returns (bytes32, bytes32, bytes32) {
+        if (tokenIds.length == 0) revert NoKeys();
+        uint64[] memory epochs = new uint64[](tokenIds.length);
+        uint64[] memory revisions = new uint64[](tokenIds.length);
+        for (uint256 i = 0; i < tokenIds.length; ++i) {
+            if (i != 0 && tokenIds[i] <= tokenIds[i - 1]) revert KeysNotAscending();
+            epochs[i] = FLEET.ownershipEpoch(tokenIds[i]);
+            revisions[i] = SHARDS.delegationRevision(tokenIds[i]);
+        }
+        return (
+            keccak256(abi.encodePacked(tokenIds)),
+            keccak256(abi.encodePacked(epochs)),
+            keccak256(abi.encodePacked(revisions))
+        );
+    }
+
+    /// @dev Checks a signed message: within its deadline, and signed by `signer` over this
+    /// contract's EIP-712 domain.
+    function _requireSigned(bytes32 structHash, address signer, uint256 deadline, bytes calldata signature)
+        private
+        view
+    {
+        if (block.timestamp > deadline) revert SignatureExpired(deadline);
+        if (!SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(structHash), signature)) {
+            revert InvalidSignature(signer);
+        }
     }
 
     /// @dev A RestrictEdits needs YES from at least three fifths of all the keys sold so far; a

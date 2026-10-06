@@ -40,12 +40,19 @@ this branch does:
   yes, and then anyone may carry it out. A RestrictEdits proposal needs at
   least three fifths. There is no window, deadline or cap.
 - No proposal moves money.
-- A key is present for 48 hours after its owner or their delegate renews it,
-  votes it or proposes with it, and stops being present the moment it changes
-  hands. A proposal records how many keys were present when it opened; it does
-  not yet use that count to decide.
-- A key's owner may issue shards: time-limited grants to other wallets, recorded
-  on chain and ended the moment the key changes hands.
+- A key is present for 48 hours after its owner or an agent holding a shard of
+  it renews it, votes it or proposes with it, and stops being present the
+  moment it changes hands. A proposal records how many keys were present when it
+  opened; it does not yet use that count to decide.
+- A key's owner may issue shards: time-limited grants to agent wallets, recorded
+  on chain and ended the moment the key changes hands. An agent with a shard
+  always may mark the key present. It may also vote the key and propose with it
+  unless the owner turned the key's agent voting off; every new owner starts
+  with it on. One agent may hold shards of many keys, and every call about keys
+  takes a list of them.
+- Renewals and votes may be signed and handed to anyone to submit; a signature
+  is void once used, after its deadline, and after any of its keys changes hands
+  or has its shards or agent voting changed.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
   refused request.
 - Keyfleet Classic, decided 28 September 2026: 1,024 keys, the first at 8 USDC
@@ -208,10 +215,10 @@ and 49,152 bytes of deployment code per contract. Measured with
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `Keyfleet` | 14,592 | 24,764 |
+| `Keyfleet` | 14,592 | 26,167 |
 | `KeyfleetRewards` | 5,204 | 5,547 |
-| `KeyfleetShards` | 2,216 | 2,407 |
-| `KeyfleetVotes` | 9,319 | 9,665 |
+| `KeyfleetShards` | 3,604 | 3,810 |
+| `KeyfleetVotes` | 13,237 | 14,207 |
 | `KeyfleetTreasury` | 1,377 | 1,955 |
 
 A fleet that deployed its controller and treasury itself would carry their
@@ -359,17 +366,19 @@ are not supported.
 
 `KeyfleetVotes` is the one collective decision. There are no councils, no
 moderators, no rule amendments, no voting windows, delays, expiries, periods or
-caps, no cancellation and no delegation by signature.
+caps and no cancellation.
 
 Every key is one vote on every kind of proposal, and every key sold counts toward
-the total. The key's owner, or the one address that owner registered with
-`setVotingDelegate(address)` (zero clears it), may vote the key with
+the total. The key's owner, or an agent holding an active shard of the key while
+the key's agent voting is on (see Shards), may vote the key with
 `vote(proposalId, tokenIds, support)` and may change its vote until the proposal
 is carried out; voting the same way twice reverts with `AlreadyVoted`. A key has
 one vote per proposal whoever holds it: a key that moves keeps the vote it had,
-and its new holder or their delegate may change it or take it away with
+and whoever may vote it now may change it or take it away with
 `withdrawVote(proposalId, tokenIds)`. A batch of keys is voted or withdrawn whole
-or not at all.
+or not at all, and anybody refused for a key gets
+`NotAuthorizedForKey(tokenId, account)`. A marketplace approval (`approve`,
+`setApprovalForAll`) gives nothing here.
 
 A Decision proposal is approved at any moment
 `yesVotes * 2 > FLEET.totalMinted()`: yes must be more than half of all the keys
@@ -383,8 +392,8 @@ the fleet is called, and any revert inside the fleet undoes the mark with
 everything else, so a failed attempt consumes nothing and the proposal stays
 open.
 
-Proposing needs standing: the proposer names a key they own or are the delegate
-of. Naming a key is not a vote. There are two kinds, numbered in this order
+Proposing needs standing: the proposer names a key they may vote, as above.
+Naming a key is not a vote. There are two kinds, numbered in this order
 from 0:
 
 - `Decision`: `proposeDecision(tokenId, text, digest)`. Records agreement and
@@ -408,18 +417,49 @@ straight after its fleet, at the address the fleet was given for it
 (`WrongFleet`).
 
 Voting is the one call whose cost grows with what it is asked, and only with the
-number of keys named. Each key named is also renewed (below). Ten Classic keys
-renewed for the first time in one vote measured 998,593 gas and each further key
-about 96,800, the same on a Fibonacci fleet; the suite asserts ceilings of
-1,199,000 and 117,000. A holder with more keys than a block can carry splits the
-vote across calls. Carrying out a proposal costs the same on any size of fleet;
+number of keys named. Each key named is also renewed (below). An agent voting
+ten Classic keys renewed for the first time in one call through its shards
+measured 1,057,582 gas and each further key about 102,700, the same on a
+Fibonacci fleet; the suite asserts ceilings of 1,270,000 and 124,000. An owner
+voting their own keys pays a little less. A holder with more keys than a block
+can carry splits the vote across calls. Carrying out a proposal costs the same on any size of fleet;
 opening one costs the same apart from the expired presences it sweeps.
+
+### Signed renewals and votes
+
+Whoever may renew or vote keys may instead sign the request and hand it to
+anyone to submit: `presentBySig(tokenIds, signer, deadline, signature)` and
+`voteBySig(proposalId, tokenIds, support, signer, deadline, signature)`. The
+signer must be allowed to act for every key when it is submitted, exactly as if
+they had sent it, and a vote is recorded under the signer. The submitter needs no
+standing and can change nothing that was signed.
+
+The messages are EIP-712 typed data in the domain `KeyfleetVotes`, version `1`,
+on the chain the controller is on (Base, 8453), at the controller's address:
+
+- `Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)`
+- `Ballot(uint256 proposalId,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)`,
+  where `choice` is 1 for yes and 2 for no.
+
+The keys are listed in strictly ascending order (`KeysNotAscending`), and for
+each key the message carries its `ownershipEpoch` on the fleet and its
+`delegationRevision` on the shard record, which the controller reads back when
+the message is submitted. So a signature stops working the moment one of its keys
+changes hands, or has a shard issued, renewed or ended, or its agent voting
+switched. Each signer has one nonce (`nonces(signer)`), used by every message
+they sign, so a message works once. A message past its deadline is refused
+(`SignatureExpired`), as is a signature that is not the signer's
+(`InvalidSignature`). Signatures are checked with OpenZeppelin
+`SignatureChecker`, which accepts ordinary wallets and contract wallets such as a
+Safe (ERC-1271). `PRESENT_TYPEHASH`, `BALLOT_TYPEHASH` and `eip712Domain()` give
+the exact values.
 
 ### Presence
 
 A key is present for 48 hours (172,800 seconds, by block time, never by block
-count) after its owner or their delegate renews it with `present(tokenIds)`,
-votes it, or proposes with it. It stops being present the moment it changes
+count) after its owner or a wallet holding an active shard of it renews it with
+`present(tokenIds)` or the signed `presentBySig`, votes it, or proposes with it.
+A shard may renew its key whether or not the key's agent voting is on. It stops being present the moment it changes
 hands, and its new owner renews it under the new ownership. Nobody else can
 renew a key, a batch with one such key renews none, and renewing changes no open
 proposal. `isActive(tokenId)` and `lastActiveAt(tokenId)` answer for now.
@@ -454,32 +494,41 @@ together is about 10 million gas, done in several calls.
 ## Shards
 
 `KeyfleetShards` records the shards of one fleet's keys: time-limited grants a
-key's owner gives to other wallets. It is bound to its fleet for good and is
-reachable as `SHARDS()` on the fleet.
+key's owner gives to agent wallets. It is bound to its fleet for good and is
+reachable as `SHARDS()` on the fleet. Shards are kept per key and wallet, so one
+agent wallet may hold shards of many keys, from one owner or several, and a key
+may have shards in many wallets. Every call takes a list of keys.
 
-- `issue(tokenId, wallet, days)` is for the key's current owner only
+- `issue(tokenIds, wallet, days)` is for the current owner of every key named
   (`NotKeyOwner` otherwise; an unsold key reverts with the ERC-721
   `ERC721NonexistentToken`). A shard lasts 1 to 365 days (`DaysOutOfRange`), may
-  not go to the zero address or the owner (`WalletIsOwner`), and records the
-  key's current `ownershipEpoch`. It emits
-  `ShardIssued(tokenId, wallet, expiresAt, epoch)`.
-- A wallet holds at most one active shard in a fleet, under whichever key issued
-  it; another key cannot issue it one (`ShardAlreadyActive`). A key may have any
-  number of shards. A new shard replaces a wallet's inactive one, and the key's
-  owner renews an active shard by issuing it again, which counts its days from now.
-- `end(tokenId, wallet)` ends an active shard early. The key's current owner or
-  the shard's own wallet may call it (`NotAllowedToEnd` otherwise), and it emits
-  `ShardEnded(tokenId, wallet, by)`.
-- `shardOf(wallet)` returns the wallet's latest shard as
-  `(tokenId, expiresAt, epoch, active)`. A shard is active while it has not been
-  ended, its time has not run out, and the key's `ownershipEpoch` is still the
-  one it was issued under, so every shard of a key stops the moment the key
+  not go to the zero address or the owner (`WalletIsOwner`), and records each
+  key's current `ownershipEpoch`. Issuing again renews a shard, counting its days
+  from now. It emits `ShardIssued(tokenId, wallet, expiresAt, epoch)` per key.
+- `end(tokenIds, wallet)` ends a wallet's active shards early. Each key's current
+  owner or the shard's own wallet may call it (`NotAllowedToEnd` otherwise;
+  `ShardNotActive` for a shard that is not active), and it emits
+  `ShardEnded(tokenId, wallet, by)` per key.
+- `shardOf(tokenId, wallet)` returns `(expiresAt, epoch, active)`, and
+  `isActive(tokenId, wallet)` just the last. A shard is active while it has not
+  been ended, its time has not run out, and the key's `ownershipEpoch` is still
+  the one it was issued under, so every shard of a key stops the moment the key
   changes hands, with no call to the record, and moving the key back does not
   revive them.
+- `setAgentVoting(tokenIds, on)` lets the owner of every key named turn the keys'
+  agent voting off or back on, emitting `AgentVotingSet(tokenId, on, epoch)`.
+  It is on for every key unless its owner turned it off, and a change of hands
+  turns it back on for the new owner. `agentVoting(tokenId)` reads it, and
+  `mayGovern(tokenId, wallet)` says whether a wallet's shard may vote and propose
+  with the key now.
+- `delegationRevision(tokenId)` goes up on every issue, end and agent-voting
+  switch for the key. Signed renewals and votes carry it (see Votes).
 
-A shard is a record, not a token: it cannot be moved, sold or approved, and it
-carries no vote, no money and no authority on chain. What a shard's wallet may do
-is decided off chain from this record.
+What an active shard lets its wallet do: work in the key's workspace (decided off
+chain from this record), mark the key present, and, while the key's agent voting
+is on, vote the key and propose with it. A shard is a record, not a token: it
+cannot be moved, sold or approved, it carries no money, and its wallet can never
+move the key, issue shards of it or switch its agent voting.
 
 ## Key reveals
 
@@ -597,7 +646,7 @@ anvil for the anvil tests in `platform/` (`mix test.external`).
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
-voting, presence, shard,
+voting, presence, shard, signature,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
 over random renewals, transfers, sweeps, openings and the passing of time. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from
