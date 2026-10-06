@@ -670,3 +670,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The About page heading now reads "A shard never touches the fleet's money".
 - `docs/product-spec.md` is the living product spec, with KeyFleet as an
   agent's home base rather than the edge of its world.
+
+## 2026-10-06 — Ash 3.34.4 (HQ 106)
+
+- Ash moves from 3.33.11 to 3.34.4, which fixes EEF-CVE-2026-94201. ash_postgres is pinned to exactly 2.13.0, because 2.13.1 through 2.14.2 can write some records outside KeyFleet's own part of the shared database.
+- regents is pinned at `004307e6` (Regents v128) and elixir-utils at `467cba6`, the versions those libraries require.
