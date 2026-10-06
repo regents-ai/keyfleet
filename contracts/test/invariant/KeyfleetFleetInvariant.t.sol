@@ -1,0 +1,516 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.26;
+
+import {Test} from "forge-std/Test.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {Keyfleet} from "../../src/Keyfleet.sol";
+import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
+import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
+import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
+import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
+import {MockToken} from "../KeyfleetIncome.t.sol";
+import {MockRegent} from "../mocks/MockRegent.sol";
+import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+
+/// @dev Drives a Cascade fleet and an Accelerant fleet through everything that moves money or keys
+/// across all five of each fleet's contracts: purchases, key transfers (each settling the ledger
+/// and telling the controller), shards issued to agents, money sent to the treasury and to the
+/// core, public daily splits as time passes, and approved batches made through the controller's
+/// address that run the split early, change its rate, admit OUSD or pay money out. Claims are made
+/// by holders, former holders and agents. Around each step it records, as `breach`, the first
+/// thing that went differently from the rules.
+contract FleetHandler is Test {
+    address internal constant NATIVE = address(0);
+    uint256 internal constant MAX_KEYS = 30;
+    uint256 internal constant ACTORS = 16;
+    uint256 internal constant AGENTS = 3;
+
+    Keyfleet[2] internal fleets;
+    MockToken internal immutable usdc;
+    MockRegent internal immutable regent;
+    MockToken internal immutable ousd;
+    address internal buyer = address(0xB0B0B0);
+
+    /// @notice Per fleet and asset, everything the split has sent the ledger and everything claims
+    /// have paid out.
+    mapping(uint256 fleet => mapping(address asset => uint256 amount)) public allocated;
+    mapping(uint256 fleet => mapping(address asset => uint256 amount)) public claimed;
+
+    /// @notice Set, with the reason, the first time a step went differently from the rules.
+    string public breach;
+
+    constructor(Keyfleet cascade, Keyfleet accelerant, MockToken usdc_, MockRegent regent_, MockToken ousd_) {
+        fleets = [cascade, accelerant];
+        usdc = usdc_;
+        regent = regent_;
+        ousd = ousd_;
+    }
+
+    function actor(uint256 i) public pure returns (address) {
+        return address(uint160(0xA11CE00 + i));
+    }
+
+    function agent(uint256 i) public pure returns (address) {
+        return address(uint160(0xA6E0700 + i));
+    }
+
+    function fleet(uint256 i) external view returns (Keyfleet) {
+        return fleets[i];
+    }
+
+    // --- keys ------------------------------------------------------------
+
+    /// @dev Buys one to three keys, each to an actor who may hold it.
+    function buy(uint256 fleetSeed, uint256 actorSeed, uint256 count) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        count = bound(count, 1, 3);
+        for (uint256 i = 0; i < count; ++i) {
+            uint256 tokenId = f.totalMinted() + 1;
+            if (tokenId > MAX_KEYS) return;
+            (address to, bool found) = _receiver(f, tokenId, actorSeed % ACTORS + i, address(0));
+            if (!found) return;
+            uint256 price = f.nextPrice();
+            usdc.mint(buyer, price);
+            vm.startPrank(buyer);
+            usdc.approve(address(f), price);
+            f.purchase(to, price, block.timestamp);
+            vm.stopPrank();
+        }
+    }
+
+    function transfer(uint256 fleetSeed, uint256 tokenSeed, uint256 actorSeed) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        uint256 minted = f.totalMinted();
+        if (minted == 0) return;
+        uint256 tokenId = 1 + tokenSeed % minted;
+        address from = f.ownerOf(tokenId);
+        (address to, bool found) = _receiver(f, tokenId, actorSeed, from);
+        if (!found) return;
+        vm.prank(from);
+        f.transferFrom(from, to, tokenId);
+    }
+
+    function issueShard(uint256 fleetSeed, uint256 tokenSeed, uint256 agentSeed, uint16 days_) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        uint256 minted = f.totalMinted();
+        if (minted == 0) return;
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 1 + tokenSeed % minted;
+        KeyfleetShards shards = f.SHARDS();
+        vm.prank(f.ownerOf(ids[0]));
+        shards.issue(ids, agent(agentSeed % AGENTS), uint16(bound(days_, 1, 3)));
+    }
+
+    function passTime(uint256 seconds_) external {
+        vm.warp(block.timestamp + bound(seconds_, 1, 2 days));
+    }
+
+    // --- money in and out of the treasury ------------------------------------
+
+    function fund(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        address treasury = address(f.TREASURY());
+        uint256 pick = assetSeed % 5;
+        if (pick == 0) {
+            vm.deal(treasury, treasury.balance + bound(amount, 0, 3 ether));
+        } else if (pick == 1) {
+            regent.mint(treasury, bound(amount, 0, 5_000e18));
+        } else if (pick == 2) {
+            usdc.mint(treasury, bound(amount, 0, 5_000e6));
+        } else if (pick == 3) {
+            ousd.mint(treasury, bound(amount, 0, 5_000e6));
+        } else {
+            usdc.mint(address(f), bound(amount, 0, 5_000e6));
+            f.recognizeSurplus(address(usdc));
+        }
+    }
+
+    /// @dev An approved payment out of the treasury, to someone outside the fleet.
+    function pay(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetTreasury treasury = f.TREASURY();
+        address asset = [NATIVE, address(regent), address(usdc)][assetSeed % 3];
+        amount = bound(amount, 0, _balanceOf(asset, address(treasury)));
+        address outsider = address(uint160(0xD00D00 + assetSeed % 3));
+        _batch(f, abi.encodeCall(KeyfleetTreasury.pay, (asset, outsider, amount)));
+    }
+
+    // --- the daily split ----------------------------------------------------
+
+    /// @dev Anyone's run: it goes through exactly when a day has passed since the last run, or since
+    /// the first mint, and splits exactly the formula on the treasury's own balances.
+    function runDailySplit(uint256 fleetSeed) external {
+        uint256 index = fleetSeed % 2;
+        KeyfleetTreasury treasury = fleets[index].TREASURY();
+        uint256 opensAt = treasury.nextRunAt();
+        bool due = opensAt != 0 && block.timestamp >= opensAt;
+        Snapshot memory before = _snapshot(fleets[index]);
+        vm.prank(address(0x7EE9E2));
+        (bool ran,) = address(treasury).call(abi.encodeCall(KeyfleetTreasury.runDailySplit, ()));
+        if (ran != due) _breach(ran ? "a public run went through before it was due" : "a due public run was refused");
+        if (ran) _checkSplit(index, before);
+    }
+
+    /// @dev An approved proposal's run, at any time.
+    function runVotedSplit(uint256 fleetSeed) external {
+        uint256 index = fleetSeed % 2;
+        if (fleets[index].totalMinted() == 0) return;
+        Snapshot memory before = _snapshot(fleets[index]);
+        _batch(fleets[index], abi.encodeCall(KeyfleetTreasury.runVotedSplit, ()));
+        _checkSplit(index, before);
+    }
+
+    function setRate(uint256 fleetSeed, uint256 bps) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        bps = bound(bps, 0, 250);
+        bool valid = bps >= 10 && bps <= 200;
+        bool set = _tryBatch(f, abi.encodeCall(KeyfleetTreasury.setDailySplitBps, (bps)));
+        if (set != valid) _breach("a rate was accepted or refused against the 10 to 200 rule");
+        if (set && f.TREASURY().dailySplitBps() != bps) _breach("an accepted rate was not set");
+    }
+
+    function admitOusd(uint256 fleetSeed) external {
+        Keyfleet f = fleets[fleetSeed % 2];
+        bool fresh = address(f.TREASURY().ousd()) == address(0);
+        bool admitted = _tryBatch(f, abi.encodeCall(KeyfleetTreasury.admitOusd, (IERC20(address(ousd)))));
+        if (admitted != fresh) _breach("OUSD was admitted twice or refused the first time");
+    }
+
+    // --- claims ---------------------------------------------------------------
+
+    /// @dev A holder, a former holder or an agent presses claim for some keys and assets. Each key's
+    /// holder is paid what the key accrued plus their credit, the caller its own credit, and
+    /// nobody else anything.
+    function claim(uint256 fleetSeed, uint256 callerSeed, uint256 keyMask, uint256 assetMask, bool asAgent) external {
+        uint256 index = fleetSeed % 2;
+        Keyfleet f = fleets[index];
+        Claim memory c;
+        c.caller = asAgent ? agent(callerSeed % AGENTS) : _holderOrFormer(f, callerSeed);
+        c.ids = _claimable(f, c.caller, keyMask);
+        c.assets = _pickAssets(f.REWARDS(), assetMask);
+        if (c.assets.length == 0) return;
+        c.payees = _payees(f, c.caller, c.ids);
+        c.expected = new uint256[](c.assets.length);
+        c.balances = new uint256[](c.assets.length);
+        uint256 total;
+        for (uint256 a = 0; a < c.assets.length; ++a) {
+            c.expected[a] = _owed(f, c.assets[a], c.payees, c.ids);
+            c.balances[a] = _sumBalances(c.assets[a], c.payees);
+            total += c.expected[a];
+        }
+
+        KeyfleetRewards rewards = f.REWARDS();
+        vm.prank(c.caller);
+        (bool ok, bytes memory returned) =
+            address(rewards).call(abi.encodeCall(KeyfleetRewards.claim, (c.ids, c.assets)));
+        if (ok != (total > 0)) {
+            _breach(ok ? "a claim with nothing owed went through" : "a claim with money owed was refused");
+        } else if (ok) {
+            _checkClaim(index, c, abi.decode(returned, (uint256[])));
+        }
+    }
+
+    // --- internals --------------------------------------------------------
+
+    /// @dev Mostly a key's holder; one time in four any actor, who may be a former holder.
+    function _holderOrFormer(Keyfleet f, uint256 seed) internal view returns (address) {
+        uint256 minted = f.totalMinted();
+        if (minted == 0 || seed % 4 == 0) return actor(seed % ACTORS);
+        return f.ownerOf(1 + (seed >> 2) % minted);
+    }
+
+    struct Claim {
+        address caller;
+        uint256[] ids;
+        address[] assets;
+        address[] payees;
+        uint256[] expected;
+        uint256[] balances;
+    }
+
+    function _checkClaim(uint256 index, Claim memory c, uint256[] memory paid) internal {
+        for (uint256 a = 0; a < c.assets.length; ++a) {
+            if (paid[a] != c.expected[a]) _breach("a claim paid other than what was owed");
+            if (_sumBalances(c.assets[a], c.payees) - c.balances[a] != c.expected[a]) {
+                _breach("a claim's payees were not paid exactly what was owed");
+            }
+            claimed[index][c.assets[a]] += paid[a];
+        }
+    }
+
+    struct Snapshot {
+        uint256 keys;
+        uint256 bps;
+        address[] assets;
+        uint256[] thresholds;
+        uint256[] balances;
+        uint256[] indexes;
+    }
+
+    function _snapshot(Keyfleet f) internal view returns (Snapshot memory s) {
+        KeyfleetTreasury treasury = f.TREASURY();
+        KeyfleetRewards rewards = f.REWARDS();
+        s.keys = f.totalMinted();
+        s.bps = treasury.dailySplitBps();
+        s.assets = treasury.splitAssets();
+        s.thresholds = new uint256[](s.assets.length);
+        s.balances = new uint256[](s.assets.length);
+        s.indexes = new uint256[](s.assets.length);
+        s.thresholds[0] = treasury.ETH_THRESHOLD();
+        s.thresholds[1] = treasury.REGENT_THRESHOLD();
+        s.thresholds[2] = treasury.USDC_THRESHOLD();
+        if (s.assets.length == 4) s.thresholds[3] = treasury.ousdThreshold();
+        for (uint256 i = 0; i < s.assets.length; ++i) {
+            s.balances[i] = _balanceOf(s.assets[i], address(treasury));
+            s.indexes[i] = rewards.splitIndex(s.assets[i]);
+        }
+    }
+
+    function _checkSplit(uint256 index, Snapshot memory before) internal {
+        Keyfleet f = fleets[index];
+        KeyfleetTreasury treasury = f.TREASURY();
+        KeyfleetRewards rewards = f.REWARDS();
+        if (treasury.lastRunAt() != block.timestamp) _breach("a run did not record when it ran");
+        for (uint256 i = 0; i < before.assets.length; ++i) {
+            address asset = before.assets[i];
+            uint256 perKey = before.keys == 0 || before.balances[i] < before.thresholds[i]
+                ? 0
+                : Math.mulDiv(before.balances[i], before.bps, 10_000) / before.keys;
+            if (rewards.splitIndex(asset) - before.indexes[i] != perKey) {
+                _breach("a key's share differed from the formula on the treasury's own balance");
+            }
+            if (_balanceOf(asset, address(treasury)) != before.balances[i] - perKey * before.keys) {
+                _breach("the treasury did not keep exactly its balance less the shares");
+            }
+            allocated[index][asset] += perKey * before.keys;
+        }
+    }
+
+    function _batch(Keyfleet f, bytes memory data) internal {
+        KeyfleetTreasury treasury = f.TREASURY();
+        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](1);
+        calls[0] = KeyfleetTreasury.Call(address(treasury), 0, data);
+        vm.prank(address(f.VOTES()));
+        treasury.executeBatch(calls);
+    }
+
+    function _tryBatch(Keyfleet f, bytes memory data) internal returns (bool) {
+        KeyfleetTreasury treasury = f.TREASURY();
+        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](1);
+        calls[0] = KeyfleetTreasury.Call(address(treasury), 0, data);
+        vm.prank(address(f.VOTES()));
+        (bool ok,) = address(treasury).call(abi.encodeCall(KeyfleetTreasury.executeBatch, (calls)));
+        return ok;
+    }
+
+    /// @dev The first actor from the seed on, other than `except`, who may hold the key under the
+    /// Fibonacci holding limit.
+    function _receiver(Keyfleet f, uint256 tokenId, uint256 seed, address except)
+        internal
+        view
+        returns (address, bool)
+    {
+        bool fibonacci = f.PRESET() == KeyfleetPresets.Preset.FibonacciCascade;
+        uint256 level = fibonacci ? f.levelOf(tokenId) : 0;
+        for (uint256 i = 0; i < ACTORS; ++i) {
+            address candidate = actor((seed % ACTORS + i) % ACTORS);
+            if (candidate == except) continue;
+            if (!fibonacci || f.heldPerLevel(candidate, level) < f.holdingLimit(level)) return (candidate, true);
+        }
+        return (address(0), false);
+    }
+
+    /// @dev The keys in `mask` the caller may claim for: those it holds, or holds an active shard of.
+    function _claimable(Keyfleet f, address caller, uint256 mask) internal view returns (uint256[] memory ids) {
+        uint256 minted = f.totalMinted();
+        KeyfleetShards shards = f.SHARDS();
+        ids = new uint256[](minted);
+        uint256 count;
+        for (uint256 k = 1; k <= minted; ++k) {
+            if ((mask >> (k % 256)) & 1 == 0) continue;
+            if (f.ownerOf(k) == caller || shards.isActive(k, caller)) ids[count++] = k;
+        }
+        assembly ("memory-safe") {
+            mstore(ids, count)
+        }
+    }
+
+    function _pickAssets(KeyfleetRewards rewards, uint256 mask) internal view returns (address[] memory assets) {
+        address[] memory all = rewards.rewardAssets();
+        assets = new address[](all.length);
+        uint256 count;
+        for (uint256 i = 0; i < all.length; ++i) {
+            if ((mask >> i) & 1 == 1) assets[count++] = all[i];
+        }
+        assembly ("memory-safe") {
+            mstore(assets, count)
+        }
+    }
+
+    function _payees(Keyfleet f, address caller, uint256[] memory ids) internal view returns (address[] memory list) {
+        list = new address[](ids.length + 1);
+        list[0] = caller;
+        uint256 count = 1;
+        for (uint256 i = 0; i < ids.length; ++i) {
+            address holder = f.ownerOf(ids[i]);
+            bool listed;
+            for (uint256 p = 0; p < count; ++p) {
+                if (list[p] == holder) listed = true;
+            }
+            if (!listed) list[count++] = holder;
+        }
+        assembly ("memory-safe") {
+            mstore(list, count)
+        }
+    }
+
+    function _owed(Keyfleet f, address asset, address[] memory payees, uint256[] memory ids)
+        internal
+        view
+        returns (uint256 amount)
+    {
+        KeyfleetRewards rewards = f.REWARDS();
+        for (uint256 p = 0; p < payees.length; ++p) {
+            amount += rewards.credits(asset, payees[p]);
+        }
+        for (uint256 i = 0; i < ids.length; ++i) {
+            amount += rewards.accrued(asset, ids[i]);
+        }
+    }
+
+    function _sumBalances(address asset, address[] memory accounts) internal view returns (uint256 sum) {
+        for (uint256 i = 0; i < accounts.length; ++i) {
+            sum += _balanceOf(asset, accounts[i]);
+        }
+    }
+
+    function _balanceOf(address asset, address account) internal view returns (uint256) {
+        return asset == NATIVE ? account.balance : IERC20(asset).balanceOf(account);
+    }
+
+    function _breach(string memory reason) internal {
+        if (bytes(breach).length == 0) breach = reason;
+    }
+}
+
+/// @dev The fleet-wide invariants of plan §4.6 and §4.8 over all five contracts, with Sean's daily
+/// split rules of 6 October: the ledger always holds what it owes in every asset; in every asset
+/// only the split pays, what it holds is exactly what the keys and wallets are owed, which is
+/// exactly what was allocated less what was claimed; the rate stays between 10 and 200 bps; the
+/// funding flag is down outside a run; an unadmitted token is never split; and agents are never
+/// paid. The handler's own checks, which must never have been breached, cover run timing, the
+/// split formula on the treasury's own balance, and exact claims.
+/// forge-config: default.invariant.runs = 256
+/// forge-config: default.invariant.depth = 100
+/// forge-config: default.invariant.fail-on-revert = true
+contract KeyfleetFleetInvariantTest is KeyfleetFixture {
+    address private constant NATIVE = address(0);
+
+    FleetHandler internal handler;
+    MockToken internal ousd;
+
+    function setUp() public {
+        _setUpFixture();
+        vm.warp(1_000_000);
+        ousd = new MockToken("Origin Dollar", "OUSD");
+        handler = new FleetHandler(
+            _deploy(KeyfleetPresets.Preset.FibonacciCascade),
+            _deploy(KeyfleetPresets.Preset.FleetTechAccelerant),
+            usdc,
+            regent,
+            ousd
+        );
+        targetContract(address(handler));
+    }
+
+    function invariant_noStepBrokeTheRules() public view {
+        assertEq(handler.breach(), "");
+    }
+
+    /// @dev In ETH, REGENT and OUSD the split is the only way in: the ledger's balance is exactly
+    /// its backing, which is exactly every key's unsettled share plus every wallet's credit, and
+    /// exactly what the split allocated less what claims paid.
+    function invariant_splitAssetsAreOwedExactlyWhatTheLedgerHolds() public view {
+        address[3] memory assets = [NATIVE, address(regent), address(ousd)];
+        for (uint256 f = 0; f < 2; ++f) {
+            Keyfleet fleet = handler.fleet(f);
+            KeyfleetRewards rewards = fleet.REWARDS();
+            for (uint256 a = 0; a < 3; ++a) {
+                address asset = assets[a];
+                uint256 backed = rewards.backed(asset);
+                assertEq(_balanceOf(asset, address(rewards)), backed, "the ledger holds exactly its backing");
+                assertEq(_owedToAll(fleet, asset), backed, "which is exactly what keys and wallets are owed");
+                assertEq(
+                    handler.allocated(f, asset) - handler.claimed(f, asset),
+                    backed,
+                    "which is what was allocated less what was claimed"
+                );
+            }
+        }
+    }
+
+    /// @dev USDC also comes in through the cohort lane, whose per-key remainder below one unit
+    /// stays in the ledger: backing covers everything owed, short of it by under a unit per key.
+    function invariant_usdcBackingCoversWhatIsOwed() public view {
+        for (uint256 f = 0; f < 2; ++f) {
+            Keyfleet fleet = handler.fleet(f);
+            KeyfleetRewards rewards = fleet.REWARDS();
+            uint256 backed = rewards.backed(address(usdc));
+            uint256 owed = _owedToAll(fleet, address(usdc));
+            assertGe(usdc.balanceOf(address(rewards)), backed, "the ledger holds its USDC backing");
+            assertGe(backed, owed, "backing covers every key and wallet");
+            assertLe(backed - owed, fleet.totalMinted(), "short of it by under a unit per key");
+        }
+    }
+
+    function invariant_theRateStaysInRangeAndTheFlagIsDown() public view {
+        for (uint256 f = 0; f < 2; ++f) {
+            KeyfleetTreasury treasury = handler.fleet(f).TREASURY();
+            uint256 bps = treasury.dailySplitBps();
+            assertGe(bps, 10);
+            assertLe(bps, 200);
+            assertFalse(treasury.splitInProgress(), "the funding flag is up only inside a run");
+            assertLe(treasury.lastRunAt(), block.timestamp);
+        }
+    }
+
+    function invariant_anUnadmittedTokenIsNeverSplit() public view {
+        for (uint256 f = 0; f < 2; ++f) {
+            Keyfleet fleet = handler.fleet(f);
+            if (address(fleet.TREASURY().ousd()) == address(0)) {
+                assertEq(fleet.REWARDS().splitIndex(address(ousd)), 0);
+            }
+        }
+    }
+
+    /// @dev Agents press claim but are never paid and never owed.
+    function invariant_agentsAreNeverPaid() public view {
+        address[4] memory assets = [NATIVE, address(regent), address(usdc), address(ousd)];
+        for (uint256 i = 0; i < 3; ++i) {
+            address wallet = handler.agent(i);
+            for (uint256 a = 0; a < 4; ++a) {
+                assertEq(_balanceOf(assets[a], wallet), 0, "an agent's balance");
+                for (uint256 f = 0; f < 2; ++f) {
+                    assertEq(handler.fleet(f).REWARDS().credits(assets[a], wallet), 0, "an agent's credit");
+                }
+            }
+        }
+    }
+
+    /// @dev Every key's unsettled amount plus every actor's credit; only actors ever hold keys.
+    function _owedToAll(Keyfleet fleet, address asset) private view returns (uint256 owed) {
+        KeyfleetRewards rewards = fleet.REWARDS();
+        uint256 minted = fleet.totalMinted();
+        for (uint256 k = 1; k <= minted; ++k) {
+            owed += rewards.accrued(asset, k);
+        }
+        for (uint256 i = 0; i < 16; ++i) {
+            owed += rewards.credits(asset, handler.actor(i));
+        }
+    }
+
+    function _balanceOf(address asset, address account) private view returns (uint256) {
+        return asset == NATIVE ? account.balance : IERC20(asset).balanceOf(account);
+    }
+}

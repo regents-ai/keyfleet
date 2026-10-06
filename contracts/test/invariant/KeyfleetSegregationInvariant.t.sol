@@ -117,7 +117,7 @@ contract SegregationHandler is Test {
     /// @dev One call from a menu reaching every contract of the fleet and USDC, with arguments
     /// drawn from `seed`: payments and advances, raw token moves and approvals, purchases, surplus
     /// and the protocol share, key transfers, every ledger entry point, the controller's and the
-    /// shard record's, and the treasury's own.
+    /// shard record's, and the treasury's own, the daily split and its rate included.
     function _call(Keyfleet fleet, uint256 seed) internal view returns (KeyfleetTreasury.Call memory) {
         Draw memory d;
         d.fleet = fleet;
@@ -127,7 +127,7 @@ contract SegregationHandler is Test {
         d.tokenId = 1 + d.arg % fleet.totalMinted();
         d.someone = d.arg % 4 == 0 ? holderOf(d.tokenId) : address(uint160(d.arg));
         d.amount = d.arg % (usdc.balanceOf(address(d.treasury)) + 2);
-        uint256 pick = seed % 22;
+        uint256 pick = seed % 24;
         return pick < 9 ? _moneyCall(d, pick) : _contractCall(d, pick);
     }
 
@@ -201,6 +201,10 @@ contract SegregationHandler is Test {
         if (pick == 20) {
             return _c(address(d.treasury), 0, abi.encodeCall(d.treasury.returnAdvance, (d.arg % 4, 0)));
         }
+        if (pick == 21) return _c(address(d.treasury), 0, abi.encodeCall(d.treasury.runVotedSplit, ()));
+        if (pick == 22) {
+            return _c(address(d.treasury), 0, abi.encodeCall(d.treasury.setDailySplitBps, (d.arg % 250)));
+        }
         return _c([address(d.fleet), address(rewards), address(votes)][d.arg % 3], d.arg % 1 ether, "");
     }
 
@@ -212,7 +216,7 @@ contract SegregationHandler is Test {
 /// @dev Segregation (plan §4.8): no batch of calls a proposal could carry out, against any of the
 /// fleet's five contracts, lowers the core's owed protocol share or Cascade reserve or what the
 /// ledger owes any holder, and the core and the ledger always hold at least what they have booked.
-/// forge-config: default.invariant.runs = 64
+/// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
 contract KeyfleetSegregationInvariantTest is KeyfleetFixture {

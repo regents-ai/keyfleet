@@ -809,10 +809,24 @@ reveal, trait-draw and deployment tests, with the presence queue's invariants ru
 over random renewals, transfers, sweeps, openings and the passing of time, the
 growing electorate's over random proposals, ballots, transfers, renewals,
 sweeps, sales and the passing of time, and segregation's over random batches of
-calls a proposal could make against all five contracts and USDC: none lowers the
-owed protocol share, the Cascade reserve outside a level completion, any
-wallet's credit or any key's accrual, and the fleet and the ledger always hold
-what they have booked.
+calls a proposal could make against all five contracts and USDC, the daily
+split and its rate included: none lowers the owed protocol share, the Cascade
+reserve outside a level completion, any wallet's credit or any key's accrual,
+and the fleet and the ledger always hold what they have booked.
+
+The fleet-wide invariants (`test/invariant/KeyfleetFleetInvariant.t.sol`) run a
+Cascade fleet and an Accelerant fleet through random purchases, key transfers,
+shards given to agents, money sent to the treasury and the fleet, payments out,
+public and voted daily splits, rate changes, OUSD admission, claims by holders,
+former holders and agents, and the passing of time. In ETH, REGENT and OUSD the
+ledger holds exactly what it owes, which is exactly what the split sent it less
+what claims paid; in USDC it holds at least what it owes, short by under a unit
+per key at most. The rate stays between 10 and 200, the split's funding flag is
+never left up, a token not admitted is never split and an agent is never paid.
+Every public run goes through exactly when it is due, every run gives each key
+exactly the formula's share of the treasury's own balance, and every claim pays
+exactly what is owed to exactly the right wallets. Every invariant suite runs
+256 sequences of 100 calls or more.
 
 Last, `script/check_bytecode.sh` disassembles the deployed code of the five
 contracts with `cast disassemble` and walks it from its entry point, following

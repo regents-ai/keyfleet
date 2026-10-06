@@ -103,7 +103,7 @@ contract ElectorateHandler is Test {
 /// tallies count each key with a ballot exactly once and never exceed `D`; `late` is exactly the
 /// keys with a ballot that were not present at opening; `e0` is never zero; and `D` never exceeds
 /// the keys sold.
-/// forge-config: default.invariant.runs = 64
+/// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
 contract KeyfleetElectorateInvariantTest is Test {

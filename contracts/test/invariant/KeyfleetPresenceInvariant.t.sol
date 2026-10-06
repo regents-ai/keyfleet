@@ -65,7 +65,7 @@ contract PresenceHandler is Test {
 /// @dev The presence queue's invariants (plan §4.1): it is ordered by expiry, `queued` is the
 /// number of linked entries, no key is queued twice, the entries that have not expired are exactly
 /// the present keys, and a key with no record is not present.
-/// forge-config: default.invariant.runs = 64
+/// forge-config: default.invariant.runs = 256
 contract KeyfleetPresenceInvariantTest is Test {
     uint256 private constant KEYS = 8;
 
