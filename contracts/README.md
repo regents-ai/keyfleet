@@ -27,30 +27,36 @@ this branch does:
 - The fleet's treasury is its one payment address. All USDC a fleet receives
   outside a purchase is treasury capital, as is every other token, the capital
   part of every purchase and a completed Cascade level's surplus. Money sent to
-  the fleet contract itself by mistake is forwarded to the treasury. Nothing can
-  spend the treasury yet: the daily split to the keys and spending by an
-  approved proposal's exact calls are later steps. There is no token launch.
+  the fleet contract itself by mistake is forwarded to the treasury. The
+  treasury spends only by making an approved proposal's exact calls; the daily
+  split to the keys is a later step. There is no token launch.
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
 - Accelerant: the first key sends 10% to staking and 90% to the treasury; every
   later key sends 10% to staking, 20% to the treasury and 70% to whoever holds
   the key before it.
-- A Decision proposal stays open until more than half of all keys sold vote
-  yes, and then anyone may carry it out. A RestrictEdits proposal needs at
-  least three fifths. There is no window, deadline or cap.
-- No proposal moves money.
+- A proposal names the key it is made with, a hash of its text, a closing time
+  at most 48 hours away and the exact calls the treasury makes if it passes.
+  Each key casts one ballot, Yes, No or Abstain, which can be changed until
+  closing. The electorate is the keys present when the proposal opened plus
+  every key that joins by casting a ballot; it never shrinks. After closing a
+  proposal passes when Yes is more than half of that electorate, so abstaining
+  and staying silent count against it, and anyone may carry it out within 48
+  hours. Whoever may vote the key it was made with may cancel it until then.
+- A key's edits are restricted, or freed again, only by a passed proposal's
+  call.
 - A key is present for 48 hours after its owner or an agent holding a shard of
-  it renews it, votes it or proposes with it, and stops being present the
-  moment it changes hands. A proposal records how many keys were present when it
-  opened; it does not yet use that count to decide.
+  it renews it, casts a ballot for it, proposes with it or cancels with it, and
+  stops being present the moment it changes hands. A proposal records how many
+  keys were present when it opened, and that count starts its electorate.
 - A key's owner may issue shards: time-limited grants to agent wallets, recorded
   on chain and ended the moment the key changes hands. An agent with a shard
-  always may mark the key present. It may also vote the key and propose with it
-  unless the owner turned the key's agent voting off; every new owner starts
-  with it on. One agent may hold shards of many keys, and every call about keys
-  takes a list of them.
-- Renewals and votes may be signed and handed to anyone to submit; a signature
+  always may mark the key present. It may also vote the key, propose with it
+  and cancel with it unless the owner turned the key's agent voting off; every
+  new owner starts with it on. One agent may hold shards of many keys, and every
+  call about keys takes a list of them.
+- Renewals and ballots may be signed and handed to anyone to submit; a signature
   is void once used, after its deadline, and after any of its keys changes hands
   or has its shards or agent voting changed.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
@@ -58,8 +64,9 @@ this branch does:
 - Keyfleet Classic, decided 28 September 2026: 1,024 keys, the first at 8 USDC
   and the last at 80 USDC, each key the same percentage dearer than the one
   before, rounded to the nearest cent.
-- Referrals, the receipt fee, the 20/80 budget split, the voting window, the pay
-  cap and period, execution expiries and the shared asset registry are deleted.
+- Referrals, the receipt fee, the 20/80 budget split, the pay cap and period,
+  the shared asset registry, proposal kinds, the three-fifths rule and
+  withdrawing a vote are deleted.
 
 On hold or not yet done:
 
@@ -218,14 +225,14 @@ and 49,152 bytes of deployment code per contract. Measured with
 | `Keyfleet` | 14,592 | 26,167 |
 | `KeyfleetRewards` | 5,204 | 5,547 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetVotes` | 13,237 | 14,207 |
-| `KeyfleetTreasury` | 1,377 | 1,955 |
+| `KeyfleetVotes` | 14,531 | 15,647 |
+| `KeyfleetTreasury` | 2,136 | 2,854 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
-33,693. The controller (presence, ballots, proposals) and the treasury (calls,
-the daily split, advances) grow by several times in later steps, which would
-take that past 49,152; deployed separately, each stays well inside both limits.
+33,693, before the controller held proposals and ballots and the treasury made
+calls. With the treasury's daily split and advances still to come, that would
+pass 49,152; deployed separately, each stays well inside both limits.
 
 ### Purchases
 
@@ -350,9 +357,13 @@ before or after any key is sold; with nothing to forward it returns zero and
 says nothing. None of it reaches the keys directly: USDC reaches them only from
 the treasury, through the daily split of a later step.
 
-The treasury is a separate contract bound to its fleet for good. In this version
-it only receives: nothing can spend from it yet. Spending by the exact calls an
-approved proposal names, and the daily split of its USDC, come in later steps.
+The treasury is a separate contract bound to its fleet for good. It spends only
+through `executeBatch(calls)`, which only the fleet's voting controller may call
+(`OnlyVotes`), when a passed proposal is carried out: it makes the proposal's
+exact calls in order, each a plain call with its value, and the first that
+reverts reverts the whole batch with its reason. It runs under the same
+reentrancy lock as the protocol share deposit. The daily split of its USDC comes
+in a later step.
 The Cascade reserve, the owed protocol share and the ledger's backing are never
 in the treasury and are out of any vote's reach. The only ways USDC leaves the
 fleet itself are the protocol share sent through the treasury to staking, the
@@ -365,81 +376,116 @@ are not supported.
 ## Votes
 
 `KeyfleetVotes` is the one collective decision. There are no councils, no
-moderators, no rule amendments, no voting windows, delays, expiries, periods or
-caps and no cancellation.
+moderators, no rule amendments, no quorum classes and no proposal kinds.
 
-Every key is one vote on every kind of proposal, and every key sold counts toward
-the total. The key's owner, or an agent holding an active shard of the key while
-the key's agent voting is on (see Shards), may vote the key with
-`vote(proposalId, tokenIds, support)` and may change its vote until the proposal
-is carried out; voting the same way twice reverts with `AlreadyVoted`. A key has
-one vote per proposal whoever holds it: a key that moves keeps the vote it had,
-and whoever may vote it now may change it or take it away with
-`withdrawVote(proposalId, tokenIds)`. A batch of keys is voted or withdrawn whole
-or not at all, and anybody refused for a key gets
+### Proposals
+
+`propose(authorKey, contentHash, closesAt, calls)` opens a proposal. The caller
+must be allowed to vote `authorKey` (below); the key is their standing and
+nothing else, and proposing casts no ballot. `contentHash` is the hash of the
+proposal's text, kept off chain. `closesAt` is when ballots stop: after now and
+at most 48 hours from now (`ClosingOutOfRange`). `calls` is the exact ordered
+batch of `(target, value, data)` calls the treasury makes if the proposal is
+carried out; an empty batch records agreement and moves nothing. The proposal can
+be carried out until `executionExpiry`, 48 hours after closing. An identical
+proposal made again is a new proposal with its own id, hash and electorate.
+
+Opening sweeps expired presences, renews the author key and records the exact
+count of present keys as `e0` (see Presence). The proposal stores
+`actionsHash = keccak256(abi.encode(calls))` and a `proposalHash`:
+
+```
+keccak256(abi.encode(chainId, votes, treasury, proposalId, authorKey,
+  ownershipEpoch(authorKey), contentHash, actionsHash, closesAt, executionExpiry))
+```
+
+`ProposalCreated(proposalId, authorKey, proposer, proposalHash, contentHash,
+closesAt, executionExpiry, e0, openRevision, calls)` carries the calls in full.
+`proposal(proposalId)` returns the whole record.
+
+### Ballots and the electorate
+
+Each key holds one ballot per proposal: `Yes`, `No` or `Abstain` (numbered 1 to
+3; 0 is no ballot). `castBallot(proposalId, tokenIds, choice)` casts or replaces
+the ballots of a list of keys, all with one choice, and renews each key. The
+key's owner, or an agent holding an active shard of the key while the key's agent
+voting is on (see Shards), may cast it, and whoever acted last decides it. A
+batch is cast whole or not at all, and anybody refused for a key gets
 `NotAuthorizedForKey(tokenId, account)`. A marketplace approval (`approve`,
-`setApprovalForAll`) gives nothing here.
+`setApprovalForAll`) gives nothing here. Ballots stop at closing and on
+cancelling (`BallotsClosed`). `ballotOf(proposalId, tokenId)` reads a ballot and
+`BallotCast(proposalId, voter, choice, tokenIds)` records each call.
 
-A Decision proposal is approved at any moment
-`yesVotes * 2 > FLEET.totalMinted()`: yes must be more than half of all the keys
-sold so far, so a silent key counts against it. A RestrictEdits proposal is
-approved at `yesVotes * 5 >= FLEET.totalMinted() * 3`: at least three fifths,
-so three of five keys pass and 599 of 1,000 do not. The test is live, so a later
-sale can take an approved proposal back to open. `state(proposalId)` reports
-`Open`, `Approved` or `Executed`. `execute(proposalId)` is permissionless and
-carries out an approved proposal once. The proposal is marked carried out before
-the fleet is called, and any revert inside the fleet undoes the mark with
-everything else, so a failed attempt consumes nothing and the proposal stays
-open.
+The electorate grows and never shrinks. A key that was not present when the
+proposal opened joins by casting its first ballot, whatever its choice, and adds
+one to `late`; the denominator is `D = e0 + late`. Replacing a ballot moves the
+key's one contribution and adds nothing; repeating it changes nothing. A key that
+expires, changes hands or abstains stays counted, and a key that changes hands
+keeps its one ballot, which its new holder may replace. Renewing a key changes no
+open proposal.
 
-Proposing needs standing: the proposer names a key they may vote, as above.
-Naming a key is not a vote. There are two kinds, numbered in this order
-from 0:
+### Outcome, cancelling and carrying out
 
-- `Decision`: `proposeDecision(tokenId, text, digest)`. Records agreement and
-  has no on-chain effect beyond `DecisionRecorded`. The text is emitted in
-  `ProposalCreated` and stored nowhere; the optional digest pins an exact
-  artifact or commit.
-- `RestrictEdits`:
-  `proposeRestrictEdits(tokenId, targetTokenId, restricted, text, digest)`.
-  Names any key already sold (`KeyNotMinted` otherwise) and whether its edits
-  should be restricted or no longer restricted. Carrying it out sets
-  `editsRestricted(targetTokenId)` and emits
-  `EditsRestrictionSet(targetTokenId, restricted, proposalId)`; the latest one
-  carried out stands. It moves no money. What a restriction stops is decided
-  off chain from this record.
+`status(proposalId)` is worked out from the stored facts and the time; nothing
+finalises it. In order: `Cancelled` once cancelled; `Executed` once carried out;
+`Open` until `closesAt`; then `Rejected` unless `yes > floor(D / 2)`; then
+`Approved` until `executionExpiry` and `ExecutionExpired` from then on (numbered
+0 to 5 in the order Open, Approved, Rejected, Cancelled, Executed,
+ExecutionExpired). A proposal is never approved before closing, a tie fails, and
+abstaining or staying silent counts against it. One present key voting Yes on a
+proposal nobody else joins passes it at closing.
 
-No proposal moves money, and the controller holds nothing. A majority of keys can
-approve a decision the rest did not want; claim and reserve solvency and the
-owed protocol share hold regardless of any vote. The controller is deployed
-straight after its fleet, at the address the fleet was given for it
-(`VOTES()`), and refuses to deploy for a fleet that names another
-(`WrongFleet`).
+`cancel(proposalId)` may be called by whoever may vote the author key now, its
+current owner or an agent, while the proposal is open or approved
+(`NotCancellable` otherwise). It renews the author key and emits
+`ProposalCancelled(proposalId, by)`.
 
-Voting is the one call whose cost grows with what it is asked, and only with the
-number of keys named. Each key named is also renewed (below). An agent voting
-ten Classic keys renewed for the first time in one call through its shards
-measured 1,057,582 gas and each further key about 102,700, the same on a
-Fibonacci fleet; the suite asserts ceilings of 1,270,000 and 124,000. An owner
-voting their own keys pays a little less. A holder with more keys than a block
-can carry splits the vote across calls. Carrying out a proposal costs the same on any size of fleet;
-opening one costs the same apart from the expired presences it sweeps.
+`execute(proposalId, calls)` is permissionless and renews no key. The proposal
+must be approved (`NotApproved(status)`) and the calls must be exactly its batch
+(`ActionsMismatch`): a changed target, value, data or order, or a call added or
+left out, is refused. The proposal is marked carried out and the treasury makes
+the calls; if any reverts, everything reverts, and the proposal stays approved to
+be retried until it expires. It is locked against reentry, so a call cannot carry
+out another proposal. `ProposalExecuted(proposalId, executor)` records it.
 
-### Signed renewals and votes
+The one thing the controller records for the fleet is whether a key's edits are
+restricted. `setEditsRestricted(tokenId, restricted)` may be called only by the
+treasury (`OnlyTreasury`), so only by a carried-out proposal's call, and only for
+a key already sold (`KeyNotMinted`). It sets `editsRestricted(tokenId)` and emits
+`EditsRestrictionSet(tokenId, restricted)`; the latest one carried out stands.
+What a restriction stops is decided off chain from this record.
 
-Whoever may renew or vote keys may instead sign the request and hand it to
-anyone to submit: `presentBySig(tokenIds, signer, deadline, signature)` and
-`voteBySig(proposalId, tokenIds, support, signer, deadline, signature)`. The
-signer must be allowed to act for every key when it is submitted, exactly as if
-they had sent it, and a vote is recorded under the signer. The submitter needs no
+The controller holds nothing. Claim and reserve solvency, the Cascade reserve and
+the owed protocol share hold regardless of any vote. The controller is deployed
+straight after its fleet, at the address the fleet was given for it (`VOTES()`),
+and refuses to deploy for a fleet that names another (`WrongFleet`).
+
+Casting ballots is the one call whose cost grows with what it is asked, and only
+with the number of keys named. An agent casting first ballots for ten Classic
+keys in one call through its shards measured 1,040,721 gas and each further key
+about 103,500, the same on a Fibonacci fleet; the suite asserts ceilings of
+1,250,000 and 125,000. An owner casting their own keys' ballots pays a little
+less. A holder with more keys than a block can carry splits them across calls.
+Cancelling costs the same on any size of fleet, carrying out costs the same
+apart from the calls it makes, and opening costs the same apart from the expired
+presences it sweeps.
+
+### Signed renewals and ballots
+
+Whoever may renew keys or cast their ballots may instead sign the request and
+hand it to anyone to submit: `presentBySig(tokenIds, signer, deadline, signature)`
+and `castBallotBySig(proposalId, tokenIds, choice, signer, deadline, signature)`.
+The signer must be allowed to act for every key when it is submitted, exactly as
+if they had sent it, and a ballot is recorded under the signer. The submitter needs no
 standing and can change nothing that was signed.
 
 The messages are EIP-712 typed data in the domain `KeyfleetVotes`, version `1`,
 on the chain the controller is on (Base, 8453), at the controller's address:
 
 - `Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)`
-- `Ballot(uint256 proposalId,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)`,
-  where `choice` is 1 for yes and 2 for no.
+- `Ballot(uint256 proposalId,bytes32 proposalHash,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)`,
+  where `choice` is 1 for Yes, 2 for No and 3 for Abstain, and `proposalHash` is
+  the proposal's, so a signed ballot counts on that proposal alone.
 
 The keys are listed in strictly ascending order (`KeysNotAscending`), and for
 each key the message carries its `ownershipEpoch` on the fleet and its
@@ -458,7 +504,8 @@ the exact values.
 
 A key is present for 48 hours (172,800 seconds, by block time, never by block
 count) after its owner or a wallet holding an active shard of it renews it with
-`present(tokenIds)` or the signed `presentBySig`, votes it, or proposes with it.
+`present(tokenIds)` or the signed `presentBySig`, casts a ballot for it,
+proposes with it, or cancels a proposal made with it.
 A shard may renew its key whether or not the key's agent voting is on. It stops being present the moment it changes
 hands, and its new owner renews it under the new ownership. Nobody else can
 renew a key, a batch with one such key renews none, and renewing changes no open
@@ -476,14 +523,14 @@ whether more are due, and emits `Swept(removed, due)`. `presenceQueue()` and
 Opening a proposal first sweeps up to 256 expired entries. If any are still due
 it reverts with `MaintenanceRequired` and changes nothing, so a proposal never
 records a count that includes expired keys; anyone may sweep the rest and try
-again. It then renews the proposer's key and records the opening revision, time
+again. It then renews the author key and records the opening revision, time
 and exact count of present keys (`e0`, never zero) in the proposal and in
 `ProposalCreated`. Each renewal, change of hands and opening is numbered in
 order, and each key keeps a checkpoint of its renewals and changes of hands, so
 `wasActiveAtOpening(proposalId, tokenId)` answers exactly even for several of
 them in one block: renewed, moved, then opened is not present at the opening;
-renewed, opened, then moved is. The count is recorded for the electorate rule
-that comes next; approval today is still the share of all keys sold above.
+renewed, opened, then moved is. The count starts the proposal's electorate (see
+Votes).
 
 Measured in a transaction of their own with every account cold: a key's first
 renewal 91,407 gas, a later one 69,958, sweeping 4,871 per expired entry, and a
@@ -519,14 +566,14 @@ may have shards in many wallets. Every call takes a list of keys.
   agent voting off or back on, emitting `AgentVotingSet(tokenId, on, epoch)`.
   It is on for every key unless its owner turned it off, and a change of hands
   turns it back on for the new owner. `agentVoting(tokenId)` reads it, and
-  `mayGovern(tokenId, wallet)` says whether a wallet's shard may vote and propose
-  with the key now.
+  `mayGovern(tokenId, wallet)` says whether a wallet's shard may vote, propose
+  and cancel with the key now.
 - `delegationRevision(tokenId)` goes up on every issue, end and agent-voting
-  switch for the key. Signed renewals and votes carry it (see Votes).
+  switch for the key. Signed renewals and ballots carry it (see Votes).
 
 What an active shard lets its wallet do: work in the key's workspace (decided off
 chain from this record), mark the key present, and, while the key's agent voting
-is on, vote the key and propose with it. A shard is a record, not a token: it
+is on, vote the key, propose with it and cancel with it. A shard is a record, not a token: it
 cannot be moved, sold or approved, it carries no money, and its wallet can never
 move the key, issue shards of it or switch its agent voting.
 
@@ -648,7 +695,9 @@ Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
 voting, presence, shard, signature,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
-over random renewals, transfers, sweeps, openings and the passing of time. Foundry must be installed; the compiler may be
+over random renewals, transfers, sweeps, openings and the passing of time, and
+the growing electorate's over random proposals, ballots, transfers, renewals,
+sweeps, sales and the passing of time. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from
 `test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
 is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,

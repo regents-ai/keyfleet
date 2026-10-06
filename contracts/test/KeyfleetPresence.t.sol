@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
@@ -126,7 +127,8 @@ contract KeyfleetPresenceTest is Test {
         assertEq(_queued(votes), 3, "time alone removes nothing from the queue");
 
         vm.prank(alice);
-        uint256 proposalId = votes.proposeDecision(2, "wake up", bytes32(0));
+        uint256 proposalId =
+            votes.propose(2, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         assertEq(votes.proposal(proposalId).e0, 1, "only the proposer's key counts");
         assertEq(_queued(votes), 1);
         assertTrue(votes.wasActiveAtOpening(proposalId, 2));
@@ -149,7 +151,8 @@ contract KeyfleetPresenceTest is Test {
         vm.warp(block.timestamp + WINDOW);
         assertEq(_queued(votes), 1, "an expired entry");
         vm.prank(alice);
-        uint256 proposalId = votes.proposeDecision(1, "dormant fleet", bytes32(0));
+        uint256 proposalId =
+            votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         assertEq(votes.proposal(proposalId).e0, 1);
     }
 
@@ -235,14 +238,15 @@ contract KeyfleetPresenceTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(KeyfleetVotes.MaintenanceRequired.selector);
-        votes.proposeDecision(1, "stale", bytes32(0));
+        votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         assertEq(_queued(votes), keys, "the refused opening swept nothing");
 
         (uint256 removed, bool due) = votes.sweepExpired(5);
         assertEq(removed, 5);
         assertTrue(due);
         vm.prank(alice);
-        uint256 proposalId = votes.proposeDecision(1, "fresh", bytes32(0));
+        uint256 proposalId =
+            votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         assertEq(votes.proposal(proposalId).e0, 1, "an exact count: the proposer's key alone");
         assertEq(_queued(votes), 1);
     }
@@ -260,9 +264,9 @@ contract KeyfleetPresenceTest is Test {
         vm.startPrank(alice);
         votes.present(_ids(2));
         fleet.transferFrom(alice, bob, 2);
-        uint256 first = votes.proposeDecision(1, "first", bytes32(0));
+        uint256 first = votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         votes.present(_ids(3));
-        uint256 second = votes.proposeDecision(1, "second", bytes32(0));
+        uint256 second = votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         fleet.transferFrom(alice, bob, 3);
         vm.stopPrank();
 
@@ -383,11 +387,12 @@ contract KeyfleetPresenceTest is Test {
         _buy(fleet, alice, 3);
 
         vm.prank(alice);
-        uint256 proposalId = votes.proposeDecision(1, "renew", bytes32(0));
+        uint256 proposalId =
+            votes.propose(1, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
         assertTrue(votes.isActive(1), "the proposer's key");
         assertFalse(votes.isActive(2));
         vm.prank(alice);
-        votes.vote(proposalId, _range(2, 2), true);
+        votes.castBallot(proposalId, _range(2, 2), KeyfleetVotes.Choice.Yes);
         assertTrue(votes.isActive(2), "each voted key");
         assertTrue(votes.isActive(3));
         assertEq(_queued(votes), 3);

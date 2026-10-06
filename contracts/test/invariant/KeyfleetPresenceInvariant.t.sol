@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
+import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
@@ -51,7 +52,8 @@ contract PresenceHandler is Test {
     function propose(uint256 seed) external {
         uint256 tokenId = _key(seed);
         vm.prank(fleet.ownerOf(tokenId));
-        try votes.proposeDecision(tokenId, "", bytes32(0)) {} catch {}
+        try votes.propose(tokenId, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0)) {}
+            catch {}
     }
 
     function wait(uint256 secs) external {

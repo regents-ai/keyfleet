@@ -5,12 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../src/KeyfleetShards.sol";
+import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
-/// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads a
-/// proposal's kind by these numbers and calls these functions, all written out there by hand. If an
-/// event's signature, a function's signature or the kinds change, this fails until both sides agree
-/// again.
+/// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads ballots
+/// and a proposal's status by these numbers and calls these functions, all written out there by
+/// hand. If an event's signature, a function's signature or the numbers change, this fails until both
+/// sides agree again.
 contract KeyfleetVotesTopicsTest is Test {
     function test_ownershipEpochTopic() public pure {
         assertEq(Keyfleet.OwnershipEpoch.selector, 0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1);
@@ -22,24 +23,33 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalCreatedTopic() public pure {
         assertEq(
-            KeyfleetVotes.ProposalCreated.selector, 0x0304fff099efa259236c475a8becd21961ea19ff1e91f791fb27c5e63a3d4848
+            KeyfleetVotes.ProposalCreated.selector, 0x38b5bfd5a74e1cd21d48353dd73195633860c2a395e3a13467494c2a8a81b462
         );
     }
 
-    function test_voteCastTopic() public pure {
-        assertEq(KeyfleetVotes.VoteCast.selector, 0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53);
+    function test_ballotCastTopic() public pure {
+        assertEq(KeyfleetVotes.BallotCast.selector, 0x8fade46d07f3bc5ab9b6f059a9582a5d1c0c1aea60978623e207da414bb1ee45);
     }
 
-    function test_voteWithdrawnTopic() public pure {
+    function test_proposalCancelledTopic() public pure {
         assertEq(
-            KeyfleetVotes.VoteWithdrawn.selector, 0x72cf7f3b692fcac70eec735cf686ea37d566b98a1a37e8f13e755db5b4d0c2c4
+            KeyfleetVotes.ProposalCancelled.selector, 0x74c34a008ce735d9fcf0bd03a9b238d212ad4c441c020661f4ffbb6442645b85
         );
     }
 
-    function test_proposalKindNumbers() public pure {
-        assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
-        assertEq(uint8(KeyfleetVotes.Kind.RestrictEdits), 1);
-        assertEq(uint8(type(KeyfleetVotes.Kind).max), 1);
+    function test_choiceAndStatusNumbers() public pure {
+        assertEq(uint8(KeyfleetVotes.Choice.None), 0);
+        assertEq(uint8(KeyfleetVotes.Choice.Yes), 1);
+        assertEq(uint8(KeyfleetVotes.Choice.No), 2);
+        assertEq(uint8(KeyfleetVotes.Choice.Abstain), 3);
+        assertEq(uint8(type(KeyfleetVotes.Choice).max), 3);
+        assertEq(uint8(KeyfleetVotes.Status.Open), 0);
+        assertEq(uint8(KeyfleetVotes.Status.Approved), 1);
+        assertEq(uint8(KeyfleetVotes.Status.Rejected), 2);
+        assertEq(uint8(KeyfleetVotes.Status.Cancelled), 3);
+        assertEq(uint8(KeyfleetVotes.Status.Executed), 4);
+        assertEq(uint8(KeyfleetVotes.Status.ExecutionExpired), 5);
+        assertEq(uint8(type(KeyfleetVotes.Status).max), 5);
     }
 
     function test_forwardedToTreasuryTopic() public pure {
@@ -66,17 +76,10 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
-    function test_restrictEditsProposedTopic() public pure {
-        assertEq(
-            KeyfleetVotes.RestrictEditsProposed.selector,
-            0x051dcf97e7396a690509aaa36720e1aeaabeff0faca865092638a5b028e2fa8f
-        );
-    }
-
     function test_editsRestrictionSetTopic() public pure {
         assertEq(
             KeyfleetVotes.EditsRestrictionSet.selector,
-            0x2e8b5462cfaf90ff39c1d520552d96015e77788b57b81d3bf8dd40a847037bad
+            0x908aa6b1a2d33ab8aaa026fccd64bd2d84297a4e0e9c496d53edbb67e5165cdc
         );
     }
 
@@ -102,14 +105,23 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
-    /// @dev The calls the platform builds for restricting edits, issuing and ending shards,
-    /// switching agent voting, signed renewals and votes, and sending the protocol share, and the
-    /// views it reads them back through.
-    function test_restrictEditsAndShardSelectors() public view {
-        assertEq(KeyfleetVotes.proposeRestrictEdits.selector, bytes4(0xe18b7f31));
+    /// @dev The calls the platform builds for proposing, casting ballots, cancelling and carrying
+    /// out, restricting edits through a proposal's call, issuing and ending shards, switching agent
+    /// voting, signed renewals and ballots, and sending the protocol share, and the views it reads
+    /// them back through.
+    function test_proposalAndShardSelectors() public view {
+        assertEq(KeyfleetVotes.propose.selector, bytes4(0x67975250));
+        assertEq(KeyfleetVotes.castBallot.selector, bytes4(0xb6e564ef));
+        assertEq(KeyfleetVotes.castBallotBySig.selector, bytes4(0xd56f0ce6));
+        assertEq(KeyfleetVotes.cancel.selector, bytes4(0x40e58ee5));
+        assertEq(KeyfleetVotes.execute.selector, bytes4(0x2b40c480));
+        assertEq(KeyfleetVotes.setEditsRestricted.selector, bytes4(0xa2fea1f9));
+        assertEq(KeyfleetTreasury.executeBatch.selector, bytes4(0x34fcd5be));
+        assertEq(KeyfleetVotes.status.selector, bytes4(0x42d21ef7));
+        assertEq(KeyfleetVotes.proposal.selector, bytes4(0x30326c17));
+        assertEq(KeyfleetVotes(address(0)).ballotOf.selector, bytes4(0xc06ecc07));
         assertEq(KeyfleetVotes(address(0)).editsRestricted.selector, bytes4(0x547676ac));
         assertEq(KeyfleetVotes.presentBySig.selector, bytes4(0xea783601));
-        assertEq(KeyfleetVotes.voteBySig.selector, bytes4(0xa10b9470));
         assertEq(KeyfleetShards.issue.selector, bytes4(0x0423d500));
         assertEq(KeyfleetShards.end.selector, bytes4(0x8dbf85b7));
         assertEq(KeyfleetShards.shardOf.selector, bytes4(0xd6617c02));

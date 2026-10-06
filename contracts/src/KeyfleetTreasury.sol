@@ -4,7 +4,9 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 
 /// @notice The treasury of one fleet: the fleet's one payment address, the only place its free
@@ -15,11 +17,23 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// part of every purchase, a completed Cascade level's released surplus and anything sent to the
 /// fleet contract itself outside a purchase are sent here too.
 ///
-/// The fleet's owed protocol share passes through here inside one call and never stays: the fleet
-/// sends it and immediately asks for it to be deposited into REGENT revenue staking. There is no
-/// administrator, no upgrade path and no pause.
+/// The treasury spends only by making the exact calls of a proposal the keys approved, which the
+/// fleet's `KeyfleetVotes` hands it when the proposal is carried out. The fleet's owed protocol
+/// share passes through here inside one call and never stays: the fleet sends it and immediately
+/// asks for it to be deposited into REGENT revenue staking. Both run under one reentrancy lock.
+/// There is no administrator, no upgrade path and no pause.
 contract KeyfleetTreasury is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+
+    /// @notice One call an approved proposal makes from the treasury.
+    /// @param target The account called.
+    /// @param value Wei sent with the call, from the treasury's balance.
+    /// @param data The exact calldata.
+    struct Call {
+        address target;
+        uint256 value;
+        bytes data;
+    }
 
     /// @notice The source tag every protocol share deposit carries:
     /// `keccak256("keyfleet.protocol_share")`. The source reference is the fleet's address.
@@ -27,6 +41,8 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
 
     /// @notice The fleet this treasury holds the capital of.
     Keyfleet public immutable FLEET;
+    /// @notice The fleet's voting controller, the only account that hands the treasury calls to make.
+    KeyfleetVotes public immutable VOTES;
     /// @notice The fleet's USDC.
     IERC20 public immutable USDC;
     /// @notice Where the protocol share is deposited. On Base the deployment scripts require REGENT
@@ -39,6 +55,8 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     error ZeroAddress();
     /// @notice Only the fleet may ask for the protocol share to be deposited.
     error OnlyFleet();
+    /// @notice Only the fleet's voting controller hands the treasury calls to make.
+    error OnlyVotes();
     /// @notice Staking did not take exactly the amount approved for it.
     error StakingDepositFailed(uint256 amount, uint256 received);
 
@@ -49,6 +67,7 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
         if (address(fleet.TREASURY()) != address(this)) revert WrongFleet(address(fleet));
         if (address(staking) == address(0)) revert ZeroAddress();
         FLEET = fleet;
+        VOTES = fleet.VOTES();
         USDC = fleet.USDC();
         REGENT_STAKING = staking;
     }
@@ -66,6 +85,20 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
             REGENT_STAKING.depositUSDC(amount, PROTOCOL_SHARE_TAG, bytes32(uint256(uint160(address(FLEET)))));
         if (received != amount || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) {
             revert StakingDepositFailed(amount, received);
+        }
+    }
+
+    /// @notice Makes an approved proposal's calls, in order.
+    /// @dev Only the voting controller calls this, when a proposal is carried out, after checking
+    /// the calls against the proposal. Each is a plain call with its value; the first that reverts
+    /// reverts the whole batch with its reason, so a batch never half succeeds.
+    /// @param calls The proposal's exact calls.
+    function executeBatch(Call[] calldata calls) external nonReentrant {
+        if (msg.sender != address(VOTES)) revert OnlyVotes();
+        for (uint256 i = 0; i < calls.length; ++i) {
+            Call calldata call = calls[i];
+            (bool success, bytes memory returndata) = call.target.call{value: call.value}(call.data);
+            Address.verifyCallResult(success, returndata);
         }
     }
 }

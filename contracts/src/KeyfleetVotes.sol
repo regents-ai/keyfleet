@@ -4,105 +4,104 @@ pragma solidity 0.8.26;
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 import {KeyfleetShards} from "./KeyfleetShards.sol";
+import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
 
-/// @notice The one fixed vote of a fleet: a proposal that stays open until it is carried out, and a
-/// fixed approval rule for each kind.
+/// @notice The one fixed vote of a fleet: exact proposals decided by a growing electorate of keys.
 /// @dev One instance is permanently bound to one fleet. It is deployed straight after the fleet, at
 /// the address the fleet was given for it, and refuses to deploy for a fleet that names another
-/// controller. There are no councils, no moderators, no rule amendments and no configurable
-/// presets, and no windows, delays, expiries, periods or caps. A Decision is approved at any moment its
-/// YES votes are more than half of all the keys sold so far, `yesVotes * 2 > FLEET.totalMinted()`;
-/// a RestrictEdits is approved at any moment its YES votes are at least three fifths of them,
-/// `yesVotes * 5 >= FLEET.totalMinted() * 3`. Either way a key that stays silent counts against
-/// it. Anyone may carry out an approved proposal, and until someone does it stays open.
+/// controller. There are no councils, no moderators, no rule amendments, no quorum classes and no
+/// configurable presets.
 ///
-/// Every key is one vote on every kind of proposal, whatever the preset, and every key sold counts
-/// toward "all the keys". The key's current owner may vote it or change its vote until the
-/// proposal is carried out, whenever the key was bought or last moved: a key has one vote per
-/// proposal, and moving it hands that one vote to its new holder. So may any wallet holding an
-/// active shard of the key (`KeyfleetShards`) while the key's agent voting is on, which it is unless
-/// the owner turned it off. Whoever may vote a key may withdraw its vote with `withdrawVote` until
-/// the proposal is carried out. A withdrawn key has no vote and counts against the proposal,
-/// exactly as a silent one does.
+/// A proposal names an author key, a content hash for its narrative, a closing time at most 48 hours
+/// away and an exact ordered batch of calls for the fleet's treasury to make. Its execution expiry
+/// is fixed at 48 hours after closing, and a proposal hash binds the chain, this controller, the
+/// treasury, the proposal id, the author key and its ownership epoch, the content, the calls and
+/// both times. A batch with no calls records agreement and moves nothing.
 ///
-/// This controller also records which keys are present (`KeyfleetPresence`): a key is present for
-/// 48 hours after its owner or any wallet holding an active shard of it renews it with `present`,
-/// or it is voted or proposed with, and stops being present the moment it changes hands. Opening a
-/// proposal requires every expired presence to have been swept, renews the proposer's key, and
-/// records the opening revision, time and exact count of present keys.
+/// The electorate grows and never shrinks. When a proposal opens, every expired presence must
+/// have been swept, the author key is renewed, and the exact count of present keys is recorded as
+/// `e0` (never zero). A key outside that count that casts its first ballot before closing joins
+/// late and adds one to the denominator `D = e0 + late`. Each key holds one ballot per proposal,
+/// Yes, No or Abstain, which whoever may vote it now may replace until closing; replacing moves
+/// the key's one contribution and repeating it changes nothing. No expiry, change of hands,
+/// abstention or ballot replacement lowers `D`. After closing, a proposal is approved exactly when
+/// `yes > floor(D / 2)`, and anyone may carry it out until its execution expiry. It is never
+/// approved before closing. Its status is worked out from these stored facts; nothing finalises it.
 ///
-/// There are two kinds. A `Decision` records agreement and has no external side effect; its
-/// text is carried in the creation event only and an optional digest pins the exact artifact or
-/// commit. A `RestrictEdits` names a key and whether its edits are to be restricted or
-/// unrestricted, and, once carried out, records that in `editsRestricted`, which is read off chain
-/// to decide whether the key and its shards may write the fleet's workspace.
+/// A key's current owner may vote it, propose with it and cancel what it authored, and so may a
+/// wallet holding an active shard of it (`KeyfleetShards`) while the key's agent voting is on, which
+/// it is unless the owner turned it off. Keys are renewed (`KeyfleetPresence`) for 48 hours by
+/// `present`, by every ballot, by proposing and by cancelling; renewing changes no open proposal.
+/// Renewals and ballots may also be signed and submitted by anyone (`presentBySig`,
+/// `castBallotBySig`): a signed message names its keys in ascending order and binds each key's
+/// ownership epoch and delegation revision and the signer's nonce, and a ballot also binds the
+/// proposal hash, so a change of hands, any change to the key's shards or agent voting, or a
+/// second submission voids it. Signatures are checked with OpenZeppelin `SignatureChecker`, which
+/// accepts ordinary wallets and contract wallets (ERC-1271).
 ///
-/// No vote moves money here. The fleet's capital is held by its `KeyfleetTreasury`.
-///
-/// Renewing and voting may also be signed and handed to anyone to submit (`presentBySig`,
-/// `voteBySig`). A signed message names its keys in ascending order and binds each key's ownership
-/// epoch and delegation revision and the signer's nonce, so a change of hands, any change to the
-/// key's shards or agent voting, or a submission of the same message twice voids it. Signatures are
-/// checked with OpenZeppelin `SignatureChecker`, which accepts ordinary wallets and contract wallets
-/// (ERC-1271). The signer must be allowed to act for every key when the message is submitted, exactly
-/// as if they had sent it themselves; the submitter needs no standing.
-///
-/// There is no administrator, no upgrade path, no pause, no cancellation and no quorum tuning. A
-/// majority of keys can approve a decision the rest of the fleet did not want, and no hidden signer
-/// is introduced to prevent that.
-contract KeyfleetVotes is EIP712, Nonces {
+/// Carrying out a proposal checks the calls against its hash, marks it executed and has the
+/// treasury make them in order; a reverting call reverts everything, so the proposal stays approved
+/// and may be retried until it expires. The controller holds nothing. The one thing it records for
+/// the fleet is whether a key's edits are restricted, which only the treasury may set, so only a
+/// carried-out proposal can. There is no administrator, no upgrade path and no pause.
+contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     using KeyfleetPresence for KeyfleetPresence.Queue;
 
-    /// @notice What a proposal does once it is carried out.
-    enum Kind {
-        Decision,
-        RestrictEdits
-    }
-
-    /// @notice Where a proposal stands right now.
-    /// @dev `Open` and `Approved` are both open to votes; `Approved` means it may be carried out now.
-    enum State {
-        Open,
-        Approved,
-        Executed
-    }
-
-    /// @notice How one key has voted on one proposal.
+    /// @notice One key's ballot on one proposal.
     enum Choice {
         None,
         Yes,
-        No
+        No,
+        Abstain
     }
 
-    /// @notice One proposal. Its payload is fixed at creation; only the tallies move.
-    /// @dev A RestrictEdits proposal's two fields are zero on a Decision.
-    /// @param kind Decision or RestrictEdits.
-    /// @param proposer The address that created it.
+    /// @notice Where a proposal stands, worked out from its stored facts and the time.
+    enum Status {
+        Open,
+        Approved,
+        Rejected,
+        Cancelled,
+        Executed,
+        ExecutionExpired
+    }
+
+    /// @notice One proposal. Its payload and opening are fixed at creation; only the tallies and
+    /// the two flags move.
+    /// @param contentHash The hash of the proposal's narrative, kept off chain.
+    /// @param actionsHash `keccak256(abi.encode(calls))` of the exact batch to carry out.
+    /// @param proposalHash The hash binding the whole proposal; signed ballots carry it.
+    /// @param authorKey The key it was proposed with.
     /// @param openRevision The presence revision recorded at opening.
     /// @param openedAt The time it opened.
-    /// @param e0 How many keys were present when it opened, counted after every due expiry was
-    /// swept. Never zero: the proposer's key is renewed first.
-    /// @param yesVotes Keys whose current vote is YES.
-    /// @param noVotes Keys whose current vote is NO.
+    /// @param closesAt The time ballots stop: the first second it is closed.
+    /// @param executionExpiry The first second it can no longer be carried out.
+    /// @param e0 How many keys were present when it opened. Never zero.
+    /// @param late How many keys outside `e0` joined by casting a ballot.
+    /// @param yes Keys whose ballot is Yes.
+    /// @param no Keys whose ballot is No.
+    /// @param abstain Keys whose ballot is Abstain.
+    /// @param cancelled Whether its author key cancelled it.
     /// @param executed Whether it has been carried out.
-    /// @param digest Optional exact artifact or commit digest; zero means none.
-    /// @param targetTokenId RestrictEdits only: the key whose edits it restricts or unrestricts.
-    /// @param restricted RestrictEdits only: true to restrict, false to unrestrict.
     struct Proposal {
-        Kind kind;
-        address proposer;
+        bytes32 contentHash;
+        bytes32 actionsHash;
+        bytes32 proposalHash;
+        uint32 authorKey;
         uint48 openRevision;
         uint64 openedAt;
+        uint64 closesAt;
+        uint64 executionExpiry;
         uint32 e0;
-        uint256 yesVotes;
-        uint256 noVotes;
+        uint32 late;
+        uint32 yes;
+        uint32 no;
+        uint32 abstain;
+        bool cancelled;
         bool executed;
-        bytes32 digest;
-        uint256 targetTokenId;
-        bool restricted;
     }
 
     /// @notice The fleet does not name this contract as its voting controller.
@@ -113,11 +112,13 @@ contract KeyfleetVotes is EIP712, Nonces {
     error KeyNotMinted(uint256 tokenId);
     /// @notice Only the fleet reports a key changing hands.
     error OnlyFleet();
+    /// @notice Only the fleet's treasury, carrying out a proposal, may do this.
+    error OnlyTreasury();
     /// @notice Expired presences are still queued after this call's sweep, so the count of present
     /// keys is not exact; `sweepExpired` must run before a proposal can open.
     error MaintenanceRequired();
     /// @notice The account may not act for this key: it neither owns the key nor holds an active
-    /// shard of it, or, to vote or propose, the key's agent voting is off.
+    /// shard of it, or, to vote, propose or cancel, the key's agent voting is off.
     error NotAuthorizedForKey(uint256 tokenId, address account);
     /// @notice A signed message's deadline has passed.
     error SignatureExpired(uint256 deadline);
@@ -125,36 +126,56 @@ contract KeyfleetVotes is EIP712, Nonces {
     error InvalidSignature(address signer);
     /// @notice A signed message's keys are not in strictly ascending order.
     error KeysNotAscending();
-    /// @notice The key's current vote on this proposal is already the one asked for.
-    error AlreadyVoted(uint256 tokenId);
-    /// @notice A vote must name at least one key.
+    /// @notice A call must name at least one key.
     error NoKeys();
-    /// @notice The proposal has already been carried out. Every proposal is carried out at most once.
-    error AlreadyExecuted();
-    /// @notice YES is not enough of all the keys sold so far for this kind of proposal.
-    error NotApproved(uint256 yesVotes, uint256 totalMinted);
-    /// @notice The key has no vote on this proposal to withdraw.
-    error NoVote(uint256 tokenId);
+    /// @notice A proposal closes after now and at most 48 hours from now.
+    error ClosingOutOfRange(uint64 closesAt);
+    /// @notice A ballot is Yes, No or Abstain.
+    error InvalidChoice();
+    /// @notice The proposal takes no more ballots: it has closed or was cancelled.
+    error BallotsClosed(uint256 proposalId);
+    /// @notice Only an open or approved proposal can be cancelled.
+    error NotCancellable(Status status);
+    /// @notice Only an approved proposal can be carried out.
+    error NotApproved(Status status);
+    /// @notice The calls are not the exact batch the proposal was made with.
+    error ActionsMismatch();
 
-    /// @notice A proposal was created. `text` is carried here and stored nowhere.
+    /// @notice A proposal was created. The calls are carried here, in full, for indexers.
     /// @param proposalId The new proposal.
-    /// @param kind Decision or RestrictEdits.
-    /// @param proposer The address that created it.
-    /// @param openRevision The presence revision recorded at opening.
-    /// @param openedAt The time it opened.
+    /// @param authorKey The key it was proposed with.
+    /// @param proposer The address that created it: the key's owner or its agent.
+    /// @param proposalHash The hash binding the whole proposal.
+    /// @param contentHash The hash of its narrative.
+    /// @param closesAt The time ballots stop.
+    /// @param executionExpiry The first second it can no longer be carried out.
     /// @param e0 How many keys were present when it opened.
-    /// @param digest Optional exact artifact or commit digest; zero means none.
-    /// @param text The proposal text, for readers; the contract never reads it back.
+    /// @param openRevision The presence revision recorded at opening.
+    /// @param calls The exact batch the treasury makes if it is carried out.
     event ProposalCreated(
         uint256 indexed proposalId,
-        Kind indexed kind,
+        uint256 indexed authorKey,
         address indexed proposer,
-        uint48 openRevision,
-        uint64 openedAt,
+        bytes32 proposalHash,
+        bytes32 contentHash,
+        uint64 closesAt,
+        uint64 executionExpiry,
         uint32 e0,
-        bytes32 digest,
-        string text
+        uint48 openRevision,
+        KeyfleetTreasury.Call[] calls
     );
+
+    /// @notice Keys cast or replaced their ballots on a proposal, all with one choice.
+    event BallotCast(uint256 indexed proposalId, address indexed voter, Choice choice, uint256[] tokenIds);
+
+    /// @notice A proposal was cancelled by whoever may act for its author key.
+    event ProposalCancelled(uint256 indexed proposalId, address indexed by);
+
+    /// @notice A proposal was carried out. It can never be carried out again.
+    event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
+
+    /// @notice A carried-out proposal set whether a key's edits are restricted.
+    event EditsRestrictionSet(uint256 indexed tokenId, bool restricted);
 
     /// @notice A key stopped being present because it changed hands.
     event PresenceCleared(uint256 indexed tokenId);
@@ -172,25 +193,6 @@ contract KeyfleetVotes is EIP712, Nonces {
     /// @param epoch The key's ownership epoch the renewal belongs to.
     event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
 
-    /// @notice The payload of a RestrictEdits proposal, emitted beside its `ProposalCreated`.
-    event RestrictEditsProposed(uint256 indexed proposalId, uint256 indexed targetTokenId, bool restricted);
-
-    /// @notice Keys were voted, one vote each, or had their vote changed to this one. A key counts
-    /// once in the tallies whatever its history.
-    event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256[] tokenIds);
-
-    /// @notice Keys' votes on a proposal were withdrawn, so they have no vote on it now.
-    event VoteWithdrawn(uint256 indexed proposalId, address indexed caller, uint256[] tokenIds);
-
-    /// @notice An approved Decision was recorded. Nothing else happens on chain.
-    event DecisionRecorded(uint256 indexed proposalId, bytes32 digest);
-
-    /// @notice An approved RestrictEdits set whether a key's edits are restricted.
-    event EditsRestrictionSet(uint256 indexed targetTokenId, bool restricted, uint256 indexed proposalId);
-
-    /// @notice A proposal was carried out. It can never be carried out again.
-    event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
-
     /// @notice How many expired presences opening a proposal sweeps before it gives up with
     /// `MaintenanceRequired`.
     uint256 public constant SWEEP_IN_PROPOSE = 256;
@@ -198,28 +200,37 @@ contract KeyfleetVotes is EIP712, Nonces {
     /// @notice How long a renewal keeps a key present: 48 hours, in seconds.
     uint64 public constant PRESENCE_WINDOW = KeyfleetPresence.WINDOW;
 
+    /// @notice The longest a proposal may stay open: 48 hours, in seconds.
+    uint64 public constant MAX_VOTING_PERIOD = 48 hours;
+
+    /// @notice How long an approved proposal may be carried out after closing: 48 hours.
+    uint64 public constant EXECUTION_WINDOW = 48 hours;
+
     /// @notice The EIP-712 type of a signed renewal. The key ids, epochs and delegation revisions
     /// are each hashed as EIP-712 arrays.
     bytes32 public constant PRESENT_TYPEHASH = keccak256(
         "Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
     );
-    /// @notice The EIP-712 type of a signed vote, a different type from a renewal. `choice` is 1 for
-    /// YES and 2 for NO.
+    /// @notice The EIP-712 type of a signed ballot, a different type from a renewal. `choice` is 1
+    /// for Yes, 2 for No and 3 for Abstain.
     bytes32 public constant BALLOT_TYPEHASH = keccak256(
-        "Ballot(uint256 proposalId,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)"
+        "Ballot(uint256 proposalId,bytes32 proposalHash,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)"
     );
 
     /// @notice The fleet that deployed this controller and holds the keys that vote.
     Keyfleet public immutable FLEET;
     /// @notice The fleet's shard record, which says which wallets may act for a key.
     KeyfleetShards public immutable SHARDS;
+    /// @notice The fleet's treasury, which makes an approved proposal's calls.
+    KeyfleetTreasury public immutable TREASURY;
 
     /// @notice Proposals created so far. Proposal ids are `1..proposalCount`.
     uint256 public proposalCount;
-    /// @notice A key's current vote on a proposal.
-    mapping(uint256 proposalId => mapping(uint256 tokenId => Choice choice)) public voteOf;
-    /// @notice Whether the keys voted to restrict a key's edits, as the latest carried-out
-    /// RestrictEdits for that key left it.
+    /// @notice A key's ballot on a proposal.
+    mapping(uint256 proposalId => mapping(uint256 tokenId => Choice choice)) public ballotOf;
+    /// @notice Whether the keys voted to restrict a key's edits, as the latest carried-out proposal
+    /// on it left it. Read off chain to decide whether the key and its shards may write the fleet's
+    /// workspace.
     mapping(uint256 tokenId => bool restricted) public editsRestricted;
 
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
@@ -232,6 +243,7 @@ contract KeyfleetVotes is EIP712, Nonces {
         if (address(fleet.VOTES()) != address(this)) revert WrongFleet(address(fleet));
         FLEET = fleet;
         SHARDS = fleet.SHARDS();
+        TREASURY = fleet.TREASURY();
     }
 
     // --- views -----------------------------------------------------------
@@ -241,13 +253,12 @@ contract KeyfleetVotes is EIP712, Nonces {
         return _require(proposalId);
     }
 
-    /// @notice Where a proposal stands: open, approved and ready to be carried out, or carried out.
-    /// @dev `Approved` is the whole test for a Decision's approval as well as the test `execute`
-    /// applies, and it is read at this moment: a later sale can take a proposal back to `Open`.
-    function state(uint256 proposalId) external view returns (State) {
-        Proposal storage stored = _require(proposalId);
-        if (stored.executed) return State.Executed;
-        return _approved(stored.kind, stored.yesVotes, FLEET.totalMinted()) ? State.Approved : State.Open;
+    /// @notice Where a proposal stands now.
+    /// @dev Cancelled or Executed once that happened; Open until closing; then Rejected unless
+    /// `yes > floor((e0 + late) / 2)`, else Approved until its execution expiry and
+    /// ExecutionExpired from then on. Tallies cannot change after closing, so this is final.
+    function status(uint256 proposalId) external view returns (Status) {
+        return _status(_require(proposalId));
     }
 
     /// @notice Whether a key is present now: renewed under its current owner less than 48 hours ago.
@@ -305,9 +316,12 @@ contract KeyfleetVotes is EIP712, Nonces {
     function presentBySig(uint256[] calldata tokenIds, address signer, uint256 deadline, bytes calldata signature)
         external
     {
-        (bytes32 ids, bytes32 epochs, bytes32 revisions) = _keyState(tokenIds);
         bytes32 structHash = keccak256(
-            abi.encode(PRESENT_TYPEHASH, address(FLEET), ids, epochs, revisions, signer, _useNonce(signer), deadline)
+            bytes.concat(
+                abi.encode(PRESENT_TYPEHASH, address(FLEET)),
+                _keyState(tokenIds),
+                abi.encode(signer, _useNonce(signer), deadline)
+            )
         );
         _requireSigned(structHash, signer, deadline, signature);
         _present(signer, tokenIds);
@@ -331,218 +345,201 @@ contract KeyfleetVotes is EIP712, Nonces {
 
     // --- proposals -------------------------------------------------------
 
-    /// @notice Proposes a Decision: text that records agreement, with no automatic side effect.
-    /// @dev The text is emitted and never stored, because nothing on chain reads it back. The digest
-    /// is stored so an approved decision can be pinned to an exact artifact or commit; zero means none.
-    /// @param tokenId A key the caller may vote. It is the caller's standing to propose and nothing
-    /// else: it is not a vote.
-    /// @param text The proposal text, for readers.
-    /// @param digest Optional exact artifact or commit digest.
+    /// @notice Proposes an exact batch of treasury calls, or none to record agreement only.
+    /// @dev The caller must be allowed to vote `authorKey`. Up to `SWEEP_IN_PROPOSE` expired
+    /// presences are swept first, and if any are still due the call reverts with
+    /// `MaintenanceRequired` rather than record a count that includes expired keys. The author key
+    /// is renewed and then the opening is recorded. Proposing casts no ballot and reserves nothing,
+    /// and an identical proposal made again is a new proposal with its own id and electorate.
+    /// @param authorKey The key proposed with. It is the caller's standing and nothing else.
+    /// @param contentHash The hash of the narrative, kept off chain.
+    /// @param closesAt When ballots stop: after now, and at most 48 hours from now.
+    /// @param calls The exact ordered calls the treasury makes if it is carried out.
     /// @return proposalId The new proposal.
-    function proposeDecision(uint256 tokenId, string calldata text, bytes32 digest)
+    function propose(uint256 authorKey, bytes32 contentHash, uint64 closesAt, KeyfleetTreasury.Call[] calldata calls)
         external
         returns (uint256 proposalId)
     {
-        return _propose(tokenId, Kind.Decision, text, digest);
-    }
-
-    /// @notice Proposes restricting or unrestricting a key's edits.
-    /// @dev Approved only when at least three fifths of all the keys sold vote YES. The key named
-    /// must have been sold; it may be the proposer's own. The text is emitted and never stored,
-    /// exactly as a Decision's is.
-    /// @param tokenId A key the caller may vote.
-    /// @param targetTokenId The key whose edits to restrict or unrestrict.
-    /// @param restricted True to restrict, false to unrestrict.
-    /// @param text The reason, for readers.
-    /// @param digest Optional exact artifact or commit digest.
-    /// @return proposalId The new proposal.
-    function proposeRestrictEdits(
-        uint256 tokenId,
-        uint256 targetTokenId,
-        bool restricted,
-        string calldata text,
-        bytes32 digest
-    ) external returns (uint256 proposalId) {
-        if (targetTokenId == 0 || targetTokenId > FLEET.totalMinted()) {
-            revert KeyNotMinted(targetTokenId);
+        if (closesAt <= block.timestamp || closesAt > block.timestamp + MAX_VOTING_PERIOD) {
+            revert ClosingOutOfRange(closesAt);
         }
+        _requireGovernor(authorKey, msg.sender);
+        (, bool due) = _sweep(SWEEP_IN_PROPOSE);
+        if (due) revert MaintenanceRequired();
+        _touch(authorKey);
 
-        proposalId = _propose(tokenId, Kind.RestrictEdits, text, digest);
+        proposalId = proposalCount + 1;
+        proposalCount = proposalId;
         Proposal storage stored = _proposals[proposalId];
-        stored.targetTokenId = targetTokenId;
-        stored.restricted = restricted;
-        emit RestrictEditsProposed(proposalId, targetTokenId, restricted);
+        stored.contentHash = contentHash;
+        stored.actionsHash = keccak256(abi.encode(calls));
+        stored.authorKey = uint32(authorKey);
+        stored.openRevision = _presence.mark();
+        stored.openedAt = uint64(block.timestamp);
+        stored.closesAt = closesAt;
+        stored.executionExpiry = closesAt + EXECUTION_WINDOW;
+        stored.e0 = _presence.queued;
+        stored.proposalHash = _proposalHash(proposalId, stored);
+        emit ProposalCreated(
+            proposalId,
+            authorKey,
+            msg.sender,
+            stored.proposalHash,
+            contentHash,
+            closesAt,
+            stored.executionExpiry,
+            stored.e0,
+            stored.openRevision,
+            calls
+        );
     }
 
-    // --- voting ----------------------------------------------------------
-
-    /// @notice Votes a set of keys for or against a proposal, or changes their votes, until it is
-    /// carried out, and renews each key.
+    /// @notice Casts or replaces ballots for a set of keys, all with one choice, and renews each key.
     /// @dev The caller must own every key named, or hold an active shard of it while its agent
-    /// voting is on. A key with no vote adds one to the chosen side; a key with the other vote
-    /// moves from that side to this one; a key that already has this vote is refused with
-    /// `AlreadyVoted`. A key that moved keeps the vote it had, and its new holder may change it.
-    ///
-    /// The whole call reverts if any one id fails, so a caller never half-votes a set by accident.
-    /// @param proposalId The proposal being voted on.
-    /// @param tokenIds The keys to vote, each at most once.
-    /// @param support True for YES, false for NO.
-    function vote(uint256 proposalId, uint256[] calldata tokenIds, bool support) external {
-        _vote(msg.sender, proposalId, tokenIds, support);
+    /// voting is on, and the proposal must be open. A key's first ballot adds it to the electorate
+    /// if it was not present at opening; a later one replaces its contribution. The whole call
+    /// reverts if any one key is refused.
+    /// @param proposalId The proposal.
+    /// @param tokenIds The keys.
+    /// @param choice Yes, No or Abstain.
+    function castBallot(uint256 proposalId, uint256[] calldata tokenIds, Choice choice) external {
+        _castBallot(msg.sender, proposalId, tokenIds, choice);
     }
 
-    /// @notice Votes keys on a signed message, which anyone may submit.
-    /// @dev The signer must be allowed to vote every key now, exactly as for `vote`, and is the
-    /// voter the vote is recorded under.
-    /// @param proposalId The proposal being voted on.
+    /// @notice Casts ballots on a signed message, which anyone may submit.
+    /// @dev The signer must be allowed to vote every key now, exactly as for `castBallot`, and is
+    /// the voter the ballots are recorded under. The message binds the proposal hash, so it cannot
+    /// be used on any other proposal.
+    /// @param proposalId The proposal.
     /// @param tokenIds The keys, in strictly ascending order.
-    /// @param support True for YES, false for NO.
+    /// @param choice Yes, No or Abstain.
     /// @param signer The account that signed.
     /// @param deadline The last timestamp the message may be submitted at.
     /// @param signature The signer's signature over the EIP-712 `Ballot` message.
-    function voteBySig(
+    function castBallotBySig(
         uint256 proposalId,
         uint256[] calldata tokenIds,
-        bool support,
+        Choice choice,
         address signer,
         uint256 deadline,
         bytes calldata signature
     ) external {
-        (bytes32 ids, bytes32 epochs, bytes32 revisions) = _keyState(tokenIds);
         bytes32 structHash = keccak256(
-            abi.encode(
-                BALLOT_TYPEHASH,
-                proposalId,
-                ids,
-                epochs,
-                revisions,
-                support ? Choice.Yes : Choice.No,
-                signer,
-                _useNonce(signer),
-                deadline
+            bytes.concat(
+                abi.encode(BALLOT_TYPEHASH, proposalId, _require(proposalId).proposalHash),
+                _keyState(tokenIds),
+                abi.encode(choice, signer, _useNonce(signer), deadline)
             )
         );
         _requireSigned(structHash, signer, deadline, signature);
-        _vote(signer, proposalId, tokenIds, support);
+        _castBallot(signer, proposalId, tokenIds, choice);
     }
 
-    /// @dev Votes keys for `voter`, who has been authenticated as the caller or a signer.
-    function _vote(address voter, uint256 proposalId, uint256[] calldata tokenIds, bool support) private {
+    /// @notice Cancels an open or approved proposal, and renews its author key.
+    /// @dev Whoever may vote the author key now may cancel: its current owner, or a wallet holding
+    /// an active shard of it while its agent voting is on.
+    /// @param proposalId The proposal.
+    function cancel(uint256 proposalId) external {
         Proposal storage stored = _require(proposalId);
-        if (stored.executed) revert AlreadyExecuted();
-        if (tokenIds.length == 0) revert NoKeys();
-
-        Choice choice = support ? Choice.Yes : Choice.No;
-        uint256 changed;
-        for (uint256 i = 0; i < tokenIds.length; ++i) {
-            uint256 tokenId = tokenIds[i];
-            _requireGovernor(tokenId, voter);
-            _touch(tokenId);
-            Choice previous = voteOf[proposalId][tokenId];
-            if (previous == choice) revert AlreadyVoted(tokenId);
-            if (previous != Choice.None) ++changed;
-            voteOf[proposalId][tokenId] = choice;
-        }
-
-        if (support) {
-            stored.yesVotes += tokenIds.length;
-            stored.noVotes -= changed;
-        } else {
-            stored.noVotes += tokenIds.length;
-            stored.yesVotes -= changed;
-        }
-        emit VoteCast(proposalId, voter, support, tokenIds);
-    }
-
-    /// @notice Withdraws a set of keys' votes on a proposal, until it is carried out.
-    /// @dev The caller must be allowed to vote every key named, as for `vote`, and each must have a
-    /// vote on the proposal, whoever cast it: a key that moved after voting can have that vote
-    /// withdrawn by whoever may vote it now. A withdrawn key has no vote, so it counts against the
-    /// proposal until it votes again.
-    ///
-    /// The whole call reverts if any one id fails, so a caller never half-withdraws a set by accident.
-    /// @param proposalId The proposal the votes were cast on.
-    /// @param tokenIds The keys whose votes to withdraw, each at most once.
-    function withdrawVote(uint256 proposalId, uint256[] calldata tokenIds) external {
-        Proposal storage stored = _require(proposalId);
-        if (stored.executed) revert AlreadyExecuted();
-        if (tokenIds.length == 0) revert NoKeys();
-
-        uint256 yes;
-        for (uint256 i = 0; i < tokenIds.length; ++i) {
-            uint256 tokenId = tokenIds[i];
-            _requireGovernor(tokenId, msg.sender);
-            Choice previous = voteOf[proposalId][tokenId];
-            if (previous == Choice.None) revert NoVote(tokenId);
-            if (previous == Choice.Yes) ++yes;
-            delete voteOf[proposalId][tokenId];
-        }
-
-        stored.yesVotes -= yes;
-        stored.noVotes -= tokenIds.length - yes;
-        emit VoteWithdrawn(proposalId, msg.sender, tokenIds);
+        Status current = _status(stored);
+        if (current != Status.Open && current != Status.Approved) revert NotCancellable(current);
+        uint256 authorKey = stored.authorKey;
+        _requireGovernor(authorKey, msg.sender);
+        stored.cancelled = true;
+        _touch(authorKey);
+        emit ProposalCancelled(proposalId, msg.sender);
     }
 
     // --- execution -------------------------------------------------------
 
-    /// @notice Carries out an approved proposal.
-    /// @dev Permissionless: the result is the vote's, not the caller's. The approval rule is read
-    /// at this moment against all the keys sold so far: YES must be more than half of them for a
-    /// Decision and at least three fifths of them for a RestrictEdits, and every key that stayed
-    /// silent counts against it. A RestrictEdits sets `editsRestricted` for its key.
-    /// @param proposalId The proposal to carry out.
-    function execute(uint256 proposalId) external {
+    /// @notice Carries out an approved proposal: the treasury makes its exact calls, in order.
+    /// @dev Permissionless, and it renews no key. The calls must be exactly the batch the proposal
+    /// was made with. The proposal is marked executed before the treasury is called; if any call
+    /// reverts, everything reverts and the proposal stays approved until its execution expiry.
+    /// Locked against reentry, so an approved call cannot carry out another proposal.
+    /// @param proposalId The proposal.
+    /// @param calls The proposal's exact calls.
+    function execute(uint256 proposalId, KeyfleetTreasury.Call[] calldata calls) external nonReentrant {
         Proposal storage stored = _require(proposalId);
-        if (stored.executed) revert AlreadyExecuted();
-        uint256 keys = FLEET.totalMinted();
-        uint256 yesVotes = stored.yesVotes;
-        Kind kind = stored.kind;
-        if (!_approved(kind, yesVotes, keys)) revert NotApproved(yesVotes, keys);
-
+        Status current = _status(stored);
+        if (current != Status.Approved) revert NotApproved(current);
+        if (keccak256(abi.encode(calls)) != stored.actionsHash) revert ActionsMismatch();
         stored.executed = true;
+        TREASURY.executeBatch(calls);
         emit ProposalExecuted(proposalId, msg.sender);
+    }
 
-        if (kind == Kind.Decision) {
-            emit DecisionRecorded(proposalId, stored.digest);
-        } else {
-            uint256 target = stored.targetTokenId;
-            bool restricted = stored.restricted;
-            editsRestricted[target] = restricted;
-            emit EditsRestrictionSet(target, restricted, proposalId);
-        }
+    /// @notice Sets whether a key's edits are restricted. Only the treasury may, so only an approved
+    /// proposal's call can.
+    /// @param tokenId A key already sold.
+    /// @param restricted True to restrict, false to lift it.
+    function setEditsRestricted(uint256 tokenId, bool restricted) external {
+        if (msg.sender != address(TREASURY)) revert OnlyTreasury();
+        if (tokenId == 0 || tokenId > FLEET.totalMinted()) revert KeyNotMinted(tokenId);
+        editsRestricted[tokenId] = restricted;
+        emit EditsRestrictionSet(tokenId, restricted);
     }
 
     // --- internals -------------------------------------------------------
 
-    /// @dev Records a proposal and its opening. The standing check is the one `vote` applies: the
-    /// caller owns the named key, or holds an active shard of it while its agent voting is on. Up to
-    /// `SWEEP_IN_PROPOSE` expired presences are swept first, and if any are still due the call
-    /// reverts with `MaintenanceRequired` rather than record a count that includes expired keys.
-    /// The proposer's key is renewed, and then the opening revision, time and the exact count of
-    /// present keys are recorded.
-    function _propose(uint256 tokenId, Kind kind, string memory text, bytes32 digest)
-        private
-        returns (uint256 proposalId)
-    {
-        _requireGovernor(tokenId, msg.sender);
-        (, bool due) = _sweep(SWEEP_IN_PROPOSE);
-        if (due) revert MaintenanceRequired();
-        _touch(tokenId);
+    /// @dev Casts ballots for `voter`, who has been authenticated as the caller or a signer. A key
+    /// with no ballot yet joins late unless it was present at opening; ballots never return to
+    /// None, so that test counts each key at most once.
+    function _castBallot(address voter, uint256 proposalId, uint256[] calldata tokenIds, Choice choice) private {
+        if (choice == Choice.None) revert InvalidChoice();
+        if (tokenIds.length == 0) revert NoKeys();
+        Proposal storage stored = _require(proposalId);
+        if (stored.cancelled || block.timestamp >= stored.closesAt) revert BallotsClosed(proposalId);
 
-        proposalId = proposalCount + 1;
-        proposalCount = proposalId;
+        uint256[4] memory tally = [0, uint256(stored.yes), uint256(stored.no), uint256(stored.abstain)];
+        uint256 late = stored.late;
+        for (uint256 i = 0; i < tokenIds.length; ++i) {
+            uint256 tokenId = tokenIds[i];
+            _requireGovernor(tokenId, voter);
+            Choice previous = ballotOf[proposalId][tokenId];
+            if (previous == Choice.None) {
+                if (!_presence.wasActive(tokenId, stored.openRevision, stored.openedAt)) ++late;
+            } else {
+                --tally[uint256(previous)];
+            }
+            ++tally[uint256(choice)];
+            ballotOf[proposalId][tokenId] = choice;
+            _touch(tokenId);
+        }
+        stored.yes = uint32(tally[1]);
+        stored.no = uint32(tally[2]);
+        stored.abstain = uint32(tally[3]);
+        stored.late = uint32(late);
+        emit BallotCast(proposalId, voter, choice, tokenIds);
+    }
 
-        Proposal storage stored = _proposals[proposalId];
-        stored.kind = kind;
-        stored.proposer = msg.sender;
-        uint48 openRevision = _presence.mark();
-        uint32 e0 = _presence.queued;
-        stored.openRevision = openRevision;
-        stored.openedAt = uint64(block.timestamp);
-        stored.e0 = e0;
-        stored.digest = digest;
+    /// @dev The hash binding a proposal: the chain, this controller, the treasury, the id, the
+    /// author key and its ownership epoch now, the content, the calls and both times.
+    function _proposalHash(uint256 proposalId, Proposal storage stored) private view returns (bytes32) {
+        uint256 authorKey = stored.authorKey;
+        return keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                address(TREASURY),
+                proposalId,
+                authorKey,
+                FLEET.ownershipEpoch(authorKey),
+                stored.contentHash,
+                stored.actionsHash,
+                stored.closesAt,
+                stored.executionExpiry
+            )
+        );
+    }
 
-        emit ProposalCreated(proposalId, kind, msg.sender, openRevision, uint64(block.timestamp), e0, digest, text);
+    function _status(Proposal storage stored) private view returns (Status) {
+        if (stored.cancelled) return Status.Cancelled;
+        if (stored.executed) return Status.Executed;
+        if (block.timestamp < stored.closesAt) return Status.Open;
+        if (stored.yes <= (uint256(stored.e0) + stored.late) / 2) return Status.Rejected;
+        if (block.timestamp >= stored.executionExpiry) return Status.ExecutionExpired;
+        return Status.Approved;
     }
 
     /// @dev Sweeps up to `limit` expired presences, announcing any it removes.
@@ -569,19 +566,20 @@ contract KeyfleetVotes is EIP712, Nonces {
         }
     }
 
-    /// @dev Who may vote a key and propose with it: its current owner, or a wallet holding an
-    /// active shard of it while the key's agent voting is on. A token id that is not a minted key
-    /// reverts in `ownerOf`.
+    /// @dev Who may vote a key, propose with it and cancel what it authored: its current owner, or
+    /// a wallet holding an active shard of it while the key's agent voting is on. A token id that is
+    /// not a minted key reverts in `ownerOf`.
     function _requireGovernor(uint256 tokenId, address account) private view {
         if (account != FLEET.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
             revert NotAuthorizedForKey(tokenId, account);
         }
     }
 
-    /// @dev The EIP-712 encoding of a signed message's keys: the ids, then each key's ownership
-    /// epoch and delegation revision now, each array hashed as EIP-712 hashes an array. The ids
-    /// must be strictly ascending, so one set of keys has exactly one encoding.
-    function _keyState(uint256[] calldata tokenIds) private view returns (bytes32, bytes32, bytes32) {
+    /// @dev The EIP-712 encoding of a signed message's three key fields, in place in the struct
+    /// encoding: the ids, then each key's ownership epoch and delegation revision now, each array
+    /// hashed as EIP-712 hashes an array. The ids must be strictly ascending, so one set of keys has
+    /// exactly one encoding.
+    function _keyState(uint256[] calldata tokenIds) private view returns (bytes memory) {
         if (tokenIds.length == 0) revert NoKeys();
         uint64[] memory epochs = new uint64[](tokenIds.length);
         uint64[] memory revisions = new uint64[](tokenIds.length);
@@ -590,7 +588,7 @@ contract KeyfleetVotes is EIP712, Nonces {
             epochs[i] = FLEET.ownershipEpoch(tokenIds[i]);
             revisions[i] = SHARDS.delegationRevision(tokenIds[i]);
         }
-        return (
+        return abi.encode(
             keccak256(abi.encodePacked(tokenIds)),
             keccak256(abi.encodePacked(epochs)),
             keccak256(abi.encodePacked(revisions))
@@ -607,13 +605,6 @@ contract KeyfleetVotes is EIP712, Nonces {
         if (!SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(structHash), signature)) {
             revert InvalidSignature(signer);
         }
-    }
-
-    /// @dev A RestrictEdits needs YES from at least three fifths of all the keys sold so far; a
-    /// Decision needs YES from more than half of them. An abstention counts against either way.
-    function _approved(Kind kind, uint256 yesVotes, uint256 keysSold) private pure returns (bool) {
-        if (kind == Kind.RestrictEdits) return yesVotes * 5 >= keysSold * 3;
-        return yesVotes * 2 > keysSold;
     }
 
     function _require(uint256 proposalId) private view returns (Proposal storage stored) {
