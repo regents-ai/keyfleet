@@ -558,10 +558,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         USDC.safeTransfer(address(TREASURY), released);
     }
 
-    /// @dev Settles the outgoing owner, enforces the Fibonacci holding limit on the incoming owner,
-    /// bumps the ownership epoch and records the block the key moved in, all before ownership
-    /// actually changes. Settlement first is
-    /// what keeps accrued rewards with the address that earned them. Only this key is settled:
+    /// @dev Settles the outgoing owner, clears the key's presence, enforces the Fibonacci holding
+    /// limit on the incoming owner and bumps the ownership epoch, all before ownership actually
+    /// changes. Settlement first is what keeps accrued rewards with the address that earned them. Only this key is settled:
     /// the ledger's accruals are per key, so the recipient's other keys are unaffected by it.
     /// There is no burn path in this contract, so `to` is never the zero address.
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
