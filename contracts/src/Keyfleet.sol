@@ -282,8 +282,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
         VOTES = companions.votes;
         TREASURY = companions.treasury;
-        REWARDS = new KeyfleetRewards(address(this), address(usdc));
         SHARDS = new KeyfleetShards(this);
+        REWARDS = new KeyfleetRewards(this, address(usdc), companions.treasury, SHARDS);
     }
 
     // --- views -----------------------------------------------------------

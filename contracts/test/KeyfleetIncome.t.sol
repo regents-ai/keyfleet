@@ -148,6 +148,11 @@ contract KeyfleetIncomeTest is Test {
         return token.balanceOf(address(fleet.TREASURY()));
     }
 
+    function _usdcOnly() private view returns (address[] memory assets) {
+        assets = new address[](1);
+        assets[0] = address(usdc);
+    }
+
     function _one(uint256 tokenId) private pure returns (uint256[] memory ids) {
         ids = new uint256[](1);
         ids[0] = tokenId;
@@ -273,7 +278,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(usdc.balanceOf(address(fleet)), 0, "leaving the fleet nothing");
 
         vm.prank(alice);
-        assertEq(rewards.claim(address(usdc), _one(1), address(0)), 10_000_000, "the repayment is claimed");
+        assertEq(rewards.claim(_one(1), _usdcOnly())[0], 10_000_000, "the repayment is claimed");
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "and the ledger still balances");
     }
 

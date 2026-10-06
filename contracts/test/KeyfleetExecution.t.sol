@@ -7,6 +7,7 @@ import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.so
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
@@ -153,6 +154,37 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         votes.execute(proposalId, calls);
         assertEq(uint256(votes.status(proposalId)), uint256(KeyfleetVotes.Status.Approved));
         assertEq(token.balanceOf(address(treasury)), 5);
+    }
+
+    /// @dev Invariant: the ledger accepts split funding only from inside the treasury's own split
+    /// routine, so an approved call from the treasury straight to either funding function reverts,
+    /// even with the exact amounts already in the ledger.
+    function test_anApprovedCallCannotFundTheSplit() public {
+        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(2);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        vm.deal(address(treasury), 2 ether);
+        KeyfleetVotes votes = fleet.VOTES();
+
+        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
+        calls[0] = KeyfleetTreasury.Call(address(usdc), 0, abi.encodeCall(IERC20.transfer, (address(rewards), 2e6)));
+        calls[1] = KeyfleetTreasury.Call(
+            address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(usdc), 1e6, 2))
+        );
+        uint256 proposalId = _approve(fleet, calls);
+        KeyfleetTreasury.Call[] memory native =
+            _one(address(rewards), 2 ether, abi.encodeCall(KeyfleetRewards.fundSplitNative, (1 ether, 2)));
+        uint256 nativeId = _approve(fleet, native);
+
+        vm.warp(votes.proposal(nativeId).closesAt);
+        vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
+        votes.execute(proposalId, calls);
+        vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
+        votes.execute(nativeId, native);
+
+        assertFalse(treasury.splitInProgress());
+        assertEq(rewards.splitIndex(address(usdc)), 0);
+        assertEq(rewards.splitIndex(NATIVE), 0);
+        assertEq(address(treasury).balance, 2 ether);
     }
 
     /// @dev Invariant: proposing reserves nothing, so a proposal opened later may spend what an

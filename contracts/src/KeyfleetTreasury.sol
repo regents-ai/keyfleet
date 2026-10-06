@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
@@ -28,6 +29,7 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// lock. There is no administrator, no upgrade path and no pause.
 contract KeyfleetTreasury is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+    using TransientSlot for *;
 
     /// @notice One call an approved proposal makes from the treasury.
     /// @param target The account called.
@@ -57,6 +59,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// @notice The source tag every protocol share deposit carries:
     /// `keccak256("keyfleet.protocol_share")`. The source reference is the fleet's address.
     bytes32 public constant PROTOCOL_SHARE_TAG = keccak256("keyfleet.protocol_share");
+
+    /// @dev The transient slot of the split-in-progress flag:
+    /// `keccak256(abi.encode(uint256(keccak256("keyfleet.treasury.split_in_progress")) - 1)) & ~bytes32(uint256(0xff))`.
+    bytes32 private constant SPLIT_IN_PROGRESS = 0xd9aca5cd3a42e97768814a58347bfab1c7bcba20bf1fb9c47c8b9d767310a900;
 
     /// @notice The fleet this treasury holds the capital of.
     Keyfleet public immutable FLEET;
@@ -117,6 +123,12 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
         VOTES = fleet.VOTES();
         USDC = fleet.USDC();
         REGENT_STAKING = staking;
+    }
+
+    /// @notice Whether the treasury is inside its split routine right now. The fleet's ledger
+    /// accepts split funding only while this is true, so no approved proposal's call can fund it.
+    function splitInProgress() external view returns (bool) {
+        return SPLIT_IN_PROGRESS.asBoolean().tload();
     }
 
     /// @notice Takes native ETH from anyone. It is free capital like any token the treasury holds.

@@ -260,7 +260,7 @@ contract KeyfleetTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetRewards rewards = fleet.REWARDS();
 
-        assertEq(rewards.FLEET(), address(fleet), "ledger bound to this fleet");
+        assertEq(address(rewards.FLEET()), address(fleet), "ledger bound to this fleet");
         assertEq(address(fleet.VOTES().FLEET()), address(fleet), "controller bound to this fleet");
         assertEq(address(fleet.SHARDS().FLEET()), address(fleet), "shard record bound to this fleet");
         address[] memory assets = rewards.rewardAssets();
@@ -723,10 +723,10 @@ contract KeyfleetTest is Test {
 
         assertEq(rewards.accrued(address(usdc), 1), Q, "key 1 accrued the repayment");
         vm.prank(carol);
-        assertEq(rewards.claim(address(usdc), _ids(1), address(0)), Q, "the holder at completion is repaid");
+        assertEq(rewards.claim(_ids(1), _usdcOnly())[0], Q, "the holder at completion is repaid");
         vm.prank(alice);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(address(usdc), _none(), address(0));
+        rewards.claim(_none(), _usdcOnly());
 
         // Bob keeps his accrual when he sells key 2 afterwards.
         vm.prank(bob);
@@ -735,9 +735,9 @@ contract KeyfleetTest is Test {
         assertEq(rewards.accrued(address(usdc), 2), 0, "and the key carries nothing to Dave");
         vm.prank(dave);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(address(usdc), _ids(2), address(0));
+        rewards.claim(_ids(2), _usdcOnly());
         vm.prank(bob);
-        assertEq(rewards.claim(address(usdc), _none(), address(0)), Q, "Bob claims after selling every key");
+        assertEq(rewards.claim(_none(), _usdcOnly())[0], Q, "Bob claims after selling every key");
         _assertBalanceInvariant(fleet);
     }
 
@@ -1206,5 +1206,10 @@ contract KeyfleetTest is Test {
     function _ids(uint256 a) private pure returns (uint256[] memory ids) {
         ids = new uint256[](1);
         ids[0] = a;
+    }
+
+    function _usdcOnly() private view returns (address[] memory assets) {
+        assets = new address[](1);
+        assets[0] = address(usdc);
     }
 }

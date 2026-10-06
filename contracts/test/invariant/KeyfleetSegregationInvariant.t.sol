@@ -169,7 +169,11 @@ contract SegregationHandler is Test {
                 abi.encodeWithSignature("transferFrom(address,address,uint256)", owner, d.someone, d.tokenId)
             );
         }
-        if (pick == 10) return _c(address(rewards), 0, abi.encodeCall(rewards.claim, (address(usdc), ids, d.someone)));
+        if (pick == 10) {
+            address[] memory assets = new address[](2);
+            (assets[0], assets[1]) = (address(usdc), NATIVE);
+            return _c(address(rewards), 0, abi.encodeCall(rewards.claim, (ids, assets)));
+        }
         if (pick == 11) {
             return
                 _c(address(rewards), 0, abi.encodeCall(rewards.credit, (address(usdc), address(d.treasury), d.amount)));

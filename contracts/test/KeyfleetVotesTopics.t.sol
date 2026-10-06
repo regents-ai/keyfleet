@@ -144,4 +144,13 @@ contract KeyfleetVotesTopicsTest is Test {
             0x2034cebd1ee980ae5db64594c0a5e13ca3153fb318294274500210fc58592e80
         );
     }
+
+    /// @dev The claim the site builds for a key's holder or agent, the reads that show what waits,
+    /// and the event a payout is matched by.
+    function test_rewardsClaimSelectorsAndTopic() public view {
+        assertEq(KeyfleetRewards.claim.selector, bytes4(0x2b14c842));
+        assertEq(KeyfleetRewards.accrued.selector, bytes4(0xbfe87f4d));
+        assertEq(KeyfleetRewards(address(0)).credits.selector, bytes4(0x637cd7f0));
+        assertEq(KeyfleetRewards.Claimed.selector, 0x913c992353dc81b7a8ba31496c484e9b6306bd2f6c509a649a38fdf5e1c953b2);
+    }
 }

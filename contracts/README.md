@@ -150,46 +150,60 @@ share for REGENT stakers. The rest depends on the preset:
 
 ## Rewards ledger
 
-`KeyfleetRewards` is the per-fleet reward ledger, permanently bound to its fleet.
-The fleet is the only writer: it enrolls keys into cohorts, allocates tokens to a
-cohort, credits an address directly, and settles a key. It pays exactly one
-token, USDC, fixed at construction: the Accelerant rebate, credited to the
-holder of the preceding key, and the Cascade repayment, allocated to the
-preceding level's cohort. `rewardAssets()` lists it and `isRewardAsset(asset)`
-answers for one.
+`KeyfleetRewards` is the per-fleet reward ledger, permanently bound to its fleet,
+its treasury and its shard record. Two things fill it, and nothing else can.
 
-Rewards are distributed through a cumulative index per asset and cohort, so an
-allocation writes one index and never iterates over recipients. Classic and
+The fleet writes its USDC obligations: the Accelerant rebate, credited to the
+holder of the preceding key, and the Cascade repayment, allocated to the
+preceding level's cohort. These go through a cumulative index per cohort, so an
+allocation writes one number and never loops over holders. Classic and
 Accelerant keys are all in cohort 0; a Fibonacci key is in the cohort of its
-level. The ledger takes any cohort id the fleet gives it, because the Fibonacci
-presets have no last level. A newly enrolled key starts at the cohort's current
-index and earns nothing from earlier allocations.
+level, and the ledger takes any cohort id because those presets have no last
+level. A newly enrolled key starts at the cohort's current index and earns
+nothing from earlier allocations.
+
+The treasury funds the daily split: the same whole amount for every minted key,
+in native ETH or a token. Each asset has one split index, counted in whole units
+per key, and a new key starts from the current index of every asset already
+split. An asset split for the first time later starts from zero, which every key
+then shares. The ledger accepts this funding only from the treasury, only while
+the treasury says it is inside its own split routine (`splitInProgress()`), and
+only for exactly as many keys as have been minted. An approved proposal's call
+from the treasury to `fundSplit` or `fundSplitNative` is therefore refused, and a
+key minted in the middle of a split makes that split revert rather than share
+it. The ledger has no other way to take ETH.
+
+`rewardAssets()` lists every asset the ledger pays: USDC first, then each asset
+the split has funded, in the order first funded. ETH is the zero address.
 
 Accrued rewards belong to the address that held the key while they accrued. The
-fleet settles a key to its outgoing owner immediately before every ownership
-change, and the incoming owner continues from the cohort's current index.
+fleet settles a key to its outgoing owner, in every asset, immediately before
+every ownership change, and the incoming owner continues from the current
+indexes.
 
-Backing is reserved at allocation, never at withdrawal. `allocateToCohort` and
-`credit` both require the tokens to be sitting in the ledger already:
-`balanceOf(this)` must cover `backed[asset]` plus the new amount. `backed` only
-ever falls when a claim pays out.
+Backing is reserved when money comes in, never when it goes out. Each of the
+four ways in requires the money to be sitting in the ledger already: its balance
+must cover `backed[asset]` plus the new amount. `backed` only falls when a claim
+pays out. Cohort indexes are scaled by `PRECISION = 1e27`; settlement carries the
+sub-unit remainder forward, so a key's shortfall stays below one atomic unit and
+the sliver stays in the ledger for good, counted as backed and never claimable.
 
-Indexes are scaled by `PRECISION = 1e27`. An allocation truncates the scaled
-index and still records the whole amount as backed. Settlement advances a key's
-watermark by exactly the whole units it credited, carrying the sub-unit
-remainder into the next settlement, so a key's shortfall stays below one atomic
-unit per asset at any moment. The sliver lost to truncation stays in the ledger
-for good, counted as backed and never claimable.
+`claim(tokenIds, assets)` can be pressed by a key's holder or by a wallet holding
+an active shard of it, for many keys and many assets at once. It settles each
+key to the wallet holding it and pays, for each asset, that wallet's whole
+credit. The money for a key always goes to the wallet holding it, never to an
+agent that pressed claim. The caller is also paid its own credit, which is how a
+former holder with no keys left collects what it earned. Each payment is one
+asset to one wallet, ETH by `Address.sendValue`, under a reentrancy lock, so a
+wallet that refuses ETH stops only a claim that includes ETH for it; the same
+claim without ETH goes through and the ETH stays waiting. It returns the total
+paid in each asset. `accrued(asset, tokenId)` reports one key's unsettled whole
+units in both lanes, and `credits(asset, account)` what is settled and waiting.
 
-`claim(asset, tokenIds, to)` settles the caller's named keys for one asset and
-pays the caller's whole credit for that asset to the caller, or to `to` when it
-is not zero. One asset per call, so a token that reverts on transfer can only
-block itself. `claimable` agrees with `claim` for distinct token ids and returns
-zero where `claim` would revert with `NothingToClaim`; callers pass each id at
-most once. `accrued(asset, tokenId)` reports one key's unsettled whole units.
-
-Worst-case settlement, with USDC pending on a key in cohort 40 and every slot
-cold, measured 53,026 gas; the suite asserts a ceiling of 64,000.
+Worst-case settlement, with USDC pending in cohort 40 and a split pending in
+four assets, every slot cold and moving from zero, measured 239,798 gas; the
+suite asserts a ceiling of 288,000. Each split asset adds about 46,000 to that
+worst case, nearly all of it first writes.
 
 ## Fleet
 
@@ -202,7 +216,8 @@ addresses its `KeyfleetVotes` and `KeyfleetTreasury` will be deployed at,
 readable as `VOTES()` and `TREASURY()`). It rejects a zero USDC or companion
 address, a USDC that does not report six decimals, a
 coordinator that holds no code and a zero trait table hash. It then deploys the
-fleet's `KeyfleetRewards` and `KeyfleetShards`.
+fleet's `KeyfleetShards`, and its `KeyfleetRewards` bound to the fleet, its
+treasury's address and that shard record.
 
 ### Deployment order and sizes
 
@@ -222,16 +237,16 @@ and 49,152 bytes of deployment code per contract. Measured with
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `Keyfleet` | 14,592 | 26,167 |
-| `KeyfleetRewards` | 5,204 | 5,547 |
+| `Keyfleet` | 14,592 | 29,523 |
+| `KeyfleetRewards` | 8,396 | 8,878 |
 | `KeyfleetShards` | 3,604 | 3,810 |
 | `KeyfleetVotes` | 14,531 | 15,647 |
-| `KeyfleetTreasury` | 3,796 | 4,515 |
+| `KeyfleetTreasury` | 3,883 | 4,602 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
 33,693, before the controller held proposals and ballots and the treasury made
-calls. With the treasury's daily split and advances still to come, that would
+calls. With the treasury's daily split still to come, that would
 pass 49,152; deployed separately, each stays well inside both limits.
 
 ### Purchases
@@ -704,7 +719,7 @@ not own. Only then does it write
 fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
 deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
-trait table hash, the token the ledger pays (`rewardTokens`) and the terms the
+trait table hash, the assets the ledger pays at deployment (`rewardTokens`) and the terms the
 release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads

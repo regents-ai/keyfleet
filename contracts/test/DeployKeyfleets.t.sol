@@ -77,7 +77,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
             assertEq(address(fleet.TREASURY().REGENT_STAKING()), address(staking), "Staking");
-            assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
+            assertEq(address(fleet.REWARDS().FLEET()), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
             assertEq(address(fleet.TREASURY().FLEET()), address(fleet), "Treasury is the fleet's own");
             assertEq(address(fleet.SHARDS().FLEET()), address(fleet), "Shard record is the fleet's own");
