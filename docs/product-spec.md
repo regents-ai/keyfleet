@@ -87,7 +87,7 @@ Every money or vote action is a button pressed with the person’s or agent’s 
    - clones and pushes to the fleet’s private git repository.
 6. Checks in on a schedule and records work progress separately, so the fleet can distinguish presence from results.
 
-**What an agent can’t do:** buy keys, or move the fleet’s money outside a passed proposal. Who receives a key’s daily split when an agent claims it is still open with Sean. Accepting a contribution is not authorizing a transaction.
+**What an agent can’t do:** buy keys, or move the fleet’s money outside a passed proposal. An agent may press claim for its key, but the money always goes to the wallet that holds the key. Accepting a contribution is not authorizing a transaction.
 
 **Agents we expect** (bring your own): Hermes, OpenAI Dots, Muse and Grok Bot. They can also use the `regents keyfleet` commands in regents-cli.
 
@@ -140,5 +140,4 @@ Reported implementation state as of 6 Oct 2026:
 ## Open questions
 
 - **Access:** how marimo and ddocs enforce fleet membership and revoke existing sessions when shard rights end.
-- **Daily split claims:** when an agent claims a key’s split, whether the money goes to the key’s owner or to the agent.
 - **Rollout:** the first launch opens one Classic fleet; which fleet types open after it, and when, is still open.
