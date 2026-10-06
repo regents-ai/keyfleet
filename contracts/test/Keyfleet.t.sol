@@ -911,23 +911,20 @@ contract KeyfleetTest is Test {
         assertEq(fleet.ownershipEpoch(2), 1, "each key counts its own epochs");
     }
 
-    /// @dev Invariant: a key records the block of its mint and of every transfer, which is what
-    /// decides whether it may vote on a proposal.
-    function test_lastMovedBlockIsTheBlockOfTheMintAndOfEveryTransfer() public {
+    /// @dev Invariant: the fleet records when its first key was sold, and later sales and
+    /// transfers never change it.
+    function test_firstMintAtIsTheFirstSaleAndNeverChanges() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        vm.roll(100);
+        assertEq(fleet.firstMintAt(), 0, "nothing sold yet");
+        vm.warp(5_000);
         _buy(fleet, alice);
-        assertEq(fleet.lastMovedBlock(1), 100, "minted in block 100");
+        assertEq(fleet.firstMintAt(), 5_000, "the first sale");
 
-        vm.roll(250);
+        vm.warp(9_000);
+        _buy(fleet, carol);
         vm.prank(alice);
         fleet.transferFrom(alice, bob, 1);
-        assertEq(fleet.lastMovedBlock(1), 250, "moved in block 250");
-
-        vm.roll(300);
-        _buy(fleet, carol);
-        assertEq(fleet.lastMovedBlock(1), 250, "another key's mint leaves it alone");
-        assertEq(fleet.lastMovedBlock(2), 300);
+        assertEq(fleet.firstMintAt(), 5_000, "later sales and transfers leave it alone");
     }
 
     // --- 8. reentrancy and receiver hooks ---------------------------------

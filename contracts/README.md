@@ -38,6 +38,10 @@ this branch does:
   yes, and then anyone may carry it out. A RestrictEdits proposal needs at
   least three fifths. There is no window, deadline or cap.
 - No proposal moves money.
+- A key is present for 48 hours after its owner or their delegate renews it,
+  votes it or proposes with it, and stops being present the moment it changes
+  hands. A proposal records how many keys were present when it opened; it does
+  not yet use that count to decide.
 - A key's owner may issue shards: time-limited grants to other wallets, recorded
   on chain and ended the moment the key changes hands.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
@@ -201,10 +205,10 @@ and 49,152 bytes of deployment code per contract. Measured with
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `Keyfleet` | 15,314 | 25,528 |
+| `Keyfleet` | 15,460 | 25,681 |
 | `KeyfleetRewards` | 5,204 | 5,547 |
 | `KeyfleetShards` | 2,216 | 2,407 |
-| `KeyfleetVotes` | 5,125 | 5,464 |
+| `KeyfleetVotes` | 9,319 | 9,665 |
 | `KeyfleetTreasury` | 1,377 | 1,955 |
 
 A fleet that deployed its controller and treasury itself would carry their
@@ -256,9 +260,12 @@ completes keeps its reserve; what happens to it is deferred.
 
 Before any ownership change the fleet settles the key to its outgoing owner,
 applies the Fibonacci holding limit to the incoming owner, raises the key's
-`ownershipEpoch` by one (it is 1 at mint) and records the block in
-`lastMovedBlock`, which is what decides whether the key can vote on a proposal.
-There is no burn.
+`ownershipEpoch` by one (it is 1 at mint) and tells the voting controller, which
+ends the key's presence. A sale does not tell it: a new key has never been
+present. There is no burn. `firstMintAt` is the time the first key was sold, zero
+until then, and never changes afterwards. Token ids stop at 4,294,967,295, the
+most the presence record indexes; a Fibonacci fleet would refuse a sale past that
+with `SoldOut`, long after its price had passed any real buyer.
 
 The costliest primary purchase is the first one of a high level on a Cascade
 fleet, every slot cold; its cost grows slowly with the level because the level
@@ -267,16 +274,17 @@ USDC and a stand-in coordinator it measured, in execution:
 
 | Purchase | Gas |
 | --- | --- |
-| Cascade, level 1 | 383,352 |
-| Cascade, level 30 | 407,890 |
-| Cascade, level 40 | 424,010 |
-| Syndicate, level 1 | 361,699 |
-| Syndicate, level 40 | 396,511 |
-| Accelerant | 341,433 |
-| Classic | 339,836 |
+| Cascade, level 1 | 383,343 |
+| Cascade, level 30 | 385,740 |
+| Cascade, level 40 | 401,860 |
+| Syndicate, level 1 | 361,690 |
+| Syndicate, level 40 | 374,361 |
+| Accelerant | 341,424 |
+| Classic | 339,827 |
 
 Syndicate, Accelerant and Classic each include one transfer of the capital part
-to the treasury.
+to the treasury. The level-1, Accelerant and Classic figures are each fleet's
+very first sale, which also writes `firstMintAt`; later sales skip that write.
 
 The suite asserts a ceiling of 509,000, the level-40 Cascade figure plus a fifth.
 That is a regression bound on the fleet's own work. Real Base USDC is a proxy
@@ -367,21 +375,18 @@ are not supported.
 ## Votes
 
 `KeyfleetVotes` is the one collective decision. There are no councils, no
-moderators, no rule amendments, no windows, delays, expiries, periods or caps, no
-cancellation and no delegation by signature.
+moderators, no rule amendments, no voting windows, delays, expiries, periods or
+caps, no cancellation and no delegation by signature.
 
-Every key is one vote on every kind of proposal. A proposal records the block it
-opened in. A key may vote on it only if the key last moved (its mint or latest
-transfer) in an earlier block, so buying or moving a key after a proposal opens
-can never add a vote to it, while every key sold still counts toward the total.
-The key's owner, or the one address that owner registered with
+Every key is one vote on every kind of proposal, and every key sold counts toward
+the total. The key's owner, or the one address that owner registered with
 `setVotingDelegate(address)` (zero clears it), may vote the key with
 `vote(proposalId, tokenIds, support)` and may change its vote until the proposal
-is carried out; voting the same way twice reverts with `AlreadyVoted`.
-`withdrawVote(proposalId, tokenIds)` takes a key's vote away. A vote cast before
-a key moved stays counted after it moves, and the key's current holder or their
-delegate may withdraw it but cannot cast a new one. A batch of keys is voted or
-withdrawn whole or not at all.
+is carried out; voting the same way twice reverts with `AlreadyVoted`. A key has
+one vote per proposal whoever holds it: a key that moves keeps the vote it had,
+and its new holder or their delegate may change it or take it away with
+`withdrawVote(proposalId, tokenIds)`. A batch of keys is voted or withdrawn whole
+or not at all.
 
 A Decision proposal is approved at any moment
 `yesVotes * 2 > FLEET.totalMinted()`: yes must be more than half of all the keys
@@ -420,11 +425,48 @@ straight after its fleet, at the address the fleet was given for it
 (`WrongFleet`).
 
 Voting is the one call whose cost grows with what it is asked, and only with the
-number of keys named. Ten Classic keys in one vote measured 284,514 gas and each
-further key about 25,400, the same on a Fibonacci fleet; the suite asserts
-ceilings of 342,000 and 31,000. A holder with more keys than a block can carry
-splits the vote across calls. Creating and carrying out a proposal cost the same
-on any size of fleet.
+number of keys named. Each key named is also renewed (below). Ten Classic keys
+renewed for the first time in one vote measured 998,593 gas and each further key
+about 96,800, the same on a Fibonacci fleet; the suite asserts ceilings of
+1,199,000 and 117,000. A holder with more keys than a block can carry splits the
+vote across calls. Carrying out a proposal costs the same on any size of fleet;
+opening one costs the same apart from the expired presences it sweeps.
+
+### Presence
+
+A key is present for 48 hours (172,800 seconds, by block time, never by block
+count) after its owner or their delegate renews it with `present(tokenIds)`,
+votes it, or proposes with it. It stops being present the moment it changes
+hands, and its new owner renews it under the new ownership. Nobody else can
+renew a key, a batch with one such key renews none, and renewing changes no open
+proposal. `isActive(tokenId)` and `lastActiveAt(tokenId)` answer for now.
+`Present(tokenId, at, blockNumber, epoch)` records each renewal and
+`PresenceCleared(tokenId)` each change of hands.
+
+Present keys sit in one queue ordered by expiry, one entry per key: a renewal
+moves the key's entry to the back. Time alone removes nothing, so the queue may
+still hold expired entries; `sweepExpired(limit)`, which anyone may call,
+removes up to `limit` of them from the front, returns how many it removed and
+whether more are due, and emits `Swept(removed, due)`. `presenceQueue()` and
+`presenceEntry(tokenId)` show the queue.
+
+Opening a proposal first sweeps up to 256 expired entries. If any are still due
+it reverts with `MaintenanceRequired` and changes nothing, so a proposal never
+records a count that includes expired keys; anyone may sweep the rest and try
+again. It then renews the proposer's key and records the opening revision, time
+and exact count of present keys (`e0`, never zero) in the proposal and in
+`ProposalCreated`. Each renewal, change of hands and opening is numbered in
+order, and each key keeps a checkpoint of its renewals and changes of hands, so
+`wasActiveAtOpening(proposalId, tokenId)` answers exactly even for several of
+them in one block: renewed, moved, then opened is not present at the opening;
+renewed, opened, then moved is. The count is recorded for the electorate rule
+that comes next; approval today is still the share of all keys sold above.
+
+Measured in a transaction of their own with every account cold: a key's first
+renewal 91,407 gas, a later one 69,958, sweeping 4,871 per expired entry, and a
+transfer of a present key 113,461 against 83,457 for one never renewed. The
+suite asserts each plus a fifth. A full sweep of 2,000 Accelerant keys expiring
+together is about 10 million gas, done in several calls.
 
 ## Shards
 
@@ -570,8 +612,9 @@ anvil for the anvil tests in `platform/` (`mix test.external`).
 ## Checks
 
 Run `make check-contracts` from the repository root to check formatting, build,
-and run the preset, ledger, purchase, income, treasury, voting, shard, reveal,
-trait-draw and deployment tests. Foundry must be installed; the compiler may be
+and run the preset, ledger, purchase, income, treasury, voting, presence, shard,
+reveal, trait-draw and deployment tests, with the presence queue's invariants run
+over random renewals, transfers, sweeps, openings and the passing of time. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from
 `test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
 is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,

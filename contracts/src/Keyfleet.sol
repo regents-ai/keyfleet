@@ -95,7 +95,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     error Expired(uint256 deadline);
     /// @notice The next price exceeded the maximum the buyer authorized.
     error PriceAboveMax(uint256 price, uint256 maxPrice);
-    /// @notice Every primary key of this Fleet.Tech fleet has been minted.
+    /// @notice Every primary key this fleet can sell has been minted: the preset's supply for a
+    /// Fleet.Tech fleet, and 4,294,967,295 keys, the most the presence record indexes, for a
+    /// Fibonacci one.
     error SoldOut();
     /// @notice The recipient already holds as many keys of this level as the preset allows.
     error HoldingLimitExceeded(address account, uint256 level, uint256 limit);
@@ -215,6 +217,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     /// @notice Primary keys minted so far. Token ids are `1..totalMinted`.
     uint256 public totalMinted;
+    /// @notice When the first key was sold; zero until then. Never changes afterwards.
+    uint64 public firstMintAt;
     /// @notice Accelerant only: the USDC price of the next primary mint, stepped by 105/100 after
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
@@ -225,9 +229,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
-    /// @notice Block of a key's mint or latest transfer. A key votes on a proposal only if it last
-    /// moved in a block before the one the proposal opened in.
-    mapping(uint256 tokenId => uint64 blockNumber) public lastMovedBlock;
     /// @notice Fibonacci only: keys of one level an address currently holds, against `holdingLimit`.
     mapping(address account => mapping(uint256 level => uint256 held)) public heldPerLevel;
     /// @notice Cascade only: gross USDC paid for all primary keys of a level.
@@ -414,7 +415,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
         address to = receiver == address(0) ? msg.sender : receiver;
         tokenId = minted + 1;
+        if (tokenId > type(uint32).max) revert SoldOut();
         totalMinted = tokenId;
+        if (minted == 0) firstMintAt = uint64(block.timestamp);
 
         USDC.safeTransferFrom(msg.sender, address(this), gross);
 
@@ -630,7 +633,10 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// There is no burn path in this contract, so `to` is never the zero address.
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
-        if (from != address(0)) REWARDS.settleKey(tokenId, from);
+        if (from != address(0)) {
+            REWARDS.settleKey(tokenId, from);
+            VOTES.onKeyMoved(tokenId);
+        }
 
         if (_isFibonacci()) {
             uint256 level = KeyfleetPresets.fibonacciLevelOf(tokenId);
@@ -643,7 +649,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
         uint64 epoch = ownershipEpoch[tokenId] + 1;
         ownershipEpoch[tokenId] = epoch;
-        lastMovedBlock[tokenId] = uint64(block.number);
         emit OwnershipEpoch(tokenId, epoch, from, to);
 
         return super._update(to, tokenId, auth);

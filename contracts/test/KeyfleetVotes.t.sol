@@ -16,9 +16,9 @@ import {MockToken} from "./KeyfleetIncome.t.sol";
 contract KeyfleetVotesTest is Test {
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
     /// @dev Measured cost of voting ten Classic keys in one call, plus a fifth, rounded up.
-    uint256 private constant TEN_KEY_VOTE_CEILING = 342_000;
+    uint256 private constant TEN_KEY_VOTE_CEILING = 1_199_000;
     /// @dev Measured marginal cost of one more key in a vote, plus a fifth, rounded up.
-    uint256 private constant PER_KEY_VOTE_CEILING = 31_000;
+    uint256 private constant PER_KEY_VOTE_CEILING = 117_000;
 
     MockToken private usdc;
     MockVRFCoordinatorV2Plus private vrf;
@@ -34,7 +34,9 @@ contract KeyfleetVotesTest is Test {
         uint256 indexed proposalId,
         KeyfleetVotes.Kind indexed kind,
         address indexed proposer,
-        uint64 openedBlock,
+        uint48 openRevision,
+        uint64 openedAt,
+        uint32 e0,
         bytes32 digest,
         string text
     );
@@ -98,6 +100,12 @@ contract KeyfleetVotesTest is Test {
         return address(uint160(0x100000 + index));
     }
 
+    /// @dev Renews key `tokenId` as its current owner.
+    function _present(KeyfleetVotes votes, uint256 tokenId) private {
+        vm.prank(votes.FLEET().ownerOf(tokenId));
+        votes.present(_ids(tokenId));
+    }
+
     function _ids(uint256 a) private pure returns (uint256[] memory ids) {
         ids = new uint256[](1);
         ids[0] = a;
@@ -116,10 +124,8 @@ contract KeyfleetVotesTest is Test {
         votes.vote(proposalId, _ids(tokenId), support);
     }
 
-    /// @dev Moves to the next block, so every key bought so far last moved before the proposal
-    /// opens, then creates a Decision from the owner of key 1.
+    /// @dev Creates a Decision from the owner of key 1.
     function _propose(KeyfleetVotes votes) private returns (uint256 proposalId) {
-        vm.roll(block.number + 1);
         vm.prank(votes.FLEET().ownerOf(1));
         proposalId = votes.proposeDecision(1, "record it", bytes32(0));
     }
@@ -171,18 +177,18 @@ contract KeyfleetVotesTest is Test {
 
     // --- 3. proposals -----------------------------------------------------
 
-    /// @dev Invariant: a proposal records the block it opened in, which is the whole of what decides
-    /// which keys may vote on it, and stores its digest but not its text.
-    function test_aProposalRecordsTheBlockItOpenedIn() public {
+    /// @dev Invariant: a proposal records its opening revision, its opening time and the exact count
+    /// of present keys, renewing the proposer's key first, and stores its digest but not its text.
+    function test_aProposalRecordsItsOpening() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
-        vm.roll(block.number + 1);
+        _present(votes, 2);
 
         bytes32 digest = keccak256("base..head");
         vm.expectEmit(true, true, true, true, address(votes));
         emit ProposalCreated(
-            1, KeyfleetVotes.Kind.Decision, _wallet(1), uint64(block.number), digest, "merge the branch"
+            1, KeyfleetVotes.Kind.Decision, _wallet(1), 3, uint64(block.timestamp), 2, digest, "merge the branch"
         );
         vm.prank(_wallet(1));
         uint256 proposalId = votes.proposeDecision(1, "merge the branch", digest);
@@ -192,7 +198,11 @@ contract KeyfleetVotesTest is Test {
         assertEq(votes.proposalCount(), 1);
         assertEq(uint256(stored.kind), uint256(KeyfleetVotes.Kind.Decision));
         assertEq(stored.proposer, _wallet(1));
-        assertEq(stored.openedBlock, uint64(block.number));
+        assertEq(stored.openRevision, 3, "key 2's renewal, the proposer's renewal, then the opening");
+        assertEq(stored.openedAt, uint64(block.timestamp));
+        assertEq(stored.e0, 2, "key 2 and the proposer's own key were present");
+        assertTrue(votes.wasActiveAtOpening(proposalId, 1), "the proposer's key was present");
+        assertFalse(votes.wasActiveAtOpening(proposalId, 3), "a key nobody renewed was not");
         assertEq(stored.digest, digest, "the digest is stored, the text is not");
         assertFalse(stored.executed);
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open));
@@ -261,10 +271,9 @@ contract KeyfleetVotesTest is Test {
 
     // --- 4. who may vote ----------------------------------------------------
 
-    /// @dev Invariant: a key may vote only if it last moved before the block the proposal opened
-    /// in. A key bought after the proposal opened cannot vote on it, but every key sold counts in
-    /// the approval rule, so a later sale can take an approved proposal back to open.
-    function test_keysBoughtAfterAProposalOpensCannotVoteButCountAgainstIt() public {
+    /// @dev Invariant: every key sold counts in the approval rule, so a later sale can take an
+    /// approved proposal back to open, and a key bought after the proposal opened may vote on it.
+    function test_keysBoughtAfterAProposalOpensCountAndMayVote() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
@@ -274,50 +283,19 @@ contract KeyfleetVotesTest is Test {
         _vote(votes, proposalId, 2, true);
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "two of three keys");
 
-        vm.roll(block.number + 1);
         _buyMany(fleet, 2);
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Open), "two of five keys is not more than half");
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, 2, 5));
         votes.execute(proposalId);
 
-        vm.prank(_wallet(4));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 4));
-        votes.vote(proposalId, _ids(4), true);
-
-        // The third original key is still eligible and carries it again.
-        _vote(votes, proposalId, 3, true);
+        _vote(votes, proposalId, 4, true);
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "three of five keys");
         votes.execute(proposalId);
-
-        // The later keys may vote on the next proposal.
-        uint256 later = _propose(votes);
-        _vote(votes, later, 4, true);
     }
 
-    /// @dev Invariant: a key bought in the very block a proposal opens cannot vote on it, so a
-    /// purchase ordered before the proposal inside one block adds no vote either.
-    function test_aKeyBoughtInTheBlockAProposalOpensCannotVoteOnIt() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 1);
-        vm.roll(block.number + 1);
-
-        _buyMany(fleet, 1);
-        vm.prank(_wallet(1));
-        uint256 proposalId = votes.proposeDecision(1, "same block", bytes32(0));
-        assertEq(fleet.lastMovedBlock(2), votes.proposal(proposalId).openedBlock);
-
-        vm.prank(_wallet(2));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 2));
-        votes.vote(proposalId, _ids(2), true);
-        _vote(votes, proposalId, 1, true);
-    }
-
-    /// @dev Invariant: moving a key after a proposal opens can never add a vote. A holder who lends
-    /// four unvoted keys to a friend after a proposal opens gives the friend nothing to vote with,
-    /// the key that had already voted keeps its vote but can no longer change it, only have it
-    /// withdrawn, and the keys stay unable to vote on that proposal when they come back.
-    function test_aKeyThatMovesAfterAProposalOpensCannotVoteOnItAndItsVoteStands() public {
+    /// @dev Invariant: a key has one vote per proposal whoever holds it. A key that moves keeps the
+    /// vote it had, its new holder may change it, and moving it back and forth never adds a vote.
+    function test_aKeyThatMovesKeepsItsOneVoteAndItsNewHolderMayChangeIt() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         for (uint256 i = 0; i < 4; ++i) {
@@ -336,29 +314,18 @@ contract KeyfleetVotesTest is Test {
         vm.stopPrank();
 
         vm.startPrank(dave);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 2));
-        votes.vote(proposalId, _range(2, 3), true);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.AlreadyVoted.selector, 1));
+        votes.vote(proposalId, _ids(1), true);
         votes.vote(proposalId, _ids(1), false);
         for (uint256 tokenId = 1; tokenId <= 4; ++tokenId) {
             fleet.transferFrom(dave, carol, tokenId);
         }
         vm.stopPrank();
 
-        vm.prank(carol);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 2));
-        votes.vote(proposalId, _range(2, 3), true);
-
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(stored.yesVotes, 1, "the one vote cast before the key moved still stands");
-        assertEq(stored.noVotes, 0);
-        assertEq(uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.Yes));
-
-        // The moved keys vote on the next proposal like any other.
-        uint256 next = _propose(votes);
-        vm.prank(carol);
-        votes.vote(next, _range(1, 4), true);
-        assertEq(votes.proposal(next).yesVotes, 4);
+        assertEq(stored.yesVotes, 0, "the vote moved off YES");
+        assertEq(stored.noVotes, 1, "key 1 still has exactly one vote");
+        assertEq(uint256(votes.voteOf(proposalId, 1)), uint256(KeyfleetVotes.Choice.No));
     }
 
     /// @dev Invariant: a key may change its vote until the proposal is carried out, and each key is
@@ -398,10 +365,9 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Invariant: whoever holds a key now, or their delegate, may withdraw the vote it carries,
-    /// whoever cast it, but a key that moved after the proposal opened still cannot cast a new one.
-    /// Keys borrowed before a proposal opens, voted and handed back do not bind their owners: each
-    /// owner takes the borrowed vote back, and the proposal loses the approval those votes gave it.
-    function test_whoeverHoldsAKeyNowMayWithdrawItsVoteButNotCastANewOne() public {
+    /// whoever cast it. Keys borrowed, voted and handed back do not bind their owners: each owner
+    /// takes the borrowed vote back, and the proposal loses the approval those votes gave it.
+    function test_whoeverHoldsAKeyNowMayWithdrawItsVote() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 10);
@@ -410,7 +376,6 @@ contract KeyfleetVotesTest is Test {
             fleet.transferFrom(_wallet(tokenId), mallory, tokenId);
         }
         uint256 proposalId = _propose(votes);
-        vm.roll(block.number + 1);
         vm.startPrank(mallory);
         votes.vote(proposalId, _range(1, 6), true);
         for (uint256 tokenId = 1; tokenId <= 6; ++tokenId) {
@@ -419,9 +384,6 @@ contract KeyfleetVotesTest is Test {
         vm.stopPrank();
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Approved), "the borrowed votes approve it");
 
-        vm.prank(_wallet(1));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 1));
-        votes.vote(proposalId, _ids(1), false);
         vm.prank(mallory);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
         votes.withdrawVote(proposalId, _ids(1));
@@ -439,9 +401,6 @@ contract KeyfleetVotesTest is Test {
         votes.setVotingDelegate(bob);
         vm.prank(bob);
         votes.withdrawVote(proposalId, _ids(2));
-        vm.prank(_wallet(1));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotEligible.selector, 1));
-        votes.vote(proposalId, _ids(1), true);
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         assertEq(stored.yesVotes, 4, "a delegate withdraws for the holder too");
@@ -450,7 +409,7 @@ contract KeyfleetVotesTest is Test {
 
     /// @dev Invariant: withdrawing takes a key's vote off whichever side it is on, needs a key the
     /// caller may vote that has a vote, and ends when the proposal is carried out. Any refused id
-    /// reverts the whole call, and a key that could always vote may vote again after withdrawing.
+    /// reverts the whole call, and a key may vote again after withdrawing.
     function test_withdrawingTakesAVoteOffItsSideUntilTheProposalIsCarriedOut() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -479,7 +438,7 @@ contract KeyfleetVotesTest is Test {
         assertEq(votes.proposal(proposalId).yesVotes, 2, "the refused call withdrew nothing");
 
         _vote(votes, proposalId, 3, true);
-        assertEq(votes.proposal(proposalId).yesVotes, 3, "a key that could always vote votes again");
+        assertEq(votes.proposal(proposalId).yesVotes, 3, "a withdrawn key votes again");
 
         votes.execute(proposalId);
         vm.prank(_wallet(1));
@@ -703,7 +662,6 @@ contract KeyfleetVotesTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 1);
-        vm.roll(block.number + 1);
 
         bytes32 digest = keccak256("commit");
         vm.prank(_wallet(1));
@@ -726,13 +684,11 @@ contract KeyfleetVotesTest is Test {
 
     // --- 6. restricting a key's edits ---------------------------------------
 
-    /// @dev Proposes a RestrictEdits from the owner of key 1 in a fresh block, so every key bought
-    /// so far may vote on it.
+    /// @dev Proposes a RestrictEdits from the owner of key 1.
     function _proposeRestrict(KeyfleetVotes votes, uint256 target, bool restricted)
         private
         returns (uint256 proposalId)
     {
-        vm.roll(block.number + 1);
         vm.prank(votes.FLEET().ownerOf(1));
         proposalId = votes.proposeRestrictEdits(1, target, restricted, "stop the edits", bytes32(0));
     }
@@ -743,11 +699,12 @@ contract KeyfleetVotesTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
-        vm.roll(block.number + 1);
 
         bytes32 digest = keccak256("edit log");
         vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, _wallet(1), uint64(block.number), digest, "spam");
+        emit ProposalCreated(
+            1, KeyfleetVotes.Kind.RestrictEdits, _wallet(1), 2, uint64(block.timestamp), 1, digest, "spam"
+        );
         vm.expectEmit(true, true, true, true, address(votes));
         emit RestrictEditsProposed(1, 3, true);
         vm.prank(_wallet(1));
@@ -816,7 +773,6 @@ contract KeyfleetVotesTest is Test {
         for (uint256 i = 0; i < 1000; ++i) {
             _buy(fleet, dave);
         }
-        vm.roll(block.number + 1);
         vm.prank(dave);
         uint256 proposalId = votes.proposeRestrictEdits(1, 1000, true, "", bytes32(0));
 
@@ -865,7 +821,6 @@ contract KeyfleetVotesTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
-        vm.roll(block.number + 1);
 
         vm.startPrank(_wallet(1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyNotMinted.selector, 0));
@@ -891,7 +846,6 @@ contract KeyfleetVotesTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 3);
-        vm.roll(block.number + 1);
 
         vm.prank(mallory);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, _wallet(1)));
@@ -900,7 +854,7 @@ contract KeyfleetVotesTest is Test {
         vm.prank(_wallet(1));
         votes.setVotingDelegate(carol);
         vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, carol, uint64(block.number), bytes32(0), "");
+        emit ProposalCreated(1, KeyfleetVotes.Kind.RestrictEdits, carol, 2, uint64(block.timestamp), 1, bytes32(0), "");
         vm.prank(carol);
         uint256 proposalId = votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
         assertEq(votes.proposal(proposalId).targetTokenId, 2, "the delegate proposed it");
@@ -910,7 +864,7 @@ contract KeyfleetVotesTest is Test {
 
     /// @dev Invariant: voting is the one call whose cost grows with what the caller asks of it, and
     /// it grows only with the number of keys named, never with the fleet. The per-key cost is the
-    /// vote record and the ownership and last-moved reads behind it, and the preset makes no
+    /// vote record, the ownership read and the key's renewal, and the preset makes no
     /// difference to it. A holder with more keys than one block can carry splits the vote across
     /// calls.
     function test_votingCostsAFixedAmountPerKeyNamed() public {
@@ -918,8 +872,8 @@ contract KeyfleetVotesTest is Test {
         for (uint256 i = 0; i < 40; ++i) {
             _buy(flat, _wallet(1));
         }
-        uint256 flatTen = _measureVote(flat.VOTES(), _wallet(1), 1, 10);
-        uint256 flatPerKey = (_measureVote(flat.VOTES(), _wallet(1), 11, 30) - flatTen) / 20;
+        uint256 flatTen = _measureVote(flat.VOTES(), _wallet(1), 2, 10);
+        uint256 flatPerKey = (_measureVote(flat.VOTES(), _wallet(1), 12, 29) - flatTen) / 19;
 
         // One caster for ten Fibonacci keys across three levels: each owner delegates to Bob, which
         // is also the only way a single call can name keys the holding limit spreads over wallets.
@@ -930,8 +884,8 @@ contract KeyfleetVotesTest is Test {
             vm.prank(_wallet(i));
             levelledVotes.setVotingDelegate(bob);
         }
-        uint256 levelledTwo = _measureVote(levelledVotes, bob, 1, 2);
-        uint256 levelledPerKey = (_measureVote(levelledVotes, bob, 3, 8) - levelledTwo) / 6;
+        uint256 levelledTwo = _measureVote(levelledVotes, bob, 2, 2);
+        uint256 levelledPerKey = (_measureVote(levelledVotes, bob, 4, 6) - levelledTwo) / 4;
 
         console2.log("vote gas for ten Classic keys:", flatTen);
         console2.log("marginal vote gas per Classic key:", flatPerKey);
@@ -943,6 +897,8 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Votes `count` consecutive ids from `firstTokenId` in one call and returns the gas used.
+    /// Key 1 proposes, which renews it, so the measured ranges leave it out and every key they name
+    /// is renewed for the first time.
     function _measureVote(KeyfleetVotes votes, address caster, uint256 firstTokenId, uint256 count)
         private
         returns (uint256 used)
@@ -970,7 +926,7 @@ contract KeyfleetVotesTest is Test {
         for (uint256 i = 0; i < 32; ++i) {
             seed = uint256(keccak256(abi.encode(seed, i)));
             if (seed % 5 == 0 && fleet.totalMinted() < 20) {
-                _buyMany(fleet, 1); // a later sale: counted, never eligible here
+                _buyMany(fleet, 1); // a later sale: counted in the approval rule
                 continue;
             }
             uint256 tokenId = ((seed >> 8) % 10) + 1;

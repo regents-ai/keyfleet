@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 
 /// @notice The one fixed vote of a fleet: a proposal that stays open until it is carried out, and a
 /// fixed approval rule for each kind.
@@ -14,14 +15,19 @@ import {Keyfleet} from "./Keyfleet.sol";
 /// `yesVotes * 5 >= FLEET.totalMinted() * 3`. Either way a key that stays silent counts against
 /// it. Anyone may carry out an approved proposal, and until someone does it stays open.
 ///
-/// Every key is one vote on every kind of proposal, whatever the preset. A key may vote on a
-/// proposal only if it last moved — its mint or its latest transfer — in a block before the one
-/// the proposal opened in, so buying or moving a key after a proposal opens can never add a vote
-/// to it, while every key sold still counts toward "all the keys". The key's owner, or that owner's
-/// registered voting delegate, may change the key's vote until the proposal is carried out. A vote
-/// a key cast stays counted after the key moves on, and whoever holds the key then, or their
-/// delegate, may withdraw it with `withdrawVote` until the proposal is carried out. A withdrawn key
-/// has no vote and counts against the proposal, exactly as a silent one does.
+/// Every key is one vote on every kind of proposal, whatever the preset, and every key sold counts
+/// toward "all the keys". The key's current owner, or that owner's registered voting delegate, may
+/// vote it or change its vote until the proposal is carried out, whenever the key was bought or
+/// last moved: a key has one vote per proposal, and moving it hands that one vote to its new
+/// holder. Whoever holds a key may withdraw its vote with `withdrawVote` until the proposal is
+/// carried out. A withdrawn key has no vote and counts against the proposal, exactly as a silent
+/// one does.
+///
+/// This controller also records which keys are present (`KeyfleetPresence`): a key is present for
+/// 48 hours after its owner or their delegate renews it with `present`, votes it or proposes with
+/// it, and stops being present the moment it changes hands. Opening a proposal requires every
+/// expired presence to have been swept, renews the proposer's key, and records the opening
+/// revision, time and exact count of present keys.
 ///
 /// There are two kinds. A `Decision` records agreement and has no external side effect; its
 /// text is carried in the creation event only and an optional digest pins the exact artifact or
@@ -35,6 +41,8 @@ import {Keyfleet} from "./Keyfleet.sol";
 /// delegation by signature. A majority of keys can approve a decision the rest of the fleet did
 /// not want, and no hidden signer is introduced to prevent that.
 contract KeyfleetVotes {
+    using KeyfleetPresence for KeyfleetPresence.Queue;
+
     /// @notice What a proposal does once it is carried out.
     enum Kind {
         Decision,
@@ -60,7 +68,10 @@ contract KeyfleetVotes {
     /// @dev A RestrictEdits proposal's two fields are zero on a Decision.
     /// @param kind Decision or RestrictEdits.
     /// @param proposer The address that created it.
-    /// @param openedBlock Block of creation. Keys that last moved before it may vote.
+    /// @param openRevision The presence revision recorded at opening.
+    /// @param openedAt The time it opened.
+    /// @param e0 How many keys were present when it opened, counted after every due expiry was
+    /// swept. Never zero: the proposer's key is renewed first.
     /// @param yesVotes Keys whose current vote is YES.
     /// @param noVotes Keys whose current vote is NO.
     /// @param executed Whether it has been carried out.
@@ -70,7 +81,9 @@ contract KeyfleetVotes {
     struct Proposal {
         Kind kind;
         address proposer;
-        uint64 openedBlock;
+        uint48 openRevision;
+        uint64 openedAt;
+        uint32 e0;
         uint256 yesVotes;
         uint256 noVotes;
         bool executed;
@@ -85,8 +98,11 @@ contract KeyfleetVotes {
     error UnknownProposal(uint256 proposalId);
     /// @notice No key with this id has been sold.
     error KeyNotMinted(uint256 tokenId);
-    /// @notice The key moved in or after the block this proposal opened in, so it cannot vote on it.
-    error KeyNotEligible(uint256 tokenId);
+    /// @notice Only the fleet reports a key changing hands.
+    error OnlyFleet();
+    /// @notice Expired presences are still queued after this call's sweep, so the count of present
+    /// keys is not exact; `sweepExpired` must run before a proposal can open.
+    error MaintenanceRequired();
     /// @notice The caller is neither the key's owner nor that owner's registered voting delegate.
     error NotAuthorizedForKey(uint256 tokenId, address owner);
     /// @notice The key's current vote on this proposal is already the one asked for.
@@ -104,17 +120,37 @@ contract KeyfleetVotes {
     /// @param proposalId The new proposal.
     /// @param kind Decision or RestrictEdits.
     /// @param proposer The address that created it.
-    /// @param openedBlock Block of creation; keys that last moved before it may vote.
+    /// @param openRevision The presence revision recorded at opening.
+    /// @param openedAt The time it opened.
+    /// @param e0 How many keys were present when it opened.
     /// @param digest Optional exact artifact or commit digest; zero means none.
     /// @param text The proposal text, for readers; the contract never reads it back.
     event ProposalCreated(
         uint256 indexed proposalId,
         Kind indexed kind,
         address indexed proposer,
-        uint64 openedBlock,
+        uint48 openRevision,
+        uint64 openedAt,
+        uint32 e0,
         bytes32 digest,
         string text
     );
+
+    /// @notice A key stopped being present because it changed hands.
+    event PresenceCleared(uint256 indexed tokenId);
+
+    /// @notice Expired presences were removed from the queue.
+    /// @param removed How many were removed.
+    /// @param due Whether expired presences are still queued.
+    event Swept(uint256 removed, bool due);
+
+    /// @notice A key was renewed: it is present until `at` plus 48 hours, unless it changes hands
+    /// first.
+    /// @param tokenId The key.
+    /// @param at The time of the renewal.
+    /// @param blockNumber The block of the renewal, for audit.
+    /// @param epoch The key's ownership epoch the renewal belongs to.
+    event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
 
     /// @notice The payload of a RestrictEdits proposal, emitted beside its `ProposalCreated`.
     event RestrictEditsProposed(uint256 indexed proposalId, uint256 indexed targetTokenId, bool restricted);
@@ -138,6 +174,13 @@ contract KeyfleetVotes {
     /// @notice A proposal was carried out. It can never be carried out again.
     event ProposalExecuted(uint256 indexed proposalId, address indexed executor);
 
+    /// @notice How many expired presences opening a proposal sweeps before it gives up with
+    /// `MaintenanceRequired`.
+    uint256 public constant SWEEP_IN_PROPOSE = 256;
+
+    /// @notice How long a renewal keeps a key present: 48 hours, in seconds.
+    uint64 public constant PRESENCE_WINDOW = KeyfleetPresence.WINDOW;
+
     /// @notice The fleet that deployed this controller and holds the keys that vote.
     Keyfleet public immutable FLEET;
 
@@ -154,6 +197,7 @@ contract KeyfleetVotes {
     mapping(uint256 tokenId => bool restricted) public editsRestricted;
 
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
+    KeyfleetPresence.Queue private _presence;
 
     /// @notice Binds this controller to its fleet.
     /// @param fleet The fleet whose keys vote here, which must name this contract's address as its
@@ -177,6 +221,72 @@ contract KeyfleetVotes {
         Proposal storage stored = _require(proposalId);
         if (stored.executed) return State.Executed;
         return _approved(stored.kind, stored.yesVotes, FLEET.totalMinted()) ? State.Approved : State.Open;
+    }
+
+    /// @notice Whether a key is present now: renewed under its current owner less than 48 hours ago.
+    function isActive(uint256 tokenId) external view returns (bool) {
+        return _presence.isActive(tokenId);
+    }
+
+    /// @notice When a key was last renewed under its current owner; zero if it changed hands since
+    /// or was never renewed.
+    function lastActiveAt(uint256 tokenId) external view returns (uint64) {
+        return _presence.lastActiveAt(tokenId);
+    }
+
+    /// @notice Whether a key was present when a proposal opened, as recorded at its opening
+    /// revision, so a renewal or a change of hands in the same block falls on the right side.
+    function wasActiveAtOpening(uint256 proposalId, uint256 tokenId) external view returns (bool) {
+        Proposal storage stored = _require(proposalId);
+        return _presence.wasActive(tokenId, stored.openRevision, stored.openedAt);
+    }
+
+    /// @notice The presence queue's ends and its entry count. `queued` includes expired entries
+    /// no sweep has removed yet, so it is the exact count of present keys only when nothing is due.
+    function presenceQueue() external view returns (uint32 head, uint32 tail, uint32 queued) {
+        return (_presence.head, _presence.tail, _presence.queued);
+    }
+
+    /// @notice A key's queue entry: its neighbours and when it expires, all zero when not queued.
+    function presenceEntry(uint256 tokenId) external view returns (uint32 prev, uint32 next, uint64 expiresAt) {
+        KeyfleetPresence.Node storage node = _presence.node[tokenId];
+        return (node.prev, node.next, node.expiresAt);
+    }
+
+    /// @notice The latest presence revision.
+    function presenceRevision() external view returns (uint48) {
+        return _presence.revision;
+    }
+
+    // --- presence --------------------------------------------------------
+
+    /// @notice Renews keys: each is present for the next 48 hours unless it changes hands first.
+    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
+    /// their delegate. A key renewed again moves to the back of the queue; it is never counted
+    /// twice. Renewing keys changes no open proposal.
+    /// @param tokenIds The keys to renew, each at most once.
+    function present(uint256[] calldata tokenIds) external {
+        if (tokenIds.length == 0) revert NoKeys();
+        for (uint256 i = 0; i < tokenIds.length; ++i) {
+            _requireCaster(tokenIds[i]);
+            _touch(tokenIds[i]);
+        }
+    }
+
+    /// @notice Ends a key's presence because it changed hands. Only the fleet calls this, from every
+    /// transfer.
+    function onKeyMoved(uint256 tokenId) external {
+        if (msg.sender != address(FLEET)) revert OnlyFleet();
+        _presence.clear(tokenId);
+        emit PresenceCleared(tokenId);
+    }
+
+    /// @notice Removes up to `limit` expired presences from the queue. Anyone may call it; it
+    /// renews nothing and changes no proposal.
+    /// @return removed How many were removed.
+    /// @return due Whether expired presences are still queued.
+    function sweepExpired(uint256 limit) external returns (uint256 removed, bool due) {
+        return _sweep(limit);
     }
 
     // --- delegation ------------------------------------------------------
@@ -237,13 +347,11 @@ contract KeyfleetVotes {
     // --- voting ----------------------------------------------------------
 
     /// @notice Votes a set of keys for or against a proposal, or changes their votes, until it is
-    /// carried out.
-    /// @dev Every id must have last moved in a block before the one the proposal opened in, and
-    /// must be owned by the caller or by an owner who has registered the caller as their delegate.
-    /// A key with no vote adds one to the chosen side; a key with the other vote moves from that
-    /// side to this one; a key that already has this vote is refused with `AlreadyVoted`. A key that
-    /// moves after the proposal opens can no longer vote or change its vote on it, and the vote it
-    /// cast before it moved stays counted until its holder withdraws it with `withdrawVote`.
+    /// carried out, and renews each key.
+    /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
+    /// their delegate. A key with no vote adds one to the chosen side; a key with the other vote
+    /// moves from that side to this one; a key that already has this vote is refused with
+    /// `AlreadyVoted`. A key that moved keeps the vote it had, and its new holder may change it.
     ///
     /// The whole call reverts if any one id fails, so a caller never half-votes a set by accident.
     /// @param proposalId The proposal being voted on.
@@ -255,12 +363,11 @@ contract KeyfleetVotes {
         if (tokenIds.length == 0) revert NoKeys();
 
         Choice choice = support ? Choice.Yes : Choice.No;
-        uint64 openedBlock = stored.openedBlock;
         uint256 changed;
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
             _requireCaster(tokenId);
-            if (FLEET.lastMovedBlock(tokenId) >= openedBlock) revert KeyNotEligible(tokenId);
+            _touch(tokenId);
             Choice previous = voteOf[proposalId][tokenId];
             if (previous == choice) revert AlreadyVoted(tokenId);
             if (previous != Choice.None) ++changed;
@@ -280,9 +387,8 @@ contract KeyfleetVotes {
     /// @notice Withdraws a set of keys' votes on a proposal, until it is carried out.
     /// @dev Every id must be owned by the caller or by an owner who has registered the caller as
     /// their delegate, and must have a vote on the proposal, whoever cast it: a key that moved after
-    /// voting can have that vote withdrawn by whoever holds it now. When the key last moved does not
-    /// matter here, because withdrawing only ever takes a vote away. A withdrawn key has no vote,
-    /// so it counts against the proposal; it can vote again only if it could vote at all.
+    /// voting can have that vote withdrawn by whoever holds it now. A withdrawn key has no vote, so
+    /// it counts against the proposal until it votes again.
     ///
     /// The whole call reverts if any one id fails, so a caller never half-withdraws a set by accident.
     /// @param proposalId The proposal the votes were cast on.
@@ -338,13 +444,20 @@ contract KeyfleetVotes {
 
     // --- internals -------------------------------------------------------
 
-    /// @dev Records a proposal and the block it opened in. The standing check is the caster check
-    /// `vote` applies: the caller owns the named key or is the registered delegate of whoever does.
+    /// @dev Records a proposal and its opening. The standing check is the caster check `vote`
+    /// applies: the caller owns the named key or is the registered delegate of whoever does. Up to
+    /// `SWEEP_IN_PROPOSE` expired presences are swept first, and if any are still due the call
+    /// reverts with `MaintenanceRequired` rather than record a count that includes expired keys.
+    /// The proposer's key is renewed, and then the opening revision, time and the exact count of
+    /// present keys are recorded.
     function _propose(uint256 tokenId, Kind kind, string memory text, bytes32 digest)
         private
         returns (uint256 proposalId)
     {
         _requireCaster(tokenId);
+        (, bool due) = _sweep(SWEEP_IN_PROPOSE);
+        if (due) revert MaintenanceRequired();
+        _touch(tokenId);
 
         proposalId = proposalCount + 1;
         proposalCount = proposalId;
@@ -352,10 +465,26 @@ contract KeyfleetVotes {
         Proposal storage stored = _proposals[proposalId];
         stored.kind = kind;
         stored.proposer = msg.sender;
-        stored.openedBlock = uint64(block.number);
+        uint48 openRevision = _presence.mark();
+        uint32 e0 = _presence.queued;
+        stored.openRevision = openRevision;
+        stored.openedAt = uint64(block.timestamp);
+        stored.e0 = e0;
         stored.digest = digest;
 
-        emit ProposalCreated(proposalId, kind, msg.sender, uint64(block.number), digest, text);
+        emit ProposalCreated(proposalId, kind, msg.sender, openRevision, uint64(block.timestamp), e0, digest, text);
+    }
+
+    /// @dev Sweeps up to `limit` expired presences, announcing any it removes.
+    function _sweep(uint256 limit) private returns (uint256 removed, bool due) {
+        (removed, due) = _presence.sweep(limit);
+        if (removed != 0) emit Swept(removed, due);
+    }
+
+    /// @dev Renews a key the caller has been authorised for.
+    function _touch(uint256 tokenId) private {
+        _presence.touch(tokenId);
+        emit Present(tokenId, uint64(block.timestamp), uint64(block.number), FLEET.ownershipEpoch(tokenId));
     }
 
     /// @dev The caster of a key is its current owner or that owner's registered delegate. A token id

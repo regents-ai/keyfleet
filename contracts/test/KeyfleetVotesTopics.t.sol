@@ -22,7 +22,7 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalCreatedTopic() public pure {
         assertEq(
-            KeyfleetVotes.ProposalCreated.selector, 0x29ea7482e80123243d4237b155637f07d8868001408424ed3934ec29e65ab647
+            KeyfleetVotes.ProposalCreated.selector, 0x0304fff099efa259236c475a8becd21961ea19ff1e91f791fb27c5e63a3d4848
         );
     }
 
