@@ -1,0 +1,345 @@
+{
+  "traits": [
+    {
+      "name": "Exterior Design",
+      "values": [
+        {"name": "Harbor", "weight": 100},
+        {"name": "Ledger", "weight": 100},
+        {"name": "Signal", "weight": 100},
+        {"name": "Relay", "weight": 100},
+        {"name": "Circuit", "weight": 100},
+        {"name": "Quarry", "weight": 100},
+        {"name": "Lantern", "weight": 100},
+        {"name": "Orchard", "weight": 80},
+        {"name": "Tidewater", "weight": 70},
+        {"name": "Observatory", "weight": 60},
+        {"name": "Cathedral", "weight": 40},
+        {"name": "Foundry", "weight": 25},
+        {"name": "Labyrinth", "weight": 15},
+        {"name": "Crown Vault", "weight": 7},
+        {"name": "Wyvern", "weight": 2},
+        {"name": "The First Door", "weight": 1}
+      ]
+    },
+    {
+      "name": "Key Material",
+      "values": [
+        {"name": "Brushed Steel", "weight": 100},
+        {"name": "Brass", "weight": 100},
+        {"name": "Nickel", "weight": 100},
+        {"name": "Graphite", "weight": 100},
+        {"name": "Copper", "weight": 100},
+        {"name": "Bone Ceramic", "weight": 100},
+        {"name": "Pewter", "weight": 100},
+        {"name": "Rose Gold", "weight": 80},
+        {"name": "Jade", "weight": 70},
+        {"name": "Blued Steel", "weight": 60},
+        {"name": "Gold", "weight": 40},
+        {"name": "Damascus", "weight": 25},
+        {"name": "Opal", "weight": 15},
+        {"name": "Glass", "weight": 7},
+        {"name": "Meteorite", "weight": 2},
+        {"name": "Starlight", "weight": 1}
+      ]
+    },
+    {
+      "name": "Card Shell",
+      "values": [
+        {"name": "Matte Graphite", "weight": 100},
+        {"name": "Pearl", "weight": 100},
+        {"name": "Powder Blue Ceramic", "weight": 100},
+        {"name": "Sage Enamel", "weight": 100},
+        {"name": "Sand Linen", "weight": 100},
+        {"name": "Carbon Weave", "weight": 100},
+        {"name": "Ivory Porcelain", "weight": 100},
+        {"name": "Frosted Glass", "weight": 80},
+        {"name": "Walnut", "weight": 70},
+        {"name": "Brushed Aluminum", "weight": 60},
+        {"name": "Red Lacquer", "weight": 40},
+        {"name": "Mother of Pearl", "weight": 25},
+        {"name": "Obsidian", "weight": 15},
+        {"name": "Clear Crystal", "weight": 7},
+        {"name": "Liquid Mercury", "weight": 2},
+        {"name": "Night Sky", "weight": 1}
+      ]
+    },
+    {
+      "name": "Foil",
+      "values": [
+        {"name": "Satin", "weight": 100},
+        {"name": "Pearl Sheen", "weight": 100},
+        {"name": "Rainbow", "weight": 100},
+        {"name": "Soft Prism", "weight": 100},
+        {"name": "Silver Fleck", "weight": 100},
+        {"name": "Gold Fleck", "weight": 100},
+        {"name": "Frost", "weight": 100},
+        {"name": "Cracked Ice", "weight": 80},
+        {"name": "Starburst", "weight": 70},
+        {"name": "Galaxy", "weight": 60},
+        {"name": "Etched Rays", "weight": 40},
+        {"name": "Checker Prism", "weight": 25},
+        {"name": "Wavefront", "weight": 15},
+        {"name": "Aurora", "weight": 7},
+        {"name": "Black Prism", "weight": 2},
+        {"name": "Full Spectrum", "weight": 1}
+      ]
+    },
+    {
+      "name": "Key Exit",
+      "values": [
+        {"name": "Normal", "weight": 100},
+        {"name": "Fade", "weight": 100},
+        {"name": "Dissolve", "weight": 100},
+        {"name": "Sink", "weight": 100},
+        {"name": "Shrink", "weight": 100},
+        {"name": "Pixelate", "weight": 100},
+        {"name": "Wipe", "weight": 100},
+        {"name": "Burn", "weight": 80},
+        {"name": "Laser", "weight": 70},
+        {"name": "Ghost", "weight": 60},
+        {"name": "Melt", "weight": 40},
+        {"name": "Sand", "weight": 25},
+        {"name": "Super Glow", "weight": 15},
+        {"name": "Lightning", "weight": 7},
+        {"name": "Starfall", "weight": 2},
+        {"name": "Supernova", "weight": 1}
+      ]
+    },
+    {
+      "name": "Reveal",
+      "values": [
+        {"name": "Iris", "weight": 100},
+        {"name": "Split Doors", "weight": 100},
+        {"name": "Slide Up", "weight": 100},
+        {"name": "Shutters", "weight": 100},
+        {"name": "Dissolve", "weight": 100},
+        {"name": "Light Sweep", "weight": 100},
+        {"name": "Quarters", "weight": 100},
+        {"name": "Blinds", "weight": 80},
+        {"name": "Diagonal Split", "weight": 70},
+        {"name": "Flip", "weight": 60},
+        {"name": "Ripple", "weight": 40},
+        {"name": "Vault Door", "weight": 25},
+        {"name": "Petals", "weight": 15},
+        {"name": "Shatter", "weight": 7},
+        {"name": "Holographic Assembly", "weight": 2},
+        {"name": "Keyhole Bloom", "weight": 1}
+      ]
+    },
+    {
+      "name": "Frame",
+      "values": [
+        {"name": "Hairline", "weight": 100},
+        {"name": "Bevel", "weight": 100},
+        {"name": "Rounded Window", "weight": 100},
+        {"name": "Chamfer", "weight": 100},
+        {"name": "Rivets", "weight": 100},
+        {"name": "Double Rule", "weight": 100},
+        {"name": "Arch", "weight": 100},
+        {"name": "Porthole", "weight": 80},
+        {"name": "Deco Fan", "weight": 70},
+        {"name": "Filigree Corners", "weight": 60},
+        {"name": "Gothic Tracery", "weight": 40},
+        {"name": "Laurel", "weight": 25},
+        {"name": "Circuit Trace", "weight": 15},
+        {"name": "Celestial Ring", "weight": 7},
+        {"name": "Crown Gilt", "weight": 2},
+        {"name": "Borderless", "weight": 1}
+      ]
+    },
+    {
+      "name": "Companion",
+      "values": [
+        {"name": "Pebble", "weight": 100},
+        {"name": "Sprout", "weight": 100},
+        {"name": "Koi", "weight": 100},
+        {"name": "Sage", "weight": 100},
+        {"name": "Fern", "weight": 100},
+        {"name": "Rill", "weight": 100},
+        {"name": "Cove", "weight": 100},
+        {"name": "Ibis", "weight": 80},
+        {"name": "Tern", "weight": 70},
+        {"name": "Rune", "weight": 60},
+        {"name": "Vix", "weight": 40},
+        {"name": "Orbit", "weight": 25},
+        {"name": "Nimbus", "weight": 15},
+        {"name": "Veil", "weight": 7},
+        {"name": "Aura", "weight": 2},
+        {"name": "To Be Named", "weight": 1}
+      ]
+    },
+    {
+      "name": "Skin",
+      "per": "Companion",
+      "values": {
+        "Pebble": [
+          {"name": "Granite", "weight": 250},
+          {"name": "Sandstone", "weight": 250},
+          {"name": "Moss", "weight": 250},
+          {"name": "Basalt", "weight": 250}
+        ],
+        "Sprout": [
+          {"name": "Leaf", "weight": 250},
+          {"name": "Cream", "weight": 250},
+          {"name": "Lime", "weight": 250},
+          {"name": "Moss", "weight": 250}
+        ],
+        "Koi": [
+          {"name": "Calico", "weight": 250},
+          {"name": "Blush", "weight": 250},
+          {"name": "Ink", "weight": 250},
+          {"name": "Clear Jelly", "weight": 250}
+        ],
+        "Sage": [
+          {"name": "Olive", "weight": 334},
+          {"name": "Stone Composite", "weight": 333},
+          {"name": "Frosted Glass", "weight": 333}
+        ],
+        "Fern": [
+          {"name": "Leaf", "weight": 334},
+          {"name": "Stone Ceramic", "weight": 333},
+          {"name": "Frosted Glass", "weight": 333}
+        ],
+        "Rill": [
+          {"name": "Teal", "weight": 334},
+          {"name": "Smoky Glass", "weight": 333},
+          {"name": "Frosted Glass", "weight": 333}
+        ],
+        "Cove": [
+          {"name": "Teal", "weight": 334},
+          {"name": "Polished Stone", "weight": 333},
+          {"name": "Frosted Glass", "weight": 333}
+        ],
+        "Ibis": [
+          {"name": "Terracotta", "weight": 334},
+          {"name": "Stone Ceramic", "weight": 333},
+          {"name": "Brushed Brass", "weight": 333}
+        ],
+        "Tern": [
+          {"name": "Navy", "weight": 334},
+          {"name": "Brushed Brass", "weight": 333},
+          {"name": "Frosted Glass", "weight": 333}
+        ],
+        "Rune": [
+          {"name": "Paper", "weight": 334},
+          {"name": "Anodized Metal", "weight": 333},
+          {"name": "Sand Resin", "weight": 333}
+        ],
+        "Vix": [
+          {"name": "Russet", "weight": 334},
+          {"name": "Bone Ceramic", "weight": 333},
+          {"name": "Graphite Stone", "weight": 333}
+        ],
+        "Orbit": [
+          {"name": "Sunny", "weight": 250},
+          {"name": "Opal", "weight": 250},
+          {"name": "Periwinkle", "weight": 250},
+          {"name": "Chrome", "weight": 250}
+        ],
+        "Nimbus": [
+          {"name": "Cloud", "weight": 250},
+          {"name": "Candy", "weight": 250},
+          {"name": "Sky", "weight": 250},
+          {"name": "Chrome", "weight": 250}
+        ],
+        "Veil": [
+          {"name": "Lilac", "weight": 334},
+          {"name": "Matte Ceramic", "weight": 333},
+          {"name": "Iridescent Glass", "weight": 333}
+        ],
+        "Aura": [
+          {"name": "Lilac", "weight": 334},
+          {"name": "Iridescent Glass", "weight": 333},
+          {"name": "Anodized Titanium", "weight": 333}
+        ],
+        "To Be Named": [
+          {"name": "To Be Named", "weight": 1000}
+        ]
+      }
+    },
+    {
+      "name": "Mark",
+      "values": [
+        {"name": "None", "weight": 100},
+        {"name": "Blush", "weight": 100},
+        {"name": "Freckles", "weight": 100},
+        {"name": "Forehead Dot", "weight": 100},
+        {"name": "Antenna", "weight": 100},
+        {"name": "Tiny Leaf", "weight": 100},
+        {"name": "Cheek Stripes", "weight": 100},
+        {"name": "Scarf", "weight": 80},
+        {"name": "Round Glasses", "weight": 70},
+        {"name": "Bow", "weight": 60},
+        {"name": "Party Hat", "weight": 40},
+        {"name": "Crown", "weight": 25},
+        {"name": "Halo", "weight": 15},
+        {"name": "Monocle", "weight": 7},
+        {"name": "Tiny Key", "weight": 2},
+        {"name": "Fleet Sigil", "weight": 1}
+      ]
+    },
+    {
+      "name": "Palette",
+      "values": [
+        {"name": "Pearl Ice", "weight": 100},
+        {"name": "Peach Cream", "weight": 100},
+        {"name": "Navy Cyan", "weight": 100},
+        {"name": "Sage Amber", "weight": 100},
+        {"name": "Lilac Pink", "weight": 100},
+        {"name": "Sand Turquoise", "weight": 100},
+        {"name": "Powder Lemon", "weight": 100},
+        {"name": "Forest Jade", "weight": 80},
+        {"name": "Rose Champagne", "weight": 70},
+        {"name": "Tangerine Ink", "weight": 60},
+        {"name": "Indigo Ice", "weight": 40},
+        {"name": "Copper Teal", "weight": 25},
+        {"name": "Opal Rose", "weight": 15},
+        {"name": "Obsidian Violet", "weight": 7},
+        {"name": "Black Gold", "weight": 2},
+        {"name": "Single Prism", "weight": 1}
+      ]
+    },
+    {
+      "name": "Habitat",
+      "values": [
+        {"name": "Soft Gradient", "weight": 100},
+        {"name": "Paper Studio", "weight": 100},
+        {"name": "Cloud Nook", "weight": 100},
+        {"name": "Moss Garden", "weight": 100},
+        {"name": "Desk Corner", "weight": 100},
+        {"name": "Tide Pool", "weight": 100},
+        {"name": "Window Seat", "weight": 100},
+        {"name": "Night Window", "weight": 80},
+        {"name": "Bookshelf", "weight": 70},
+        {"name": "Greenhouse", "weight": 60},
+        {"name": "Aurora Field", "weight": 40},
+        {"name": "Orbit Deck", "weight": 25},
+        {"name": "Deep Sea", "weight": 15},
+        {"name": "Nebula", "weight": 7},
+        {"name": "Black Hole", "weight": 2},
+        {"name": "Endless Card", "weight": 1}
+      ]
+    },
+    {
+      "name": "Idle Motion",
+      "values": [
+        {"name": "Float", "weight": 100},
+        {"name": "Breathe", "weight": 100},
+        {"name": "Bob", "weight": 100},
+        {"name": "Sway", "weight": 100},
+        {"name": "Lean", "weight": 100},
+        {"name": "Double Blink", "weight": 100},
+        {"name": "Bounce", "weight": 100},
+        {"name": "Tiny Orbit", "weight": 80},
+        {"name": "Wobble", "weight": 70},
+        {"name": "Stretch", "weight": 60},
+        {"name": "Hop", "weight": 40},
+        {"name": "Spin", "weight": 25},
+        {"name": "Jiggle", "weight": 15},
+        {"name": "Phase Echo", "weight": 7},
+        {"name": "Flip", "weight": 2},
+        {"name": "Light Bloom", "weight": 1}
+      ]
+    }
+  ]
+}
