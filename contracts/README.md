@@ -28,8 +28,9 @@ this branch does:
   outside a purchase is treasury capital, as is every other token, the capital
   part of every purchase and a completed Cascade level's surplus. Money sent to
   the fleet contract itself by mistake is forwarded to the treasury. The
-  treasury spends only by making an approved proposal's exact calls; the daily
-  split to the keys is a later step. There is no token launch.
+  treasury spends only by making an approved proposal's exact calls, apart from
+  the daily split, which shares a small part of its ETH, REGENT and USDC (and
+  OUSD once a vote admits it) equally across all keys. There is no token launch.
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
@@ -205,6 +206,12 @@ four assets, every slot cold and moving from zero, measured 239,798 gas; the
 suite asserts a ceiling of 288,000. Each split asset adds about 46,000 to that
 worst case, nearly all of it first writes.
 
+In a whole fleet with all four bound assets split, moving a key costs 306,095
+gas with every slot cold. One wallet claiming ten keys in all four assets costs
+1,283,814 the first time, because each key's watermark in each asset is written
+from zero, and 476,709 for the next day's claim of the same ten keys. The suite
+asserts ceilings twenty percent above each.
+
 ## Fleet
 
 `Keyfleet` is an OpenZeppelin ERC721 with 1-based, contiguous token ids.
@@ -241,13 +248,13 @@ and 49,152 bytes of deployment code per contract. Measured with
 | `KeyfleetRewards` | 8,396 | 8,878 |
 | `KeyfleetShards` | 3,604 | 3,810 |
 | `KeyfleetVotes` | 14,531 | 15,647 |
-| `KeyfleetTreasury` | 3,883 | 4,602 |
+| `KeyfleetTreasury` | 8,346 | 9,856 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
 33,693, before the controller held proposals and ballots and the treasury made
-calls. With the treasury's daily split still to come, that would
-pass 49,152; deployed separately, each stays well inside both limits.
+calls and ran the daily split. With those, it would pass 49,152; deployed
+separately, each stays well inside both limits.
 
 ### Purchases
 
@@ -369,8 +376,8 @@ There are no deposit functions. `recognizeSurplus(asset)` sends an asset's whole
 surplus to the treasury, USDC exactly as any other token, and emits
 `ForwardedToTreasury(asset, caller, amount)`. Anyone may call it at any time,
 before or after any key is sold; with nothing to forward it returns zero and
-says nothing. None of it reaches the keys directly: USDC reaches them only from
-the treasury, through the daily split of a later step.
+says nothing. None of it reaches the keys directly: it reaches them only from
+the treasury, through the daily split.
 
 The treasury is a separate contract bound to its fleet for good. It holds native
 ETH as well as tokens: anyone may send it ETH. It spends only through
@@ -407,7 +414,6 @@ advance, which disclosure covers.
 Carrying out calls, the protocol share deposit and returning an advance share
 one reentrancy lock, so a payee called back by a payment cannot return an
 advance, send the protocol share or carry out another proposal from inside it.
-The daily split of the treasury's balances comes in a later step.
 The Cascade reserve, the owed protocol share and the ledger's backing are never
 in the treasury and are out of any vote's reach. The only ways USDC leaves the
 fleet itself are the protocol share sent through the treasury to staking, the
@@ -416,6 +422,65 @@ the treasury, and the Accelerant rebate and the Cascade repayment moved into the
 ledger. No token a fleet holds
 is ever swapped or converted. Tokens that take a fee when they move, or rebase,
 are not supported.
+
+### The daily split
+
+Once a day the treasury shares a fixed part of its balance of each bound asset
+equally across every key minted so far. The bound assets are ETH, REGENT and
+USDC; REGENT is fixed at deployment as `REGENT()`, on Base
+`0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. OUSD has a slot that starts empty:
+a passed proposal may fill it once with `admitOusd(token)`, which refuses the
+zero address, USDC and REGENT (`OusdInvalid`) and a second admission
+(`OusdAlreadyAdmitted`), and emits `OusdAdmitted(token, threshold)`.
+`splitAssets()` lists the bound assets in the order they are split: ETH (the
+zero address), REGENT, USDC, then OUSD once admitted. Any other token the
+treasury holds is never split.
+
+For each bound asset, with `B` the treasury's balance of it, `N` the number of
+keys minted and the rate in basis points:
+
+- the cut is `B × rate / 10,000`, rounded down;
+- each key's share is the cut divided by `N`, rounded down, in whole units;
+- the treasury sends the ledger exactly the share times `N`, and the rounding
+  dust stays in the treasury.
+
+An asset is skipped, with `SplitSkipped(asset, balance)`, when no key has been
+minted, when `B` is below its threshold, or when the share comes to zero
+because there are more keys than units in the cut. The thresholds are 0.05 ETH
+and 100 whole units of each token, read from the token's decimals once (REGENT
+and USDC at deployment, OUSD when admitted); a balance equal to the threshold
+qualifies. `B` is only the treasury's own balance, so what the ledger already
+holds for the keys is never counted again. Each asset split emits
+`SplitAllocated(asset, balance, perKey, keys)`.
+
+The rate starts at 50 basis points (half a percent) and is always between 10 and
+200. Only a passed proposal can change it, with `setDailySplitBps(bps)`
+(`SplitRateOutOfRange` otherwise); the new rate applies from the next run, with
+nothing pending in between. It emits `DailySplitRateSet(bps)`.
+
+Anyone may call `runDailySplit()` once a day has passed since the last run; the
+first run opens a day after the first key was minted (`firstMintAt`).
+`nextRunAt()` gives that time, or zero before any key is minted, and an early
+call reverts with `SplitNotDue(opensAt)`. Days nobody runs it are not made up
+later. A passed proposal may also run it at any time with `runVotedSplit()`,
+ignoring the clock. Every run, public or voted, records `lastRunAt` and emits
+`DailySplitRun(voted, keys, bps)`.
+
+The public run takes the treasury's one reentrancy lock, and the voted run is
+only ever made from inside a carried-out proposal, which already holds it. While
+a run is under way the treasury raises a flag that lasts only for that
+transaction (`splitInProgress()`); the ledger accepts split funding only from the
+treasury and only while that flag is up. A proposal's call to the ledger's
+funding functions is therefore refused, and a key minted while a token is on its
+way to the ledger makes the whole run revert rather than share an allocation
+worked out before it existed.
+
+ETH is sent with the funding call itself. A token is sent first and the ledger is
+funded after; a token that refuses the transfer is skipped with
+`SplitTransferFailed(asset, amount)` and the other assets are still split. A
+transfer that fails because it ran out of gas reverts the whole run with
+`SplitOutOfGas` instead, so nobody can starve one asset of its day by sending
+too little gas.
 
 ## Votes
 
@@ -699,8 +764,10 @@ lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab` or
 the 30 gwei lane
 `0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70` (from
 Chainlink's VRF v2.5 supported-networks page), and a staking contract other
-than REGENT revenue staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. On
-any chain it refuses a staking address that holds no code, a coordinator that
+than REGENT revenue staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, and a
+REGENT other than `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07` (the manifest's
+`regent`). On any chain it refuses a staking address or a REGENT that holds no
+code, a coordinator that
 holds no code, a gas lane or subscription
 the coordinator does not know, a zero trait table hash and an unknown fleet
 name.
@@ -710,7 +777,7 @@ because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
 named fleet's, any value that differs from the manifest (the treasury's
-staking contract included), a ledger, controller,
+staking contract and REGENT included), a ledger, controller,
 treasury or shard record that holds no code or does not name the fleet as its
 own (`CompanionNotBound`), a fleet the subscription
 does not list as a consumer and, on Base, a subscription the Regents Safe does
@@ -719,8 +786,8 @@ not own. Only then does it write
 fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
 deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
-trait table hash, the assets the ledger pays at deployment (`rewardTokens`) and the terms the
-release discloses.
+trait table hash, REGENT, the assets the daily split shares at deployment
+(`splitAssets`) and the terms the release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads
 `deployments/base.json` and `deployments/anvil.json`. Their cores take and return
@@ -730,14 +797,14 @@ how to run each step and what each refuses.
 
 `script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet and
 its controller and treasury, with
-stand-in USDC, VRF coordinator and REGENT staking, on a plain local
+stand-in USDC, REGENT, VRF coordinator and REGENT staking, on a plain local
 anvil for the anvil tests in `platform/` (`mix test.external`).
 
 ## Checks
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
-payment and advance, voting, presence, shard, signature,
+payment and advance, daily split, voting, presence, shard, signature,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
 over random renewals, transfers, sweeps, openings and the passing of time, the
 growing electorate's over random proposals, ballots, transfers, renewals,

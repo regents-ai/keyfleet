@@ -76,6 +76,7 @@ contract KeyfleetBaseForkTest is Test {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             IRegentRevenueStaking(address(staking)),
+            IERC20Metadata(script.BASE_REGENT()),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({coordinator: coordinator, subscriptionId: subscriptionId, keyHash: keyHash}),
             TRAIT_TABLE

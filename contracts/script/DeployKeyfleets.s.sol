@@ -47,6 +47,7 @@ contract DeployKeyfleets is KeyfleetManifest {
             _presets()[manifest.slot],
             IERC20(manifest.usdc),
             IRegentRevenueStaking(manifest.regentStaking),
+            IERC20(manifest.regent),
             Keyfleet.Metadata({
                 name: manifest.fleet.name, symbol: manifest.fleet.symbol, baseTokenURI: manifest.fleet.baseTokenURI
             }),

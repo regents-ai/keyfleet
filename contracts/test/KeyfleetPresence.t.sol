@@ -11,6 +11,7 @@ import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Presence: a key is present for 48 hours after it is renewed under its current owner,
@@ -45,6 +46,7 @@ contract KeyfleetPresenceTest is Test {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             new MockRegentRevenueStaking(usdc),
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -427,6 +429,7 @@ contract KeyfleetPresenceGasTest is Test {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             new MockRegentRevenueStaking(usdc),
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

@@ -10,6 +10,7 @@ import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "../KeyfleetIncome.t.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Drives proposals, ballots, transfers, renewals, sweeps, sales and the passing of time over a
@@ -119,6 +120,7 @@ contract KeyfleetElectorateInvariantTest is Test {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             new MockRegentRevenueStaking(usdc),
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

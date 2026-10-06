@@ -9,16 +9,18 @@ import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "../KeyfleetIncome.t.sol";
+import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev A whole fleet on stand-in USDC, VRF and staking, with the steps the money tests repeat:
+/// @dev A whole fleet on stand-in USDC, REGENT, VRF and staking, with the steps the money tests repeat:
 /// buying keys, and passing and carrying out a proposal's calls.
 abstract contract KeyfleetFixture is Test {
     MockToken internal usdc;
     MockVRFCoordinatorV2Plus internal vrf;
     uint256 internal vrfSubscription;
     MockRegentRevenueStaking internal staking;
+    MockRegent internal regent;
     address internal buyer = address(0xB0B0B0);
 
     function _setUpFixture() internal {
@@ -26,6 +28,7 @@ abstract contract KeyfleetFixture is Test {
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
         staking = new MockRegentRevenueStaking(usdc);
+        regent = new MockRegent();
     }
 
     function _deploy(KeyfleetPresets.Preset preset) internal returns (Keyfleet fleet) {
@@ -33,6 +36,7 @@ abstract contract KeyfleetFixture is Test {
             preset,
             usdc,
             staking,
+            regent,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

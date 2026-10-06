@@ -116,6 +116,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         if (address(fleet.TREASURY().REGENT_STAKING()) != manifest.regentStaking) {
             revert RecordedMismatch("regentStaking");
         }
+        if (address(fleet.TREASURY().REGENT()) != manifest.regent) revert RecordedMismatch("regent");
         _requireRandomnessMatches(manifest.vrf, fleet);
         if (fleet.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
         if (!_equal(fleet.name(), manifest.fleet.name)) revert RecordedMismatch("name");
@@ -135,13 +136,14 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeAddress(root, "usdc", address(fleet.USDC()));
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
         vm.serializeAddress(root, "regentStaking", address(fleet.TREASURY().REGENT_STAKING()));
+        vm.serializeAddress(root, "regent", address(fleet.TREASURY().REGENT()));
         vm.serializeBytes32(root, "protocolShareTag", fleet.TREASURY().PROTOCOL_SHARE_TAG());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
         vm.serializeString(root, "bounds", _boundsJson());
         vm.serializeString(root, "fees", _feesJson());
         vm.serializeString(root, "vrf", _vrfJson(fleet));
         vm.serializeBytes32(root, "traitTableHash", fleet.TRAIT_TABLE_HASH());
-        vm.serializeAddress(root, "rewardTokens", fleet.REWARDS().rewardAssets());
+        vm.serializeAddress(root, "splitAssets", fleet.TREASURY().splitAssets());
         return vm.serializeString(root, "disclosures", _disclosuresJson());
     }
 

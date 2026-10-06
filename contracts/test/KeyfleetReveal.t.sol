@@ -14,6 +14,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "../src/vendor/chainlink/libraries/VRFV2PlusClient.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
@@ -77,6 +78,7 @@ abstract contract RevealFixture is Test {
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             new MockRegentRevenueStaking(usdc),
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             randomness,
             traitTableHash

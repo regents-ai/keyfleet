@@ -13,6 +13,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -192,6 +193,7 @@ contract KeyfleetTest is Test {
             preset,
             usdc,
             staking,
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -294,16 +296,17 @@ contract KeyfleetTest is Test {
     /// so a fleet's five contracts always point at each other.
     function test_theControllerAndTheTreasuryBindOnlyToTheFleetThatNamesThem() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        MockRegent regent = new MockRegent();
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.WrongFleet.selector, address(fleet)));
         new KeyfleetVotes(fleet);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.WrongFleet.selector, address(fleet)));
-        new KeyfleetTreasury(fleet, staking);
+        new KeyfleetTreasury(fleet, staking, regent);
 
         Keyfleet.Companions memory companions = KeyfleetStack.companionsOfNextFleet();
         Keyfleet unbound = _construct(usdc, companions);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.WrongFleet.selector, address(unbound)));
-        new KeyfleetTreasury(unbound, staking);
+        new KeyfleetTreasury(unbound, staking, regent);
     }
 
     function _construct(IERC20 usdc_) private returns (Keyfleet) {

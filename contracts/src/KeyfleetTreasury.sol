@@ -2,11 +2,14 @@
 pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 
@@ -25,8 +28,16 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// an advance to an operator, which anyone may return with `returnAdvance` up to what is still
 /// outstanding. The fleet's owed protocol share passes through here inside one call and never
 /// stays: the fleet sends it and immediately asks for it to be deposited into REGENT revenue
-/// staking. Carrying out calls, the deposit and returning an advance run under one reentrancy
-/// lock. There is no administrator, no upgrade path and no pause.
+/// staking.
+///
+/// The daily split shares a fixed part of the treasury's balance of each bound asset (ETH, REGENT,
+/// USDC, and OUSD once a proposal admits it) equally across every minted key, through the fleet's
+/// ledger. Anyone may run it once a day has passed since the last run, or since the first mint
+/// before any run; an approved proposal may also run it at any time. Its rate, 0.5% by default,
+/// is between 0.1% and 2% and changes only by an approved proposal. Carrying out calls, the
+/// deposit, returning an advance and the public split run under one reentrancy lock; a voted
+/// split runs inside the calls it is carried out with. There is no administrator, no upgrade path
+/// and no pause.
 contract KeyfleetTreasury is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using TransientSlot for *;
@@ -56,6 +67,15 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// @notice How the treasury names native ETH wherever it names an asset.
     address public constant NATIVE = address(0);
 
+    /// @notice The lowest daily split rate, in basis points: 0.1%.
+    uint16 public constant MIN_SPLIT_BPS = 10;
+    /// @notice The highest daily split rate, in basis points: 2%.
+    uint16 public constant MAX_SPLIT_BPS = 200;
+    /// @notice How long after the last run anyone may run the daily split again.
+    uint256 public constant SPLIT_INTERVAL = 1 days;
+    /// @notice The least ETH the treasury must hold for ETH to be split.
+    uint256 public constant ETH_THRESHOLD = 0.05 ether;
+
     /// @notice The source tag every protocol share deposit carries:
     /// `keccak256("keyfleet.protocol_share")`. The source reference is the fleet's address.
     bytes32 public constant PROTOCOL_SHARE_TAG = keccak256("keyfleet.protocol_share");
@@ -74,12 +94,31 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.
     IRegentRevenueStaking public immutable REGENT_STAKING;
 
+    /// @notice The fleet's reward ledger, which the daily split funds.
+    KeyfleetRewards public immutable REWARDS;
+    /// @notice REGENT, a bound asset of the daily split. On Base the deployment scripts require
+    /// `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`.
+    IERC20 public immutable REGENT;
+    /// @notice The least USDC the treasury must hold for USDC to be split: 100 USDC.
+    uint256 public immutable USDC_THRESHOLD;
+    /// @notice The least REGENT the treasury must hold for REGENT to be split: 100 REGENT.
+    uint256 public immutable REGENT_THRESHOLD;
+
+    /// @notice OUSD once an approved proposal admits it, and zero until then.
+    IERC20 public ousd;
+    /// @notice The daily split rate in basis points of each bound asset's balance.
+    uint16 public dailySplitBps = 50;
+    /// @notice When the daily split last ran, publicly or by vote; zero before its first run.
+    uint64 public lastRunAt;
+    /// @notice The least OUSD the treasury must hold for OUSD to be split: 100 OUSD.
+    uint256 public ousdThreshold;
+
     /// @notice Every advance an approved proposal has made, by the id the proposal gave it.
     mapping(uint256 advanceId => Advance advance) public advances;
 
     /// @notice The fleet does not name this contract as its treasury.
     error WrongFleet(address fleet);
-    /// @notice The staking address is zero.
+    /// @notice The staking or REGENT address is zero.
     error ZeroAddress();
     /// @notice Only the fleet may ask for the protocol share to be deposited.
     error OnlyFleet();
@@ -96,6 +135,17 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// @notice The ETH sent with a return does not match the amount: all of it for an ETH advance,
     /// none for a token advance.
     error WrongValue(uint256 value);
+    /// @notice The daily split may not run publicly yet: no key has been minted (`opensAt` zero),
+    /// or a day has not passed since the last run or the first mint.
+    error SplitNotDue(uint256 opensAt);
+    /// @notice A daily split rate outside 10 to 200 basis points.
+    error SplitRateOutOfRange(uint256 bps);
+    /// @notice A bound token's transfer to the ledger ran out of gas; retry with more gas.
+    error SplitOutOfGas();
+    /// @notice OUSD has already been admitted.
+    error OusdAlreadyAdmitted();
+    /// @notice OUSD cannot be the zero address, USDC or REGENT.
+    error OusdInvalid(address token);
 
     /// @notice An approved proposal paid an asset out of the treasury.
     event Paid(address indexed asset, address indexed to, uint256 amount);
@@ -107,22 +157,44 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// @param from Whoever returned it; anyone may.
     /// @param outstanding What is still outstanding afterwards.
     event AdvanceReturned(uint256 indexed advanceId, address indexed from, uint256 amount, uint256 outstanding);
+    /// @notice The daily split ran for `keys` keys at `bps`, publicly or, when `voted`, by an
+    /// approved proposal.
+    event DailySplitRun(bool indexed voted, uint256 keys, uint256 bps);
+    /// @notice One bound asset was split: `perKey` to each key from a balance of `balance`; the
+    /// treasury keeps the rest, rounding dust included.
+    event SplitAllocated(address indexed asset, uint256 balance, uint256 perKey, uint256 keys);
+    /// @notice One bound asset was not split this run: no keys, a balance under its threshold, or
+    /// too little to give every key a whole unit.
+    event SplitSkipped(address indexed asset, uint256 balance);
+    /// @notice One bound token refused to move to the ledger, so it was not split this run; the
+    /// others were.
+    event SplitTransferFailed(address indexed asset, uint256 amount);
+    /// @notice An approved proposal changed the daily split rate, from the next run.
+    event DailySplitRateSet(uint256 bps);
+    /// @notice An approved proposal admitted OUSD as a bound asset of the daily split.
+    event OusdAdmitted(address indexed token, uint256 threshold);
 
     modifier onlySelf() {
         if (msg.sender != address(this)) revert OnlySelf();
         _;
     }
 
-    /// @notice Binds this treasury to its fleet and to the staking contract the protocol share goes to.
+    /// @notice Binds this treasury to its fleet, to the staking contract the protocol share goes
+    /// to, and to REGENT.
     /// @param fleet The fleet, which must name this contract's address as its treasury.
     /// @param staking REGENT revenue staking. Not zero.
-    constructor(Keyfleet fleet, IRegentRevenueStaking staking) {
+    /// @param regent REGENT. Not zero; its decimals are read once here for its threshold.
+    constructor(Keyfleet fleet, IRegentRevenueStaking staking, IERC20 regent) {
         if (address(fleet.TREASURY()) != address(this)) revert WrongFleet(address(fleet));
-        if (address(staking) == address(0)) revert ZeroAddress();
+        if (address(staking) == address(0) || address(regent) == address(0)) revert ZeroAddress();
         FLEET = fleet;
         VOTES = fleet.VOTES();
         USDC = fleet.USDC();
+        REWARDS = fleet.REWARDS();
         REGENT_STAKING = staking;
+        REGENT = regent;
+        USDC_THRESHOLD = _hundred(USDC);
+        REGENT_THRESHOLD = _hundred(regent);
     }
 
     /// @notice Whether the treasury is inside its split routine right now. The fleet's ledger
@@ -203,6 +275,108 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
         stored.outstanding = outstanding - amount;
         emit AdvanceReturned(advanceId, msg.sender, amount, outstanding - amount);
         if (asset != NATIVE) IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    /// @notice Runs the daily split for every bound asset. Anyone may call it once a day has passed
+    /// since the last run, or since the first mint before any run. A day nobody runs it is not
+    /// made up later.
+    function runDailySplit() external nonReentrant {
+        uint256 opensAt = nextRunAt();
+        if (opensAt == 0 || block.timestamp < opensAt) revert SplitNotDue(opensAt);
+        _split(false);
+    }
+
+    /// @notice Runs the daily split now, whenever the last run was. Only an approved proposal's
+    /// call reaches it, already under the lock of the calls it is carried out with.
+    function runVotedSplit() external onlySelf {
+        _split(true);
+    }
+
+    /// @notice Sets the daily split rate from the next run. Only an approved proposal's call
+    /// reaches it.
+    /// @param bps Between 10 and 200 basis points.
+    function setDailySplitBps(uint256 bps) external onlySelf {
+        if (bps < MIN_SPLIT_BPS || bps > MAX_SPLIT_BPS) revert SplitRateOutOfRange(bps);
+        dailySplitBps = uint16(bps);
+        emit DailySplitRateSet(bps);
+    }
+
+    /// @notice Admits OUSD as a bound asset of the daily split, once. Only an approved proposal's
+    /// call reaches it. Its decimals are read here, once, for its threshold.
+    function admitOusd(IERC20 token) external onlySelf {
+        if (address(ousd) != address(0)) revert OusdAlreadyAdmitted();
+        if (address(token) == address(0) || token == USDC || token == REGENT) revert OusdInvalid(address(token));
+        uint256 threshold = _hundred(token);
+        ousd = token;
+        ousdThreshold = threshold;
+        emit OusdAdmitted(address(token), threshold);
+    }
+
+    /// @notice The assets the daily split shares, in the order it splits them: ETH (`NATIVE`),
+    /// REGENT, USDC, then OUSD once admitted.
+    function splitAssets() external view returns (address[] memory assets) {
+        IERC20 admitted = ousd;
+        assets = new address[](address(admitted) == address(0) ? 3 : 4);
+        (assets[0], assets[1], assets[2]) = (NATIVE, address(REGENT), address(USDC));
+        if (assets.length == 4) assets[3] = address(admitted);
+    }
+
+    /// @notice When anyone may next run the daily split: a day after the last run, or a day after
+    /// the first mint before any run. Zero while no key has been minted.
+    function nextRunAt() public view returns (uint256) {
+        uint256 firstMintAt = FLEET.firstMintAt();
+        if (firstMintAt == 0) return 0;
+        return Math.max(lastRunAt, firstMintAt) + SPLIT_INTERVAL;
+    }
+
+    /// @dev Splits every bound asset at the current rate across the keys minted now, with the
+    /// ledger's funding flag set throughout so that only this routine can fund the ledger.
+    function _split(bool voted) private {
+        TransientSlot.BooleanSlot flag = SPLIT_IN_PROGRESS.asBoolean();
+        flag.tstore(true);
+        lastRunAt = uint64(block.timestamp);
+        uint256 keys = FLEET.totalMinted();
+        uint256 bps = dailySplitBps;
+        emit DailySplitRun(voted, keys, bps);
+        _splitAsset(NATIVE, address(this).balance, ETH_THRESHOLD, keys, bps);
+        _splitAsset(address(REGENT), REGENT.balanceOf(address(this)), REGENT_THRESHOLD, keys, bps);
+        _splitAsset(address(USDC), USDC.balanceOf(address(this)), USDC_THRESHOLD, keys, bps);
+        IERC20 admitted = ousd;
+        if (address(admitted) != address(0)) {
+            _splitAsset(address(admitted), admitted.balanceOf(address(this)), ousdThreshold, keys, bps);
+        }
+        flag.tstore(false);
+    }
+
+    /// @dev `balance` is the treasury's whole balance of the asset, all of it free capital, read
+    /// before anything is cut from it. A token that refuses the transfer is skipped and the run goes
+    /// on; one that ran the transfer out of gas reverts the run instead, so a caller cannot starve
+    /// one asset on purpose. Once the tokens are in the ledger, its funding must succeed or the
+    /// whole run reverts, which is how a key minted during the transfer is kept from sharing it.
+    function _splitAsset(address asset, uint256 balance, uint256 threshold, uint256 keys, uint256 bps) private {
+        uint256 perKey = keys == 0 || balance < threshold ? 0 : Math.mulDiv(balance, bps, 10_000) / keys;
+        if (perKey == 0) {
+            emit SplitSkipped(asset, balance);
+            return;
+        }
+        uint256 allocated = perKey * keys;
+        if (asset == NATIVE) {
+            REWARDS.fundSplitNative{value: allocated}(perKey, keys);
+        } else {
+            uint256 gasBefore = gasleft();
+            if (!IERC20(asset).trySafeTransfer(address(REWARDS), allocated)) {
+                if (gasleft() < gasBefore / 63) revert SplitOutOfGas();
+                emit SplitTransferFailed(asset, allocated);
+                return;
+            }
+            REWARDS.fundSplit(asset, perKey, keys);
+        }
+        emit SplitAllocated(asset, balance, perKey, keys);
+    }
+
+    /// @dev 100 whole units of a token, by the decimals it reports.
+    function _hundred(IERC20 token) private view returns (uint256) {
+        return 100 * 10 ** IERC20Metadata(address(token)).decimals();
     }
 
     function _send(address asset, address to, uint256 amount) private {

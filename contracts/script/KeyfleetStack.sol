@@ -20,18 +20,19 @@ library KeyfleetStack {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @notice Deploys a fleet, then its voting controller, then its treasury, which deposits the
-    /// fleet's protocol share into `staking`.
+    /// fleet's protocol share into `staking` and splits `regent` among the keys with ETH and USDC.
     function deploy(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
         IRegentRevenueStaking staking,
+        IERC20 regent,
         Keyfleet.Metadata memory metadata,
         Keyfleet.Randomness memory randomness,
         bytes32 traitTableHash
     ) internal returns (Keyfleet fleet) {
         fleet = new Keyfleet(preset, usdc, metadata, randomness, traitTableHash, companionsOfNextFleet());
         new KeyfleetVotes(fleet);
-        new KeyfleetTreasury(fleet, staking);
+        new KeyfleetTreasury(fleet, staking, regent);
     }
 
     /// @notice Where the voting controller and the treasury of the fleet the deployer creates next

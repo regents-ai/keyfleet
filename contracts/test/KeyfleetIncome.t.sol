@@ -10,6 +10,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -99,6 +100,7 @@ contract KeyfleetIncomeTest is Test {
             preset,
             usdcToken,
             staking,
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -537,6 +539,7 @@ contract KeyfleetIncomeGasTest is Test {
             KeyfleetPresets.Preset.FibonacciSyndicate,
             usdc,
             staking,
+            new MockRegent(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             _randomness(),
             keccak256("trait table")

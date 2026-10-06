@@ -153,4 +153,37 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetRewards(address(0)).credits.selector, bytes4(0x637cd7f0));
         assertEq(KeyfleetRewards.Claimed.selector, 0x913c992353dc81b7a8ba31496c484e9b6306bd2f6c509a649a38fdf5e1c953b2);
     }
+
+    /// @dev The daily split the site offers anyone to run, the calls a proposal makes to run it
+    /// early, change its rate or admit OUSD, the reads that show when it next opens, and its events.
+    function test_dailySplitSelectorsAndTopics() public view {
+        assertEq(KeyfleetTreasury.runDailySplit.selector, bytes4(0x8802523d));
+        assertEq(KeyfleetTreasury.runVotedSplit.selector, bytes4(0x2bc1d9c2));
+        assertEq(KeyfleetTreasury.setDailySplitBps.selector, bytes4(0x32ce8862));
+        assertEq(KeyfleetTreasury.admitOusd.selector, bytes4(0x7fea0985));
+        assertEq(KeyfleetTreasury.splitAssets.selector, bytes4(0x930fcaef));
+        assertEq(KeyfleetTreasury.nextRunAt.selector, bytes4(0x8e3b5ea7));
+        assertEq(KeyfleetTreasury(payable(address(0))).lastRunAt.selector, bytes4(0x1767e5cc));
+        assertEq(KeyfleetTreasury(payable(address(0))).dailySplitBps.selector, bytes4(0x8b0e4bdd));
+        assertEq(
+            KeyfleetTreasury.DailySplitRun.selector, 0x589c845daa4d6c172f7b015018e21cf71a9651115b4cb58d0bde2b1bf57f50ec
+        );
+        assertEq(
+            KeyfleetTreasury.SplitAllocated.selector, 0x9074e50b5000d1a14458055f7b5489e63374e5de93050bc4c71be60cc3fe43a7
+        );
+        assertEq(
+            KeyfleetTreasury.SplitSkipped.selector, 0xea328f671ee6ff84eeaff6f40f943c3204abf2f8546aa6d059b505d73ebceb19
+        );
+        assertEq(
+            KeyfleetTreasury.SplitTransferFailed.selector,
+            0xce002d041f89b0045ad3cfc1b0ae1f7aeca252711b611ca0181d3f40c24aa625
+        );
+        assertEq(
+            KeyfleetTreasury.DailySplitRateSet.selector,
+            0x5b373159cf1aa560402780ad3be14b33d21f72e79ae0dae5688d4c232b953d81
+        );
+        assertEq(
+            KeyfleetTreasury.OusdAdmitted.selector, 0xebcf2752fcd8a14f6710aaeea4dff961f9fe5e076a8a719afc5b286405520d78
+        );
+    }
 }

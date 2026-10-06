@@ -26,7 +26,8 @@ abstract contract KeyfleetManifest is Script {
     /// @notice Native USDC on Base, the only USDC a manifest may name there. Every key price assumes
     /// its six decimals. Source: Circle's USDC contract addresses page.
     address public constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    /// @notice REGENT on Base, the token Regent pins in Autolaunch's Base bindings. 18 decimals.
+    /// @notice REGENT on Base, the token Regent pins in Autolaunch's Base bindings, the only REGENT a
+    /// manifest may name there. 18 decimals.
     address public constant BASE_REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
     /// @notice REGENT revenue staking on Base (verified source `RegentRevenueStaking`), the only
     /// staking contract a manifest may name there. Every fleet's protocol share is deposited into it
@@ -62,6 +63,8 @@ abstract contract KeyfleetManifest is Script {
     /// must be `BASE_USDC`.
     /// @param regentStaking Where every fleet's treasury deposits the 10% protocol share. On Base it
     /// must be `BASE_REGENT_REVENUE_STAKING`.
+    /// @param regent REGENT, which every fleet's treasury splits among its keys. On Base it must be
+    /// `BASE_REGENT`.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
     /// chain. On Base the coordinator must be `BASE_VRF_COORDINATOR` and the gas lane one of the two
     /// Base lanes.
@@ -74,6 +77,7 @@ abstract contract KeyfleetManifest is Script {
         uint256 chainId;
         address usdc;
         address regentStaking;
+        address regent;
         Keyfleet.Randomness vrf;
         bytes32 traitTableHash;
         uint8 slot;
@@ -90,6 +94,10 @@ abstract contract KeyfleetManifest is Script {
     error VrfKeyHashNotBase(bytes32 keyHash);
     /// @notice A Base manifest names a staking contract other than REGENT revenue staking.
     error RegentStakingNotBase(address regentStaking);
+    /// @notice A Base manifest names a REGENT other than REGENT on Base.
+    error RegentNotBase(address regent);
+    /// @notice The manifest's REGENT address holds no code on this chain.
+    error RegentMissing(address regent);
     /// @notice The manifest's staking address holds no code on this chain.
     error RegentStakingMissing(address regentStaking);
     /// @notice The manifest's VRF coordinator address holds no code on this chain.
@@ -134,6 +142,7 @@ abstract contract KeyfleetManifest is Script {
         manifest.chainId = vm.parseJsonUint(json, ".chainId");
         manifest.usdc = vm.parseJsonAddress(json, ".usdc");
         manifest.regentStaking = vm.parseJsonAddress(json, ".regentStaking");
+        manifest.regent = vm.parseJsonAddress(json, ".regent");
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(vm.parseJsonAddress(json, ".vrf.coordinator")),
             subscriptionId: vm.parseJsonUint(json, ".vrf.subscriptionId"),
@@ -153,8 +162,8 @@ abstract contract KeyfleetManifest is Script {
     }
 
     /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC,
-    /// staking contract, VRF coordinator and gas lane must be Base's own, and on every chain the
-    /// staking contract must hold code and the coordinator must hold code, know the gas lane and
+    /// staking contract, REGENT, VRF coordinator and gas lane must be Base's own, and on every chain
+    /// the staking contract and REGENT must hold code and the coordinator must hold code, know the gas lane and
     /// know the subscription; a subscription it does not know reverts with the coordinator's own
     /// `InvalidSubscription`. The trait table hash must not be zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
@@ -170,8 +179,10 @@ abstract contract KeyfleetManifest is Script {
             if (manifest.regentStaking != BASE_REGENT_REVENUE_STAKING) {
                 revert RegentStakingNotBase(manifest.regentStaking);
             }
+            if (manifest.regent != BASE_REGENT) revert RegentNotBase(manifest.regent);
         }
         if (manifest.regentStaking.code.length == 0) revert RegentStakingMissing(manifest.regentStaking);
+        if (manifest.regent.code.length == 0) revert RegentMissing(manifest.regent);
         if (coordinator.code.length == 0) revert VrfCoordinatorMissing(coordinator);
         (bool keyExists,) = IVRFProvingKeys(coordinator).s_provingKeys(manifest.vrf.keyHash);
         if (!keyExists) revert VrfKeyHashUnknown(manifest.vrf.keyHash);
