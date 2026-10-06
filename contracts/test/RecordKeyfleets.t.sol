@@ -11,12 +11,12 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./DeployKeyfleets.t.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    address private constant SAFE = address(0x5AFE);
     address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     uint256 private constant DEPLOYMENT_BLOCK = 7;
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
@@ -25,6 +25,7 @@ contract RecordKeyfleetsTest is Test {
     DeployKeyfleets private deployer;
     RecordKeyfleets private recorder;
     MockToken private usdc;
+    MockRegentRevenueStaking private staking;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
 
@@ -32,6 +33,7 @@ contract RecordKeyfleetsTest is Test {
         deployer = new DeployKeyfleets();
         recorder = new RecordKeyfleets();
         usdc = new MockToken("USD Coin", "USDC");
+        staking = new MockRegentRevenueStaking(usdc);
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
@@ -47,7 +49,10 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".deploymentBlock"), DEPLOYMENT_BLOCK, "Deployment block");
         assertEq(vm.parseJsonAddress(json, ".usdc"), address(usdc), "USDC");
         assertEq(vm.parseJsonUint(json, ".qUsdc"), KeyfleetPresets.Q_USDC, "The reference price Q");
-        assertEq(vm.parseJsonAddress(json, ".protocolTreasury"), SAFE, "Protocol treasury");
+        assertEq(vm.parseJsonAddress(json, ".regentStaking"), address(staking), "Staking");
+        assertEq(
+            vm.parseJsonBytes32(json, ".protocolShareTag"), keccak256("keyfleet.protocol_share"), "Protocol share tag"
+        );
 
         assertEq(vm.parseJsonString(json, ".fleet.slot"), "classic", "The key the manifest names the fleet by");
         assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
@@ -85,7 +90,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonString(json, ".disclosures.serviceRewardEligibility"), "Keys only.", "Eligibility");
         assertEq(
             vm.parseJsonString(json, ".disclosures.feeComposition"),
-            "Keyfleet takes 10% of every key purchase for the Regents protocol and nothing from money a fleet"
+            "Keyfleet takes 10% of every key purchase for REGENT stakers and nothing from money a fleet"
             " receives afterwards.",
             "Fee composition"
         );
@@ -152,8 +157,8 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, fleet, _released("usdc"));
 
         manifest = _manifest();
-        manifest.protocolTreasury = address(0xBEEF);
-        _expectRecordRefused(manifest, fleet, _released("protocolTreasury"));
+        manifest.regentStaking = address(new MockRegentRevenueStaking(usdc));
+        _expectRecordRefused(manifest, fleet, _released("regentStaking"));
 
         manifest = _manifest();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(_otherCoordinatorKnowing(manifest)));
@@ -195,10 +200,9 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, fleet, abi.encodeWithSelector(Keyfleet.TraitTableHashZero.selector));
     }
 
-    /// @dev Invariant: on Base a fleet is published only while the protocol treasury, the
-    /// Regents Safe, owns the subscription that pays for its reveals, so nobody else can remove the
-    /// fleet or cancel it.
-    function test_recordOnBaseRefusesASubscriptionTheTreasuryDoesNotOwn() public {
+    /// @dev Invariant: on Base a fleet is published only while the Regents Safe owns the
+    /// subscription that pays for its reveals, so nobody else can remove the fleet or cancel it.
+    function test_recordOnBaseRefusesASubscriptionTheRegentsSafeDoesNotOwn() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
         MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
@@ -207,24 +211,22 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(
             manifest,
             fleet,
-            abi.encodeWithSelector(
-                RecordKeyfleets.VrfSubscriptionNotOwnedByTreasury.selector, address(0xBEEF), REGENTS_SAFE
-            )
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, address(0xBEEF))
         );
 
         base.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
         recorder.record(manifest, _summary(fleet));
     }
 
-    /// @dev Invariant: a Base record never publishes a protocol treasury other than the
-    /// Regents Safe.
-    function test_recordOnBaseRefusesAnyTreasuryButTheRegentsSafe() public {
+    /// @dev Invariant: a Base record never publishes a staking contract other than REGENT revenue
+    /// staking.
+    function test_recordOnBaseRefusesAnyStakingButRegentRevenueStaking() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
 
-        manifest.protocolTreasury = SAFE;
+        manifest.regentStaking = address(staking);
         _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.ProtocolTreasuryNotRegentsSafe.selector, SAFE)
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.RegentStakingNotBase.selector, address(staking))
         );
     }
 
@@ -258,7 +260,6 @@ contract RecordKeyfleetsTest is Test {
         Keyfleet fleet = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            manifest.protocolTreasury,
             Keyfleet.Metadata(manifest.fleet.name, manifest.fleet.symbol, manifest.fleet.baseTokenURI),
             manifest.vrf,
             manifest.traitTableHash,
@@ -360,11 +361,12 @@ contract RecordKeyfleetsTest is Test {
     }
 
     /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
-    /// coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
-    /// Regents Safe as its treasury and the subscription's owner.
+    /// coordinator on its 2 gwei lane, depositing into REGENT revenue staking, all stood in for by
+    /// the local mocks' code, with the Regents Safe as the subscription's owner.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(deployer.BASE_USDC(), address(usdc).code);
+        vm.etch(deployer.BASE_REGENT_REVENUE_STAKING(), address(staking).code);
         MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(deployer.BASE_VRF_COORDINATOR());
         vm.etch(address(base), address(vrf).code);
         base.addProvingKey(deployer.BASE_VRF_KEY_HASH_2_GWEI(), 2 gwei);
@@ -375,13 +377,13 @@ contract RecordKeyfleetsTest is Test {
         manifest.vrf.subscriptionId = base.createSubscription();
         base.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
         manifest.vrf.keyHash = deployer.BASE_VRF_KEY_HASH_2_GWEI();
-        manifest.protocolTreasury = REGENTS_SAFE;
+        manifest.regentStaking = deployer.BASE_REGENT_REVENUE_STAKING();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = ANVIL_CHAIN_ID;
         manifest.usdc = address(usdc);
-        manifest.protocolTreasury = SAFE;
+        manifest.regentStaking = address(staking);
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

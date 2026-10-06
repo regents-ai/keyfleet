@@ -7,8 +7,11 @@ import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
+import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
+import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The fleet's free capital lives in its treasury and nowhere else: the capital part of every
@@ -36,7 +39,7 @@ contract KeyfleetTreasuryTest is Test {
         fleet = KeyfleetStack.deploy(
             preset,
             usdc,
-            address(0x7EA5),
+            new MockRegentRevenueStaking(usdc),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -68,13 +71,33 @@ contract KeyfleetTreasuryTest is Test {
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds its backing");
     }
 
-    /// @dev Invariant: the treasury is bound to its fleet, and the fleet sends its capital to it.
+    /// @dev Invariant: the treasury is bound to its fleet, holds the fleet's USDC, and names the
+    /// staking contract the protocol share goes to, which can never be zero.
     function test_theTreasuryIsTheFleetsOwn() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetTreasury treasury = fleet.TREASURY();
 
         assertEq(address(treasury.FLEET()), address(fleet), "bound to the fleet");
         assertGt(address(treasury).code.length, 0, "and deployed at the address the fleet names");
+        assertEq(address(treasury.USDC()), address(usdc), "the fleet's USDC");
+        assertGt(address(treasury.REGENT_STAKING()).code.length, 0, "a staking contract");
+        assertEq(treasury.PROTOCOL_SHARE_TAG(), keccak256("keyfleet.protocol_share"), "the protocol share tag");
+
+        Keyfleet unbound = new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            usdc,
+            Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
+            Keyfleet.Randomness({
+                coordinator: IVRFCoordinatorV2Plus(address(vrf)),
+                subscriptionId: vrfSubscription,
+                keyHash: keccak256("key hash")
+            }),
+            keccak256("trait table"),
+            KeyfleetStack.companionsOfNextFleet()
+        );
+        new KeyfleetVotes(unbound);
+        vm.expectRevert(KeyfleetTreasury.ZeroAddress.selector);
+        new KeyfleetTreasury(unbound, IRegentRevenueStaking(address(0)));
     }
 
     /// @dev Invariant: on every preset, across sales, Cascade completions, Accelerant rebates,

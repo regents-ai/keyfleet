@@ -21,8 +21,9 @@ Decided by the founder on 27, 28 and 29 September 2026, and what the code on
 this branch does:
 
 - Fleets are fully owned by their key holders. Regents takes 10% of each key
-  purchase, once, in USDC, sent to the Regents Safe on Base. Keyfleet takes
-  nothing from money a fleet receives afterwards.
+  purchase, once, in USDC, deposited into REGENT revenue staking on Base
+  (`0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`) for REGENT stakers. Keyfleet
+  takes nothing from money a fleet receives afterwards.
 - Income in USDC is paid 100% to the keys. The capital part of every purchase,
   a completed Cascade level's surplus and every other token a fleet receives go
   to the fleet's treasury. Nothing can spend the treasury yet: spending by an
@@ -30,8 +31,8 @@ this branch does:
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
-- Accelerant: the first key sends 10% to the Safe and 90% to the treasury; every
-  later key sends 10% to the Safe, 20% to the treasury and 70% to whoever holds
+- Accelerant: the first key sends 10% to staking and 90% to the treasury; every
+  later key sends 10% to staking, 20% to the treasury and 70% to whoever holds
   the key before it.
 - A Decision proposal stays open until more than half of all keys sold vote
   yes, and then anyone may carry it out. A RestrictEdits proposal needs at
@@ -51,9 +52,9 @@ On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before these
   contracts are complete and deployed on Base.
-- Every deployment takes the protocol treasury as a required input with no
-  default, and on Base refuses anything but the Regents Safe
-  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`.
+- On Base every deployment refuses any staking contract but REGENT revenue
+  staking, and the record step refuses a randomness subscription not owned by
+  the Regents Safe `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`.
 - Before any deploy: an outside audit and the founder's go.
 - `deployments/base.json` carries the final trait table's hash
   (`0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`, eight
@@ -118,7 +119,7 @@ arithmetic reverts, long after any price anyone could pay.
 
 A purchase is split into four parts that always sum to exactly the gross price.
 `PROTOCOL_BPS` is 1000: 10% of every purchase, rounded down, is the protocol
-share for the Regents Safe. The rest depends on the preset:
+share for REGENT stakers. The rest depends on the preset:
 
 - Syndicate and Classic: the rest, 90%, goes to the fleet's treasury.
 - Cascade: the rest, 90%, goes to the level-completion reserve.
@@ -174,12 +175,11 @@ cold, measured 53,026 gas; the suite asserts a ceiling of 64,000.
 `Keyfleet` is an OpenZeppelin ERC721 with 1-based, contiguous token ids.
 `tokenURI` is a fixed base plus the id; the base is set once at construction and
 is readable through `baseTokenURI()`. The constructor takes the preset, USDC,
-the protocol treasury (`PROTOCOL_TREASURY`, the Regents Safe), a `Metadata`
-value (name, symbol, metadata base), a `Randomness` value (VRF coordinator,
+a `Metadata` value (name, symbol, metadata base), a `Randomness` value (VRF coordinator,
 subscription, gas lane), the trait table hash and a `Companions` value (the
 addresses its `KeyfleetVotes` and `KeyfleetTreasury` will be deployed at,
-readable as `VOTES()` and `TREASURY()`). It rejects a zero USDC, protocol
-treasury or companion address, a USDC that does not report six decimals, a
+readable as `VOTES()` and `TREASURY()`). It rejects a zero USDC or companion
+address, a USDC that does not report six decimals, a
 coordinator that holds no code and a zero trait table hash. It then deploys the
 fleet's `KeyfleetRewards` and `KeyfleetShards`.
 
@@ -201,11 +201,11 @@ and 49,152 bytes of deployment code per contract. Measured with
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `Keyfleet` | 15,262 | 25,526 |
+| `Keyfleet` | 15,314 | 25,528 |
 | `KeyfleetRewards` | 5,204 | 5,547 |
 | `KeyfleetShards` | 2,216 | 2,407 |
 | `KeyfleetVotes` | 5,125 | 5,464 |
-| `KeyfleetTreasury` | 108 | 409 |
+| `KeyfleetTreasury` | 1,377 | 1,955 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
@@ -286,13 +286,34 @@ fork of Base.
 ### The protocol share
 
 The 10% of every purchase is added to `protocolShareOwed`; a purchase never
-sends it, so a treasury that cannot receive USDC cannot stop a sale.
-`sendProtocolShare()` is how it leaves: anyone may call it at any time, and it
-transfers the whole owed amount in USDC to `PROTOCOL_TREASURY`, which is fixed
-at construction. If the transfer fails the call reverts and the amount stays
-owed. It emits `ProtocolShareSent(caller, amount)` and reverts with `ZeroAmount`
-when nothing is owed. This is the only fee a fleet ever pays. The send measured
-39,578 gas; the suite asserts a ceiling of 48,000.
+sends it, so staking that is paused or refuses a deposit cannot stop a sale.
+`sendProtocolShare()` is how it leaves: anyone may call it at any time. It
+sends the whole owed amount to the fleet's treasury, and in the same call the
+treasury approves REGENT revenue staking for exactly that amount and deposits
+it with `depositUSDC`. The deposit carries the source tag
+`PROTOCOL_SHARE_TAG = keccak256("keyfleet.protocol_share")`
+(`0xd5e47eb51823bc53938260d20f51f3d772c0410bdc18528aee65e4994f00b271`) and the
+fleet's address as its source reference. Only the fleet can ask its treasury
+for this (`OnlyFleet`). The amount never stays in the treasury, and the fleet
+itself never approves a token.
+
+Staking must report receiving exactly the owed amount and leave no approval
+standing, or the treasury reverts with `StakingDepositFailed(amount, received)`.
+That revert, a paused staking contract, or any other failure unwinds the whole
+call, and the share stays owed in the fleet for a later send. The send emits
+`ProtocolShareSent(caller, amount)` and reverts with `ZeroAmount` when nothing
+is owed. This is the only fee a fleet ever pays.
+
+The staking address is fixed in the treasury at deployment as
+`REGENT_STAKING()`; on Base the deployment scripts require
+`0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. A plain USDC transfer to it would
+not count as revenue there, which is why the share goes through a deposit. The
+Regents staking reader indexes deposits without filtering on the tag, so the tag
+is Keyfleet's own; the fleet in the source reference tells fleets apart.
+
+Against the stand-in staking contract the send measured 150,200 gas, all
+accounts cold; the suite asserts a ceiling of 181,000. Against the real staking
+contract on a fork of Base it measured 118,771 gas.
 
 ### Income and the treasury
 
@@ -325,9 +346,9 @@ or holders. With every slot cold it measured, in execution:
 
 | Completed levels | Keys sold | Gas | Ceiling |
 | --- | --- | --- | --- |
-| 20 | 46,365 | 667,437 | 804,000 |
-| 30 | 5,702,884 | 967,147 | 1,164,000 |
-| 40 | 701,408,730 | 1,266,857 | 1,523,000 |
+| 20 | 46,365 | 665,208 | 804,000 |
+| 30 | 5,702,884 | 964,918 | 1,164,000 |
+| 40 | 701,408,730 | 1,264,628 | 1,523,000 |
 
 About 30,000 gas per completed level. Each ceiling is the measured figure plus
 a fifth.
@@ -337,7 +358,7 @@ it only receives: nothing can spend from it yet. Spending by the exact calls an
 approved proposal names, and the daily split of its USDC, come in later steps.
 The Cascade reserve, the owed protocol share and the ledger's backing are never
 in the treasury and are out of any vote's reach. The only ways USDC leaves the
-fleet itself are the protocol share sent to the Regents Safe, the capital part
+fleet itself are the protocol share sent through the treasury to staking, the capital part
 and the released Cascade surplus sent to the treasury, the Accelerant rebate,
 the Cascade repayment and income moved into the ledger. No token a fleet holds
 is ever swapped or converted. Tokens that take a fee when they move, or rebase,
@@ -504,17 +525,18 @@ Each fleet is deployed and recorded on its own, named by `KEYFLEET_FLEET`
 `script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. It
 sends three transactions from one account through `script/KeyfleetStack.sol`:
 the fleet, its voting controller and its treasury, in that order. The
-protocol treasury comes from `KEYFLEET_PROTOCOL_TREASURY`, never from the
-manifest file, and has no default. It refuses a manifest whose `chainId` is not
+staking contract comes from the manifest's `regentStaking`. It refuses a
+manifest whose `chainId` is not
 the chain it runs on. On Base it refuses a USDC other than native Base USDC
 `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, a VRF coordinator other than
 `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`, a gas lane other than the 2 gwei
 lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab` or
 the 30 gwei lane
 `0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70` (from
-Chainlink's VRF v2.5 supported-networks page), and a protocol treasury other
-than the Regents Safe. On any chain it refuses a zero
-protocol treasury, a coordinator that holds no code, a gas lane or subscription
+Chainlink's VRF v2.5 supported-networks page), and a staking contract other
+than REGENT revenue staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. On
+any chain it refuses a staking address that holds no code, a coordinator that
+holds no code, a gas lane or subscription
 the coordinator does not know, a zero trait table hash and an unknown fleet
 name.
 
@@ -522,14 +544,15 @@ name.
 because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
-named fleet's, any value that differs from the manifest, a ledger, controller,
+named fleet's, any value that differs from the manifest (the treasury's
+staking contract included), a ledger, controller,
 treasury or shard record that holds no code or does not name the fleet as its
 own (`CompanionNotBound`), a fleet the subscription
 does not list as a consumer and, on Base, a subscription the Regents Safe does
 not own. Only then does it write
 `deployments/<name>.<fleet>.deployed.json`, the fleet's published manifest: the
 fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
-deployment block, the protocol treasury, the supply limits of Classic and
+deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
 trait table hash, the income token and the terms the release discloses.
 
@@ -541,7 +564,7 @@ how to run each step and what each refuses.
 
 `script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet and
 its controller and treasury, with
-stand-in USDC and VRF coordinator and a fixed lab treasury, on a plain local
+stand-in USDC, VRF coordinator and REGENT staking, on a plain local
 anvil for the anvil tests in `platform/` (`mix test.external`).
 
 ## Checks
@@ -553,7 +576,9 @@ downloaded on first use. Tests need no RPC, apart from
 `test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
 is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,
 the Regents Safe, the coordinator and both gas lanes) and runs a fleet against
-the real Chainlink coordinator and USDC on a fork of Base. The public
+the real Chainlink coordinator, USDC and REGENT staking on a fork of Base,
+including a protocol share deposit and a send refused while the Safe has staking
+paused (on the fork only). The public
 `https://mainnet.base.org` is enough for it.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run

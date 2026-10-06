@@ -7,6 +7,7 @@ import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.s
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
@@ -59,7 +60,7 @@ contract KeyfleetVotesTest is Test {
         fleet = KeyfleetStack.deploy(
             preset,
             usdc,
-            address(0x7EA5),
+            new MockRegentRevenueStaking(usdc),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")

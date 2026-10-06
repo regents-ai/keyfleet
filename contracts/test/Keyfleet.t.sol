@@ -12,6 +12,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
@@ -157,7 +158,7 @@ contract KeyfleetTest is Test {
     uint256 private vrfSubscription;
 
     address private buyer = address(0xB0B0B0);
-    address private treasury = address(0x7EA5);
+    MockRegentRevenueStaking private staking;
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
     address private carol = address(0xCA201);
@@ -179,6 +180,7 @@ contract KeyfleetTest is Test {
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC");
         other = new MockERC20("Other", "OTH");
+        staking = new MockRegentRevenueStaking(usdc);
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
     }
@@ -189,7 +191,7 @@ contract KeyfleetTest is Test {
         fleet = KeyfleetStack.deploy(
             preset,
             usdc,
-            treasury,
+            staking,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             _randomness(),
             keccak256("trait table")
@@ -265,7 +267,7 @@ contract KeyfleetTest is Test {
         assertEq(assets.length, 1, "USDC is the one income token");
         assertEq(assets[0], address(usdc));
         assertEq(address(fleet.USDC()), address(usdc));
-        assertEq(fleet.PROTOCOL_TREASURY(), treasury);
+        assertEq(address(fleet.TREASURY().REGENT_STAKING()), address(staking), "treasury deposits into staking");
         assertEq(address(fleet.TREASURY().FLEET()), address(fleet), "treasury bound to this fleet");
         assertEq(uint256(fleet.PRESET()), uint256(KeyfleetPresets.Preset.FibonacciSyndicate));
         assertEq(fleet.totalMinted(), 0);
@@ -276,18 +278,16 @@ contract KeyfleetTest is Test {
     /// can be changed afterwards.
     function test_constructorRejectsZeroAddresses() public {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(IERC20(address(0)), treasury);
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, address(0));
+        _construct(IERC20(address(0)));
 
         Keyfleet.Companions memory companions = KeyfleetStack.companionsOfNextFleet();
         companions.votes = KeyfleetVotes(address(0));
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, treasury, companions);
+        _construct(usdc, companions);
         companions = KeyfleetStack.companionsOfNextFleet();
         companions.treasury = KeyfleetTreasury(address(0));
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
-        _construct(usdc, treasury, companions);
+        _construct(usdc, companions);
     }
 
     /// @dev Invariant: the voting controller and the treasury bind only to a fleet that names them,
@@ -298,26 +298,22 @@ contract KeyfleetTest is Test {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.WrongFleet.selector, address(fleet)));
         new KeyfleetVotes(fleet);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.WrongFleet.selector, address(fleet)));
-        new KeyfleetTreasury(fleet);
+        new KeyfleetTreasury(fleet, staking);
 
         Keyfleet.Companions memory companions = KeyfleetStack.companionsOfNextFleet();
-        Keyfleet unbound = _construct(usdc, treasury, companions);
+        Keyfleet unbound = _construct(usdc, companions);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.WrongFleet.selector, address(unbound)));
-        new KeyfleetTreasury(unbound);
+        new KeyfleetTreasury(unbound, staking);
     }
 
-    function _construct(IERC20 usdc_, address treasury_) private returns (Keyfleet) {
-        return _construct(usdc_, treasury_, KeyfleetStack.companionsOfNextFleet());
+    function _construct(IERC20 usdc_) private returns (Keyfleet) {
+        return _construct(usdc_, KeyfleetStack.companionsOfNextFleet());
     }
 
-    function _construct(IERC20 usdc_, address treasury_, Keyfleet.Companions memory companions)
-        private
-        returns (Keyfleet)
-    {
+    function _construct(IERC20 usdc_, Keyfleet.Companions memory companions) private returns (Keyfleet) {
         return new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc_,
-            treasury_,
             Keyfleet.Metadata("n", "s", BASE_URI),
             _randomness(),
             keccak256("trait table"),
@@ -331,7 +327,7 @@ contract KeyfleetTest is Test {
         EighteenDecimalToken eighteen = new EighteenDecimalToken();
 
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.UsdcDecimalsWrong.selector, uint8(18)));
-        _construct(IERC20(address(eighteen)), treasury);
+        _construct(IERC20(address(eighteen)));
     }
 
     /// @dev Invariant: only the fleet may write to the ledger it deployed.
@@ -371,7 +367,7 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
-    /// 8 USDC to 80 USDC, and 10% of every sale is owed to the protocol treasury.
+    /// 8 USDC to 80 USDC, and 10% of every sale is owed to REGENT staking.
     function test_classicSellsExactlyOneThousandTwentyFourKeysAlongItsPriceCurve() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         assertEq(fleet.maxSupply(), 1024);
@@ -386,7 +382,7 @@ contract KeyfleetTest is Test {
         }
 
         assertEq(paid, 32_032_450_000, "the whole fleet cost 32,032.45 USDC");
-        assertEq(fleet.protocolShareOwed(), paid / 10, "10% of every sale is owed to the treasury");
+        assertEq(fleet.protocolShareOwed(), paid / 10, "10% of every sale is owed to staking");
         assertEq(_capital(fleet), paid - paid / 10, "and the rest is in the treasury");
         _assertBalanceInvariant(fleet);
 
@@ -460,9 +456,9 @@ contract KeyfleetTest is Test {
 
     // --- 3. Syndicate and Classic ledgers ---------------------------------
 
-    /// @dev Invariant: 10% is owed to the protocol treasury and every remaining unit is free
+    /// @dev Invariant: 10% is owed to REGENT staking and every remaining unit is free
     /// capital; the fleet's USDC balance is exactly those two figures.
-    function test_syndicatePurchaseOwesTheTreasuryTenPercentAndBooksTheRestAsCapital() public {
+    function test_syndicatePurchaseOwesStakingTenPercentAndSendsTheRestToTheTreasury() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
 
         uint256 price = _fundNext(fleet);
@@ -471,7 +467,7 @@ contract KeyfleetTest is Test {
         vm.prank(buyer);
         fleet.purchase(alice, 2 * price, block.timestamp);
 
-        assertEq(fleet.protocolShareOwed(), Q_PROTOCOL, "10% owed to the treasury");
+        assertEq(fleet.protocolShareOwed(), Q_PROTOCOL, "10% owed to staking");
         assertEq(_capital(fleet), Q - Q_PROTOCOL, "90% to capital");
         assertEq(fleet.cascadeReserve(), 0, "Syndicate holds no reserve");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no reward backing from a Syndicate purchase");
@@ -524,7 +520,7 @@ contract KeyfleetTest is Test {
     }
 
     /// @dev Invariant: on every preset each purchase adds exactly 10% of its gross, floored, to the
-    /// protocol share owed to the treasury, and the fleet and its ledger together still hold every unit
+    /// protocol share owed to staking, and the fleet and its ledger together still hold every unit
     /// paid: the fleet's balance is capital plus reserve plus the owed share, and the ledger's
     /// balance is exactly what it has backed.
     function test_everyPresetOwesTheTreasuryTenPercentOfEachPurchase() public {
@@ -1182,7 +1178,7 @@ contract KeyfleetTest is Test {
 
     /// @dev Invariant: across random purchase and transfer sequences on any preset, the fleet's
     /// USDC balance is always exactly its free capital plus its Cascade reserve plus the protocol
-    /// share owed to the treasury. Reward backing sits in the ledger, so nothing else can hide here.
+    /// share owed to staking. Reward backing sits in the ledger, so nothing else can hide here.
     function testFuzz_usdcBalanceAlwaysEqualsCapitalPlusReservePlusOwedShare(uint256 seed) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset(seed % 4));
         usdc.mint(buyer, 1e30);

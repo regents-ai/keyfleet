@@ -23,7 +23,7 @@ library KeyfleetPresets {
     }
 
     /// @notice How a single gross purchase amount is divided. The four parts always sum to gross.
-    /// @param protocol Protocol share for the Regents protocol treasury, taken once on every purchase.
+    /// @param protocol Protocol share for REGENT revenue staking, taken once on every purchase.
     /// @param capital Share that goes to the fleet's treasury.
     /// @param reserve Level-completion reserve, used by Fibonacci Cascade only.
     /// @param rebate Share paid to the holder of the preceding key, used by Accelerant primary mints after the first only.
@@ -70,7 +70,7 @@ library KeyfleetPresets {
     uint256 internal constant ACCELERANT_STEP_NUMERATOR = 105;
     uint256 internal constant ACCELERANT_STEP_DENOMINATOR = 100;
 
-    /// @notice Protocol share of gross for the Regents protocol treasury, in basis points: 10%.
+    /// @notice Protocol share of gross for REGENT revenue staking, in basis points: 10%.
     uint256 internal constant PROTOCOL_BPS = 1000;
     /// @notice Capital share of gross on Accelerant purchases with a predecessor, in basis points: 20%.
     uint256 internal constant ACCELERANT_CAPITAL_BPS = 2000;

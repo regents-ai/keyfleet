@@ -9,6 +9,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
 
@@ -49,7 +50,7 @@ contract KeyfleetShardsTest is Test {
         deployed = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            address(0x7EA5),
+            new MockRegentRevenueStaking(usdc),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

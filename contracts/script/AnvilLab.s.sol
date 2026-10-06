@@ -7,6 +7,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetStack} from "./KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "../test/mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A six-decimal stand-in for USDC, as a fleet requires, that mints to whoever asks.
@@ -25,29 +26,29 @@ contract AnvilLabUsdc is ERC20 {
 /// @notice Puts one fleet on a plain local anvil for the anvil tests in `platform/`: the wallet
 /// buttons' steps and the rewards a key has waiting. Nothing here is for a real network: the
 /// sender is an account anvil has unlocked, and no private key is read.
-/// @dev The fleet is a Classic fleet whose protocol treasury is a fixed lab address, on a
-/// stand-in VRF coordinator whose subscription holds 0.1 ETH. Two keys are sold while the
+/// @dev The fleet is a Classic fleet whose protocol share goes to a stand-in REGENT staking
+/// contract, on a stand-in VRF coordinator whose subscription holds 0.1 ETH. Two keys are sold while the
 /// coordinator refuses every request, so neither key's reveal was ever accepted, and then the
 /// coordinator takes requests again. The fleet owes the protocol share of both sales, and the
 /// buyer holds and has approved the USDC for a third key, for the test to buy.
 contract AnvilLab is Script {
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
-    address private constant TREASURY = address(0x7EA5);
 
     /// @notice Builds the lab, broadcast from `--sender`, which owns the subscription and buys
     /// both keys.
-    function run() external returns (address fleet, address treasury, address shards) {
+    function run() external returns (address fleet, address staking, address shards) {
         vm.startBroadcast();
         AnvilLabUsdc usdc = new AnvilLabUsdc();
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
+        MockRegentRevenueStaking regentStaking = new MockRegentRevenueStaking(usdc);
         uint256 subscriptionId = vrf.createSubscription();
         vrf.fundSubscriptionWithNative{value: 0.1 ether}(subscriptionId);
 
         Keyfleet classic = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            TREASURY,
+            regentStaking,
             Keyfleet.Metadata("Anvil Lab Classic", "ALC", "https://keyfleet.ai/metadata/anvil-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
@@ -64,6 +65,6 @@ contract AnvilLab is Script {
         vrf.setRevertAll(false);
         vm.stopBroadcast();
 
-        return (address(classic), TREASURY, address(classic.SHARDS()));
+        return (address(classic), address(regentStaking), address(classic.SHARDS()));
     }
 }

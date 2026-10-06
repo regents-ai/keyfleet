@@ -8,6 +8,7 @@ import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
@@ -26,8 +27,6 @@ contract MockToken is ERC20 {
 contract DeployKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
     uint256 private constant BASE_CHAIN_ID = 8453;
-    address private constant SAFE = address(0x5AFE);
-    address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     address private constant BUYER = address(0xB0B);
     bytes32 private constant KEY_HASH = keccak256("lab gas lane");
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
@@ -38,12 +37,14 @@ contract DeployKeyfleetsTest is Test {
 
     DeployKeyfleets private script;
     MockToken private usdc;
+    MockRegentRevenueStaking private staking;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
 
     function setUp() public {
         script = new DeployKeyfleets();
         usdc = new MockToken("USD Coin", "USDC");
+        staking = new MockRegentRevenueStaking(usdc);
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
@@ -75,7 +76,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.name(), manifest.fleet.name, "Name");
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
-            assertEq(fleet.PROTOCOL_TREASURY(), SAFE, "Protocol treasury");
+            assertEq(address(fleet.TREASURY().REGENT_STAKING()), address(staking), "Staking");
             assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
             assertEq(address(fleet.TREASURY().FLEET()), address(fleet), "Treasury is the fleet's own");
@@ -102,7 +103,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(
                 fleet.tokenURI(1), string.concat(manifest.fleet.baseTokenURI, "1"), "Metadata base is the fleet's own"
             );
-            assertEq(fleet.protocolShareOwed(), price / 10, "A tenth of the sale is owed to the Safe");
+            assertEq(fleet.protocolShareOwed(), price / 10, "A tenth of the sale is owed to staking");
         }
     }
 
@@ -114,13 +115,12 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: every fleet names the Safe that receives its protocol share; a zero
-    /// treasury never reaches a fleet.
-    function test_manifestWithoutAProtocolTreasuryIsRefused() public {
+    /// @dev Invariant: every fleet's protocol share goes to a staking contract that exists.
+    function test_manifestNamingAStakingAddressWithoutCodeIsRefused() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.protocolTreasury = address(0);
+        manifest.regentStaking = address(0x57A6E);
 
-        vm.expectRevert(Keyfleet.ZeroAddress.selector);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.RegentStakingMissing.selector, address(0x57A6E)));
         script.deploy(manifest);
     }
 
@@ -134,13 +134,13 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: on Base the protocol share of every fleet goes to the Regents Safe and
+    /// @dev Invariant: on Base the protocol share of every fleet goes to REGENT revenue staking and
     /// nowhere else.
-    function test_baseManifestNamingAnyTreasuryButTheRegentsSafeIsRefused() public {
+    function test_baseManifestNamingAnyStakingButRegentRevenueStakingIsRefused() public {
         KeyfleetManifest.Manifest memory manifest = _baseManifest();
-        manifest.protocolTreasury = SAFE;
+        manifest.regentStaking = address(staking);
 
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.ProtocolTreasuryNotRegentsSafe.selector, SAFE));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.RegentStakingNotBase.selector, address(staking)));
         script.deploy(manifest);
     }
 
@@ -199,6 +199,7 @@ contract DeployKeyfleetsTest is Test {
         string memory json = string.concat(
             '{"chainId": 31337,',
             ' "usdc": "0x00000000000000000000000000000000000000a2",',
+            ' "regentStaking": "0x00000000000000000000000000000000000000a3",',
             ' "traitTableHash": "0x00000000000000000000000000000000000000000000000000000000000000c4",',
             ' "vrf": {"keyHash": "0x00000000000000000000000000000000000000000000000000000000000000c3",',
             '  "subscriptionId": "115792089237316195423570985008687907853269984665640564039457584007913129639935",',
@@ -215,7 +216,7 @@ contract DeployKeyfleetsTest is Test {
 
         assertEq(manifest.chainId, ANVIL_CHAIN_ID, "chainId");
         assertEq(manifest.usdc, address(0xA2), "usdc");
-        assertEq(manifest.protocolTreasury, address(0), "the treasury never comes from the file");
+        assertEq(manifest.regentStaking, address(0xA3), "regentStaking");
         assertEq(address(manifest.vrf.coordinator), address(0xC1), "vrf.coordinator");
         assertEq(manifest.vrf.subscriptionId, type(uint256).max, "vrf.subscriptionId, all 78 digits");
         assertEq(manifest.vrf.keyHash, bytes32(uint256(0xC3)), "vrf.keyHash");
@@ -240,13 +241,12 @@ contract DeployKeyfleetsTest is Test {
     /// carries the final trait table's hash and a zero subscription until the operator writes in the
     /// subscription the Safe owns, so until then no fleet can be deployed on Base; the anvil
     /// manifest carries a zero trait table too. With them written in, every other refusal passes for
-    /// Classic, the fleet that opens first. Both take the protocol treasury from the environment,
-    /// never from the file.
+    /// Classic, the fleet that opens first. Both name REGENT revenue staking on Base.
     function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
-        vm.setEnv("KEYFLEET_PROTOCOL_TREASURY", vm.toString(SAFE));
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
-        assertEq(anvil.protocolTreasury, SAFE, "The treasury comes from the environment");
         vm.etch(anvil.usdc, address(usdc).code);
+        vm.etch(anvil.regentStaking, address(staking).code);
+        assertEq(anvil.regentStaking, script.BASE_REGENT_REVENUE_STAKING(), "The lab forks Base's staking");
         uint256 labSubscription = _standInForBaseCoordinator();
         assertEq(anvil.usdc, script.BASE_USDC(), "The lab forks Base's USDC");
         assertEq(address(anvil.vrf.coordinator), script.BASE_VRF_COORDINATOR(), "The lab forks Base's coordinator");
@@ -261,7 +261,6 @@ contract DeployKeyfleetsTest is Test {
         Keyfleet lab = script.deploy(anvil);
         assertGt(address(lab).code.length, 0, "The anvil manifest deploys on its chain");
 
-        vm.setEnv("KEYFLEET_PROTOCOL_TREASURY", vm.toString(REGENTS_SAFE));
         KeyfleetManifest.Manifest memory base = script.readManifest("base", "classic");
         vm.chainId(BASE_CHAIN_ID);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
@@ -270,7 +269,11 @@ contract DeployKeyfleetsTest is Test {
         base.vrf.subscriptionId = labSubscription;
         Keyfleet release = script.deploy(base);
         assertGt(address(release).code.length, 0, "The Base manifest deploys");
-        assertEq(release.PROTOCOL_TREASURY(), REGENTS_SAFE, "And sends its protocol share to the Regents Safe");
+        assertEq(
+            address(release.TREASURY().REGENT_STAKING()),
+            script.BASE_REGENT_REVENUE_STAKING(),
+            "And deposits its protocol share into REGENT revenue staking"
+        );
     }
 
     /// @dev Puts the mock coordinator's code at Base's coordinator address, registers
@@ -284,11 +287,12 @@ contract DeployKeyfleetsTest is Test {
     }
 
     /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
-    /// coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
-    /// Regents Safe as its treasury.
+    /// coordinator on its 2 gwei lane, with its protocol share going to REGENT revenue staking, all
+    /// stood in for by the local mocks' code.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(script.BASE_USDC(), address(usdc).code);
+        vm.etch(script.BASE_REGENT_REVENUE_STAKING(), address(staking).code);
         uint256 baseSubscription = _standInForBaseCoordinator();
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
@@ -298,13 +302,13 @@ contract DeployKeyfleetsTest is Test {
             subscriptionId: baseSubscription,
             keyHash: script.BASE_VRF_KEY_HASH_2_GWEI()
         });
-        manifest.protocolTreasury = REGENTS_SAFE;
+        manifest.regentStaking = script.BASE_REGENT_REVENUE_STAKING();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = ANVIL_CHAIN_ID;
         manifest.usdc = address(usdc);
-        manifest.protocolTreasury = SAFE;
+        manifest.regentStaking = address(staking);
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

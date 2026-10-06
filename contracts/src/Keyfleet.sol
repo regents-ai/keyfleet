@@ -25,8 +25,9 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// transaction that records it.
 ///
 /// The 10% protocol share of every purchase is set aside here in `protocolShareOwed`, and anyone may
-/// send the whole of it with `sendProtocolShare` to the fixed `PROTOCOL_TREASURY`. It is the only
-/// fee this fleet ever pays.
+/// send the whole of it with `sendProtocolShare`, which deposits it into REGENT revenue staking
+/// through the fleet's treasury. It is the only fee this fleet ever pays. This contract never
+/// approves a token.
 ///
 /// This contract holds no free capital. The fleet's capital lives in its `KeyfleetTreasury`: the
 /// capital part of every purchase and a completed Cascade level's released surplus are sent there
@@ -53,7 +54,7 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// or replace a seed.
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
-/// this contract are the owed protocol share sent to the protocol treasury, capital and released
+/// this contract are the owed protocol share sent through the treasury to staking, capital and released
 /// Cascade surplus sent to the fleet's treasury, the Accelerant rebate paid into the ledger, the
 /// Cascade reimbursement paid into the ledger, and income paid into the ledger for the keys.
 contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
@@ -125,7 +126,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param buyer The caller, who paid the USDC.
     /// @param receiver The address the key was minted to.
     /// @param gross The USDC price paid.
-    /// @param protocol USDC set aside for the protocol treasury in `protocolShareOwed`.
+    /// @param protocol USDC set aside for REGENT staking in `protocolShareOwed`.
     /// @param capital USDC sent to this fleet's treasury.
     /// @param reserve USDC added to the Cascade completion reserve.
     /// @param rebate USDC credited to the holder of the preceding key in the ledger.
@@ -150,7 +151,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param surplus USDC released and sent to this fleet's treasury.
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
 
-    /// @notice The whole owed protocol share was sent to the protocol treasury.
+    /// @notice The whole owed protocol share was deposited into REGENT revenue staking.
     /// @param caller Whoever sent it; anyone may.
     /// @param amount The USDC sent, which was the whole owed amount.
     event ProtocolShareSent(address indexed caller, uint256 amount);
@@ -191,9 +192,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// constructor requires it to report six decimals; the deployment scripts require it to be
     /// native USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
     IERC20 public immutable USDC;
-    /// @notice Where `sendProtocolShare` sends the 10% protocol share of every purchase: the Regents
-    /// Safe.
-    address public immutable PROTOCOL_TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
     /// @notice The fleet's voting controller, deployed straight after the fleet at this address.
@@ -222,8 +220,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     uint256 public currentPrice;
     /// @notice Cascade only: USDC held back for the next level completion. Never capital.
     uint256 public cascadeReserve;
-    /// @notice USDC set aside from purchases as the protocol share and not yet sent to the
-    /// protocol treasury. Never capital and never surplus.
+    /// @notice USDC set aside from purchases as the protocol share and not yet deposited into
+    /// staking. Never capital and never surplus.
     uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
@@ -254,7 +252,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// capital to the treasury's address, where it is held once the treasury is deployed there.
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param usdc The USDC every key is paid in, reporting six decimals.
-    /// @param protocolTreasury Where the protocol share is sent. Not zero.
     /// @param metadata The ERC721 name, symbol and metadata base.
     /// @param randomness The VRF coordinator, subscription and gas lane.
     /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte. Not zero.
@@ -262,14 +259,13 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     constructor(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
-        address protocolTreasury,
         Metadata memory metadata,
         Randomness memory randomness,
         bytes32 traitTableHash,
         Companions memory companions
     ) ERC721(metadata.name, metadata.symbol) {
         if (
-            address(usdc) == address(0) || protocolTreasury == address(0) || address(companions.votes) == address(0)
+            address(usdc) == address(0) || address(companions.votes) == address(0)
                 || address(companions.treasury) == address(0)
         ) revert ZeroAddress();
         uint8 decimals = IERC20Metadata(address(usdc)).decimals();
@@ -281,7 +277,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         if (traitTableHash == bytes32(0)) revert TraitTableHashZero();
         PRESET = preset;
         USDC = usdc;
-        PROTOCOL_TREASURY = protocolTreasury;
         VRF_COORDINATOR = randomness.coordinator;
         VRF_SUBSCRIPTION_ID = randomness.subscriptionId;
         VRF_KEY_HASH = randomness.keyHash;
@@ -390,8 +385,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// USDC, or one that blacklists the caller or this fleet, stops purchases until it lifts; that
     /// is accepted.
     ///
-    /// The 10% protocol share is added to `protocolShareOwed` and nothing is sent: the protocol
-    /// treasury is paid only by `sendProtocolShare`. The capital part is sent to the fleet's
+    /// The 10% protocol share is added to `protocolShareOwed` and nothing is sent: it leaves only
+    /// through `sendProtocolShare`, so a purchase never touches staking. The capital part is sent to the fleet's
     /// treasury in the same call.
     ///
     /// The key is enrolled in the ledger before it is minted, so a receiver contract may forward it
@@ -546,17 +541,21 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         }
     }
 
-    /// @notice Sends the whole owed protocol share to the protocol treasury.
+    /// @notice Deposits the whole owed protocol share into REGENT revenue staking.
     /// @dev Permissionless and all-or-nothing: anyone may call it at any time, and it always sends
-    /// exactly `protocolShareOwed`. A USDC that refuses the transfer reverts the call and leaves the
-    /// whole amount owed for a later one, while purchases carry on adding to it.
-    /// @return amount The USDC sent.
+    /// exactly `protocolShareOwed`. The amount goes to the fleet's treasury, which approves staking
+    /// for exactly that amount and deposits it in the same call, so it never stays in the treasury.
+    /// A paused staking contract, or one that takes anything other than the whole amount, reverts
+    /// the call and leaves the whole amount owed for a later one, while purchases carry on adding to
+    /// it.
+    /// @return amount The USDC deposited.
     function sendProtocolShare() external nonReentrant returns (uint256 amount) {
         amount = protocolShareOwed;
         if (amount == 0) revert ZeroAmount();
         protocolShareOwed = 0;
         emit ProtocolShareSent(msg.sender, amount);
-        USDC.safeTransfer(PROTOCOL_TREASURY, amount);
+        USDC.safeTransfer(address(TREASURY), amount);
+        TREASURY.depositProtocolShare(amount);
     }
 
     // --- internals -------------------------------------------------------

@@ -109,7 +109,6 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetShards.end.selector, bytes4(0x96f0fa4d));
         assertEq(KeyfleetShards.shardOf.selector, bytes4(0xf01d24e8));
         assertEq(Keyfleet(address(0)).SHARDS.selector, bytes4(0x48db3888));
-        assertEq(Keyfleet(address(0)).PROTOCOL_TREASURY.selector, bytes4(0x6352cf24));
         assertEq(Keyfleet.sendProtocolShare.selector, bytes4(0xcb097587));
     }
 }

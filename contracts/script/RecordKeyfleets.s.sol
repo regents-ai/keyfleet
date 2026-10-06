@@ -51,14 +51,13 @@ contract RecordKeyfleets is KeyfleetManifest {
     error RecordedMismatch(string field);
     /// @notice The VRF subscription does not list the fleet as a consumer yet.
     error FleetNotVrfConsumer(address fleet);
-    /// @notice On Base, the VRF subscription is owned by someone other than the protocol
-    /// treasury, the Regents Safe.
-    error VrfSubscriptionNotOwnedByTreasury(address owner, address protocolTreasury);
+    /// @notice On Base, the VRF subscription is owned by someone other than the Regents Safe.
+    error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
 
     /// @notice Reads the named manifest for the named fleet and that fleet's broadcast, and writes
     /// `deployments/<manifestName>.<fleetKey>.deployed.json`.
     /// @dev Run against the RPC the deployment was broadcast to, with the same `KEYFLEET_MANIFEST`,
-    /// `KEYFLEET_FLEET` and `KEYFLEET_PROTOCOL_TREASURY`, straight after that fleet's deployment:
+    /// and `KEYFLEET_FLEET`, straight after that fleet's deployment:
     /// Forge keeps only the latest broadcast as `run-latest.json`.
     function run() external {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
@@ -103,8 +102,9 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// returns its deployed manifest's JSON.
     /// @dev The fleet's ledger, voting controller, treasury and shard record must exist and be bound
     /// to it. The fleet's preset must be the manifest slot's, and every address it holds the one the
-    /// manifest names. The fleet must be a consumer of the subscription, and on Base the
-    /// subscription must be owned by the protocol treasury.
+    /// manifest names, and its treasury must deposit into the manifest's staking contract. The fleet
+    /// must be a consumer of the subscription, and on Base the subscription must be owned by the
+    /// Regents Safe.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         Keyfleet fleet = summary.fleet;
@@ -113,7 +113,9 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         if (fleet.PRESET() != _presets()[manifest.slot]) revert RecordedMismatch("preset");
         if (address(fleet.USDC()) != manifest.usdc) revert RecordedMismatch("usdc");
-        if (fleet.PROTOCOL_TREASURY() != manifest.protocolTreasury) revert RecordedMismatch("protocolTreasury");
+        if (address(fleet.TREASURY().REGENT_STAKING()) != manifest.regentStaking) {
+            revert RecordedMismatch("regentStaking");
+        }
         _requireRandomnessMatches(manifest.vrf, fleet);
         if (fleet.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
         if (!_equal(fleet.name(), manifest.fleet.name)) revert RecordedMismatch("name");
@@ -122,8 +124,8 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         (,,, address subscriptionOwner, address[] memory consumers) =
             manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
-        if (block.chainid == BASE_CHAIN_ID && subscriptionOwner != manifest.protocolTreasury) {
-            revert VrfSubscriptionNotOwnedByTreasury(subscriptionOwner, manifest.protocolTreasury);
+        if (block.chainid == BASE_CHAIN_ID && subscriptionOwner != BASE_REGENTS_SAFE) {
+            revert VrfSubscriptionNotOwnedByRegentsSafe(subscriptionOwner);
         }
         if (!_contains(consumers, address(fleet))) revert FleetNotVrfConsumer(address(fleet));
 
@@ -132,7 +134,8 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(root, "deploymentBlock", summary.deploymentBlock);
         vm.serializeAddress(root, "usdc", address(fleet.USDC()));
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
-        vm.serializeAddress(root, "protocolTreasury", fleet.PROTOCOL_TREASURY());
+        vm.serializeAddress(root, "regentStaking", address(fleet.TREASURY().REGENT_STAKING()));
+        vm.serializeBytes32(root, "protocolShareTag", fleet.TREASURY().PROTOCOL_SHARE_TAG());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
         vm.serializeString(root, "bounds", _boundsJson());
         vm.serializeString(root, "fees", _feesJson());
@@ -223,14 +226,14 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(
             disclosures,
             "feeComposition",
-            "Keyfleet takes 10% of every key purchase for the Regents protocol and nothing from money a"
-            " fleet receives afterwards."
+            "Keyfleet takes 10% of every key purchase for REGENT stakers and nothing from money a fleet"
+            " receives afterwards."
         );
         return vm.serializeString(
             disclosures,
             "safeAuthority",
-            "The Regents Safe receives the 10% protocol share and owns the randomness subscription. It"
-            " has no vote, claim or price in any fleet and cannot move a fleet's money."
+            "The Regents Safe owns the randomness subscription and REGENT revenue staking. It has no"
+            " vote, claim or price in any fleet and cannot move a fleet's money."
         );
     }
 

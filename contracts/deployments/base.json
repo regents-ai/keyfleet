@@ -1,6 +1,7 @@
 {
   "chainId": 8453,
   "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
   "vrf": {
     "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
     "subscriptionId": "0",

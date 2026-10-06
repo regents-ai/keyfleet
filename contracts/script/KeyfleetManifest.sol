@@ -16,11 +16,9 @@ interface IVRFProvingKeys {
 /// refusals that hold for the manifest before anything is deployed or recorded.
 /// @dev A manifest file holds what every fleet on its chain shares and the name, symbol and
 /// metadata base of each of the four fleets. One run deploys or records one fleet, named by its
-/// key, so each fleet goes on chain on its own. The protocol treasury is not in the file: each run
-/// takes it from `KEYFLEET_PROTOCOL_TREASURY`, which has no default. `parseManifest` and
-/// `parseSharedWiring` take the JSON text and `readManifest` and `readSharedWiring` are the only
-/// parts that open a file or read the environment, so the suite parses manifests without writing
-/// any.
+/// key, so each fleet goes on chain on its own. `parseManifest` and `parseSharedWiring` take the
+/// JSON text and `readManifest` and `readSharedWiring` are the only parts that open a file, so the
+/// suite parses manifests without writing any.
 abstract contract KeyfleetManifest is Script {
     /// @notice The chain the release deploys to: Base mainnet. A manifest naming it is held to the
     /// strictest checks the deployment has.
@@ -30,8 +28,9 @@ abstract contract KeyfleetManifest is Script {
     address public constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     /// @notice REGENT on Base, the token Regent pins in Autolaunch's Base bindings. 18 decimals.
     address public constant BASE_REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
-    /// @notice REGENT revenue staking on Base (verified source `RegentRevenueStaking`). Revenue
-    /// counts there only when it arrives through `depositUSDC`.
+    /// @notice REGENT revenue staking on Base (verified source `RegentRevenueStaking`), the only
+    /// staking contract a manifest may name there. Every fleet's protocol share is deposited into it
+    /// through `depositUSDC`, the only way revenue counts there.
     address public constant BASE_REGENT_REVENUE_STAKING = 0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5;
     /// @notice The Regents Safe on Base, a 2-of-3 Safe v1.4.1. It owns the staking contract and the
     /// VRF subscription. The same address on Ethereum is a different Safe with different signers.
@@ -61,9 +60,8 @@ abstract contract KeyfleetManifest is Script {
     /// @param chainId The chain this manifest is for. Both steps refuse any other.
     /// @param usdc The USDC every key is paid in, and every fleet's one income token. On Base it
     /// must be `BASE_USDC`.
-    /// @param protocolTreasury The Regents Safe, which receives the 10% protocol share of every
-    /// purchase and, on Base, owns the VRF subscription. Taken from `KEYFLEET_PROTOCOL_TREASURY`,
-    /// never from the file. On Base it must be `BASE_REGENTS_SAFE`.
+    /// @param regentStaking Where every fleet's treasury deposits the 10% protocol share. On Base it
+    /// must be `BASE_REGENT_REVENUE_STAKING`.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
     /// chain. On Base the coordinator must be `BASE_VRF_COORDINATOR` and the gas lane one of the two
     /// Base lanes.
@@ -75,7 +73,7 @@ abstract contract KeyfleetManifest is Script {
     struct Manifest {
         uint256 chainId;
         address usdc;
-        address protocolTreasury;
+        address regentStaking;
         Keyfleet.Randomness vrf;
         bytes32 traitTableHash;
         uint8 slot;
@@ -90,8 +88,10 @@ abstract contract KeyfleetManifest is Script {
     error VrfCoordinatorNotBase(address coordinator);
     /// @notice A Base manifest names a VRF gas lane other than Base's 2 gwei or 30 gwei lane.
     error VrfKeyHashNotBase(bytes32 keyHash);
-    /// @notice A Base manifest names a protocol treasury other than the Regents Safe.
-    error ProtocolTreasuryNotRegentsSafe(address protocolTreasury);
+    /// @notice A Base manifest names a staking contract other than REGENT revenue staking.
+    error RegentStakingNotBase(address regentStaking);
+    /// @notice The manifest's staking address holds no code on this chain.
+    error RegentStakingMissing(address regentStaking);
     /// @notice The manifest's VRF coordinator address holds no code on this chain.
     error VrfCoordinatorMissing(address coordinator);
     /// @notice The coordinator has no proving key for the manifest's gas lane.
@@ -99,22 +99,18 @@ abstract contract KeyfleetManifest is Script {
     /// @notice No fleet has this key.
     error UnknownFleet(string fleetKey);
 
-    /// @notice Reads `deployments/<manifestName>.json` for the fleet with key `fleetKey`, with the
-    /// protocol treasury from `KEYFLEET_PROTOCOL_TREASURY`.
+    /// @notice Reads `deployments/<manifestName>.json` for the fleet with key `fleetKey`.
     function readManifest(string memory manifestName, string memory fleetKey)
         public
         view
         returns (Manifest memory manifest)
     {
-        manifest = parseManifest(vm.readFile(string.concat("deployments/", manifestName, ".json")), fleetKey);
-        manifest.protocolTreasury = vm.envAddress("KEYFLEET_PROTOCOL_TREASURY");
+        return parseManifest(vm.readFile(string.concat("deployments/", manifestName, ".json")), fleetKey);
     }
 
-    /// @notice Reads what every fleet shares from `deployments/<manifestName>.json`, naming no fleet,
-    /// with the protocol treasury from `KEYFLEET_PROTOCOL_TREASURY`.
+    /// @notice Reads what every fleet shares from `deployments/<manifestName>.json`, naming no fleet.
     function readSharedWiring(string memory manifestName) public view returns (Manifest memory manifest) {
-        manifest = parseSharedWiring(vm.readFile(string.concat("deployments/", manifestName, ".json")));
-        manifest.protocolTreasury = vm.envAddress("KEYFLEET_PROTOCOL_TREASURY");
+        return parseSharedWiring(vm.readFile(string.concat("deployments/", manifestName, ".json")));
     }
 
     /// @notice Parses manifest JSON into the value both fleet steps take, for the fleet with key
@@ -130,13 +126,14 @@ abstract contract KeyfleetManifest is Script {
         });
     }
 
-    /// @notice Parses what every fleet on the manifest's chain shares, leaving the protocol
-    /// treasury, the slot and the fleet empty.
+    /// @notice Parses what every fleet on the manifest's chain shares, leaving the slot and the
+    /// fleet empty.
     /// @dev Every field is read by name rather than decoded from the whole object, so the file is
     /// keyed by what it says and not by the order it says it in.
     function parseSharedWiring(string memory json) public pure returns (Manifest memory manifest) {
         manifest.chainId = vm.parseJsonUint(json, ".chainId");
         manifest.usdc = vm.parseJsonAddress(json, ".usdc");
+        manifest.regentStaking = vm.parseJsonAddress(json, ".regentStaking");
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(vm.parseJsonAddress(json, ".vrf.coordinator")),
             subscriptionId: vm.parseJsonUint(json, ".vrf.subscriptionId"),
@@ -155,10 +152,10 @@ abstract contract KeyfleetManifest is Script {
         revert UnknownFleet(fleetKey);
     }
 
-    /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC, VRF
-    /// coordinator and gas lane must be Base's own and its protocol treasury the Regents Safe, and
-    /// on every chain the protocol treasury must not be zero and the coordinator must hold code, know the gas lane and know the
-    /// subscription; a subscription it does not know reverts with the coordinator's own
+    /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC,
+    /// staking contract, VRF coordinator and gas lane must be Base's own, and on every chain the
+    /// staking contract must hold code and the coordinator must hold code, know the gas lane and
+    /// know the subscription; a subscription it does not know reverts with the coordinator's own
     /// `InvalidSubscription`. The trait table hash must not be zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
         if (block.chainid != manifest.chainId) revert WrongChain(manifest.chainId, block.chainid);
@@ -170,11 +167,11 @@ abstract contract KeyfleetManifest is Script {
             if (keyHash != BASE_VRF_KEY_HASH_2_GWEI && keyHash != BASE_VRF_KEY_HASH_30_GWEI) {
                 revert VrfKeyHashNotBase(keyHash);
             }
-            if (manifest.protocolTreasury != BASE_REGENTS_SAFE) {
-                revert ProtocolTreasuryNotRegentsSafe(manifest.protocolTreasury);
+            if (manifest.regentStaking != BASE_REGENT_REVENUE_STAKING) {
+                revert RegentStakingNotBase(manifest.regentStaking);
             }
         }
-        if (manifest.protocolTreasury == address(0)) revert Keyfleet.ZeroAddress();
+        if (manifest.regentStaking.code.length == 0) revert RegentStakingMissing(manifest.regentStaking);
         if (coordinator.code.length == 0) revert VrfCoordinatorMissing(coordinator);
         (bool keyExists,) = IVRFProvingKeys(coordinator).s_provingKeys(manifest.vrf.keyHash);
         if (!keyExists) revert VrfKeyHashUnknown(manifest.vrf.keyHash);
