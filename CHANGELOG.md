@@ -675,3 +675,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Ash moves from 3.33.11 to 3.34.4, which fixes EEF-CVE-2026-94201. ash_postgres is pinned to exactly 2.13.0, because 2.13.1 through 2.14.2 can write some records outside KeyFleet's own part of the shared database.
 - regents is pinned at `004307e6` (Regents v128) and elixir-utils at `467cba6`, the versions those libraries require.
+
+## 2026-10-06 — Package rules in AGENTS.md
+
+- `mix usage_rules.sync` writes a marked block at the end of `platform/AGENTS.md` that links each installed package's own rules (Ash and its extensions, Phoenix, usage_rules), the same setup as the template. `mix precommit` checks the block is in step with the installed versions.

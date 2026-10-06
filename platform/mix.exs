@@ -19,6 +19,7 @@ defmodule Keyfleet.MixProject do
       start_permanent: false,
       aliases: aliases(),
       deps: deps(),
+      usage_rules: usage_rules(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
@@ -91,7 +92,23 @@ defmodule Keyfleet.MixProject do
        sparse: "credo_ash",
        only: [:dev, :test],
        runtime: false},
-      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:usage_rules, "~> 1.2.8", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  # `mix usage_rules.sync` writes the marked block at the end of AGENTS.md: how to
+  # read the installed version's docs, and links to each package's own rules in deps/.
+  defp usage_rules do
+    [
+      file: "AGENTS.md",
+      usage_rules: [
+        {:usage_rules, sub_rules: []},
+        {:usage_rules, sub_rules: :all, main: false, link: :markdown},
+        {:ash, link: :markdown},
+        {~r/^ash_/, link: :markdown},
+        {:phoenix, sub_rules: ["phoenix", "liveview", "html"], link: :markdown}
+      ]
     ]
   end
 
@@ -149,6 +166,7 @@ defmodule Keyfleet.MixProject do
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
+        "usage_rules.sync --check",
         "keyfleet.route_handoff --check"
       ]
     ]
