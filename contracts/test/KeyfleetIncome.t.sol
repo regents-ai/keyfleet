@@ -645,7 +645,7 @@ contract KeyfleetIncomeGasTest is Test {
 
     /// @dev A send touches one fleet slot and one USDC transfer. It is measured with the fleet and
     /// USDC cold, against a plain ERC-20 standing in for USDC, so this is a regression bound; the
-    /// figure to publish is measured on a fork of Ethereum.
+    /// figure to publish is measured on a fork of Base.
     function test_sendProtocolShareGas() public {
         _completeLevels(20);
         uint256 owed = fleet.protocolShareOwed();

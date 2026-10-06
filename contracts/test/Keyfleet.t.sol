@@ -1082,7 +1082,7 @@ contract KeyfleetTest is Test {
     /// what the real coordinator's writes. The first purchase after each `sendProtocolShare` pays
     /// the write of the owed share from zero again. That makes it a regression bound on the fleet's
     /// own work, not the figure to publish: real USDC is a proxy and costs more per transfer, so the
-    /// figures to publish are measured on a fork of Ethereum. The level-completing Cascade purchase
+    /// figures to publish are measured on a fork of Base. The level-completing Cascade purchase
     /// is measured alongside it for information; it is cheaper, because by then the buckets it
     /// writes are warm.
     function test_purchaseGasStaysUnderTheCeiling() public {

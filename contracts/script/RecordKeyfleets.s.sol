@@ -43,7 +43,7 @@ contract RecordKeyfleets is KeyfleetManifest {
     error RecordedMismatch(string field);
     /// @notice The VRF subscription does not list the fleet as a consumer yet.
     error FleetNotVrfConsumer(address fleet);
-    /// @notice On Ethereum, the VRF subscription is owned by someone other than the protocol
+    /// @notice On Base, the VRF subscription is owned by someone other than the protocol
     /// treasury, the Regents Safe.
     error VrfSubscriptionNotOwnedByTreasury(address owner, address protocolTreasury);
 
@@ -94,7 +94,7 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice Reads the broadcast's fleet back from the chain, checks it against the manifest, and
     /// returns its deployed manifest's JSON.
     /// @dev The fleet's preset must be the manifest slot's, and every address it holds the one the
-    /// manifest names. The fleet must be a consumer of the subscription, and on Ethereum the
+    /// manifest names. The fleet must be a consumer of the subscription, and on Base the
     /// subscription must be owned by the protocol treasury.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
@@ -112,7 +112,7 @@ contract RecordKeyfleets is KeyfleetManifest {
 
         (,,, address subscriptionOwner, address[] memory consumers) =
             manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
-        if (block.chainid == ETHEREUM_CHAIN_ID && subscriptionOwner != manifest.protocolTreasury) {
+        if (block.chainid == BASE_CHAIN_ID && subscriptionOwner != manifest.protocolTreasury) {
             revert VrfSubscriptionNotOwnedByTreasury(subscriptionOwner, manifest.protocolTreasury);
         }
         if (!_contains(consumers, address(fleet))) revert FleetNotVrfConsumer(address(fleet));

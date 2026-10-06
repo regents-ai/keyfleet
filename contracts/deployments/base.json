@@ -1,10 +1,10 @@
 {
-  "chainId": 1,
-  "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "chainId": 8453,
+  "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "vrf": {
-    "coordinator": "0xD7f86b4b8Cae7D942340FF628F82735b7a20893a",
+    "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
     "subscriptionId": "0",
-    "keyHash": "0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9"
+    "keyHash": "0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab"
   },
   "traitTableHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "fleets": {

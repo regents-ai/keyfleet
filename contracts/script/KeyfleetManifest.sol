@@ -22,22 +22,30 @@ interface IVRFProvingKeys {
 /// parts that open a file or read the environment, so the suite parses manifests without writing
 /// any.
 abstract contract KeyfleetManifest is Script {
-    /// @notice The chain the release deploys to: Ethereum. A manifest naming it is held to the
+    /// @notice The chain the release deploys to: Base mainnet. A manifest naming it is held to the
     /// strictest checks the deployment has.
-    uint256 public constant ETHEREUM_CHAIN_ID = 1;
-    /// @notice USDC on Ethereum, the only USDC a manifest may name there. Every key price assumes
-    /// its six decimals.
-    address public constant ETHEREUM_USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    /// @notice The Chainlink VRF v2.5 coordinator on Ethereum, the only one a manifest may name
-    /// there.
-    address public constant ETHEREUM_VRF_COORDINATOR = 0xD7f86b4b8Cae7D942340FF628F82735b7a20893a;
-    /// @notice The Ethereum VRF gas lane with the 200 gwei price cap, the only one a manifest may
+    uint256 public constant BASE_CHAIN_ID = 8453;
+    /// @notice Native USDC on Base, the only USDC a manifest may name there. Every key price assumes
+    /// its six decimals. Source: Circle's USDC contract addresses page.
+    address public constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    /// @notice REGENT on Base, the token Regent pins in Autolaunch's Base bindings. 18 decimals.
+    address public constant BASE_REGENT = 0x6f89bcA4eA5931EdFCB09786267b251DeE752b07;
+    /// @notice REGENT revenue staking on Base (verified source `RegentRevenueStaking`). Revenue
+    /// counts there only when it arrives through `depositUSDC`.
+    address public constant BASE_REGENT_REVENUE_STAKING = 0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5;
+    /// @notice The Regents Safe on Base, a 2-of-3 Safe v1.4.1. It owns the staking contract and the
+    /// VRF subscription. The same address on Ethereum is a different Safe with different signers.
+    address public constant BASE_REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
+    /// @notice The Chainlink VRF v2.5 coordinator on Base, the only one a manifest may name there.
+    /// Source: Chainlink's VRF v2.5 supported-networks page, Base Mainnet.
+    address public constant BASE_VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
+    /// @notice The Base VRF gas lane with the 2 gwei price cap, the lane the release uses.
+    bytes32 public constant BASE_VRF_KEY_HASH_2_GWEI =
+        0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab;
+    /// @notice The Base VRF gas lane with the 30 gwei price cap, the only other lane a manifest may
     /// name there.
-    bytes32 public constant ETHEREUM_VRF_KEY_HASH = 0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9;
-    /// @notice The Regents Safe on Ethereum, the only protocol treasury a manifest may name there.
-    /// It still comes from `KEYFLEET_PROTOCOL_TREASURY`, which has no default; this only refuses any
-    /// other address.
-    address public constant ETHEREUM_PROTOCOL_TREASURY = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
+    bytes32 public constant BASE_VRF_KEY_HASH_30_GWEI =
+        0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70;
 
     /// @notice What one fleet is deployed with, which is exactly `Keyfleet.Metadata`.
     /// @param name ERC721 collection name.
@@ -51,15 +59,14 @@ abstract contract KeyfleetManifest is Script {
 
     /// @notice One fleet's deployment inputs.
     /// @param chainId The chain this manifest is for. Both steps refuse any other.
-    /// @param usdc The USDC every key is paid in, and every fleet's one income token. On Ethereum it
-    /// must be `ETHEREUM_USDC`.
+    /// @param usdc The USDC every key is paid in, and every fleet's one income token. On Base it
+    /// must be `BASE_USDC`.
     /// @param protocolTreasury The Regents Safe, which receives the 10% protocol share of every
-    /// purchase and, on Ethereum, owns the VRF subscription. Taken from
-    /// `KEYFLEET_PROTOCOL_TREASURY`, never from the file. On Ethereum it must be
-    /// `ETHEREUM_PROTOCOL_TREASURY`.
+    /// purchase and, on Base, owns the VRF subscription. Taken from `KEYFLEET_PROTOCOL_TREASURY`,
+    /// never from the file. On Base it must be `BASE_REGENTS_SAFE`.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
-    /// chain. On Ethereum the coordinator and gas lane must be `ETHEREUM_VRF_COORDINATOR` and
-    /// `ETHEREUM_VRF_KEY_HASH`.
+    /// chain. On Base the coordinator must be `BASE_VRF_COORDINATOR` and the gas lane one of the two
+    /// Base lanes.
     /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte, the same
     /// for every fleet on the chain. Never zero.
     /// @param slot The fleet's slot: 0 Syndicate, 1 Cascade, 2 Classic, 3 Accelerant. It decides
@@ -77,13 +84,13 @@ abstract contract KeyfleetManifest is Script {
 
     /// @notice The manifest is for another chain.
     error WrongChain(uint256 expected, uint256 actual);
-    /// @notice An Ethereum manifest names a USDC other than USDC on Ethereum.
-    error UsdcNotEthereumUsdc(address usdc);
-    /// @notice An Ethereum manifest names a VRF coordinator other than Ethereum's.
-    error VrfCoordinatorNotEthereum(address coordinator);
-    /// @notice An Ethereum manifest names a VRF gas lane other than Ethereum's 200 gwei lane.
-    error VrfKeyHashNotEthereum(bytes32 keyHash);
-    /// @notice An Ethereum manifest names a protocol treasury other than the Regents Safe.
+    /// @notice A Base manifest names a USDC other than native USDC on Base.
+    error UsdcNotBaseUsdc(address usdc);
+    /// @notice A Base manifest names a VRF coordinator other than Base's.
+    error VrfCoordinatorNotBase(address coordinator);
+    /// @notice A Base manifest names a VRF gas lane other than Base's 2 gwei or 30 gwei lane.
+    error VrfKeyHashNotBase(bytes32 keyHash);
+    /// @notice A Base manifest names a protocol treasury other than the Regents Safe.
     error ProtocolTreasuryNotRegentsSafe(address protocolTreasury);
     /// @notice The manifest's VRF coordinator address holds no code on this chain.
     error VrfCoordinatorMissing(address coordinator);
@@ -148,20 +155,22 @@ abstract contract KeyfleetManifest is Script {
         revert UnknownFleet(fleetKey);
     }
 
-    /// @dev The manifest must fit this chain. Its chain must be this chain. On Ethereum its USDC,
-    /// VRF coordinator and gas lane must be Ethereum's own and its protocol treasury the Regents
-    /// Safe, and on every chain the protocol
-    /// treasury must not be zero and the coordinator must hold code, know the gas lane and know the
+    /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC, VRF
+    /// coordinator and gas lane must be Base's own and its protocol treasury the Regents Safe, and
+    /// on every chain the protocol treasury must not be zero and the coordinator must hold code, know the gas lane and know the
     /// subscription; a subscription it does not know reverts with the coordinator's own
     /// `InvalidSubscription`. The trait table hash must not be zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
         if (block.chainid != manifest.chainId) revert WrongChain(manifest.chainId, block.chainid);
         address coordinator = address(manifest.vrf.coordinator);
-        if (block.chainid == ETHEREUM_CHAIN_ID) {
-            if (manifest.usdc != ETHEREUM_USDC) revert UsdcNotEthereumUsdc(manifest.usdc);
-            if (coordinator != ETHEREUM_VRF_COORDINATOR) revert VrfCoordinatorNotEthereum(coordinator);
-            if (manifest.vrf.keyHash != ETHEREUM_VRF_KEY_HASH) revert VrfKeyHashNotEthereum(manifest.vrf.keyHash);
-            if (manifest.protocolTreasury != ETHEREUM_PROTOCOL_TREASURY) {
+        if (block.chainid == BASE_CHAIN_ID) {
+            if (manifest.usdc != BASE_USDC) revert UsdcNotBaseUsdc(manifest.usdc);
+            if (coordinator != BASE_VRF_COORDINATOR) revert VrfCoordinatorNotBase(coordinator);
+            bytes32 keyHash = manifest.vrf.keyHash;
+            if (keyHash != BASE_VRF_KEY_HASH_2_GWEI && keyHash != BASE_VRF_KEY_HASH_30_GWEI) {
+                revert VrfKeyHashNotBase(keyHash);
+            }
+            if (manifest.protocolTreasury != BASE_REGENTS_SAFE) {
                 revert ProtocolTreasuryNotRegentsSafe(manifest.protocolTreasury);
             }
         }

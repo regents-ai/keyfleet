@@ -17,12 +17,13 @@ interface IVRFRequestCommitments {
     function s_requestCommitments(uint256 requestId) external view returns (bytes32);
 }
 
-/// @dev A fleet against the real Chainlink VRF v2.5 coordinator on a fork of Ethereum. It runs
-/// only when `ETHEREUM_RPC_URL` is set in the environment, and skips itself otherwise; the URL is never
-/// printed. It proves that the real coordinator accepts the fleet's request on its exact terms,
-/// that a fleet not yet on the subscription still sells, and that an answer delivered as the
-/// coordinator delivers it fits the callback gas.
-contract KeyfleetRevealEthereumForkTest is Test {
+/// @dev A fleet against the real Base contracts on a fork of Base. It runs only when `BASE_RPC_URL`
+/// is set in the environment, and skips itself otherwise; the URL is never printed. It reads the
+/// pinned Base addresses (USDC, REGENT, REGENT staking, the VRF coordinator and its gas lanes), and
+/// proves that the real coordinator accepts the fleet's request on its exact terms, that a fleet
+/// not yet on the subscription still sells, and that an answer delivered as the coordinator
+/// delivers it fits the callback gas.
+contract KeyfleetBaseForkTest is Test {
     address private constant BUYER = address(0xB0B0B0);
     bytes32 private constant TRAIT_TABLE = keccak256("trait table");
     bytes32 private constant RANDOM_WORDS_REQUESTED =
@@ -31,6 +32,7 @@ contract KeyfleetRevealEthereumForkTest is Test {
     event RevealRequestFailed(uint256 indexed tokenId);
     event KeyRevealed(uint256 indexed tokenId, uint256 indexed requestId, bytes32 seed);
 
+    DeployKeyfleets private script;
     IVRFCoordinatorV2Plus private coordinator;
     bytes32 private keyHash;
     IERC20Metadata private usdc;
@@ -38,17 +40,17 @@ contract KeyfleetRevealEthereumForkTest is Test {
     Keyfleet private fleet;
 
     function setUp() public {
-        string memory rpc = vm.envOr("ETHEREUM_RPC_URL", string(""));
+        string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
         if (bytes(rpc).length == 0) {
             vm.skip(true);
             return;
         }
         vm.createSelectFork(rpc);
 
-        DeployKeyfleets script = new DeployKeyfleets();
-        coordinator = IVRFCoordinatorV2Plus(script.ETHEREUM_VRF_COORDINATOR());
-        keyHash = script.ETHEREUM_VRF_KEY_HASH();
-        usdc = IERC20Metadata(script.ETHEREUM_USDC());
+        script = new DeployKeyfleets();
+        coordinator = IVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
+        keyHash = script.BASE_VRF_KEY_HASH_2_GWEI();
+        usdc = IERC20Metadata(script.BASE_USDC());
 
         subscriptionId = coordinator.createSubscription();
         vm.deal(address(this), 1 ether);
@@ -67,9 +69,19 @@ contract KeyfleetRevealEthereumForkTest is Test {
         usdc.approve(address(fleet), type(uint256).max);
     }
 
-    function test_theEthereumGasLaneExists() public view {
+    function test_theBaseGasLanesExist() public view {
         (bool exists,) = IVRFProvingKeys(address(coordinator)).s_provingKeys(keyHash);
-        assertTrue(exists, "the 200 gwei gas lane is registered on the Ethereum coordinator");
+        assertTrue(exists, "the 2 gwei gas lane is registered on the Base coordinator");
+        (exists,) = IVRFProvingKeys(address(coordinator)).s_provingKeys(script.BASE_VRF_KEY_HASH_30_GWEI());
+        assertTrue(exists, "the 30 gwei gas lane is registered on the Base coordinator");
+    }
+
+    function test_thePinnedBaseTokensAndStakingAreLive() public view {
+        assertEq(block.chainid, script.BASE_CHAIN_ID(), "a fork of Base");
+        assertEq(usdc.decimals(), 6, "USDC has 6 decimals");
+        assertEq(IERC20Metadata(script.BASE_REGENT()).decimals(), 18, "REGENT has 18 decimals");
+        assertGt(script.BASE_REGENT_REVENUE_STAKING().code.length, 0, "REGENT staking is deployed");
+        assertGt(script.BASE_REGENTS_SAFE().code.length, 0, "the Regents Safe is deployed");
     }
 
     /// @dev The fleet is sold before it is a consumer, then added, then retried, then answered.

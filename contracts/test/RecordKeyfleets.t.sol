@@ -13,7 +13,7 @@ import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 contract RecordKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
-    uint256 private constant ETHEREUM_CHAIN_ID = 1;
+    uint256 private constant BASE_CHAIN_ID = 8453;
     address private constant SAFE = address(0x5AFE);
     address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     uint256 private constant DEPLOYMENT_BLOCK = 7;
@@ -192,15 +192,15 @@ contract RecordKeyfleetsTest is Test {
         _expectRecordRefused(manifest, fleet, abi.encodeWithSelector(Keyfleet.TraitTableHashZero.selector));
     }
 
-    /// @dev Invariant: on Ethereum a fleet is published only while the protocol treasury, the
+    /// @dev Invariant: on Base a fleet is published only while the protocol treasury, the
     /// Regents Safe, owns the subscription that pays for its reveals, so nobody else can remove the
     /// fleet or cancel it.
-    function test_recordOnEthereumRefusesASubscriptionTheTreasuryDoesNotOwn() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    function test_recordOnBaseRefusesASubscriptionTheTreasuryDoesNotOwn() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
-        MockVRFCoordinatorV2Plus ethereum = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(address(manifest.vrf.coordinator));
 
-        ethereum.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
+        base.openSubscription(manifest.vrf.subscriptionId, address(0xBEEF));
         _expectRecordRefused(
             manifest,
             fleet,
@@ -209,14 +209,14 @@ contract RecordKeyfleetsTest is Test {
             )
         );
 
-        ethereum.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
+        base.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
         recorder.record(manifest, _summary(fleet));
     }
 
-    /// @dev Invariant: an Ethereum record never publishes a protocol treasury other than the
+    /// @dev Invariant: a Base record never publishes a protocol treasury other than the
     /// Regents Safe.
-    function test_recordOnEthereumRefusesAnyTreasuryButTheRegentsSafe() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    function test_recordOnBaseRefusesAnyTreasuryButTheRegentsSafe() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         manifest.protocolTreasury = SAFE;
@@ -228,24 +228,22 @@ contract RecordKeyfleetsTest is Test {
     function test_recordRefusesAManifestForAnotherChain() public {
         Keyfleet fleet = _deployAndAddConsumer(_manifest());
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.chainId = ETHEREUM_CHAIN_ID;
+        manifest.chainId = BASE_CHAIN_ID;
 
         _expectRecordRefused(
-            manifest,
-            fleet,
-            abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, ETHEREUM_CHAIN_ID, ANVIL_CHAIN_ID)
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, BASE_CHAIN_ID, ANVIL_CHAIN_ID)
         );
     }
 
-    /// @dev Invariant: an Ethereum record never publishes a USDC other than Ethereum's own, even
+    /// @dev Invariant: a Base record never publishes a USDC other than Base's own, even
     /// for a release that was deployed correctly.
-    function test_recordOnEthereumRefusesAnyUsdcButEthereums() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    function test_recordOnBaseRefusesAnyUsdcButBaseUsdc() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         Keyfleet fleet = _deployAndAddConsumer(manifest);
 
         manifest.usdc = address(usdc);
         _expectRecordRefused(
-            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.UsdcNotEthereumUsdc.selector, address(usdc))
+            manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc))
         );
     }
 
@@ -300,7 +298,7 @@ contract RecordKeyfleetsTest is Test {
     }
 
     /// @dev Deploys, then adds the fleet to the manifest's subscription as its owner does between
-    /// the two steps: the Safe on Ethereum, the test contract on a lab chain.
+    /// the two steps: the Safe on Base, the test contract on a lab chain.
     function _deployAndAddConsumer(KeyfleetManifest.Manifest memory manifest) private returns (Keyfleet fleet) {
         fleet = deployer.deploy(manifest);
         (,,, address owner,) = manifest.vrf.coordinator.getSubscription(manifest.vrf.subscriptionId);
@@ -334,22 +332,22 @@ contract RecordKeyfleetsTest is Test {
         return RecordKeyfleets.BroadcastSummary({fleet: fleet, deploymentBlock: DEPLOYMENT_BLOCK});
     }
 
-    /// @dev An Ethereum manifest on Ethereum, paid in Ethereum USDC and answered by Ethereum's VRF
-    /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code, with the
+    /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
+    /// coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
     /// Regents Safe as its treasury and the subscription's owner.
-    function _ethereumManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
-        vm.chainId(ETHEREUM_CHAIN_ID);
-        vm.etch(deployer.ETHEREUM_USDC(), address(usdc).code);
-        MockVRFCoordinatorV2Plus ethereum = MockVRFCoordinatorV2Plus(deployer.ETHEREUM_VRF_COORDINATOR());
-        vm.etch(address(ethereum), address(vrf).code);
-        ethereum.addProvingKey(deployer.ETHEREUM_VRF_KEY_HASH(), 200 gwei);
+    function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
+        vm.chainId(BASE_CHAIN_ID);
+        vm.etch(deployer.BASE_USDC(), address(usdc).code);
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(deployer.BASE_VRF_COORDINATOR());
+        vm.etch(address(base), address(vrf).code);
+        base.addProvingKey(deployer.BASE_VRF_KEY_HASH_2_GWEI(), 2 gwei);
         manifest = _manifest();
-        manifest.chainId = ETHEREUM_CHAIN_ID;
-        manifest.usdc = deployer.ETHEREUM_USDC();
-        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(ethereum));
-        manifest.vrf.subscriptionId = ethereum.createSubscription();
-        ethereum.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
-        manifest.vrf.keyHash = deployer.ETHEREUM_VRF_KEY_HASH();
+        manifest.chainId = BASE_CHAIN_ID;
+        manifest.usdc = deployer.BASE_USDC();
+        manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(base));
+        manifest.vrf.subscriptionId = base.createSubscription();
+        base.openSubscription(manifest.vrf.subscriptionId, REGENTS_SAFE);
+        manifest.vrf.keyHash = deployer.BASE_VRF_KEY_HASH_2_GWEI();
         manifest.protocolTreasury = REGENTS_SAFE;
     }
 

@@ -14,7 +14,7 @@ import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoor
 import {VRFV2PlusClient} from "../src/vendor/chainlink/libraries/VRFV2PlusClient.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev Reports six decimals, as Ethereum USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract RevealUsdc is ERC20 {
     constructor() ERC20("USD Coin", "USDC") {}
 

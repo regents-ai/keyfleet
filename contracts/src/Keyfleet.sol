@@ -201,7 +201,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     KeyfleetPresets.Preset public immutable PRESET;
     /// @notice The USDC every primary purchase is paid in, and the one income token. The
     /// constructor requires it to report six decimals; the deployment scripts require it to be
-    /// `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` on Ethereum.
+    /// native USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
     IERC20 public immutable USDC;
     /// @notice Where `sendProtocolShare` sends the 10% protocol share of every purchase: the Regents
     /// Safe.
@@ -213,8 +213,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     KeyfleetVotes public immutable VOTES;
     /// @notice The shard record this fleet deployed for itself.
     KeyfleetShards public immutable SHARDS;
-    /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On
-    /// Ethereum the deployment scripts require `0xD7f86b4b8Cae7D942340FF628F82735b7a20893a`.
+    /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On Base
+    /// the deployment scripts require `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`.
     IVRFCoordinatorV2Plus public immutable VRF_COORDINATOR;
     /// @notice The VRF subscription every request is paid from, in ETH.
     uint256 public immutable VRF_SUBSCRIPTION_ID;
@@ -390,7 +390,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Buys the next primary key with USDC.
     /// @dev The caller must have approved this contract for the gross price. No balance-delta check
     /// is taken around the pull: `USDC` is fixed at construction, where it must report six
-    /// decimals, and the deployment scripts pin it to USDC on Ethereum, which is neither rebasing
+    /// decimals, and the deployment scripts pin it to native USDC on Base, which is neither rebasing
     /// nor fee-charging, so the transferred amount is the credited amount by construction. A paused
     /// USDC, or one that blacklists the caller or this fleet, stops purchases until it lifts; that
     /// is accepted.

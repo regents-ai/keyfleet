@@ -10,7 +10,7 @@ purchases and its money. Each fleet deploys its own `KeyfleetRewards` ledger,
 its own `KeyfleetVotes` controller and its own `KeyfleetShards` record in its
 constructor, so a fleet and its three companions are born bound to each other.
 No contract is shared between fleets, and no contract has an administrator, an
-upgrade path, a pause or a setter. The fleets live on Ethereum (chain 1).
+upgrade path, a pause or a setter. The fleets live on Base (chain 8453).
 
 ## Status
 
@@ -18,7 +18,7 @@ Decided by the founder on 27, 28 and 29 September 2026, and what the code on
 this branch does:
 
 - Fleets are fully owned by their key holders. Regents takes 10% of each key
-  purchase, once, in USDC, sent to the Regents Safe on Ethereum. Keyfleet takes
+  purchase, once, in USDC, sent to the Regents Safe on Base. Keyfleet takes
   nothing from money a fleet receives afterwards.
 - Income in USDC is paid 100% to the keys. Every other token a fleet holds is
   shared money, spent only by a vote. There is no token launch.
@@ -46,19 +46,20 @@ this branch does:
 On hold or not yet done:
 
 - Key sales stay off until the founder explicitly says so, and not before these
-  contracts are complete and deployed on Ethereum.
-- The Regents Safe address on Ethereum is not yet chosen; every deployment takes
-  it as a required input with no default.
+  contracts are complete and deployed on Base.
+- Every deployment takes the protocol treasury as a required input with no
+  default, and on Base refuses anything but the Regents Safe
+  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`.
 - Before any deploy: an outside audit and the founder's go.
 - Deferred until each fleet type is next: Fibonacci late-entry capture (a
   level that completes shares in income that was waiting before it) and the
   Cascade reserve of a level that never completes.
-- The purchase and send gas figures on a fork of Ethereum have not been
-  measured; the figures below are from the suite's stand-ins.
+- The purchase and send gas figures on a fork of Base have not been measured;
+  the figures below are from the suite's stand-ins.
 - Each key's Chainlink VRF request is paid in ETH from the Regents subscription
-  on the 200 gwei Ethereum lane. The VRF cost of one key on Ethereum has not
-  been measured against the 10% Regents takes from that key's sale (80 cents on
-  the first Classic key).
+  on Base's 2 gwei lane (the 30 gwei lane is also allowed). The VRF cost of one
+  key on Base has not been measured against the 10% Regents takes from that
+  key's sale (80 cents on the first Classic key).
 
 ## Presets
 
@@ -178,9 +179,8 @@ created. A zero receiver mints to the caller. The deadline, the supply bound and
 the price against `maxPrice` are checked before any token moves, because the
 displayed next key is not reserved. The buyer must have approved the fleet for
 the gross price in USDC. No balance-delta check is taken around the pull: USDC is
-fixed at deployment and on Ethereum the deployment scripts pin it to Ethereum
-USDC. A
-paused USDC, or one that blocks the buyer or the fleet, stops purchases until it
+fixed at deployment and on Base the deployment scripts pin it to native Base
+USDC. A paused USDC, or one that blocks the buyer or the fleet, stops purchases until it
 lifts; that is accepted.
 
 Within a purchase the order is fixed: the USDC is pulled, the split is taken from
@@ -235,9 +235,9 @@ USDC and a stand-in coordinator it measured, in execution:
 | Classic | 336,629 |
 
 The suite asserts a ceiling of 509,000, the level-40 Cascade figure plus a fifth.
-That is a regression bound on the fleet's own work. Real Ethereum USDC is a proxy
+That is a regression bound on the fleet's own work. Real Base USDC is a proxy
 and costs more per transfer, so the figures to publish must be measured on a
-fork of Ethereum.
+fork of Base.
 
 ### The protocol share
 
@@ -463,16 +463,19 @@ beside them.
 
 Each fleet is deployed and recorded on its own, named by `KEYFLEET_FLEET`
 (`syndicate`, `cascade`, `classic` or `accelerant`) beside `KEYFLEET_MANIFEST`
-(`ethereum` or `anvil`). There is nothing shared to deploy first.
+(`base` or `anvil`). There is nothing shared to deploy first.
 
 `script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. The
 protocol treasury comes from `KEYFLEET_PROTOCOL_TREASURY`, never from the
 manifest file, and has no default. It refuses a manifest whose `chainId` is not
-the chain it runs on; on Ethereum, a USDC other than
-`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`, a VRF coordinator other than
-`0xD7f86b4b8Cae7D942340FF628F82735b7a20893a` or a gas lane other than the 200
-gwei lane `0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9`
-(from Chainlink's VRF v2.5 supported-networks page); on any chain, a zero
+the chain it runs on. On Base it refuses a USDC other than native Base USDC
+`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, a VRF coordinator other than
+`0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`, a gas lane other than the 2 gwei
+lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab` or
+the 30 gwei lane
+`0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70` (from
+Chainlink's VRF v2.5 supported-networks page), and a protocol treasury other
+than the Regents Safe. On any chain it refuses a zero
 protocol treasury, a coordinator that holds no code, a gas lane or subscription
 the coordinator does not know, a zero trait table hash and an unknown fleet
 name.
@@ -482,8 +485,8 @@ because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
 named fleet's, any value that differs from the manifest, a fleet the subscription
-does not list as a consumer and, on Ethereum, a subscription the protocol
-treasury does not own. Only then does it write
+does not list as a consumer and, on Base, a subscription the Regents Safe does
+not own. Only then does it write
 `deployments/<name>.<fleet>.deployed.json`, the fleet's published manifest: the
 fleet, ledger, controller and shard record addresses, the fleet's code hash, the
 deployment block, the protocol treasury, the supply limits of Classic and
@@ -491,7 +494,7 @@ Accelerant, the reference price, the fee basis points, the randomness terms, the
 trait table hash, the income token and the terms the release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads
-`deployments/ethereum.json` and `deployments/anvil.json`. Their cores take and return
+`deployments/base.json` and `deployments/anvil.json`. Their cores take and return
 values, so the suite runs the real deployment and the real record against local
 mocks without touching a file. [../docs/deployment.md](../docs/deployment.md) is
 how to run each step and what each refuses.
@@ -506,9 +509,11 @@ Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, income, treasury, voting, shard, reveal,
 trait-draw and deployment tests. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from
-`test/fork/KeyfleetRevealEthereumFork.t.sol`, which skips itself unless
-`ETHEREUM_RPC_URL` is set and then runs a fleet against the real Chainlink
-coordinator and USDC on a fork of Ethereum.
+`test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
+is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,
+the Regents Safe, the coordinator and both gas lanes) and runs a fleet against
+the real Chainlink coordinator and USDC on a fork of Base. The public
+`https://mainnet.base.org` is enough for it.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run
 `git submodule update --init`.

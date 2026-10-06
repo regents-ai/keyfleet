@@ -10,7 +10,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev Reports six decimals, as Ethereum USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
@@ -25,7 +25,7 @@ contract MockToken is ERC20 {
 
 contract DeployKeyfleetsTest is Test {
     uint256 private constant ANVIL_CHAIN_ID = 31_337;
-    uint256 private constant ETHEREUM_CHAIN_ID = 1;
+    uint256 private constant BASE_CHAIN_ID = 8453;
     address private constant SAFE = address(0x5AFE);
     address private constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
     address private constant BUYER = address(0xB0B);
@@ -105,9 +105,9 @@ contract DeployKeyfleetsTest is Test {
 
     function test_manifestForAnotherChainIsRefused() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        manifest.chainId = ETHEREUM_CHAIN_ID;
+        manifest.chainId = BASE_CHAIN_ID;
 
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, ETHEREUM_CHAIN_ID, ANVIL_CHAIN_ID));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, BASE_CHAIN_ID, ANVIL_CHAIN_ID));
         script.deploy(manifest);
     }
 
@@ -121,38 +121,43 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: on Ethereum the only USDC a release can be paid in is Ethereum USDC, whose
+    /// @dev Invariant: on Base the only USDC a release can be paid in is Base USDC, whose
     /// six decimals every key price assumes; a look-alike never reaches a fleet.
-    function test_ethereumManifestNamingAnyUsdcButEthereumUsdcIsRefused() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    function test_baseManifestNamingAnyUsdcButBaseUsdcIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.usdc = address(usdc);
 
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.UsdcNotEthereumUsdc.selector, address(usdc)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc)));
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: on Ethereum the protocol share of every fleet goes to the Regents Safe and
+    /// @dev Invariant: on Base the protocol share of every fleet goes to the Regents Safe and
     /// nowhere else.
-    function test_ethereumManifestNamingAnyTreasuryButTheRegentsSafeIsRefused() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    function test_baseManifestNamingAnyTreasuryButTheRegentsSafeIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.protocolTreasury = SAFE;
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.ProtocolTreasuryNotRegentsSafe.selector, SAFE));
         script.deploy(manifest);
     }
 
-    /// @dev Invariant: on Ethereum the only randomness a release can use is Chainlink's own
-    /// Ethereum coordinator on its 200 gwei gas lane.
-    function test_ethereumManifestNamingAnyVrfCoordinatorOrGasLaneButEthereumsIsRefused() public {
-        KeyfleetManifest.Manifest memory manifest = _ethereumManifest();
+    /// @dev Invariant: on Base the only randomness a release can use is Chainlink's own Base
+    /// coordinator on its 2 gwei or 30 gwei gas lane.
+    function test_baseManifestNamingAnyVrfCoordinatorOrGasLaneButBaseOnesIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(vrf));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfCoordinatorNotEthereum.selector, address(vrf)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfCoordinatorNotBase.selector, address(vrf)));
         script.deploy(manifest);
 
-        manifest = _ethereumManifest();
+        manifest = _baseManifest();
         manifest.vrf.keyHash = KEY_HASH;
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfKeyHashNotEthereum.selector, KEY_HASH));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.VrfKeyHashNotBase.selector, KEY_HASH));
         script.deploy(manifest);
+
+        manifest = _baseManifest();
+        manifest.vrf.keyHash = script.BASE_VRF_KEY_HASH_30_GWEI();
+        MockVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR()).addProvingKey(manifest.vrf.keyHash, 30 gwei);
+        assertGt(address(script.deploy(manifest)).code.length, 0, "The 30 gwei lane is the other lane allowed");
     }
 
     function test_vrfCoordinatorWithoutCodeIsRefused() public {
@@ -228,7 +233,7 @@ contract DeployKeyfleetsTest is Test {
         script.parseManifest(json, "Classic");
     }
 
-    /// @dev The committed manifests name Ethereum's coordinator and 200 gwei gas lane, and carry a
+    /// @dev The committed manifests name Base's coordinator and 2 gwei gas lane, and carry a
     /// zero subscription and a zero trait table until the operator writes in the subscription the
     /// Safe owns and the final trait table's hash. Until then no fleet can be deployed; with both
     /// written in, every other refusal passes for Classic, the fleet that opens first. Both take the
@@ -238,12 +243,10 @@ contract DeployKeyfleetsTest is Test {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
         assertEq(anvil.protocolTreasury, SAFE, "The treasury comes from the environment");
         vm.etch(anvil.usdc, address(usdc).code);
-        uint256 labSubscription = _standInForEthereumCoordinator();
-        assertEq(anvil.usdc, script.ETHEREUM_USDC(), "The lab forks Ethereum's USDC");
-        assertEq(
-            address(anvil.vrf.coordinator), script.ETHEREUM_VRF_COORDINATOR(), "The lab forks Ethereum's coordinator"
-        );
-        assertEq(anvil.vrf.keyHash, script.ETHEREUM_VRF_KEY_HASH(), "The lab uses Ethereum's gas lane");
+        uint256 labSubscription = _standInForBaseCoordinator();
+        assertEq(anvil.usdc, script.BASE_USDC(), "The lab forks Base's USDC");
+        assertEq(address(anvil.vrf.coordinator), script.BASE_VRF_COORDINATOR(), "The lab forks Base's coordinator");
+        assertEq(anvil.vrf.keyHash, script.BASE_VRF_KEY_HASH_2_GWEI(), "The lab uses Base's gas lane");
 
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
         script.deploy(anvil);
@@ -255,41 +258,41 @@ contract DeployKeyfleetsTest is Test {
         assertGt(address(lab).code.length, 0, "The anvil manifest deploys on its chain");
 
         vm.setEnv("KEYFLEET_PROTOCOL_TREASURY", vm.toString(REGENTS_SAFE));
-        KeyfleetManifest.Manifest memory ethereum = script.readManifest("ethereum", "classic");
-        vm.chainId(ETHEREUM_CHAIN_ID);
+        KeyfleetManifest.Manifest memory base = script.readManifest("base", "classic");
+        vm.chainId(BASE_CHAIN_ID);
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
-        script.deploy(ethereum);
-        ethereum.vrf.subscriptionId = labSubscription;
-        ethereum.traitTableHash = TRAIT_TABLE;
-        Keyfleet release = script.deploy(ethereum);
-        assertGt(address(release).code.length, 0, "The Ethereum manifest deploys");
+        script.deploy(base);
+        base.vrf.subscriptionId = labSubscription;
+        base.traitTableHash = TRAIT_TABLE;
+        Keyfleet release = script.deploy(base);
+        assertGt(address(release).code.length, 0, "The Base manifest deploys");
         assertEq(release.PROTOCOL_TREASURY(), REGENTS_SAFE, "And sends its protocol share to the Regents Safe");
     }
 
-    /// @dev Puts the mock coordinator's code at Ethereum's coordinator address, registers
-    /// Ethereum's 200 gwei gas lane there and opens a subscription on it, as the operator does on a
+    /// @dev Puts the mock coordinator's code at Base's coordinator address, registers
+    /// Base's 2 gwei gas lane there and opens a subscription on it, as the operator does on a
     /// fork.
-    function _standInForEthereumCoordinator() private returns (uint256 ethereumSubscription) {
-        MockVRFCoordinatorV2Plus ethereum = MockVRFCoordinatorV2Plus(script.ETHEREUM_VRF_COORDINATOR());
-        vm.etch(address(ethereum), address(vrf).code);
-        ethereum.addProvingKey(script.ETHEREUM_VRF_KEY_HASH(), 200 gwei);
-        ethereumSubscription = ethereum.createSubscription();
+    function _standInForBaseCoordinator() private returns (uint256 baseSubscription) {
+        MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
+        vm.etch(address(base), address(vrf).code);
+        base.addProvingKey(script.BASE_VRF_KEY_HASH_2_GWEI(), 2 gwei);
+        baseSubscription = base.createSubscription();
     }
 
-    /// @dev An Ethereum manifest on Ethereum, paid in Ethereum USDC and answered by Ethereum's VRF
-    /// coordinator on its 200 gwei lane, all stood in for by the local mocks' code, with the
+    /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
+    /// coordinator on its 2 gwei lane, all stood in for by the local mocks' code, with the
     /// Regents Safe as its treasury.
-    function _ethereumManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
-        vm.chainId(ETHEREUM_CHAIN_ID);
-        vm.etch(script.ETHEREUM_USDC(), address(usdc).code);
-        uint256 ethereumSubscription = _standInForEthereumCoordinator();
+    function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
+        vm.chainId(BASE_CHAIN_ID);
+        vm.etch(script.BASE_USDC(), address(usdc).code);
+        uint256 baseSubscription = _standInForBaseCoordinator();
         manifest = _manifest();
-        manifest.chainId = ETHEREUM_CHAIN_ID;
-        manifest.usdc = script.ETHEREUM_USDC();
+        manifest.chainId = BASE_CHAIN_ID;
+        manifest.usdc = script.BASE_USDC();
         manifest.vrf = Keyfleet.Randomness({
-            coordinator: IVRFCoordinatorV2Plus(script.ETHEREUM_VRF_COORDINATOR()),
-            subscriptionId: ethereumSubscription,
-            keyHash: script.ETHEREUM_VRF_KEY_HASH()
+            coordinator: IVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR()),
+            subscriptionId: baseSubscription,
+            keyHash: script.BASE_VRF_KEY_HASH_2_GWEI()
         });
         manifest.protocolTreasury = REGENTS_SAFE;
     }
