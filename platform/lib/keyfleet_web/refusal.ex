@@ -110,7 +110,7 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was written. Use a new idempotency_key for a new post."},
     "reply_not_here" =>
       {"The post you replied to isn't in this room.",
-       "Reply only to posts in the same room or Key thread."},
+       "Reply only to posts in the same room or on the same wall."},
     "invalid_message" =>
       {"This post doesn't fit the room.",
        "A post is 1 to 4,000 characters. Correct it, then send it again."},

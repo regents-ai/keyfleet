@@ -441,7 +441,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "a visitor is asked to sign in", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
 
-      assert render(view) =~ "Everyone can read. Sign in to write to Key 12."
+      assert render(view) =~ "Everyone can read. Sign in to post on Key 12’s wall."
       assert has_element?(view, "#key-profile [data-account-target='sign-in']")
       refute has_element?(view, "#key-profile-composer")
     end
