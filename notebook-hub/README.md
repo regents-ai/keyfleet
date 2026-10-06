@@ -173,10 +173,9 @@ reachable from Keyfleet's server only through one private (Flycast) address.
 - **The hub must not share a web address with keyfleet.ai.** In this setup,
   notebook pages are served from the hub's own web address. A notebook's page
   can therefore run scripts as that address, which is what
-  `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED` acknowledges. Not even a subdomain
-  of keyfleet.ai will do, because a page there could set cookies that
-  keyfleet.ai receives. The hub needs a separate registrable domain, which is
-  Sean's decision.
+  `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED` acknowledges. Sean chose
+  `<fleet>.notebooks.keyfleet.ai` (4 Oct 2026). Keyfleet's own sign-in cookie
+  is a `__Host-` cookie, so a notebook page cannot set or replace it.
 - **Each fleet has its own private network.** A fleet's notebook machines can
   reach that fleet's hub and the fleet's other notebook machines, and nothing
   else on Fly's private network. The hub's sign-in and each machine's helper
