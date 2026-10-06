@@ -1,68 +1,87 @@
 # Lit Protocol for KeyFleet: one-page scope
 
-5 October 2026. Research only. No contract, site or account was changed.
+6 October 2026, rewritten from Lit's current official documents. Research only:
+no contract, site, dependency or account was changed. Each claim names its source
+in brackets; the sources are listed at the end. These are Lit's own statements,
+not an audit by us.
 
-## The headline
+## What Lit is today
 
-The Lit Protocol most people know no longer exists. On 1 April 2026 Lit replaced its network of nodes with a hosted service called Chipotle ("Lit v3"):
+- Lit's current network, "Chipotle" (Lit v3), went live on 1 April 2026 [S1]. The
+  previous network, Naga, ended the same day [S2]. Naga had itself gone live in
+  January 2026 [S3] and replaced Datil, which shut down on 25 February 2026 [S3a].
+  That is two network switches in about ten weeks.
+- Code runs in secure hardware (a TEE), and permissions live in Lit's own contracts
+  on Base [S4, S5]. The older SDK no longer works because its networks are gone.
+  Lit says most old features "have equivalent functionality" built from the new
+  pieces [S6].
+- Conditions are now written as a small JavaScript program, a "Lit Action". It may
+  "verify a signature, read a smart contract state" before it encrypts, decrypts
+  or signs [S7]. Any EVM chain can be read, Ethereum mainnet included [S6].
+- Running an Action needs a Lit API key [S8]. That key can be a "usage key" handed
+  to end users that only pays for the run, while "authority comes from signatures
+  the action verifies, never from the key" [S9]. So a holder's or agent's own
+  wallet signature can be what grants access.
+- Encryption and decryption happen inside the secure hardware [S7]. Lit says this
+  is "not a drop-in replacement" for its old access-condition system when
+  decryption must be tied to on-chain conditions [S7].
 
-- Lit's code runs inside secure hardware hosted by Phala.
-- Permissions are kept in Lit's own contracts on Base.
-- The old access conditions, session signatures and capacity credits are gone. A small JavaScript program (a "Lit Action") now decides who gets in.
-- Only someone holding an API key from the account owner can run an Action. A wallet cannot call it directly.
+## Self-hosting, governance, licence and keys
 
-This is the fourth Lit network since 2024. Keys made on one network were not carried to the next: in February 2026 users had to make new ones.
+| Topic | What Lit says | What it leaves open |
+| --- | --- | --- |
+| Self-hosting | Documented: you run the API server, Actions runtime, dashboard and contracts yourself, on any secure-hardware host that dstack supports: bare-metal Intel TDX or AMD SEV-SNP, Phala Cloud, Google confidential machines or AWS Nitro Enclaves [S10]. | Fly offers none of these hosts, so a self-hosted Lit would break our rule that every server runs on Fly. |
+| Upgrades, hosted | A change needs 2 of 4 Lit-held signers, with no waiting period [S11]. The approved system images are governed by a separate Phala-held Safe [S11]. | — |
+| Upgrades, self-hosted | Your own Safe owns upgrades; "There is no forced upgrade" [S10]. | Who governs the system-image and root-key layer in a self-hosted deployment. |
+| Licence | The docs call Chipotle "open source" [S10]. | The repository has no licence file and its README says "All rights reserved"; several parts declare Apache-2.0 [S12]. There is no single clear licence. |
+| Root key | Held by Phala's key service; only approved builds can use it [S5]. | How the root key is backed up or recovered, hosted or self-hosted. |
+| Past migrations | "PKPs will not be migrated from Datil to Naga"; users had to make new keys [S3a]. | Whether anything carried from Naga to Chipotle. |
+| Agent wallets | Vincent Yield users were told to withdraw their funds before Datil shut down on 25 February 2026 [S3a]. The current docs don't mention Vincent. | Any successor; the earlier claim that Keychain replaced it was unsupported. |
 
 ## What Lit could do for KeyFleet
 
-| Use | What it would do | Contract change | Fit |
+| Use | How | Contract change | Fit |
 | --- | --- | --- | --- |
-| **Access control** | Only a key's holder, or an agent with a live shard, can open a fleet's private files. The Action reads `ownerOf` and `shardOf` on Ethereum, checks the caller's signature, then opens the file. | None. Both reads already exist. | Weak. marimo, dDocs and the code store all need the plain text on a live server, so KeyFleet's own check runs anyway. Lit helps only with files stored at rest. |
-| **Signing** | A signing key per fleet or per key, held by Lit and used only when the Action's check is met. | None. | Weak. Agents already sign with their own wallets. Such a key must never hold money, because the owner presses every money action. Key recovery is not documented. |
-| **Custody / delegated powers** | Lit's agent product (Vincent) gave agents limited powers over a wallet. | Would need one if it touched the fleet's money. | Not available. Vincent ran on a network that shut down in February 2026. Its successor stores passwords and API keys only. KeyFleet's rule is that the owner signs every money action anyway. |
+| **Fleet files usable outside our server** | An Action reads `ownerOf` and `shardOf` on Ethereum, checks the caller's wallet signature, then decrypts. Holders and agents could open a fleet's stored files without trusting KeyFleet's server. | None: both reads exist. | **Useful but narrow.** It suits the "home base, not the edge of the world" direction. marimo, dDocs and the code store still need the plain text on our server, so our own key-and-shard check still runs for them. |
+| **Bounded agent operations** | A key held in Lit signs only when an Action's rules pass: a budget cap, an approved vote, an expiry. | Depends on the authority model; anything touching the treasury does. | **The strongest fit**, but it waits on the founder's long-term agent-authority decision and on the current hold on KeyFleet contracts. |
+| **Custody for agents** | No current Lit product. | — | Not available. |
 
-## On chain and off
+**Cost** [S13]:
 
-- **On chain:** nothing changes in the KeyFleet contracts for any use above. Lit's own permission records live on Base and would be set up through Lit's dashboard or API.
-- **Off chain:**
-  - KeyFleet's server would hold a Lit API key and pass requests through.
-  - One Action would be written in JavaScript and stored on IPFS, with the Ethereum RPC address fixed inside it so a caller can't point it at a fake chain.
-  - Files would be encrypted before they are stored.
-- **Effort:** about 3 to 5 days for access control on stored files. Signing is about the same.
+- $0.01 per second of Action time; read-only calls are free.
+- Prepaid credits from $5, by card or crypto through Stripe.
+- An optional 25% discount for paying in Lit's own token.
+- A protected read costs about a cent.
 
-## Cost
+**Effort:** about 3 to 5 days for the first use. The second needs its rules designed first.
 
-- $0.01 per second of Action time, 1-second minimum, so about **$0.01 per protected read**. Plain reads of Lit's records are free.
-- Prepaid credits from $5, by card or crypto through Stripe. There is no free tier and no Lit token is needed.
+## Decision for Sean (HQ 79)
 
-## Risks
+**Should KeyFleet use Lit, and for what?**
 
-- **Trust:** Lit's hardware sees the plain text, and changes to Lit's code are approved by 2 of 4 Lit-held signers, with no waiting period.
-- **Short-lived networks:** four networks in about two years, and keys were lost at one switch.
-- **Lock-in:** Actions are written in Lit's own JavaScript format. The self-hosting docs call Chipotle open source, but its repository says "All rights reserved".
-- **Not confirmed:** how many machines run the service, and how its root key is backed up.
+- Using hosted Lit adds Lit's account, upgrade signers and root-key custody to KeyFleet's trust.
+- Self-hosting would need confidential hardware outside Fly.
+- No contract changes for options a or b.
 
-## Decisions for Sean
+Options:
 
-1. **Should KeyFleet use Lit at all, given that it is now a hosted service?**
-   - a) No, for now. KeyFleet's own key-and-shard check keeps guarding every read. Revisit if Lit ships a self-hostable, openly licensed network. *(recommended)*
-   - b) Access control on stored fleet files only: about 3 to 5 days and about $0.01 per read, with no contract change.
-   - c) Add signing keys as well, on top of b.
-2. **If b or c: which account pays?** A Regents Labs Lit account funded by card. This needs Sean to create the account and issue the API key.
-
-No contract change is proposed. Any later change that touches keys, shards or money comes back to Sean before it is built.
+- a) **Not now.** Our key-and-shard check keeps guarding every read. Lit becomes the lead candidate for bounded agent operations, revisited when that authority model is decided. *(recommended)*
+- b) **A hosted trial for fleet files usable outside our server.** About 3 to 5 days and about a cent per read. Sean creates a Regents Labs Lit account and API key.
+- c) **b, plus a rule-gated signing key for agent operations.** This is built only after the authority model is decided and the contract hold is lifted.
 
 ## Sources
 
-- Lit v3 launch: https://spark.litprotocol.com/lit-v3-is-live-confidential-compute-and-key-management-in-one-api/
-- Naga sunset: https://spark.litprotocol.com/naga-network-sunset/
-- Architecture: https://developer.litprotocol.com/architecture/index.md
-- Auth model: https://developer.litprotocol.com/architecture/authModel.md
-- Encryption: https://developer.litprotocol.com/lit-actions/migration/encryption.md
-- Limits: https://developer.litprotocol.com/lit-actions/limits.md
-- Pricing: https://developer.litprotocol.com/management/pricing.md
-- Upgrade governance: https://developer.litprotocol.com/architecture/verification/upgrade-governance.md
-- Self-hosting: https://developer.litprotocol.com/architecture/self-hosting.md
-- Chipotle repository: https://github.com/LIT-Protocol/chipotle
-- Keychain: https://developer.litprotocol.com/keychain/index.md
-- Vincent: https://heyvincent.ai/ and https://github.com/LIT-Protocol/Vincent
+- S1: https://spark.litprotocol.com/lit-v3-is-live-confidential-compute-and-key-management-in-one-api/
+- S2: https://spark.litprotocol.com/naga-network-sunset/
+- S3: https://spark.litprotocol.com/v1-live/
+- S3a: https://spark.litprotocol.com/sunsetting-lit-v0-datil-migrate-to-v1-naga-within-30-days/ (now unpublished; read via the Wayback Machine copy of 18 February 2026)
+- S4: https://spark.litprotocol.com/introducing-lit-protocol-v3-chipotle/
+- S5: https://developer.litprotocol.com/architecture/authModel.md
+- S6: https://developer.litprotocol.com/lit-actions/migration/changes.md
+- S7: https://developer.litprotocol.com/lit-actions/migration/encryption.md
+- S8: https://developer.litprotocol.com/management/api_keys.md
+- S9: https://developer.litprotocol.com/lit-actions/derived-actions.md
+- S10: https://developer.litprotocol.com/architecture/self-hosting.md
+- S11: https://developer.litprotocol.com/architecture/verification/upgrade-governance.md
+- S12: https://github.com/LIT-Protocol/chipotle (README and component manifests, commit ad7a74f, 2 October 2026)
+- S13: https://developer.litprotocol.com/management/pricing.md and https://developer.litprotocol.com/management/litkey.md
