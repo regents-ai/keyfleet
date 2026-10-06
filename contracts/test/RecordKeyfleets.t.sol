@@ -69,9 +69,9 @@ contract RecordKeyfleetsTest is Test {
             "Metadata base read from the fleet"
         );
 
-        address[] memory incomeTokens = vm.parseJsonAddressArray(json, ".incomeTokens");
-        assertEq(incomeTokens.length, 1, "One income token");
-        assertEq(incomeTokens[0], address(usdc), "USDC");
+        address[] memory rewardTokens = vm.parseJsonAddressArray(json, ".rewardTokens");
+        assertEq(rewardTokens.length, 1, "One token the ledger pays");
+        assertEq(rewardTokens[0], address(usdc), "USDC");
 
         assertEq(vm.parseJsonUint(json, ".bounds.classicSupply"), 1024, "Classic keys");
         assertEq(vm.parseJsonUint(json, ".bounds.accelerantMaxKeys"), 2000, "Accelerant limit");

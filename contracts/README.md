@@ -17,17 +17,19 @@ setter. The fleets live on Base (chain 8453).
 
 ## Status
 
-Decided by the founder on 27, 28 and 29 September 2026, and what the code on
+Decided by the founder on 27, 28 and 29 September and 6 October 2026, and what the code on
 this branch does:
 
 - Fleets are fully owned by their key holders. Regents takes 10% of each key
   purchase, once, in USDC, deposited into REGENT revenue staking on Base
   (`0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`) for REGENT stakers. Keyfleet
   takes nothing from money a fleet receives afterwards.
-- Income in USDC is paid 100% to the keys. The capital part of every purchase,
-  a completed Cascade level's surplus and every other token a fleet receives go
-  to the fleet's treasury. Nothing can spend the treasury yet: spending by an
-  approved proposal's exact calls is a later step. There is no token launch.
+- The fleet's treasury is its one payment address. All USDC a fleet receives
+  outside a purchase is treasury capital, as is every other token, the capital
+  part of every purchase and a completed Cascade level's surplus. Money sent to
+  the fleet contract itself by mistake is forwarded to the treasury. Nothing can
+  spend the treasury yet: the daily split to the keys and spending by an
+  approved proposal's exact calls are later steps. There is no token launch.
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
@@ -65,9 +67,8 @@ On hold or not yet done:
   traits of sixteen values each, every trait's weights adding up to 1,000) and a
   VRF subscription of 0, so a Base deployment is refused until the Regents
   subscription id is written in.
-- Deferred until each fleet type is next: Fibonacci late-entry capture (a
-  level that completes shares in income that was waiting before it) and the
-  Cascade reserve of a level that never completes.
+- Deferred until the Cascade fleet type is next: the reserve of a level that
+  never completes.
 - The purchase and send gas figures on a fork of Base have not been measured;
   the figures below are from the suite's stand-ins.
 - Each key's Chainlink VRF request is paid in ETH from the Regents subscription
@@ -138,8 +139,10 @@ share for REGENT stakers. The rest depends on the preset:
 `KeyfleetRewards` is the per-fleet reward ledger, permanently bound to its fleet.
 The fleet is the only writer: it enrolls keys into cohorts, allocates tokens to a
 cohort, credits an address directly, and settles a key. It pays exactly one
-income token, USDC, fixed at construction. `rewardAssets()` lists it and
-`isRewardAsset(asset)` answers for one.
+token, USDC, fixed at construction: the Accelerant rebate, credited to the
+holder of the preceding key, and the Cascade repayment, allocated to the
+preceding level's cohort. `rewardAssets()` lists it and `isRewardAsset(asset)`
+answers for one.
 
 Rewards are distributed through a cumulative index per asset and cohort, so an
 allocation writes one index and never iterates over recipients. Classic and
@@ -205,7 +208,7 @@ and 49,152 bytes of deployment code per contract. Measured with
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `Keyfleet` | 15,460 | 25,681 |
+| `Keyfleet` | 14,592 | 24,764 |
 | `KeyfleetRewards` | 5,204 | 5,547 |
 | `KeyfleetShards` | 2,216 | 2,407 |
 | `KeyfleetVotes` | 9,319 | 9,665 |
@@ -243,9 +246,9 @@ may forward the key: enrollment happens before the mint.
 and Accelerant both revert once the fleet is sold out, and `maxSupply()` and
 `remainingSupply()` give the limit and count down to zero. Syndicate and Cascade
 never sell out, so on them `maxSupply()` and `remainingSupply()` revert with
-`NotFleetTechPreset` rather than answer with a stand-in number. `levelOf`,
-`holdingLimit` and `completedLevels` report the library's answers and revert
-with `NotFibonacciPreset` on Classic and Accelerant, which have no levels.
+`NotFleetTechPreset` rather than answer with a stand-in number. `levelOf` and
+`holdingLimit` report the library's answers and revert with `NotFibonacciPreset`
+on Classic and Accelerant, which have no levels.
 
 A Cascade level completes in the transaction that mints its last key, once. Level
 1 has no predecessor, so its whole reserve goes to the treasury. From level 2 the
@@ -319,56 +322,36 @@ not count as revenue there, which is why the share goes through a deposit. The
 Regents staking reader indexes deposits without filtering on the tag, so the tag
 is Keyfleet's own; the fleet in the source reference tells fleets apart.
 
-Against the stand-in staking contract the send measured 150,200 gas, all
+Against the stand-in staking contract the send measured 150,155 gas, all
 accounts cold; the suite asserts a ceiling of 181,000. Against the real staking
 contract on a fork of Base it measured 118,771 gas.
 
-### Income and the treasury
+### The treasury and money sent to the fleet
 
 The fleet itself holds only two USDC figures: `cascadeReserve` and
 `protocolShareOwed`. It holds no free capital in any token: that is all in its
-treasury, reachable as `TREASURY()`. `accountedBalance(asset)` is the sum of the
-two figures for USDC and zero for every other asset, and `surplus(asset)` is the
-fleet's balance above it: money that has arrived and not yet been sorted. Reward
-backing lives in the ledger and is not part of either.
+treasury, reachable as `TREASURY()`, which is the address anyone paying the
+fleet pays, in USDC or any other token. `accountedBalance(asset)` is the sum of
+the two figures for USDC and zero for every other asset, and `surplus(asset)` is
+the fleet's balance above it: money sent to the fleet contract itself and not yet
+forwarded. Reward backing lives in the ledger and is not part of either.
 
-There are no deposit functions. Money reaches a fleet by a plain transfer, and
-`recognizeSurplus(asset)` sorts it. Anyone may call it, and the class the money
-lands in depends only on the token:
-
-- USDC, the one income token, is moved into the ledger and allocated to the
-  keys in full, and
-  `IncomeRecognized(asset, caller, amount)` is emitted. Classic and Accelerant
-  share it equally per key minted. The Fibonacci presets share it equally across
-  the fully minted levels and then equally per key within each level; the
-  remainder of the split goes to the last completed level. While no key, or no
-  Fibonacci level, can receive it the call reverts with `NoEligibleKeys`, and an
-  amount below one atomic unit per eligible level reverts with `ZeroAmount`;
-  the balance waits for a later call.
-- Every other token is sent on to the treasury, and
-  `ForwardedToTreasury(asset, caller, amount)` is emitted.
-
-Sorting USDC on a Fibonacci fleet writes one ledger index per completed level,
-so its cost grows with the completed levels and never with the number of keys
-or holders. With every slot cold it measured, in execution:
-
-| Completed levels | Keys sold | Gas | Ceiling |
-| --- | --- | --- | --- |
-| 20 | 46,365 | 665,208 | 804,000 |
-| 30 | 5,702,884 | 964,918 | 1,164,000 |
-| 40 | 701,408,730 | 1,264,628 | 1,523,000 |
-
-About 30,000 gas per completed level. Each ceiling is the measured figure plus
-a fifth.
+There are no deposit functions. `recognizeSurplus(asset)` sends an asset's whole
+surplus to the treasury, USDC exactly as any other token, and emits
+`ForwardedToTreasury(asset, caller, amount)`. Anyone may call it at any time,
+before or after any key is sold; with nothing to forward it returns zero and
+says nothing. None of it reaches the keys directly: USDC reaches them only from
+the treasury, through the daily split of a later step.
 
 The treasury is a separate contract bound to its fleet for good. In this version
 it only receives: nothing can spend from it yet. Spending by the exact calls an
 approved proposal names, and the daily split of its USDC, come in later steps.
 The Cascade reserve, the owed protocol share and the ledger's backing are never
 in the treasury and are out of any vote's reach. The only ways USDC leaves the
-fleet itself are the protocol share sent through the treasury to staking, the capital part
-and the released Cascade surplus sent to the treasury, the Accelerant rebate,
-the Cascade repayment and income moved into the ledger. No token a fleet holds
+fleet itself are the protocol share sent through the treasury to staking, the
+capital part, the released Cascade surplus and USDC sent to the fleet forwarded to
+the treasury, and the Accelerant rebate and the Cascade repayment moved into the
+ledger. No token a fleet holds
 is ever swapped or converted. Tokens that take a fee when they move, or rebase,
 are not supported.
 
@@ -596,7 +579,8 @@ not own. Only then does it write
 fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
 deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
-trait table hash, the income token and the terms the release discloses.
+trait table hash, the token the ledger pays (`rewardTokens`) and the terms the
+release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads
 `deployments/base.json` and `deployments/anvil.json`. Their cores take and return
@@ -612,7 +596,8 @@ anvil for the anvil tests in `platform/` (`mix test.external`).
 ## Checks
 
 Run `make check-contracts` from the repository root to check formatting, build,
-and run the preset, ledger, purchase, income, treasury, voting, presence, shard,
+and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
+voting, presence, shard,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
 over random renewals, transfers, sweeps, openings and the passing of time. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from

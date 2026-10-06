@@ -58,7 +58,7 @@ abstract contract KeyfleetManifest is Script {
 
     /// @notice One fleet's deployment inputs.
     /// @param chainId The chain this manifest is for. Both steps refuse any other.
-    /// @param usdc The USDC every key is paid in, and every fleet's one income token. On Base it
+    /// @param usdc The USDC every key is paid in and every fleet's ledger pays. On Base it
     /// must be `BASE_USDC`.
     /// @param regentStaking Where every fleet's treasury deposits the 10% protocol share. On Base it
     /// must be `BASE_REGENT_REVENUE_STAKING`.

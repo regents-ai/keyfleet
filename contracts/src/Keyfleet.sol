@@ -29,12 +29,11 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// through the fleet's treasury. It is the only fee this fleet ever pays. This contract never
 /// approves a token.
 ///
-/// This contract holds no free capital. The fleet's capital lives in its `KeyfleetTreasury`: the
-/// capital part of every purchase and a completed Cascade level's released surplus are sent there
-/// in the transaction that books them. Money that reaches the fleet other than through a purchase
-/// is sorted by `recognizeSurplus`, and where it goes depends only on the token, never on who sent
-/// it or when anyone called: USDC, the one income token, goes to the keys in full by the ledger's
-/// cohort formula, and every other token is forwarded to the treasury.
+/// This contract holds no free capital. The fleet's capital lives in its `KeyfleetTreasury`, which
+/// is the fleet's one payment address: the capital part of every purchase and a completed Cascade
+/// level's released surplus are sent there in the transaction that books them, and money sent to
+/// this contract by mistake, in USDC or any other token, is forwarded there whole by
+/// `recognizeSurplus`.
 ///
 /// The fleet is five contracts. This one deploys its `KeyfleetRewards` ledger and its
 /// `KeyfleetShards` record in its own constructor, and is given the addresses its `KeyfleetVotes`
@@ -56,7 +55,8 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
 /// this contract are the owed protocol share sent through the treasury to staking, capital and released
 /// Cascade surplus sent to the fleet's treasury, the Accelerant rebate paid into the ledger, the
-/// Cascade reimbursement paid into the ledger, and income paid into the ledger for the keys.
+/// Cascade reimbursement paid into the ledger, and USDC that arrived outside a purchase forwarded to
+/// the treasury.
 contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -110,8 +110,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     error UsdcDecimalsWrong(uint8 decimals);
     /// @notice A protocol-share send with nothing owed is rejected.
     error ZeroAmount();
-    /// @notice No cohort can receive income yet: no key is minted, or no Fibonacci level is complete.
-    error NoEligibleKeys();
     /// @notice The VRF coordinator address holds no code.
     error CoordinatorMissing(address coordinator);
     /// @notice No trait table was named.
@@ -158,10 +156,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param amount The USDC sent, which was the whole owed amount.
     event ProtocolShareSent(address indexed caller, uint256 amount);
 
-    /// @notice Unaccounted USDC was paid to the keys through the ledger.
-    event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
-
-    /// @notice Another token's unaccounted balance was sent to this fleet's treasury.
+    /// @notice A token's unaccounted balance was sent to this fleet's treasury.
     event ForwardedToTreasury(address indexed asset, address indexed caller, uint256 amount);
 
     /// @notice The coordinator accepted a request for a key's random word.
@@ -190,7 +185,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     /// @notice The preset this fleet was deployed with. It can never change.
     KeyfleetPresets.Preset public immutable PRESET;
-    /// @notice The USDC every primary purchase is paid in, and the one income token. The
+    /// @notice The USDC every primary purchase is paid in, and the token the ledger pays. The
     /// constructor requires it to report six decimals; the deployment scripts require it to be
     /// native USDC on Base, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
     IERC20 public immutable USDC;
@@ -343,17 +338,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     function holdingLimit(uint256 level) public view returns (uint256) {
         if (!_isFibonacci()) revert NotFibonacciPreset();
         return KeyfleetPresets.fibonacciHoldingLimit(level);
-    }
-
-    /// @notice Fibonacci levels that are fully minted and therefore eligible for revenue.
-    /// @dev Derived from `totalMinted` alone, because token ids are contiguous and a level's last
-    /// id is fixed by the preset. Reverts on the two Fleet.Tech presets, which have no levels.
-    function completedLevels() public view returns (uint256) {
-        if (!_isFibonacci()) revert NotFibonacciPreset();
-        uint256 minted = totalMinted;
-        if (minted == 0) return 0;
-        uint256 level = KeyfleetPresets.fibonacciLevelOf(minted);
-        return KeyfleetPresets.fibonacciLevelEnd(level) == minted ? level : level - 1;
     }
 
     /// @notice Balance of an asset this fleet has already recorded a purpose for.
@@ -516,32 +500,20 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     // --- money ---------------------------------------------------------
 
-    /// @notice Sorts an asset's unaccounted balance by the token it is in.
-    /// @dev Permissionless, because it can only ever sort what nobody has a claim on: it works from
+    /// @notice Sends an asset's unaccounted balance whole to the fleet's treasury, whatever the token.
+    /// @dev Permissionless, because it can only ever move what nobody has a claim on: it works from
     /// `balanceOf(this)` minus what this fleet has already recorded a purpose for, which for USDC is
     /// the Cascade completion reserve and the owed protocol share. Reward backing sits in the ledger
     /// and is not part of this balance at all, so no recorded liability can be reclassified, an
     /// incomplete level's reserve can never be drawn on, and the owed protocol share can never be
-    /// swept into capital.
-    ///
-    /// USDC goes to the keys in full through `_allocateToKeys`, which follows the ledger's rules:
-    /// while no key, or no Fibonacci level, can receive it the call reverts with `NoEligibleKeys`,
-    /// and below one atomic unit per eligible Fibonacci level it cannot be divided and reverts with
-    /// the ledger's `ZeroAmount`; either way the balance waits for a later call. Every other token
-    /// is sent whole to the fleet's treasury. A balance of zero returns zero.
-    /// @param asset The asset to sort.
-    /// @return amount What was sorted: paid to the keys for USDC, sent to the treasury otherwise.
+    /// swept into capital. A balance of zero returns zero.
+    /// @param asset The asset to forward.
+    /// @return amount What was sent to the treasury.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 amount) {
         amount = surplus(asset);
         if (amount == 0) return 0;
-
-        if (asset == address(USDC)) {
-            _allocateToKeys(amount);
-            emit IncomeRecognized(asset, msg.sender, amount);
-        } else {
-            emit ForwardedToTreasury(asset, msg.sender, amount);
-            IERC20(asset).safeTransfer(address(TREASURY), amount);
-        }
+        emit ForwardedToTreasury(asset, msg.sender, amount);
+        IERC20(asset).safeTransfer(address(TREASURY), amount);
     }
 
     /// @notice Deposits the whole owed protocol share into REGENT revenue staking.
@@ -562,45 +534,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     }
 
     // --- internals -------------------------------------------------------
-
-    /// @dev Moves `amount` of this fleet's USDC into the ledger and allocates all of it to
-    /// the keys in the same transaction, so an obligation is never recorded without the tokens
-    /// behind it. Allocation writes one index per eligible cohort and never iterates over keys or
-    /// holders.
-    ///
-    /// Classic and Accelerant have one cohort, so the amount is shared equally by every key minted
-    /// at this moment. The two Fibonacci presets share it equally across the fully minted levels
-    /// and then equally per key within each level; an unfinished level receives nothing, and keys
-    /// minted later start at the index this allocation left behind. The remainder of the equal
-    /// split is added to the last completed level, and the ledger keeps its own division dust as
-    /// backing, so the whole amount is backed and nothing is stranded in the fleet. The cost grows
-    /// by one ledger write per completed level and never with the number of keys or holders; a
-    /// fleet needs 701 million keys sold to complete forty levels. Refused with `NoEligibleKeys`
-    /// while no key is minted or no Fibonacci level is complete.
-    ///
-    /// An amount smaller than the number of completed Fibonacci levels cannot be split equally and
-    /// reverts with the ledger's `ZeroAmount`, and waits for more.
-    function _allocateToKeys(uint256 amount) private {
-        bool fibonacci = _isFibonacci();
-        uint256 levels;
-        if (fibonacci) {
-            levels = completedLevels();
-            if (levels == 0) revert NoEligibleKeys();
-        } else if (totalMinted == 0) {
-            revert NoEligibleKeys();
-        }
-
-        USDC.safeTransfer(address(REWARDS), amount);
-
-        if (fibonacci) {
-            uint256 share = amount / levels;
-            for (uint256 level = 1; level <= levels; ++level) {
-                REWARDS.allocateToCohort(address(USDC), level, level == levels ? amount - share * (levels - 1) : share);
-            }
-        } else {
-            REWARDS.allocateToCohort(address(USDC), 0, amount);
-        }
-    }
 
     /// @dev Releases a completed Cascade level's reserve. Level 1 has no predecessor, so its whole
     /// reserve is sent to the treasury. Above that, the reserve first repays the preceding level's

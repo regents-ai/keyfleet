@@ -42,10 +42,6 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(uint8(type(KeyfleetVotes.Kind).max), 1);
     }
 
-    function test_incomeRecognizedTopic() public pure {
-        assertEq(Keyfleet.IncomeRecognized.selector, 0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13);
-    }
-
     function test_forwardedToTreasuryTopic() public pure {
         assertEq(
             Keyfleet.ForwardedToTreasury.selector, 0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81

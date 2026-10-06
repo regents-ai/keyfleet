@@ -100,14 +100,14 @@ contract KeyfleetTreasuryTest is Test {
         new KeyfleetTreasury(unbound, IRegentRevenueStaking(address(0)));
     }
 
-    /// @dev Invariant: on every preset, across sales, Cascade completions, Accelerant rebates,
-    /// income and a stray token, every unit paid or received lands in exactly one of the treasury,
-    /// the Cascade reserve, the owed share or the ledger's backing, and none of it is free capital
-    /// in the core or the ledger.
+    /// @dev Invariant: on every preset, across sales, Cascade completions, Accelerant rebates and
+    /// USDC and another token sent to the fleet contract, every unit paid or received lands in
+    /// exactly one of the treasury, the Cascade reserve, the owed share or the ledger's backing, and
+    /// none of it is free capital in the core or the ledger.
     function testFuzz_everyUnitLandsInTheTreasuryTheReserveTheOwedShareOrBacking(
         uint8 presetIndex,
         uint8 keys,
-        uint64 income,
+        uint64 received,
         uint64 stray
     ) public {
         KeyfleetPresets.Preset preset = KeyfleetPresets.Preset(bound(presetIndex, 0, 3));
@@ -122,13 +122,12 @@ contract KeyfleetTreasuryTest is Test {
             _assertNoFreeCapitalOutsideTheTreasury(fleet);
         }
 
-        uint256 received = income;
-        usdc.mint(address(fleet), income);
-        if (preset == KeyfleetPresets.Preset.FleetTechClassic || preset == KeyfleetPresets.Preset.FleetTechAccelerant) {
-            if (income != 0) fleet.recognizeSurplus(address(usdc));
-        } else if (fleet.completedLevels() != 0 && income >= fleet.completedLevels()) {
-            fleet.recognizeSurplus(address(usdc));
-        }
+        uint256 backed = rewards.backed(address(usdc));
+        uint256 capital = usdc.balanceOf(treasury);
+        usdc.mint(address(fleet), received);
+        fleet.recognizeSurplus(address(usdc));
+        assertEq(usdc.balanceOf(treasury), capital + received, "USDC sent to the fleet is the treasury's");
+        assertEq(rewards.backed(address(usdc)), backed, "and never the keys'");
         other.mint(address(fleet), stray);
         fleet.recognizeSurplus(address(other));
 
@@ -137,7 +136,7 @@ contract KeyfleetTreasuryTest is Test {
             usdc.balanceOf(treasury) + fleet.cascadeReserve() + fleet.protocolShareOwed()
                 + rewards.backed(address(usdc)) + fleet.surplus(address(usdc)),
             paid + received,
-            "every USDC unit is in the treasury, the reserve, the owed share, the backing or unsorted"
+            "every USDC unit is in the treasury, the reserve, the owed share or the backing"
         );
         assertEq(other.balanceOf(treasury), stray, "every other token is in the treasury");
         assertEq(other.balanceOf(address(fleet)), 0, "and none of it stays in the core");

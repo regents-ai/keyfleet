@@ -14,8 +14,8 @@ interface IFleetBound {
 /// the chain, checks it against the input manifest, and writes that fleet's published deployment
 /// manifest.
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
-/// the fleet and the blocks the transactions landed in. Every address and value and the income
-/// token are read from the chain through that fleet. The supply, USDC price and split constants
+/// the fleet and the blocks the transactions landed in. Every address and value and the token the
+/// ledger pays are read from the chain through that fleet. The supply, USDC price and split constants
 /// are the ones this script was compiled with from `KeyfleetPresets`, and the fleet's runtime code
 /// hash is recorded so it can be re-verified against the deployed code. A receipt that failed, a
 /// transaction with no receipt, a fleet with no code, a fleet whose five contracts do not all
@@ -141,7 +141,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(root, "fees", _feesJson());
         vm.serializeString(root, "vrf", _vrfJson(fleet));
         vm.serializeBytes32(root, "traitTableHash", fleet.TRAIT_TABLE_HASH());
-        vm.serializeAddress(root, "incomeTokens", fleet.REWARDS().rewardAssets());
+        vm.serializeAddress(root, "rewardTokens", fleet.REWARDS().rewardAssets());
         return vm.serializeString(root, "disclosures", _disclosuresJson());
     }
 

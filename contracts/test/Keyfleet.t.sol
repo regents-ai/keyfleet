@@ -441,7 +441,7 @@ contract KeyfleetTest is Test {
             uint256 endOfForty = KeyfleetPresets.fibonacciLevelEnd(40);
             assertEq(endOfForty, 701_408_730, "701,408,730 keys fill levels 1 to 40");
             fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(endOfForty);
-            assertEq(fleet.completedLevels(), 40, "forty levels complete");
+            assertEq(fleet.levelOf(endOfForty), 40, "the last key of level 40");
             assertEq(fleet.levelOf(endOfForty + 1), 41, "the next key opens level 41");
             assertEq(fleet.nextPrice(), KeyfleetPresets.fibonacciLevelPrice(41), "at level 41's price");
             assertEq(fleet.holdingLimit(41), KeyfleetPresets.fibonacciLevelSupply(41) / 10, "by the same limit rule");

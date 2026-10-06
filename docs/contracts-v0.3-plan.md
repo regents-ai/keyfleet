@@ -986,3 +986,15 @@ Watch items for the build, not decisions:
 - `executeBatch`, `processDailySplit` and `depositProtocolShare` share one reentrancy lock in the treasury.
 - `Keyfleet._update` calls `VOTES.onKeyMoved` on every transfer; its gas is measured and capped in C5 alongside the five-asset settlement of C9.
 - `returnAdvance` limits relabelling only up to the open advance (section 4.7); this stays in the audit notes as a known limit.
+
+## 9. Sean's answers (6 Oct 2026)
+
+- P1 a: the threshold is measured on the free balance. The daily split is a built-in treasury function that splits to all keys; an approved proposal may also run it again within the same day; the rate is 10–200 bps (0.1%–2%), changed by an ordinary majority proposal.
+- P2 b: the USDC income route is dropped; all USDC is treasury capital.
+- P3 a: Base addresses confirmed.
+- P7 a: agents do the roll call (Present) automatically; agent voting is a simple per-key owner toggle, on by default.
+- P8 b: no site wallet. Anyone may run the split once 24 hours have passed since the last run; if nobody runs it, it does not run.
+- P10 b: wait for Autolaunch v2 on Base; C12 waits.
+- P13 a: the product spec is updated (on main, by the chief engineer).
+- P14 a: keys stack in a wallet; every key action is batchable.
+- KF-CLAIM: the owner or an agent holding an active shard of the key may press claim (batched over many keys); the money always goes to the wallet that holds the key, never to the agent.

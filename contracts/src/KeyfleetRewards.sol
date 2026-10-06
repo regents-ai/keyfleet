@@ -8,10 +8,11 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /// @notice Per-fleet reward ledger. One instance is permanently bound to one fleet contract.
 /// @dev The fleet is the sole writer. There is no admin, no upgrade path, and no exit other
-/// than `claim`. The ledger pays exactly one income token, the fleet's USDC. Rewards are
-/// distributed through per-cohort cumulative indexes, so allocation never iterates over
-/// recipients. Cohort membership is the fleet's decision: cohort 0 on Classic and Accelerant, and
-/// the key's level on the two Fibonacci presets, which have no last level.
+/// than `claim`. The ledger pays exactly one token, the fleet's USDC: the Accelerant rebate,
+/// credited straight to the holder of the preceding key, and the Cascade repayment, allocated to
+/// the preceding level's cohort. Allocation goes through per-cohort cumulative indexes, so it never
+/// iterates over recipients. Cohort membership is the fleet's decision: cohort 0 on Classic and
+/// Accelerant, and the key's level on the two Fibonacci presets, which have no last level.
 /// Accrued rewards belong permanently to the address that held the key while they accrued: the
 /// fleet settles a key to its outgoing owner before every ownership change, and the incoming
 /// owner continues from the cohort's current index.
@@ -34,7 +35,7 @@ contract KeyfleetRewards is ReentrancyGuard {
 
     /// @notice The fleet contract that owns this ledger and holds the keys.
     address public immutable FLEET;
-    /// @notice USDC, the one income token.
+    /// @notice USDC, the one token the ledger pays.
     address public immutable USDC;
 
     /// @notice Tokens reserved for credits, unsettled index accruals, and retained rounding dust.
@@ -70,12 +71,12 @@ contract KeyfleetRewards is ReentrancyGuard {
         _;
     }
 
-    /// @notice Whether `asset` is the fleet's income token.
+    /// @notice Whether `asset` is the token the ledger pays.
     function isRewardAsset(address asset) public view returns (bool) {
         return asset == USDC;
     }
 
-    /// @notice The income tokens: USDC alone.
+    /// @notice The tokens the ledger pays: USDC alone.
     function rewardAssets() public view returns (address[] memory assets) {
         assets = new address[](1);
         assets[0] = USDC;

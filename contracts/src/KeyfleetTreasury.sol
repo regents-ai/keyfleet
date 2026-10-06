@@ -7,13 +7,13 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
 import {Keyfleet} from "./Keyfleet.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 
-/// @notice The treasury of one fleet: the only place the fleet's free capital is held, and the
-/// only account of the fleet that approves a token.
+/// @notice The treasury of one fleet: the fleet's one payment address, the only place its free
+/// capital is held, and the only account of the fleet that approves a token.
 /// @dev One instance is permanently bound to one fleet. It is deployed straight after the fleet,
 /// at the address the fleet was given for it, and refuses to deploy for a fleet that names another
-/// treasury. The capital part of every purchase, a completed Cascade level's released surplus and
-/// every token other than USDC that reaches the fleet are sent here. Income in USDC never comes
-/// here: it goes from the fleet to the keys.
+/// treasury. Anyone paying the fleet pays this address, in USDC or any other token. The capital
+/// part of every purchase, a completed Cascade level's released surplus and anything sent to the
+/// fleet contract itself outside a purchase are sent here too.
 ///
 /// The fleet's owed protocol share passes through here inside one call and never stays: the fleet
 /// sends it and immediately asks for it to be deposited into REGENT revenue staking. There is no
