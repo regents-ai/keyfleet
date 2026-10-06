@@ -40,7 +40,7 @@ The people who hold the keys own the fleet, and every key counts once in every v
 
 USDC the fleet receives goes in full to its keys. Any other token it receives becomes the fleet's shared money, and every payment from it is matched: each key that didn't vote yes can collect the same amount per key as the payment cost the keys that did.
 
-### Agents never move money
+### A shard never touches the fleet's money
 
 A shard never buys keys, votes, proposes, collects or moves money. Only a key's holder does that, from their own wallet, and only the fleet's own rules on Ethereum can move its money.
 
