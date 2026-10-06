@@ -303,6 +303,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
 
     /// @notice Admits OUSD as a bound asset of the daily split, once. Only an approved proposal's
     /// call reaches it. Its decimals are read here, once, for its threshold.
+    /// @dev The token must deliver exactly what the treasury sends: the ledger checks its balance
+    /// covers each split in full, so a token that delivers even one unit less reverts every later
+    /// run, for every asset, and admission cannot be undone. Prove the exact token's transfers on a
+    /// Base fork before proposing it.
     function admitOusd(IERC20 token) external onlySelf {
         if (address(ousd) != address(0)) revert OusdAlreadyAdmitted();
         if (address(token) == address(0) || token == USDC || token == REGENT) revert OusdInvalid(address(token));

@@ -987,6 +987,18 @@ Watch items for the build, not decisions:
 - `Keyfleet._update` calls `VOTES.onKeyMoved` on every transfer; its gas is measured and capped in C5 alongside the five-asset settlement of C9.
 - `returnAdvance` limits relabelling only up to the open advance (section 4.7); this stays in the audit notes as a known limit.
 
+### 8.1 Review of C8–C11 (6 October 2026)
+
+The money paths hold:
+
+- **USDC backing is never short.** Each key's share of a cohort allocation is rounded down, and the rounding is carried in the key's own snapshot, so keys are owed at most what was set aside. The ledger's USDC balance is at least its backing, and its backing is at least everything owed. The difference, under one unit per key, stays in the ledger. `invariant_usdcBackingCoversWhatIsOwed` asserts all three.
+- **Split assets are exact.** Each split books `perKey × keys` against a balance check, and a key minted later starts from the current index. ETH, REGENT and USDC are owed exactly what the ledger holds.
+- **Claims pay the holder.** The holder or an active shard presses; each key's money settles to `ownerOf` and the caller's own credit (a former holder's) is paid with it. Credits are zeroed before any payment, under the ledger's lock.
+- **A failed transfer skips one asset; running out of gas reverts the run.** A transfer call keeps at most 1/64 of the gas back, so less than `gasBefore / 63` left means it ran out, and the whole run reverts rather than spending the day.
+- **The bytecode check works.** Planted DELEGATECALL and SELFDESTRUCT are reported when reachable straight on or through a pushed jump target, and code nothing jumps to is not judged.
+
+One admission precondition, written on `admitOusd`: the ledger requires the tokens it is funded with to arrive in full. A token that delivers less than sent, as some rebasing tokens do by a unit, would revert every later run for every asset, and admission is once. OUSD is not on Base today; before any proposal admits a token, its exact transfers are proven on a Base fork.
+
 ## 9. Sean's answers (6 Oct 2026)
 
 - P1 a: the threshold is measured on the free balance. The daily split is a built-in treasury function that splits to all keys; an approved proposal may also run it again within the same day; the rate is 10–200 bps (0.1%–2%), changed by an ordinary majority proposal.
