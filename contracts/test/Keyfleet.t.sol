@@ -285,7 +285,7 @@ contract KeyfleetTest is Test {
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         _construct(usdc, companions);
         companions = KeyfleetStack.companionsOfNextFleet();
-        companions.treasury = KeyfleetTreasury(address(0));
+        companions.treasury = KeyfleetTreasury(payable(address(0)));
         vm.expectRevert(Keyfleet.ZeroAddress.selector);
         _construct(usdc, companions);
     }

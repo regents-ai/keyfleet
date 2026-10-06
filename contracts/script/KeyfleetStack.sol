@@ -41,7 +41,7 @@ library KeyfleetStack {
         uint64 nonce = VM.getNonce(deployer);
         return Keyfleet.Companions({
             votes: KeyfleetVotes(VM.computeCreateAddress(deployer, nonce + 1)),
-            treasury: KeyfleetTreasury(VM.computeCreateAddress(deployer, nonce + 2))
+            treasury: KeyfleetTreasury(payable(VM.computeCreateAddress(deployer, nonce + 2)))
         });
     }
 

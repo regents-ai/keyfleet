@@ -129,4 +129,19 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(Keyfleet(address(0)).SHARDS.selector, bytes4(0x48db3888));
         assertEq(Keyfleet.sendProtocolShare.selector, bytes4(0xcb097587));
     }
+
+    /// @dev The treasury's payments and advances, which a proposal's calls name, and the events the
+    /// treasury reader matches them by.
+    function test_treasuryPaymentAndAdvanceSelectorsAndTopics() public view {
+        assertEq(KeyfleetTreasury.pay.selector, bytes4(0xb3d76188));
+        assertEq(KeyfleetTreasury.advance.selector, bytes4(0x130846af));
+        assertEq(KeyfleetTreasury.returnAdvance.selector, bytes4(0xf6dd8fda));
+        assertEq(KeyfleetTreasury(payable(address(0))).advances.selector, bytes4(0x435cee31));
+        assertEq(KeyfleetTreasury.Paid.selector, 0x9def4e2802183d68ce90a6a226a2962b59298616c27165f12c4fbc5c84cdd778);
+        assertEq(KeyfleetTreasury.Advanced.selector, 0x43b27f372639bed05e9fab94afe302ce65996b9a58d7fa92d3dbfbdca5d0109c);
+        assertEq(
+            KeyfleetTreasury.AdvanceReturned.selector,
+            0x2034cebd1ee980ae5db64594c0a5e13ca3153fb318294274500210fc58592e80
+        );
+    }
 }

@@ -226,7 +226,7 @@ and 49,152 bytes of deployment code per contract. Measured with
 | `KeyfleetRewards` | 5,204 | 5,547 |
 | `KeyfleetShards` | 3,604 | 3,810 |
 | `KeyfleetVotes` | 14,531 | 15,647 |
-| `KeyfleetTreasury` | 2,136 | 2,854 |
+| `KeyfleetTreasury` | 3,796 | 4,515 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
@@ -357,13 +357,42 @@ before or after any key is sold; with nothing to forward it returns zero and
 says nothing. None of it reaches the keys directly: USDC reaches them only from
 the treasury, through the daily split of a later step.
 
-The treasury is a separate contract bound to its fleet for good. It spends only
-through `executeBatch(calls)`, which only the fleet's voting controller may call
+The treasury is a separate contract bound to its fleet for good. It holds native
+ETH as well as tokens: anyone may send it ETH. It spends only through
+`executeBatch(calls)`, which only the fleet's voting controller may call
 (`OnlyVotes`), when a passed proposal is carried out: it makes the proposal's
 exact calls in order, each a plain call with its value, and the first that
-reverts reverts the whole batch with its reason. It runs under the same
-reentrancy lock as the protocol share deposit. The daily split of its USDC comes
-in a later step.
+reverts reverts the whole batch with its reason. Proposing sets nothing aside,
+so two approved proposals can never spend the same money: whichever is carried
+out second fails if the money is gone, and stays approved to be retried.
+
+Two of the treasury's own functions accept only the treasury itself as caller
+(`OnlySelf`), so only a passed proposal's call reaches them:
+
+- `pay(asset, to, amount)` pays a token with OpenZeppelin `SafeERC20`, so a
+  token that answers `false` instead of paying fails the whole batch, or pays
+  ETH when the asset is `NATIVE` (the zero address) with `Address.sendValue`.
+  Proposals pay tokens through here rather than with a raw `transfer` call. It
+  emits `Paid(asset, to, amount)`.
+- `advance(advanceId, operator, asset, amount, purposeHash)` pays the same way
+  and records it under a new id (`AdvanceIdTaken` for one already used), as
+  `advances(advanceId)`: the operator, the asset, what is still outstanding and
+  the hash of what it is for. It emits `Advanced`.
+
+Anyone may return an advance with `returnAdvance(advanceId, amount)`: an ETH
+advance by sending exactly `amount` with the call, a token advance by approving
+the treasury, which pulls it (`WrongValue` for ETH sent with the wrong amount or
+with a token). A return is capped at what is outstanding
+(`ReturnAboveOutstanding`), so the same money cannot be returned twice and a
+return cannot be labelled against more than was advanced. It emits
+`AdvanceReturned(advanceId, from, amount, outstanding)`. The cap is the only
+check: someone holding customer income could still return it against an open
+advance, which disclosure covers.
+
+Carrying out calls, the protocol share deposit and returning an advance share
+one reentrancy lock, so a payee called back by a payment cannot return an
+advance, send the protocol share or carry out another proposal from inside it.
+The daily split of the treasury's balances comes in a later step.
 The Cascade reserve, the owed protocol share and the ledger's backing are never
 in the treasury and are out of any vote's reach. The only ways USDC leaves the
 fleet itself are the protocol share sent through the treasury to staking, the
@@ -693,11 +722,22 @@ anvil for the anvil tests in `platform/` (`mix test.external`).
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
-voting, presence, shard, signature,
+payment and advance, voting, presence, shard, signature,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
-over random renewals, transfers, sweeps, openings and the passing of time, and
-the growing electorate's over random proposals, ballots, transfers, renewals,
-sweeps, sales and the passing of time. Foundry must be installed; the compiler may be
+over random renewals, transfers, sweeps, openings and the passing of time, the
+growing electorate's over random proposals, ballots, transfers, renewals,
+sweeps, sales and the passing of time, and segregation's over random batches of
+calls a proposal could make against all five contracts and USDC: none lowers the
+owed protocol share, the Cascade reserve outside a level completion, any
+wallet's credit or any key's accrual, and the fleet and the ledger always hold
+what they have booked.
+
+Last, `script/check_bytecode.sh` disassembles the deployed code of the five
+contracts with `cast disassemble` and walks it from its entry point, following
+every jump target the code pushes, and fails if any of them can reach
+`DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
+the Classic price table stored at the end of the fleet's code, are data and are
+not judged. Foundry must be installed; the compiler may be
 downloaded on first use. Tests need no RPC, apart from
 `test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
 is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,
