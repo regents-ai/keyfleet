@@ -998,3 +998,13 @@ Watch items for the build, not decisions:
 - P13 a: the product spec is updated (on main, by the chief engineer).
 - P14 a: keys stack in a wallet; every key action is batchable.
 - KF-CLAIM: the owner or an agent holding an active shard of the key may press claim (batched over many keys); the money always goes to the wallet that holds the key, never to the agent.
+
+### 9.1 Where the build differs from sections 4.6 and 6 (C8–C11, 6 Oct 2026)
+
+- No periods or slots. One public `runDailySplit()` splits every bound asset in one call, once 24 hours have passed since `lastRunAt` (the first run 24 hours after `firstMintAt`). `runVotedSplit()` is the proposal's run, at any time. Both set `lastRunAt`. There is no `processDailySplit(slot)` or `processAll()`.
+- The rate is 10–200 bps (P1 a), not 10–100. `setDailySplitBps` applies from the next run, with no pending state.
+- The TOKEN slot and `bindLaunchToken` are not built. OUSD has an empty slot that `admitOusd(token)` fills once, through an approved call, and it is split from the next run.
+- A token whose transfer to the ledger fails is skipped with `SplitTransferFailed` and the other assets are still split; that day is used for all of them. A transfer that ran out of gas reverts the whole run (`SplitOutOfGas`), so a caller cannot starve one asset.
+- The ledger has no `receive`; ETH reaches it only through the payable `fundSplitNative`.
+- `claim(tokenIds, assets)` replaces `claim(asset, keys, to)`: many keys and assets at once, pressed by the holder or an active shard, each key's money paid to its holder, plus the caller's own credit (a former holder's). There is no `to`.
+- REGENT is named in the deployment manifests (`regent`) and checked against `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07` on Base. The published manifest lists `splitAssets` in place of `rewardTokens`.
