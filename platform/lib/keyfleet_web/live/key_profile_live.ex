@@ -208,7 +208,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
-          <dt>Messages</dt>
+          <dt>Wall posts</dt>
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
         <div>
@@ -432,9 +432,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Messages to Key {Rules.grouped(@profile.token_id)}</h3>
+      <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
       <p :if={@profile.messages == 0} class="key-profile-muted">
-        Nobody has written to this key yet.
+        Nobody has posted on this wall yet.
       </p>
       <ol
         id="key-profile-thread"
@@ -474,7 +474,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-submit="post_to_key"
       >
         <label for="key-profile-composer-body">
-          Write to Key {Rules.grouped(@profile.token_id)}
+          Post on Key {Rules.grouped(@profile.token_id)}’s wall
         </label>
         <textarea
           id="key-profile-composer-body"
@@ -487,14 +487,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </.form>
 
       <div :if={@profile.composer == :sign_in} class="key-profile__signed-out">
-        <p>Everyone can read. Sign in to write to Key {Rules.grouped(@profile.token_id)}.</p>
+        <p>Everyone can read. Sign in to post on Key {Rules.grouped(@profile.token_id)}’s wall.</p>
         <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-in">
           Sign in
         </Regent.Primitives.button>
       </div>
 
       <p :if={@profile.composer == :no_key} class="key-profile-muted">
-        Only people who hold a key in {@fleet.name} can write here. Everyone can read.
+        Only people who hold a key in {@fleet.name} can post here. Everyone can read.
       </p>
 
       <p :if={@profile.composer == :refreshing} class="key-profile-muted">
