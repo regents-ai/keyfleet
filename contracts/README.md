@@ -3,14 +3,17 @@
 A Foundry workspace pinned to Solidity 0.8.26 with OpenZeppelin 5.7.0 and
 forge-std 1.9.7 vendored as git submodules under `contracts/lib`.
 
-There are five contracts. `KeyfleetPresets` is a pure library holding every
-price, supply, holding-limit and purchase-split rule, with Classic's price table
-in the generated `KeyfleetClassicPrices`. `Keyfleet` is one fleet: its keys, its
-purchases and its money. Each fleet deploys its own `KeyfleetRewards` ledger,
-its own `KeyfleetVotes` controller and its own `KeyfleetShards` record in its
-constructor, so a fleet and its three companions are born bound to each other.
-No contract is shared between fleets, and no contract has an administrator, an
-upgrade path, a pause or a setter. The fleets live on Base (chain 8453).
+`KeyfleetPresets` is a pure library holding every price, supply, holding-limit
+and purchase-split rule, with Classic's price table in the generated
+`KeyfleetClassicPrices`. A fleet is five contracts. `Keyfleet` is the fleet
+itself: its keys, its purchases, the Cascade reserve and the owed protocol
+share. It deploys its own `KeyfleetRewards` ledger and its own `KeyfleetShards`
+record in its constructor. Its `KeyfleetVotes` controller and its
+`KeyfleetTreasury`, which holds all of the fleet's free capital, are deployed
+straight after it, at addresses the fleet was given in advance, and each
+refuses to bind to a fleet that does not name it. No contract is shared between
+fleets, and no contract has an administrator, an upgrade path, a pause or a
+setter. The fleets live on Base (chain 8453).
 
 ## Status
 
@@ -20,19 +23,20 @@ this branch does:
 - Fleets are fully owned by their key holders. Regents takes 10% of each key
   purchase, once, in USDC, sent to the Regents Safe on Base. Keyfleet takes
   nothing from money a fleet receives afterwards.
-- Income in USDC is paid 100% to the keys. Every other token a fleet holds is
-  shared money, spent only by a vote. There is no token launch.
+- Income in USDC is paid 100% to the keys. The capital part of every purchase,
+  a completed Cascade level's surplus and every other token a fleet receives go
+  to the fleet's treasury. Nothing can spend the treasury yet: spending by an
+  approved proposal's exact calls is a later step. There is no token launch.
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
-- Accelerant: the first key sends 10% to the Safe and 90% to shared money; every
-  later key sends 10% to the Safe, 20% to shared money and 70% to whoever holds
+- Accelerant: the first key sends 10% to the Safe and 90% to the treasury; every
+  later key sends 10% to the Safe, 20% to the treasury and 70% to whoever holds
   the key before it.
-- A Decision or Pay proposal stays open until more than half of all keys sold
-  vote yes, and then anyone may carry it out. A RestrictEdits proposal needs at
+- A Decision proposal stays open until more than half of all keys sold vote
+  yes, and then anyone may carry it out. A RestrictEdits proposal needs at
   least three fifths. There is no window, deadline or cap.
-- Every payment is matched: every key that did not vote yes can collect the same
-  amount per key as the payment cost the yes keys.
+- No proposal moves money.
 - A key's owner may issue shards: time-limited grants to other wallets, recorded
   on chain and ended the moment the key changes hands.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
@@ -116,13 +120,13 @@ A purchase is split into four parts that always sum to exactly the gross price.
 `PROTOCOL_BPS` is 1000: 10% of every purchase, rounded down, is the protocol
 share for the Regents Safe. The rest depends on the preset:
 
-- Syndicate and Classic: the rest, 90%, becomes shared money.
+- Syndicate and Classic: the rest, 90%, goes to the fleet's treasury.
 - Cascade: the rest, 90%, goes to the level-completion reserve.
 - Accelerant after the first key: `ACCELERANT_CAPITAL_BPS` (2000, 20% of gross,
-  rounded down) becomes shared money and the rest, 70% of gross plus any
+  rounded down) goes to the treasury and the rest, 70% of gross plus any
   rounding dust, is a rebate to the current holder of the preceding key. The
-  first Accelerant key has no predecessor and its rest, 90%, becomes shared
-  money.
+  first Accelerant key has no predecessor and its rest, 90%, goes to the
+  treasury.
 
 ## Rewards ledger
 
@@ -172,10 +176,42 @@ cold, measured 53,026 gas; the suite asserts a ceiling of 64,000.
 is readable through `baseTokenURI()`. The constructor takes the preset, USDC,
 the protocol treasury (`PROTOCOL_TREASURY`, the Regents Safe), a `Metadata`
 value (name, symbol, metadata base), a `Randomness` value (VRF coordinator,
-subscription, gas lane) and the trait table hash. It rejects a zero USDC or
-treasury address, a USDC that does not report six decimals, a coordinator that
-holds no code and a zero trait table hash. It then deploys the fleet's
-`KeyfleetRewards`, `KeyfleetVotes` and `KeyfleetShards`.
+subscription, gas lane), the trait table hash and a `Companions` value (the
+addresses its `KeyfleetVotes` and `KeyfleetTreasury` will be deployed at,
+readable as `VOTES()` and `TREASURY()`). It rejects a zero USDC, protocol
+treasury or companion address, a USDC that does not report six decimals, a
+coordinator that holds no code and a zero trait table hash. It then deploys the
+fleet's `KeyfleetRewards` and `KeyfleetShards`.
+
+### Deployment order and sizes
+
+A fleet goes on chain as three transactions from one account: the fleet, then
+its voting controller, then its treasury. The fleet is told the controller's and
+the treasury's addresses before they exist (the account's next two contract
+addresses), and each of the two refuses to deploy for a fleet that does not name
+its address, so a wrong address stops the deployment rather than binding the
+wrong contract. `script/KeyfleetStack.sol` does this for the deployment
+script, the anvil lab and the suite. A purchase made before the treasury is
+deployed sends its capital to the treasury's address, where the treasury finds
+it once deployed.
+
+The order exists because of Base's size limits: 24,576 bytes of runtime code
+and 49,152 bytes of deployment code per contract. Measured with
+`forge build --sizes`:
+
+| Contract | Runtime (bytes) | Deployment (bytes) |
+| --- | --- | --- |
+| `Keyfleet` | 15,262 | 25,526 |
+| `KeyfleetRewards` | 5,204 | 5,547 |
+| `KeyfleetShards` | 2,216 | 2,407 |
+| `KeyfleetVotes` | 5,125 | 5,464 |
+| `KeyfleetTreasury` | 108 | 409 |
+
+A fleet that deployed its controller and treasury itself would carry their
+deployment code inside its own; when it did, its deployment code measured
+33,693. The controller (presence, ballots, proposals) and the treasury (calls,
+the daily split, advances) grow by several times in later steps, which would
+take that past 49,152; deployed separately, each stays well inside both limits.
 
 ### Purchases
 
@@ -190,9 +226,9 @@ lifts; that is accepted.
 
 Within a purchase the order is fixed: the USDC is pulled, the split is taken from
 `KeyfleetPresets`, the protocol share is added to `protocolShareOwed`, the
-preset's own bookkeeping runs (shared money, the Cascade reserve, or the
-Accelerant rebate moved into the ledger and credited to the holder of the
-preceding key), the key is enrolled in the ledger, the key is minted, a Cascade
+preset's own bookkeeping runs (the capital part sent to the treasury, the
+Cascade reserve, or the Accelerant rebate moved into the ledger and credited to
+the holder of the preceding key), the key is enrolled in the ledger, the key is minted, a Cascade
 level completes if this was its last key, and last the key's traits are
 requested. `Purchased(tokenId, buyer, receiver, gross, protocol, capital,
 reserve, rebate)` records the split. `purchase` is guarded against reentrancy,
@@ -208,10 +244,10 @@ never sell out, so on them `maxSupply()` and `remainingSupply()` revert with
 with `NotFibonacciPreset` on Classic and Accelerant, which have no levels.
 
 A Cascade level completes in the transaction that mints its last key, once. Level
-1 has no predecessor, so its whole reserve becomes shared money. From level 2 the
+1 has no predecessor, so its whole reserve goes to the treasury. From level 2 the
 reserve first repays the whole gross the preceding level paid, moved into the
 ledger and allocated to that level's cohort, which means whoever holds those keys
-at that moment; the rest becomes shared money and the reserve is emptied. The
+at that moment; the rest goes to the treasury and the reserve is emptied. The
 reserve always covers the repayment: a level has at least 1.5 times the keys of
 the one before at 1.2 times the price, and 90% of every purchase is reserved, so
 the reserve is at least 1.5 × 1.2 × 0.9 = 1.62 times what is owed.
@@ -231,13 +267,16 @@ USDC and a stand-in coordinator it measured, in execution:
 
 | Purchase | Gas |
 | --- | --- |
-| Cascade, level 1 | 383,375 |
-| Cascade, level 30 | 407,913 |
-| Cascade, level 40 | 424,033 |
-| Syndicate, level 1 | 358,492 |
-| Syndicate, level 40 | 393,304 |
-| Accelerant | 338,226 |
-| Classic | 336,629 |
+| Cascade, level 1 | 383,352 |
+| Cascade, level 30 | 407,890 |
+| Cascade, level 40 | 424,010 |
+| Syndicate, level 1 | 361,699 |
+| Syndicate, level 40 | 396,511 |
+| Accelerant | 341,433 |
+| Classic | 339,836 |
+
+Syndicate, Accelerant and Classic each include one transfer of the capital part
+to the treasury.
 
 The suite asserts a ceiling of 509,000, the level-40 Cascade figure plus a fifth.
 That is a regression bound on the fleet's own work. Real Base USDC is a proxy
@@ -255,13 +294,14 @@ owed. It emits `ProtocolShareSent(caller, amount)` and reverts with `ZeroAmount`
 when nothing is owed. This is the only fee a fleet ever pays. The send measured
 39,578 gas; the suite asserts a ceiling of 48,000.
 
-### Income and shared money
+### Income and the treasury
 
-A fleet holds three separate USDC figures: `freeCapital[USDC]` (shared money),
-`cascadeReserve` and `protocolShareOwed`. For every other asset it holds only
-`freeCapital[asset]`. `accountedBalance(asset)` is their sum and
-`surplus(asset)` is the fleet's balance above it: money that has arrived and not
-yet been sorted. Reward backing lives in the ledger and is not part of either.
+The fleet itself holds only two USDC figures: `cascadeReserve` and
+`protocolShareOwed`. It holds no free capital in any token: that is all in its
+treasury, reachable as `TREASURY()`. `accountedBalance(asset)` is the sum of the
+two figures for USDC and zero for every other asset, and `surplus(asset)` is the
+fleet's balance above it: money that has arrived and not yet been sorted. Reward
+backing lives in the ledger and is not part of either.
 
 There are no deposit functions. Money reaches a fleet by a plain transfer, and
 `recognizeSurplus(asset)` sorts it. Anyone may call it, and the class the money
@@ -276,8 +316,8 @@ lands in depends only on the token:
   Fibonacci level, can receive it the call reverts with `NoEligibleKeys`, and an
   amount below one atomic unit per eligible level reverts with `ZeroAmount`;
   the balance waits for a later call.
-- Every other token becomes shared money, and
-  `SharedMoneyRecognized(asset, caller, amount)` is emitted.
+- Every other token is sent on to the treasury, and
+  `ForwardedToTreasury(asset, caller, amount)` is emitted.
 
 Sorting USDC on a Fibonacci fleet writes one ledger index per completed level,
 so its cost grows with the completed levels and never with the number of keys
@@ -285,20 +325,23 @@ or holders. With every slot cold it measured, in execution:
 
 | Completed levels | Keys sold | Gas | Ceiling |
 | --- | --- | --- | --- |
-| 20 | 46,365 | 669,667 | 804,000 |
-| 30 | 5,702,884 | 969,377 | 1,164,000 |
-| 40 | 701,408,730 | 1,269,087 | 1,523,000 |
+| 20 | 46,365 | 667,437 | 804,000 |
+| 30 | 5,702,884 | 967,147 | 1,164,000 |
+| 40 | 701,408,730 | 1,266,857 | 1,523,000 |
 
 About 30,000 gas per completed level. Each ceiling is the measured figure plus
 a fifth.
 
-Shared money leaves only through `payFromBudget`, which only the fleet's own
-voting controller can call, on an approved Pay proposal. The Cascade reserve, the
-owed protocol share and the ledger's backing are out of a vote's reach. The only
-ways USDC leaves a fleet are the protocol share sent to the treasury, the Accelerant
-rebate, the Cascade repayment and income moved into the ledger, and a payment
-the keys voted for with its matches. No token a fleet holds is ever swapped or
-converted. Tokens that take a fee when they move, or rebase, are not supported.
+The treasury is a separate contract bound to its fleet for good. In this version
+it only receives: nothing can spend from it yet. Spending by the exact calls an
+approved proposal names, and the daily split of its USDC, come in later steps.
+The Cascade reserve, the owed protocol share and the ledger's backing are never
+in the treasury and are out of any vote's reach. The only ways USDC leaves the
+fleet itself are the protocol share sent to the Regents Safe, the capital part
+and the released Cascade surplus sent to the treasury, the Accelerant rebate,
+the Cascade repayment and income moved into the ledger. No token a fleet holds
+is ever swapped or converted. Tokens that take a fee when they move, or rebase,
+are not supported.
 
 ## Votes
 
@@ -319,7 +362,7 @@ a key moved stays counted after it moves, and the key's current holder or their
 delegate may withdraw it but cannot cast a new one. A batch of keys is voted or
 withdrawn whole or not at all.
 
-A Decision or Pay proposal is approved at any moment
+A Decision proposal is approved at any moment
 `yesVotes * 2 > FLEET.totalMinted()`: yes must be more than half of all the keys
 sold so far, so a silent key counts against it. A RestrictEdits proposal is
 approved at `yesVotes * 5 >= FLEET.totalMinted() * 3`: at least three fifths,
@@ -332,15 +375,13 @@ everything else, so a failed attempt consumes nothing and the proposal stays
 open.
 
 Proposing needs standing: the proposer names a key they own or are the delegate
-of. Naming a key is not a vote. There are three kinds, numbered in this order
+of. Naming a key is not a vote. There are two kinds, numbered in this order
 from 0:
 
 - `Decision`: `proposeDecision(tokenId, text, digest)`. Records agreement and
   has no on-chain effect beyond `DecisionRecorded`. The text is emitted in
   `ProposalCreated` and stored nowhere; the optional digest pins an exact
   artifact or commit.
-- `Pay`: `proposePay(tokenId, asset, amount, recipient, text, digest)`. The
-  recipient may not be zero, the fleet, the controller or the ledger.
 - `RestrictEdits`:
   `proposeRestrictEdits(tokenId, targetTokenId, restricted, text, digest)`.
   Names any key already sold (`KeyNotMinted` otherwise) and whether its edits
@@ -350,25 +391,15 @@ from 0:
   carried out stands. It moves no money. What a restriction stops is decided
   off chain from this record.
 
-Every payment is matched. When a Pay is carried out, the fleet computes
-`share = ceil(amount / yesVotes)` and `matched = share * (keysSold - yesVotes)`,
-and requires `amount + matched` to fit in the asset's shared money, or it reverts
-with `AboveYesShare` and the proposal stays open for later. The recipient
-receives exactly `amount`, `matched` moves to the voting controller, and
-`BudgetPaid(asset, recipient, amount, share, matched)` records it. A payment
-therefore spends at most the yes keys' share of that token. The controller
-stores the share and the keys sold; `collect(proposalId, tokenIds)` then pays
-`share` for each named key that was among those keys sold, did not vote yes and
-has not collected, to whoever holds that key when it is collected. Anyone may
-call `collect`, and the money goes only to the key holders.
-
-This does not stop a majority. A majority of keys can approve a decision or a
-payment the rest did not want. Matching means a payment only ever
-spends the majority's own share; claim and reserve solvency and the owed
-protocol share hold regardless of any vote.
+No proposal moves money, and the controller holds nothing. A majority of keys can
+approve a decision the rest did not want; claim and reserve solvency and the
+owed protocol share hold regardless of any vote. The controller is deployed
+straight after its fleet, at the address the fleet was given for it
+(`VOTES()`), and refuses to deploy for a fleet that names another
+(`WrongFleet`).
 
 Voting is the one call whose cost grows with what it is asked, and only with the
-number of keys named. Ten Classic keys in one vote measured 284,470 gas and each
+number of keys named. Ten Classic keys in one vote measured 284,514 gas and each
 further key about 25,400, the same on a Fibonacci fleet; the suite asserts
 ceilings of 342,000 and 31,000. A holder with more keys than a block can carry
 splits the vote across calls. Creating and carrying out a proposal cost the same
@@ -470,7 +501,9 @@ Each fleet is deployed and recorded on its own, named by `KEYFLEET_FLEET`
 (`syndicate`, `cascade`, `classic` or `accelerant`) beside `KEYFLEET_MANIFEST`
 (`base` or `anvil`). There is nothing shared to deploy first.
 
-`script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. The
+`script/DeployKeyfleets.s.sol` deploys the named fleet and writes nothing. It
+sends three transactions from one account through `script/KeyfleetStack.sol`:
+the fleet, its voting controller and its treasury, in that order. The
 protocol treasury comes from `KEYFLEET_PROTOCOL_TREASURY`, never from the
 manifest file, and has no default. It refuses a manifest whose `chainId` is not
 the chain it runs on. On Base it refuses a USDC other than native Base USDC
@@ -489,11 +522,13 @@ name.
 because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
-named fleet's, any value that differs from the manifest, a fleet the subscription
+named fleet's, any value that differs from the manifest, a ledger, controller,
+treasury or shard record that holds no code or does not name the fleet as its
+own (`CompanionNotBound`), a fleet the subscription
 does not list as a consumer and, on Base, a subscription the Regents Safe does
 not own. Only then does it write
 `deployments/<name>.<fleet>.deployed.json`, the fleet's published manifest: the
-fleet, ledger, controller and shard record addresses, the fleet's code hash, the
+fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
 deployment block, the protocol treasury, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
 trait table hash, the income token and the terms the release discloses.
@@ -504,7 +539,8 @@ values, so the suite runs the real deployment and the real record against local
 mocks without touching a file. [../docs/deployment.md](../docs/deployment.md) is
 how to run each step and what each refuses.
 
-`script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet, with
+`script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet and
+its controller and treasury, with
 stand-in USDC and VRF coordinator and a fixed lab treasury, on a plain local
 anvil for the anvil tests in `platform/` (`mix test.external`).
 

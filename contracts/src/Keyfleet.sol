@@ -8,10 +8,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetShards} from "./KeyfleetShards.sol";
+import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
 import {IVRFCoordinatorV2Plus} from "./vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol";
@@ -28,24 +28,22 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// send the whole of it with `sendProtocolShare` to the fixed `PROTOCOL_TREASURY`. It is the only
 /// fee this fleet ever pays.
 ///
-/// Money that reaches the fleet other than through a purchase is sorted by `recognizeSurplus`,
-/// and the class it lands in depends only on the token, never on who sent it or when anyone called:
-/// USDC, the one income token, goes to the keys in full by the ledger's cohort formula, and every
-/// other token becomes shared money.
+/// This contract holds no free capital. The fleet's capital lives in its `KeyfleetTreasury`: the
+/// capital part of every purchase and a completed Cascade level's released surplus are sent there
+/// in the transaction that books them. Money that reaches the fleet other than through a purchase
+/// is sorted by `recognizeSurplus`, and where it goes depends only on the token, never on who sent
+/// it or when anyone called: USDC, the one income token, goes to the keys in full by the ledger's
+/// cohort formula, and every other token is forwarded to the treasury.
 ///
-/// The one collective decision is taken in the `KeyfleetVotes` controller this contract deploys for
-/// itself in its constructor. It is the only caller of `payFromBudget`. The only tokens a vote can
-/// move are shared money: the Cascade completion reserve, the owed protocol share and the ledger's
-/// reward backing are all out of its reach. Every payment is matched: the keys that voted YES can
-/// pay out at most their own share of an asset's shared money, and in the same call the fleet
-/// moves the matches, the payment over the YES votes rounded up for every other key sold, out of
-/// its shared money and into the voting controller, which pays each match to whoever holds that
-/// key when it is collected. Payments assume an asset that moves exactly the amount asked; a token
-/// that takes a fee when it moves, or rebases, is not supported.
+/// The fleet is five contracts. This one deploys its `KeyfleetRewards` ledger and its
+/// `KeyfleetShards` record in its own constructor, and is given the addresses its `KeyfleetVotes`
+/// controller and its `KeyfleetTreasury` will be deployed at, which are deployed straight after it
+/// and each refuse to bind to a fleet that does not name them. They are not deployed here because
+/// their code would make this contract's deployment larger than a chain accepts.
 ///
-/// A key's owner may give wallets time-limited shards of the key in the `KeyfleetShards` record
-/// this contract deploys for itself in its constructor. A shard lasts only while the key's
-/// `ownershipEpoch` is the one it was issued under, so every shard of a key ends when the key moves.
+/// A key's owner may give wallets time-limited shards of the key in the `KeyfleetShards` record.
+/// A shard lasts only while the key's `ownershipEpoch` is the one it was issued under, so every
+/// shard of a key ends when the key moves.
 ///
 /// Every key's traits come from one Chainlink VRF v2.5 answer. A purchase asks the pinned coordinator
 /// for one random word and never waits for it or fails because of it; the coordinator answers a few
@@ -55,10 +53,9 @@ import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol"
 /// or replace a seed.
 ///
 /// There is no administrator, no upgrade path, no pause and no burn. The only ways USDC leaves
-/// this contract are the owed protocol share sent to the protocol treasury, the Accelerant rebate
-/// paid into the ledger, the Cascade reimbursement paid into the ledger, income paid into the
-/// ledger for the keys, and a payment of shared money the keys voted for with its matches, which
-/// move to the voting controller.
+/// this contract are the owed protocol share sent to the protocol treasury, capital and released
+/// Cascade surplus sent to the fleet's treasury, the Accelerant rebate paid into the ledger, the
+/// Cascade reimbursement paid into the ledger, and income paid into the ledger for the keys.
 contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -83,6 +80,14 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         bytes32 keyHash;
     }
 
+    /// @notice The two contracts deployed straight after a fleet, at addresses fixed before it.
+    /// @param votes Where the fleet's `KeyfleetVotes` controller will be deployed.
+    /// @param treasury Where the fleet's `KeyfleetTreasury` will be deployed.
+    struct Companions {
+        KeyfleetVotes votes;
+        KeyfleetTreasury treasury;
+    }
+
     /// @notice A constructor address argument was zero.
     error ZeroAddress();
     /// @notice The purchase deadline had already passed.
@@ -104,14 +109,6 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     error ZeroAmount();
     /// @notice No cohort can receive income yet: no key is minted, or no Fibonacci level is complete.
     error NoEligibleKeys();
-    /// @notice Only this fleet's own voting controller may spend shared money.
-    error OnlyVotes();
-    /// @notice The payment is more than the YES keys' share of this asset's shared money: with every
-    /// match, it does not fit in the shared money.
-    /// @param amount The payment.
-    /// @param matched The matches it would set aside for the keys that did not vote YES.
-    /// @param available The asset's shared money.
-    error AboveYesShare(address asset, uint256 amount, uint256 matched, uint256 available);
     /// @notice The VRF coordinator address holds no code.
     error CoordinatorMissing(address coordinator);
     /// @notice No trait table was named.
@@ -129,7 +126,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @param receiver The address the key was minted to.
     /// @param gross The USDC price paid.
     /// @param protocol USDC set aside for the protocol treasury in `protocolShareOwed`.
-    /// @param capital USDC added to this fleet's shared money.
+    /// @param capital USDC sent to this fleet's treasury.
     /// @param reserve USDC added to the Cascade completion reserve.
     /// @param rebate USDC credited to the holder of the preceding key in the ledger.
     event Purchased(
@@ -150,7 +147,7 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice A Cascade level was fully minted and its reserve was released.
     /// @param level The level that completed.
     /// @param reimbursement USDC allocated to the holders of the preceding level: its whole gross cost.
-    /// @param surplus USDC released to shared money.
+    /// @param surplus USDC released and sent to this fleet's treasury.
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
 
     /// @notice The whole owed protocol share was sent to the protocol treasury.
@@ -161,17 +158,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Unaccounted USDC was paid to the keys through the ledger.
     event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
 
-    /// @notice Another token's unaccounted balance became shared money.
-    event SharedMoneyRecognized(address indexed asset, address indexed caller, uint256 amount);
-
-    /// @notice An approved Pay proposal paid shared money out of this fleet, and set aside the
-    /// match for every key that did not vote YES.
-    /// @param amount Atomic units paid to the recipient.
-    /// @param share What each key that did not vote YES may collect: `amount` over the YES votes,
-    /// rounded up.
-    /// @param matched `share` times the keys that did not vote YES, sent to the voting controller
-    /// for them to collect. No longer shared money.
-    event BudgetPaid(address indexed asset, address indexed recipient, uint256 amount, uint256 share, uint256 matched);
+    /// @notice Another token's unaccounted balance was sent to this fleet's treasury.
+    event ForwardedToTreasury(address indexed asset, address indexed caller, uint256 amount);
 
     /// @notice The coordinator accepted a request for a key's random word.
     event RevealRequested(uint256 indexed tokenId, uint256 indexed requestId);
@@ -208,9 +196,11 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     address public immutable PROTOCOL_TREASURY;
     /// @notice The reward ledger this fleet deployed for itself and is the sole writer of.
     KeyfleetRewards public immutable REWARDS;
-    /// @notice The voting controller this fleet deployed for itself and the only caller of
-    /// `payFromBudget`.
+    /// @notice The fleet's voting controller, deployed straight after the fleet at this address.
     KeyfleetVotes public immutable VOTES;
+    /// @notice The fleet's treasury, which holds all of its free capital, deployed straight after
+    /// the voting controller at this address.
+    KeyfleetTreasury public immutable TREASURY;
     /// @notice The shard record this fleet deployed for itself.
     KeyfleetShards public immutable SHARDS;
     /// @notice The one Chainlink VRF v2.5 coordinator that answers this fleet's requests. On Base
@@ -230,14 +220,10 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// @notice Accelerant only: the USDC price of the next primary mint, stepped by 105/100 after
     /// every primary mint. Zero on the other three presets, which quote from `KeyfleetPresets`.
     uint256 public currentPrice;
-    /// @notice Shared money held by this fleet, per asset. Purchases and Cascade level completions
-    /// write the USDC entry; `recognizeSurplus` writes the entry of every other token. The only way
-    /// out is `payFromBudget`, on an approved Pay proposal.
-    mapping(address asset => uint256 amount) public freeCapital;
-    /// @notice Cascade only: USDC held back for the next level completion. Never shared money.
+    /// @notice Cascade only: USDC held back for the next level completion. Never capital.
     uint256 public cascadeReserve;
     /// @notice USDC set aside from purchases as the protocol share and not yet sent to the
-    /// protocol treasury. Never shared money and never surplus.
+    /// protocol treasury. Never capital and never surplus.
     uint256 public protocolShareOwed;
     /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
     mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
@@ -259,25 +245,33 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     string private _baseTokenURI;
     mapping(uint256 requestId => uint256 tokenId) private _requestToken;
 
-    /// @notice Deploys a fleet and, atomically, the reward ledger, voting controller and shard
-    /// record bound to it.
-    /// @dev All three are constructed here rather than passed in, so there is no window in which a
-    /// fleet points at a ledger, a controller or a shard record bound to someone else.
+    /// @notice Deploys a fleet and, atomically, the reward ledger and shard record bound to it, and
+    /// fixes where its voting controller and treasury will be.
+    /// @dev The ledger and the shard record are constructed here, so there is no window in which a
+    /// fleet points at either bound to someone else. The voting controller and the treasury are
+    /// deployed by the same deployer in its next two transactions, at the addresses given here, and
+    /// each refuses to deploy for a fleet that does not name it. A purchase before then sends
+    /// capital to the treasury's address, where it is held once the treasury is deployed there.
     /// @param preset The preset whose prices, supply and split this fleet follows.
     /// @param usdc The USDC every key is paid in, reporting six decimals.
     /// @param protocolTreasury Where the protocol share is sent. Not zero.
     /// @param metadata The ERC721 name, symbol and metadata base.
     /// @param randomness The VRF coordinator, subscription and gas lane.
     /// @param traitTableHash `keccak256` of the published trait-table file, byte for byte. Not zero.
+    /// @param companions Where the voting controller and the treasury will be deployed. Not zero.
     constructor(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
         address protocolTreasury,
         Metadata memory metadata,
         Randomness memory randomness,
-        bytes32 traitTableHash
+        bytes32 traitTableHash,
+        Companions memory companions
     ) ERC721(metadata.name, metadata.symbol) {
-        if (address(usdc) == address(0) || protocolTreasury == address(0)) revert ZeroAddress();
+        if (
+            address(usdc) == address(0) || protocolTreasury == address(0) || address(companions.votes) == address(0)
+                || address(companions.treasury) == address(0)
+        ) revert ZeroAddress();
         uint8 decimals = IERC20Metadata(address(usdc)).decimals();
         if (decimals != KeyfleetPresets.USDC_DECIMALS) revert UsdcDecimalsWrong(decimals);
         // A coordinator without code would make the request in `purchase` revert past its `catch`.
@@ -295,8 +289,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
         _baseTokenURI = metadata.baseTokenURI;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = KeyfleetPresets.Q_USDC;
 
+        VOTES = companions.votes;
+        TREASURY = companions.treasury;
         REWARDS = new KeyfleetRewards(address(this), address(usdc));
-        VOTES = new KeyfleetVotes(this);
         SHARDS = new KeyfleetShards(this);
     }
 
@@ -366,13 +361,13 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     }
 
     /// @notice Balance of an asset this fleet has already recorded a purpose for.
-    /// @dev Reward backing is not counted: it lives in the ledger, not in this balance. For USDC this
-    /// is shared money plus the Cascade completion reserve plus the owed protocol share, three
-    /// separate figures that purchases write to without ever reading each other.
+    /// @dev Reward backing is not counted: it lives in the ledger, not in this balance, and capital
+    /// lives in the treasury. For USDC this is the Cascade completion reserve plus the owed protocol
+    /// share, two separate figures that purchases write to without ever reading each other. Every
+    /// other token has no recorded purpose here.
     function accountedBalance(address asset) public view returns (uint256) {
-        uint256 accounted = freeCapital[asset];
-        if (asset == address(USDC)) accounted += cascadeReserve + protocolShareOwed;
-        return accounted;
+        if (asset == address(USDC)) return cascadeReserve + protocolShareOwed;
+        return 0;
     }
 
     /// @notice Balance of an asset that has arrived and not yet been sorted by `recognizeSurplus`.
@@ -396,7 +391,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     /// is accepted.
     ///
     /// The 10% protocol share is added to `protocolShareOwed` and nothing is sent: the protocol
-    /// treasury is paid only by `sendProtocolShare`.
+    /// treasury is paid only by `sendProtocolShare`. The capital part is sent to the fleet's
+    /// treasury in the same call.
     ///
     /// The key is enrolled in the ledger before it is minted, so a receiver contract may forward it
     /// straight on from inside `onERC721Received`: that transfer settles a freshly enrolled key,
@@ -439,10 +435,10 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
                 cascadeReserve += split.reserve;
                 levelGrossPaid[level] += gross;
             } else {
-                freeCapital[address(USDC)] += split.capital;
+                USDC.safeTransfer(address(TREASURY), split.capital);
             }
         } else {
-            freeCapital[address(USDC)] += split.capital;
+            USDC.safeTransfer(address(TREASURY), split.capital);
             if (PRESET == KeyfleetPresets.Preset.FleetTechAccelerant) {
                 if (hasPredecessor) {
                     address predecessor = ownerOf(tokenId - 1);
@@ -524,19 +520,19 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
 
     /// @notice Sorts an asset's unaccounted balance by the token it is in.
     /// @dev Permissionless, because it can only ever sort what nobody has a claim on: it works from
-    /// `balanceOf(this)` minus what this fleet has already recorded a purpose for, which is shared
-    /// money plus, for USDC, the Cascade completion reserve and the owed protocol share. Reward
-    /// backing sits in the ledger and is not part of this balance at all, so no recorded liability
-    /// can be reclassified, an incomplete level's reserve can never be drawn on, and the owed
-    /// protocol share can never be swept into shared money.
+    /// `balanceOf(this)` minus what this fleet has already recorded a purpose for, which for USDC is
+    /// the Cascade completion reserve and the owed protocol share. Reward backing sits in the ledger
+    /// and is not part of this balance at all, so no recorded liability can be reclassified, an
+    /// incomplete level's reserve can never be drawn on, and the owed protocol share can never be
+    /// swept into capital.
     ///
     /// USDC goes to the keys in full through `_allocateToKeys`, which follows the ledger's rules:
     /// while no key, or no Fibonacci level, can receive it the call reverts with `NoEligibleKeys`,
     /// and below one atomic unit per eligible Fibonacci level it cannot be divided and reverts with
     /// the ledger's `ZeroAmount`; either way the balance waits for a later call. Every other token
-    /// becomes shared money. A balance of zero returns zero.
+    /// is sent whole to the fleet's treasury. A balance of zero returns zero.
     /// @param asset The asset to sort.
-    /// @return amount What was sorted: paid to the keys for USDC, shared money otherwise.
+    /// @return amount What was sorted: paid to the keys for USDC, sent to the treasury otherwise.
     function recognizeSurplus(address asset) external nonReentrant returns (uint256 amount) {
         amount = surplus(asset);
         if (amount == 0) return 0;
@@ -545,57 +541,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
             _allocateToKeys(amount);
             emit IncomeRecognized(asset, msg.sender, amount);
         } else {
-            freeCapital[asset] += amount;
-            emit SharedMoneyRecognized(asset, msg.sender, amount);
+            emit ForwardedToTreasury(asset, msg.sender, amount);
+            IERC20(asset).safeTransfer(address(TREASURY), amount);
         }
-    }
-
-    /// @notice Pays shared money out of this fleet on the authority of an approved Pay proposal, and
-    /// sets aside the same amount per key for every key that did not vote YES.
-    /// @dev The voting controller this fleet deployed is the only caller. It passes the proposal's
-    /// YES votes, which it has just checked are more than half of the keys sold.
-    ///
-    /// With `S` the asset's shared money, `N` the keys sold and `y` the YES votes, every key that
-    /// did not vote YES is matched with `share = A / y`, rounded up, so a payment never rounds a
-    /// match down to less than the YES keys paid per key, and never to zero. The payment `A` and
-    /// its matches must fit together, `A + share * (N - y) <= S`, which is the YES keys' share of
-    /// the shared money, `A * N <= S * y`, with the rounding taken from the YES side. The recipient
-    /// receives exactly `A` and `share * (N - y)` goes to the voting controller, which pays each
-    /// such key's match to whoever holds the key when it is collected. A payment that does not fit
-    /// reverts with `AboveYesShare` and rolls back with the controller's execution, so the proposal
-    /// stays open to be carried out later.
-    ///
-    /// The asset must move exactly the amount asked. A token that takes a fee when it moves, or
-    /// rebases, is not supported: the recipient or the matches can receive less than recorded.
-    ///
-    /// Shared money is the only bucket reachable from here. The Cascade completion reserve and the
-    /// owed protocol share are separate figures this function never reads, and reward backing does
-    /// not sit in this contract at all.
-    ///
-    /// Guarded like every other entry point that moves tokens, so an asset that calls back from
-    /// inside the transfer cannot sort a balance this call has already spent, and no key can be sold
-    /// between the count and the payment.
-    /// @param asset The asset to pay.
-    /// @param amount Atomic units to pay.
-    /// @param recipient Who receives them.
-    /// @param yesVotes The proposal's YES votes.
-    /// @return share What each key that did not vote YES may collect.
-    function payFromBudget(address asset, uint256 amount, address recipient, uint256 yesVotes)
-        external
-        nonReentrant
-        returns (uint256 share)
-    {
-        if (msg.sender != address(VOTES)) revert OnlyVotes();
-
-        uint256 available = freeCapital[asset];
-        share = Math.ceilDiv(amount, yesVotes);
-        uint256 matched = share * (totalMinted - yesVotes);
-        if (amount + matched > available) revert AboveYesShare(asset, amount, matched, available);
-        freeCapital[asset] = available - amount - matched;
-
-        emit BudgetPaid(asset, recipient, amount, share, matched);
-        IERC20(asset).safeTransfer(recipient, amount);
-        if (matched != 0) IERC20(asset).safeTransfer(address(VOTES), matched);
     }
 
     /// @notice Sends the whole owed protocol share to the protocol treasury.
@@ -653,9 +601,9 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
     }
 
     /// @dev Releases a completed Cascade level's reserve. Level 1 has no predecessor, so its whole
-    /// reserve becomes shared money. Above that, the reserve first repays the preceding level's
-    /// whole original gross mint cost to whoever holds those keys at this moment, and the rest
-    /// becomes shared money. The reserve always covers it: a level has at least 1.5 times the keys
+    /// reserve is sent to the treasury. Above that, the reserve first repays the preceding level's
+    /// whole original gross mint cost to whoever holds those keys at this moment, and the rest is
+    /// sent to the treasury. The reserve always covers it: a level has at least 1.5 times the keys
     /// of the one before at no less than 1.2 times the price, and at least 90% of every purchase is
     /// reserved, so the reserve is at least 1.5 x 1.2 x 0.9 = 1.62 times what the preceding level
     /// is owed. The reserve is always emptied, and a level completes exactly once.
@@ -671,8 +619,8 @@ contract Keyfleet is IERC4906, ERC721, ReentrancyGuard {
             REWARDS.allocateToCohort(address(USDC), level - 1, reimbursement);
         }
         uint256 released = reserve - reimbursement;
-        freeCapital[address(USDC)] += released;
         emit LevelCompleted(level, reimbursement, released);
+        USDC.safeTransfer(address(TREASURY), released);
     }
 
     /// @dev Settles the outgoing owner, enforces the Fibonacci holding limit on the incoming owner,

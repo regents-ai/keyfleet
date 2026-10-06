@@ -7,6 +7,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -72,7 +73,7 @@ contract ReenteringToken is ERC20 {
 }
 
 /// @dev How money that reaches a fleet is sorted. USDC is income, and all of it goes to the keys;
-/// every other token is shared money. The owed protocol share, the Cascade reserve and reward
+/// every other token is forwarded to the fleet's treasury. The owed protocol share, the Cascade reserve and reward
 /// backing are never surplus.
 contract KeyfleetIncomeTest is Test {
     string private constant BASE_URI = "https://keys.regents.sh/alpha/";
@@ -88,7 +89,7 @@ contract KeyfleetIncomeTest is Test {
     address private bob = address(0xB0B);
 
     event IncomeRecognized(address indexed asset, address indexed caller, uint256 amount);
-    event SharedMoneyRecognized(address indexed asset, address indexed caller, uint256 amount);
+    event ForwardedToTreasury(address indexed asset, address indexed caller, uint256 amount);
     event ProtocolShareSent(address indexed caller, uint256 amount);
 
     function setUp() public {
@@ -105,7 +106,7 @@ contract KeyfleetIncomeTest is Test {
     }
 
     function _deployWith(KeyfleetPresets.Preset preset, IERC20 usdcToken) private returns (Keyfleet fleet) {
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             preset,
             usdcToken,
             treasury,
@@ -153,6 +154,11 @@ contract KeyfleetIncomeTest is Test {
         sorted = fleet.recognizeSurplus(address(token));
     }
 
+    /// @dev A token's capital: what the fleet's treasury holds of it.
+    function _capital(Keyfleet fleet, MockToken token) private view returns (uint256) {
+        return token.balanceOf(address(fleet.TREASURY()));
+    }
+
     function _one(uint256 tokenId) private pure returns (uint256[] memory ids) {
         ids = new uint256[](1);
         ids[0] = tokenId;
@@ -161,14 +167,14 @@ contract KeyfleetIncomeTest is Test {
     // --- 1. income goes to the keys -----------------------------------------
 
     /// @dev Invariant: USDC that reaches a fleet is income and goes to the keys in full, equally per
-    /// key on Classic. Nothing is kept as shared money and nothing is taken off the top.
+    /// key on Classic. Nothing goes to the treasury and nothing is taken off the top.
     function test_usdcIncomeGoesWhollyToTheKeys() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetRewards rewards = fleet.REWARDS();
         uint256 first = _buy(fleet, alice);
         uint256 second = _buy(fleet, bob);
         uint256 third = _buy(fleet, bob);
-        uint256 capitalBefore = fleet.freeCapital(address(usdc));
+        uint256 capitalBefore = _capital(fleet, usdc);
 
         usdc.mint(address(fleet), 10_000);
         vm.expectEmit(true, true, true, true, address(fleet));
@@ -181,24 +187,25 @@ contract KeyfleetIncomeTest is Test {
         assertEq(rewards.accrued(address(usdc), third), 3_333);
         assertEq(rewards.backed(address(usdc)), 10_000, "the whole receipt is backed, dust included");
         assertEq(usdc.balanceOf(address(rewards)), 10_000, "and the tokens are actually there");
-        assertEq(fleet.freeCapital(address(usdc)), capitalBefore, "income never becomes shared money");
+        assertEq(_capital(fleet, usdc), capitalBefore, "income never reaches the treasury");
         assertEq(fleet.surplus(address(usdc)), 0, "nothing is left unsorted");
     }
 
-    /// @dev Invariant: any token other than USDC becomes shared money in full, and nothing of it
-    /// reaches the keys or the ledger.
-    function test_anyOtherTokenBecomesSharedMoney() public {
+    /// @dev Invariant: any token other than USDC is forwarded to the treasury in full, and nothing
+    /// of it reaches the keys or the ledger or stays in the fleet.
+    function test_anyOtherTokenIsForwardedToTheTreasury() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetRewards rewards = fleet.REWARDS();
         _buy(fleet, alice);
 
         other.mint(address(fleet), 10_000);
         vm.expectEmit(true, true, true, true, address(fleet));
-        emit SharedMoneyRecognized(address(other), bob, 10_000);
+        emit ForwardedToTreasury(address(other), bob, 10_000);
         vm.prank(bob);
         assertEq(fleet.recognizeSurplus(address(other)), 10_000);
 
-        assertEq(fleet.freeCapital(address(other)), 10_000, "all of it is shared money");
+        assertEq(_capital(fleet, other), 10_000, "all of it is in the treasury");
+        assertEq(other.balanceOf(address(fleet)), 0, "none of it stays in the fleet");
         assertEq(other.balanceOf(address(rewards)), 0, "the ledger holds none of it");
         assertFalse(rewards.isRewardAsset(address(other)), "and the ledger does not know the token");
         assertEq(fleet.surplus(address(other)), 0);
@@ -266,7 +273,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(usdc.balanceOf(address(fleet)), held, "and none of it is left in the fleet");
     }
 
-    /// @dev Invariant: income no key can receive yet is refused rather than kept as shared money,
+    /// @dev Invariant: income no key can receive yet is refused rather than sent to the treasury,
     /// and waits in the fleet, still unsorted, until a key can receive it. That is no key at all on
     /// Classic, and no completed level on a Fibonacci preset.
     function test_incomeWaitsUntilAKeyCanReceiveIt() public {
@@ -275,7 +282,7 @@ contract KeyfleetIncomeTest is Test {
         vm.expectRevert(Keyfleet.NoEligibleKeys.selector);
         classic.recognizeSurplus(address(usdc));
         assertEq(classic.surplus(address(usdc)), 10_000, "the receipt is still unsorted");
-        assertEq(classic.freeCapital(address(usdc)), 0, "and none of it became shared money");
+        assertEq(_capital(classic, usdc), 0, "and none of it reached the treasury");
 
         uint256 tokenId = _buy(classic, alice);
         assertEq(classic.recognizeSurplus(address(usdc)), 10_000, "the first key can receive it");
@@ -322,12 +329,12 @@ contract KeyfleetIncomeTest is Test {
 
     /// @dev Invariant: sorting touches only the part of the balance nothing else has a purpose for.
     /// The Cascade completion reserve is accounted for, so an incomplete level's reserve can never
-    /// be handed to the keys or turned into shared money by anyone.
+    /// be handed to the keys or sent to the treasury by anyone.
     function test_theCascadeReserveIsNeverSurplus() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         _buyMany(fleet, 3); // level 1 completes, key 3 starts the level 2 reserve.
         uint256 reserve = fleet.cascadeReserve();
-        uint256 capital = fleet.freeCapital(address(usdc));
+        uint256 capital = _capital(fleet, usdc);
         assertGt(reserve, 0, "key 3 funds the level 2 reserve");
         assertEq(fleet.surplus(address(usdc)), 0, "an accounted balance shows no surplus");
 
@@ -336,7 +343,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(fleet.recognizeSurplus(address(usdc)), 10_000);
 
         assertEq(fleet.cascadeReserve(), reserve, "the reserve is untouched");
-        assertEq(fleet.freeCapital(address(usdc)), capital, "and so is shared money");
+        assertEq(_capital(fleet, usdc), capital, "and so is the treasury");
         assertEq(fleet.surplus(address(usdc)), 0, "nothing is left unsorted");
     }
 
@@ -353,7 +360,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(rewards.backed(address(usdc)), 10_000, "the obligation is unchanged");
     }
 
-    /// @dev Invariant: keys are paid in USDC and USDC is also the income token, yet shared money,
+    /// @dev Invariant: keys are paid in USDC and USDC is also the income token, yet capital,
     /// the Cascade completion reserve, the owed protocol share and reward backing stay separate
     /// figures. USDC income moves only backing, and the repayment a level completion makes lands
     /// beside it in the ledger without disturbing it.
@@ -363,37 +370,31 @@ contract KeyfleetIncomeTest is Test {
         _buy(fleet, alice);
         _buy(fleet, bob);
         _buy(fleet, _wallet(3));
-        assertEq(fleet.freeCapital(address(usdc)), 18_000_000, "level 1 released its reserve to shared money");
+        assertEq(_capital(fleet, usdc), 18_000_000, "level 1 released its reserve to the treasury");
         assertEq(fleet.cascadeReserve(), 10_800_000, "key 3 opened the level 2 reserve");
 
         _receive(fleet, usdc, 1_000e6);
         assertEq(rewards.backed(address(usdc)), 1_000e6, "income moves only backing");
         assertEq(rewards.accrued(address(usdc), 1), 500e6, "shared across level 1's two keys");
-        assertEq(fleet.freeCapital(address(usdc)), 18_000_000, "and leaves shared money alone");
+        assertEq(_capital(fleet, usdc), 18_000_000, "and leaves the treasury alone");
         assertEq(fleet.cascadeReserve(), 10_800_000, "and the reserve");
 
         _buy(fleet, _wallet(4));
         _buy(fleet, _wallet(5));
         assertTrue(fleet.levelCompleted(2), "level 2 completed");
         assertEq(fleet.cascadeReserve(), 0);
-        assertEq(
-            fleet.freeCapital(address(usdc)), 18_000_000 + 12_400_000, "only what the repayment left is shared money"
-        );
+        assertEq(_capital(fleet, usdc), 18_000_000 + 12_400_000, "only what the repayment left reaches the treasury");
         assertEq(rewards.backed(address(usdc)), 1_000e6 + 20_000_000, "the repayment joins the income");
         assertEq(rewards.accrued(address(usdc), 1), 500e6 + 10_000_000, "key 1 earned income and repayment");
 
         uint256 owed = 2 * 1_000_000 + 3 * 1_200_000;
         assertEq(fleet.protocolShareOwed(), owed, "the owed share is 10% of each purchase");
-        assertEq(
-            usdc.balanceOf(address(fleet)),
-            fleet.freeCapital(address(usdc)) + owed,
-            "the fleet holds only shared money and the owed share"
-        );
+        assertEq(usdc.balanceOf(address(fleet)), owed, "the fleet holds only the owed share");
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds only backing");
 
         fleet.sendProtocolShare();
         assertEq(usdc.balanceOf(treasury), owed, "the treasury received exactly the owed share");
-        assertEq(usdc.balanceOf(address(fleet)), fleet.freeCapital(address(usdc)), "leaving the fleet shared money");
+        assertEq(usdc.balanceOf(address(fleet)), 0, "leaving the fleet nothing");
 
         vm.prank(alice);
         assertEq(rewards.claim(address(usdc), _one(1), address(0)), 510e6, "both are paid in one claim");
@@ -456,7 +457,7 @@ contract KeyfleetIncomeTest is Test {
 
     /// @dev Invariant: whatever receipts it sees in whatever tokens, the fleet always holds at least
     /// what it has booked, the ledger holds exactly what it has backed, and every unit received is
-    /// either still unsorted, shared money or backing.
+    /// either still unsorted, in the treasury or backing.
     function testFuzz_balancesAlwaysCoverEveryBookedFigure(uint96 usdcIn, uint96 otherIn) public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -465,7 +466,7 @@ contract KeyfleetIncomeTest is Test {
         _buyMany(fleet, 3);
         uint256 reserve = fleet.cascadeReserve();
         uint256 owed = fleet.protocolShareOwed();
-        uint256 usdcCapital = fleet.freeCapital(address(usdc));
+        uint256 usdcCapital = _capital(fleet, usdc);
         uint256 usdcBacked = rewards.backed(address(usdc));
 
         usdc.mint(address(fleet), usdcIn);
@@ -478,9 +479,9 @@ contract KeyfleetIncomeTest is Test {
 
         assertEq(fleet.cascadeReserve(), reserve, "the reserve survived sorting");
         assertEq(fleet.protocolShareOwed(), owed, "and so did the owed share");
-        assertEq(fleet.freeCapital(address(usdc)), usdcCapital, "USDC income never becomes shared money");
+        assertEq(_capital(fleet, usdc), usdcCapital, "USDC income never reaches the treasury");
         assertEq(rewards.backed(address(usdc)), usdcBacked + usdcIn, "all of it is backed");
-        assertEq(fleet.freeCapital(address(other)), otherIn, "every other token is shared money");
+        assertEq(_capital(fleet, other), otherIn, "every other token is in the treasury");
         _assertCovered(fleet, usdc);
         _assertCovered(fleet, other);
 
@@ -502,7 +503,7 @@ contract KeyfleetIncomeTest is Test {
 
     /// @dev Invariant: on every preset, anyone at all, holding no key, may send the whole owed share,
     /// and it reaches the protocol treasury in full. Nothing is left owed and the fleet is left
-    /// holding exactly its capital and reserve. A second send has nothing to send.
+    /// holding exactly its reserve. A second send has nothing to send.
     function test_anyoneSendsTheWholeOwedShareToTheTreasury() public {
         address stranger = address(0x5791);
         uint256 receivedBefore;
@@ -520,11 +521,7 @@ contract KeyfleetIncomeTest is Test {
 
             assertEq(usdc.balanceOf(treasury), receivedBefore + owed, "the treasury received exactly the owed share");
             assertEq(fleet.protocolShareOwed(), 0, "nothing is owed any more");
-            assertEq(
-                usdc.balanceOf(address(fleet)),
-                fleet.freeCapital(address(usdc)) + fleet.cascadeReserve(),
-                "the fleet holds only capital and reserve"
-            );
+            assertEq(usdc.balanceOf(address(fleet)), fleet.cascadeReserve(), "the fleet holds only its reserve");
             receivedBefore = usdc.balanceOf(treasury);
 
             vm.prank(stranger);
@@ -550,11 +547,7 @@ contract KeyfleetIncomeTest is Test {
         _buy(fleet, bob);
         assertEq(fleet.totalMinted(), 2, "a purchase goes through while the send is refused");
         assertEq(fleet.protocolShareOwed(), owed + secondShare, "and adds its share on top");
-        assertEq(
-            usdc.balanceOf(address(fleet)),
-            fleet.freeCapital(address(usdc)) + fleet.protocolShareOwed(),
-            "the fleet holds capital and the owed share"
-        );
+        assertEq(usdc.balanceOf(address(fleet)), fleet.protocolShareOwed(), "the fleet holds only the owed share");
 
         usdc.setBlocked(address(0));
         assertEq(fleet.sendProtocolShare(), owed + secondShare, "one send delivers everything that built up");
@@ -570,9 +563,9 @@ contract KeyfleetIncomeTest is Test {
         _buy(fleet, alice);
         _buy(fleet, bob);
         uint256 owed = fleet.protocolShareOwed();
-        uint256 capital = fleet.freeCapital(address(usdc));
+        uint256 capital = _capital(fleet, usdc);
 
-        assertEq(fleet.accountedBalance(address(usdc)), capital + owed, "the owed share is accounted for");
+        assertEq(fleet.accountedBalance(address(usdc)), owed, "the owed share is accounted for");
         assertEq(fleet.surplus(address(usdc)), 0, "so purchases leave no surplus");
         assertEq(fleet.recognizeSurplus(address(usdc)), 0);
 
@@ -580,7 +573,7 @@ contract KeyfleetIncomeTest is Test {
         assertEq(fleet.surplus(address(usdc)), 10_000, "only the stray transfer is surplus");
         assertEq(fleet.recognizeSurplus(address(usdc)), 10_000);
         assertEq(fleet.protocolShareOwed(), owed, "sorting left the owed share untouched");
-        assertEq(fleet.freeCapital(address(usdc)), capital, "and shared money");
+        assertEq(_capital(fleet, usdc), capital, "and the treasury");
         assertEq(fleet.REWARDS().backed(address(usdc)), 10_000, "the stray transfer went to the keys");
         assertEq(fleet.surplus(address(usdc)), 0);
     }
@@ -591,14 +584,14 @@ contract KeyfleetIncomeTest is Test {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buy(fleet, alice);
         uint256 owed = fleet.protocolShareOwed();
-        uint256 capital = fleet.freeCapital(address(usdc));
+        uint256 capital = _capital(fleet, usdc);
         usdc.mint(address(fleet), 10_000);
 
         assertEq(fleet.sendProtocolShare(), owed, "the send reports the owed share");
         assertEq(usdc.balanceOf(treasury), owed, "the treasury received exactly the owed share");
         assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still surplus");
-        assertEq(fleet.freeCapital(address(usdc)), capital, "and shared money is unchanged");
-        assertEq(usdc.balanceOf(address(fleet)), capital + 10_000);
+        assertEq(_capital(fleet, usdc), capital, "and the treasury is unchanged");
+        assertEq(usdc.balanceOf(address(fleet)), 10_000);
     }
 }
 
@@ -632,7 +625,7 @@ contract KeyfleetIncomeGasTest is Test {
         usdc = new MockToken("USD Coin", "USDC");
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FibonacciSyndicate,
             usdc,
             treasury,

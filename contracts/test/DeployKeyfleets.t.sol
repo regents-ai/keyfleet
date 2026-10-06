@@ -49,8 +49,8 @@ contract DeployKeyfleetsTest is Test {
         subscriptionId = vrf.createSubscription();
     }
 
-    /// @dev Each run puts one fleet on chain, and nothing else, so the four go on sale one at a time
-    /// on shared wiring.
+    /// @dev Each run puts one fleet on chain, as its core, its voting controller and its treasury
+    /// and nothing else, so the four go on sale one at a time on shared wiring.
     function test_eachRunDeploysOneFleetCarryingTheManifest() public {
         KeyfleetPresets.Preset[4] memory presets = [
             KeyfleetPresets.Preset.FibonacciSyndicate,
@@ -70,7 +70,7 @@ contract DeployKeyfleetsTest is Test {
 
             Keyfleet fleet = script.deploy(manifest);
 
-            assertEq(vm.getNonce(address(script)) - nonceBefore, 1, "One fleet and nothing else");
+            assertEq(vm.getNonce(address(script)) - nonceBefore, 3, "One fleet's three deployments and nothing else");
             assertTrue(fleet.PRESET() == presets[slot], "Preset of the slot");
             assertEq(fleet.name(), manifest.fleet.name, "Name");
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
@@ -78,6 +78,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.PROTOCOL_TREASURY(), SAFE, "Protocol treasury");
             assertEq(fleet.REWARDS().FLEET(), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
+            assertEq(address(fleet.TREASURY().FLEET()), address(fleet), "Treasury is the fleet's own");
             assertEq(address(fleet.SHARDS().FLEET()), address(fleet), "Shard record is the fleet's own");
             assertEq(address(fleet.VRF_COORDINATOR()), address(vrf), "VRF coordinator");
             assertEq(fleet.VRF_SUBSCRIPTION_ID(), subscriptionId, "VRF subscription");

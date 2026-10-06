@@ -5,7 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {DeployKeyfleets} from "../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
+import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./DeployKeyfleets.t.sol";
@@ -52,6 +54,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonBytes32(json, ".fleet.codeHash"), address(fleet).codehash, "Fleet code");
         assertEq(vm.parseJsonAddress(json, ".fleet.rewards"), address(fleet.REWARDS()), "Ledger");
         assertEq(vm.parseJsonAddress(json, ".fleet.votes"), address(fleet.VOTES()), "Controller");
+        assertEq(vm.parseJsonAddress(json, ".fleet.treasury"), address(fleet.TREASURY()), "Treasury");
         assertEq(vm.parseJsonAddress(json, ".fleet.shards"), address(fleet.SHARDS()), "Shard record");
         assertEq(vm.parseJsonString(json, ".fleet.name"), manifest.fleet.name, "Name");
         assertEq(vm.parseJsonString(json, ".fleet.symbol"), manifest.fleet.symbol, "Symbol");
@@ -244,6 +247,30 @@ contract RecordKeyfleetsTest is Test {
         manifest.usdc = address(usdc);
         _expectRecordRefused(
             manifest, fleet, abi.encodeWithSelector(KeyfleetManifest.UsdcNotBaseUsdc.selector, address(usdc))
+        );
+    }
+
+    /// @dev Invariant: a fleet is published only once all five of its contracts exist and are bound
+    /// to it, so a deployment that stopped after the fleet itself is never listed.
+    function test_recordRefusesAFleetWhoseTreasuryWasNeverDeployed() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        Keyfleet.Companions memory companions = KeyfleetStack.companionsOfNextFleet();
+        Keyfleet fleet = new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            usdc,
+            manifest.protocolTreasury,
+            Keyfleet.Metadata(manifest.fleet.name, manifest.fleet.symbol, manifest.fleet.baseTokenURI),
+            manifest.vrf,
+            manifest.traitTableHash,
+            companions
+        );
+        new KeyfleetVotes(fleet);
+        vrf.addConsumer(subscriptionId, address(fleet));
+
+        _expectRecordRefused(
+            manifest,
+            fleet,
+            abi.encodeWithSelector(RecordKeyfleets.CompanionNotBound.selector, "treasury", address(companions.treasury))
         );
     }
 

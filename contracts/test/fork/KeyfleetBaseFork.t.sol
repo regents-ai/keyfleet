@@ -8,6 +8,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {DeployKeyfleets} from "../../script/DeployKeyfleets.s.sol";
 import {IVRFProvingKeys} from "../../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
+import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 
@@ -56,7 +57,7 @@ contract KeyfleetBaseForkTest is Test {
         vm.deal(address(this), 1 ether);
         coordinator.fundSubscriptionWithNative{value: 1 ether}(subscriptionId);
 
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             address(0x7EA5),

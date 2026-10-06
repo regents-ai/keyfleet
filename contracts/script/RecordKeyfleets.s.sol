@@ -5,6 +5,11 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
+/// @notice The one view every contract a fleet is made of shares: the fleet it is bound to.
+interface IFleetBound {
+    function FLEET() external view returns (address);
+}
+
 /// @notice Step two of two: after `DeployKeyfleets` has broadcast one fleet, reads it back from
 /// the chain, checks it against the input manifest, and writes that fleet's published deployment
 /// manifest.
@@ -13,7 +18,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// token are read from the chain through that fleet. The supply, USDC price and split constants
 /// are the ones this script was compiled with from `KeyfleetPresets`, and the fleet's runtime code
 /// hash is recorded so it can be re-verified against the deployed code. A receipt that failed, a
-/// transaction with no receipt, a fleet with no code, a fleet of another preset, any value that
+/// transaction with no receipt, a fleet with no code, a fleet whose five contracts do not all
+/// exist and point at each other, a fleet of another preset, any value that
 /// differs from the manifest, or a fleet the VRF subscription does not yet list as a consumer stops
 /// the step before it writes. The Safe adds the consumer between the two steps, so
 /// the site only ever lists a fleet whose keys can be revealed.
@@ -39,6 +45,8 @@ contract RecordKeyfleets is KeyfleetManifest {
     error FleetNotInBroadcast();
     /// @notice The broadcast's fleet has no code on this chain.
     error FleetMissing(address fleet);
+    /// @notice One of the fleet's four other contracts has no code, or is bound to another fleet.
+    error CompanionNotBound(string companion, address account);
     /// @notice A value of the deployed fleet differs from the manifest.
     error RecordedMismatch(string field);
     /// @notice The VRF subscription does not list the fleet as a consumer yet.
@@ -93,13 +101,15 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @notice Reads the broadcast's fleet back from the chain, checks it against the manifest, and
     /// returns its deployed manifest's JSON.
-    /// @dev The fleet's preset must be the manifest slot's, and every address it holds the one the
+    /// @dev The fleet's ledger, voting controller, treasury and shard record must exist and be bound
+    /// to it. The fleet's preset must be the manifest slot's, and every address it holds the one the
     /// manifest names. The fleet must be a consumer of the subscription, and on Base the
     /// subscription must be owned by the protocol treasury.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
         _requireManifestFitsChain(manifest);
         Keyfleet fleet = summary.fleet;
         if (address(fleet).code.length == 0) revert FleetMissing(address(fleet));
+        _requireCompanionsBound(fleet);
 
         if (fleet.PRESET() != _presets()[manifest.slot]) revert RecordedMismatch("preset");
         if (address(fleet.USDC()) != manifest.usdc) revert RecordedMismatch("usdc");
@@ -130,6 +140,20 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeBytes32(root, "traitTableHash", fleet.TRAIT_TABLE_HASH());
         vm.serializeAddress(root, "incomeTokens", fleet.REWARDS().rewardAssets());
         return vm.serializeString(root, "disclosures", _disclosuresJson());
+    }
+
+    /// @dev Each of the fleet's four other contracts holds code and names the fleet as its own.
+    function _requireCompanionsBound(Keyfleet fleet) private view {
+        _requireBound("rewards", address(fleet.REWARDS()), fleet);
+        _requireBound("votes", address(fleet.VOTES()), fleet);
+        _requireBound("treasury", address(fleet.TREASURY()), fleet);
+        _requireBound("shards", address(fleet.SHARDS()), fleet);
+    }
+
+    function _requireBound(string memory companion, address account, Keyfleet fleet) private view {
+        if (account.code.length == 0 || IFleetBound(account).FLEET() != address(fleet)) {
+            revert CompanionNotBound(companion, account);
+        }
     }
 
     /// @dev The three randomness values the manifest decides, read back off the fleet.
@@ -163,6 +187,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeBytes32(fleetJson, "codeHash", address(fleet).codehash);
         vm.serializeAddress(fleetJson, "rewards", address(fleet.REWARDS()));
         vm.serializeAddress(fleetJson, "votes", address(fleet.VOTES()));
+        vm.serializeAddress(fleetJson, "treasury", address(fleet.TREASURY()));
         vm.serializeAddress(fleetJson, "shards", address(fleet.SHARDS()));
         vm.serializeString(fleetJson, "name", fleet.name());
         vm.serializeString(fleetJson, "symbol", fleet.symbol());

@@ -24,7 +24,7 @@ library KeyfleetPresets {
 
     /// @notice How a single gross purchase amount is divided. The four parts always sum to gross.
     /// @param protocol Protocol share for the Regents protocol treasury, taken once on every purchase.
-    /// @param capital Share that becomes the fleet's shared money.
+    /// @param capital Share that goes to the fleet's treasury.
     /// @param reserve Level-completion reserve, used by Fibonacci Cascade only.
     /// @param rebate Share paid to the holder of the preceding key, used by Accelerant primary mints after the first only.
     struct PurchaseSplit {

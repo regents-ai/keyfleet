@@ -4,9 +4,12 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
+import {KeyfleetStack} from "./KeyfleetStack.sol";
 
 /// @notice Step one of two: deploys one fleet, and writes nothing.
-/// @dev Each fleet goes on chain on its own run.
+/// @dev Each fleet goes on chain on its own run, as three transactions from the same account: the
+/// fleet, which deploys its ledger and shard record itself, then its voting controller, then its
+/// treasury, each at the address the fleet was given for it.
 ///
 /// Forge simulates a script in full before it broadcasts anything, so any file this step wrote
 /// would be written by a dry run too, and by a broadcast that failed partway. The deployed
@@ -35,14 +38,12 @@ contract DeployKeyfleets is KeyfleetManifest {
         vm.stopBroadcast();
     }
 
-    /// @notice Deploys the manifest's fleet.
+    /// @notice Deploys the manifest's fleet with its voting controller and treasury.
     /// @dev Reads no file and no environment variable, so this is the function the suite runs.
-    /// The fleet deploys its own reward ledger, voting controller and shard record in its own
-    /// constructor, so there is no window in which it exists without them.
     function deploy(Manifest memory manifest) public returns (Keyfleet fleet) {
         _requireManifestFitsChain(manifest);
 
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             _presets()[manifest.slot],
             IERC20(manifest.usdc),
             manifest.protocolTreasury,

@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
@@ -45,7 +46,7 @@ contract KeyfleetShardsTest is Test {
     // --- helpers ---------------------------------------------------------
 
     function _deploy() private returns (Keyfleet deployed) {
-        deployed = new Keyfleet(
+        deployed = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             address(0x7EA5),

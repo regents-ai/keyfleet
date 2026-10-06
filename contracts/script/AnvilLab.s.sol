@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetStack} from "./KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
@@ -43,7 +44,7 @@ contract AnvilLab is Script {
         uint256 subscriptionId = vrf.createSubscription();
         vrf.fundSubscriptionWithNative{value: 0.1 ether}(subscriptionId);
 
-        Keyfleet classic = new Keyfleet(
+        Keyfleet classic = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             TREASURY,

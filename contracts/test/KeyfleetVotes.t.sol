@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -19,7 +20,6 @@ contract KeyfleetVotesTest is Test {
     uint256 private constant PER_KEY_VOTE_CEILING = 31_000;
 
     MockToken private usdc;
-    MockToken private other;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private vrfSubscription;
 
@@ -47,7 +47,6 @@ contract KeyfleetVotesTest is Test {
 
     function setUp() public {
         usdc = new MockToken("USD Coin", "USDC");
-        other = new MockToken("Other", "OTH");
         vrf = new MockVRFCoordinatorV2Plus();
         vrfSubscription = vrf.createSubscription();
         vm.warp(1_000_000);
@@ -57,7 +56,7 @@ contract KeyfleetVotesTest is Test {
     // --- helpers ---------------------------------------------------------
 
     function _deploy(KeyfleetPresets.Preset preset) private returns (Keyfleet fleet) {
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             preset,
             usdc,
             address(0x7EA5),
@@ -98,13 +97,6 @@ contract KeyfleetVotesTest is Test {
         return address(uint160(0x100000 + index));
     }
 
-    /// @dev Sends `amount` of `token`, which is not an income token, to the fleet and sorts it, so
-    /// it becomes shared money.
-    function _receiveSharedMoney(Keyfleet fleet, MockToken token, uint256 amount) private {
-        token.mint(address(fleet), amount);
-        fleet.recognizeSurplus(address(token));
-    }
-
     function _ids(uint256 a) private pure returns (uint256[] memory ids) {
         ids = new uint256[](1);
         ids[0] = a;
@@ -137,8 +129,9 @@ contract KeyfleetVotesTest is Test {
 
     // --- 1. deployment and wiring ----------------------------------------
 
-    /// @dev Invariant: a fleet and its voting controller are born together and correctly bound, so
-    /// no deployment step can leave a fleet taking orders from someone else's vote.
+    /// @dev Invariant: a fleet and its voting controller are bound to each other, so no deployment
+    /// step can leave a fleet taking orders from someone else's vote, and no second controller can
+    /// bind to it.
     function test_constructorDeploysAndBindsItsOwnVotingController() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetVotes votes = fleet.VOTES();
@@ -146,8 +139,8 @@ contract KeyfleetVotesTest is Test {
         assertEq(address(votes.FLEET()), address(fleet), "the controller is bound to this fleet");
         assertEq(votes.proposalCount(), 0, "no proposal exists yet");
 
-        vm.expectRevert(KeyfleetVotes.ZeroAddress.selector);
-        new KeyfleetVotes(Keyfleet(address(0)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.WrongFleet.selector, address(fleet)));
+        new KeyfleetVotes(fleet);
     }
 
     // --- 2. one vote per key ---------------------------------------------
@@ -251,22 +244,18 @@ contract KeyfleetVotesTest is Test {
         }
     }
 
-    /// @dev Invariant: proposing reserves nothing and has no per-key limit. A Pay far above all the
-    /// shared money the fleet holds can be proposed, one key can open any number of proposals, and
-    /// the shared money is untouched until a Pay is carried out.
-    function test_proposingReservesNothingAndOneKeyMayOpenAnyNumber() public {
+    /// @dev Invariant: proposing has no per-key limit: one key can open any number of proposals.
+    function test_oneKeyMayOpenAnyNumberOfProposals() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 1);
-        _receiveSharedMoney(fleet, other, 1_000_000);
 
         vm.startPrank(_wallet(1));
         for (uint256 i = 0; i < 50; ++i) {
-            votes.proposePay(1, address(other), 1e30, bob, "far more than the fleet holds", bytes32(0));
+            votes.proposeDecision(1, "one more", bytes32(0));
         }
         vm.stopPrank();
         assertEq(votes.proposalCount(), 50, "fifty proposals from one key");
-        assertEq(fleet.freeCapital(address(other)), 1_000_000, "nothing reserved");
     }
 
     // --- 4. who may vote ----------------------------------------------------
@@ -708,12 +697,11 @@ contract KeyfleetVotesTest is Test {
     }
 
     /// @dev Invariant: an approved Decision records agreement and does nothing else. It is carried
-    /// out once, moves no tokens, and cannot be carried out a second time by anyone.
-    function test_anApprovedDecisionRecordsOnceAndMovesNothing() public {
+    /// out once and cannot be carried out a second time by anyone.
+    function test_anApprovedDecisionRecordsOnce() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
         _buyMany(fleet, 1);
-        _receiveSharedMoney(fleet, other, 10_000);
         vm.roll(block.number + 1);
 
         bytes32 digest = keccak256("commit");
@@ -730,8 +718,6 @@ contract KeyfleetVotesTest is Test {
 
         assertTrue(votes.proposal(proposalId).executed);
         assertEq(_state(votes, proposalId), uint256(KeyfleetVotes.State.Executed));
-        assertEq(fleet.freeCapital(address(other)), 10_000, "a Decision spends nothing");
-        assertEq(other.balanceOf(address(fleet)), 10_000);
 
         vm.expectRevert(KeyfleetVotes.AlreadyExecuted.selector);
         votes.execute(proposalId);
@@ -750,8 +736,8 @@ contract KeyfleetVotesTest is Test {
         proposalId = votes.proposeRestrictEdits(1, target, restricted, "stop the edits", bytes32(0));
     }
 
-    /// @dev Invariant: a RestrictEdits proposal names a key and a direction, is kind 2, stores
-    /// both and carries its reason in the creation event only. Its Pay fields stay zero.
+    /// @dev Invariant: a RestrictEdits proposal names a key and a direction, is kind 1, stores
+    /// both and carries its reason in the creation event only.
     function test_aRestrictEditsProposalStoresItsKeyAndDirection() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetVotes votes = fleet.VOTES();
@@ -767,13 +753,10 @@ contract KeyfleetVotesTest is Test {
         uint256 proposalId = votes.proposeRestrictEdits(1, 3, true, "spam", digest);
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        assertEq(uint256(stored.kind), 2, "RestrictEdits is kind 2");
+        assertEq(uint256(stored.kind), 1, "RestrictEdits is kind 1");
         assertEq(stored.targetTokenId, 3);
         assertTrue(stored.restricted);
         assertEq(stored.digest, digest);
-        assertEq(stored.asset, address(0), "no Pay fields");
-        assertEq(stored.amount, 0);
-        assertEq(stored.recipient, address(0));
         assertFalse(votes.editsRestricted(3), "nothing is restricted until it is carried out");
     }
 
@@ -920,23 +903,6 @@ contract KeyfleetVotesTest is Test {
         vm.prank(carol);
         uint256 proposalId = votes.proposeRestrictEdits(1, 2, true, "", bytes32(0));
         assertEq(votes.proposal(proposalId).targetTokenId, 2, "the delegate proposed it");
-    }
-
-    /// @dev Invariant: a RestrictEdits moves no money and leaves nothing to collect.
-    function test_aRestrictEditsMovesNoMoney() public {
-        Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        KeyfleetVotes votes = fleet.VOTES();
-        _buyMany(fleet, 3);
-        _receiveSharedMoney(fleet, other, 10_000);
-        uint256 proposalId = _proposeRestrict(votes, 3, true);
-        _vote(votes, proposalId, 1, true);
-        _vote(votes, proposalId, 2, true);
-        votes.execute(proposalId);
-
-        assertEq(fleet.freeCapital(address(other)), 10_000, "shared money is untouched");
-        assertEq(other.balanceOf(address(votes)), 0, "and nothing was set aside");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NothingToCollect.selector, proposalId));
-        votes.collect(proposalId, _ids(3));
     }
 
     // --- 7. gas -------------------------------------------------------------

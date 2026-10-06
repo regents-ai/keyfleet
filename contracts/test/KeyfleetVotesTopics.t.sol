@@ -26,10 +26,6 @@ contract KeyfleetVotesTopicsTest is Test {
         );
     }
 
-    function test_payProposedTopic() public pure {
-        assertEq(KeyfleetVotes.PayProposed.selector, 0x1da5b725f356ce5da6ebeddfa1d1b808edc6cc42c21738f9023ad8a0d59f96be);
-    }
-
     function test_voteCastTopic() public pure {
         assertEq(KeyfleetVotes.VoteCast.selector, 0x707650471b3fbad25e3f07d77bd835851846b71eb8c47598be05f07de77aed53);
     }
@@ -42,36 +38,28 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalKindNumbers() public pure {
         assertEq(uint8(KeyfleetVotes.Kind.Decision), 0);
-        assertEq(uint8(KeyfleetVotes.Kind.Pay), 1);
-        assertEq(uint8(KeyfleetVotes.Kind.RestrictEdits), 2);
-        assertEq(uint8(type(KeyfleetVotes.Kind).max), 2);
+        assertEq(uint8(KeyfleetVotes.Kind.RestrictEdits), 1);
+        assertEq(uint8(type(KeyfleetVotes.Kind).max), 1);
     }
 
     function test_incomeRecognizedTopic() public pure {
         assertEq(Keyfleet.IncomeRecognized.selector, 0x0cd4e99e415e30cc448d0a20beb2e3d8e1476362e9da4a494959dc6817a3fb13);
     }
 
-    function test_sharedMoneyRecognizedTopic() public pure {
+    function test_forwardedToTreasuryTopic() public pure {
         assertEq(
-            Keyfleet.SharedMoneyRecognized.selector, 0x499f2f2f2d8bb29705b19416e4ed4b160f0dfbfbe5a2bf3bc0f73d6b73e12fa7
+            Keyfleet.ForwardedToTreasury.selector, 0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81
         );
     }
 
-    function test_budgetPaidTopic() public pure {
-        assertEq(Keyfleet.BudgetPaid.selector, 0x49fd68af19bac5da72e7e1622c38c15d88d83df2eb98a0c9b2a03b81b9a74e9e);
-    }
-
-    function test_collectedTopic() public pure {
-        assertEq(KeyfleetVotes.Collected.selector, 0xb0204fab5c5aa6ce90e169a2f115973605e0a5bd6acfa463f8550ebaf458c9b4);
-    }
-
-    /// @dev The treasury reader's balance reads, one call each at the same block. A public
+    /// @dev The treasury reader's balance reads, one call each at the same block. The fleet's
+    /// capital is the token balance of the address `TREASURY` returns. A public
     /// mapping or variable's getter is only reachable through an instance, so those are named
     /// through one at address zero, which is never called.
     function test_treasuryViewSelectors() public view {
         assertEq(KeyfleetRewards.rewardAssets.selector, bytes4(0x880ec04e));
         assertEq(KeyfleetRewards(address(0)).backed.selector, bytes4(0x595b7f21));
-        assertEq(Keyfleet(address(0)).freeCapital.selector, bytes4(0x2b84308e));
+        assertEq(Keyfleet(address(0)).TREASURY.selector, bytes4(0x2d2c5565));
         assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
         assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
     }
