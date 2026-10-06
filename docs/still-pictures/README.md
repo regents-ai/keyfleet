@@ -8,7 +8,7 @@ need their own go.
 
 ## What ran
 
-- **Page.** The Key Lab, version 8 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv. A link of the form
+- **Page.** The Key Lab, version 9 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv. A link of the form
   `#seed=0x…&key=N&fleet=classic&fleetNumber=1&open` opens that key's card with its top line.
 - **Draw.** `table.json` is the trait table file from that page: 8 traits of 16 values each, every trait's weights
   adding up to 1,000. Its fingerprint is `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`.
