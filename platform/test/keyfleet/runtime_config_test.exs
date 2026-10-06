@@ -33,7 +33,7 @@ defmodule Keyfleet.RuntimeConfigTest do
       "AWS_ENDPOINT_URL_S3",
       "AWS_REGION",
       "BUCKET_NAME",
-      "AVATAR_PUBLIC_URL"
+      "PICTURES_PUBLIC_URL"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -329,7 +329,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("AWS_ENDPOINT_URL_S3", "https://storage.example.test")
     System.put_env("AWS_REGION", "auto")
     System.put_env("BUCKET_NAME", "keyfleet-avatars")
-    System.put_env("AVATAR_PUBLIC_URL", "https://keyfleet-avatars.storage.example.test")
+    System.put_env("PICTURES_PUBLIC_URL", "https://keyfleet-avatars.storage.example.test")
   end
 
   defp put_pooled_url do
