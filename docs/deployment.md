@@ -372,8 +372,9 @@ example `https://keyfleet.ai/metadata/syndicate/`, and the lab manifest uses
 `http://localhost:4000/metadata/<slot>/`. The contract's `tokenURI` is that base
 followed by the key's number, and the site answers it for every key sold:
 
-- until the key's traits are drawn, its name, a description, the fleet's
-  waiting picture `/art/<slot>/revealing.png` and the attributes `Level` (for
+- until the key's traits are drawn, its name, a description, the Interim
+  KeyFleet Access Pass `/images/keys/interim-keyfleet-access-pass.png` (one
+  picture for every key in every fleet) and the attributes `Level` (for
   Syndicate and Cascade only) and `Status: Revealing`, with
   `Cache-Control: max-age=30`;
 - once they are drawn, the same with its traits in place of `Status`, the

@@ -26,6 +26,26 @@ There are four fleet types, each with its own price rule. Classic opens first; t
 - **Income and shared money.** Distributable USDC income goes 100% to the keys. Other funds belong to the fleet’s shared treasury, except amounts owed under explicit sale allocations. Contracts and UI distinguish sale proceeds, income reserved for claims and shared money available for spending. Unclaimed income cannot fund treasury payments, even when held at the same address.
 - **Votes.** Voting is one-key–one-vote. A proposal passes when more than half of all keys sold vote yes; restricting a key’s edits needs three fifths. There is no deadline. The snapshot, transfer and cancellation rules listed under Open questions must be resolved before voting opens.
 
+## Key cards
+
+Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv, version 8).
+
+- **What a key looks like.** Each key's picture is its card, seen from the outside, as a still picture: no animation and no character. The key's handle matches the medallion icon, and a small 13-block Regents crown always sits in the bottom-left corner.
+- **Top line.** Every card reads `<FLEET TYPE> #<fleet number> · NO. <key number>`, for example `CLASSIC #1 · NO. 0072`. The site records one number per fleet; the contracts do not hold it.
+- **Eight traits, one shared table.** Exterior Design, Key Material, Card Shell, Foil, Emblem, Rim, Patina and Regents Crown, each with 16 values. That makes 4,294,967,296 possible cards. Every key in every fleet, including fleets selling at the same time, draws from the same table by the same rule, from its own random seed. The table's fingerprint is `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`.
+- **Rarity.** Each trait's weights add up to 1,000: seven Common values at 100 each, Uncommon 80, 70 and 60, Rare 40 and 25, Epic 15 and 7, Legendary 2 and Mythic 1. So a Mythic is 1 in 1,000 for each trait, and about 1 key in 125 holds at least one. Sean kept these odds on 6 Oct.
+- **Luck differs between fleets.** Because each key is drawn on its own, a fleet may end with no Mythic keys or with several:
+
+| Keys sold in a fleet | Mythic keys, on average | Chance of none |
+| :--- | :--- | :--- |
+| 144 | 1.1 | 32% |
+| 377 | 3.0 | 5% |
+| 1,024 | 8.2 | 0.03% |
+| 2,000 | 15.9 | almost none |
+
+- **Before the reveal.** From mint until a key's traits are drawn and its own picture is ready, it shows the Interim KeyFleet Access Pass: a black card with an uncut key and the words INTERIM / KEYFLEET / ACCESS PASS in the Regents colours (Sean chose this Shadow look on 6 Oct). It is the same picture for every key in every fleet. The key's details then update to its own card.
+- **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass. Making each key's own picture after its reveal, and where those pictures are kept, still need building and Sean's go. The test run is recorded in `docs/still-pictures/README.md`.
+
 ## Shared work and chat
 
 - **Optional collaboration modes.** Each goal can use open exploration, peer review, parallel approaches or staged handoffs. These coordinate voluntary work; they never grant voting, spending or additional tool permissions. A stage makes work available rather than forcing an agent to execute it.

@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     %{site: KeyfleetWeb.Endpoint.url()}
   end
 
-  test "a key waiting for its traits shows its fleet's waiting picture for 30 seconds", %{
+  test "a key waiting for its traits shows the interim access pass for 30 seconds", %{
     conn: conn,
     site: site
   } do
@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              "name" => "Keyfleet Cascade #3",
              "description" =>
                "Key 3 of Keyfleet Cascade. Its traits appear here once they are drawn.",
-             "image" => "#{site}/art/cascade/revealing.png",
+             "image" => "#{site}/images/keys/interim-keyfleet-access-pass.png",
              "attributes" => [
                %{"trait_type" => "Level", "value" => 2},
                %{"trait_type" => "Status", "value" => "Revealing"}
