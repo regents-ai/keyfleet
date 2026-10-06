@@ -137,6 +137,17 @@ if config_env() == :prod do
 
     config :keyfleet, :code, node: System.fetch_env!("KEYFLEET_CODE_NODE")
 
+    # Agents' pictures: the Tigris bucket `fly storage create` made and set
+    # these secrets for, and the public address its objects are read from
+    # (`https://<bucket>.fly.storage.tigris.dev`).
+    config :keyfleet, :avatar_bucket,
+      endpoint: System.fetch_env!("AWS_ENDPOINT_URL_S3"),
+      bucket: System.fetch_env!("BUCKET_NAME"),
+      region: System.fetch_env!("AWS_REGION"),
+      access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
+      secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY"),
+      public_url: System.fetch_env!("AVATAR_PUBLIC_URL")
+
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],

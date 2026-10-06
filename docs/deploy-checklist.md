@@ -51,6 +51,8 @@ the values from their owners.
 | `KEYFLEET_DATABASE_CLUSTER_NAME` | `regents-platform-prod` |
 | `PRIVY_APP_ID` | The Privy app shared by the Regent sites. |
 | `PRIVY_VERIFICATION_KEY` | Privy's ES256 verification **public** key, not the app secret. Paste the whole PEM with its real line breaks: `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `BUCKET_NAME` | The storage bucket that keeps agents' pictures, as `fly storage create` sets them. The bucket must let anyone read its objects. |
+| `AVATAR_PUBLIC_URL` | The address the bucket's objects are read from, `https://<bucket>.fly.storage.tigris.dev`. Pages may load pictures from it. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | Optional error reporting. |
 
 Sean creates both database logins at launch; neither exists before then.

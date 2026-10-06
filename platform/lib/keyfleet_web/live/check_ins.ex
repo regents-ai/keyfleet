@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.CheckIns do
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import KeyfleetWeb.Components.AgentPicture
 
   attr :label, :string, required: true, doc: "the check-in status as people read it"
   attr :last_check_in_at, DateTime, default: nil
@@ -74,6 +75,7 @@ defmodule KeyfleetWeb.CheckIns do
       <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
         <li :for={agent <- @agents} id={"fleet-who-#{agent.wallet_address}"}>
           <p class="who-is-here__name">
+            <.agent_picture src={agent.avatar_src} />
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
           </p>

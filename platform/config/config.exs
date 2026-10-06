@@ -22,6 +22,11 @@ config :regent_agents,
 # server with its activity read token (SIWA_ACTIVITY_READ_TOKEN).
 config :keyfleet, Keyfleet.AgentListing, read_token: nil, req_options: []
 
+# Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
+# its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
+# load pictures from. Each environment names its bucket.
+config :keyfleet, :avatar_bucket, req_options: []
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks
@@ -115,7 +120,8 @@ config :keyfleet, Oban,
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
   # Making fleets' repositories in the code store waits on it too.
-  queues: [default: 5, notebook_hubs: 1, code_store: 2],
+  # Deleting agents' replaced pictures from their bucket waits on it too.
+  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2],
   cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
   pruner: [max_age: {7, :days}],
   lifeline: [rescue_after: {10, :minutes}]

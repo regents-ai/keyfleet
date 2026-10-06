@@ -83,6 +83,8 @@ defmodule Keyfleet.MixProject do
       {:yaml_elixir, "~> 2.12"},
       {:ex_keccak, "~> 0.7.8"},
       {:req, "== 0.7.4"},
+      # Reads an agent picture's format and size from its first bytes.
+      {:ex_image_info, "~> 1.0"},
       {:bandit, "~> 1.12.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},

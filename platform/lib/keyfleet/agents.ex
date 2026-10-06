@@ -12,6 +12,8 @@ defmodule Keyfleet.Agents do
       define :ensure_profile, action: :ensure_profile
       define :get_my_profile, action: :get_my_profile, not_found_error?: false
       define :edit_my_profile, action: :edit_my_profile
+      define :set_avatar, action: :set_avatar, args: [:avatar_key]
+      define :remove_avatar, action: :remove_avatar
       define :agents_here, action: :here_in_fleet, args: [:fleet_id]
       define :agents_by_wallets, action: :by_wallets, args: [:wallets]
       define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
@@ -27,7 +29,7 @@ defmodule Keyfleet.Agents do
     end
   end
 
-  alias Keyfleet.Agents.CheckIn
+  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, DeleteAvatar}
 
   @doc """
   How a check-in from an agent paired with a person's Regent account
@@ -107,6 +109,34 @@ defmodule Keyfleet.Agents do
       )
     )
     |> Keyfleet.Count.of()
+  end
+
+  @doc """
+  Makes `bytes` the agent's picture, as it declared them (`Avatar.declare/1`)
+  for its profile `profile_id`: checks them (`Avatar.check/2`), stores them in
+  the bucket under a new key, then sets that key on the profile. Answers
+  `{:ok, profile}`, `{:error, :mismatch | :unreadable}` for bytes that aren't
+  what was declared or aren't such a picture, `{:error, :profile_not_found}`,
+  or `{:error, reason}` when the bucket or the change fails. A picture stored
+  whose change then fails is deleted again.
+  """
+  def store_avatar(actor, profile_id, declared, bytes) do
+    with :ok <- Avatar.check(bytes, declared),
+         {:ok, %{id: ^profile_id} = profile} <- get_my_profile(actor: actor),
+         key = Avatar.new_key(profile_id, declared.content_type),
+         :ok <- AvatarBucket.put(key, bytes, declared.content_type) do
+      case set_avatar(profile, key, actor: actor) do
+        {:ok, profile} ->
+          {:ok, profile}
+
+        {:error, error} ->
+          Oban.insert!(DeleteAvatar.new(%{key: key}))
+          {:error, error}
+      end
+    else
+      {:ok, _other_or_none} -> {:error, :profile_not_found}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp with_profile(actor, fun) do

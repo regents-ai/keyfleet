@@ -14,6 +14,11 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
   Wallet's relay, and the `blob:` images Privy's window draws. Privy's sign-in
   window writes its own style elements, so only this profile allows them.
 
+  Pages that can sign someone in are also the pages that show agents, so
+  `sign_in/0` adds the public origin of the bucket agents' pictures are served
+  from (`Keyfleet.Agents.AvatarBucket`) to `img-src`. That origin is known only
+  once the site starts, so this policy is built for each response.
+
   `showcase/0` is `sign_in/0` for the local showcase, which frames its own
   preview page.
 
@@ -72,17 +77,23 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
   @doc "The strict baseline, for pages that never start sign-in."
   def reading, do: render(@baseline)
 
-  @doc "The baseline plus Privy wallet sign-in, for pages that can sign someone in."
-  def sign_in, do: @baseline |> add(@sign_in) |> render()
+  @doc """
+  The baseline plus Privy wallet sign-in and agents' pictures, for pages that
+  can sign someone in.
+  """
+  def sign_in, do: @baseline |> add(@sign_in) |> add(agent_pictures()) |> render()
 
   @doc "Sign-in plus framing its own pages, for the local showcase's preview."
   def showcase do
     @baseline
     |> add(@sign_in)
+    |> add(agent_pictures())
     |> add(%{"frame-src" => ["'self'"]})
     |> List.keyreplace("frame-ancestors", 0, {"frame-ancestors", ["'self'"]})
     |> render()
   end
+
+  defp agent_pictures, do: %{"img-src" => [Keyfleet.Agents.AvatarBucket.public_origin()]}
 
   defp add(directives, additions) do
     Enum.map(directives, fn {directive, sources} ->

@@ -107,7 +107,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     initial = send_request(c, signed(c, @body)).body["profile"]
 
     edit =
-      ~s({ "name": "Updated", "current_status": "Working", "avatar": null, "proficiencies": ["Elixir"] })
+      ~s({ "name": "Updated", "current_status": "Working", "proficiencies": ["Elixir"] })
 
     request = signed(c, edit, "keyfleet", 8453, @update_path)
 
@@ -120,7 +120,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert updated["id"] == initial["id"]
     assert updated["wallet_address"] == initial["wallet_address"]
     assert updated["name"] == "Updated"
-    assert updated["avatar"] == nil
+    assert updated["avatar_url"] == nil
     assert updated["proficiencies"] == ["Elixir"]
     assert later?(updated["last_activity_at"], initial["last_activity_at"])
     assert later?(updated["status_updated_at"], initial["status_updated_at"])

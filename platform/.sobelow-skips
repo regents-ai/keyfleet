@@ -1,0 +1,4 @@
+
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:99,192EBFD
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:18,49BC7A3
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:92,91A6CF

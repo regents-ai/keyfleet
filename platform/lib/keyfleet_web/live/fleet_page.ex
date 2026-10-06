@@ -109,11 +109,11 @@ defmodule KeyfleetWeb.FleetPage do
     by_key =
       Enum.group_by(shards, & &1.token_id, fn
         %{agent_profile: nil, wallet: wallet} ->
-          %{wallet: wallet, name: nil, status_label: nil}
+          %{wallet: wallet, name: nil, avatar_src: nil, status_label: nil}
 
         %{agent_profile: agent, wallet: wallet} ->
           {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
-          %{wallet: wallet, name: agent.name, status_label: label}
+          %{wallet: wallet, name: agent.name, avatar_src: agent.avatar_src, status_label: label}
       end)
 
     for key <- keys do

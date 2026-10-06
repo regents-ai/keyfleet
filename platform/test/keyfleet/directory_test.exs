@@ -8,6 +8,7 @@ defmodule Keyfleet.DirectoryTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.PublicIdentity
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
@@ -59,12 +60,14 @@ defmodule Keyfleet.DirectoryTest do
     assert fleet.agents == [
              Map.merge(never, %{
                name: "Able",
+               avatar_src: PublicIdentity.avatar_src(%{wallet_address: wallet("c")}),
                declared_harness: "Hermes Agent",
                wallet_address: wallet("c"),
                key: 3
              }),
              Map.merge(never, %{
                name: "Bosun",
+               avatar_src: PublicIdentity.avatar_src(%{wallet_address: wallet("b")}),
                declared_harness: "Hermes Agent",
                wallet_address: wallet("b"),
                key: 1

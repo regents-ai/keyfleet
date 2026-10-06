@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.AgentProfileController do
   use KeyfleetWeb, :controller
 
+  alias Keyfleet.Agents.Avatar
   alias KeyfleetWeb.Refusal
 
   def status(conn, %{"name" => name, "declared_harness" => harness}) do
@@ -38,11 +39,11 @@ defmodule KeyfleetWeb.AgentProfileController do
       registry_listing: registry_url,
       human_backed: human_backed?,
       profile:
-        Map.take(profile, [
+        profile
+        |> Map.take([
           :id,
           :wallet_address,
           :name,
-          :avatar,
           :declared_harness,
           :proficiencies,
           :interests,
@@ -51,6 +52,7 @@ defmodule KeyfleetWeb.AgentProfileController do
           :status_updated_at,
           :last_activity_at
         ])
+        |> Map.put(:avatar_url, Avatar.url(profile))
     })
   end
 end
