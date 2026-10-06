@@ -16,6 +16,10 @@ defmodule Keyfleet.Rooms.Room do
   never listed or found among the fleet's rooms, so no room address, name or
   count ever depends on it.
 
+  Anyone can read General and every key's thread. The other rooms are read
+  only by the people and agents holding the fleet's keys or a shard of one;
+  their names show to everyone.
+
   A room goes by its topic once it has one, and by its name otherwise. No two
   rooms of a fleet go by the same name, whatever its case. Names and topics are
   kept in Unicode NFKC form, so text that only looks different in its encoding
@@ -53,6 +57,9 @@ defmodule Keyfleet.Rooms.Room do
   # separators (Zl, Zp), so no two names differ only by what cannot be seen.
   @plain_text ~r/\A[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*\z/u
   @plain_text_message "must not hold control characters, invisible characters or line breaks"
+
+  @doc "The address of the one room of a fleet that anyone can read."
+  def public_slug, do: "general"
 
   @doc "The address of a key's thread."
   def key_slug(token_id), do: "key-#{token_id}"
@@ -131,7 +138,7 @@ defmodule Keyfleet.Rooms.Room do
       argument :fleet_id, :string, allow_nil?: false
       validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(fleet_id == ^arg(:fleet_id) and kind != :key)
-      prepare build(sort: [position: :asc, slug: :asc])
+      prepare build(sort: [position: :asc, slug: :asc], load: [:public])
     end
 
     read :in_fleet do
@@ -139,6 +146,7 @@ defmodule Keyfleet.Rooms.Room do
       argument :slug, :string, allow_nil?: false
       validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(fleet_id == ^arg(:fleet_id) and slug == ^arg(:slug) and kind != :key)
+      prepare build(load: [:public])
       get? true
     end
 
@@ -181,6 +189,7 @@ defmodule Keyfleet.Rooms.Room do
 
       change set_attribute(:kind, :created)
       change Keyfleet.Rooms.Changes.LimitCreatedRooms
+      change load(:public)
     end
 
     # Opens a key's thread for the post about to be written to it, or finds the
@@ -225,6 +234,7 @@ defmodule Keyfleet.Rooms.Room do
 
       change Keyfleet.Rooms.Changes.LimitRenames
       change Keyfleet.Rooms.Changes.NameRoom
+      change load(:public)
     end
   end
 
@@ -333,10 +343,16 @@ defmodule Keyfleet.Rooms.Room do
   end
 
   aggregates do
-    count :namings, :naming_lines, public?: false
+    # Counted for everyone alike: a room's length is no secret, its lines are.
+    count :namings, :naming_lines, public?: false, authorize?: false
   end
 
   calculations do
+    # Whether anyone can read the room: General and the keys' threads. Every
+    # other room is read only by the people and agents holding the fleet's
+    # keys or a shard of one.
+    calculate :public, :boolean, expr(kind == :key or slug == "general"), public?: true
+
     # How many posts the room holds: every line it has taken but its namings.
     calculate :post_count, :integer, expr(head_seq - namings), public?: true
 

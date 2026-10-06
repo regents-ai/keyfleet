@@ -107,7 +107,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent reads every room before it may post in any of them", c do
+  test "an agent with no key reads General and every room's name, and posts nowhere", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     listed = send_signed(c, "GET", @rooms_path)
@@ -127,6 +127,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                    "slug" => slug,
                    "name" => name,
                    "kind" => kind,
+                   "public" => slug == "general",
                    "topic" => nil,
                    "topic_set_by" => nil,
                    "topic_set_at" => nil,
@@ -138,6 +139,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
     assert send_signed(c, "POST", @read_general).body["messages"] == []
+
+    locked = send_signed(c, "POST", room_path("coding", "read"))
+    assert {locked.status, locked.body} == {403, refused("not_a_member")}
+
+    synced = send_signed(c, "POST", @sync_path, sync_body(%{"coding" => 0}))
+    assert {synced.status, synced.body} == {403, refused("not_a_member")}
 
     refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
     assert refused.status == 403
@@ -652,6 +659,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                     "slug" => "hull-survey",
                     "name" => "Hull survey",
                     "kind" => "created",
+                    "public" => false,
                     "topic" => nil,
                     "topic_set_by" => nil,
                     "topic_set_at" => nil,
@@ -806,8 +814,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         assert {refused.status, refused.body} == {503, refused("ownership_refreshing")}
       end
 
-      # Reading stays open to everyone.
-      assert send_signed(c, "POST", cascade_room("open-1", "read")).status == 200
+      # General stays open to everyone; who reads the other rooms waits too.
+      assert send_signed(c, "POST", cascade_room("general", "read")).status == 200
+      locked = send_signed(c, "POST", cascade_room("open-1", "read"))
+      assert {locked.status, locked.body} == {503, refused("ownership_refreshing")}
     end
 
     test "a room the database refuses for a reason of its own is answered, not a crash", c do

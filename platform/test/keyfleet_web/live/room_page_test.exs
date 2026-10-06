@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
     assert html =~ "Hull survey started"
-    assert html =~ "Everyone can read."
+    assert html =~ "Anyone can read this room."
     refute has_element?(view, @composer)
 
     assert render_submit(view, "send_message", %{"post" => %{"body" => "Hello"}}) =~
@@ -263,7 +263,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     {:ok, _view, html} = live(conn, @path)
 
-    assert html =~ "Everyone can read."
+    assert html =~ "Anyone can read this room."
     refute html =~ "being refreshed"
   end
 
@@ -310,7 +310,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
           view
           |> element(".rooms-list")
           |> render()
-          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*<\/a>/u, &1, capture: :all_but_first))
+          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*</u, &1, capture: :all_but_first))
           |> List.flatten()
 
         assert labels ==
@@ -321,10 +321,22 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         refute has_element?(view, @namer)
       end
 
+      # Everyone sees every room's name; only the keys read beyond General.
+      for conn <- [signed_out, stranger] do
+        {:ok, view, _html} = live(conn, @path)
+        refute has_element?(view, ~s(a[href="#{@path}"] .rooms-access))
+        assert has_element?(view, ~s(a[href="#{@open_one}"] .rooms-access), "Keys only")
+      end
+
+      {:ok, view, _html} = live(member, @path)
+      assert has_element?(view, ~s(a[href="#{@path}"] .rooms-access), "Public")
+      refute has_element?(view, ~s(a[href="#{@open_one}"] .rooms-access))
+
       # Only a member is asked to name an open room.
       for conn <- [signed_out, stranger] do
         {:ok, view, html} = live(conn, @open_one)
-        assert has_element?(view, "#rooms-thread-title", "Open room 1")
+        assert has_element?(view, "#rooms-locked #rooms-thread-title", "Open room 1")
+        assert has_element?(view, "#rooms-locked", "Anyone can read General.")
         refute has_element?(view, @namer)
         refute html =~ "Name this room"
       end
@@ -356,9 +368,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, "#rooms-namer-topic[value='']")
       assert has_element?(view, "label[for=rooms-namer-topic]", "Rename this room")
 
-      assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
-      assert has_element?(watcher, ".rooms-naming", "named this room “Hull survey”")
-      assert render(watcher) =~ "Named by 0xdddd..dddd on"
+      # Someone with no key sees the room's new name, never what is said in it.
+      assert has_element?(watcher, "#rooms-locked #rooms-thread-title", "Hull survey")
+      refute has_element?(watcher, ".rooms-naming")
       assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
 
       # A room is renamed at most once a minute.
@@ -371,7 +383,10 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit()
       assert has_element?(watcher, "#rooms-thread-title", "Dry dock")
 
-      assert Enum.map(Rooms.read_messages!(@fleet, "open-1"), &{&1.kind, &1.body}) == [
+      assert Enum.map(
+               Rooms.read_messages!(@fleet, "open-1", actor: owner_actor()),
+               &{&1.kind, &1.body}
+             ) == [
                {:room_named, "Hull survey"},
                {:room_named, "Dry dock"}
              ]

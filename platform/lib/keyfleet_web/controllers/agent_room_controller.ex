@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
 
-  @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
+  @room_fields [:slug, :name, :kind, :public, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
   @message_fields [
     :id,
@@ -55,7 +55,7 @@ defmodule KeyfleetWeb.AgentRoomController do
         conn |> put_status(201) |> json(%{room: room_json(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
-        if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+        refuse_forbidden(conn, fleet_id, error)
 
       {:error, error} ->
         refuse_room(conn, error)
@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.AgentRoomController do
         json(conn, %{room: room_json(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
-        if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
+        refuse_forbidden(conn, fleet_id, error)
 
       {:error, error} ->
         refuse_topic(conn, error)
@@ -83,8 +83,11 @@ defmodule KeyfleetWeb.AgentRoomController do
     # The posts are read before the room's head, so the head answered is never
     # behind the posts answered with it. Posts written as a key the agent has
     # muted are left out, and the cursor still counts them, so reading on from
-    # it never reads them again.
-    with {:ok, messages} <-
+    # it never reads them again. A room other than General is refused to an
+    # agent holding none of the fleet's keys or shards, once it is known to be
+    # one of the fleet's rooms, whose names are public.
+    with {:ok, %{}} <- Rooms.get_room(fleet_id, slug, actor: actor),
+         {:ok, messages} <-
            Rooms.read_messages(fleet_id, slug, Map.take(params, ["after_seq", "limit"]),
              actor: actor
            ),
@@ -97,7 +100,9 @@ defmodule KeyfleetWeb.AgentRoomController do
         messages: messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
       })
     else
+      {:ok, nil} -> not_found(conn)
       nil -> not_found(conn)
+      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -161,6 +166,7 @@ defmodule KeyfleetWeb.AgentRoomController do
          {:ok, yours} <- yours(fleet_id, actor) do
       json(conn, sync_json(synced, check_in, yours, Rooms.muted_keys!(fleet_id, actor)))
     else
+      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -170,7 +176,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   # Standing cannot be read while the fleet's key ownership is not fresh.
   defp sent(conn, fleet_id, {:error, %Ash.Error.Forbidden{} = error}),
-    do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
+    do: refuse_forbidden(conn, fleet_id, error)
 
   defp sent(conn, _fleet_id, {:error, error}), do: refuse(conn, error)
 
@@ -264,6 +270,11 @@ defmodule KeyfleetWeb.AgentRoomController do
       version: task.version
     }
   end
+
+  # Who reads beyond General, posts, names and creates rooms is the fleet's
+  # keys, which cannot be told while the fleet's key ownership is not fresh.
+  defp refuse_forbidden(conn, fleet_id, error),
+    do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
 
   defp refuse(conn, %Ash.Error.Forbidden{}), do: forbidden(conn)
 

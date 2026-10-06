@@ -64,7 +64,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   @doc """
   One fleet: its rules, who's here, its open work, its rooms and its latest
-  posts, or for a coming-soon fleet, that it is coming soon.
+  posts in General, or for a coming-soon fleet, that it is coming soon.
   """
   def show(assigns) do
     case DirectoryJSON.show(assigns) do
@@ -113,7 +113,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     #{rooms(fleet)}
 
-    ## Latest posts
+    ## Latest posts in General
 
     #{posts(fleet.recent_posts)}
 

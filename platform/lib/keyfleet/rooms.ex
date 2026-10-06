@@ -47,7 +47,10 @@ defmodule Keyfleet.Rooms do
         action: :fleet_lines_before,
         args: [:fleet_id, :before_at, :before_id, :limit]
 
-      define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
+      define :get_post_in_room,
+        action: :in_room,
+        args: [:fleet_id, :id, :room_id],
+        not_found_error?: false
 
       define :get_post_under_send_key,
         action: :under_send_key,
@@ -152,27 +155,36 @@ defmodule Keyfleet.Rooms do
       else: Enum.random(15..30)
   end
 
-  # The posts are read before the heads. A post is only ever seen once its room
-  # has counted it, so a head read afterwards is never behind the posts it is
-  # returned with.
+  # Every room named must be one the fleet has, whoever asks, since every
+  # room's name is public. The posts are then read before the heads. A post is
+  # only ever seen once its room has counted it, so a head read afterwards is
+  # never behind the posts it is returned with.
   defp sync_rooms(fleet_id, cursors, actor) do
-    read =
-      Enum.map(cursors, fn cursor ->
-        {cursor,
-         read_messages!(fleet_id, cursor.slug, %{after_seq: cursor.after_seq, limit: @sync_page},
-           actor: actor
-         )}
-      end)
-
-    rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
-
-    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
-      nil ->
-        {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, rooms) end)}
-
-      %{slug: slug} ->
-        {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+    with :ok <- known_rooms(fleet_id, cursors, actor),
+         {:ok, read} <- read_cursors(fleet_id, cursors, actor) do
+      rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
+      {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, rooms) end)}
     end
+  end
+
+  defp known_rooms(fleet_id, cursors, actor) do
+    slugs = MapSet.new(list_rooms!(fleet_id, actor: actor), & &1.slug)
+
+    case Enum.find(cursors, &(not MapSet.member?(slugs, &1.slug))) do
+      nil -> :ok
+      %{slug: slug} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+    end
+  end
+
+  defp read_cursors(fleet_id, cursors, actor) do
+    Enum.reduce_while(cursors, {:ok, []}, fn cursor, {:ok, read} ->
+      page = %{after_seq: cursor.after_seq, limit: @sync_page}
+
+      case read_messages(fleet_id, cursor.slug, page, actor: actor) do
+        {:ok, messages} -> {:cont, {:ok, read ++ [{cursor, messages}]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
   end
 
   defp synced(%{slug: slug, after_seq: after_seq}, messages, rooms) do

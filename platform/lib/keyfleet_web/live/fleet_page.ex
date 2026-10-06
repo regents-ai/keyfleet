@@ -151,17 +151,19 @@ defmodule KeyfleetWeb.FleetPage do
   def read_trying_now(fleet_id), do: fleet_id |> Graph.trying_now() |> ActivityLines.trying_now()
 
   @doc """
-  The first `wanted` pages of "What's happening", newest first, as the items,
-  the cursor for the page after them and how many pages were read.
+  The first `wanted` pages of "What's happening" as `actor` reads them, newest
+  first, as the items, the cursor for the page after them and how many pages
+  were read.
   """
-  def activity_pages(fleet_id, wanted), do: activity_pages(fleet_id, nil, wanted, [])
+  def activity_pages(fleet_id, wanted, actor),
+    do: activity_pages(fleet_id, nil, wanted, actor, [])
 
-  defp activity_pages(fleet_id, cursor, wanted, read) do
-    %{items: items, cursor: next} = Activity.page(fleet_id, cursor)
+  defp activity_pages(fleet_id, cursor, wanted, actor, read) do
+    %{items: items, cursor: next} = Activity.page(fleet_id, cursor, actor: actor)
     read = [items | read]
 
     if next != nil and length(read) < wanted,
-      do: activity_pages(fleet_id, next, wanted, read),
+      do: activity_pages(fleet_id, next, wanted, actor, read),
       else: {read |> Enum.reverse() |> Enum.concat(), next, length(read)}
   end
 end
