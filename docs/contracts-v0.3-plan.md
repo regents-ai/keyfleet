@@ -331,25 +331,33 @@ Sean confirms the Base signers in decision 3.
 - **A plain USDC transfer is not counted as revenue.** It sits as surplus, which only the owner can redeposit (`redepositSurplusUSDC`) or sweep (`sweepSurplusUSDC`). There is no public way to recognise it. So today's plain `transfer` must not simply be pointed at the staking address. It has to become a deposit.
 - **Where the money goes:** stakers are credited pro rata on the **total** REGENT supply, and the unstaked remainder goes to a treasury balance the Safe can withdraw.
 
-**The change (commit C3):**
+**The change (commit C3), as amended in review (section 8):** the deposit is made by the fleet's `KeyfleetTreasury`, not by the core. The core never approves anything, so spec §7.2 ("no external token approvals ever originate from the protected rewards/settlement vault") holds without an exception, and no extra contract is needed.
 
 ```solidity
-IRegentRevenueStaking public immutable REGENT_STAKING;   // pinned 0xb027…54AB5, replaces PROTOCOL_TREASURY
-
+// Keyfleet (core)
 function sendProtocolShare() external nonReentrant {
     uint256 amount = protocolShareOwed;
     protocolShareOwed = 0;
-    USDC.forceApprove(address(REGENT_STAKING), amount);                    // exact, same call
-    uint256 received = REGENT_STAKING.depositUSDC(amount, PROTOCOL_SHARE_TAG, bytes32(uint256(uint160(address(this)))));
-    if (received != amount || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) revert StakingDepositFailed(amount, received);
+    USDC.safeTransfer(address(TREASURY), amount);
+    TREASURY.depositProtocolShare(amount);              // reverts the whole call if staking refuses
     emit ProtocolShareSent(amount);
+}
+
+// KeyfleetTreasury
+IRegentRevenueStaking public immutable REGENT_STAKING;   // pinned 0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5
+
+function depositProtocolShare(uint256 amount) external onlyFleet nonReentrant {
+    USDC.forceApprove(address(REGENT_STAKING), amount);                    // exact, same call
+    uint256 received = REGENT_STAKING.depositUSDC(amount, PROTOCOL_SHARE_TAG, bytes32(uint256(uint160(address(FLEET)))));
+    if (received != amount || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) revert StakingDepositFailed(amount, received);
 }
 ```
 
 - **Still the same:** 10% of every purchase, booked at purchase and sent whole by anyone.
 - **`PROTOCOL_SHARE_TAG`:** a fixed constant. C3 copies the exact tag convention that the Regents staking reader already indexes (read in `repos/regents` at that commit; not yet checked).
-- **A purchase never touches staking.** If staking is paused, or the owed amount is zero, only `sendProtocolShare` reverts and the share stays owed. A reverted press is an accepted outcome, so the button is never gated (rule 11).
-- **The only approval the core ever makes** is this exact, same-call allowance to one pinned address, and it is asserted back to zero. Spec §7.2 says no approval originates from the protected vault, so this is decision 4.
+- **A purchase never touches staking.** If staking is paused, or the owed amount is zero, only `sendProtocolShare` reverts, the whole call unwinds and the share stays owed in the core. A reverted press is an accepted outcome, so the button is never gated (rule 11).
+- **The owed share never sits in the treasury between transactions.** It passes through inside one call; `depositProtocolShare` shares the treasury's reentrancy lock with `executeBatch` and `processDailySplit`, so no approved call or split can run in the middle of it.
+- **The only approval this path makes** comes from the treasury (the account the spec lets approve), is exact, goes to one pinned non-proxy address, and is asserted back to zero.
 - **Other protocol revenue paths:**
   - No other KeyFleet contract path pays protocol revenue.
   - Autolaunch v1's per-launch splitter already sends its 2% to this staking contract through `depositUSDC`.
@@ -449,6 +457,7 @@ The checkpoint library is OpenZeppelin `Checkpoints.Trace208`, with a `uint48` r
 - `issue(tokenId, wallet, days, caps)`.
 - `delegationRevision[tokenId]` goes up on every issue and every end for that key.
 - `hasCapability(wallet, tokenId, cap)` is a view.
+- Shards are keyed by `(tokenId, wallet)`, so one agent wallet may hold shards of several keys (P14, section 8). `shardOf(wallet)` is replaced by `shardOf(tokenId, wallet)`; the site's shard reader changes with it (S3, S4).
 
 A marketplace approval (`approve`, `setApprovalForAll`) grants nothing here.
 
@@ -579,11 +588,12 @@ mapping(uint256 key => mapping(address asset => uint256)) keySplitIndex;
 address[] splitAssets;                                        // append-only, at most 5, filled on first funding
 ```
 
-- **`fundSplit(asset, perKey, n)`**, treasury only.
+- **`fundSplit(asset, perKey, n)`**, treasury only, and only while the treasury is inside `processDailySplit` (review amendment, section 8).
+  0. Require `TREASURY.splitInProgress()`. The treasury sets this flag with OpenZeppelin `TransientSlot` at the start of `processDailySplit` and clears it at the end. `executeBatch` never sets it, so an approved CALL from the treasury to Rewards cannot fund a split outside the rate, threshold and once-per-period rules, or fill the five split-asset entries with other tokens.
   1. Require `FLEET.totalMinted() == n`. A key minted during funding, for example from a token callback, makes it revert, so a new key never shares an allocation worked out before its mint.
   2. Require `balance ≥ backed + perKey × n`.
   3. Then `splitIndex += perKey` and `backed += perKey × n`. Append the asset to `splitAssets` the first time.
-- **`fundSplitNative`** does the same for ETH, with `msg.value == perKey × n`.
+- **`fundSplitNative`** does the same for ETH, with the same flag check and `msg.value == perKey × n`.
 - **Mint (`enrollKey`):** for each asset in `splitAssets`, `keySplitIndex[k][a] = splitIndex[a]`. Assets bound later start at index 0, which is correct for every key.
 - **`settleKey(k, from)`** settles both lanes: the cohort USDC income, and `(splitIndex[a] − keySplitIndex[k][a])` for each split asset, into `credits[a][from]`. This happens before every transfer. It loops over at most 5 assets plus one cohort.
 - **`claim(asset, keys, to)`** settles the caller's own keys, then pays the caller's credit, with `Address.sendValue` for ETH. One asset per call, so a recipient that refuses ETH blocks only its own claim. Only the owner can redirect with `to`; there is no operator path.
@@ -635,10 +645,10 @@ Section 4.7's binding rule `launcher == treasury` becomes `launches(id).treasury
 
 | Account | Holds | Can make arbitrary calls? | Approvals out |
 |---|---|---|---|
-| `Keyfleet` (core) | Cascade reserve, owed protocol share, USDC income on its way to Rewards | No | One exact, same-call approval to the pinned staking contract (section 3.2, decision 4) |
+| `Keyfleet` (core) | Cascade reserve, owed protocol share, USDC income on its way to Rewards | No | None (the staking deposit is made by the treasury, section 3.2) |
 | `KeyfleetRewards` | All member claims: income, rebates, Cascade repayments, split allocations | No | None |
 | `KeyfleetVotes` | Nothing (matching is deleted) | No | None |
-| `KeyfleetTreasury` | Free capital only | Yes, approved `Call[]` | Only through approved calls |
+| `KeyfleetTreasury` | Free capital only | Yes, approved `Call[]` | Through approved calls, plus the exact staking deposit of section 3.2 |
 
 Acceptance (§13 step 2):
 
@@ -914,13 +924,13 @@ Sizes are rough source lines changed, tests included.
 |---|---|---|---|---|
 | C1 | 1 | This plan | Sean answers section 7 | doc |
 | C2 | 1 | **Base manifest and pins.** Add `deployments/base.json`, delete `ethereum.json`. Pin Base USDC, VRF coordinator and gas lane, REGENT, staking and the Safe in `KeyfleetManifest`. Update the anvil manifest. Replace the Ethereum fork test with `fork/KeyfleetBaseFork.t.sol` (gas lane exists, USDC has 6 decimals, staking has code, REGENT `decimals`). | Refusal tests per pin. The fork test is green with `BASE_RPC_URL`. No Ethereum pin is left. | ~400 |
-| C3 | 2 | **Protocol share to REGENT staking.** `sendProtocolShare` deposits into the pinned staking contract (section 3.2). `PROTOCOL_TREASURY` is deleted. | 10% is unchanged. A paused staking contract leaves the share owed and never blocks a purchase. The amount received is checked. The allowance ends at 0. A fork test against the real staking contract. | ~250 |
-| C4 | 2 | **Treasury split out; matching deleted.** New `KeyfleetTreasury` (it receives funds; execution comes later). Purchase capital, Cascade surplus and non-USDC surplus are forwarded to it. Delete `freeCapital`, `payFromBudget`, `collect` and matching. Deployment topology from the size measurements. | Every paid unit lands in the treasury, the reserve, the owed share or Rewards backing (today's conservation test, extended). The core and Rewards hold no free capital. Sizes are under 24,576 runtime and 49,152 initcode. | ~900 |
+| C3 | 2 | **Treasury split out; matching deleted.** New `KeyfleetTreasury` (it receives funds; execution comes later). Purchase capital, Cascade surplus and non-USDC surplus are forwarded to it. Delete `freeCapital`, `payFromBudget`, `collect` and matching. Deployment topology from the size measurements. | Every paid unit lands in the treasury, the reserve, the owed share or Rewards backing (today's conservation test, extended). The core and Rewards hold no free capital. Sizes are under 24,576 runtime and 49,152 initcode. | ~900 |
+| C4 | 2 | **Protocol share to REGENT staking.** `sendProtocolShare` moves the owed share to the treasury, which deposits it into the pinned staking contract in the same call (section 3.2). `PROTOCOL_TREASURY` is deleted. | 10% is unchanged. A paused staking contract unwinds the call, leaves the share owed in the core and never blocks a purchase. The core makes no approval. The amount received is checked. The allowance ends at 0. A fork test against the real staking contract. | ~250 |
 | C5 | 3 | **Presence.** `KeyfleetPresence`: touch, the queue, `sweepExpired`, checkpoints, `onKeyMoved`. Delete `lastMovedBlock`. Add `firstMintAt`. | The presence tests from 4.10. Queue invariants. Gas ceilings for touch, sweep per entry and the transfer hook. | ~700 |
 | C6 | 3 | **Delegation and signatures.** Shard capabilities and delegation revision. EIP-712 Present and Ballot. Delete `votingDelegate`. | Old-signature, ERC-1271, nonce, marketplace-approval and keeper-cannot-present tests. | ~600 |
 | C7 | 3 | **Proposals and the growing electorate.** New proposal shape, ballots, worked-out status, cancel, expiry. Delete the kinds, `withdrawVote` and three fifths. | The electorate tests and invariants from 4.10. The §6 example table. | ~1,000 |
 | C8 | 4 | **Exact CALL execution.** `executeBatch`, the `onlySelf` functions `pay`, `advance` and `setEditsRestricted`, `returnAdvance`. Bytecode check script plus Slither config. | The execution tests from 4.10. The segregation invariant (random calls cannot lower protected figures). No `DELEGATECALL` or `SELFDESTRUCT` is reachable. | ~800 |
-| C9 | 5 | **Rewards: multi-asset split index.** `fundSplit` and `fundSplitNative`, split settlement on transfer, ETH claims. | The ownership and rewards tests. Backing invariant per asset. Transfer gas ceiling with 5 bound assets. | ~600 |
+| C9 | 5 | **Rewards: multi-asset split index.** `fundSplit` and `fundSplitNative`, split settlement on transfer, ETH claims. | The ownership and rewards tests. Backing invariant per asset. Transfer gas ceiling with 5 bound assets. An approved CALL from the treasury to `fundSplit` or `fundSplitNative` reverts. | ~600 |
 | C10 | 5 | **Daily fair split.** Periods, rate state, thresholds, slots, `processDailySplit` and `processAll`, `admitOusd`. | The daily-allocation tests. Once-per-period invariant. The spec's §8.4 table, row by row. | ~700 |
 | C11 | 5 | **Invariant suite**, combining handlers across all five contracts. | All invariants from section 4 hold over 256 runs × depth 100, or more. | ~500 |
 | C12 | 7 | **Autolaunch path.** Minimal interfaces copied from the selected Base version, `bindLaunchToken`, launch-call template, and the receiver pointing at the core. | Fork test: a whole launch through an approved treasury call on a Base fork. TOKEN is bound only after success, and only released tokens count. | ~700 |
@@ -934,130 +944,45 @@ Step 8 (independent review and controlled release) comes after C14. It needs an 
 
 ## 7. Open points for Sean
 
-Each one is a plain decision with a recommendation. Decisions 1–3 are the spec's own three review points (§14).
+Reviewed and trimmed by the KeyFleet chief engineer (section 8). Points the spec itself already settles are built as the spec says and are listed in 7.2, not asked. The questions put to Sean are in 7.1; the build follows each recommendation until he answers, and a different answer changes only the named commit.
 
-### 1. (P1) What "at least the threshold" is measured against
+### 7.1 Asked
 
-- What changes: in the contracts, the fair split runs only when the treasury's free balance of an asset is at least the threshold (0.05 ETH, or 100 whole tokens). The size of the cut is not tested.
-- **a)** Use the free balance before the cut (spec §2). The split runs as soon as the balance reaches the threshold.
-- **b)** Hold: the split code (C10) waits.
-- Recommendation: **a**.
+| Plan id | Question | Recommendation | Commits it touches |
+|---|---|---|---|
+| P1 | The daily split's threshold (0.05 ETH, 100 tokens) is measured on the free balance before the cut (spec §2, flagged by the spec for review). | Yes | C10 |
+| P2 | Keep the USDC income route: USDC paid to the fleet core goes 100% to the keys; only the treasury's holdings are split daily (spec §2 and §9, flagged for review). | Yes | C3, C10 |
+| P3 | The Base addresses in section 3.1, including the Base Regents Safe signers, which differ from the Ethereum Safe's at the same address. | Confirm | C2 |
+| P7 | A key's owner may let its agent mark the key present, vote and propose (spec §5.1). The product spec today says an agent never votes. | Follow spec v0.3, opt-in per shard | C6 |
+| P8 | The site runs the daily split and the expiry clean-up from a small gas-only Base wallet (spec §5.3 and §12 call for Oban to do this). The product spec today says the site never sends a transaction. | Yes | Site lane S8 only |
+| P10 | The fleet's token launch binds to Autolaunch v1 now, or waits for v2 on Base. | Depends on v2 timing | C12 only |
+| P13 | Bring `docs/product-spec.md` in line with v0.3 (Base, the 48-hour electorate, agents per P7, the site wallet per P8, REGENT staking receives the 10%). | Yes, doc-only commit | Docs |
+| P14 | One agent wallet may hold shards of several keys of the same fleet. | Allow it (changed in review, section 8) | C6 |
 
-### 2. (P2) Keep the USDC income route
+P9 (a throwaway Lit test fleet on Base mainnet) is a deployment and is asked at deployment time, with its own go.
 
-- What changes: USDC paid to the fleet core counts as income and goes 100% to the keys by the existing per-key and per-level rule. It never enters the treasury or the daily split. Everything in the treasury is free capital and part of the split base.
-- **a)** Keep it (spec §2 and §9). Customers and the Revstake splitter are told to pay the core.
-- **b)** Drop the income route, so all USDC becomes capital and goes through the 0.5% daily split.
-- Recommendation: **a**. It keeps today's "income goes 100% to the keys" promise.
+### 7.2 Settled by the spec or by engineering, not asked
 
-### 3. (P3) Confirm the Base bindings
+| Plan id | Settled as | Why |
+|---|---|---|
+| P4 | The treasury, not the core, approves and deposits the 10% (section 3.2). | Keeps spec §7.2 without an exception or a new contract. |
+| P5 | Restricting a key's edits passes by the same `Yes > floor(D/2)` rule. | Spec §7.1: no separate quorum class. |
+| P6 | Minority matching and "Collect the match" are deleted. | Spec §1 and §4.3. |
+| P11 | Sequenced deploy of the five contracts. | Base's code-size limit; engineering only. |
+| P12 | A proposal's result is a read; no finalize transaction. | Tallies cannot change after closing. |
+| P15 | VRF on the 2 gwei lane, native ETH, 3 confirmations, 100,000 callback gas. | Base gas sits far below 2 gwei; a refused request can be retried. |
+| P16 | Keys the treasury holds count, vote and earn like any other. | Spec §4.1 and §8.2 ("all existing minted Keys"). |
 
-- What changes: `KeyfleetManifest` pins these on Base (chain 8453), and every Ethereum pin is deleted.
-  - USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
-  - REGENT `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`.
-  - REGENT staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.
-  - VRF coordinator `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`.
-  - Autolaunch v1 factory `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`.
-  - Regents Safe `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, which owns staking and the VRF subscription.
-  - OUSD unconfigured.
-- The Base Safe has different signers from the Ethereum Safe at the same address. On Base: `0x8C172cA4b5Dd9449217C636A953727eACD690e37`, `0x978BDbECb54C54800D01055Df5A8f6af600BfaCe` and `0x1d0dcABAeb941823E51935F795Be184aBeBf76dF`.
-- **a)** Confirm all of them as written.
-- **b)** Hold, and say which one is wrong.
-- Recommendation: **a**. All were checked against official pages and the live chain.
+## 8. Chief engineer review (6 October 2026)
 
-### 4. (P4) How the 10% reaches staking
+Checked against the spec, section by section: the electorate (E0 from the cleaned queue, late joiners, `Yes > floor(D/2)`, no shrinking, the §6 example table), presence (sorted queue, epoch clearing on transfer, same-block ordering through the state revision), exact CALL-only execution (hash binding, atomic batch, retry until expiry, cancel while Open or Approved), the daily split formula and rate timing (§8.3, §8.4), funded pull claims (§8.5), segregation (§3, §4.3) and rule 41 a. The design holds. Three amendments, applied above:
 
-- What changes: `Keyfleet.sendProtocolShare` stops sending USDC to the Regents Safe. It deposits into REGENT staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5` with `depositUSDC`. Staking does not count plain transfers, so a deposit is required.
-- **a)** The fleet core gives an exact, same-call approval for the owed amount to that one pinned address, deposits, and checks the allowance is back to zero. This is the single, written exception to spec §7.2's "no approvals from the protected vault".
-- **b)** No exception: the core sends the share to a tiny separate forwarding contract with no other role, which approves and deposits. It adds one contract and one hop.
-- Recommendation: **a**. It is simplest, the allowance never outlives the call, and only staking can use it.
+1. **Gap closed: an approved CALL could fund a split directly.** `KeyfleetRewards.fundSplit` was "treasury only", and every approved CALL is sent by the treasury. A proposal could therefore call it with any asset and amount, skipping the 10–100 bps bound and the once-per-period rule, and could fill the five split-asset entries with other tokens so OUSD or the launch TOKEN could never be added. Fix: Rewards also requires `TREASURY.splitInProgress()`, a transient flag only `processDailySplit` sets (section 4.6). A test in C9 proves an approved call to either funding function reverts.
+2. **The 10% goes through the treasury.** The plan's version had the core approve staking, an exception to spec §7.2. Sending the owed share to the treasury and depositing it in the same call needs no exception and no new contract (section 3.2). C3 and C4 swap so the treasury exists first.
+3. **P14 changes to "allow".** The spec's own test list includes "one person holding many Keys", and with explicit capabilities per shard there is no safety reason to force one agent per key. Shards become keyed by `(tokenId, wallet)`; a wallet's authority is always checked for a named key, so holding several never mixes them.
 
-### 5. (P5) Restricting a key's edits: simple majority
+Watch items for the build, not decisions:
 
-- What changes: today restricting edits needs three fifths of all keys sold. Under v0.3 every proposal passes on `Yes > half of D`, and the spec allows no separate class.
-- **a)** A simple majority, like every other proposal.
-- **b)** Keep three fifths of D for restrictions, which goes against the spec's single rule.
-- Recommendation: **a**.
-
-### 6. (P6) Delete minority matching
-
-- What changes: today a payment proposal also pays every key that did not vote yes a matching share, which the keys collect. The spec forbids new minority matching or reserves. This deletes `collect`, the matching maths and the "Collect the match" button.
-- **a)** Delete it.
-- **b)** Keep it, which conflicts with spec §1 and §4.3.
-- Recommendation: **a**.
-
-### 7. (P7) Agents may be present, vote and propose when the owner allows
-
-- What changes: the product spec says an agent "never touches money or votes". Spec v0.3 lets a key's owner grant an agent PRESENCE and GOVERNANCE capabilities on its shard. The default is WORKSPACE only.
-- **a)** Follow spec v0.3: capabilities are opt-in and granted per shard by the owner.
-- **b)** Agents get WORKSPACE only and never presence or governance. Owners must press Present and vote themselves.
-- Recommendation: **a**, with the product spec updated (decision 13).
-
-### 8. (P8) A housekeeping wallet run by the site
-
-- What changes: `sweepExpired` and `processDailySplit` are permissionless and need someone to send them. Today "the site never sends a transaction itself".
-- **a)** The site runs two Oban jobs from a small gas-only wallet on Base that holds no USDC and no keys. Anyone can still press the same buttons.
-- **b)** No site wallet: members press "Clean up" and "Run today's split" themselves. Splits are skipped on days nobody does.
-- Recommendation: **a**.
-
-### 9. (P9) A Lit test fleet on Base mainnet
-
-- What changes: Lit's servers run only against Base mainnet. Contract ownership of a Lit account (ERC-1271), minting a usage key and running the inbox action can only be proven there.
-- **a)** Before the real launch, deploy one throwaway lab fleet on Base mainnet with a few test keys and run the Lit flow end to end. This needs a separate deploy go from Sean.
-- **b)** Launch with Lit untested live, and prove it on the first real fleet.
-- Recommendation: **a**.
-
-### 10. (P10) The Autolaunch path binds to v1
-
-- What changes: v2 is not on Base, so fleet launches go through Autolaunch v1 `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`. The fleet's treasury is the launch treasury, and the TOKEN split slot is bound once the auction has succeeded. Commit C12 reads the exact "success" check and where the splitter's remaining USDC goes.
-- **a)** Bind v1 now. Moving to v2 later would mean a new fleet deployment, because the binding is fixed.
-- **b)** Wait for v2 on Base before building C12. Everything else goes ahead.
-- Recommendation: **b** if v2 is close, otherwise **a**. Sean knows the v2 timing.
-
-### 11. (P11) Deploy each fleet's contracts in sequence
-
-- What changes: the fleet plus everything it creates will pass Base's 48 KB deploy limit. So the core deploys Rewards and Shards itself, and the script then deploys Votes and the Treasury at predicted addresses. Every contract checks that it points at the others before a fleet is recorded.
-- **a)** Sequenced deploy.
-- **b)** Split the code some other way, at the cost of more contracts or less checking.
-- Recommendation: **a**.
-
-### 12. (P12) "Finalize" is a read, not a transaction
-
-- What changes: a proposal's result (approved, rejected or expired) follows from stored counts and the clock, so no one has to send a "finalize" transaction. The site's `proposal_finalize` operation just reads the status.
-- **a)** Yes.
-- **b)** Add an explicit finalize transaction, which costs gas and does nothing extra.
-- Recommendation: **a**.
-
-### 13. (P13) Update the product spec to match v0.3
-
-- Lines that change in `docs/product-spec.md`:
-  - "bought in USDC on Ethereum" becomes Base.
-  - "more than half of all keys sold ... three fifths ... no deadline" becomes the growing electorate with a 48-hour close.
-  - The agent limits follow decision 7.
-  - "the site never sends a transaction" follows decision 8.
-  - The "Regents Safe" row becomes "REGENT staking receives the 10%".
-  - The voting open question is closed.
-- **a)** Update it in the same branch, as a doc-only commit.
-- **b)** Hold the product spec as it is for now.
-- Recommendation: **a**.
-
-### 14. (P14) One shard per agent wallet
-
-- What changes: today an agent wallet can hold at most one active shard per fleet, so one agent cannot act for two keys at once. The spec allows one person to hold many keys, but it does not say whether one agent may act for several.
-- **a)** Keep one active shard per wallet per fleet.
-- **b)** Allow one wallet to hold shards of several keys.
-- Recommendation: **a**. It is simpler, and a person with many keys can run one agent per key.
-
-### 15. (P15) VRF settings on Base
-
-- What changes: the trait draw keeps native-ETH payment, 3 confirmations (about 6 seconds on Base) and 100,000 callback gas, on the 2 gwei gas lane. A Base VRF subscription has to be created and funded by the Regents Safe before deployment.
-- **a)** Keep these settings on the 2 gwei lane.
-- **b)** Use the 30 gwei lane, so reveals still arrive during a gas spike, at a higher worst-case cost.
-- Recommendation: **a**.
-
-### 16. (P16) Keys held by the fleet's own treasury
-
-- What changes: if the treasury buys or is given keys, they count, vote and earn like any other key. There is no special case.
-- **a)** No special case, per the spec's no-exceptions rule.
-- **b)** Exclude treasury-held keys from votes and splits, which adds a special case.
-- Recommendation: **a**.
+- `executeBatch`, `processDailySplit` and `depositProtocolShare` share one reentrancy lock in the treasury.
+- `Keyfleet._update` calls `VOTES.onKeyMoved` on every transfer; its gas is measured and capped in C5 alongside the five-asset settlement of C9.
+- `returnAdvance` limits relabelling only up to the open advance (section 4.7); this stays in the audit notes as a known limit.
