@@ -127,13 +127,16 @@ defmodule Keyfleet.WalletSteps.Typed do
     end
   end
 
-  @doc "How many hours a proposal is open to votes: one of the choices the form offers."
-  def hours(text) do
-    with {hours, ""} <- Integer.parse(String.trim(text)),
-         true <- hours in Keyfleet.Proposals.vote_hours() do
-      {:ok, hours}
+  @doc """
+  A share of a treasury balance written as a percent, like `2.5`, in parts
+  per million: from 0.0001% to 99%, to four decimal places.
+  """
+  def share(text) do
+    with {:ok, ppm} <- amount(text, 4, @largest_uint256),
+         true <- ppm in 1..990_000 do
+      {:ok, ppm}
     else
-      _other -> {:error, :hours_unreadable}
+      _other -> {:error, :share_unreadable}
     end
   end
 

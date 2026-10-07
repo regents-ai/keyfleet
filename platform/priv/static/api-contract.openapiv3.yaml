@@ -3131,21 +3131,20 @@ components:
     ProposalCreateRequest:
       type: object
       additionalProperties: false
-      required: [kind, key, hours, text]
+      required: [kind, key, text]
       description: >-
-        Every field is a string, as the proposals page's form sends it. kind names what the
-        proposal does, and the other fields it needs are those of its kind. decision: nothing
-        more. pay: asset, amount and recipient, paid from the treasury. advance: asset, amount
-        and recipient, the operator the advance goes to. rate: rate. edits: target and
+        Every field is a string, as the proposals page's form sends it. Every vote lasts 24
+        hours. kind names what the proposal does, and the other fields it needs are those of its
+        kind. decision: nothing more. pay: asset, share and recipient, paid from the treasury.
+        advance: asset, share and recipient, the operator the advance goes to. rate: rate. edits: target and
         restricted. signature: hash and signature. launch: name, symbol, description, website
         and image.
       properties:
         kind: {type: string, enum: [decision, pay, advance, rate, edits, signature, launch]}
         key: {type: string, description: "The key the proposal is made with, in decimal"}
-        hours: {type: string, enum: ["1", "6", "24", "48"], description: "How many hours voting stays open"}
         text: {type: string, description: "The proposal's words, at most 4000 bytes once trimmed"}
         asset: {type: string, description: "The address of an asset the treasury pays in"}
-        amount: {type: string, description: "The amount in whole tokens; a point marks decimals and commas may group thousands"}
+        share: {type: string, description: "The share of the treasury's balance of the asset, in percent, 0.0001 to 99, with at most four decimals; the transaction names what that share is at the latest block"}
         recipient: {type: string, description: "A full wallet address"}
         rate: {type: string, description: "The daily split in percent, 0.1 to 2, with at most two decimals"}
         target: {type: string, description: "The key whose workspace edits it restricts or frees, in decimal"}
@@ -3224,7 +3223,7 @@ components:
         transactions: {$ref: "#/components/schemas/ChainTransactions"}
         kind: {type: string, enum: [decision, pay, advance, rate, edits, signature, launch]}
         key: {type: integer, minimum: 1}
-        hours: {type: integer, minimum: 1}
+        hours: {type: integer, const: 24, description: "How long voting stays open"}
         closes_at: {type: string, format: date-time, description: When voting closes if it is sent now}
         content_hash: {$ref: "#/components/schemas/ChainHash"}
     ChainVote:

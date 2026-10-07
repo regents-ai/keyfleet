@@ -180,7 +180,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <h2 id="proposal-vote-title">
             Vote
             <Regent.Primitives.tip id="proposal-vote-tip" label="About voting">
-              Every key you hold votes together, and so does every key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes.
+              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes.
             </Regent.Primitives.tip>
           </h2>
           <.live_component
@@ -394,8 +394,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :page, :map, required: true
   attr :actor, :any, required: true
 
-  # One form for every kind of proposal: its kind, the key it is made with,
-  # how long voting lasts, its text, and the fields its kind needs. Every
+  # One form for every kind of proposal: its kind, the Key it is made with,
+  # its text, and the fields its kind needs. Every
   # field stays in the form, so the steps always match what it holds; only
   # the kind chosen shows its own.
   defp propose(assigns) do
@@ -406,7 +406,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="propose-title">
         Propose
         <Regent.Primitives.tip id="propose-tip" label="About proposing">
-          Proposing with a key you hold, or one you hold a shard of while its agent voting is on, opens a vote of every key. Approved proposals are carried out exactly as written.
+          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment or advance names one token and a share of the treasury’s balance of it. Approved proposals are carried out exactly as written.
         </Regent.Primitives.tip>
       </h2>
       <.live_component
@@ -421,10 +421,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           %{
             "kind" => "decision",
             "key" => "",
-            "hours" => "24",
             "text" => "",
             "asset" => hd(@page.propose.assets).address,
-            "amount" => "",
+            "share" => "",
             "recipient" => "",
             "rate" => "",
             "target" => "",
@@ -455,13 +454,6 @@ defmodule KeyfleetWeb.ProposalsLive do
               inputmode="numeric"
               value={panel.inputs["key"]}
             />
-            <.select_field
-              id="propose-hours"
-              name="hours"
-              label="Voting time"
-              value={panel.inputs["hours"]}
-              options={vote_hour_options()}
-            />
             <.text_area
               id="propose-text"
               name="text"
@@ -479,12 +471,14 @@ defmodule KeyfleetWeb.ProposalsLive do
                 options={Enum.map(@page.propose.assets, &{&1.address, &1.name})}
               />
               <.text_field
-                id="propose-amount"
-                name="amount"
-                label="Amount"
+                id="propose-share"
+                name="share"
+                label="Share of the treasury’s balance, %"
                 inputmode="decimal"
-                value={panel.inputs["amount"]}
-              />
+                value={panel.inputs["share"]}
+              >
+                0.0001 to 99
+              </.text_field>
               <.text_field
                 id="propose-recipient"
                 name="recipient"
@@ -1036,10 +1030,5 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)
 
-  defp vote_hour_options,
-    do: for(hours <- Keyfleet.Proposals.vote_hours(), do: {"#{hours}", hours_words(hours)})
-
-  defp hours_words(1), do: "1 hour"
-  defp hours_words(hours), do: "#{hours} hours"
 
 end

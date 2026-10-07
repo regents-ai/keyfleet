@@ -111,12 +111,6 @@
           "description": "The key you propose with."
         },
         {
-          "field": "hours",
-          "type": "string",
-          "required": true,
-          "description": "How long voting stays open: 1, 6, 24 or 48."
-        },
-        {
           "field": "text",
           "type": "string",
           "required": true,
@@ -129,10 +123,10 @@
           "description": "pay and advance: the address of an asset the treasury pays in."
         },
         {
-          "field": "amount",
+          "field": "share",
           "type": "string",
           "required": false,
-          "description": "pay and advance: the amount in whole tokens."
+          "description": "pay and advance: the share of the treasury's balance of the asset, in percent, 0.0001 to 99."
         },
         {
           "field": "recipient",

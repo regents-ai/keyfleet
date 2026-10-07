@@ -102,19 +102,21 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/create` → `buildProposal`
 - **Inputs:** `<fleet>`, and on stdin one JSON object, every value a string:
-  `kind`, `key`, `hours` (`1`, `6`, `24` or `48`) and `text` (up to 4,000 bytes), plus
-  the fields of its kind. `pay` and `advance`: `asset`, `amount` (whole tokens),
-  `recipient`. `rate`: `rate`, the daily split in percent, 0.1 to 2. `edits`: `target`
+  `kind`, `key` and `text` (up to 4,000 bytes), plus the fields of its kind. Every vote
+  lasts 24 hours. `pay` and `advance`: `asset`, `share` (percent of the treasury's
+  balance of that asset, 0.0001 to 99) and `recipient`; for now the transaction names
+  the amount that share is at the latest block. `rate`: `rate`, the daily split in percent, 0.1 to 2. `edits`: `target`
   and `restricted`. `signature`: `hash` and `signature` (`approve` or `revoke`).
   `launch`: `name`, `symbol`, `description`, `website`, `image`.
 
   ```sh
-  echo '{"kind":"decision","key":"7","hours":"24","text":"Survey the hull first."}' \
+  echo '{"kind":"decision","key":"7","text":"Survey the hull first."}' \
     | regents keyfleet proposals create fleet_tech_classic
   ```
 
-- **Answer:** the transaction `propose`, with `kind`, `key`, `hours`, `closes_at` (if it
-  is sent now) and `content_hash`.
+- **Answer:** the transaction `propose`, with `kind`, `key`, `hours` (always 24),
+  `closes_at` (if it is sent now) and `content_hash`. For `pay` and `advance`, `says`
+  names the share and about what it is today.
 - **Refusals:** 422 `invalid_proposal`: a field is missing or can't be read;
   `error.details.problem` says which. Nothing was kept.
 
@@ -131,7 +133,8 @@ answer the step, blocked "Not your key" unless the wallet may vote the key
 ```
 
 - **Server needs:** the `proposal_words` table; the chain read at the latest block.
-- **History:** 2026-10-07 added.
+- **History:** 2026-10-07 added. 2026-10-07: every vote lasts 24 hours (`hours` input
+  gone); `pay` and `advance` take `share` in place of `amount`.
 
 ## regents keyfleet proposals vote <fleet> <number> <choice>
 

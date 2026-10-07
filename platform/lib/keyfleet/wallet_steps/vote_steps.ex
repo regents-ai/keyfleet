@@ -111,7 +111,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   end
 
   # One proposal of the kind chosen, made with the Key typed, open to votes
-  # for the hours chosen from the latest block's own clock. Its text is
+  # for `Keyfleet.Proposals.vote_hours/0` from the latest block's own clock. Its text is
   # hashed into the proposal; the text itself stays off the chain. The vote
   # contract refuses a Key sold less than two days ago, and a proposal that
   # moves money during the fleet's first 7 days of sales, so those presses are
@@ -121,7 +121,6 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
     with {:ok, key} <- Build.typed(inputs, "key", &Typed.key/1, %{kind: kind}),
          figures = %{kind: kind, key: key},
-         {:ok, hours} <- Build.typed(inputs, "hours", &Typed.hours/1, figures),
          {:ok, text} <- Build.typed(inputs, "text", &Typed.text(&1, :text, 4_000), figures),
          {:ok, reads} <- reads(figures),
          {:ok, action, details} <- action(kind, fleet, inputs, reads, text, figures),
@@ -129,6 +128,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          {:ok, opens_at} <- read(reads, fleet.votes_address, "treasuryOpensAt()", figures),
          {:ok, matures_at} <- matures_at(reads, fleet, key, figures) do
       now = DateTime.to_unix(Reads.now(reads))
+      hours = Proposals.vote_hours()
       closes_at = now + hours * 3600
       content_hash = content_hash(text)
       calls = Actions.encode(action, fleet)
@@ -176,21 +176,21 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   defp action("decision", _fleet, _inputs, _reads, _text, _figures),
     do: {:ok, :decision, :decision}
 
-  defp action("pay", fleet, inputs, _reads, _text, figures) do
-    with {:ok, asset, amount, to} <- payment(fleet, inputs, figures) do
-      {:ok, {:pay, asset.address, to, amount}, {:pay, asset, to, amount}}
+  defp action("pay", fleet, inputs, reads, _text, figures) do
+    with {:ok, asset, share, amount, to} <- payment(fleet, inputs, reads, figures) do
+      {:ok, {:pay, asset.address, to, amount}, {:pay, asset, to, share, amount}}
     end
   end
 
   # An advance is numbered with the number this proposal is about to take,
   # which no other advance has.
   defp action("advance", fleet, inputs, reads, text, figures) do
-    with {:ok, asset, amount, operator} <- payment(fleet, inputs, figures),
+    with {:ok, asset, share, amount, operator} <- payment(fleet, inputs, reads, figures),
          {:ok, count} <- read(reads, fleet.votes_address, "proposalCount()", figures) do
       id = count + 1
 
       {:ok, {:advance, id, operator, asset.address, amount, content_hash(text)},
-       {:advance, id, asset, operator, amount}}
+       {:advance, id, asset, operator, share, amount}}
     end
   end
 
@@ -228,21 +228,30 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          do: {:ok, {name, value}}
   end
 
-  # The token, amount and wallet of a payment or an advance: a token the
-  # treasury holds, by address, in whole tokens.
-  defp payment(fleet, inputs, figures) do
+  # The token, share and wallet of a payment or an advance: a token the
+  # treasury holds, by address, and a share of the treasury's balance of it,
+  # in parts per million. The vote contract takes an amount, so the share is
+  # turned into one at the latest block's balance.
+  defp payment(fleet, inputs, reads, figures) do
     with {:ok, asset} <- asset(fleet, inputs, figures),
          figures = Map.put(figures, :asset, asset),
-         {:ok, amount} <-
-           Build.typed(
-             inputs,
-             "amount",
-             &Typed.amount(&1, asset.decimals || 0, Typed.largest_uint256()),
-             figures
-           ),
+         {:ok, share} <- Build.typed(inputs, "share", &Typed.share/1, figures),
          {:ok, to} <-
-           Build.typed(inputs, "recipient", &Typed.address(&1, :recipient_unreadable), figures) do
-      {:ok, asset, amount, to}
+           Build.typed(inputs, "recipient", &Typed.address(&1, :recipient_unreadable), figures),
+         {:ok, held} <- held(reads, fleet, asset, figures) do
+      {:ok, asset, share, div(held * share, 1_000_000), to}
+    end
+  end
+
+  defp held(reads, fleet, %{address: address}, figures) do
+    read =
+      if address == Treasury.native(),
+        do: Reads.balance(reads, fleet.treasury_address),
+        else: Reads.one(reads, address, "balanceOf(address)", [fleet.treasury_address], {:uint, 256})
+
+    case read do
+      {:ok, held} -> {:ok, held}
+      {:error, _reason} -> {:problem, :unread, figures}
     end
   end
 

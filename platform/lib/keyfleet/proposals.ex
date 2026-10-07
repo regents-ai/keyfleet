@@ -118,12 +118,8 @@ defmodule Keyfleet.Proposals do
     end
   end
 
-  @doc """
-  How long a proposal may be open to votes, in hours: the choices the
-  proposal form offers, each within the vote contract's 48 hours. The one
-  place the voting times are set.
-  """
-  def vote_hours, do: [1, 6, 24, 48]
+  @doc "How long every proposal is open to votes, in hours. The one place it is set."
+  def vote_hours, do: 24
 
   @doc """
   How many Yes votes approve a proposal `voters` Keys may vote on: 60% of

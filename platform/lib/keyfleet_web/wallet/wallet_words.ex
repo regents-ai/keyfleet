@@ -53,13 +53,11 @@ defmodule KeyfleetWeb.WalletWords do
   # What carrying out a proposal does, in one short sentence.
   defp action(:decision), do: "A decision; nothing moves."
 
-  defp action({:pay, asset, to, amount}),
-    do: "Pays #{token_amount(asset_amount(asset, amount))} to #{RegentFormat.short_address(to)}."
+  defp action({:pay, asset, to, share, amount}),
+    do: "Pays #{share_words(asset, share, amount)} to #{RegentFormat.short_address(to)}."
 
-  defp action({:advance, _id, asset, operator, amount}),
-    do:
-      "Advances #{token_amount(asset_amount(asset, amount))} to " <>
-        "#{RegentFormat.short_address(operator)}."
+  defp action({:advance, _id, asset, operator, share, amount}),
+    do: "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
 
   defp action({:rate, bps}), do: "Sets the daily split to #{ProposalsPage.units(bps, 2)}%."
 
@@ -68,6 +66,23 @@ defmodule KeyfleetWeb.WalletWords do
   defp action({:signature, :approve, _hash}), do: "Signs the message for the fleet."
   defp action({:signature, :revoke, _hash}), do: "Withdraws the fleet’s signature."
   defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
+
+  defp share_words(asset, share, amount),
+    do:
+      "#{ProposalsPage.units(share, 4)}% of the treasury’s #{asset_name(asset)} " <>
+        "(about #{token_amount(asset_amount(asset, rough(amount, asset.decimals)))} today)"
+
+  # An amount cut to two decimals from one whole token up, and to six below.
+  defp rough(amount, nil), do: amount
+
+  defp rough(amount, decimals) do
+    shown = if amount >= Integer.pow(10, decimals), do: 2, else: 6
+    step = Integer.pow(10, max(decimals - shown, 0))
+    amount - rem(amount, step)
+  end
+
+  defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol
+  defp asset_name(%{address: address}), do: "token #{RegentFormat.short_address(address)}"
 
   defp asset_amount(asset, amount),
     do:
@@ -83,7 +98,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:no_target), do: "Type the key this is about."
   defp problem(:target_unreadable), do: "A key is a whole number, like 12."
   defp problem(:days_unreadable), do: "From 1 to 365 days."
-  defp problem(:hours_unreadable), do: "Choose how long voting lasts."
+  defp problem(:share_unreadable), do: "From 0.0001% to 99%."
   defp problem(:rate_unreadable), do: "From 0.1% to 2%."
   defp problem(:hash_unreadable), do: "The message code is 0x and 64 letters and numbers."
   defp problem(:kind_unknown), do: "Choose what to propose."
