@@ -109,7 +109,7 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
         assertEq(LIT.getAccountWalletAddress(account), safe);
         KeyfleetTreasury.Call[] memory late = _one(LitAdminCalls.removeKey(LIT, address(treasury), NEXT_OPERATOR_KEY));
         uint256 proposalId = _approve(classic, late);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(abi.encodeWithSelector(ILitErrors.NoAccountAccess.selector, account, address(treasury)));
         votes.execute(proposalId, late);
         assertTrue(LIT.canExecuteAction(NEXT_OPERATOR_KEY, INBOX_ACTION), "the key stands");

@@ -164,8 +164,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
             KeyfleetTreasury.Call[] memory calls =
                 _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.setDailySplitBps, (refused[i])));
             uint256 proposalId = _approve(fleet, calls);
-            vm.warp(block.timestamp + 1);
             KeyfleetVotes votes = fleet.VOTES();
+            vm.warp(votes.executableAt(proposalId));
             vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.SplitRateOutOfRange.selector, refused[i]));
             votes.execute(proposalId, calls);
         }
@@ -322,8 +322,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
             KeyfleetTreasury.Call[] memory calls =
                 _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.admitOusd, (invalid[i])));
             uint256 proposalId = _approve(fleet, calls);
-            vm.warp(block.timestamp + 1);
             KeyfleetVotes votes = fleet.VOTES();
+            vm.warp(votes.executableAt(proposalId));
             vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.OusdInvalid.selector, address(invalid[i])));
             votes.execute(proposalId, calls);
         }
@@ -338,8 +338,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         KeyfleetTreasury.Call[] memory again =
             _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.admitOusd, (new DecimalsToken(18))));
         uint256 againId = _approve(fleet, again);
-        vm.warp(block.timestamp + 1);
         KeyfleetVotes againVotes = fleet.VOTES();
+        vm.warp(againVotes.executableAt(againId));
         vm.expectRevert(KeyfleetTreasury.OusdAlreadyAdmitted.selector);
         againVotes.execute(againId, again);
 
@@ -452,14 +452,13 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         _openTreasury(fleet);
         KeyfleetRewards rewards = fleet.REWARDS();
         _hold(treasury, 4 ether, 0, 0);
-        // The first public run has been due since a day after the first mint.
-        _run(treasury);
-        uint256 afterFirst = address(treasury).balance;
-
         KeyfleetTreasury.Call[] memory calls = _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.runVotedSplit, ()));
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(block.timestamp + 1);
         KeyfleetVotes votes = fleet.VOTES();
+        vm.warp(votes.executableAt(proposalId));
+        // A public run, due since a day after the first mint, then the voted one in the same second.
+        _run(treasury);
+        uint256 afterFirst = address(treasury).balance;
         vm.expectEmit(true, false, false, true, address(treasury));
         emit DailySplitRun(true, 2, 50);
         votes.execute(proposalId, calls);
@@ -560,17 +559,17 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         // The first public run has been due since a day after the first mint.
         KeyfleetTreasury.Call[] memory calls = _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.runDailySplit, ()));
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(block.timestamp + 1);
         KeyfleetVotes votes = fleet.VOTES();
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
         votes.execute(proposalId, calls);
         _votedRun(fleet);
         assertEq(treasury.lastRunAt(), block.timestamp);
     }
 
-    /// @dev Invariant: what the split moved to the ledger is no longer free capital, so a payment of
-    /// the whole balance before the split fails after it, and the ledger's balance never counts
-    /// towards the next split.
+    /// @dev Invariant: what the split moved to the ledger is no longer free capital, so a payment's
+    /// share is of what the treasury still holds, and the ledger's balance never counts towards a
+    /// payment or the next split.
     function test_theSplitLeavesLessFreeCapitalAndNeverCountsTheLedger() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         _mature();
@@ -582,16 +581,16 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         uint256 free = usdc.balanceOf(address(treasury));
         assertEq(free, 1_000e6 - 2 * _perKey(1_000e6, 50, 2));
 
-        KeyfleetTreasury.Call[] memory whole = _selfCall(
-            treasury, abi.encodeCall(KeyfleetTreasury.pay, (address(usdc), address(0xD00D), uint256(1_000e6)))
+        uint256 ledger = usdc.balanceOf(address(rewards));
+        _execute(
+            fleet,
+            _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.pay, (address(usdc), address(0xD00D), uint32(500_000))))
         );
-        uint256 proposalId = _approve(fleet, whole);
-        vm.warp(block.timestamp + 1);
-        KeyfleetVotes votes = fleet.VOTES();
-        vm.expectRevert();
-        votes.execute(proposalId, whole);
+        assertEq(usdc.balanceOf(address(0xD00D)), free / 2, "half of the free capital, not of the ledger's");
+        assertEq(usdc.balanceOf(address(rewards)), ledger, "the ledger's balance is untouched");
+        free = usdc.balanceOf(address(treasury));
 
-        vm.warp(treasury.nextRunAt());
+        assertGe(block.timestamp, treasury.nextRunAt(), "the next run is due");
         vm.expectEmit(true, false, false, true, address(treasury));
         emit SplitAllocated(address(usdc), free, _perKey(free, 50, 2), 2);
         _run(treasury);

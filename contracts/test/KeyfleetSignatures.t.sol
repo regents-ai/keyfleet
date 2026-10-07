@@ -173,8 +173,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
 
     function _propose() private returns (uint256 proposalId) {
         vm.prank(bob);
-        proposalId =
-            votes.propose(k3, keccak256("record it"), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
+        proposalId = votes.propose(k3, keccak256("record it"), new KeyfleetTreasury.Call[](0));
     }
 
     // --- 1. the signed path ------------------------------------------------
@@ -187,7 +186,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// this suite's addresses. The fleet contracts are deployed with CREATE2, so a change to their
     /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(votes), 0xbF5e48c100111D2B695092C99E7F5b1c8c5299Aa, "the address the vector was signed for");
+        assertEq(address(votes), 0x8de5b97f116577a8669c27ec074E793FF60B92b1, "the address the vector was signed for");
         assertEq(address(fleet), 0xbe712D5699f7B3Fd137d8966095D6925ba18d136, "the manager the vector names");
         assertEq(block.chainid, 31337);
         assertEq(k1, 10_000_000_001);
@@ -199,7 +198,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             _pair(k1, k2),
             alice,
             2_000_000,
-            hex"7f53c080fe5ad218d5eb7ac26a6e1415e2836cb916dbd92ec36a280b91a7f9734740d66e317b9a671cecc395fba81f613e96c6162b142b7542b9a29c922c03f71b"
+            hex"2fa905546860129623ba6e18539668c58350b86de550f4be94b306ccff7159ef7cb577dd38a18b349a338870db2a3e8bfff082f8a28d0b0d99fe0f80e5cc2d221b"
         );
         assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }
@@ -212,7 +211,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// treasury address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation
     /// revisions 0 and 0, nonce 0 and deadline 2,000,000.
     function test_aBallotFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(fleet.TREASURY()), 0x0dcd618B9948CC861158Ebd2802683B8510A68f8, "the treasury the encoder used");
+        assertEq(address(fleet.TREASURY()), 0x563Ba0c6B6c2C1B89d95985226Bd16BC654E38Cf, "the treasury the encoder used");
         uint256 proposalId = _propose();
         assertEq(
             votes.proposal(proposalId).actionsHash,
@@ -221,7 +220,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         );
         assertEq(
             votes.proposal(proposalId).proposalHash,
-            0x6dbcaf759b61f9cc2ad8c862868b869b30e975442dc6c63fdbf206381b51f8a9,
+            0x35d0175209d1c852a946980d71c071c484b0fcdd2470427d817b13a2c3b36f0a,
             "the proposal hash the encoder worked out"
         );
 
@@ -231,7 +230,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             YES,
             alice,
             2_000_000,
-            hex"e572fb1c81a51473307e0ba0dcb71485d3c9dfde98615b302a3ec0d4255c9a7c6b40d252cc92af545ff82d7e15a8ccbb983d3fc7914dfa4a05102f09180530bb1c"
+            hex"8e78cb3fda67a3861461bc143a9705f170a5f81c52f1b6382aca0aec18f49249692bb585c4e7fe263d1ea724bbbf1167210c75e7e922f67f9d95ce36574b121d1c"
         );
         assertEq(votes.proposal(proposalId).yes, 2);
     }
@@ -502,12 +501,11 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         _lapse();
         uint256 a1 = _key(a, 1);
         uint256 b1 = _key(b, 1);
-        uint64 closesAt = uint64(block.timestamp + 1 days);
         KeyfleetVotes votesA = a.VOTES();
         KeyfleetVotes votesB = b.VOTES();
         vm.startPrank(creator);
-        votesA.propose(a1, keccak256("record it"), closesAt, new KeyfleetTreasury.Call[](0));
-        votesB.propose(b1, keccak256("record it"), closesAt, new KeyfleetTreasury.Call[](0));
+        votesA.propose(a1, keccak256("record it"), new KeyfleetTreasury.Call[](0));
+        votesB.propose(b1, keccak256("record it"), new KeyfleetTreasury.Call[](0));
         vm.stopPrank();
     }
 

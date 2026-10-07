@@ -18,7 +18,7 @@ import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 
-/// @dev A token whose `transfer` returns false instead of reverting when it cannot pay.
+/// @dev A token whose `transfer` returns false instead of paying.
 contract FalseReturningToken is ERC20 {
     constructor() ERC20("False", "FLS") {}
 
@@ -26,9 +26,8 @@ contract FalseReturningToken is ERC20 {
         _mint(to, amount);
     }
 
-    function transfer(address to, uint256 amount) public override returns (bool) {
-        if (balanceOf(msg.sender) < amount) return false;
-        return super.transfer(to, amount);
+    function transfer(address, uint256) public pure override returns (bool) {
+        return false;
     }
 }
 
@@ -74,7 +73,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
     address private operator = address(0x0E0E);
     address private mallory = address(0x4A11);
 
-    event Paid(address indexed asset, address indexed to, uint256 amount);
+    event Paid(address indexed asset, address indexed to, uint32 sharePpm, uint256 amount);
     event AdvanceReturned(uint256 indexed advanceId, address indexed from, uint256 amount, uint256 outstanding);
     event ProfileChanged(string name, string description, string imageLink);
 
@@ -101,15 +100,15 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         _openTreasury(fleet);
     }
 
-    function _pay(KeyfleetTreasury treasury, address asset, address to, uint256 amount)
+    function _pay(KeyfleetTreasury treasury, address asset, address to, uint32 sharePpm)
         private
         pure
         returns (KeyfleetTreasury.Call[] memory)
     {
-        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.pay, (asset, to, amount)));
+        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.pay, (asset, to, sharePpm)));
     }
 
-    function _advance(KeyfleetTreasury treasury, uint256 advanceId, address asset, uint256 amount)
+    function _advance(KeyfleetTreasury treasury, uint256 advanceId, address asset, uint32 sharePpm)
         private
         view
         returns (KeyfleetTreasury.Call[] memory)
@@ -117,8 +116,18 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         return _one(
             address(treasury),
             0,
-            abi.encodeCall(KeyfleetTreasury.advance, (advanceId, operator, asset, amount, keccak256("purpose")))
+            abi.encodeCall(KeyfleetTreasury.advance, (advanceId, operator, asset, sharePpm, keccak256("purpose")))
         );
+    }
+
+    /// @dev Proposes `calls` with key 1 as its owner, expecting the refusal `reason`.
+    function _refused(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls, bytes memory reason) private {
+        uint256 first = _key(fleet, 1);
+        KeyfleetVotes votes = fleet.VOTES();
+        address author = keys.ownerOf(first);
+        vm.prank(author);
+        vm.expectRevert(reason);
+        votes.propose(first, bytes32(0), calls);
     }
 
     // --- payments and advances ----------------------------------------------------------
@@ -143,24 +152,187 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
             vm.stopPrank();
         }
 
+        _execute(fleet, _pay(treasury, NATIVE, operator, 400_000));
+        assertEq(operator.balance, 0.4 ether, "40% of the ETH");
+        assertEq(address(treasury).balance, 0.6 ether);
+
         uint256 capital = regent.balanceOf(address(treasury));
         assertGt(capital, 0, "the first key's capital arrived as REGENT");
-        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
-        calls[0] = _pay(treasury, NATIVE, operator, 0.4 ether)[0];
-        calls[1] = _pay(treasury, address(regent), operator, capital)[0];
+        KeyfleetTreasury.Call[] memory calls = _pay(treasury, address(regent), operator, 990_000);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(block.timestamp + 1);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(treasury));
-        emit Paid(NATIVE, operator, 0.4 ether);
-        vm.expectEmit(true, true, true, true, address(treasury));
-        emit Paid(address(regent), operator, capital);
+        emit Paid(address(regent), operator, 990_000, capital * 99 / 100);
         votes.execute(proposalId, calls);
+        assertEq(regent.balanceOf(operator), capital * 99 / 100, "at most 99% of a balance moves at once");
+        assertEq(regent.balanceOf(address(treasury)), capital - capital * 99 / 100);
+    }
 
-        assertEq(operator.balance, 0.4 ether);
-        assertEq(address(treasury).balance, 0.6 ether);
-        assertEq(regent.balanceOf(operator), capital, "governance may spend all free capital");
-        assertEq(regent.balanceOf(address(treasury)), 0);
+    /// @dev Invariant: a payment is its share of the treasury's balance of its asset when it is
+    /// carried out, rounded down, whatever the balance was when it was proposed.
+    function test_aPaymentIsItsShareOfTheBalanceWhenCarriedOut() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        usdc.mint(address(treasury), 1_000_003);
+        uint256 atProposal = usdc.balanceOf(address(treasury));
+        KeyfleetTreasury.Call[] memory calls = _pay(treasury, address(usdc), operator, 333_333);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 proposalId = _approve(fleet, calls);
+        usdc.mint(address(treasury), 7_777_777);
+        uint256 atExecution = usdc.balanceOf(address(treasury));
+        assertGt(atExecution, atProposal);
+
+        vm.warp(votes.executableAt(proposalId));
+        votes.execute(proposalId, calls);
+        assertEq(usdc.balanceOf(operator), atExecution * 333_333 / 1_000_000, "the share of today's balance");
+        assertEq(usdc.balanceOf(address(treasury)), atExecution - atExecution * 333_333 / 1_000_000);
+    }
+
+    /// @dev Invariant: a share is refused when proposed unless it is 1 to 990,000 parts per million
+    /// (0.0001% to 99%), for payments and advances alike; both ends are allowed.
+    function test_aShareOutsideTheRangeIsRefusedWhenProposed() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        uint32[3] memory refused = [uint32(0), 990_001, 1_000_000];
+        for (uint256 i = 0; i < refused.length; ++i) {
+            bytes memory reason = abi.encodeWithSelector(KeyfleetVotes.ShareOutOfRange.selector, refused[i]);
+            _refused(fleet, _pay(treasury, address(regent), operator, refused[i]), reason);
+            _refused(fleet, _advance(treasury, 1, address(regent), refused[i]), reason);
+        }
+        uint256 smallest = _approve(fleet, _pay(treasury, address(regent), operator, 1));
+        uint256 largest = _approve(fleet, _advance(treasury, 1, address(regent), 990_000));
+        assertEq(smallest + 1, largest, "both ends open");
+    }
+
+    /// @dev Invariant: a share that rounds down to nothing is not carried out, and the proposal
+    /// stays approved until it expires.
+    function test_aShareThatRoundsToNothingIsNotCarriedOut() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        usdc.mint(address(treasury), 999_999);
+        KeyfleetTreasury.Call[] memory calls = _pay(treasury, address(usdc), operator, 1);
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 proposalId = _approve(fleet, calls);
+        vm.warp(votes.executableAt(proposalId));
+        vm.expectRevert(
+            abi.encodeWithSelector(KeyfleetTreasury.ShareRoundsToZero.selector, address(usdc), uint32(1), 999_999)
+        );
+        votes.execute(proposalId, calls);
+        assertEq(uint256(votes.status(proposalId)), uint256(KeyfleetVotes.Status.Approved));
+
+        usdc.mint(address(treasury), 1);
+        votes.execute(proposalId, calls);
+        assertEq(usdc.balanceOf(operator), 1, "one part in a million of 1,000,000 units");
+    }
+
+    /// @dev Invariant: a proposal moves money in at most one `pay` or `advance` call, so it names
+    /// one asset and one share; a second is refused when proposed.
+    function test_aProposalMovesMoneyInOneCallOnly() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](3);
+        calls[0] = _pay(treasury, NATIVE, operator, 10)[0];
+        calls[1] = _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.setDailySplitBps, (100)))[0];
+        calls[2] = _pay(treasury, NATIVE, operator, 10)[0];
+        bytes memory reason = abi.encodeWithSelector(KeyfleetVotes.OneMoneyMovePerProposal.selector);
+        _refused(fleet, calls, reason);
+        calls[2] = _advance(treasury, 1, address(usdc), 10)[0];
+        _refused(fleet, calls, reason);
+        calls[2] = calls[1];
+        _approve(fleet, calls);
+    }
+
+    /// @dev Invariant: no call carries ETH; ETH leaves only through `pay` or `advance`.
+    function test_noCallCarriesEth() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
+        calls[0] = _pay(treasury, NATIVE, operator, 10)[0];
+        calls[1] = KeyfleetTreasury.Call(operator, 1, "");
+        _refused(fleet, calls, abi.encodeWithSelector(KeyfleetVotes.CallCarriesValue.selector, 1));
+        calls[0] = KeyfleetTreasury.Call(address(treasury), 1 wei, abi.encodeCall(treasury.runVotedSplit, ()));
+        _refused(fleet, calls, abi.encodeWithSelector(KeyfleetVotes.CallCarriesValue.selector, 0));
+    }
+
+    /// @dev Invariant: no call uses a standard function that moves or approves tokens, on any
+    /// contract, the fleet's own key collection included: money leaves only as a share.
+    function test_rawTokenMovesAndApprovalsAreRefused() public {
+        (KeyfleetManager fleet,) = _classic(1);
+        bytes4[20] memory selectors = [
+            bytes4(0xa9059cbb),
+            0x23b872dd,
+            0x095ea7b3,
+            0x39509351,
+            0xd505accf,
+            0xa22cb465,
+            0x42842e0e,
+            0xb88d4fde,
+            0xf242432a,
+            0x2eb2c2d6,
+            0x1296ee62,
+            0x4000aea0,
+            0xd8fbe994,
+            0xc1d34b89,
+            0x3177029f,
+            0xcae9ca51,
+            0x9bd9bbc6,
+            0x62ad1b83,
+            0x959b8c3f,
+            0x87517c45
+        ];
+        address[3] memory targets = [address(usdc), address(regent), address(keys)];
+        for (uint256 t = 0; t < targets.length; ++t) {
+            for (uint256 i = 0; i < selectors.length; ++i) {
+                KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
+                calls[0] = _one(address(fleet), 0, abi.encodeCall(KeyfleetManager.setProfile, (_profile("x"))))[0];
+                calls[1] = KeyfleetTreasury.Call(targets[t], 0, abi.encodePacked(selectors[i], uint256(1)));
+                _refused(fleet, calls, abi.encodeWithSelector(KeyfleetVotes.TokenMoveRefused.selector, 1, selectors[i]));
+            }
+        }
+        assertEq(KeyfleetTreasury.pay.selector, bytes4(0x5bc0a2ae));
+        assertEq(KeyfleetTreasury.advance.selector, bytes4(0x18b18d1a));
+    }
+
+    /// @dev Invariant: a proposal that moves money waits a day after closing, then may be carried
+    /// out for 48 hours: not a second before closing plus a day, nor from closing plus a day plus
+    /// 48 hours. Waiting, it may still be cancelled. One that moves no money waits nothing.
+    function test_aMoneyProposalWaitsADayAfterClosing() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        vm.deal(address(treasury), 1 ether);
+        KeyfleetVotes votes = fleet.VOTES();
+        KeyfleetTreasury.Call[] memory calls = _pay(treasury, NATIVE, operator, 100_000);
+        uint256 last = _approve(fleet, calls);
+        uint256 expiring = _approve(fleet, calls);
+        uint256 cancelled = _approve(fleet, calls);
+        KeyfleetTreasury.Call[] memory free =
+            _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.setDailySplitBps, (100)));
+        uint256 rate = _approve(fleet, free);
+        KeyfleetVotes.Proposal memory stored = votes.proposal(last);
+        uint64 closesAt = stored.closesAt;
+        assertEq(votes.MONEY_DELAY(), 1 days);
+        assertEq(votes.executableAt(last), closesAt + 1 days);
+        assertEq(stored.executionExpiry, closesAt + 1 days + 48 hours);
+        assertEq(votes.executableAt(rate), closesAt, "moving no money, it waits nothing");
+        assertEq(votes.proposal(rate).executionExpiry, closesAt + 48 hours);
+
+        vm.warp(closesAt);
+        votes.execute(rate, free);
+        for (uint256 t = closesAt; t < closesAt + 1 days; t += 1 days - 1) {
+            vm.warp(t);
+            assertEq(uint256(votes.status(last)), uint256(KeyfleetVotes.Status.Waiting));
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Waiting));
+            votes.execute(last, calls);
+        }
+        vm.prank(keys.ownerOf(_key(fleet, 1)));
+        votes.cancel(cancelled);
+
+        vm.warp(closesAt + 1 days);
+        assertEq(uint256(votes.status(last)), uint256(KeyfleetVotes.Status.Approved));
+        vm.warp(closesAt + 1 days + 48 hours - 1);
+        votes.execute(last, calls);
+        assertEq(operator.balance, 0.1 ether);
+        vm.warp(closesAt + 1 days + 48 hours);
+        vm.expectRevert(
+            abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.ExecutionExpired)
+        );
+        votes.execute(expiring, calls);
+        assertEq(operator.balance, 0.1 ether);
     }
 
     /// @dev Invariant: a token that returns false instead of paying fails the payment, the whole
@@ -171,9 +343,9 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         token.mint(address(treasury), 5);
 
         KeyfleetVotes votes = fleet.VOTES();
-        KeyfleetTreasury.Call[] memory calls = _pay(treasury, address(token), operator, 6);
+        KeyfleetTreasury.Call[] memory calls = _pay(treasury, address(token), operator, 990_000);
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(token)));
         votes.execute(proposalId, calls);
         assertEq(uint256(votes.status(proposalId)), uint256(KeyfleetVotes.Status.Approved));
@@ -186,21 +358,20 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
     function test_anApprovedCallCannotFundTheSplit() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         KeyfleetRewards rewards = fleet.REWARDS();
+        vm.deal(address(rewards), 2 ether);
+        regent.mint(address(rewards), 2e18);
         vm.deal(address(treasury), 2 ether);
         KeyfleetVotes votes = fleet.VOTES();
 
-        KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
-        calls[0] = KeyfleetTreasury.Call(address(regent), 0, abi.encodeCall(IERC20.transfer, (address(rewards), 2e18)));
-        calls[1] = KeyfleetTreasury.Call(
-            address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(regent), 1e18, 2))
-        );
+        KeyfleetTreasury.Call[] memory calls =
+            _one(address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(regent), 1e18, 2)));
         uint256 proposalId = _approve(fleet, calls);
         KeyfleetTreasury.Call[] memory native =
-            _one(address(rewards), 2 ether, abi.encodeCall(KeyfleetRewards.fundSplitNative, (1 ether, 2)));
+            _one(address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplitNative, (1 ether, 2)));
         uint256 nativeId = _approve(fleet, native);
         uint256 held = regent.balanceOf(address(treasury));
 
-        vm.warp(votes.proposal(nativeId).closesAt);
+        vm.warp(votes.executableAt(nativeId));
         vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
         votes.execute(proposalId, calls);
         vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
@@ -213,29 +384,26 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         assertEq(address(treasury).balance, 2 ether);
     }
 
-    /// @dev Invariant: proposing reserves nothing, so a proposal opened later may spend what an
-    /// earlier one would have, and two approvals can never spend the same funds twice: the second
-    /// batch fails and stays approved.
-    function test_proposalsReserveNothingAndCannotDoubleSpend() public {
+    /// @dev Invariant: proposing reserves nothing, so each approved payment takes its share of
+    /// what is left when it is carried out: two of 99% leave 0.01% behind, never less.
+    function test_proposalsReserveNothingAndEachTakesItsShareOfWhatIsLeft() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         uint256 capital = regent.balanceOf(address(treasury));
-        KeyfleetTreasury.Call[] memory first = _pay(treasury, address(regent), operator, capital);
-        KeyfleetTreasury.Call[] memory second = _pay(treasury, address(regent), mallory, capital);
+        KeyfleetTreasury.Call[] memory first = _pay(treasury, address(regent), operator, 990_000);
+        KeyfleetTreasury.Call[] memory second = _pay(treasury, address(regent), mallory, 990_000);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 firstId = _approve(fleet, first);
         uint256 secondId = _approve(fleet, second);
         assertEq(regent.balanceOf(address(treasury)), capital, "nothing moved or was set aside");
 
-        vm.warp(votes.proposal(secondId).closesAt);
+        vm.warp(votes.executableAt(secondId));
         votes.execute(secondId, second);
-        assertEq(regent.balanceOf(mallory), capital);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, address(treasury), 0, capital)
-        );
+        uint256 toMallory = capital * 99 / 100;
+        assertEq(regent.balanceOf(mallory), toMallory);
         votes.execute(firstId, first);
-        assertEq(uint256(votes.status(firstId)), uint256(KeyfleetVotes.Status.Approved));
-        assertEq(regent.balanceOf(operator), 0);
+        uint256 toOperator = (capital - toMallory) * 99 / 100;
+        assertEq(regent.balanceOf(operator), toOperator, "99% of what was left");
+        assertEq(regent.balanceOf(address(treasury)), capital - toMallory - toOperator);
     }
 
     /// @dev Invariant: an advance is sent and recorded as outstanding under a new id; anyone may
@@ -243,8 +411,9 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
     /// returned twice and a return cannot be labelled against more than was advanced.
     function test_aTokenAdvanceIsReturnedOnlyUpToWhatIsOutstanding() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        _execute(fleet, _advance(treasury, 7, address(regent), 3e18));
-        assertEq(regent.balanceOf(operator), 3e18);
+        deal(address(regent), address(treasury), 6e18);
+        _execute(fleet, _advance(treasury, 7, address(regent), 500_000));
+        assertEq(regent.balanceOf(operator), 3e18, "half of 6 REGENT");
         (address recordedOperator, address asset, uint256 outstanding, bytes32 purposeHash) = treasury.advances(7);
         assertEq(recordedOperator, operator);
         assertEq(asset, address(regent));
@@ -254,7 +423,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         KeyfleetVotes votes = fleet.VOTES();
         KeyfleetTreasury.Call[] memory again = _advance(treasury, 7, address(regent), 1);
         uint256 againId = _approve(fleet, again);
-        vm.warp(votes.proposal(againId).closesAt);
+        vm.warp(votes.executableAt(againId));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTreasury.AdvanceIdTaken.selector, 7));
         votes.execute(againId, again);
 
@@ -285,7 +454,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
     function test_anEthAdvanceIsReturnedWithExactlyItsValue() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         vm.deal(address(treasury), 1 ether);
-        _execute(fleet, _advance(treasury, 1, NATIVE, 0.25 ether));
+        _execute(fleet, _advance(treasury, 1, NATIVE, 250_000));
         assertEq(operator.balance, 0.25 ether);
 
         vm.startPrank(operator);
@@ -302,12 +471,12 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
     function test_aReentrantPayeeCannotReachProtectedAccounting() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         vm.deal(address(treasury), 1 ether);
-        KeyfleetTreasury.Call[] memory inner = _pay(treasury, NATIVE, mallory, 0.1 ether);
+        KeyfleetTreasury.Call[] memory inner = _pay(treasury, NATIVE, mallory, 100_000);
         uint256 innerId = _approve(fleet, inner);
         ReenteringPayee payee = new ReenteringPayee(fleet, innerId, inner);
         uint256 owed = fleet.protocolShareOwed();
 
-        _execute(fleet, _pay(treasury, NATIVE, address(payee), 0.5 ether));
+        _execute(fleet, _pay(treasury, NATIVE, address(payee), 500_000));
         assertEq(payee.attempts(), 3);
         assertEq(payee.gotThrough(), 0, "every attempt met a lock");
         assertEq(fleet.protocolShareOwed(), owed);
@@ -343,7 +512,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
             _one(address(fleet), 0, abi.encodeCall(KeyfleetManager.setProfile, (renamed)));
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(fleet));
         emit ProfileChanged(renamed.name, renamed.description, renamed.imageLink);
         vm.expectEmit(true, true, true, true, address(keys));
@@ -380,7 +549,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
             proposalIds[i] = _approve(fleet, batches[i]);
         }
         KeyfleetVotes votes = fleet.VOTES();
-        vm.warp(votes.proposal(proposalIds[attempts.length - 1]).closesAt);
+        vm.warp(votes.executableAt(proposalIds[attempts.length - 1]));
         Snapshot memory before = _snapshot(fleet, another);
 
         for (uint256 i = 0; i < attempts.length; ++i) {
@@ -631,7 +800,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         a[9] = _attempt(
             "other pay",
             address(otherTreasury),
-            abi.encodeCall(KeyfleetTreasury.pay, (address(regent), treasury, 1)),
+            abi.encodeCall(KeyfleetTreasury.pay, (address(regent), treasury, uint32(1))),
             abi.encodeWithSelector(KeyfleetTreasury.OnlySelf.selector)
         );
         a[10] = _attempt(
@@ -660,7 +829,7 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
             _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.depositProtocolShare, (1e6)));
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
         votes.execute(proposalId, calls);
         assertEq(staking.totalUsdcReceived(), 0);

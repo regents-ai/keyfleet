@@ -81,7 +81,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     {
         uint256 proposalId = _approve(fleet, calls);
         KeyfleetVotes votes = fleet.VOTES();
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(reason);
         votes.execute(proposalId, calls);
     }
@@ -294,7 +294,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: the ledger takes launch-token funding only from inside the split routine, so
-    /// an approved call that moves the token to the ledger and funds it reverts.
+    /// an approved proposal that pays 0.2% of the token to the ledger and funds it reverts.
     function test_anApprovedCallCannotFundASplitOfTheLaunchToken() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -302,7 +302,11 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         token.mint(address(treasury), 1_000e18);
 
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
-        calls[0] = KeyfleetTreasury.Call(address(token), 0, abi.encodeCall(IERC20.transfer, (address(rewards), 2e18)));
+        calls[0] = KeyfleetTreasury.Call(
+            address(treasury),
+            0,
+            abi.encodeCall(KeyfleetTreasury.pay, (address(token), address(rewards), uint32(2_000)))
+        );
         calls[1] = KeyfleetTreasury.Call(
             address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(token), 1e18, 2))
         );

@@ -74,6 +74,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         bytes32 proposalHash,
         bytes32 contentHash,
         uint64 closesAt,
+        uint64 executableAt,
         uint64 executionExpiry,
         uint32 e0,
         uint48 openRevision,
@@ -123,13 +124,13 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         }
     }
 
-    /// @dev Opens a proposal with key `authorKey` as its owner, closing a day from now.
+    /// @dev Opens a proposal with key `authorKey` as its owner; it closes a day from now.
     function _propose(KeyfleetVotes v, uint256 authorKey, KeyfleetTreasury.Call[] memory calls)
         private
         returns (uint256 proposalId)
     {
         vm.prank(keys.ownerOf(authorKey));
-        proposalId = v.propose(authorKey, keccak256("narrative"), uint64(block.timestamp + 1 days), calls);
+        proposalId = v.propose(authorKey, keccak256("narrative"), calls);
     }
 
     /// @dev Opens a proposal with the fleet's key 1 and no calls.
@@ -157,6 +158,12 @@ contract KeyfleetVotesTest is KeyfleetFixture {
 
     function _closeOf(KeyfleetVotes v, uint256 proposalId) private {
         vm.warp(v.proposal(proposalId).closesAt);
+    }
+
+    /// @dev Waits until a proposal may first be carried out: its closing, plus a day if it moves
+    /// money.
+    function _carryOutOf(KeyfleetVotes v, uint256 proposalId) private {
+        vm.warp(v.executableAt(proposalId));
     }
 
     function _d(KeyfleetVotes v, uint256 proposalId) private view returns (uint256) {
@@ -203,8 +210,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
 
         KeyfleetTreasury.Call[] memory calls = _restrict(votes, _k(3), true);
         bytes32 content = keccak256("restrict key 3");
-        uint64 closesAt = uint64(block.timestamp + 12 hours);
-        uint64 expiry = closesAt + 48 hours;
+        uint64 closesAt = uint64(block.timestamp + 24 hours);
         bytes32 actionsHash = keccak256(abi.encode(calls));
         bytes32 proposalHash = keccak256(
             abi.encode(
@@ -217,14 +223,16 @@ contract KeyfleetVotesTest is KeyfleetFixture {
                 content,
                 actionsHash,
                 closesAt,
-                expiry
+                closesAt + 48 hours
             )
         );
 
         vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalCreated(1, k1, _wallet(1), proposalHash, content, closesAt, expiry, 2, 6, calls);
+        emit ProposalCreated(
+            1, k1, _wallet(1), proposalHash, content, closesAt, closesAt, closesAt + 48 hours, 2, 6, calls
+        );
         vm.prank(_wallet(1));
-        uint256 proposalId = votes.propose(k1, content, closesAt, calls);
+        uint256 proposalId = votes.propose(k1, content, calls);
 
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         assertEq(proposalId, 1, "proposal ids start at one");
@@ -234,8 +242,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(stored.proposalHash, proposalHash);
         assertEq(stored.openRevision, 6, "three sales, key 2's renewal, the author's renewal, then the opening");
         assertEq(stored.openedAt, uint64(block.timestamp));
-        assertEq(stored.closesAt, closesAt);
-        assertEq(stored.executionExpiry, expiry, "48 hours after closing");
+        assertEq(stored.closesAt, closesAt, "24 hours after opening");
+        assertEq(stored.executionExpiry, closesAt + 48 hours, "48 hours after closing");
         assertEq(stored.e0, 2, "key 2 and the author key were present");
         assertTrue(votes.isActive(k1), "the author key was renewed");
         assertEq(stored.yes + stored.no + stored.abstain + stored.late, 0, "proposing casts no ballot");
@@ -243,23 +251,34 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Open));
     }
 
-    /// @dev Invariant: a proposal closes after it opens and at most 48 hours later, both ends of
-    /// the range checked.
-    function test_aProposalClosesWithinFortyEightHours() public {
+    /// @dev Invariant: every proposal is open for exactly 24 hours, takes ballots up to the last
+    /// second before closing and none from closing on, and may be carried out for 48 hours after.
+    function test_everyProposalIsOpenForExactlyTwentyFourHours() public {
         _buyMany(fleet, 1);
         _mature();
         uint256 k1 = _k(1);
         uint64 nowAt = uint64(block.timestamp);
+        assertEq(votes.VOTING_PERIOD(), 24 hours);
 
-        vm.startPrank(_wallet(1));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ClosingOutOfRange.selector, nowAt));
-        votes.propose(k1, bytes32(0), nowAt, _noCalls());
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ClosingOutOfRange.selector, nowAt + 48 hours + 1));
-        votes.propose(k1, bytes32(0), nowAt + 48 hours + 1, _noCalls());
-        votes.propose(k1, bytes32(0), nowAt + 1, _noCalls());
-        votes.propose(k1, bytes32(0), nowAt + 48 hours, _noCalls());
-        vm.stopPrank();
-        assertEq(votes.proposalCount(), 2);
+        uint256 proposalId = _propose(votes, k1, _noCalls());
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        assertEq(stored.openedAt, nowAt);
+        assertEq(stored.closesAt, nowAt + 24 hours);
+        assertEq(votes.executableAt(proposalId), nowAt + 24 hours, "moving no money, it waits nothing more");
+        assertEq(stored.executionExpiry, nowAt + 24 hours + 48 hours);
+
+        vm.warp(nowAt + 24 hours - 1);
+        _ballot(votes, proposalId, k1, KeyfleetVotes.Choice.Yes);
+        assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Open));
+        vm.warp(nowAt + 24 hours);
+        assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Approved));
+        vm.prank(_wallet(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.BallotsClosed.selector, proposalId));
+        votes.castBallot(proposalId, _ids(k1), KeyfleetVotes.Choice.No);
+        vm.warp(nowAt + 72 hours - 1);
+        assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Approved));
+        vm.warp(nowAt + 72 hours);
+        assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.ExecutionExpired));
     }
 
     /// @dev Invariant: proposing needs standing. The author key must be one the caller may vote:
@@ -268,21 +287,20 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         _buyMany(fleet, 2);
         _mature();
         uint256 k1 = _k(1);
-        uint64 closesAt = uint64(block.timestamp + 1 days);
 
         vm.startPrank(carol);
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, _k(3)));
-        votes.propose(_k(3), bytes32(0), closesAt, _noCalls());
+        votes.propose(_k(3), bytes32(0), _noCalls());
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, carol));
-        votes.propose(k1, bytes32(0), closesAt, _noCalls());
+        votes.propose(k1, bytes32(0), _noCalls());
         vm.stopPrank();
 
         vm.prank(_wallet(1));
         shards.issue(_ids(k1), carol, 30);
         vm.expectEmit(true, true, true, false, address(votes));
-        emit ProposalCreated(1, k1, carol, bytes32(0), bytes32(0), 0, 0, 0, 0, _noCalls());
+        emit ProposalCreated(1, k1, carol, bytes32(0), bytes32(0), 0, 0, 0, 0, 0, _noCalls());
         vm.prank(carol);
-        votes.propose(k1, bytes32(0), closesAt, _noCalls());
+        votes.propose(k1, bytes32(0), _noCalls());
     }
 
     /// @dev Invariant: an identical proposal made again is a new proposal, with its own id, hash
@@ -416,7 +434,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         _present(votes, _range(_k(2), 2));
         vm.warp(block.timestamp + 47 hours);
         vm.prank(_wallet(1));
-        uint256 proposalId = votes.propose(_k(1), bytes32(0), uint64(block.timestamp + 2 hours), _noCalls());
+        uint256 proposalId = votes.propose(_k(1), bytes32(0), _noCalls());
         assertEq(_d(votes, proposalId), 3);
 
         vm.warp(block.timestamp + 1 hours);
@@ -543,7 +561,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         // vote at the opening; keys 4 to 6 an hour later.
         _present(votes, _range(_k(5), 5));
         vm.prank(_wallet(1));
-        uint256 nine = votes.propose(_k(1), bytes32(0), uint64(t0 + 48 hours), _noCalls());
+        uint256 nine = votes.propose(_k(1), bytes32(0), _noCalls());
         _ballots(votes, nine, _k(1), 3, YES);
         vm.warp(t0 + 1 hours);
         _ballots(votes, nine, _k(4), 3, YES);
@@ -618,7 +636,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         vm.prank(_wallet(2));
         shards.issue(_ids(k2), bob, 30);
         vm.prank(bob);
-        uint256 authored = votes.propose(k2, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 authored = votes.propose(k2, bytes32(0), _noCalls());
         uint256 proposalId = _propose(votes);
         vm.prank(bob);
         votes.castBallot(proposalId, _ids(k2), YES);
@@ -629,7 +647,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k2, bob));
         votes.castBallot(proposalId, _ids(k2), NO);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k2, bob));
-        votes.propose(k2, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        votes.propose(k2, bytes32(0), _noCalls());
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k2, bob));
         votes.cancel(authored);
         votes.present(_ids(k2));
@@ -688,7 +706,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, mallory));
         votes.castBallot(proposalId, _ids(k1), YES);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, _k(2), mallory));
-        votes.propose(_k(2), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        votes.propose(_k(2), bytes32(0), _noCalls());
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, mallory));
         votes.cancel(proposalId);
         vm.stopPrank();
@@ -820,7 +838,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         uint256 expiring = _propose(votes, k1, calls);
         _ballot(votes, proposalId, k1, YES);
         _ballot(votes, expiring, k1, YES);
-        _closeOf(votes, proposalId);
+        _carryOutOf(votes, proposalId);
 
         vm.expectRevert(MockSwitch.Failing.selector);
         votes.execute(proposalId, calls);
@@ -859,7 +877,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         uint256 outerId = _propose(votes, k1, outer);
         _ballot(votes, innerId, k1, YES);
         _ballot(votes, outerId, k1, YES);
-        _closeOf(votes, outerId);
+        _carryOutOf(votes, outerId);
 
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
         votes.execute(outerId, outer);
@@ -964,20 +982,19 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     function test_proposingRefusesAnAuthorKeyOfAnotherFleetFirst() public {
         KeyfleetManager other = _otherFleet();
         uint256 foreign = _key(other, 2);
-        uint64 closesAt = uint64(block.timestamp + 1 days);
 
         vm.prank(_wallet(1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
-        votes.propose(foreign, bytes32(0), closesAt, _noCalls());
+        votes.propose(foreign, bytes32(0), _noCalls());
         vm.prank(mallory);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
-        votes.propose(foreign, bytes32(0), closesAt, _noCalls());
+        votes.propose(foreign, bytes32(0), _noCalls());
 
         vm.prank(_wallet(1));
         shards.issue(_ids(foreign), bob, 30);
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
-        votes.propose(foreign, bytes32(0), closesAt, _noCalls());
+        votes.propose(foreign, bytes32(0), _noCalls());
 
         assertEq(votes.proposalCount(), 0, "no proposal was made");
         assertFalse(votes.isActive(foreign));

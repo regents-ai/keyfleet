@@ -18,11 +18,21 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// that takes a key refuses a key of another fleet before anything else. There are no councils, no moderators, no rule amendments, no quorum classes and no
 /// configurable presets.
 ///
-/// A proposal names an author key, a content hash for its narrative, a closing time at most 48 hours
-/// away and an exact ordered batch of calls for the fleet's treasury to make. Its execution expiry
-/// is fixed at 48 hours after closing, and a proposal hash binds the chain, this controller, the
-/// treasury, the proposal id, the author key and its ownership epoch, the content, the calls and
-/// both times. A batch with no calls records agreement and moves nothing.
+/// A proposal names an author key, a content hash for its narrative and an exact ordered batch of
+/// calls for the fleet's treasury to make. Every proposal is open for exactly `VOTING_PERIOD` (24
+/// hours). One that moves money, any batch but the few calls the opening allows (`_movesNoMoney`),
+/// then waits `MONEY_DELAY` (1 day); every proposal may be carried out for `EXECUTION_WINDOW` (48
+/// hours) from when it may first be carried out (`executableAt`). A proposal hash binds the chain,
+/// this controller, the treasury, the proposal id, the author key and its ownership epoch, the
+/// content, the calls, its closing and its execution expiry. A batch with no calls records
+/// agreement and moves nothing.
+///
+/// Money leaves the treasury only as a share of its balance. A proposal moves money in at most one
+/// call, the treasury's `pay` or `advance`, which names one asset and a share of the treasury's
+/// balance of it in parts per million, from `MIN_SHARE_PPM` (0.0001%) to `MAX_SHARE_PPM` (99%);
+/// the amount is worked out from the balance when it is carried out. No call carries ETH, and no
+/// call to another contract uses a standard function that moves or approves tokens; both are
+/// refused when the proposal is made.
 ///
 /// The electorate grows and never shrinks. When a proposal opens, every due presence entry must
 /// have been swept, the author key is renewed, and the exact count of present keys is recorded as
@@ -33,8 +43,8 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// abstention or ballot replacement lowers `D`. Because any ballot may still change until closing,
 /// the outcome is decided only at closing: a proposal is then approved exactly when Yes reaches
 /// `approvalsNeeded(D)`, `APPROVAL_PERCENT` (60%) of `D` rounded up, so one present key alone may
-/// approve anything, and anyone may carry it out from closing until its execution expiry, 48 hours
-/// later. It is never approved before closing, however many Yes ballots it has. Its status is
+/// approve anything, and anyone may carry it out from `executableAt` until its execution expiry, 48
+/// hours later. It is never approved before closing, however many Yes ballots it has. Its status is
 /// worked out from these stored facts; nothing finalises it.
 ///
 /// A key takes part only once `KEY_MATURITY` (2 days) has passed since it was minted, counted in
@@ -46,8 +56,9 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 ///
 /// For `TREASURY_OPENING` (7 days) from the moment the fleet's sales open, a proposal may carry
 /// only calls that move no money: setting the fleet's profile, the daily split rate and whether a
-/// key's edits are restricted, each without value. A proposal with no calls is always allowed, and
-/// the daily split runs as usual.
+/// key's edits are restricted. A proposal with no calls is always allowed, and the daily split runs
+/// as usual. The same few calls, or none, are what a proposal may carry and still be carried out as
+/// soon as it closes; any other batch moves money and waits `MONEY_DELAY` first.
 ///
 /// A key's current owner may vote it, propose with it and cancel what it authored, and so may a
 /// wallet holding an active shard of it (`KeyfleetShards`) while the key's agent voting is on, which
@@ -76,9 +87,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         Abstain
     }
 
-    /// @notice Where a proposal stands, worked out from its stored facts and the time.
+    /// @notice Where a proposal stands, worked out from its stored facts and the time. `Waiting`
+    /// is a proposal that moves money, approved at closing, during its `MONEY_DELAY`.
     enum Status {
         Open,
+        Waiting,
         Approved,
         Rejected,
         Cancelled,
@@ -95,7 +108,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @param openRevision The presence revision recorded at opening.
     /// @param openedAt The time it opened.
     /// @param closesAt The time ballots stop: the first second it is closed.
-    /// @param executionExpiry The first second it can no longer be carried out.
+    /// @param executionExpiry The first second it can no longer be carried out: `EXECUTION_WINDOW`
+    /// after `executableAt`.
     /// @param e0 How many keys were present when it opened. Never zero.
     /// @param late How many keys outside `e0` joined by casting a ballot.
     /// @param yes Keys whose ballot is Yes.
@@ -148,8 +162,18 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     error KeyTooNew(uint256 tokenId, uint64 maturesAt);
     /// @notice A call must name at least one key.
     error NoKeys();
-    /// @notice A proposal closes after now and at most 48 hours from now.
-    error ClosingOutOfRange(uint64 closesAt);
+    /// @notice A call carries ETH. ETH leaves the treasury only through `pay` or `advance`.
+    /// @param index The call's place in the batch.
+    error CallCarriesValue(uint256 index);
+    /// @notice A share outside `MIN_SHARE_PPM` to `MAX_SHARE_PPM` parts per million.
+    error ShareOutOfRange(uint256 sharePpm);
+    /// @notice A proposal moves money in at most one `pay` or `advance` call.
+    error OneMoneyMovePerProposal();
+    /// @notice A call uses a standard function that moves or approves tokens; money leaves only
+    /// through `pay` or `advance`.
+    /// @param index The call's place in the batch.
+    /// @param selector The refused function.
+    error TokenMoveRefused(uint256 index, bytes4 selector);
     /// @notice The fleet is in its opening, during which a proposal may carry only calls that move
     /// no money.
     /// @param opensAt The first second any calls may be proposed.
@@ -158,7 +182,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     error InvalidChoice();
     /// @notice The proposal takes no more ballots: it has closed or was cancelled.
     error BallotsClosed(uint256 proposalId);
-    /// @notice Only an open or approved proposal can be cancelled.
+    /// @notice Only an open, waiting or approved proposal can be cancelled.
     error NotCancellable(Status status);
     /// @notice Only an approved proposal can be carried out.
     error NotApproved(Status status);
@@ -172,6 +196,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @param proposalHash The hash binding the whole proposal.
     /// @param contentHash The hash of its narrative.
     /// @param closesAt The time ballots stop.
+    /// @param executableAt The first second it may be carried out if approved.
     /// @param executionExpiry The first second it can no longer be carried out.
     /// @param e0 How many keys were present when it opened.
     /// @param openRevision The presence revision recorded at opening.
@@ -183,6 +208,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         bytes32 proposalHash,
         bytes32 contentHash,
         uint64 closesAt,
+        uint64 executableAt,
         uint64 executionExpiry,
         uint32 e0,
         uint48 openRevision,
@@ -240,11 +266,22 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// rounded up (`approvalsNeeded`).
     uint256 public constant APPROVAL_PERCENT = 60;
 
-    /// @notice The longest a proposal may stay open: 48 hours, in seconds.
-    uint64 public constant MAX_VOTING_PERIOD = 48 hours;
+    /// @notice How long every proposal is open: 24 hours, in seconds.
+    uint64 public constant VOTING_PERIOD = 24 hours;
 
-    /// @notice How long an approved proposal may be carried out after closing: 48 hours.
+    /// @notice How long after closing an approved proposal that moves money waits before it may
+    /// be carried out: 1 day, in seconds. One that moves no money waits nothing.
+    uint64 public constant MONEY_DELAY = 1 days;
+
+    /// @notice How long an approved proposal may be carried out from `executableAt`: 48 hours.
     uint64 public constant EXECUTION_WINDOW = 48 hours;
+
+    /// @notice The smallest share of an asset's balance a proposal may move: 1 part per million,
+    /// 0.0001%.
+    uint256 public constant MIN_SHARE_PPM = 1;
+    /// @notice The largest share of an asset's balance a proposal may move: 990,000 parts per
+    /// million, 99%.
+    uint256 public constant MAX_SHARE_PPM = 990_000;
 
     /// @notice The EIP-712 type of a signed renewal. The key ids, epochs and delegation revisions
     /// are each hashed as EIP-712 arrays.
@@ -300,10 +337,17 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Where a proposal stands now.
     /// @dev Cancelled or Executed once that happened; Open until closing; then Rejected unless
-    /// `yes >= approvalsNeeded(e0 + late)`, else Approved until its execution expiry and
-    /// ExecutionExpired from then on. Tallies cannot change after closing, so this is final.
+    /// `yes >= approvalsNeeded(e0 + late)`, else Waiting until `executableAt`, Approved until its
+    /// execution expiry and ExecutionExpired from then on. Tallies cannot change after closing, so
+    /// this is final.
     function status(uint256 proposalId) external view returns (Status) {
         return _status(_require(proposalId));
+    }
+
+    /// @notice The first second a proposal may be carried out if approved: its closing, plus
+    /// `MONEY_DELAY` when it moves money.
+    function executableAt(uint256 proposalId) external view returns (uint64) {
+        return _executableAt(_require(proposalId));
     }
 
     /// @notice How many Yes ballots approve a proposal whose electorate is `voters` keys:
@@ -433,28 +477,26 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     // --- proposals -------------------------------------------------------
 
-    /// @notice Proposes an exact batch of treasury calls, or none to record agreement only.
+    /// @notice Proposes an exact batch of treasury calls, or none to record agreement only. It is
+    /// open for `VOTING_PERIOD` from now.
     /// @dev The caller must be allowed to vote `authorKey`, which must be mature (`KEY_MATURITY`).
-    /// Before `treasuryOpensAt` every call must be one that moves no money. Up to
+    /// The calls must follow the money rules (`_requireShares`), and before `treasuryOpensAt`
+    /// every call must be one that moves no money; a batch that moves money waits `MONEY_DELAY`
+    /// after closing before it may be carried out. Up to
     /// `SWEEP_IN_PROPOSE` due presence entries are swept first, and if any are still due the call
     /// reverts with `MaintenanceRequired` rather than record an inexact count. The author key
     /// is renewed and then the opening is recorded. Proposing casts no ballot and reserves nothing,
     /// and an identical proposal made again is a new proposal with its own id and electorate.
     /// @param authorKey The key proposed with. It is the caller's standing and nothing else.
     /// @param contentHash The hash of the narrative, kept off chain.
-    /// @param closesAt When ballots stop: after now, and at most 48 hours from now.
     /// @param calls The exact ordered calls the treasury makes if it is carried out.
     /// @return proposalId The new proposal.
-    function propose(uint256 authorKey, bytes32 contentHash, uint64 closesAt, KeyfleetTreasury.Call[] calldata calls)
+    function propose(uint256 authorKey, bytes32 contentHash, KeyfleetTreasury.Call[] calldata calls)
         external
         returns (uint256 proposalId)
     {
-        if (closesAt <= block.timestamp || closesAt > block.timestamp + MAX_VOTING_PERIOD) {
-            revert ClosingOutOfRange(closesAt);
-        }
         _requireGovernor(authorKey, msg.sender);
-        uint64 opensAt = treasuryOpensAt();
-        if (block.timestamp < opensAt && !_movesNoMoney(calls)) revert TreasuryOpening(opensAt);
+        uint64 delay = _delayFor(calls);
         (, bool due) = _sweep(SWEEP_IN_PROPOSE);
         if (due) revert MaintenanceRequired();
         _touch(authorKey);
@@ -467,22 +509,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         stored.authorKey = uint64(authorKey);
         stored.openRevision = _presence.mark();
         stored.openedAt = uint64(block.timestamp);
-        stored.closesAt = closesAt;
-        stored.executionExpiry = closesAt + EXECUTION_WINDOW;
+        stored.closesAt = uint64(block.timestamp) + VOTING_PERIOD;
+        stored.executionExpiry = stored.closesAt + delay + EXECUTION_WINDOW;
         stored.e0 = _presence.presentCount();
         stored.proposalHash = _proposalHash(proposalId, stored);
-        emit ProposalCreated(
-            proposalId,
-            authorKey,
-            msg.sender,
-            stored.proposalHash,
-            contentHash,
-            closesAt,
-            stored.executionExpiry,
-            stored.e0,
-            stored.openRevision,
-            calls
-        );
+        _announce(proposalId, stored, calls);
     }
 
     /// @notice Casts or replaces ballots for a set of keys, all with one choice, and renews each key.
@@ -527,14 +558,16 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         _castBallot(signer, proposalId, tokenIds, choice);
     }
 
-    /// @notice Cancels an open or approved proposal, and renews its author key.
+    /// @notice Cancels an open, waiting or approved proposal, and renews its author key.
     /// @dev Whoever may vote the author key now may cancel: its current owner, or a wallet holding
     /// an active shard of it while its agent voting is on.
     /// @param proposalId The proposal.
     function cancel(uint256 proposalId) external {
         Proposal storage stored = _require(proposalId);
         Status current = _status(stored);
-        if (current != Status.Open && current != Status.Approved) revert NotCancellable(current);
+        if (current != Status.Open && current != Status.Waiting && current != Status.Approved) {
+            revert NotCancellable(current);
+        }
         uint256 authorKey = stored.authorKey;
         _requireGovernor(authorKey, msg.sender);
         stored.cancelled = true;
@@ -632,17 +665,110 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (stored.executed) return Status.Executed;
         if (block.timestamp < stored.closesAt) return Status.Open;
         if (stored.yes < approvalsNeeded(uint256(stored.e0) + stored.late)) return Status.Rejected;
+        if (block.timestamp < _executableAt(stored)) return Status.Waiting;
         if (block.timestamp >= stored.executionExpiry) return Status.ExecutionExpired;
         return Status.Approved;
     }
 
-    /// @dev Whether every call is one a proposal may carry during the fleet's opening: no value,
-    /// and the treasury's `setDailySplitBps`, the manager's `setProfile` or this controller's
-    /// `setEditsRestricted`. None of them moves money.
+    /// @dev How long after closing a batch waits before it may be carried out: nothing for one
+    /// that moves no money, `MONEY_DELAY` for any other, which must also follow the money rules
+    /// (`_requireShares`) and is refused until `treasuryOpensAt`.
+    function _delayFor(KeyfleetTreasury.Call[] calldata calls) private view returns (uint64) {
+        _requireShares(calls);
+        if (_movesNoMoney(calls)) return 0;
+        uint64 opensAt = treasuryOpensAt();
+        if (block.timestamp < opensAt) revert TreasuryOpening(opensAt);
+        return MONEY_DELAY;
+    }
+
+    /// @dev Announces a new proposal, its calls in full.
+    function _announce(uint256 proposalId, Proposal storage stored, KeyfleetTreasury.Call[] calldata calls) private {
+        emit ProposalCreated(
+            proposalId,
+            stored.authorKey,
+            msg.sender,
+            stored.proposalHash,
+            stored.contentHash,
+            stored.closesAt,
+            _executableAt(stored),
+            stored.executionExpiry,
+            stored.e0,
+            stored.openRevision,
+            calls
+        );
+    }
+
+    /// @dev Refuses a batch that moves money other than as one share of one asset: a call with ETH,
+    /// a second `pay` or `advance`, a share outside `MIN_SHARE_PPM` to `MAX_SHARE_PPM`, or a call
+    /// to any other contract using a standard function that moves or approves tokens
+    /// (`_movesTokens`).
+    function _requireShares(KeyfleetTreasury.Call[] calldata calls) private view {
+        bool moved;
+        for (uint256 i = 0; i < calls.length; ++i) {
+            KeyfleetTreasury.Call calldata call = calls[i];
+            if (call.value != 0) revert CallCarriesValue(i);
+            if (call.data.length < 4) continue;
+            bytes4 selector = bytes4(call.data[:4]);
+            if (call.target == address(TREASURY)) {
+                uint32 sharePpm;
+                if (selector == KeyfleetTreasury.pay.selector) {
+                    (,, sharePpm) = abi.decode(call.data[4:], (address, address, uint32));
+                } else if (selector == KeyfleetTreasury.advance.selector) {
+                    (,,, sharePpm,) = abi.decode(call.data[4:], (uint256, address, address, uint32, bytes32));
+                } else {
+                    continue;
+                }
+                if (moved) revert OneMoneyMovePerProposal();
+                moved = true;
+                if (sharePpm < MIN_SHARE_PPM || sharePpm > MAX_SHARE_PPM) revert ShareOutOfRange(sharePpm);
+            } else if (_movesTokens(selector)) {
+                revert TokenMoveRefused(i, selector);
+            }
+        }
+    }
+
+    /// @dev The standard functions that move a holder's tokens or let another account move them:
+    /// ERC-20 `transfer`, `transferFrom`, `approve`, `increaseAllowance` and EIP-2612 `permit`;
+    /// ERC-721 and ERC-1155 `setApprovalForAll`, `safeTransferFrom` and `safeBatchTransferFrom`;
+    /// ERC-1363 `transferAndCall`, `transferFromAndCall` and `approveAndCall`; ERC-777 `send`,
+    /// `operatorSend` and `authorizeOperator`; and Permit2's `approve`.
+    function _movesTokens(bytes4 selector) private pure returns (bool) {
+        return selector == 0xa9059cbb // transfer(address,uint256)
+            || selector == 0x23b872dd // transferFrom(address,address,uint256)
+            || selector == 0x095ea7b3 // approve(address,uint256)
+            || selector == 0x39509351 // increaseAllowance(address,uint256)
+            || selector == 0xd505accf // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
+            || selector == 0xa22cb465 // setApprovalForAll(address,bool)
+            || selector == 0x42842e0e // safeTransferFrom(address,address,uint256)
+            || selector == 0xb88d4fde // safeTransferFrom(address,address,uint256,bytes)
+            || selector == 0xf242432a // safeTransferFrom(address,address,uint256,uint256,bytes)
+            || selector == 0x2eb2c2d6 // safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)
+            || selector == 0x1296ee62 // transferAndCall(address,uint256)
+            || selector == 0x4000aea0 // transferAndCall(address,uint256,bytes)
+            || selector == 0xd8fbe994 // transferFromAndCall(address,address,uint256)
+            || selector == 0xc1d34b89 // transferFromAndCall(address,address,uint256,bytes)
+            || selector == 0x3177029f // approveAndCall(address,uint256)
+            || selector == 0xcae9ca51 // approveAndCall(address,uint256,bytes)
+            || selector == 0x9bd9bbc6 // send(address,uint256,bytes)
+            || selector == 0x62ad1b83 // operatorSend(address,address,uint256,bytes,bytes)
+            || selector == 0x959b8c3f // authorizeOperator(address)
+            || selector == 0x87517c45; // approve(address,address,uint160,uint48), Permit2
+    }
+
+    /// @dev The first second a proposal may be carried out: its execution expiry less
+    /// `EXECUTION_WINDOW`, which `propose` set from closing plus any `MONEY_DELAY`.
+    function _executableAt(Proposal storage stored) private view returns (uint64) {
+        return stored.executionExpiry - EXECUTION_WINDOW;
+    }
+
+    /// @dev Whether every call is one a proposal may carry during the fleet's opening: the
+    /// treasury's `setDailySplitBps`, the manager's `setProfile` or this controller's
+    /// `setEditsRestricted`. None of them moves money, and `_requireShares` has already refused
+    /// any call with value.
     function _movesNoMoney(KeyfleetTreasury.Call[] calldata calls) private view returns (bool) {
         for (uint256 i = 0; i < calls.length; ++i) {
             KeyfleetTreasury.Call calldata call = calls[i];
-            if (call.value != 0 || call.data.length < 4) return false;
+            if (call.data.length < 4) return false;
             bytes4 selector = bytes4(call.data[:4]);
             if (
                 !(call.target == address(TREASURY) && selector == KeyfleetTreasury.setDailySplitBps.selector)

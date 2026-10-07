@@ -70,8 +70,7 @@ contract PresenceHandler is Test {
     function propose(uint256 seed) external {
         uint256 tokenId = _key(seed);
         vm.prank(keys.ownerOf(tokenId));
-        try votes.propose(tokenId, bytes32(0), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0)) {}
-            catch {}
+        try votes.propose(tokenId, bytes32(0), new KeyfleetTreasury.Call[](0)) {} catch {}
     }
 
     function wait(uint256 secs) external {

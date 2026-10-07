@@ -317,7 +317,7 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
 
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
         votes.execute(proposalId, calls);
         assertEq(rewards.splitIndex(address(regent)), 0);

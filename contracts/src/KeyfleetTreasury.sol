@@ -30,7 +30,10 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// carried out. Some of its own functions can only be reached that way, because they accept only
 /// the treasury itself as caller: `pay` sends a payment, and `advance` sends one and records it as
 /// an advance to an operator, which anyone may return with `returnAdvance` up to what is still
-/// outstanding. The fleet's owed protocol share passes through here inside one call and never
+/// outstanding. Each names one asset and a share of the treasury's balance of it in parts per
+/// million, which the voting controller holds between 0.0001% and 99% when the proposal is made;
+/// the amount is that share of the balance when the call is made, rounded down, and a share that
+/// rounds down to nothing is refused. The fleet's owed protocol share passes through here inside one call and never
 /// stays: the manager sends it as USDC and immediately asks for it to be deposited into REGENT
 /// revenue staking.
 ///
@@ -83,6 +86,9 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
 
     /// @notice How the treasury names native ETH wherever it names an asset.
     address public constant NATIVE = address(0);
+
+    /// @notice What a share of a balance is counted in: parts per million.
+    uint256 public constant SHARE_DENOMINATOR = 1_000_000;
 
     /// @notice The lowest daily split rate, in basis points: 0.1%.
     uint16 public constant MIN_SPLIT_BPS = 10;
@@ -154,6 +160,8 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     error StakingDepositFailed(uint256 amount, uint256 received);
     /// @notice Only the treasury itself may call this, so only an approved proposal's call reaches it.
     error OnlySelf();
+    /// @notice The share of the treasury's balance of the asset rounds down to nothing.
+    error ShareRoundsToZero(address asset, uint32 sharePpm, uint256 balance);
     /// @notice An advance already has this id.
     error AdvanceIdTaken(uint256 advanceId);
     /// @notice More was returned than the advance has outstanding.
@@ -181,11 +189,18 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @notice The launch's token is already split as OUSD.
     error LaunchTokenIsOusd(address token);
 
-    /// @notice An approved proposal paid an asset out of the treasury.
-    event Paid(address indexed asset, address indexed to, uint256 amount);
-    /// @notice An approved proposal advanced an asset to an operator.
+    /// @notice An approved proposal paid `sharePpm` parts per million of the treasury's balance of
+    /// an asset, `amount`, out of the treasury.
+    event Paid(address indexed asset, address indexed to, uint32 sharePpm, uint256 amount);
+    /// @notice An approved proposal advanced `sharePpm` parts per million of the treasury's balance
+    /// of an asset, `amount`, to an operator.
     event Advanced(
-        uint256 indexed advanceId, address indexed operator, address indexed asset, uint256 amount, bytes32 purposeHash
+        uint256 indexed advanceId,
+        address indexed operator,
+        address indexed asset,
+        uint32 sharePpm,
+        uint256 amount,
+        bytes32 purposeHash
     );
     /// @notice Part or all of an advance came back.
     /// @param from Whoever returned it; anyone may.
@@ -275,29 +290,35 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         }
     }
 
-    /// @notice Pays `amount` of an asset to `to`. Only an approved proposal's call reaches it.
+    /// @notice Pays `sharePpm` parts per million of the treasury's balance of an asset to `to`.
+    /// Only an approved proposal's call reaches it.
     /// @dev A token is sent with `SafeERC20`, so a token that returns false instead of reverting
-    /// still fails the batch; ETH (`NATIVE`) is sent with `Address.sendValue`. Proposals pay tokens
-    /// through here rather than through a raw `transfer` call for that reason.
-    function pay(address asset, address to, uint256 amount) external onlySelf {
-        emit Paid(asset, to, amount);
+    /// still fails the batch; ETH (`NATIVE`) is sent with `Address.sendValue`.
+    /// @param asset A token, or `NATIVE` for ETH.
+    /// @param to Who receives it.
+    /// @param sharePpm The share of the balance, held between 1 and 990,000 when proposed.
+    function pay(address asset, address to, uint32 sharePpm) external onlySelf {
+        uint256 amount = _shareOf(asset, sharePpm);
+        emit Paid(asset, to, sharePpm, amount);
         _send(asset, to, amount);
     }
 
-    /// @notice Advances `amount` of an asset to an operator and records it under `advanceId` as
-    /// outstanding. Only an approved proposal's call reaches it.
+    /// @notice Advances `sharePpm` parts per million of the treasury's balance of an asset to an
+    /// operator and records the amount under `advanceId` as outstanding. Only an approved
+    /// proposal's call reaches it.
     /// @param advanceId A new id, chosen in the proposal.
     /// @param operator Who receives it.
     /// @param asset A token, or `NATIVE` for ETH.
-    /// @param amount How much.
+    /// @param sharePpm The share of the balance, held between 1 and 990,000 when proposed.
     /// @param purposeHash The hash of what it is for, kept off chain.
-    function advance(uint256 advanceId, address operator, address asset, uint256 amount, bytes32 purposeHash)
+    function advance(uint256 advanceId, address operator, address asset, uint32 sharePpm, bytes32 purposeHash)
         external
         onlySelf
     {
         if (advances[advanceId].operator != address(0)) revert AdvanceIdTaken(advanceId);
+        uint256 amount = _shareOf(asset, sharePpm);
         advances[advanceId] = Advance({operator: operator, asset: asset, outstanding: amount, purposeHash: purposeHash});
-        emit Advanced(advanceId, operator, asset, amount, purposeHash);
+        emit Advanced(advanceId, operator, asset, sharePpm, amount, purposeHash);
         _send(asset, operator, amount);
     }
 
@@ -478,6 +499,14 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @dev 100 whole units of a token, by the decimals it reports.
     function _hundred(IERC20 token) private view returns (uint256) {
         return 100 * 10 ** IERC20Metadata(address(token)).decimals();
+    }
+
+    /// @dev `sharePpm` parts per million of the treasury's balance of `asset` now, rounded down;
+    /// refused when that is nothing.
+    function _shareOf(address asset, uint32 sharePpm) private view returns (uint256 amount) {
+        uint256 balance = asset == NATIVE ? address(this).balance : IERC20(asset).balanceOf(address(this));
+        amount = Math.mulDiv(balance, sharePpm, SHARE_DENOMINATOR);
+        if (amount == 0) revert ShareRoundsToZero(asset, sharePpm, balance);
     }
 
     function _send(address asset, address to, uint256 amount) private {

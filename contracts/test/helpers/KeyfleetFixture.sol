@@ -280,7 +280,7 @@ abstract contract KeyfleetFixture is Test {
     }
 
     /// @dev Proposes `calls` with key 1, as its owner, and votes it Yes; nobody else is present, so
-    /// it is approved once it closes a second later. It does not wait itself: the caller has made
+    /// it is approved once it closes, 24 hours later. It does not wait itself: the caller has made
     /// key 1 mature (`_mature`) and ended the other keys' automatic presence (`_lapse`), or, for
     /// calls that move money, waited out the treasury opening (`_openTreasury`), which does both
     /// for keys bought when sales opened.
@@ -292,15 +292,16 @@ abstract contract KeyfleetFixture is Test {
         uint256 first = _key(fleet, 1);
         address author = keys.ownerOf(first);
         vm.startPrank(author);
-        proposalId = votes.propose(first, keccak256("narrative"), uint64(block.timestamp + 1), calls);
+        proposalId = votes.propose(first, keccak256("narrative"), calls);
         votes.castBallot(proposalId, _ids(first), KeyfleetVotes.Choice.Yes);
         vm.stopPrank();
     }
 
-    /// @dev Passes `calls` and carries them out.
+    /// @dev Passes `calls` and carries them out as soon as it may: at closing, or a day later for a
+    /// batch that moves money.
     function _execute(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls) internal {
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(fleet.VOTES().proposal(proposalId).closesAt);
+        vm.warp(fleet.VOTES().executableAt(proposalId));
         fleet.VOTES().execute(proposalId, calls);
     }
 

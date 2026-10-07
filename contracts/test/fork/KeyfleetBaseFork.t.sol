@@ -159,7 +159,7 @@ abstract contract KeyfleetForkFixture is Test {
         uint256 first = _key(fleet, 1);
         address author = keys.ownerOf(first);
         vm.startPrank(author);
-        proposalId = votes.propose(first, keccak256("narrative"), uint64(block.timestamp + 1), calls);
+        proposalId = votes.propose(first, keccak256("narrative"), calls);
         votes.castBallot(proposalId, _ids(first), KeyfleetVotes.Choice.Yes);
         vm.stopPrank();
     }
@@ -168,7 +168,7 @@ abstract contract KeyfleetForkFixture is Test {
     function _execute(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls) internal {
         uint256 proposalId = _approve(fleet, calls);
         KeyfleetVotes votes = fleet.VOTES();
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         votes.execute(proposalId, calls);
     }
 }
