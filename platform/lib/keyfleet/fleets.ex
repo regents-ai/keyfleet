@@ -75,6 +75,9 @@ defmodule Keyfleet.Fleets do
     fleets
   end
 
+  # The address the treasury names ETH by.
+  @native "0x0000000000000000000000000000000000000000"
+
   # The deployed manifest names its fleet by its slot in the deployment.
   @manifest_slots %{
     "syndicate" => "fibonacci_syndicate",
@@ -91,21 +94,29 @@ defmodule Keyfleet.Fleets do
   `contracts/script/RecordKeyfleets.s.sol` writes for one fleet, from trusted
   operator code, and returns the fleet.
 
+  The treasury splits ETH, REGENT and USDC from the start, in that order,
+  so a manifest whose `splitAssets` begin otherwise matches no clause.
+
   Recording the same manifest again changes nothing; a manifest naming other
-  contracts for a bound fleet is refused, and so is one whose chain, USDC or
-  trait table differs from a fleet already bound. Every
-  other fleet is left as it is.
+  contracts for a bound fleet is refused, and so is one whose chain, USDC,
+  REGENT, staking contract, Autolaunch factory or trait table differs from a
+  fleet already bound. Every other fleet is left as it is.
   """
   def record_manifest!(%{
         "chainId" => chain_id,
         "deploymentBlock" => block,
         "usdc" => usdc,
+        "regent" => regent,
+        "regentStaking" => regent_staking,
+        "autolaunchFactory" => autolaunch_factory,
+        "splitAssets" => [@native, regent, usdc | _admitted_later],
         "traitTableHash" => trait_table_hash,
         "fleet" => %{
           "slot" => slot,
           "address" => address,
           "rewards" => rewards,
           "votes" => votes,
+          "treasury" => treasury,
           "shards" => shards
         }
       })
@@ -118,8 +129,12 @@ defmodule Keyfleet.Fleets do
       contract_address: String.downcase(address),
       rewards_address: String.downcase(rewards),
       votes_address: String.downcase(votes),
+      treasury_address: String.downcase(treasury),
       shards_address: String.downcase(shards),
       usdc_address: String.downcase(usdc),
+      regent_address: String.downcase(regent),
+      regent_staking_address: String.downcase(regent_staking),
+      autolaunch_factory_address: String.downcase(autolaunch_factory),
       deployed_block: block,
       trait_table_hash: String.downcase(trait_table_hash)
     }

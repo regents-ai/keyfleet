@@ -65,7 +65,11 @@ defmodule Keyfleet.WalletStepsAnvilTest do
         contract_address: lab.fleet,
         rewards_address: lab.rewards,
         votes_address: lab.votes,
+        treasury_address: lab.treasury,
         shards_address: lab.shards,
+        regent_address: lab.regent,
+        regent_staking_address: lab.staking,
+        autolaunch_factory_address: lab.autolaunch_factory,
         usdc_address: lab.usdc,
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)

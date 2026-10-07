@@ -29,7 +29,11 @@ defmodule Keyfleet.ChainHelpers do
         contract_address: "0x" <> String.duplicate("c" <> digit, 20),
         rewards_address: "0x" <> String.duplicate("d" <> digit, 20),
         votes_address: "0x" <> String.duplicate("e" <> digit, 20),
+        treasury_address: "0x" <> String.duplicate("b" <> digit, 20),
         shards_address: "0x" <> String.duplicate("f" <> digit, 20),
+        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)

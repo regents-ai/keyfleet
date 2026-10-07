@@ -1,8 +1,9 @@
 defmodule Keyfleet.Fleets.Validations.SharedWiring do
   @moduledoc """
-  Every deployed fleet sells on one chain, for one USDC, and draws traits
-  from one trait table, so a deployment whose wiring differs from any other
-  bound fleet's is refused.
+  Every deployed fleet sells on one chain, for one USDC, pays Regents' share
+  through one REGENT token and staking contract, launches its token through
+  one Autolaunch factory and draws traits from one trait table, so a
+  deployment whose wiring differs from any other bound fleet's is refused.
 
   It runs inside the action's transaction and first locks every fleet row, in
   id order, so two recordings for different fleets are checked one after the
@@ -12,7 +13,14 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
 
   require Ash.Query
 
-  @fields [:chain_id, :usdc_address, :trait_table_hash]
+  @fields [
+    :chain_id,
+    :usdc_address,
+    :regent_address,
+    :regent_staking_address,
+    :autolaunch_factory_address,
+    :trait_table_hash
+  ]
 
   @impl true
   def validate(changeset, _opts, _context) do

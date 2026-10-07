@@ -1268,7 +1268,11 @@ defmodule Keyfleet.ProposalsChainTest do
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
+        treasury_address: "0x" <> String.duplicate("7e", 20),
         shards_address: @shards,
+        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: @deployed,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -1454,7 +1458,9 @@ defmodule Keyfleet.ProposalsChainTest do
 
       Repo.query!(
         "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
-          "rewards_address = NULL, votes_address = NULL, shards_address = NULL, usdc_address = NULL, " <>
+          "rewards_address = NULL, votes_address = NULL, treasury_address = NULL, " <>
+          "shards_address = NULL, usdc_address = NULL, regent_address = NULL, " <>
+          "regent_staking_address = NULL, autolaunch_factory_address = NULL, " <>
           "deployed_block = NULL, trait_table_hash = NULL " <>
           "WHERE id = $1",
         [@fleet]

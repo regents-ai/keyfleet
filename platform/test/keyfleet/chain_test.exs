@@ -20,6 +20,9 @@ defmodule Keyfleet.ChainTest do
   @contract "0x" <> String.duplicate("7", 40)
   @deployed 5_000_000
   @new_hash "0x" <> String.duplicate("e", 64)
+  @usdc "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  @regent "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07"
+  @native "0x0000000000000000000000000000000000000000"
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -306,7 +309,12 @@ defmodule Keyfleet.ChainTest do
                contract_address: "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
                rewards_address: "0xd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
                votes_address: "0x9191919191919191919191919191919191919191",
-               usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+               treasury_address: "0x7171717171717171717171717171717171717171",
+               shards_address: "0x6161616161616161616161616161616161616161",
+               usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+               regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+               regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+               autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e"
              } = classic
 
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
@@ -348,6 +356,9 @@ defmodule Keyfleet.ChainTest do
       for {key, value, field} <- [
             {"chainId", 1, "chain_id"},
             {"usdc", "0x" <> String.duplicate("0b", 20), "usdc_address"},
+            {"regentStaking", "0x" <> String.duplicate("0c", 20), "regent_staking_address"},
+            {"autolaunchFactory", "0x" <> String.duplicate("0d", 20),
+             "autolaunch_factory_address"},
             {"traitTableHash", "0x" <> String.duplicate("b2", 32), "trait_table_hash"}
           ] do
         File.write!(path, Jason.encode!(manifest("cascade", "1", %{key => value})))
@@ -358,6 +369,26 @@ defmodule Keyfleet.ChainTest do
 
       assert Map.new(Fleets.list_fleets!(), &{&1.id, &1}) == bound
       assert slugs("fibonacci_cascade") == []
+    end
+
+    # The treasury splits ETH, REGENT and USDC from its first block, so a
+    # manifest whose treasury splits anything else first is not this
+    # deployment's and binds nothing.
+    @tag :tmp_dir
+    test "a manifest whose split assets don't begin ETH, REGENT, USDC binds nothing", %{
+      tmp_dir: dir
+    } do
+      path = Path.join(dir, "deployed.json")
+
+      for split <- [
+            [@regent, @usdc],
+            ["0x0000000000000000000000000000000000000000", @usdc, @regent]
+          ] do
+        File.write!(path, Jason.encode!(manifest("classic", "1", %{"splitAssets" => split})))
+        assert_raise FunctionClauseError, fn -> Release.seed_deployment!(path) end
+      end
+
+      assert Fleets.list_deployed_fleets!() == []
     end
   end
 
@@ -445,7 +476,11 @@ defmodule Keyfleet.ChainTest do
       contract_address: contract,
       rewards_address: "0x" <> String.duplicate("8", 40),
       votes_address: "0x" <> String.duplicate("9", 40),
+      treasury_address: "0x" <> String.duplicate("7e", 20),
       shards_address: "0x" <> String.duplicate("6", 40),
+      regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+      regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+      autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
       usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
       deployed_block: @deployed,
       trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -453,7 +488,8 @@ defmodule Keyfleet.ChainTest do
   end
 
   # The manifest `RecordKeyfleets` writes for the fleet in `slot`, on the
-  # wiring every fleet shares unless `wiring` says otherwise.
+  # wiring every fleet shares unless `wiring` says otherwise. Its treasury
+  # splits ETH, then its REGENT, then its USDC unless `wiring` names others.
   defp manifest(slot, generation, wiring \\ %{}) do
     letter = %{"syndicate" => "a", "cascade" => "b", "classic" => "c", "accelerant" => "f"}[slot]
 
@@ -461,18 +497,23 @@ defmodule Keyfleet.ChainTest do
       %{
         "chainId" => 8453,
         "deploymentBlock" => 42,
-        "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "usdc" => @usdc,
+        "regent" => @regent,
+        "regentStaking" => "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
+        "autolaunchFactory" => "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
         "traitTableHash" => "0x" <> String.duplicate("A1", 32),
         "fleet" => %{
           "slot" => slot,
           "address" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
           "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
           "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20),
+          "treasury" => "0x" <> String.duplicate("7" <> generation, 20),
           "shards" => "0x" <> String.duplicate("6" <> generation, 20)
         }
       },
       wiring
     )
+    |> then(&Map.put_new(&1, "splitAssets", [@native, &1["regent"], &1["usdc"]]))
   end
 
   defp letter_for_votes("b"), do: "e"

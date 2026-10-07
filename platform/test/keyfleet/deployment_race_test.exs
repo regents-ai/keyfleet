@@ -16,8 +16,12 @@ defmodule Keyfleet.DeploymentRaceTest do
     :contract_address,
     :rewards_address,
     :votes_address,
+    :treasury_address,
     :shards_address,
     :usdc_address,
+    :regent_address,
+    :regent_staking_address,
+    :autolaunch_factory_address,
     :deployed_block,
     :trait_table_hash
   ]
@@ -91,7 +95,11 @@ defmodule Keyfleet.DeploymentRaceTest do
       contract_address: contract,
       rewards_address: "0x" <> String.duplicate("8", 40),
       votes_address: "0x" <> String.duplicate("9", 40),
+      treasury_address: "0x" <> String.duplicate("7e", 20),
       shards_address: "0x" <> String.duplicate("6", 40),
+      regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+      regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+      autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
       usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
       deployed_block: 1_000,
       trait_table_hash: "0x" <> String.duplicate("a", 64)
