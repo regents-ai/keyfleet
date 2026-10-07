@@ -33,7 +33,9 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.Scanner
   alias Keyfleet.Chain.StubClient
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.ProposalHelpers
@@ -54,6 +56,7 @@ defmodule Keyfleet.BrowserChain do
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
+  @sales_open Call.selector("salesOpen(uint256)")
   @credits Call.selector("credits(address,address)")
   @shard_is_active Call.selector("isActive(uint256,address)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
@@ -96,23 +99,17 @@ defmodule Keyfleet.BrowserChain do
     Fleets.bootstrap_catalog!()
     fleet = Fleets.get_fleet!(fleet_id)
 
-    unless fleet.contract_address do
+    unless fleet.manager_address do
       Fleets.record_deployment!(
         fleet,
-        %{
+        ChainHelpers.deployment(fleet_id, %{
           chain_id: @chain_id,
-          contract_address: @contract,
+          manager_address: @contract,
           rewards_address: "0x" <> String.duplicate("6", 40),
-          votes_address: "0x" <> String.duplicate("9", 40),
-          treasury_address: "0x" <> String.duplicate("7e", 20),
           shards_address: "0x" <> String.duplicate("4", 40),
-          regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-          regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-          autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
           usdc_address: @usdc,
-          deployed_block: 1_000,
-          trait_table_hash: "0x" <> String.duplicate("a", 64)
-        },
+          deployed_block: 1_000
+        }),
         actor: @system
       )
     end
@@ -129,8 +126,8 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "Key `token_id` of the fleet has `amount` atomic USDC waiting from now on."
   def offer_rewards!(fleet_id, token_id, amount) do
-    %{rewards_address: rewards} = Fleets.get_fleet!(fleet_id)
-    remember({:rewards, rewards, token_id}, amount)
+    %{rewards_address: rewards} = fleet = Fleets.get_fleet!(fleet_id)
+    remember({:rewards, rewards, Fleet.onchain_token_id(fleet, token_id)}, amount)
   end
 
   @doc """
@@ -138,8 +135,8 @@ defmodule Keyfleet.BrowserChain do
   `refused`, and accepted otherwise, from now on.
   """
   def refuse_draw!(fleet_id, token_id, refused) do
-    %{contract_address: contract} = Fleets.get_fleet!(fleet_id)
-    remember({:draw_refused, contract, token_id}, refused)
+    %{keys_address: keys} = fleet = Fleets.get_fleet!(fleet_id)
+    remember({:draw_refused, keys, Fleet.onchain_token_id(fleet, token_id)}, refused)
   end
 
   @doc "`owner` has allowed every fleet `amount` atomic USDC from now on."
@@ -189,9 +186,12 @@ defmodule Keyfleet.BrowserChain do
 
   defp answer(_rewards, @credits <> _asset_and_account, _block_hash), do: {:ok, <<0::256>>}
 
-  # A key never sold has no owner, and the fleet refuses to name one.
-  defp answer(fleet, @owner_of <> token_id, _block_hash) do
-    case Map.fetch(answers(), {:owner, fleet, String.to_integer(token_id, 16)}) do
+  # Every fleet's Keys are on sale.
+  defp answer(_keys, @sales_open <> _fleet, _block_hash), do: {:ok, <<1::256>>}
+
+  # A key never sold has no owner, and the collection refuses to name one.
+  defp answer(keys, @owner_of <> token_id, _block_hash) do
+    case Map.fetch(answers(), {:owner, keys, String.to_integer(token_id, 16)}) do
       {:ok, owner} -> {:ok, address_bytes(owner)}
       :error -> {:error, :reverted}
     end
@@ -208,8 +208,8 @@ defmodule Keyfleet.BrowserChain do
 
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
 
-  defp answer(fleet, @reveal_requested_at <> token_id, _block_hash) do
-    refused? = Map.get(answers(), {:draw_refused, fleet, String.to_integer(token_id, 16)}, false)
+  defp answer(keys, @reveal_requested_at <> token_id, _block_hash) do
+    refused? = Map.get(answers(), {:draw_refused, keys, String.to_integer(token_id, 16)}, false)
     {:ok, <<if(refused?, do: 0, else: 1)::256>>}
   end
 
@@ -255,14 +255,15 @@ defmodule Keyfleet.BrowserChain do
   def issue_shard!(fleet_id, token_id, wallet, days) do
     %{ownership_epoch: epoch} = Keys.current_key!(fleet_id, token_id)
     expires = DateTime.to_unix(DateTime.utc_now()) + days * 86_400
-    %{shards_address: shards} = Fleets.get_fleet!(fleet_id)
-    remember({:shard, shards, token_id, String.downcase(wallet)}, true)
+    %{shards_address: shards} = fleet = Fleets.get_fleet!(fleet_id)
+    onchain = Fleet.onchain_token_id(fleet, token_id)
+    remember({:shard, shards, onchain, String.downcase(wallet)}, true)
 
     pass!(fleet_id, fn fleet, block ->
       [
         log(
           fleet.shards_address,
-          [@shard_issued, word(token_id), address_word(wallet)],
+          [@shard_issued, word(onchain), address_word(wallet)],
           word_data([expires, epoch]),
           fleet.id,
           block,
@@ -274,14 +275,15 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "The shard of key `token_id` that `wallet` holds has been ended by `by`."
   def end_shard!(fleet_id, token_id, wallet, by) do
-    %{shards_address: shards} = Fleets.get_fleet!(fleet_id)
-    remember({:shard, shards, token_id, String.downcase(wallet)}, false)
+    %{shards_address: shards} = fleet = Fleets.get_fleet!(fleet_id)
+    onchain = Fleet.onchain_token_id(fleet, token_id)
+    remember({:shard, shards, onchain, String.downcase(wallet)}, false)
 
     pass!(fleet_id, fn fleet, block ->
       [
         log(
           fleet.shards_address,
-          [@shard_ended, word(token_id), address_word(wallet), address_word(by)],
+          [@shard_ended, word(onchain), address_word(wallet), address_word(by)],
           "0x",
           fleet.id,
           block,
@@ -352,18 +354,27 @@ defmodule Keyfleet.BrowserChain do
   # One pass over a chain whose next block holds the ownership `changes`, as
   # `{token_id, epoch, owner}`, and whose head is well past it.
   defp pass!(fleet_id, changes) when is_list(changes) do
-    %{contract_address: contract} = Fleets.get_fleet!(fleet_id)
+    %{keys_address: keys} = fleet = Fleets.get_fleet!(fleet_id)
 
     for {token_id, _epoch, owner} <- changes,
-        do: remember({:owner, contract, token_id}, String.downcase(owner))
+        do:
+          remember(
+            {:owner, keys, Fleet.onchain_token_id(fleet, token_id)},
+            String.downcase(owner)
+          )
 
     pass!(fleet_id, fn fleet, block ->
       changes
       |> Enum.with_index()
       |> Enum.map(fn {{token_id, epoch, owner}, index} ->
         log(
-          fleet.contract_address,
-          [OwnershipLog.topic(), word(token_id), word(0), address_word(owner)],
+          fleet.keys_address,
+          [
+            OwnershipLog.topic(),
+            word(Fleet.onchain_token_id(fleet, token_id)),
+            word(0),
+            address_word(owner)
+          ],
           word(epoch),
           fleet.id,
           block,

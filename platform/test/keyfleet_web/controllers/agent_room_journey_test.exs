@@ -196,8 +196,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
            )
   end
 
-  test "an agent reaches Keyfleet Classic's rooms before its deployment is recorded", c do
-    assert Fleets.get_fleet!("fleet_tech_classic").contract_address == nil
+  test "an agent reaches Classic #1's rooms before its deployment is recorded", c do
+    assert Fleets.get_fleet!("fleet_tech_classic").manager_address == nil
 
     answer = send_signed(c, "GET", "/api/v1/agent/fleets/fleet_tech_classic/rooms", "{}")
 

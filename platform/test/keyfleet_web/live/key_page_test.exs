@@ -126,7 +126,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert has_element?(
              view,
              "#key-edits-tip",
-             "A vote of the fleet stopped this key and its shards changing the workspace."
+             "A vote of the fleet stopped this Key and its shards changing the workspace."
            )
   end
 
@@ -164,7 +164,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
       assert has_element?(view, "#key-present-keys [data-key='1']", "Present until")
       assert has_element?(view, "#key-present-mark[disabled]")
-      assert has_element?(view, "#key-present-action", "Not your key")
+      assert has_element?(view, "#key-present-action", "Not your Key")
       assert has_element?(view, "#key-present-sweep:not([disabled])")
 
       # A visitor reads it too, with no buttons.
@@ -191,7 +191,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
     render_async(view)
 
-    assert has_element?(view, "#key-agent-voting-state", "On for key 1")
+    assert has_element?(view, "#key-agent-voting-state", "On for Key 1")
     assert has_element?(view, "#key-agent-voting-on:not([disabled])", "Turn on")
     assert has_element?(view, "#key-agent-voting-off:not([disabled])", "Turn off")
     assert has_element?(view, "#key-agent-voting-keys[data-onchain-input=keys][value='1']")
@@ -203,10 +203,11 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     reader = "0x" <> String.duplicate("d", 40)
     fleet = Fleets.get_fleet!(@fleet)
 
-    # The page's buttons read the reader's USDC allowance and whether the
-    # fleet has launched a token.
+    # The page's buttons read whether the fleet's Keys are on sale, the
+    # reader's USDC allowance and whether the fleet has launched a token.
     ChainViews.put!([
-      {fleet.usdc_address, "allowance(address,address)", [reader, fleet.contract_address],
+      {fleet.keys_address, "salesOpen(uint256)", [fleet.chain_fleet_id], {"bool", [true]}},
+      {fleet.usdc_address, "allowance(address,address)", [reader, fleet.manager_address],
        {"uint256", [0]}},
       {fleet.treasury_address, "launchId()", [], {"uint256", [0]}}
     ])
@@ -219,26 +220,29 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
   end
 
   # The views the key's wallet buttons read for key 1: its holder, whether
-  # each shard wallet is active, when the key's presence runs out, the
-  # presence queue, and whether its agent voting is on.
+  # each shard wallet is active, whether the key is present and since when
+  # (present for 48 hours, until `until`; 0 for not present), when it may
+  # first take part, whether lapsed presences wait to be cleared, and
+  # whether its agent voting is on.
   defp chain!(fleet, present_until: until, agent_voting: voting) do
+    key = ChainHelpers.onchain_id(@fleet, 1)
+
     shard_checks =
       for check <- ["isActive", "mayGovern"], wallet <- [@agent, @bare, @stranger] do
-        {fleet.shards_address, "#{check}(uint256,address)", [1, wallet], {"bool", [true]}}
+        {fleet.shards_address, "#{check}(uint256,address)", [key, wallet],
+         {"bool", [not (check == "isActive" and wallet == @stranger)]}}
       end
 
     ChainViews.put!([
-      {fleet.contract_address, "ownerOf(uint256)", [1], {"address", [@owner]}},
-      {fleet.votes_address, "presenceEntry(uint256)", [1],
-       {"uint32,uint32,uint64", [0, 0, until]}},
-      {fleet.votes_address, "presenceQueue()", [], {"uint32,uint32,uint32", [0, 0, 0]}},
-      {fleet.shards_address, "agentVoting(uint256)", [1], {"bool", [voting]}}
-      | List.replace_at(shard_checks, 2, isactive_false(fleet))
+      {fleet.keys_address, "ownerOf(uint256)", [key], {"address", [@owner]}},
+      {fleet.votes_address, "isActive(uint256)", [key], {"bool", [until > 0]}},
+      {fleet.votes_address, "presentFrom(uint256)", [key], {"uint64", [max(until - 172_800, 0)]}},
+      {fleet.votes_address, "maturesAt(uint256)", [key], {"uint64", [0]}},
+      {fleet.votes_address, "sweepExpired(uint256)", [0], {"uint256,bool", [0, false]}},
+      {fleet.shards_address, "agentVoting(uint256)", [key], {"bool", [voting]}}
+      | shard_checks
     ])
   end
-
-  defp isactive_false(fleet),
-    do: {fleet.shards_address, "isActive(uint256,address)", [1, @stranger], {"bool", [false]}}
 
   defp epoch!(epoch, owner) do
     Keys.record_epoch!(

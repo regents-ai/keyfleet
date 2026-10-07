@@ -6,8 +6,9 @@ defmodule Keyfleet.DecksTest do
   @table "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
 
   setup %{tmp_dir: tmp_dir} do
+    configured = Application.fetch_env!(:keyfleet, Decks)
     Application.put_env(:keyfleet, Decks, directory: tmp_dir)
-    on_exit(fn -> Application.delete_env(:keyfleet, Decks) end)
+    on_exit(fn -> Application.put_env(:keyfleet, Decks, configured) end)
   end
 
   # A deck's hash goes into its fleet's creation for good, so the site must

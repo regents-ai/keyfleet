@@ -3,7 +3,6 @@ defmodule Keyfleet.TreasuryReaderTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.Actors.System
   alias Keyfleet.Chain.{StubClient, TreasuryReader}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
@@ -41,25 +40,11 @@ defmodule Keyfleet.TreasuryReaderTest do
     ChainHelpers.seed_cursor!(@fleet)
 
     fleet =
-      @fleet
-      |> Fleets.get_fleet!()
-      |> Fleets.record_deployment!(
-        %{
-          chain_id: 8453,
-          contract_address: @contract,
-          rewards_address: @rewards,
-          votes_address: "0x" <> String.duplicate("9", 40),
-          treasury_address: @treasury,
-          shards_address: "0x" <> String.duplicate("6", 40),
-          regent_address: @regent,
-          regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-          autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-          usdc_address: @usdc,
-          deployed_block: 1,
-          trait_table_hash: "0x" <> String.duplicate("a", 64)
-        },
-        actor: %System{}
-      )
+      ChainHelpers.deploy!(@fleet, %{
+        manager_address: @contract,
+        rewards_address: @rewards,
+        treasury_address: @treasury
+      })
 
     %{fleet: fleet}
   end

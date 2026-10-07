@@ -9,6 +9,7 @@ defmodule Keyfleet.WalletStepsTest do
   alias Keyfleet.ChainViews
   alias Keyfleet.Fleets
   alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Proposals
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.Repo
   alias Keyfleet.WalletSteps
@@ -24,7 +25,7 @@ defmodule Keyfleet.WalletStepsTest do
   @regent "0x6f89bca4ea5931edfcb09786267b251dee752b07"
   @native "0x0000000000000000000000000000000000000000"
   @now DateTime.to_unix(ChainViews.head().timestamp)
-  @propose "propose(uint256,bytes32,uint64,(address,uint256,bytes)[])"
+  @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -49,11 +50,18 @@ defmodule Keyfleet.WalletStepsTest do
 
   # --- views the steps read ------------------------------------------------
 
+  # Key `key` of the fleet as the Key collection names it.
+  defp id(key), do: ChainHelpers.onchain_id(@fleet, key)
+  defp ids(keys), do: Enum.map(keys, &id/1)
+
   defp owner(fleet, key, wallet),
-    do: {fleet.contract_address, "ownerOf(uint256)", [key], {"address", [wallet]}}
+    do: {fleet.keys_address, "ownerOf(uint256)", [id(key)], {"address", [wallet]}}
 
   defp shard(fleet, check, key, wallet, answer),
-    do: {fleet.shards_address, "#{check}(uint256,address)", [key, wallet], {"bool", [answer]}}
+    do: {fleet.shards_address, "#{check}(uint256,address)", [id(key), wallet], {"bool", [answer]}}
+
+  defp matures(fleet, key, at),
+    do: {fleet.votes_address, "maturesAt(uint256)", [id(key)], {"uint64", [at]}}
 
   defp uint(to, signature, arguments \\ [], value),
     do: {to, signature, arguments, {"uint256", [value]}}
@@ -63,7 +71,7 @@ defmodule Keyfleet.WalletStepsTest do
 
   describe "who may build" do
     test "only a signed-in person, for a wallet their account links", %{fleet: fleet} do
-      ChainViews.put!([uint(fleet.contract_address, "protocolShareOwed()", 0)])
+      ChainViews.put!([uint(fleet.manager_address, "protocolShareOwed()", 0)])
 
       assert {:ok, _built} = build(:send_share)
       assert {:error, %Ash.Error.Forbidden{}} = build(:send_share, %{}, nil)
@@ -96,14 +104,16 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "buying a key" do
-    defp allowance(fleet, amount),
-      do:
-        {@usdc, "allowance(address,address)", [@signer, fleet.contract_address],
+    defp sale(fleet, amount, open? \\ true),
+      do: [
+        {fleet.keys_address, "salesOpen(uint256)", [fleet.chain_fleet_id], {"bool", [open?]}},
+        {@usdc, "allowance(address,address)", [@signer, fleet.manager_address],
          {"uint256", [amount]}}
+      ]
 
     test "approves exactly the price when the allowance is short, then buys for the signer",
          %{fleet: fleet} do
-      ChainViews.put!([allowance(fleet, 0)])
+      ChainViews.put!(sale(fleet, 0))
 
       built = build!(:buy)
       assert built.problem == nil
@@ -116,19 +126,28 @@ defmodule Keyfleet.WalletStepsTest do
       assert approve.to == @usdc
 
       assert approve.data ==
-               Call.encode("approve(address,uint256)", [fleet.contract_address, 10_000_000])
+               Call.encode("approve(address,uint256)", [fleet.manager_address, 10_000_000])
 
-      assert buy.to == fleet.contract_address
+      assert buy.to == fleet.manager_address
 
       assert buy.data ==
-               Call.encode("purchase(address,uint256,uint256)", [@signer, 10_000_000, @now + 600])
+               Call.encode("purchase(address,uint256,uint256,bytes32[])", [
+                 @signer,
+                 10_000_000,
+                 @now + 600,
+                 []
+               ])
     end
 
-    test "an allowance of the price or more leaves only the purchase", %{fleet: fleet} do
-      ChainViews.put!([allowance(fleet, 10_000_000)])
+    test "an allowance of the price or more leaves only the purchase, once sales open",
+         %{fleet: fleet} do
+      ChainViews.put!(sale(fleet, 10_000_000))
       assert %{figures: %{approve?: false, blocked: blocked}} = built = build!(:buy)
       assert blocked == %{}
       assert names(built) == ["buy"]
+
+      ChainViews.put!(sale(fleet, 10_000_000, false))
+      assert build!(:buy).figures.blocked == %{"buy" => :sales_not_open}
     end
 
     test "a chain that can't be read builds nothing and says so" do
@@ -148,8 +167,8 @@ defmodule Keyfleet.WalletStepsTest do
   describe "asking again for a key's draw" do
     defp draw(fleet, seed, requested_at) do
       ChainViews.put!([
-        {fleet.contract_address, "revealSeed(uint256)", [4], {"bytes32", [seed]}},
-        uint(fleet.contract_address, "revealRequestedAt(uint256)", [4], requested_at)
+        {fleet.keys_address, "revealSeed(uint256)", [id(4)], {"bytes32", [seed]}},
+        uint(fleet.keys_address, "revealRequestedAt(uint256)", [id(4)], requested_at)
       ])
     end
 
@@ -158,7 +177,8 @@ defmodule Keyfleet.WalletStepsTest do
       draw(fleet, zero, 0)
       built = build!(:reveal, token_id: 4)
       assert built.figures.blocked == %{}
-      assert steps(built)["reveal"].data == Call.encode("requestReveal(uint256)", [4])
+      assert steps(built)["reveal"].to == fleet.keys_address
+      assert steps(built)["reveal"].data == Call.encode("requestReveal(uint256)", [id(4)])
 
       draw(fleet, zero, @now)
       assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :reveal_requested}
@@ -174,8 +194,8 @@ defmodule Keyfleet.WalletStepsTest do
         [
           {fleet.rewards_address, "rewardAssets()", [], {"address[]", [[@usdc, @regent]]}},
           owner(fleet, 5, holder),
-          uint(fleet.rewards_address, "accrued(address,uint256)", [@usdc, 5], 2_000_000),
-          uint(fleet.rewards_address, "accrued(address,uint256)", [@regent, 5], 0),
+          uint(fleet.rewards_address, "accrued(address,uint256)", [@usdc, id(5)], 2_000_000),
+          uint(fleet.rewards_address, "accrued(address,uint256)", [@regent, id(5)], 0),
           uint(fleet.rewards_address, "credits(address,address)", [@usdc, holder], 500_000),
           uint(fleet.rewards_address, "credits(address,address)", [@regent, holder], 0)
         ] ++ extra
@@ -195,7 +215,7 @@ defmodule Keyfleet.WalletStepsTest do
       assert names(built) == ["claim-#{@usdc}", "claim-#{@regent}"]
       claim = steps(built)["claim-#{@usdc}"]
       assert claim.to == fleet.rewards_address
-      assert claim.data == Call.encode("claim(uint256[],address[])", [[5], [@usdc]])
+      assert claim.data == Call.encode("claim(uint256[],address[])", [[id(5)], [@usdc]])
       assert built.figures.blocked == %{"claim-#{@regent}" => :nothing_to_claim}
     end
 
@@ -228,13 +248,19 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "being present" do
-    defp presence(fleet, key, expires_at),
-      do:
-        {fleet.votes_address, "presenceEntry(uint256)", [key],
-         {"uint32,uint32,uint64", [0, 0, expires_at]}}
+    # Key `key` present for 48 hours until `until`, or not present for nil,
+    # and old enough to take part.
+    defp presence(fleet, key, until) do
+      [
+        {fleet.votes_address, "isActive(uint256)", [id(key)], {"bool", [until != nil]}},
+        {fleet.votes_address, "presentFrom(uint256)", [id(key)],
+         {"uint64", [if(until, do: until - 172_800, else: 0)]}},
+        matures(fleet, key, @now - 1)
+      ]
+    end
 
-    defp queue(fleet, first),
-      do: {fleet.votes_address, "presenceQueue()", [], {"uint32,uint32,uint32", [first, 0, 1]}}
+    defp sweep(fleet, due?),
+      do: {fleet.votes_address, "sweepExpired(uint256)", [0], {"uint256,bool", [0, due?]}}
 
     test "every key the signer holds or holds a shard of, marked in one press",
          %{fleet: fleet} do
@@ -242,16 +268,16 @@ defmodule Keyfleet.WalletStepsTest do
       ProposalHelpers.keys_sold!(@fleet, [7], @other)
       ChainHelpers.issue_shard!(@fleet, 7, @signer)
 
-      ChainViews.put!([
-        owner(fleet, 1, @signer),
-        owner(fleet, 2, @signer),
-        owner(fleet, 7, @other),
-        shard(fleet, "isActive", 7, @signer, true),
-        presence(fleet, 1, @now + 3_600),
-        presence(fleet, 2, @now - 1),
-        presence(fleet, 7, 0),
-        queue(fleet, 0)
-      ])
+      ChainViews.put!(
+        [
+          owner(fleet, 1, @signer),
+          owner(fleet, 2, @signer),
+          owner(fleet, 7, @other),
+          shard(fleet, "isActive", 7, @signer, true),
+          sweep(fleet, false)
+        ] ++
+          presence(fleet, 1, @now + 3_600) ++ presence(fleet, 2, nil) ++ presence(fleet, 7, nil)
+      )
 
       built = build!(:present)
 
@@ -264,19 +290,16 @@ defmodule Keyfleet.WalletStepsTest do
       assert built.figures.maintenance? == false
       assert built.figures.blocked == %{}
       assert steps(built)["present"].to == fleet.votes_address
-      assert steps(built)["present"].data == Call.encode("present(uint256[])", [[1, 2, 7]])
+      assert steps(built)["present"].data == Call.encode("present(uint256[])", [ids([1, 2, 7])])
       assert steps(built)["sweep"].data == Call.encode("sweepExpired(uint256)", [256])
     end
 
     test "a key's page shows its key to anyone, and lapsed presences need tidying",
          %{fleet: fleet} do
-      ChainViews.put!([
-        owner(fleet, 9, @other),
-        shard(fleet, "isActive", 9, @signer, false),
-        presence(fleet, 9, @now + 60),
-        queue(fleet, 3),
-        presence(fleet, 3, @now - 60)
-      ])
+      ChainViews.put!(
+        [owner(fleet, 9, @other), shard(fleet, "isActive", 9, @signer, false), sweep(fleet, true)] ++
+          presence(fleet, 9, @now + 60)
+      )
 
       built = build!(:present, token_id: 9)
       assert built.figures.keys == [%{token_id: 9, until: DateTime.from_unix!(@now + 60)}]
@@ -286,7 +309,7 @@ defmodule Keyfleet.WalletStepsTest do
     end
 
     test "a wallet with no keys may still tidy up", %{fleet: fleet} do
-      ChainViews.put!([queue(fleet, 0)])
+      ChainViews.put!([sweep(fleet, false)])
       assert build!(:present).figures.blocked == %{"present" => :no_keys}
     end
   end
@@ -304,7 +327,7 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["issue"].to == fleet.shards_address
 
       assert steps(built)["issue"].data ==
-               Call.encode("issue(uint256[],address,uint16)", [[1, 3], @other, 45])
+               Call.encode("issue(uint256[],address,uint16)", [ids([1, 3]), @other, 45])
     end
 
     test "a key held by someone else, or the signer's own wallet, can't be issued",
@@ -346,10 +369,10 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["end-#{@other}"].to == fleet.shards_address
 
       assert steps(built)["end-#{@other}"].data ==
-               Call.encode("end(uint256[],address)", [[3], @other])
+               Call.encode("end(uint256[],address)", [[id(3)], @other])
 
       assert steps(built)["renew-#{@other}"].data ==
-               Call.encode("issue(uint256[],address,uint16)", [[3], @other, 30])
+               Call.encode("issue(uint256[],address,uint16)", [[id(3)], @other, 30])
     end
 
     test "a shard already ended on the chain, or someone else's, can't be ended",
@@ -376,8 +399,8 @@ defmodule Keyfleet.WalletStepsTest do
       views = [
         owner(fleet, 2, @signer),
         owner(fleet, 4, @signer),
-        {fleet.shards_address, "agentVoting(uint256)", [2], {"bool", [true]}},
-        {fleet.shards_address, "agentVoting(uint256)", [4], {"bool", [false]}}
+        {fleet.shards_address, "agentVoting(uint256)", [id(2)], {"bool", [true]}},
+        {fleet.shards_address, "agentVoting(uint256)", [id(4)], {"bool", [false]}}
       ]
 
       ChainViews.put!(views)
@@ -386,10 +409,10 @@ defmodule Keyfleet.WalletStepsTest do
       assert blocked == %{}
 
       assert steps(built)["on"].data ==
-               Call.encode("setAgentVoting(uint256[],bool)", [[2, 4], true])
+               Call.encode("setAgentVoting(uint256[],bool)", [ids([2, 4]), true])
 
       assert steps(built)["off"].data ==
-               Call.encode("setAgentVoting(uint256[],bool)", [[2, 4], false])
+               Call.encode("setAgentVoting(uint256[],bool)", [ids([2, 4]), false])
 
       ChainViews.put!([owner(fleet, 2, @other) | tl(views)])
 
@@ -428,7 +451,7 @@ defmodule Keyfleet.WalletStepsTest do
         assert steps(built)[name].to == fleet.votes_address
 
         assert steps(built)[name].data ==
-                 Call.encode("castBallot(uint256,uint256[],uint8)", [4, [1, 2, 5], choice])
+                 Call.encode("castBallot(uint256,uint256[],uint8)", [4, ids([1, 2, 5]), choice])
       end
     end
 
@@ -438,7 +461,7 @@ defmodule Keyfleet.WalletStepsTest do
     end
 
     test "a closed proposal can't be voted on", %{fleet: fleet} do
-      ChainViews.put!(ballot_views(fleet, 1, true))
+      ChainViews.put!(ballot_views(fleet, 2, true))
 
       assert build!(:ballot, proposal: 4).figures.blocked == %{
                "yes" => :voting_closed,
@@ -453,17 +476,17 @@ defmodule Keyfleet.WalletStepsTest do
       zero = "0x" <> String.duplicate("0", 64)
 
       {fleet.votes_address, "proposal(uint256)", [proposal],
-       {"bytes32,bytes32,bytes32,uint32,uint48,uint64,uint64,uint64,uint32,uint32,uint32,uint32,uint32,bool,bool",
-        [zero, zero, zero, key, 1, 0, 0, 0, 3, 1, 2, 1, 0, false, false]}}
+       {"bytes32,bytes32,bytes32,uint64,uint48,uint64,uint64,uint64,uint32,uint32,uint32,uint32,uint32,bool,bool",
+        [zero, zero, zero, id(key), 1, 0, 0, 0, 3, 1, 2, 1, 0, false, false]}}
     end
 
     test "the proposal's key may cancel it while it is open or approved", %{fleet: fleet} do
-      ChainViews.put!([status(fleet, 4, 1), author(fleet, 4, 2), owner(fleet, 2, @signer)])
+      ChainViews.put!([status(fleet, 4, 2), author(fleet, 4, 2), owner(fleet, 2, @signer)])
       built = build!(:cancel, proposal: 4)
       assert built.figures.blocked == %{}
       assert steps(built)["cancel"].data == Call.encode("cancel(uint256)", [4])
 
-      ChainViews.put!([status(fleet, 4, 3), author(fleet, 4, 2), owner(fleet, 2, @signer)])
+      ChainViews.put!([status(fleet, 4, 4), author(fleet, 4, 2), owner(fleet, 2, @signer)])
       assert build!(:cancel, proposal: 4).figures.blocked == %{"cancel" => :cancelled}
 
       ChainViews.put!([
@@ -477,16 +500,17 @@ defmodule Keyfleet.WalletStepsTest do
     end
 
     test "carrying out passes the proposal's exact calls, once it's approved", %{fleet: fleet} do
-      calls = Actions.encode({:pay, @usdc, @third, 5_000_000}, fleet)
+      calls = Actions.encode({:pay, @usdc, @third, 50_000}, fleet)
 
-      ProposalHelpers.proposal!(@fleet, 4, %{
-        calls:
-          Enum.map(calls, fn {target, value, data} ->
-            %{target: target, value: value, data: data}
-          end)
-      })
+      recorded =
+        ProposalHelpers.proposal!(@fleet, 4, %{
+          calls:
+            Enum.map(calls, fn {target, value, data} ->
+              %{target: target, value: value, data: data}
+            end)
+        })
 
-      ChainViews.put!([status(fleet, 4, 1)])
+      ChainViews.put!([status(fleet, 4, 2)])
       built = build!(:carry_out, proposal: 4)
       assert built.figures.blocked == %{}
       assert steps(built)["carry_out"].to == fleet.votes_address
@@ -494,7 +518,16 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["carry_out"].data ==
                Call.encode("execute(uint256,(address,uint256,bytes)[])", [4, calls])
 
-      for {index, reason} <- [{0, :open}, {2, :rejected}, {4, :executed}, {5, :execution_expired}] do
+      # A proposal that moves money waits after its vote passes.
+      waiting = {:carry_out_from, Proposals.carry_out_from(recorded)}
+
+      for {index, reason} <- [
+            {0, :open},
+            {1, waiting},
+            {3, :rejected},
+            {5, :executed},
+            {6, :execution_expired}
+          ] do
         ChainViews.put!([status(fleet, 4, index)])
         assert build!(:carry_out, proposal: 4).figures.blocked == %{"carry_out" => reason}
       end
@@ -504,64 +537,69 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "proposing" do
+    # Key 2 is the signer's and old enough to take part, the treasury opened
+    # for spending a day ago, and holds 2,500 USDC and 1 ETH.
+    defp proposing(fleet, extra \\ []) do
+      ChainViews.put!(
+        [
+          owner(fleet, 2, @signer),
+          matures(fleet, 2, @now - 1),
+          uint(fleet.votes_address, "proposalCount()", 6),
+          uint(fleet.votes_address, "treasuryOpensAt()", @now - 86_400),
+          uint(@usdc, "balanceOf(address)", [fleet.treasury_address], 2_500_000_000)
+        ] ++ extra,
+        balances: %{fleet.treasury_address => 10 ** 18}
+      )
+    end
+
     setup %{fleet: fleet} do
-      ChainViews.put!([owner(fleet, 2, @signer), uint(fleet.votes_address, "proposalCount()", 6)])
+      proposing(fleet)
       :ok
     end
 
     defp propose(inputs),
-      do:
-        build!(:propose,
-          inputs: Map.merge(%{"key" => "2", "hours" => "24", "text" => "Why"}, inputs)
-        )
+      do: build!(:propose, inputs: Map.merge(%{"key" => "2", "text" => "Why"}, inputs))
 
-    defp proposed(fleet, action, hours \\ 24) do
-      Call.encode(@propose, [
-        2,
-        VoteSteps.content_hash("Why"),
-        @now + hours * 3_600,
-        Actions.encode(action, fleet)
-      ])
+    defp proposed(fleet, action) do
+      Call.encode(@propose, [id(2), VoteSteps.content_hash("Why"), Actions.encode(action, fleet)])
     end
 
-    test "a decision makes no calls and closes when chosen", %{fleet: fleet} do
-      built = propose(%{"kind" => "decision", "hours" => "6"})
-      assert built.figures.closes_at == DateTime.from_unix!(@now + 6 * 3_600)
+    test "a decision makes no calls and its vote lasts a day", %{fleet: fleet} do
+      built = propose(%{"kind" => "decision"})
+      assert built.figures.closes_at == DateTime.from_unix!(@now + 24 * 3_600)
       assert built.figures.blocked == %{}
       assert steps(built)["propose"].to == fleet.votes_address
-      assert steps(built)["propose"].data == proposed(fleet, :decision, 6)
+      assert steps(built)["propose"].data == proposed(fleet, :decision)
       assert Actions.encode(:decision, fleet) == []
     end
 
-    test "a payment in the token's own units", %{fleet: fleet} do
+    test "a payment names a share of what the treasury holds of the token", %{fleet: fleet} do
       built =
-        propose(%{
-          "kind" => "pay",
-          "asset" => @usdc,
-          "amount" => "1,250.5",
-          "recipient" => @third
-        })
+        propose(%{"kind" => "pay", "asset" => @usdc, "share" => "1.5", "recipient" => @third})
 
-      assert {:pay, %{address: @usdc}, @third, 1_250_500_000} = built.figures.action
-      assert steps(built)["propose"].data == proposed(fleet, {:pay, @usdc, @third, 1_250_500_000})
+      assert {:pay, %{address: @usdc}, @third, 15_000, 37_500_000} = built.figures.action
+      assert steps(built)["propose"].data == proposed(fleet, {:pay, @usdc, @third, 15_000})
 
       built =
-        propose(%{"kind" => "pay", "asset" => @native, "amount" => "0.5", "recipient" => @third})
+        propose(%{"kind" => "pay", "asset" => @native, "share" => "50", "recipient" => @third})
 
-      assert steps(built)["propose"].data ==
-               proposed(fleet, {:pay, @native, @third, 500_000_000_000_000_000})
+      assert {:pay, %{address: @native}, @third, 500_000, 500_000_000_000_000_000} =
+               built.figures.action
+
+      assert steps(built)["propose"].data == proposed(fleet, {:pay, @native, @third, 500_000})
     end
 
     test "an advance takes the proposal's number and its text's hash", %{fleet: fleet} do
       built =
-        propose(%{"kind" => "advance", "asset" => @usdc, "amount" => "10", "recipient" => @third})
+        propose(%{"kind" => "advance", "asset" => @usdc, "share" => "10", "recipient" => @third})
 
-      assert {:advance, 7, %{address: @usdc}, @third, 10_000_000} = built.figures.action
+      assert {:advance, 7, %{address: @usdc}, @third, 100_000, 250_000_000} =
+               built.figures.action
 
       assert steps(built)["propose"].data ==
                proposed(
                  fleet,
-                 {:advance, 7, @third, @usdc, 10_000_000, VoteSteps.content_hash("Why")}
+                 {:advance, 7, @third, @usdc, 100_000, VoteSteps.content_hash("Why")}
                )
     end
 
@@ -611,22 +649,44 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{problem: :kind_unknown} = propose(%{"kind" => "vote"})
       assert %{problem: :rate_unreadable} = propose(%{"kind" => "rate", "rate" => "2.5"})
       assert %{problem: :rate_unreadable} = propose(%{"kind" => "rate", "rate" => "0.05"})
-      assert %{problem: :hours_unreadable} = propose(%{"kind" => "decision", "hours" => "12"})
       assert %{problem: {:missing, :text}} = propose(%{"kind" => "decision", "text" => " "})
       assert %{problem: :hash_unreadable} = propose(%{"kind" => "signature", "hash" => "0x12"})
       assert %{problem: :no_key} = propose(%{"kind" => "decision", "key" => ""})
 
       assert %{problem: :asset_unreadable} =
-               propose(%{"kind" => "pay", "asset" => @third, "amount" => "1"})
+               propose(%{"kind" => "pay", "asset" => @third, "share" => "1"})
 
-      assert %{problem: {:too_many_decimals, 6}} =
-               propose(%{"kind" => "pay", "asset" => @usdc, "amount" => "0.0000001"})
+      for share <- ["0", "99.5", "0.00001", "half"] do
+        assert %{problem: :share_unreadable} =
+                 propose(%{
+                   "kind" => "pay",
+                   "asset" => @usdc,
+                   "share" => share,
+                   "recipient" => @third
+                 })
+      end
     end
 
-    test "a key the signer may not govern can't propose", %{fleet: fleet} do
-      ChainViews.put!([owner(fleet, 2, @other), shard(fleet, "mayGovern", 2, @signer, false)])
-
+    test "a key the signer may not govern or too new, or money too early, can't propose",
+         %{fleet: fleet} do
+      proposing(fleet, [owner(fleet, 2, @other), shard(fleet, "mayGovern", 2, @signer, false)])
       assert propose(%{"kind" => "decision"}).figures.blocked == %{"propose" => :not_your_key}
+
+      proposing(fleet, [matures(fleet, 2, @now + 60)])
+      assert propose(%{"kind" => "decision"}).figures.blocked == %{"propose" => :too_new}
+
+      # Money waits until the treasury opens; anything else need not.
+      pay = %{"kind" => "pay", "asset" => @usdc, "share" => "1", "recipient" => @third}
+
+      proposing(fleet, [uint(fleet.votes_address, "treasuryOpensAt()", 0)])
+      assert propose(pay).figures.blocked == %{"propose" => :sales_not_open}
+      assert propose(%{"kind" => "decision"}).figures.blocked == %{}
+
+      proposing(fleet, [uint(fleet.votes_address, "treasuryOpensAt()", @now + 60)])
+
+      assert propose(pay).figures.blocked == %{
+               "propose" => {:opens_at, DateTime.from_unix!(@now + 60)}
+             }
     end
   end
 
@@ -638,7 +698,7 @@ defmodule Keyfleet.WalletStepsTest do
           uint(fleet.treasury_address, "dailySplitBps()", 50),
           uint(fleet.treasury_address, "lastRunAt()", @now - 86_000),
           uint(fleet.treasury_address, "nextRunAt()", next_run_at),
-          uint(fleet.contract_address, "totalMinted()", 10),
+          uint(fleet.manager_address, "totalMinted()", 10),
           {@usdc, "decimals()", [], {"uint8", [6]}},
           uint(@usdc, "balanceOf(address)", [fleet.treasury_address], 50_000_000)
         ],
@@ -741,13 +801,13 @@ defmodule Keyfleet.WalletStepsTest do
 
   describe "Regents' share" do
     test "sent from the fleet contract while something is owed", %{fleet: fleet} do
-      ChainViews.put!([uint(fleet.contract_address, "protocolShareOwed()", 3)])
+      ChainViews.put!([uint(fleet.manager_address, "protocolShareOwed()", 3)])
       built = build!(:send_share)
       assert built.figures == %{owed: 3, blocked: %{}}
-      assert steps(built)["send_share"].to == fleet.contract_address
+      assert steps(built)["send_share"].to == fleet.manager_address
       assert steps(built)["send_share"].data == Call.encode("sendProtocolShare()", [])
 
-      ChainViews.put!([uint(fleet.contract_address, "protocolShareOwed()", 0)])
+      ChainViews.put!([uint(fleet.manager_address, "protocolShareOwed()", 0)])
       assert build!(:send_share).figures.blocked == %{"send_share" => :nothing_owed}
     end
   end
@@ -843,13 +903,13 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "what's typed" do
-    test "rates, voting hours, hashes and text" do
+    test "rates, shares, hashes and text" do
       assert Typed.rate("0.1") == {:ok, 10}
       assert Typed.rate("2") == {:ok, 200}
       assert Typed.rate("0.5") == {:ok, 50}
       assert Typed.rate("2.01") == {:error, :rate_unreadable}
-      assert Typed.hours(" 48 ") == {:ok, 48}
-      assert Typed.hours("2") == {:error, :hours_unreadable}
+      assert Typed.share(" 1.5 ") == {:ok, 15_000}
+      assert Typed.share("99.0001") == {:error, :share_unreadable}
       hex = String.duplicate("AB", 32)
       assert Typed.hash(hex) == {:ok, "0x" <> String.downcase(hex)}
       assert Typed.text("  hi ", :name, 2) == {:ok, "hi"}

@@ -10,10 +10,13 @@ const fleet = "fleet_tech_classic"
 const me = "0x1111111111111111111111111111111111111111"
 const stranger = "0x9999999999999999999999999999999999999999"
 const fleetContract = "0x5555555555555555555555555555555555555555"
+const keysContract = "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+// The collection names Key `key` of the Classic, fleet 1, by its id across every fleet.
+const collectionId = (key: number) => BigInt(10_000_000_000) + BigInt(key)
 const rewardsContract = "0x6666666666666666666666666666666666666666"
 const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 const approveSelector = "0x095ea7b3"
-const purchaseSelector = "0x98968f15"
+const purchaseSelector = "0xb48eb184"
 const requestRevealSelector = "0x40261cdd"
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, at its
@@ -188,8 +191,8 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)
   const [first, second] = await sentByStandIn(page)
   for (const {transaction} of [first, second]) {
-    expect(transaction.to.toLowerCase()).toBe(fleetContract)
-    expect(transaction.data).toBe(requestRevealSelector + key.toString(16).padStart(64, "0"))
+    expect(transaction.to.toLowerCase()).toBe(keysContract)
+    expect(transaction.data).toBe(requestRevealSelector + collectionId(key).toString(16).padStart(64, "0"))
   }
 
   // The first is accepted; the server reads that the draw is on its way.

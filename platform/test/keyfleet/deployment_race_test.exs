@@ -4,40 +4,28 @@ defmodule Keyfleet.DeploymentRaceTest do
   import Ecto.Query
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.CommittedCatalog
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Repo
 
   # Each recording runs on a connection of its own and commits, so the fleet is
   # put back unbound, and any fleets committed here are removed, when it ends.
   @fleet "fibonacci_cascade"
-  @deployment_fields [
-    :chain_id,
-    :contract_address,
-    :rewards_address,
-    :votes_address,
-    :treasury_address,
-    :shards_address,
-    :usdc_address,
-    :regent_address,
-    :regent_staking_address,
-    :autolaunch_factory_address,
-    :deployed_block,
-    :trait_table_hash
-  ]
 
   setup do
     added_fleets =
       Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
         added = CommittedCatalog.commit!()
-        assert Fleets.get_fleet!(@fleet).contract_address == nil
+        assert Fleets.get_fleet!(@fleet).manager_address == nil
         added
       end)
 
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
         Repo.update_all(from(fleet in "fleets", where: fleet.id == ^@fleet),
-          set: Enum.map(@deployment_fields, &{&1, nil})
+          set: Enum.map(Fleet.deployment_fields(), &{&1, nil})
         )
 
         CommittedCatalog.remove!(added_fleets)
@@ -53,13 +41,13 @@ defmodule Keyfleet.DeploymentRaceTest do
     contracts = ["0x" <> String.duplicate("1", 40), "0x" <> String.duplicate("2", 40)]
     results = race(contracts)
 
-    assert [%{contract_address: bound}] = for({:ok, fleet} <- results, do: fleet)
+    assert [%{manager_address: bound}] = for({:ok, fleet} <- results, do: fleet)
 
-    assert [{:error, %Ash.Error.Invalid{errors: [%{field: :contract_address}]}}] =
+    assert [{:error, %Ash.Error.Invalid{errors: [%{field: :manager_address}]}}] =
              Enum.reject(results, &match?({:ok, _fleet}, &1))
 
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      assert Fleets.get_fleet!(@fleet).contract_address == bound
+      assert Fleets.get_fleet!(@fleet).manager_address == bound
     end)
   end
 
@@ -74,7 +62,12 @@ defmodule Keyfleet.DeploymentRaceTest do
           send(parent, {:ready, self()})
 
           receive do
-            :go -> Fleets.record_deployment(fleet, deployment(contract), actor: %System{})
+            :go ->
+              Fleets.record_deployment(
+                fleet,
+                ChainHelpers.deployment(@fleet, %{manager_address: contract}),
+                actor: %System{}
+              )
           after
             10_000 -> raise "recording barrier timed out"
           end
@@ -87,22 +80,5 @@ defmodule Keyfleet.DeploymentRaceTest do
 
     Enum.each(callers, &send(&1.pid, :go))
     Task.await_many(callers, 15_000)
-  end
-
-  defp deployment(contract) do
-    %{
-      chain_id: 8453,
-      contract_address: contract,
-      rewards_address: "0x" <> String.duplicate("8", 40),
-      votes_address: "0x" <> String.duplicate("9", 40),
-      treasury_address: "0x" <> String.duplicate("7e", 20),
-      shards_address: "0x" <> String.duplicate("6", 40),
-      regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-      regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-      autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-      usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-      deployed_block: 1_000,
-      trait_table_hash: "0x" <> String.duplicate("a", 64)
-    }
   end
 end

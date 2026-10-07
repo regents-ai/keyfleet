@@ -5,7 +5,13 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
 
-  @fleet %{fleet_id: "fibonacci_cascade", rewards_address: "0x" <> String.duplicate("8", 40)}
+  @fleet %{
+    fleet_id: "fibonacci_cascade",
+    chain_fleet_id: 3,
+    rewards_address: "0x" <> String.duplicate("8", 40)
+  }
+  # Key 12 of fleet 3, as the reward ledger names it.
+  @key 30_000_000_012
   @head_hash "0x" <> String.duplicate("c", 64)
   @eth "0x0000000000000000000000000000000000000000"
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
@@ -23,14 +29,15 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
 
   # The ledger's assets, then for each what the key has accrued and the
   # holder's credit, all at the head. The ledger here says each key has
-  # accrued its own number, and the holder has 2 in credit.
+  # accrued its own number in its fleet, and the holder has 2 in credit.
   test "asks the fleet's reward ledger what waits for the key and its holder in each asset" do
     answering(fn
       _to, @reward_assets, _hash ->
         {:ok, addresses([@eth, @usdc])}
 
       _to, @accrued <> args, _hash ->
-        {:ok, <<args |> String.slice(64, 64) |> String.to_integer(16)::256>>}
+        {:ok,
+         <<args |> String.slice(64, 64) |> String.to_integer(16) |> rem(10_000_000_000)::256>>}
 
       _to, @credits <> _args, _hash ->
         {:ok, <<2::256>>}
@@ -45,9 +52,9 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
 
     assert StubClient.call_requests() == [
              {@fleet.rewards_address, @reward_assets, @head_hash},
-             {@fleet.rewards_address, @accrued <> arg(@eth) <> number(12), @head_hash},
+             {@fleet.rewards_address, @accrued <> arg(@eth) <> number(@key), @head_hash},
              {@fleet.rewards_address, @credits <> arg(@eth) <> arg(@holder), @head_hash},
-             {@fleet.rewards_address, @accrued <> arg(@usdc) <> number(12), @head_hash},
+             {@fleet.rewards_address, @accrued <> arg(@usdc) <> number(@key), @head_hash},
              {@fleet.rewards_address, @credits <> arg(@usdc) <> arg(@holder), @head_hash}
            ]
   end

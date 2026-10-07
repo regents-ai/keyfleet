@@ -34,7 +34,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     rewards_answer(fn _to, _data, _block_hash -> {:ok, <<0::256>>} end)
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    deploy!()
+
+    ChainHelpers.deploy!(@fleet, %{
+      rewards_address: @rewards,
+      trait_table_hash: "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
+    })
+
     ChainHelpers.seed_cursor!(@fleet)
 
     for token_id <- 1..20, token_id not in [3, 12, 20], do: epoch!(token_id, 1, wallet("f"))
@@ -265,8 +270,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       conn: conn
     } do
       holder = wallet("e")
-      owner_of = Call.encode("ownerOf(uint256)", [12])
-      accrued = Call.encode("accrued(address,uint256)", [@usdc, 12])
+      owner_of = Call.encode("ownerOf(uint256)", [id(12)])
+      accrued = Call.encode("accrued(address,uint256)", [@usdc, id(12)])
 
       rewards_answer(fn
         _to, ^owner_of, _hash ->
@@ -295,14 +300,14 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert claim.step == "claim-#{@usdc}"
       assert claim.to == @rewards
-      assert claim.data == Call.encode("claim(uint256[],address[])", [[12], [@usdc]])
+      assert claim.data == Call.encode("claim(uint256[],address[])", [[id(12)], [@usdc]])
       assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
       refute has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
     end
 
     test "nothing waiting keeps the button in view, not pressable, and says so", %{conn: conn} do
       holder = wallet("e")
-      owner_of = Call.encode("ownerOf(uint256)", [12])
+      owner_of = Call.encode("ownerOf(uint256)", [id(12)])
 
       rewards_answer(fn
         _to, ^owner_of, _hash ->
@@ -329,8 +334,6 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   end
 
   describe "asking again for a key's draw" do
-    @contract "0x" <> String.duplicate("7", 40)
-
     test "a key whose draw was turned down offers anyone Ask again, built on the server",
          %{conn: conn} do
       signer = wallet("f")
@@ -350,8 +353,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       })
 
       assert reveal.step == "reveal"
-      assert reveal.to == @contract
-      assert reveal.data == Call.encode("requestReveal(uint256)", [12])
+      assert reveal.to == Fleets.get_fleet!(@fleet).keys_address
+      assert reveal.data == Call.encode("requestReveal(uint256)", [id(12)])
 
       assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
       refute has_element?(view, "#key-profile-reveal-again[phx-click]")
@@ -359,7 +362,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       refute has_element?(view, "#key-profile-reveal-again[disabled]")
 
       assert text(view, "#key-profile-reveal-tip") ==
-               "A key’s traits come from a random draw. If the request for it was turned " <>
+               "A Key’s traits come from a random draw. If the request for it was turned " <>
                  "down, anyone can ask again."
     end
 
@@ -375,7 +378,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       # The press reaches the server while the steps for the new wallet are
       # still being read: the first read from now on takes its time.
       reads = :atomics.new(1, [])
-      seed = Call.encode("revealSeed(uint256)", [12])
+      seed = Call.encode("revealSeed(uint256)", [id(12)])
 
       rewards_answer(fn
         _to, ^seed, _hash ->
@@ -610,7 +613,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       rewards_answer(fn
         _to, @accrued <> <<_usdc::binary-size(64), token_id::binary-size(64)>>, _block_hash ->
-          token_id = String.to_integer(token_id, 16)
+          token_id = rem(String.to_integer(token_id, 16), 10_000_000_000)
           send(test, {:reading, token_id, self()})
 
           receive do
@@ -658,8 +661,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # What the fleet answers for key 12's seed, which it has none of, and for
   # when its request for a draw was accepted; anything else is zero.
   defp draw_answer(requested_at) do
-    seed = Call.encode("revealSeed(uint256)", [12])
-    requested = Call.encode("revealRequestedAt(uint256)", [12])
+    seed = Call.encode("revealSeed(uint256)", [id(12)])
+    requested = Call.encode("revealRequestedAt(uint256)", [id(12)])
 
     rewards_answer(fn
       _to, ^seed, _hash -> {:ok, <<0::256>>}
@@ -668,27 +671,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end)
   end
 
-  defp deploy! do
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: "0x" <> String.duplicate("7", 40),
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: "0x" <> String.duplicate("6", 40),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: 1,
-        trait_table_hash: "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
-      },
-      actor: @system
-    )
-  end
+  defp id(key), do: ChainHelpers.onchain_id(@fleet, key)
 
   defp epoch!(token_id, epoch, owner) do
     Keys.record_epoch!(

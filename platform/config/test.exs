@@ -68,6 +68,9 @@ config :keyfleet, :chain_nodes, %{}
 config :keyfleet, Keyfleet.Traits,
   directory: Path.expand("../test/support/fixtures/trait_tables", __DIR__)
 
+config :keyfleet, Keyfleet.Decks,
+  directory: Path.expand("../test/support/fixtures/decks", __DIR__)
+
 config :keyfleet, :database_startup_enabled, true
 
 # Jobs run only when a test runs them (`Oban.Testing`).

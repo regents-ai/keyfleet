@@ -3,12 +3,13 @@ defmodule Keyfleet.ShardsChainTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain.{Scanner, StubClient}
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Repo
 
   @fleet "fleet_tech_accelerant"
-  @contract "0x" <> String.duplicate("7", 40)
+  @keys "0x" <> String.duplicate("a1", 20)
   @votes "0x" <> String.duplicate("9", 40)
   @shards "0x" <> String.duplicate("6", 40)
   @deployed 6_000_000
@@ -24,7 +25,15 @@ defmodule Keyfleet.ShardsChainTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
-    %{fleet: deploy!()}
+
+    %{
+      fleet:
+        ChainHelpers.deploy!(@fleet, %{
+          votes_address: @votes,
+          shards_address: @shards,
+          deployed_block: @deployed
+        })
+    }
   end
 
   describe "shards" do
@@ -179,8 +188,8 @@ defmodule Keyfleet.ShardsChainTest do
 
   defp ownership(token_id, owner, epoch, block, log_index) do
     log(
-      @contract,
-      [@ownership, <<token_id::256>>, <<0::256>>, address_word(owner)],
+      @keys,
+      [@ownership, key(token_id), <<0::256>>, address_word(owner)],
       <<epoch::256>>,
       block,
       log_index
@@ -190,7 +199,7 @@ defmodule Keyfleet.ShardsChainTest do
   defp issued(token_id, holder, expires_at, epoch, block, log_index) do
     log(
       @shards,
-      [@shard_issued, <<token_id::256>>, address_word(holder)],
+      [@shard_issued, key(token_id), address_word(holder)],
       <<DateTime.to_unix(expires_at)::256, epoch::256>>,
       block,
       log_index
@@ -200,7 +209,7 @@ defmodule Keyfleet.ShardsChainTest do
   defp ended(token_id, holder, by, block, log_index) do
     log(
       @shards,
-      [@shard_ended, <<token_id::256>>, address_word(holder), address_word(by)],
+      [@shard_ended, key(token_id), address_word(holder), address_word(by)],
       <<>>,
       block,
       log_index
@@ -208,17 +217,20 @@ defmodule Keyfleet.ShardsChainTest do
   end
 
   defp edits_set(token_id, restricted, block, log_index),
-    do: log(@votes, [@edits_set, <<token_id::256>>], <<flag(restricted)::256>>, block, log_index)
+    do: log(@votes, [@edits_set, key(token_id)], <<flag(restricted)::256>>, block, log_index)
 
   defp agent_voting(token_id, on, epoch, block, log_index) do
     log(
       @shards,
-      [@agent_voting_set, <<token_id::256>>],
+      [@agent_voting_set, key(token_id)],
       <<flag(on)::256, epoch::256>>,
       block,
       log_index
     )
   end
+
+  # The Key's id in the Key collection, which every shared contract's log names.
+  defp key(token_id), do: <<ChainHelpers.onchain_id(@fleet, token_id)::256>>
 
   defp flag(true), do: 1
   defp flag(false), do: 0
@@ -250,26 +262,4 @@ defmodule Keyfleet.ShardsChainTest do
       hash: "0x" <> String.duplicate("f", 64),
       timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number)
     }
-
-  defp deploy! do
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: @votes,
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: @shards,
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: @deployed,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %System{}
-    )
-  end
 end

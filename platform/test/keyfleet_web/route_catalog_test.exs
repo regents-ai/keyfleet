@@ -154,22 +154,22 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                  targets: [
                    %RouteTarget{
                      route_id: :fleet,
-                     label: "Keyfleet Classic",
+                     label: "Classic #1",
                      path: "/app/fleets/fleet_tech_classic"
                    },
                    %RouteTarget{
                      route_id: :fleet,
-                     label: "Keyfleet Syndicate",
+                     label: "Syndicate #1",
                      path: "/app/fleets/fibonacci_syndicate"
                    },
                    %RouteTarget{
                      route_id: :fleet,
-                     label: "Keyfleet Cascade",
+                     label: "Cascade #1",
                      path: "/app/fleets/fibonacci_cascade"
                    },
                    %RouteTarget{
                      route_id: :fleet,
-                     label: "Keyfleet Accelerant",
+                     label: "Accelerant #1",
                      path: "/app/fleets/fleet_tech_accelerant"
                    },
                    %RouteTarget{route_id: :account, label: "Account", path: "/account"}

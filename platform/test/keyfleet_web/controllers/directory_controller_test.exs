@@ -81,18 +81,15 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     refute body =~ "<script>"
   end
 
-  test "each fleet's sales line gives the next key's price and how many one wallet may hold",
-       %{conn: conn} do
+  test "each fleet's sales line gives the next key's price", %{conn: conn} do
     ChainHelpers.deploy!("fleet_tech_classic")
     ChainHelpers.seed_cursor!("fleet_tech_classic")
 
     lines = conn |> get("/fleets.md") |> response(200) |> String.split("\n")
 
-    assert ("1 Key sold · new levels keep opening · next Key: Key 2 for 10 USDC. " <>
-              "One wallet may hold 1 Key of level 1.") in lines
+    assert "1 Key sold · new levels keep opening · next Key: Key 2 for 10 USDC." in lines
 
-    assert ("0 of 1,024 Keys sold · 1,024 left · next Key: Key 1 for 8 USDC. " <>
-              "No limit on Keys per wallet.") in lines
+    assert "0 of 1,024 Keys sold · 1,024 left · next Key: Key 1 for 10 USDC." in lines
   end
 
   test "a fleet coming soon is listed by name, and its page says only that it is coming soon",
@@ -100,11 +97,11 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     soon = "Coming soon. It has no Keys for sale and can’t be joined yet."
 
     index = conn |> get("/fleets.md") |> response(200)
-    [_before, cascade] = String.split(index, "## Keyfleet Cascade\n\n")
-    assert String.starts_with?(cascade, soon <> "\n\n## Keyfleet Accelerant\n\n" <> soon)
+    [_before, cascade] = String.split(index, "## Cascade #1\n\n")
+    assert String.starts_with?(cascade, soon <> "\n\n## Accelerant #1\n\n" <> soon)
 
     page = conn |> get("/fleets/fibonacci_cascade.md") |> response(200)
-    assert String.starts_with?(page, "# Keyfleet Cascade\n\n" <> soon <> "\n\n")
+    assert String.starts_with?(page, "# Cascade #1\n\n" <> soon <> "\n\n")
     refute page =~ ~r/USDC|Rooms|Terms|Agents/
 
     assert conn |> get("/api/v1/fleets/fibonacci_cascade") |> json_response(200) |> Map.keys() ==

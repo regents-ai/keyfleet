@@ -3,9 +3,9 @@ defmodule Keyfleet.RevealsChainTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.{Logs, RevealLog, Scanner, StubClient}
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Repo
@@ -13,7 +13,7 @@ defmodule Keyfleet.RevealsChainTest do
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
   @fleet "fleet_tech_accelerant"
-  @contract "0x" <> String.duplicate("7", 40)
+  @keys "0x" <> String.duplicate("a1", 20)
   @votes "0x" <> String.duplicate("9", 40)
   @deployed 5_000_000
   @new_hash "0x" <> String.duplicate("e", 64)
@@ -26,7 +26,7 @@ defmodule Keyfleet.RevealsChainTest do
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
     Fleets.bootstrap_catalog!()
-    %{fleet: deploy!()}
+    %{fleet: ChainHelpers.deploy!(@fleet, %{votes_address: @votes, deployed_block: @deployed})}
   end
 
   describe "recording reveals" do
@@ -177,7 +177,7 @@ defmodule Keyfleet.RevealsChainTest do
             %{reveal | "topics" => Enum.drop(reveal["topics"], -1)},
             %{reveal | "topics" => reveal["topics"] ++ [hex(<<1::256>>)]},
             %{reveal | "data" => hex(<<0::248>>)},
-            %{reveal | "data" => hex(<<0::512>>)},
+            %{reveal | "data" => hex(<<0::768>>)},
             %{reveal | "data" => "0x"}
           ] do
         assert Logs.decode([broken], fleet, @deployed, @deployed + 10) ==
@@ -187,18 +187,30 @@ defmodule Keyfleet.RevealsChainTest do
     end
   end
 
-  defp revealed(token_id, request_id, seed, block, log_index) do
+  # Key `key` of the fleet revealed, named in the Key collection by its id
+  # there, its fleet's number and its number in the fleet.
+  defp revealed(key, request_id, seed, block, log_index) do
     log(
-      [RevealLog.topic(), <<token_id::256>>, <<request_id::256>>],
-      bytes(seed),
+      [
+        RevealLog.topic(),
+        <<ChainHelpers.onchain_id(@fleet, key)::256>>,
+        <<ChainHelpers.chain_fleet_id(@fleet)::256>>,
+        <<request_id::256>>
+      ],
+      <<key::256>> <> bytes(seed),
       block,
       log_index
     )
   end
 
-  defp mint(token_id, block, log_index) do
+  defp mint(key, block, log_index) do
     log(
-      [@ownership, <<token_id::256>>, <<0::256>>, <<0::96>> <> :binary.copy(<<0xAA>>, 20)],
+      [
+        @ownership,
+        <<ChainHelpers.onchain_id(@fleet, key)::256>>,
+        <<0::256>>,
+        <<0::96>> <> :binary.copy(<<0xAA>>, 20)
+      ],
       <<1::256>>,
       block,
       log_index
@@ -207,7 +219,7 @@ defmodule Keyfleet.RevealsChainTest do
 
   defp log([topic0 | words], data, block, log_index) do
     %{
-      "address" => @contract,
+      "address" => @keys,
       "topics" => [topic0 | Enum.map(words, &hex/1)],
       "data" => hex(data),
       "blockNumber" => quantity(block),
@@ -230,26 +242,4 @@ defmodule Keyfleet.RevealsChainTest do
       hash: "0x" <> String.duplicate("f", 64),
       timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number)
     }
-
-  defp deploy! do
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: @votes,
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: "0x" <> String.duplicate("6", 40),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: @deployed,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %System{}
-    )
-  end
 end

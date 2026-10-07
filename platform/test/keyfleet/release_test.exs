@@ -209,6 +209,7 @@ defmodule Keyfleet.ReleaseTest do
              "graph_objects",
              "graph_relations",
              "key_attachments",
+             "key_pictures",
              "key_presences",
              "key_reveals",
              "linked_identities",

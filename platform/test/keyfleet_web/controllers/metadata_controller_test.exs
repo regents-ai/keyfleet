@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   alias Keyfleet.Lighthouse
   alias Keyfleet.Traits
 
-  @path "/metadata/{slot}/{token_id}"
+  @path "/metadata/keys/{collection_token_id}"
   # keccak256 of the fixture table in test/support/fixtures/trait_tables.
   @table_hash "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
 
@@ -24,8 +24,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   setup do
     Fleets.bootstrap_catalog!()
 
-    for {fleet_id, character} <- [{"fibonacci_cascade", "3"}, {"fleet_tech_accelerant", "4"}] do
-      deploy!(fleet_id, character)
+    for fleet_id <- ["fibonacci_cascade", "fleet_tech_accelerant"] do
+      ChainHelpers.deploy!(fleet_id, %{trait_table_hash: @table_hash})
       ChainHelpers.seed_cursor!(fleet_id)
     end
 
@@ -37,14 +37,13 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   test "a key waiting for its traits shows the interim access pass for 30 seconds", %{
     conn: conn
   } do
-    cascade = get(conn, "/metadata/cascade/3")
+    cascade = get(conn, key_path("fibonacci_cascade", 3))
 
     assert get_resp_header(cascade, "cache-control") == ["max-age=30"]
 
     assert json_response(cascade, 200) == %{
-             "name" => "Keyfleet Cascade #3",
-             "description" =>
-               "Key 3 of Keyfleet Cascade. Its traits appear here once they are drawn.",
+             "name" => "CASCADE—001—003",
+             "description" => "Key 3 of Cascade #1. Its traits appear here once they are drawn.",
              "image" => @interim_pass,
              "attributes" => [
                %{"trait_type" => "Level", "value" => 2},
@@ -52,7 +51,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              ]
            }
 
-    accelerant = get(conn, "/metadata/accelerant/1")
+    accelerant = get(conn, key_path("fleet_tech_accelerant", 1))
 
     assert json_response(accelerant, 200)["attributes"] == [
              %{"trait_type" => "Status", "value" => "Revealing"}
@@ -77,8 +76,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     assert_enqueued(worker: DrawPicture, args: args)
 
     revealed = %{
-      "name" => "Keyfleet Cascade #3",
-      "description" => "Key 3 of Keyfleet Cascade.",
+      "name" => "CASCADE—001—003",
+      "description" => "Key 3 of Cascade #1.",
       "attributes" => [
         %{"trait_type" => "Level", "value" => 2},
         %{"trait_type" => "Hull", "value" => "Steel"},
@@ -88,7 +87,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
       "properties" => %{"seed" => seed, "trait_table_hash" => @table_hash}
     }
 
-    drawing = get(conn, "/metadata/cascade/3")
+    drawing = get(conn, key_path("fibonacci_cascade", 3))
     assert get_resp_header(drawing, "cache-control") == ["max-age=30"]
 
     assert json_response(drawing, 200) ==
@@ -121,7 +120,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     assert_received {:draw, "/draw",
                      %{
                        "seed" => ^seed,
-                       "top_line" => "CASCADE #1 · NO. 0003",
+                       "top_line" => "CASCADE—001—003",
                        "table" => @table_hash
                      }}
 
@@ -134,7 +133,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     assert perform_job(DrawPicture, args) == :ok
     refute_received {:draw, _path, _body}
 
-    cascade = get(conn, "/metadata/cascade/3")
+    cascade = get(conn, key_path("fibonacci_cascade", 3))
 
     assert get_resp_header(cascade, "cache-control") == ["public, max-age=3600"]
 
@@ -143,7 +142,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              |> Map.put("image", "https://media.regents.sh/ipfs/#{cid}")
              |> put_in(["properties", "card"], "ipfs://#{cid}")
 
-    accelerant = get(conn, "/metadata/accelerant/1")
+    accelerant = get(conn, key_path("fleet_tech_accelerant", 1))
 
     assert Enum.map(json_response(accelerant, 200)["attributes"], & &1["trait_type"]) ==
              ["Hull", "Sky", "Mark"]
@@ -165,25 +164,27 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     on_exit(fn -> Application.put_env(:keyfleet, Traits, configured) end)
     reveal!("fibonacci_cascade", 3, Traits.keccak256("golden-1"))
 
-    assert_error_sent 500, fn -> get(conn, "/metadata/cascade/3") end
-    assert json_response(get(conn, "/metadata/accelerant/1"), 200)
+    assert_error_sent 500, fn -> get(conn, key_path("fibonacci_cascade", 3)) end
+    assert json_response(get(conn, key_path("fleet_tech_accelerant", 1)), 200)
 
     File.write!(Path.join(tmp_dir, @table_hash <> ".json"), ~s({"traits": []}))
 
-    assert_error_sent 500, fn -> get(conn, "/metadata/cascade/3") end
+    assert_error_sent 500, fn -> get(conn, key_path("fibonacci_cascade", 3)) end
   end
 
   test "no such fleet or no such key is not found", %{conn: conn} do
+    cascade_3 = Integer.to_string(ChainHelpers.onchain_id("fibonacci_cascade", 3))
+
     for path <- [
-          "/metadata/fibonacci_cascade/3",
-          "/metadata/unknown/3",
-          "/metadata/cascade/4",
-          "/metadata/syndicate/3",
-          "/metadata/cascade/03",
-          "/metadata/cascade/0",
-          "/metadata/cascade/3.json",
-          "/metadata/cascade/-3",
-          "/metadata/cascade/1234567890123456789"
+          key_path("fibonacci_cascade", 4),
+          "/metadata/keys/30000000000",
+          key_path("fibonacci_syndicate", 3),
+          "/metadata/keys/3",
+          "/metadata/keys/0" <> cascade_3,
+          "/metadata/keys/0",
+          "/metadata/keys/#{cascade_3}.json",
+          "/metadata/keys/-#{cascade_3}",
+          "/metadata/keys/1234567890123456789"
         ] do
       response = get(conn, path)
       assert json_response(response, 404) == refused("key_not_found"), path
@@ -191,27 +192,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     end
   end
 
-  defp deploy!(fleet_id, character) do
-    fleet_id
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: "0x" <> String.duplicate(character, 40),
-        rewards_address: "0x" <> String.duplicate(character <> "a", 20),
-        votes_address: "0x" <> String.duplicate(character <> "b", 20),
-        treasury_address: "0x" <> String.duplicate(character <> "d", 20),
-        shards_address: "0x" <> String.duplicate(character <> "c", 20),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: 1,
-        trait_table_hash: @table_hash
-      },
-      actor: %System{}
-    )
-  end
+  defp key_path(fleet_id, key),
+    do: "/metadata/keys/#{ChainHelpers.onchain_id(fleet_id, key)}"
 
   defp buy!(fleet_id, token_id) do
     Keys.record_epoch!(

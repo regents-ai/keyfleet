@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias Keyfleet.Proposals
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.TestChainNode
+  alias KeyfleetWeb.WalletWords
   alias RegentChain.Call
 
   @fleet "fibonacci_syndicate"
@@ -20,41 +21,29 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   @other ProposalHelpers.wallet("2")
   @votes "0x" <> String.duplicate("9", 40)
   @fleet_contract "0x" <> String.duplicate("7", 40)
+  @keys "0x" <> String.duplicate("a1", 20)
   @treasury "0x" <> String.duplicate("7e", 20)
   @shards "0x" <> String.duplicate("6", 40)
-  @factory "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e"
   @eth "0x0000000000000000000000000000000000000000"
   @day 86_400
   @rule KeyfleetWeb.ProposalsLive.approval_rule()
   @execute "execute(uint256,(address,uint256,bytes)[])"
-  @propose "propose(uint256,bytes32,uint64,(address,uint256,bytes)[])"
+  @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
   # The vote contract's `proposal(uint256)` answer.
-  @proposal_types "bytes32,bytes32,bytes32,uint32,uint48,uint64,uint64,uint64," <>
+  @proposal_types "bytes32,bytes32,bytes32,uint64,uint48,uint64,uint64,uint64," <>
                     "uint32,uint32,uint32,uint32,uint32,bool,bool"
-  @statuses [:open, :approved, :rejected, :cancelled, :executed, :execution_expired]
+  @statuses [:open, :waiting, :approved, :rejected, :cancelled, :executed, :execution_expired]
 
   setup do
     Fleets.bootstrap_catalog!()
 
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @fleet_contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: @votes,
-        treasury_address: @treasury,
-        shards_address: @shards,
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: @factory,
-        usdc_address: @usdc,
-        deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %Actors.System{}
-    )
+    ChainHelpers.deploy!(@fleet, %{
+      manager_address: @fleet_contract,
+      keys_address: @keys,
+      votes_address: @votes,
+      treasury_address: @treasury,
+      shards_address: @shards
+    })
 
     ChainHelpers.seed_cursor!(@fleet)
     :ok
@@ -91,7 +80,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
 
       assert text(view, ~s([data-proposal="3"] .proposals-detail)) ==
-               "3 yes, 1 no, 1 abstain, of 5 keys counted"
+               "3 yes, 1 no, 1 abstain, of 5 Keys counted"
 
       ChainViews.put!(on_chain(2, :approved))
       view |> element(~s([data-proposal="2"] a)) |> render_click()
@@ -116,8 +105,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       }
 
       actions = [
-        {:pay, @usdc, paid, 12_500_000},
-        {:advance, 5, operator, @eth, 10 ** 18, "0x" <> String.duplicate("e", 64)},
+        {:pay, @usdc, paid, 125_000},
+        {:advance, 5, operator, @eth, 100_000, "0x" <> String.duplicate("e", 64)},
         {:rate, 75},
         {:edits, 12, true},
         {:signature, :approve, message},
@@ -145,10 +134,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(conn, "#{@list}/1")
 
       assert has_element?(view, "#proposal-status", "Open")
-      assert has_element?(view, "#proposal-yes", "51 keys")
-      assert has_element?(view, "#proposal-no", "1 key")
-      assert has_element?(view, "#proposal-abstain", "2 keys")
-      assert has_element?(view, "#proposal-counted", "60 keys")
+      assert has_element?(view, "#proposal-yes", "51 Keys")
+      assert has_element?(view, "#proposal-no", "1 Key")
+      assert has_element?(view, "#proposal-abstain", "2 Keys")
+      assert has_element?(view, "#proposal-counted", "60 Keys")
 
       assert has_element?(
                view,
@@ -163,24 +152,24 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       # Each call in a few words, with the wallet or code it names in full.
       assert lines(view, "#proposal-calls li") == [
-               "Pay 12.5 USDC to #{paid}",
-               "Advance 1 ETH (advance 5) to #{operator}",
+               "Pay 12.5% of the treasury’s USDC to #{paid}",
+               "Advance 10% of the treasury’s ETH (advance 5) to #{operator}",
                "Set the daily split to 0.75%",
-               "Stop key 12 changing the workspace",
+               "Stop Key 12 changing the workspace",
                "Sign a message for the fleet: #{message}",
                "Launch Fleet Coin (FLT) through Autolaunch, for the treasury",
                "Send 1 ETH and call #{paid}"
              ]
 
       assert length(lines(view, "#proposal-votes li")) == 50
-      assert hd(lines(view, "#proposal-votes li")) == "Yes 0xeeee..eeee, with key 1"
+      assert hd(lines(view, "#proposal-votes li")) == "Yes 0xeeee..eeee, with Key 1"
 
       view |> element("#proposal-more-votes") |> render_click()
 
       assert lines(view, "#proposal-votes li") == [
-               "Yes 0xeeee..eeee, with key 51",
-               "No 0xeeee..eeee, with key 52",
-               "Abstain 0xeeee..eeee, with keys 53, 54"
+               "Yes 0xeeee..eeee, with Key 51",
+               "No 0xeeee..eeee, with Key 52",
+               "Abstain 0xeeee..eeee, with Keys 53, 54"
              ]
 
       view |> element("#proposal-first-votes") |> render_click()
@@ -224,7 +213,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         balance(fake, held: 1_000_000, backed: 3_000_000)
       ])
 
-      money!(:paid, asset: fake, account: ProposalHelpers.wallet("b"), amount: 2_000_000)
+      money!(:paid,
+        asset: fake,
+        account: ProposalHelpers.wallet("b"),
+        share: 10_000,
+        amount: 2_000_000
+      )
 
       {:ok, view, _html} = live(conn, @list)
 
@@ -336,11 +330,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = live(conn, "#{@list}/1")
       {:ok, list, _html} = live(conn, @list)
-      assert has_element?(view, "#proposal-yes", "0 keys")
+      assert has_element?(view, "#proposal-yes", "0 Keys")
 
       ProposalHelpers.vote!(@fleet, 1, @voter, :yes, [1, 2])
       ChainViews.put!(on_chain(1, :open, late: 2, yes: 2))
-      assert has_element?(view, "#proposal-yes", "0 keys")
+      assert has_element?(view, "#proposal-yes", "0 Keys")
 
       Phoenix.PubSub.broadcast(
         Keyfleet.PubSub,
@@ -348,7 +342,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         {:proposals_changed, @fleet}
       )
 
-      assert shows?(fn -> has_element?(view, "#proposal-yes", "2 keys") end)
+      assert shows?(fn -> has_element?(view, "#proposal-yes", "2 Keys") end)
 
       assert shows?(fn ->
                text(list, ~s([data-proposal="1"] .proposals-detail)) =~ "2 yes, 0 no"
@@ -392,13 +386,21 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       money!(:forwarded, asset: @usdc, by: @voter, amount: 10_000_000)
       money!(:split_allocated, asset: @usdc, balance: 50_000_000, per_key: 250_000, keys: 4)
-      money!(:paid, asset: weth, account: ProposalHelpers.wallet("b"), amount: 5 * 10 ** 17)
+
+      money!(:paid,
+        asset: weth,
+        account: ProposalHelpers.wallet("b"),
+        share: 250_000,
+        amount: 5 * 10 ** 17
+      )
+
       money!(:protocol_share_sent, by: @voter, amount: 1_000_000)
 
       money!(:advanced,
         advance_id: 1,
         account: operator,
         asset: @usdc,
+        share: 40_000,
         amount: 4_000_000,
         purpose_hash: "0x" <> String.duplicate("e", 64)
       )
@@ -419,7 +421,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(
                view,
                "#proposals-backed-tip",
-               "Already shared with keys and waiting to be claimed."
+               "Already shared with Keys and waiting to be claimed."
              )
 
       assert fields(view, "#proposals-split div") == [
@@ -438,7 +440,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Advanced 4 USDC to 0xdddd..dddd",
                "Sent to Regents 1 USDC",
                "Paid 0.5 WETH 0xcccc..cccc to 0xbbbb..bbbb",
-               "Shared with key holders 1 USDC",
+               "Shared with Key holders 1 USDC",
                "Received 10 USDC"
              ]
     end
@@ -453,7 +455,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 50_000_000)])
 
       for _payment <- 1..21,
-          do: money!(:paid, asset: @usdc, account: ProposalHelpers.wallet("b"), amount: 1)
+          do:
+            money!(:paid,
+              asset: @usdc,
+              account: ProposalHelpers.wallet("b"),
+              share: 1,
+              amount: 1
+            )
 
       {:ok, view, _html} = live(conn, @list)
 
@@ -481,7 +489,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   describe "the wallet buttons on the list" do
-    # Keys 1 and 2 are the holder's; key 3 is another's, with the holder's
+    # Keys 1 and 2 are the holder's; Key 3 is another's, with the holder's
     # shard on it, so the holder may mark it present too.
     test "the present card marks every key the wallet may, and says when tidying is needed", %{
       conn: conn
@@ -494,9 +502,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(
         list_views(
           keys: [{1, @holder, until}, {2, @holder, 0}, {3, @other, 0}],
-          queue: [2, 3, 2]
+          maintenance: true
         ) ++
-          [{@shards, "isActive(uint256,address)", [3, @holder], {"bool", [true]}}]
+          [{@shards, "isActive(uint256,address)", [id(3), @holder], {"bool", [true]}}]
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
@@ -518,7 +526,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert {present.to, present.data} ==
-               {@votes, Call.encode("present(uint256[])", [[1, 2, 3]])}
+               {@votes, Call.encode("present(uint256[])", [[id(1), id(2), id(3)]])}
 
       assert {sweep.to, sweep.data} == {@votes, Call.encode("sweepExpired(uint256)", [256])}
     end
@@ -530,7 +538,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view)
 
       assert has_element?(view, "#proposals-present-mark[disabled]")
-      assert has_element?(view, "#proposals-present-mark-why", "No keys to use")
+      assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
       assert pressable?(view, "sweep", ["#proposals-present-sweep"])
       refute has_element?(view, "#proposals-present-maintenance")
     end
@@ -541,22 +549,22 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       fleet = Fleets.get_fleet!(@fleet)
       ProposalHelpers.keys_sold!(@fleet, [7], @holder)
       recipient = ProposalHelpers.wallet("b")
-      closes_at = now() + 24 * 3600
 
       ChainViews.put!(
-        list_views(keys: [{7, @holder, 0}]) ++
-          [{@votes, "proposalCount()", [], {"uint256", [4]}}]
+        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000) ++
+          [{@votes, "proposalCount()", [], {"uint256", [4]}}],
+        balances: %{@treasury => 10 ** 18}
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
       active!(view, "#propose-action", @holder)
 
-      assert text(view, "#propose-action-line") == "Type the key you’re proposing with."
+      assert text(view, "#propose-action-line") == "Type the Key you’re proposing with."
       assert pressable?(view, "propose", ["#propose-button"])
 
       expect = fn typed, action, line ->
         text = typed[:text] || "Hire a designer"
-        typed = Keyword.merge([key: "7", hours: "24", text: text], typed)
+        typed = Keyword.merge([key: "7", text: text], typed)
         view |> form("#propose-action-form", typed) |> render_change()
         render_async(view)
 
@@ -566,7 +574,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         })
 
         assert step.data ==
-                 Call.encode(@propose, [7, keccak(text), closes_at, Actions.encode(action, fleet)])
+                 Call.encode(@propose, [id(7), keccak(text), Actions.encode(action, fleet)])
 
         assert text(view, "#propose-action-line") == "#{line} Voting closes 8 Oct, 12:00 UTC."
       end
@@ -574,16 +582,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       expect.([kind: "decision"], :decision, "A decision; nothing moves.")
 
       expect.(
-        [kind: "pay", asset: @usdc, amount: "12.5", recipient: recipient],
-        {:pay, @usdc, recipient, 12_500_000},
-        "Pays 12.5 USDC to 0xbbbb..bbbb."
+        [kind: "pay", asset: @usdc, share: "12.5", recipient: recipient],
+        {:pay, @usdc, recipient, 125_000},
+        "Pays 12.5% of the treasury’s USDC (about 12.5 USDC today) to 0xbbbb..bbbb."
       )
 
       # An advance takes the number the proposal is about to take.
       expect.(
-        [kind: "advance", text: "Run the servers", asset: @eth, amount: "0.5"],
-        {:advance, 5, recipient, @eth, 5 * 10 ** 17, keccak("Run the servers")},
-        "Advances 0.5 ETH to 0xbbbb..bbbb."
+        [kind: "advance", text: "Run the servers", asset: @eth, share: "50"],
+        {:advance, 5, recipient, @eth, 500_000, keccak("Run the servers")},
+        "Advances 50% of the treasury’s ETH (about 0.5 ETH today) to 0xbbbb..bbbb."
       )
 
       expect.([kind: "rate", rate: "0.75"], {:rate, 75}, "Sets the daily split to 0.75%.")
@@ -591,13 +599,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       expect.(
         [kind: "edits", target: "12", restricted: "true"],
         {:edits, 12, true},
-        "Restricts key 12’s edits."
+        "Restricts Key 12’s edits."
       )
 
       expect.(
         [kind: "edits", restricted: "false"],
         {:edits, 12, false},
-        "Allows key 12’s edits."
+        "Allows Key 12’s edits."
       )
 
       hash = "0x" <> String.duplicate("ab", 32)
@@ -653,7 +661,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       |> with_target("#propose-action")
       |> render_hook("step_pressed", %{
         "step" => "propose",
-        "form" => %{"kind" => "decision", "key" => "7", "hours" => "24", "text" => "  #{words} "}
+        "form" => %{"kind" => "decision", "key" => "7", "text" => "  #{words} "}
       })
 
       ProposalHelpers.proposal!(@fleet, 1, content_hash: keccak(words))
@@ -672,7 +680,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       ChainViews.put!(
         list_views(keys: [{7, @other, 0}]) ++
-          [{@shards, "mayGovern(uint256,address)", [7, @holder], {"bool", [false]}}]
+          [{@shards, "mayGovern(uint256,address)", [id(7), @holder], {"bool", [false]}}]
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
@@ -684,7 +692,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view)
 
       assert has_element?(view, "#propose-button[disabled]")
-      assert has_element?(view, "#propose-button-why", "Not your key")
+      assert has_element?(view, "#propose-button-why", "Not your Key")
     end
 
     test "the split preview shows each asset's share now, and the split opens on time", %{
@@ -737,7 +745,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
       render_async(view)
 
-      assert has_element?(view, "#proposals-run-split-why", "No keys sold yet")
+      assert has_element?(view, "#proposals-run-split-why", "No Keys sold yet")
       refute has_element?(view, "#proposals-split-opens")
       assert text(view, "#proposals-split-last") == "Never"
     end
@@ -750,6 +758,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         advance_id: 1,
         account: operator,
         asset: @usdc,
+        share: 40_000,
         amount: 4_000_000,
         purpose_hash: "0x" <> String.duplicate("e", 64)
       )
@@ -846,7 +855,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     test "signed out, the split and presence show read-only, and the other buttons take the press",
          %{conn: conn} do
       ChainViews.put!(
-        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}], queue: [2, 3, 2])
+        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}], maintenance: true)
       )
 
       {:ok, view, _html} = live(conn, @list)
@@ -863,7 +872,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   describe "the wallet buttons on a proposal" do
-    # Keys 1 and 2 are the holder's; key 3 is another's, with the holder's
+    # Keys 1 and 2 are the holder's; Key 3 is another's, with the holder's
     # shard on it and its agent voting on.
     test "a ballot votes every key the wallet may, all at once", %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
@@ -874,7 +883,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(
         on_chain(1, :open) ++
           owners([{1, @holder}, {2, @holder}, {3, @other}]) ++
-          [{@shards, "mayGovern(uint256,address)", [3, @holder], {"bool", [true]}}]
+          [{@shards, "mayGovern(uint256,address)", [id(3), @holder], {"bool", [true]}}]
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), "#{@list}/1")
@@ -888,10 +897,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       for {step, name, choice} <- [{yes, "yes", 1}, {no, "no", 2}, {abstain, "abstain", 3}] do
         assert {step.step, step.to, step.data} ==
                  {name, @votes,
-                  Call.encode("castBallot(uint256,uint256[],uint8)", [1, [1, 2, 3], choice])}
+                  Call.encode("castBallot(uint256,uint256[],uint8)", [
+                    1,
+                    [id(1), id(2), id(3)],
+                    choice
+                  ])}
       end
 
-      assert text(view, "#proposal-vote-action-line") == "With keys 1, 2, 3."
+      assert text(view, "#proposal-vote-action-line") == "With Keys 1, 2, 3."
       assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Base."
       assert ballot_pressable?(view)
     end
@@ -900,7 +913,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     # disabled, with a few words saying why.
     test "carrying out and cancelling say why, as the proposal stands on chain", %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, [1], @holder)
-      for number <- 1..6, do: ProposalHelpers.proposal!(@fleet, number)
+      for number <- 1..7, do: ProposalHelpers.proposal!(@fleet, number)
+      waiting = Proposals.get_by_number(@fleet, 2)
+      from = "From " <> WalletWords.at(Proposals.carry_out_from(waiting))
 
       ChainViews.put!(
         Enum.flat_map(Enum.with_index(@statuses, 1), fn {status, number} ->
@@ -912,11 +927,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       for {number, word, carry_out, cancel} <- [
             {1, "Open", "Voting still open", nil},
-            {2, "Approved", nil, nil},
-            {3, "Not approved", "Not approved", "Not approved"},
-            {4, "Cancelled", "Cancelled", "Cancelled"},
-            {5, "Carried out", "Already carried out", "Already carried out"},
-            {6, "Expired", "Expired", "Expired"}
+            {2, "Approved, waiting", from, nil},
+            {3, "Approved", nil, nil},
+            {4, "Not approved", "Not approved", "Not approved"},
+            {5, "Cancelled", "Cancelled", "Cancelled"},
+            {6, "Carried out", "Already carried out", "Already carried out"},
+            {7, "Expired", "Expired", "Expired"}
           ] do
         {:ok, view, _html} = live(holder, "#{@list}/#{number}")
         render_async(view)
@@ -935,7 +951,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     test "carrying out passes the exact calls the proposal recorded", %{conn: conn} do
       fleet = Fleets.get_fleet!(@fleet)
       paid = ProposalHelpers.wallet("b")
-      [{target, value, data}] = Actions.encode({:pay, @usdc, paid, 12_500_000}, fleet)
+      [{target, value, data}] = Actions.encode({:pay, @usdc, paid, 125_000}, fleet)
       ProposalHelpers.proposal!(@fleet, 2, calls: [%{target: target, value: value, data: data}])
       ChainViews.put!(on_chain(2, :approved) ++ owners([{1, @holder}]))
 
@@ -959,14 +975,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(
         on_chain(1, :open) ++
           owners([{1, @other}]) ++
-          [{@shards, "mayGovern(uint256,address)", [1, @holder], {"bool", [false]}}]
+          [{@shards, "mayGovern(uint256,address)", [id(1), @holder], {"bool", [false]}}]
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), "#{@list}/1")
       render_async(view)
 
-      assert why(view, "#proposal-cancel-button") == "Not your key"
-      assert why(view, "#proposal-vote-yes") == "No keys to use"
+      assert why(view, "#proposal-cancel-button") == "Not your Key"
+      assert why(view, "#proposal-vote-yes") == "No Keys to use"
     end
 
     # A ballot the contract turns down says why it may have been, and the
@@ -1051,7 +1067,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   # The vote contract's answers for proposal `number`: its status and its
-  # figures, each count 0 and key 1 its author unless `counts` says.
+  # figures, each count 0 and Key 1 its author unless `counts` says.
   defp on_chain(number, status, counts \\ []) do
     counts = Keyword.merge([e0: 0, late: 0, yes: 0, no: 0, abstain: 0], counts)
     zero = "0x" <> String.duplicate("0", 64)
@@ -1061,36 +1077,40 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
        {"uint8", [Enum.find_index(@statuses, &(&1 == status))]}},
       {@votes, "proposal(uint256)", [number],
        {@proposal_types,
-        [zero, zero, zero, 1, 1, 0, 0, 0] ++
+        [zero, zero, zero, id(1), 1, 0, 0, 0] ++
           Enum.map([:e0, :late, :yes, :no, :abstain], &counts[&1]) ++ [false, false]}}
     ]
   end
 
   defp owners(holders) do
     for {key, holder} <- holders,
-        do: {@fleet_contract, "ownerOf(uint256)", [key], {"address", [holder]}}
+        do: {@keys, "ownerOf(uint256)", [id(key)], {"address", [holder]}}
   end
 
   # Cancelling proposal 1 reads whether its key, held by another, is the
   # holder's to govern through a shard.
   defp cancel_check,
-    do: [{@shards, "mayGovern(uint256,address)", [1, @holder], {"bool", [false]}}]
+    do: [{@shards, "mayGovern(uint256,address)", [id(1), @holder], {"bool", [false]}}]
 
   # What the list's buttons read for the signed-in wallet: the presence of
-  # each of `keys` (`{key, holder, present until}`) and the queue, the daily
-  # split, and the share owed to Regents.
+  # each of `keys` (`{key, holder, present until}`, each old enough to take
+  # part) and whether lapsed presences wait to be cleared, when the treasury
+  # opened, the daily split, and the share owed to Regents.
   defp list_views(opts \\ []) do
     presence =
       for {key, holder, until} <- Keyword.get(opts, :keys, []) do
         [
-          {@fleet_contract, "ownerOf(uint256)", [key], {"address", [holder]}},
-          {@votes, "presenceEntry(uint256)", [key], {"uint32,uint32,uint64", [0, 0, until]}}
+          {@keys, "ownerOf(uint256)", [id(key)], {"address", [holder]}},
+          {@votes, "isActive(uint256)", [id(key)], {"bool", [until > 0]}},
+          {@votes, "presentFrom(uint256)", [id(key)], {"uint64", [max(until - 172_800, 0)]}},
+          {@votes, "maturesAt(uint256)", [id(key)], {"uint64", [1]}}
         ]
       end
 
     [
-      {@votes, "presenceQueue()", [],
-       {"uint32,uint32,uint32", Keyword.get(opts, :queue, [0, 0, 0])}},
+      {@votes, "sweepExpired(uint256)", [0],
+       {"uint256,bool", [0, Keyword.get(opts, :maintenance, false)]}},
+      {@votes, "treasuryOpensAt()", [], {"uint256", [1]}},
       {@treasury, "splitAssets()", [],
        {"address[]", [Keyword.get(opts, :split_assets, [@usdc])]}},
       {@treasury, "dailySplitBps()", [], {"uint256", [100]}},
@@ -1104,6 +1124,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   defp now, do: DateTime.to_unix(ChainViews.head().timestamp)
+
+  defp id(key), do: ChainHelpers.onchain_id(@fleet, key)
 
   defp keccak(text), do: "0x" <> Base.encode16(ExKeccak.hash_256(text), case: :lower)
 

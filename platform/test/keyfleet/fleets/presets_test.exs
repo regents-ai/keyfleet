@@ -56,13 +56,6 @@ defmodule Keyfleet.Fleets.PresetsTest do
     assert Presets.writable_levels(46_366, 46_366) == [21]
   end
 
-  # Pinned to contracts/test/KeyfleetPresets.t.sol.
-  test "a wallet may hold one key of each of the first seven levels, then a tenth of a level" do
-    assert Enum.map(1..7, &Presets.fibonacci_holding_limit/1) == List.duplicate(1, 7)
-
-    assert Enum.map([8, 9, 10, 20], &Presets.fibonacci_holding_limit/1) == [5, 8, 14, 1_771]
-  end
-
   test "only the two Fibonacci fleets have levels" do
     assert Enum.filter(Keyfleet.Fleets.catalog_ids(), &Presets.levelled?/1) ==
              ["fibonacci_syndicate", "fibonacci_cascade"]

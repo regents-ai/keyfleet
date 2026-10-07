@@ -17,9 +17,9 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Keyfleet.Repo)
     Fleets.bootstrap_catalog!()
 
-    for {fleet, n} <- Enum.with_index(Fleets.catalog_ids(), 1) do
+    for fleet <- Fleets.catalog_ids() do
       ChainHelpers.seed_cursor!(fleet)
-      deploy(fleet, "0x" <> String.duplicate("#{n}", 40))
+      ChainHelpers.deploy!(fleet)
     end
 
     :ok
@@ -195,28 +195,6 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     Keyfleet.Repo.query!(
       "UPDATE keyfleet_app.chain_cursors SET ownership_seq = $2 WHERE fleet_id = $1",
       [fleet, length(rows)]
-    )
-  end
-
-  defp deploy(fleet, contract) do
-    fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: "0x" <> String.duplicate("6", 40),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %Actors.System{}
     )
   end
 end

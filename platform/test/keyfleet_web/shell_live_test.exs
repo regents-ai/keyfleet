@@ -261,7 +261,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            |> LazyHTML.from_document()
            |> LazyHTML.query("#account-keys h3")
            |> LazyHTML.text() ==
-             "Keyfleet ClassicKeyfleet Cascade"
+             "Classic #1Cascade #1"
 
     assert keys_listed(html) == [
              "/app/fleets/fleet_tech_classic?key=2",

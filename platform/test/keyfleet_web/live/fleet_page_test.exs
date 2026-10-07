@@ -182,7 +182,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, html} = live(conn, @path)
 
-      assert has_element?(view, "#fleet-soon h1", "Keyfleet Cascade")
+      assert has_element?(view, "#fleet-soon h1", "Cascade #1")
       assert has_element?(view, "#fleet-soon-title", "Coming soon")
       assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
 
@@ -225,9 +225,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   describe "buying the next key" do
-    # Key 151 opens level 9, whose price is the first to round up and where a
-    # wallet may hold 8 keys. The offer is in "How this fleet works", under
-    # "Buying a key".
+    # Key 151 opens level 9, whose price is the first to round up. The offer
+    # is in "How this fleet works", under "Buying a key".
     test "offers the next key's number, exact price and level", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
@@ -238,7 +237,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#buy-key-level") == "9"
-      assert text(view, "#buy-key") =~ "One wallet may hold 8 Keys of level 9."
       assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy Key 151"
       refute has_element?(view, "#buy-key-sold-out")
     end
@@ -409,12 +407,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
 
-      {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
+      {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
 
       assert text(view, "#buy-key-number") == "1"
       assert text(view, "#buy-key-price") == "10 USDC"
       refute has_element?(view, "#buy-key-level")
-      refute html =~ "One wallet may hold"
     end
 
     # A purchase from a sold-out fleet is certain to fail, so Buy stays in
@@ -798,7 +795,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     instruction = text(view, "#fleet-send-agent-instruction")
 
     assert instruction ==
-             "Visit keyfleet.ai and read its joining guide. Then look at the Keyfleet Cascade fleet."
+             "Visit keyfleet.ai and read its joining guide. Then look at the Cascade #1 fleet."
 
     assert has_element?(
              view,
@@ -866,7 +863,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     @locker "0x" <> String.duplicate("5a", 20)
 
     setup do
-      deploy!()
+      ChainHelpers.deploy!(@fleet, %{manager_address: @contract, treasury_address: @treasury})
       ChainHelpers.seed_cursor!(@fleet)
       :ok
     end
@@ -1235,27 +1232,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   defp item_path(id), do: WorkspacePage.item_path(@fleet, id)
 
-  defp deploy!(fleet_id \\ @fleet, deployed_block \\ 1) do
-    fleet_id
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: "0x" <> String.duplicate("6", 40),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: @usdc,
-        deployed_block: deployed_block,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %Actors.System{}
-    )
-  end
+  defp deploy!(fleet_id \\ @fleet, deployed_block \\ 1),
+    do:
+      ChainHelpers.deploy!(fleet_id, %{manager_address: @contract, deployed_block: deployed_block})
 
   defp issue!(fleet_id, token_id, owner \\ @owner) do
     Keys.record_epoch!(
@@ -1321,14 +1300,20 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   # `token_id` under its first owner, or the wallet named ending it.
   defp shard_log(:issued, token_id, block) do
     expires = DateTime.to_unix(DateTime.utc_now()) + 30 * 86_400
-    topics = [@shard_issued, word(token_id), address_word(@agent)]
+
+    topics = [
+      @shard_issued,
+      word(ChainHelpers.onchain_id(@fleet, token_id)),
+      address_word(@agent)
+    ]
+
     shards_log(topics, "0x" <> bare_word(expires) <> bare_word(1), block)
   end
 
   defp shard_log({:ended, by}, token_id, block) do
     topics = [
       @shard_ended,
-      word(token_id),
+      word(ChainHelpers.onchain_id(@fleet, token_id)),
       address_word(@agent),
       address_word(by)
     ]
@@ -1338,7 +1323,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   defp shards_log(topics, data, block) do
     %{
-      "address" => "0x" <> String.duplicate("6", 40),
+      "address" => Fleets.get_fleet!(@fleet).shards_address,
       "topics" => topics,
       "data" => data,
       "blockNumber" => "0x" <> Integer.to_string(block, 16),
@@ -1428,12 +1413,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   defp chain_head(number),
     do: %{number: number, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()}
 
+  # The Key collection moving Accelerant's Key `token_id` to `owner`.
   defp ownership_log(token_id, epoch, "0x" <> owner, block) do
     %{
-      "address" => @contract,
+      "address" => Fleets.get_fleet!("fleet_tech_accelerant").keys_address,
       "topics" => [
         OwnershipLog.topic(),
-        word(token_id),
+        word(ChainHelpers.onchain_id("fleet_tech_accelerant", token_id)),
         word(0),
         "0x" <> String.duplicate("0", 24) <> owner
       ],
@@ -1456,19 +1442,23 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     render_async(view)
   end
 
-  # The chain the buy steps read: the wallet's USDC allowance to the fleet.
+  # The chain the buy steps read: sales open, and the wallet's USDC
+  # allowance to the fleet.
   defp chain!(opts) do
     allowance = Call.selector("allowance(address,address)")
+    sales_open = Call.selector("salesOpen(uint256)")
 
     StubClient.put_chain(chain_head(1_000), [],
-      calls: fn _to, data, _hash -> answer(data, allowance, opts) end
+      calls: fn _to, data, _hash -> answer(data, allowance, sales_open, opts) end
     )
   end
 
-  defp answer(data, allowance, opts) do
-    if String.starts_with?(data, allowance),
-      do: {:ok, <<Keyword.fetch!(opts, :allowance)::256>>},
-      else: {:error, :no_answer}
+  defp answer(data, allowance, sales_open, opts) do
+    cond do
+      String.starts_with?(data, allowance) -> {:ok, <<Keyword.fetch!(opts, :allowance)::256>>}
+      String.starts_with?(data, sales_open) -> {:ok, <<1::256>>}
+      true -> {:error, :no_answer}
+    end
   end
 
   defp text(view, selector) do

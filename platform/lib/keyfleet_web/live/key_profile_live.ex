@@ -740,7 +740,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp start_rewards_read(
          %{assigns: %{fleet: fleet, key_profile: %{token_id: token_id, holder: holder}}} = socket
        ) do
-    rewards = Map.take(fleet, [:fleet_id, :rewards_address])
+    rewards = Map.take(fleet, [:fleet_id, :chain_fleet_id, :rewards_address])
     client = Chain.Client.configured()
 
     start_async(socket, :rewards, fn ->

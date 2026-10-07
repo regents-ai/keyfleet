@@ -53,7 +53,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/auth/privy/failure",
              "/auth/privy/session",
              "/auth/session",
-             "/metadata/{slot}/{token_id}"
+             "/metadata/collection.json",
+             "/metadata/keys/{collection_token_id}"
            ]
 
     assert Map.take(contract["paths"], [

@@ -158,7 +158,7 @@ defmodule Keyfleet.DirectoryTest do
     {:ok, fleet} = Directory.fleet(@fleet)
 
     assert Enum.map(fleet.recent_posts, & &1.excerpt) == for(n <- 11..2//-1, do: "Post #{n}")
-    assert hd(fleet.recent_posts).author == %{kind: :human, wallet: @owner}
+    assert hd(fleet.recent_posts).author == %{kind: :human, wallet: @owner, via_agent: nil}
     assert fleet.last_post_at == hd(fleet.recent_posts).at
 
     assert listed(@fleet).last_post_at == fleet.last_post_at
@@ -187,7 +187,7 @@ defmodule Keyfleet.DirectoryTest do
              keys_sold: 6,
              keys_total: nil,
              keys_left: nil,
-             next_key: %{token_id: 7, price_atomic_usdc: 14_400_000, level: 3, holding_limit: 1}
+             next_key: %{token_id: 7, price_atomic_usdc: 14_400_000, level: 3}
            }
 
     ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -1, :day))
@@ -201,7 +201,7 @@ defmodule Keyfleet.DirectoryTest do
   # Classic is open from the start; the others open once their deployment is
   # recorded, as this fleet's was in the setup.
   test "a fleet coming soon gives its name and nothing else, until its deployment is recorded" do
-    soon = %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon: true}
+    soon = %{id: "fibonacci_cascade", name: "Cascade #1", coming_soon: true}
 
     assert Directory.fleet("fibonacci_cascade") == {:ok, soon}
 

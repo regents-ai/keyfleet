@@ -28,8 +28,8 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   end
 
   @doc """
-  What waits for key `token_id` of `fleet`, which names its `fleet_id` and
-  `rewards_address`, held by `holder`: `{:ok, [%{asset: asset, accrued:
+  What waits for key `token_id` of `fleet`, which names its `fleet_id`,
+  `chain_fleet_id` and `rewards_address`, held by `holder`: `{:ok, [%{asset: asset, accrued:
   amount, credit: amount}]}` in the ledger's order, amounts in the asset's
   atomic units, or the chain's `{:error, reason}`. An answer read less than
   30 seconds before `now`, in monotonic milliseconds, is given again without

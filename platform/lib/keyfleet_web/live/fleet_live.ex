@@ -1173,6 +1173,7 @@ defmodule KeyfleetWeb.FleetLive do
       name: fleet.name,
       coming_soon?: false,
       chain_id: fleet.chain_id,
+      chain_fleet_id: fleet.chain_fleet_id,
       manager_address: fleet.manager_address,
       rewards_address: fleet.rewards_address,
       usdc_address: fleet.usdc_address,

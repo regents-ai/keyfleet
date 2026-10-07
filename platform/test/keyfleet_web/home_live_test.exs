@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
                 home-fleet-fleet_tech_accelerant)
 
-    assert has_element?(view, "#home-fleet-#{@cascade} h3", "Keyfleet Cascade")
+    assert has_element?(view, "#home-fleet-#{@cascade} h3", "Cascade #1")
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"
     assert attribute(html, "#home-fleet-preview-#{@cascade}", "data-minted") == ["0"]
     refute has_element?(view, "#home-fleet-#{@cascade} .rl-fleet-card__now")
@@ -338,12 +338,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    [_, section] = String.split(markdown, "\n## Keyfleet Classic\n", parts: 2)
+    [_, section] = String.split(markdown, "\n## Classic #1\n", parts: 2)
     [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
-    assert build_conn() |> get(path) |> response(200) =~ "Keyfleet Classic"
+    assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
 
-    for name <- ["Keyfleet Syndicate", "Keyfleet Cascade", "Keyfleet Accelerant"] do
+    for name <- ["Syndicate #1", "Cascade #1", "Accelerant #1"] do
       [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
 
       [section | _] = String.split(section, "\n## ", parts: 2)
@@ -352,7 +352,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
 
     [_, all] = Regex.run(~r{\[Every fleet\]\(https?://[^/]+(/[^)]+)\)}, markdown)
-    assert build_conn() |> get(all) |> response(200) =~ "Keyfleet Syndicate"
+    assert build_conn() |> get(all) |> response(200) =~ "Syndicate #1"
   end
 
   @stack [

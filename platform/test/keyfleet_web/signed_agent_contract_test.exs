@@ -103,10 +103,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      %{
        "kind" => "launch",
        "key" => "2",
-       "hours" => "24",
        "text" => "Launch the fleet's token",
        "asset" => "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-       "amount" => "1",
+       "share" => "1",
        "recipient" => "0x" <> String.duplicate("a", 40),
        "rate" => "1",
        "target" => "1",
@@ -348,7 +347,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
     assert shard["step_down"]["data"] ==
-             RegentChain.Call.encode("end(uint256[],address)", [[1], holder.address])
+             RegentChain.Call.encode("end(uint256[],address)", [
+               [ChainHelpers.onchain_id(@fleet, 1)],
+               holder.address
+             ])
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
@@ -599,11 +601,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     fleet = Fleets.get_fleet!(@fleet)
     wallet = String.downcase(c.signer.address)
     usdc = fleet.usdc_address
-    owner = {fleet.contract_address, "ownerOf(uint256)", [2], {"address", [wallet]}}
+    key = ChainHelpers.onchain_id(@fleet, 2)
+    owner = {fleet.keys_address, "ownerOf(uint256)", [key], {"address", [wallet]}}
     uint = &{&1, &2, &3, {"uint256", [&4]}}
     status = {fleet.votes_address, "status(uint256)", [1], {"uint8", [0]}}
     offchain = Map.put(@address, "fleet_id", "fleet_tech_classic")
-    words = %{"kind" => "decision", "key" => "2", "hours" => "24", "text" => "Survey the hull"}
+    words = %{"kind" => "decision", "key" => "2", "text" => "Survey the hull"}
 
     for {template, body} <- [
           {@presence, %{}},
@@ -618,10 +621,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
                refused("fleet_not_on_chain")
     end
 
+    # Key 2 is old enough to take part and isn't present.
+    matures = {fleet.votes_address, "maturesAt(uint256)", [key], {"uint64", [1]}}
+
     ChainViews.put!([
       owner,
-      {fleet.votes_address, "presenceEntry(uint256)", [2], {"uint32,uint32,uint64", [0, 0, 0]}},
-      {fleet.votes_address, "presenceQueue()", [], {"uint32,uint32,uint32", [0, 0, 0]}}
+      matures,
+      {fleet.votes_address, "isActive(uint256)", [key], {"bool", [false]}},
+      {fleet.votes_address, "presentFrom(uint256)", [key], {"uint64", [0]}},
+      {fleet.votes_address, "sweepExpired(uint256)", [0], {"uint256,bool", [0, false]}}
     ])
 
     assert %{"keys" => [%{"token_id" => 2, "present_until" => nil}], "transactions" => sent} =
@@ -629,18 +637,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     assert Enum.map(sent, &{&1["name"], &1["blocked"]}) == [{"present", nil}, {"sweep", nil}]
 
-    ChainViews.put!([owner, {fleet.votes_address, "presenceEntry(uint256)", [2], :revert}])
+    ChainViews.put!([owner, {fleet.votes_address, "isActive(uint256)", [key], :revert}])
 
     assert answer(c, c.signer, "POST", @presence, @address, %{}, 503).body ==
              refused("chain_unavailable")
 
     # Proposing keeps the words before the wallet sends anything.
-    ChainViews.put!([owner])
+    ChainViews.put!([owner, matures, uint.(fleet.votes_address, "treasuryOpensAt()", [], 1)])
     made = answer(c, c.signer, "POST", @propose, @address, words, 200).body
     assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
 
-    unreadable = answer(c, c.signer, "POST", @propose, @address, %{words | "hours" => "5"}, 422)
+    unreadable = answer(c, c.signer, "POST", @propose, @address, %{words | "kind" => "vote"}, 422)
     assert unreadable.body["error"]["code"] == "invalid_proposal"
 
     ChainViews.put!([owner, status])
@@ -672,18 +680,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       uint.(fleet.treasury_address, "dailySplitBps()", [], 50),
       uint.(fleet.treasury_address, "lastRunAt()", [], 0),
       uint.(fleet.treasury_address, "nextRunAt()", [], 0),
-      uint.(fleet.contract_address, "totalMinted()", [], 0),
+      uint.(fleet.manager_address, "totalMinted()", [], 0),
       {usdc, "decimals()", [], {"uint8", [6]}},
       uint.(usdc, "balanceOf(address)", [fleet.treasury_address], 0)
     ])
 
-    assert [%{"name" => "run_split", "blocked" => "No keys sold yet"}] =
+    assert [%{"name" => "run_split", "blocked" => "No Keys sold yet"}] =
              answer(c, c.signer, "POST", @split, @address, %{}, 200).body["transactions"]
 
     ChainViews.put!([
       owner,
       {fleet.rewards_address, "rewardAssets()", [], {"address[]", [[usdc]]}},
-      uint.(fleet.rewards_address, "accrued(address,uint256)", [usdc, 2], 2_000_000),
+      uint.(fleet.rewards_address, "accrued(address,uint256)", [usdc, key], 2_000_000),
       uint.(fleet.rewards_address, "credits(address,address)", [usdc, wallet], 0)
     ])
 
@@ -698,8 +706,24 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     zero = "0x" <> String.duplicate("0", 64)
 
     {fleet.votes_address, "proposal(uint256)", [number],
-     {"bytes32,bytes32,bytes32,uint32,uint48,uint64,uint64,uint64,uint32,uint32,uint32,uint32,uint32,bool,bool",
-      [zero, zero, zero, key, 1, 0, 0, 0, 3, 1, 2, 1, 0, false, false]}}
+     {"bytes32,bytes32,bytes32,uint64,uint48,uint64,uint64,uint64,uint32,uint32,uint32,uint32,uint32,bool,bool",
+      [
+        zero,
+        zero,
+        zero,
+        ChainHelpers.onchain_id(@fleet, key),
+        1,
+        0,
+        0,
+        0,
+        3,
+        1,
+        2,
+        1,
+        0,
+        false,
+        false
+      ]}}
   end
 
   # Signs and sends one request, and holds its answer to the contract.
@@ -788,6 +812,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@topic), do: %{"topic" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
+  defp empty_or_minimal(@avatar_start), do: @picture
 
   defp empty_or_minimal(@sync),
     do: %{
@@ -800,7 +825,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@proposal), do: %{"number" => 1, "votes_after_seq" => 0}
 
   defp empty_or_minimal(@propose),
-    do: %{"kind" => "decision", "key" => "2", "hours" => "24", "text" => "Away"}
+    do: %{"kind" => "decision", "key" => "2", "text" => "Away"}
 
   defp empty_or_minimal(@vote), do: %{"number" => 1, "choice" => "yes"}
   defp empty_or_minimal(@cancel), do: %{"number" => 1}

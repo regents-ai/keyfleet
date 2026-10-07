@@ -5,10 +5,10 @@ defmodule Keyfleet.FleetsTest do
   alias Keyfleet.Fleets.Fleet
 
   @catalog %{
-    "fibonacci_syndicate" => "Keyfleet Syndicate",
-    "fibonacci_cascade" => "Keyfleet Cascade",
-    "fleet_tech_classic" => "Keyfleet Classic",
-    "fleet_tech_accelerant" => "Keyfleet Accelerant"
+    "fibonacci_syndicate" => "Syndicate #1",
+    "fibonacci_cascade" => "Cascade #1",
+    "fleet_tech_classic" => "Classic #1",
+    "fleet_tech_accelerant" => "Accelerant #1"
   }
 
   setup do

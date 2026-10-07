@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     Fleets.bootstrap_catalog!()
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    deploy(@fleet, @contract)
+    ChainHelpers.deploy!(@fleet, %{manager_address: @contract})
     for {token_id, wallet} <- @owners, do: record_owner(token_id, 1, wallet)
 
     secret = :crypto.strong_rand_bytes(32)
@@ -511,9 +511,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a Classic or Accelerant key writes the fleet scope and no level", c do
     unlevelled = ["fleet_tech_classic", "fleet_tech_accelerant"]
 
-    for {fleet, n} <- Enum.with_index(unlevelled, 1) do
+    for fleet <- unlevelled do
       ChainHelpers.seed_cursor!(fleet)
-      deploy(fleet, "0x" <> String.duplicate("#{n}", 40))
+      ChainHelpers.deploy!(fleet)
       record_owner(1, 1, owner_wallet(1), fleet)
     end
 
@@ -1062,33 +1062,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     run_id
   end
 
-  defp deploy(fleet, contract) do
-    fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: contract,
-        rewards_address: "0x" <> String.duplicate("8", 40),
-        votes_address: "0x" <> String.duplicate("9", 40),
-        treasury_address: "0x" <> String.duplicate("7e", 20),
-        shards_address: "0x" <> String.duplicate("6", 40),
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %Actors.System{}
-    )
-  end
-
   # The Cascade fleet deployed and fresh, with these keys sold.
   defp sell_levelled(token_ids) do
     if Chain.get_cursor!(@levelled) == nil do
       ChainHelpers.seed_cursor!(@levelled)
-      deploy(@levelled, "0x" <> String.duplicate("6", 40))
+      ChainHelpers.deploy!(@levelled)
     end
 
     for token_id <- token_ids, do: record_owner(token_id, 1, owner_wallet(token_id), @levelled)

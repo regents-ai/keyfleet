@@ -19,11 +19,13 @@ defmodule Keyfleet.ChainTest do
   # high block keeps these readings to what each test puts on the chain.
   @fleet "fleet_tech_accelerant"
   @contract "0x" <> String.duplicate("7", 40)
+  @keys "0x" <> String.duplicate("a1", 20)
   @deployed 5_000_000
   @new_hash "0x" <> String.duplicate("e", 64)
   @usdc "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
   @regent "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07"
   @native "0x0000000000000000000000000000000000000000"
+  @deck_hash "0x" <> String.duplicate("0d", 32)
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -51,7 +53,10 @@ defmodule Keyfleet.ChainTest do
 
   describe "reading the chain" do
     setup do
-      %{fleet: deploy!(@fleet, @contract)}
+      %{
+        fleet:
+          ChainHelpers.deploy!(@fleet, %{manager_address: @contract, deployed_block: @deployed})
+      }
     end
 
     # The cursor moves on only after everything up to the head is recorded,
@@ -324,7 +329,7 @@ defmodule Keyfleet.ChainTest do
       File.write!(path, Jason.encode!(manifest("classic", "1")))
 
       assert capture_io(fn -> Release.seed_deployment!(path) end) ==
-               "fleet_tech_classic: 0x#{String.duplicate("c1", 20)} from block 42\n"
+               "fleet_tech_classic: fleet 1 at 0x#{String.duplicate("c1", 20)} from block 42\n"
 
       capture_io(fn -> Release.seed_deployment!(path) end)
 
@@ -332,8 +337,12 @@ defmodule Keyfleet.ChainTest do
 
       assert %{
                chain_id: 8453,
+               chain_fleet_id: 1,
                deployed_block: 42,
-               contract_address: "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+               keys_address: "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+               deck_hash: @deck_hash,
+               deck_size: 1,
+               manager_address: "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
                rewards_address: "0xd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
                votes_address: "0x9191919191919191919191919191919191919191",
                treasury_address: "0x7171717171717171717171717171717171717171",
@@ -412,7 +421,7 @@ defmodule Keyfleet.ChainTest do
             ["0x0000000000000000000000000000000000000000", @usdc, @regent]
           ] do
         File.write!(path, Jason.encode!(manifest("classic", "1", %{"splitAssets" => split})))
-        assert_raise FunctionClauseError, fn -> Release.seed_deployment!(path) end
+        assert_raise MatchError, fn -> Release.seed_deployment!(path) end
       end
 
       assert Fleets.list_deployed_fleets!() == []
@@ -437,21 +446,19 @@ defmodule Keyfleet.ChainTest do
 
     catch_error(capture_io(fn -> Release.seed_deployment!(path) end))
 
-    assert Fleets.get_fleet!("fibonacci_cascade").contract_address == nil
+    assert Fleets.get_fleet!("fibonacci_cascade").manager_address == nil
     assert slugs("fibonacci_cascade") == ["hull"]
   end
 
   # Run one after the other: the row lock the rule takes is what keeps two
   # recordings at the same moment in this order too.
   test "a second fleet naming another trait table is refused however it is recorded" do
-    deploy!("fleet_tech_classic", "0x" <> String.duplicate("c", 40))
+    ChainHelpers.deploy!("fleet_tech_classic")
 
     other =
-      Map.put(
-        deployment("0x" <> String.duplicate("b", 40)),
-        :trait_table_hash,
-        "0x" <> String.duplicate("5", 64)
-      )
+      ChainHelpers.deployment("fibonacci_cascade", %{
+        trait_table_hash: "0x" <> String.duplicate("5", 64)
+      })
 
     assert {:error, %Ash.Error.Invalid{} = error} =
              "fibonacci_cascade"
@@ -474,7 +481,7 @@ defmodule Keyfleet.ChainTest do
                fleet_tech_accelerant: coming soon
                """
 
-      assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.contract_address))
+      assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.manager_address))
       assert Fleets.list_deployed_fleets!() == []
       assert length(slugs("fleet_tech_classic")) >= 10
       assert slugs("fibonacci_syndicate") == []
@@ -491,56 +498,44 @@ defmodule Keyfleet.ChainTest do
 
   defp slugs(fleet), do: Enum.map(Rooms.list_rooms!(fleet), & &1.slug)
 
-  defp deploy!(fleet, contract) do
-    fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(deployment(contract), actor: %System{})
-  end
-
-  defp deployment(contract) do
-    %{
-      chain_id: 8453,
-      contract_address: contract,
-      rewards_address: "0x" <> String.duplicate("8", 40),
-      votes_address: "0x" <> String.duplicate("9", 40),
-      treasury_address: "0x" <> String.duplicate("7e", 20),
-      shards_address: "0x" <> String.duplicate("6", 40),
-      regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-      regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-      autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-      usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-      deployed_block: @deployed,
-      trait_table_hash: "0x" <> String.duplicate("a", 64)
-    }
-  end
-
-  # The manifest `RecordKeyfleets` writes for the fleet in `slot`, on the
-  # wiring every fleet shares unless `wiring` says otherwise. Its treasury
-  # splits ETH, then its REGENT, then its USDC unless `wiring` names others.
+  # The record `RecordKeyfleets` writes holding the first fleet of type
+  # `slot`, on the wiring every fleet shares unless `wiring` says otherwise.
+  # Its treasury splits ETH, then its REGENT, then its USDC unless `wiring`
+  # names other `splitAssets`.
   defp manifest(slot, generation, wiring \\ %{}) do
     letter = %{"syndicate" => "a", "cascade" => "b", "classic" => "c", "accelerant" => "f"}[slot]
+    number = %{"classic" => "1", "syndicate" => "2", "cascade" => "3", "accelerant" => "4"}[slot]
+    {split, shared} = Map.pop(wiring, "splitAssets")
 
-    Map.merge(
-      %{
-        "chainId" => 8453,
-        "deploymentBlock" => 42,
-        "usdc" => @usdc,
-        "regent" => @regent,
-        "regentStaking" => "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
-        "autolaunchFactory" => "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
-        "traitTableHash" => "0x" <> String.duplicate("A1", 32),
-        "fleet" => %{
-          "slot" => slot,
-          "address" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
-          "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
-          "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20),
-          "treasury" => "0x" <> String.duplicate("7" <> generation, 20),
-          "shards" => "0x" <> String.duplicate("6" <> generation, 20)
-        }
-      },
-      wiring
-    )
-    |> then(&Map.put_new(&1, "splitAssets", [@native, &1["regent"], &1["usdc"]]))
+    record =
+      Map.merge(
+        %{
+          "chainId" => 8453,
+          "deploymentBlock" => 42,
+          "collection" => %{"address" => "0x" <> String.duplicate("A1", 20)},
+          "shards" => %{"address" => "0x" <> String.duplicate("61", 20)},
+          "usdc" => @usdc,
+          "regent" => @regent,
+          "regentStaking" => "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
+          "autolaunchFactory" => "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
+          "traitTableHash" => "0x" <> String.duplicate("A1", 32)
+        },
+        shared
+      )
+
+    fleet = %{
+      "type" => slot,
+      "typeNumber" => 1,
+      "manager" => "0x" <> String.duplicate(String.upcase(letter) <> generation, 20),
+      "rewards" => "0x" <> String.duplicate("d" <> generation, 20),
+      "votes" => "0x" <> String.duplicate(letter_for_votes(letter) <> generation, 20),
+      "treasury" => "0x" <> String.duplicate("7" <> generation, 20),
+      "deckHash" => @deck_hash,
+      "deckSize" => 1,
+      "splitAssets" => split || [@native, record["regent"], record["usdc"]]
+    }
+
+    Map.put(record, "fleets", %{number => fleet})
   end
 
   defp letter_for_votes("b"), do: "e"
@@ -591,7 +586,7 @@ defmodule Keyfleet.ChainTest do
 
   defp log(token_id, epoch, owner, block, log_index) do
     %{
-      "address" => @contract,
+      "address" => @keys,
       "topics" => topics(token_id, owner),
       "data" => word(epoch),
       "blockNumber" => quantity(block),
@@ -604,7 +599,7 @@ defmodule Keyfleet.ChainTest do
   defp topics(token_id, owner),
     do: [
       OwnershipLog.topic(),
-      word(token_id),
+      word(ChainHelpers.onchain_id(@fleet, token_id)),
       word(0),
       "0x" <> String.duplicate("0", 24) <> String.duplicate(owner, 40)
     ]

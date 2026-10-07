@@ -6,8 +6,10 @@ defmodule Keyfleet.ProposalsChainTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.{Logs, Scanner, StubClient}
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.CommittedCatalog
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
@@ -16,6 +18,7 @@ defmodule Keyfleet.ProposalsChainTest do
   # Other suites commit Syndicate keys outside the sandbox; Accelerant from a
   # high block keeps these readings to what each test puts on the chain.
   @fleet "fleet_tech_accelerant"
+  @keys "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("7", 40)
   @rewards "0x" <> String.duplicate("8", 40)
   @votes "0x" <> String.duplicate("9", 40)
@@ -31,21 +34,22 @@ defmodule Keyfleet.ProposalsChainTest do
   # Pinned from `cast keccak` of each event signature, and against the
   # contracts in contracts/test/KeyfleetVotesTopics.t.sol where it pins them.
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
-  @revealed "0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e"
+  @revealed "0x2641319733d9075c8fb8c0e9c0738513e76e459cba32ba76efd9a29096dc8a24"
   @forwarded "0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81"
   @protocol_share "0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3"
-  @created "0x38b5bfd5a74e1cd21d48353dd73195633860c2a395e3a13467494c2a8a81b462"
+  @created "0x959c9f8f330ac28b7f4719d751c7fa2d25e7be768c2642037e274c468a0ac796"
   @ballot "0x8fade46d07f3bc5ab9b6f059a9582a5d1c0c1aea60978623e207da414bb1ee45"
   @cancelled "0x74c34a008ce735d9fcf0bd03a9b238d212ad4c441c020661f4ffbb6442645b85"
   @executed "0x9c85b616f29fca57a17eafe71cf9ff82ffef41766e2cf01ea7f8f7878dd3ec24"
   @edits_set "0x908aa6b1a2d33ab8aaa026fccd64bd2d84297a4e0e9c496d53edbb67e5165cdc"
   @present "0x65494834b9ecadf1a0a1aa43098094d1784705df5b74020daae186d31b9d5d19"
   @presence_cleared "0x3a7956ae06b201a0d818ed191ba804d3cbe825deec03291fae84299fc9b2ae8f"
+  @presence_scheduled "0x43b6d694a84ad821ffa4c6b8182345b762cd50945d6c3267f8bdea3d0a1ab722"
   @shard_issued "0x3b2824f462424cb01c09746900aff2810947c0577d310c08082c75fe40c2312a"
   @shard_ended "0x22773ac65ded0957ecf7109dad0076e1968f3db974ccda1df370bfa4505092f4"
   @agent_voting_set "0xfdf7ebb0624288d5705c5fa214a210cf974c5a5598f8f65a6d616f0c420acabd"
-  @paid "0x9def4e2802183d68ce90a6a226a2962b59298616c27165f12c4fbc5c84cdd778"
-  @advanced "0x43b27f372639bed05e9fab94afe302ce65996b9a58d7fa92d3dbfbdca5d0109c"
+  @paid "0xadcbed09c0c3a96dbd120d51398fcb6c403f4bfad9a29f7e23e7f5707968220d"
+  @advanced "0x48ac236609298a1c7957fb52a75e13423f9df416523ebeec6db95db52d813159"
   @advance_returned "0x2034cebd1ee980ae5db64594c0a5e13ca3153fb318294274500210fc58592e80"
   @daily_split_run "0x589c845daa4d6c172f7b015018e21cf71a9651115b4cb58d0bde2b1bf57f50ec"
   @split_allocated "0x9074e50b5000d1a14458055f7b5489e63374e5de93050bc4c71be60cc3fe43a7"
@@ -109,7 +113,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
 
       assert [{addresses, topics, @deployed, to}] = StubClient.log_requests()
-      assert addresses == [@contract, @votes, @shards, @treasury, @rewards]
+      assert addresses == [@keys, @contract, @votes, @shards, @treasury, @rewards]
       assert to == @deployed + 10
 
       assert Enum.sort(topics) ==
@@ -125,6 +129,7 @@ defmodule Keyfleet.ProposalsChainTest do
                  @edits_set,
                  @present,
                  @presence_cleared,
+                 @presence_scheduled,
                  @shard_issued,
                  @shard_ended,
                  @agent_voting_set,
@@ -267,6 +272,7 @@ defmodule Keyfleet.ProposalsChainTest do
       assert %{kind: :paid, record_seq: 3, block_number: paid_block, log_index: 0} = paid
       assert paid_block == @deployed + 2
       assert paid.asset == wallet("a") and paid.account == wallet("c")
+      assert Decimal.equal?(paid.share, 15_000)
       assert Decimal.equal?(paid.amount, @max_uint256)
 
       assert %{kind: :split_allocated, record_seq: 4} = split
@@ -940,7 +946,7 @@ defmodule Keyfleet.ProposalsChainTest do
       topic = &List.replace_at(&1["topics"], &2, &3)
       # The one call's words: its target, value, the offset of its data, its
       # length, and the data padded to a word.
-      call = 7 * 32 + 64
+      call = 8 * 32 + 64
 
       for {index, broken} <- [
             {1, %{created | "address" => wallet("8")}},
@@ -958,12 +964,12 @@ defmodule Keyfleet.ProposalsChainTest do
             {1, %{created | "data" => hex(binary_part(data.(created), 0, 127))}},
             {1, %{created | "data" => "0x0"}},
             {1, %{created | "data" => hex(patch(data.(created), 64, <<@max_bigint + 1::256>>))}},
-            {1, %{created | "data" => hex(patch(data.(created), 128, <<4_294_967_296::256>>))}},
+            {1, %{created | "data" => hex(patch(data.(created), 160, <<4_294_967_296::256>>))}},
             {1,
-             %{created | "data" => hex(patch(data.(created), 160, <<281_474_976_710_656::256>>))}},
-            {1, %{created | "data" => hex(patch(data.(created), 192, <<256::256>>))}},
-            {1, %{created | "data" => hex(patch(data.(created), 224, <<2::256>>))}},
-            {1, %{created | "data" => hex(patch(data.(created), 256, <<64::256>>))}},
+             %{created | "data" => hex(patch(data.(created), 192, <<281_474_976_710_656::256>>))}},
+            {1, %{created | "data" => hex(patch(data.(created), 224, <<288::256>>))}},
+            {1, %{created | "data" => hex(patch(data.(created), 256, <<2::256>>))}},
+            {1, %{created | "data" => hex(patch(data.(created), 288, <<64::256>>))}},
             {1, %{created | "data" => hex(patch(data.(created), call, <<1::96, 0::160>>))}},
             {1, %{created | "data" => hex(patch(data.(created), call + 64, <<64::256>>))}},
             {1, %{created | "data" => hex(patch(data.(created), call + 96, <<33::256>>))}},
@@ -999,7 +1005,8 @@ defmodule Keyfleet.ProposalsChainTest do
             {7, %{mint | "topics" => topic.(mint, 3, hex(<<1::96, 0::160>>))}},
             {8, %{paid | "address" => @votes}},
             {8, %{paid | "address" => @contract}},
-            {8, %{paid | "data" => hex(<<10::256, 1::256>>)}},
+            {8, %{paid | "data" => hex(data.(paid) <> <<0::256>>)}},
+            {8, %{paid | "data" => hex(patch(data.(paid), 0, <<4_294_967_296::256>>))}},
             {8, %{paid | "data" => hex(<<>>)}},
             {8, %{paid | "topics" => topic.(paid, 2, hex(<<1::96, 0::160>>))}},
             {8, %{paid | "topics" => Enum.drop(paid["topics"], -1)}},
@@ -1077,15 +1084,17 @@ defmodule Keyfleet.ProposalsChainTest do
     opened = DateTime.to_unix(block_time(block))
     closes = opened + @day
 
+    # A decision can be carried out as soon as its vote closes.
     head =
-      <<1000 + number::256, number::256, closes::256, closes + @execution_window::256,
-        Keyword.get(opts, :opening, 3)::256, 1::256, 7 * 32::256>>
+      <<1000 + number::256, number::256, closes::256, closes::256,
+        closes + @execution_window::256, Keyword.get(opts, :opening, 3)::256, 1::256,
+        8 * 32::256>>
 
     [
       present(author, block, at),
       log(
         @votes,
-        [@created, <<number::256>>, <<author::256>>, address_word_bytes("f")],
+        [@created, <<number::256>>, key(author), address_word_bytes("f")],
         head <> calls(Keyword.get(opts, :calls, [])),
         block,
         at + 1
@@ -1113,18 +1122,18 @@ defmodule Keyfleet.ProposalsChainTest do
   # Key `token_id` renewed at the block's time, in its first ownership.
   defp present(token_id, block, log_index) do
     data = <<DateTime.to_unix(block_time(block))::256, block::256, 1::256>>
-    log(@votes, [@present, <<token_id::256>>], data, block, log_index)
+    log(@votes, [@present, key(token_id)], data, block, log_index)
   end
 
   defp cleared(token_id, block, log_index),
-    do: log(@votes, [@presence_cleared, <<token_id::256>>], <<>>, block, log_index)
+    do: log(@votes, [@presence_cleared, key(token_id)], <<>>, block, log_index)
 
   @choices %{yes: 1, no: 2, abstain: 3}
 
   defp vote(number, voter, choice, token_ids, block, log_index) do
     data =
       <<Map.fetch!(@choices, choice)::256, 64::256, length(token_ids)::256>> <>
-        for(id <- token_ids, into: <<>>, do: <<id::256>>)
+        for(id <- token_ids, into: <<>>, do: key(id))
 
     log(@votes, [@ballot, <<number::256>>, address_word_bytes(voter)], data, block, log_index)
   end
@@ -1144,15 +1153,16 @@ defmodule Keyfleet.ProposalsChainTest do
 
   defp edits_set(token_id, restricted, block, log_index) do
     flag = if restricted, do: 1, else: 0
-    log(@votes, [@edits_set, <<token_id::256>>], <<flag::256>>, block, log_index)
+    log(@votes, [@edits_set, key(token_id)], <<flag::256>>, block, log_index)
   end
 
-  # `amount` of asset 0x`asset`… paid by the treasury to 0x`to`….
+  # `amount` of asset 0x`asset`… paid by the treasury to 0x`to`…, 1.5% of
+  # what it held.
   defp paid(asset, to, block, log_index, amount) do
     log(
       @treasury,
       [@paid, address_word_bytes(asset), address_word_bytes(to)],
-      <<amount::256>>,
+      <<15_000::256, amount::256>>,
       block,
       log_index
     )
@@ -1181,13 +1191,16 @@ defmodule Keyfleet.ProposalsChainTest do
 
   defp ownership(token_id, owner, block, log_index) do
     log(
-      @contract,
-      [@ownership, <<token_id::256>>, <<0::256>>, address_word_bytes(owner)],
+      @keys,
+      [@ownership, key(token_id), <<0::256>>, address_word_bytes(owner)],
       <<1::256>>,
       block,
       log_index
     )
   end
+
+  # The fleet's Key `token_id` by its id in the Key collection, as every log names it.
+  defp key(token_id), do: <<ChainHelpers.onchain_id(@fleet, token_id)::256>>
 
   defp log(address, [topic0 | words], data, block, log_index) do
     %{
@@ -1223,28 +1236,6 @@ defmodule Keyfleet.ProposalsChainTest do
       hash: "0x" <> String.duplicate("f", 64),
       timestamp: block_time(number)
     }
-
-  defp deploy! do
-    @fleet
-    |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: 8453,
-        contract_address: @contract,
-        rewards_address: @rewards,
-        votes_address: @votes,
-        treasury_address: @treasury,
-        shards_address: @shards,
-        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
-        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
-        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
-        deployed_block: @deployed,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
-      },
-      actor: %System{}
-    )
-  end
 
   # Runs `passes` passes over `logs` at once, each on a connection of its own.
   defp race(fleet, logs, passes) do
@@ -1413,15 +1404,8 @@ defmodule Keyfleet.ProposalsChainTest do
 
       Repo.query!("DELETE FROM keyfleet_app.chain_cursors WHERE fleet_id = $1", [@fleet])
 
-      Repo.query!(
-        "UPDATE keyfleet_app.fleets SET chain_id = NULL, contract_address = NULL, " <>
-          "rewards_address = NULL, votes_address = NULL, treasury_address = NULL, " <>
-          "shards_address = NULL, usdc_address = NULL, regent_address = NULL, " <>
-          "regent_staking_address = NULL, autolaunch_factory_address = NULL, " <>
-          "deployed_block = NULL, trait_table_hash = NULL " <>
-          "WHERE id = $1",
-        [@fleet]
-      )
+      unbound = Enum.map_join(Fleet.deployment_fields(), ", ", &"#{&1} = NULL")
+      Repo.query!("UPDATE keyfleet_app.fleets SET #{unbound} WHERE id = $1", [@fleet])
     end)
   end
 
@@ -1462,5 +1446,16 @@ defmodule Keyfleet.ProposalsChainTest do
     after
       0 -> Enum.reverse(writes)
     end
+  end
+
+  defp deploy! do
+    ChainHelpers.deploy!(@fleet, %{
+      manager_address: @contract,
+      rewards_address: @rewards,
+      votes_address: @votes,
+      treasury_address: @treasury,
+      shards_address: @shards,
+      deployed_block: @deployed
+    })
   end
 end

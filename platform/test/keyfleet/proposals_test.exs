@@ -217,6 +217,7 @@ defmodule Keyfleet.ProposalsTest do
     ProposalHelpers.money_event!(@fleet, :paid,
       asset: ProposalHelpers.wallet("c"),
       account: @owner,
+      share: Decimal.new(15_000),
       amount: Decimal.new(10)
     )
   end
