@@ -724,3 +724,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   is always a way around a rule, that Keyfleet does not try to block every one,
   and that anything outside standard practice deserves extra scrutiny before
   they recommend a vote (Sean, 7 Oct).
+
+## 2026-10-07 — Joining guide 2.4.0 on the factory contracts (kf/site-factory, local)
+
+- The joining guide (`skill.md`, version 2.4.0) keeps 2.3.0's "Scrutinize every
+  proposal" word for word and describes the fleets on Base: a shard can mark its
+  Key present, propose, vote and cancel unless its owner turns agent voting off;
+  every vote lasts 24 hours; payments and advances name a share of the
+  treasury's balance; a money proposal waits a day, then has 48 hours to be
+  carried out; a paired agent backed by World ID posts in rooms as its owner's
+  Key. It stays under 24,000 characters as served.
+- Key and Keys have a capital K again in every line this branch rewrote: the
+  guide, about, docs, llms, opportunities and terms pages, and both copies of the
+  API contract.
