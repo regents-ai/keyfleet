@@ -1,149 +1,360 @@
-# Deploying the fleets
+# Deploying Keyfleet
 
-The fleets live on Base (chain 8453). Each fleet is deployed and recorded on its
-own: Keyfleet Classic first, and each of the others later, one at a time, when
-the founder opens it. Nothing is deployed before the first fleet, and fleets
-share only the randomness subscription.
+Keyfleet lives on Base (chain 8453). The whole system is deployed once: one
+factory, which creates the one key collection, the shared shard record and the
+shared REGENT buyer. Fleets are then created through the factory: the four
+founding fleets by the Regents Safe, and later fleets by anyone once the Safe
+has moved the collection to phase 3.
 
-No fleet may be deployed yet. Before any deploy the contracts must be complete
-and audited by an outside auditor, and the founder must give the go; the
-[contracts README](../contracts/README.md#status) lists what is decided and
-what is on hold. Key sales stay off until the founder says so.
+Nothing may be deployed yet. Before any deploy the contracts must be audited by
+an outside auditor, and the founder must give the go; the
+[contracts README](../contracts/README.md#status) lists what is decided and what
+is on hold. Key sales stay off until the founder says so: every fleet's sales
+open only through a phase step, which is a Safe transaction the founder signs.
 
-A fleet is five contracts: `Keyfleet` (the fleet itself), which creates its
-`KeyfleetRewards` ledger and its `KeyfleetShards` record as it is deployed, then
-its `KeyfleetVotes` controller and its `KeyfleetTreasury`. It is deployed in two
-steps.
+The release runs in six steps, in this order:
 
-1. **Deploy.** `DeployKeyfleets` deploys the one fleet it is told to, as three
-   transactions from one account. It writes no file of its own.
-2. **Record.** After the deployment has been broadcast, and after the Safe has
-   added the fleet to the randomness subscription, `RecordKeyfleets` reads the
-   fleet's five contracts back from the chain, checks every value against the
-   manifest, and only then writes that fleet's published deployment manifest.
+1. **Subscription.** Create the Chainlink VRF subscription, fund it and move it
+   to the Regents Safe. Write its id and the keeper's address into the manifest.
+2. **Deploy.** `DeployKeyfleets` deploys the system in five transactions from
+   one account. It writes no file of its own and creates no fleet.
+3. **Consumer.** The Safe adds the collection to the subscription.
+4. **Founding fleets.** `KeyfleetSafeSteps` with the step `founding-fleets`
+   writes one Safe transaction per founding fleet. The founder signs each, in
+   order: Classic #1, Syndicate #1, Accelerant #1, Cascade #1.
+5. **Record.** `RecordKeyfleets` reads the system and every fleet back from the
+   chain, checks them against the manifest, and writes the published record,
+   `contracts/deployments/base.deployed.json`.
+6. **Phases.** Only when the founder says sales open, `KeyfleetSafeSteps` with
+   the step `advance-phase` writes the next phase step for the founder to sign:
+   phase 1 opens Classic #1, phase 2 opens the other three founding fleets,
+   phase 3 lets anyone create a fleet.
 
-Nothing puts a fleet's keys on sale until its deployed manifest is recorded in
-the app by hand with `bin/seed-deployment` (see
-[deploy-checklist.md](deploy-checklist.md)). The app refuses to record a fleet
-whose chain, USDC or trait table differs from a fleet it has already recorded.
+Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
+once the record is loaded into it by hand with `seed-deployment` (see
+[deploy-checklist.md](deploy-checklist.md)), and it shows each fleet's buy
+button as closed until the collection says that fleet's sales are open.
 
-The steps are separate because Forge runs a script in full, locally, before it
-broadcasts anything. A file written by the deployment step would be written by
-a dry run too, and by a broadcast that failed partway, naming contracts that do
-not exist. The record step runs only against what the chain actually holds.
+The deploy and record steps are separate because Forge runs a script in full,
+locally, before it broadcasts anything. A file written by the deployment step
+would be written by a dry run too, and by a broadcast that failed partway,
+naming contracts that do not exist. The record step runs only against what the
+chain actually holds.
 
-## The order of the three transactions
+## The five deployment transactions
 
-The fleet goes first. Before it exists it is told where its controller and its
-treasury will be: the deploying account's next two contract addresses, worked
-out from its nonce. The fleet keeps both addresses for good and, as it is
-deployed, creates its ledger (bound to the fleet, the treasury's address and the
-shard record) and its shard record. The controller goes second and the treasury
-third, from the same account, each at the address the fleet was given, and each
-refuses to deploy for a fleet that does not name it. So a wrong address, or any
-other transaction sent from the account in between, stops the deployment rather
-than binding the wrong contract. `contracts/script/KeyfleetStack.sol` does this
-for the deployment script, the anvil lab and the suite.
+`contracts/script/KeyfleetSystem.sol` does this for the deployment script, the
+suite and the fork tests. From one account, in order:
 
-The order exists because of Base's size limits: no contract may have more than
-24,576 bytes of code or 49,152 bytes of deployment code, and the fleet with its
-controller and treasury inside it would pass the second. Deployed one Classic
-fleet at a time on a local fork of Base, the three transactions measured:
+1. `KeyfleetManagerDeployer`
+2. `KeyfleetVotesDeployer`
+3. `KeyfleetTreasuryDeployer`
+4. `KeyfleetRewardsDeployer`
+5. `KeyfleetFactory`, whose constructor deploys `KeyfleetKeys`, `KeyfleetShards`
+   and `KeyfleetRegentBuyer`
 
-| Transaction | Gas |
-| --- | --- |
-| The fleet, with its ledger and shard record | 6,045,638 |
-| The voting controller | 3,210,157 |
-| The treasury | 2,443,275 |
-| All three | 11,699,070 |
+Each deployer is told the factory's address before the factory exists: the
+deploying account's fifth contract address from now, worked out from its nonce.
+The factory refuses any deployer that names another address, so a transaction
+sent from the account in between, or a wrong order, stops the deployment rather
+than binding the wrong contract. The deployers exist because of Base's size
+limits: no contract may have more than 24,576 bytes of code or 49,152 bytes of
+deployment code, and the factory could not carry the four fleet contracts'
+creation code itself.
 
-A purchase made in the moment between the fleet and its treasury sends its
-capital to the treasury's address, where the treasury finds it once deployed.
+The factory holds no money and has no administrator. The deploying account
+receives no authority anywhere in the system, so it matters only for paying gas.
+The gas these five transactions use on Base is still to measure on a Base fork;
+the [contracts README](../contracts/README.md#gas) has the figures measured so
+far.
 
 ## What a manifest says
 
 Everything the deployment decides is in one file:
-`contracts/deployments/base.json` for Base and `contracts/deployments/anvil.json`
-for the lab. The only environment variables are the manifest's name and the
-fleet's. Neither step invents a value or falls back on one nobody chose.
+`contracts/deployments/base.json` for Base and
+`contracts/deployments/anvil.json` for a fork of Base on chain 31337. Every
+script reads the manifest named by `KEYFLEET_MANIFEST`; none invents a value or
+falls back on one nobody chose.
 
 | Key | What it fixes |
 | --- | --- |
 | `chainId` | The only chain this manifest may be deployed to or recorded on. |
-| `usdc` | The USDC every key is paid in. On Base it must be native Base USDC, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`; a fleet refuses a USDC that does not report six decimals. |
+| `safe` | The Regents Safe: the only account that may move the phase, create the founding fleets, replace the keeper or allow another factory, and the receiver of the 2.5% resale royalty. On Base it must be `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. |
+| `keeper` | The Regents wallet that records an open fleet's card deck once and may ask for a key's metadata refresh. It must not be zero. |
 | `regentStaking` | Where each fleet's treasury deposits the 10% protocol share. On Base it must be REGENT revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. |
-| `regent` | The REGENT token the daily split shares among keys. On Base it must be `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
-| `autolaunchFactory` | The Autolaunch factory a fleet launches its own token through, and the only one whose launches its treasury will bind to the daily split. On Base it must be Autolaunch Revstake v2's factory, `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`. |
-| `fleets.*` | Per fleet, under `syndicate`, `cascade`, `classic` and `accelerant`: the collection `name`, `symbol` and `baseTokenURI`. A run reads only the fleet it deploys. |
-| `vrf.coordinator` | The Chainlink VRF v2.5 coordinator every key's traits are requested from. On Base it must be `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`. |
+| `autolaunchFactory` | The Autolaunch factory a fleet launches its own token through. On Base it must be Autolaunch Revstake v2's factory, `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`. |
+| `collection.name`, `collection.symbol` | On Base `Keyfleet` and `KEYFLEET`. |
+| `collection.baseTokenURI` | The fixed address every key's metadata is read from: the base followed by the token id. On Base it must be `https://keyfleet.ai/metadata/keys/`. |
+| `collection.contractURI` | The collection page's own metadata, `https://keyfleet.ai/metadata/collection.json` in `base.json`. It is not pinned; the record step checks it against the chain. |
+| `vrf.coordinator` | The Chainlink VRF v2.5 coordinator. On Base it must be `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`. |
 | `vrf.subscriptionId` | The subscription that pays for every request, written as a decimal string because ids are longer than JSON numbers hold exactly. The coordinator must know it. |
 | `vrf.keyHash` | The gas lane. On Base it must be the 2 gwei lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab` (the release's) or the 30 gwei lane `0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70`. |
-| `traitTableHash` | `keccak256` of the published trait-table file, byte for byte, that every key's traits are drawn from. Must not be zero. |
+| `traitTableHash` | `keccak256` of the published trait table file, byte for byte. Must not be zero. |
+| `route.usdc`, `route.weth`, `route.regent` | On Base `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, `0x4200000000000000000000000000000000000006` and `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
+| `route.v3Pool` | The USDC/WETH Uniswap v3 pool. On Base the 0.05% pool `0xd0b53D9277642d899DF5C87A3966A349A798F224`. |
+| `route.poolManager` | The Uniswap v4 PoolManager. On Base `0x498581fF718922c3f8e6A244956aF099B2652b2b`. |
+| `route.v4Pool` | The WETH/REGENT v4 pool key: on Base `currency0` WETH, `currency1` REGENT, `fee` 8388608 (`0x800000`, the hook sets the fee), `tickSpacing` 200, `hooks` `0xd60D6B218116cFd801E28F78d011a203D2b068Cc`. |
+| `foundingFleets.classic`, `.syndicate`, `.accelerant`, `.cascade` | Each founding fleet's `deckHash`, `deckSize` and `profile` (`name`, `description`, `imageLink`). |
 
-The key price is not a manifest value: it is fixed in the contracts. Each fleet
-carries its own `baseTokenURI`: all four number their keys from 1, so a single
-shared base would make `tokenURI` ambiguous across the release.
+Prices, supplies and splits are not manifest values: they are fixed in the
+contracts. The founding fleets all start at 10 USDC, and Accelerant #1 steps
+5% per key.
+
+`base.json` carries the trait table hash
+`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, the four
+founding decks below, profiles named "Classic #1", "Syndicate #1",
+"Accelerant #1" and "Cascade #1" with an empty description and image link, a
+zero `keeper` and `"subscriptionId": "0"`. So a Base deployment is refused until
+the keeper's address and the Regents subscription id are written in.
+
+| Founding fleet | `deckHash` | `deckSize` |
+| --- | --- | --- |
+| Classic #1 | `0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7` | 1000 |
+| Syndicate #1 | `0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706` | 1000 |
+| Accelerant #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` | 1000 |
+| Cascade #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` | 1000 |
+
+`anvil.json` is for a fork of Base on chain 31337: it names Base's own
+addresses, the same trait table and decks, anvil's first account as keeper,
+metadata on `http://localhost:4000`, and a zero subscription for the rehearsal
+to write in.
 
 Every Base address is pinned in `contracts/script/KeyfleetManifest.sol` with its
 source: USDC from Circle's contract addresses page, the coordinator and gas
 lanes from Chainlink's VRF v2.5 supported-networks page
 (<https://docs.chain.link/vrf/v2-5/supported-networks>), REGENT and REGENT
 revenue staking from Regent's own Base bindings and verified Basescan source,
-and the Autolaunch factory from the deployment manifest of Autolaunch Revstake
-v2 (6 October 2026), whose recorded code hashes match what is on Base for the
-factory and every contract it wires.
+the Autolaunch factory from Autolaunch Revstake v2's deployment manifest
+(6 October 2026), and the swap route from the pools on Base.
 
-`base.json` carries the final trait table's hash and `"subscriptionId": "0"`, so
-a Base deployment is refused until the Regents subscription id is written in.
-`anvil.json` is for a fork of Base on chain 31337: it names Base's own
-addresses, with a zero subscription and a zero trait table hash for the lab to
-write in.
+## Step 1: the randomness subscription
 
-## The randomness subscription
-
-Every purchase asks Chainlink VRF for the random number its key's traits are
-drawn from, and one subscription pays for every fleet's requests in ETH. Before
-the first fleet is deployed:
+Every key's card or traits come from one Chainlink VRF random number, and one
+subscription pays for every fleet's requests in ETH. Before the deployment:
 
 1. Create the subscription on the Base coordinator (`createSubscription()`, or
    Chainlink's VRF app) and fund it in ETH with
    `fundSubscriptionWithNative(subId)`.
 2. Move its ownership to the Regents Safe on Base,
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
-   `requestSubscriptionOwnerTransfer(subId, <Safe>)` from the creator, then
-   `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-3. Write the subscription id into `vrf.subscriptionId` in `base.json`.
+   `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
+   from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
+3. Write the subscription id into `vrf.subscriptionId` and the keeper wallet's
+   address into `keeper` in `base.json`.
 
-Between each fleet's deployment and its record step the Safe adds that fleet to
-the subscription with `addConsumer(subId, fleet)`. A key sold before its fleet
-is added is still sold; its request is refused, and anyone can ask again for it
-with `requestReveal(tokenId)` once the fleet is added. The record step refuses a
-fleet until it is listed, and on Base it also refuses one whose subscription the
-Regents Safe does not own.
-
-## Keeping the subscription funded
+### Keeping the subscription funded
 
 The subscription must never run dry. Each answer is paid in ETH at up to the
-2 gwei lane's price cap. The balance to keep and the alert level must be set
-from a measured cost per key before the first sale. A request made while the
-subscription is empty waits unanswered, and pending requests block both removing
-a consumer and cancelling the subscription until they are answered, so an empty
-subscription cannot simply be closed and replaced.
+2 gwei lane's price cap. Sixteen real answers on Base read on 7 October 2026
+cost about 0.4 to 1.4 US cents each, about half a cent for a key's
+100,000-gas answer. The balance to keep and the alert level must be set from
+that cost before the first sale. A request made while the subscription is empty
+waits unanswered, and pending requests block both removing a consumer and
+cancelling the subscription until they are answered, so an empty subscription
+cannot simply be closed and replaced.
 
-Nothing on the site asks again by itself for keys still waiting on a seed.
-Anyone can ask again with `requestReveal(tokenId)`: a key whose request was
-refused shows a Try again button on its page, which sends that call from the
-visitor's own wallet.
+Anyone can ask again for a key whose request was refused, with
+`requestReveal(tokenId)` on the collection. The deck backend asks for the keys
+of an open fleet that waited for its deck.
+
+## Step 2: deploy
+
+All commands run from `contracts/`. Base, with a signer that keeps its key in
+hardware:
+
+```sh
+cd contracts
+
+# Simulated. Sends nothing and writes no deployment file.
+KEYFLEET_MANIFEST=base \
+  forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
+  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address>
+
+# Deployed: five transactions, the four deployers then the factory.
+KEYFLEET_MANIFEST=base \
+  forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
+  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --slow --verify
+```
+
+`--slow` sends each transaction only after the one before has landed, so the
+five keep their order. The deploying account must send nothing else until all
+five have landed: its fifth contract address from the start is the factory's.
+`--verify` wants an explorer API key in `ETHERSCAN_API_KEY`; leave the flag off
+and verify afterwards if there is none to hand.
+
+A simulation leaves Forge's own log under
+`broadcast/DeployKeyfleets.s.sol/8453/dry-run/`, which git ignores. A broadcast
+writes `broadcast/DeployKeyfleets.s.sol/8453/run-latest.json`, which the Safe
+steps and the record step read to find the factory.
+
+No private key goes in a file, an environment variable or a command line. No
+script reads one: they read the manifest and the chain, and signing is entirely
+the caller's business.
+
+### What the deployment step refuses
+
+- A manifest whose `chainId` is not the chain it is running on (`WrongChain`).
+- On Base, any pinned field that is not Base's own (`NotBasePin(field)`): the
+  Safe, REGENT revenue staking, the Autolaunch factory, the coordinator, the gas
+  lane, the collection's name, symbol and metadata base, and every part of the
+  swap route.
+- A gas lane the coordinator does not know (`VrfKeyHashUnknown`), and a
+  subscription it does not know, which includes the placeholder `"0"` (the
+  coordinator's own `InvalidSubscription`).
+- In the contracts themselves: a staking contract, Autolaunch factory,
+  coordinator or route address with no code, a USDC that does not report six
+  decimals, a v3 pool that does not hold exactly USDC and WETH, a v4 pool key
+  that does not name exactly WETH and REGENT, a zero Safe or keeper, and a zero
+  trait table hash.
+
+## Step 3: the collection becomes a consumer
+
+The Safe adds the collection to the subscription with
+`addConsumer(subId, <collection address>)`, in the Chainlink app or as a Safe
+transaction. The collection's address is `KEYS()` on the factory. A key sold
+before this is still sold; its request is refused, and anyone can ask again
+with `requestReveal(tokenId)` once the collection is added. The record step
+refuses the deployment until the collection is listed.
+
+## Step 4: the founding fleets
+
+```sh
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=founding-fleets \
+  forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
+```
+
+This sends nothing and needs no signer. It runs one `createFoundingFleet` per
+founding fleet the collection does not have yet, in order, from the Safe's
+address against Base's current state, and stops at the first call that would
+revert with the collection's or factory's own error. It then writes each call as
+its own Safe Transaction Builder file:
+
+- `deployments/safe/base.founding-fleet-1.json` (Classic #1)
+- `deployments/safe/base.founding-fleet-2.json` (Syndicate #1)
+- `deployments/safe/base.founding-fleet-3.json` (Accelerant #1)
+- `deployments/safe/base.founding-fleet-4.json` (Cascade #1)
+
+The Safe's signers load each file in the Safe's Transaction Builder, check it
+and sign it, one after another in that order: each creation uses about 10.7
+million gas, so each is its own transaction. Run the step again after some have
+landed and it writes files only for the fleets still missing. Each founding
+fleet is created with its deck and no joining requirements, and its sales stay
+closed.
+
+## Step 5: record
+
+Once the broadcast has finished, the collection is a consumer and the founding
+fleets exist:
+
+```sh
+KEYFLEET_MANIFEST=base \
+  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$BASE_RPC_URL"
+```
+
+It sends nothing and needs no signer. It writes
+`contracts/deployments/base.deployed.json`. Run it again at any time to add the
+fleets created since: it lists every fleet in the collection's registry.
+
+### What the record step refuses
+
+- A broadcast with a transaction that has no receipt (`BroadcastIncomplete`) or
+  a receipt that did not succeed (`BroadcastReceiptFailed`), or one that created
+  no factory (`FactoryNotInBroadcast`).
+- A factory with no code on the chain it is run against (`FactoryMissing`).
+- The same chain, pin, gas lane and subscription refusals as the deployment
+  step.
+- Any system value that differs from the manifest, read back from the chain
+  (`RecordedMismatch(field)`): the Safe, the keeper, the collection's name,
+  symbol, metadata base and collection metadata address, the coordinator,
+  subscription and gas lane, the trait table hash, REGENT staking, the
+  Autolaunch factory, the shard record and every part of the swap route.
+- A fleet whose four contracts are not where the factory places them, hold no
+  code or do not point at each other, the collection and the fleet, or a
+  founding fleet of another type or deck than the manifest's
+  (`FleetNotBound(fleetId, part)`).
+- A collection the subscription does not list as a consumer
+  (`CollectionNotVrfConsumer`).
+- On Base, a subscription whose owner is not the Regents Safe
+  (`VrfSubscriptionNotOwnedByRegentsSafe`).
+
+### What the record step writes
+
+`contracts/deployments/base.deployed.json`, the one published record of the
+system and every fleet. Every address and value is read from the chain, not
+copied from the manifest. The supply, price and split constants come from the
+`KeyfleetPresets` library the record step was compiled with, and every
+contract's runtime code hash is recorded so anyone can check later that the
+deployed code is the code those constants came from. It carries:
+
+- `chainId` and `deploymentBlock`, the lowest block the deployment's
+  transactions landed in, so a reader starting there misses nothing;
+- `factory`: its address and code hash and its four deployers with theirs;
+- `collection`: address, code hash, name, symbol, metadata base, collection
+  metadata address, the Safe, the keeper and the royalty in basis points;
+- `shards`: address and code hash;
+- `regentBuyer`: address, code hash and the whole route;
+- `usdc`, `regent`, `regentStaking` and `autolaunchFactory`;
+- `vrf`: the coordinator and its code hash, the subscription id as a decimal
+  string, the gas lane, the three block confirmations, the 100,000 gas each
+  answer is given, and that requests are paid in ETH;
+- `traitTableHash`;
+- `startPrice`: the lowest and highest starting price anyone may choose and
+  its step, one cent, in atomic USDC;
+- `bounds`: the two supply limits, Classic's 1,024 keys and Accelerant's 2,000
+  (Syndicate and Cascade have none);
+- `fees`: the 10% protocol share, the Accelerant 20% capital share and the
+  basis-point denominator;
+- `fleets`, keyed by fleet number: each fleet's type, its number within its
+  type, starting price, deck fingerprint and size (zero until recorded for an
+  open fleet), its manager, votes, treasury and rewards addresses each with its
+  code hash, its name, description and image link, its joining requirements,
+  the tag its protocol share deposits carry, and the assets its daily split
+  shares;
+- `disclosures`: public-read chat, no refunds, service rewards to keys only,
+  what the 10% fee and the 2.5% royalty are, that the treasury's part buys
+  REGENT at the market price with no minimum, and what the Regents Safe can and
+  cannot do.
+
+There is no configuration screen anywhere in the product, so this file is where
+those values are published, and it is what the site is seeded from.
+
+## Step 6: phases
+
+Run only when the founder says the next fleets' sales open:
+
+```sh
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase \
+  forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
+```
+
+It checks the step against Base's current state as the Safe and writes one file,
+`deployments/safe/base.phase-1.json`, `base.phase-2.json` or
+`base.phase-3.json`, for the founder to sign. Phase 1 needs Classic #1 to exist
+and opens its sales. Phase 2 needs all four founding fleets and opens Syndicate
+#1, Accelerant #1 and Cascade #1 together. Phase 3 lets anyone create a fleet,
+which sells from the moment it is created. There is no step back, and nothing
+else moves a phase.
+
+## Fleets anyone creates
+
+From phase 3 anyone may call `createFleet` on the factory, buying the new
+fleet's key 1 in the same transaction. Such a fleet starts with no card deck, so
+its keys wait for their random numbers. The deck backend sees `FleetCreated`,
+builds the fleet's deck by the same process as the founding four, records it
+from the keeper wallet with `setDeck(fleetId, deckHash, deckSize)`, then calls
+`requestReveal(tokenId)` for each key minted while the fleet waited. Keys minted
+afterwards ask at mint. Rerun the record step to add the new fleet to the
+published record.
 
 ## The trait table
 
-`traitTableHash` is `keccak256` of the trait-table file itself, byte for byte:
-the file the art agent delivers. Nothing is normalised or re-encoded before
-hashing, so the hash is taken of exactly the bytes that are committed, with
-keccak256 (not the standardised SHA3-256, which gives a different result). Once
-the fleets are deployed the file can never change: a changed byte is a
-different hash, and every fleet holds the original one. The contracts README
-gives the rule that draws each key's traits from its seed and this table.
+`traitTableHash` is `keccak256` of the trait table file itself, byte for byte.
+Nothing is normalised or re-encoded before hashing, so the hash is taken of
+exactly the bytes that are committed, with keccak256 (not the standardised
+SHA3-256, which gives a different result). Once the system is deployed the file
+can never change: a changed byte is a different hash, and the collection holds
+the original one. The contracts README gives the rule that draws traits from a
+key's seed and this table, for keys beyond their fleet's card deck.
 
 The file is JSON: an object whose `traits` lists every trait in the order the
 rule draws them, each with its `name` and its `values`, and each value with its
@@ -157,66 +368,38 @@ trait's weights must add up to at least 1 and less than 2^32.
 ]}
 ```
 
-The table ships with the site: the art agent commits it as
-`platform/priv/trait_tables/<traitTableHash>.json`, named by the hash in
-lowercase `0x` hex, and there is no copy step. The site uses it only if its
-`keccak256` is that name; a missing or changed file answers revealed keys'
-metadata with a server error.
+The table ships with the site as `platform/priv/trait_tables/<traitTableHash>.json`,
+named by the hash in lowercase `0x` hex. The site uses it only if its
+`keccak256` is that name.
 
-## Running it
+## Key metadata
 
-All commands run from `contracts/`. The two steps take the same
-`KEYFLEET_MANIFEST` (`base` or `anvil`), the same `KEYFLEET_FLEET` (`syndicate`,
-`cascade`, `classic` or `accelerant`) and the same RPC. Neither has a default.
+The collection's `tokenURI` is `https://keyfleet.ai/metadata/keys/` followed by
+the token id, which is the fleet number times 10^10 plus the key number. The
+site answers it for every key sold, and nothing for a key not yet sold:
 
-Base, with a signer that keeps its key in hardware:
+- the key's name, `<TYPE>—<fleet number>—<key number>`, each number padded to
+  three digits, or four from 1,000, such as `CLASSIC—001—072`;
+- traits that include `Fleet type`, `Fleet number`, the fleet's name and the key
+  number, so a marketplace's trait filter narrows the one collection to one
+  fleet;
+- an interim picture until the key's permanent card is published, then the
+  card, with its picture on `https://media.regents.sh/ipfs/<cid>`.
 
-```sh
-cd contracts
-
-# Step 1, simulated. Sends nothing and writes no deployment file.
-KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
-  forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
-  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address>
-
-# Step 1, deployed: three transactions, the fleet, its controller, its treasury.
-KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
-  forge script script/DeployKeyfleets.s.sol:DeployKeyfleets \
-  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --slow --verify
-
-# Between the steps, the Regents Safe adds the fleet to the subscription.
-
-# Step 2, once the broadcast has finished and the fleet is a consumer.
-KEYFLEET_MANIFEST=base KEYFLEET_FLEET=classic \
-  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$BASE_RPC_URL"
-```
-
-`--slow` sends each transaction only after the one before has landed, so the
-three keep their order. The deploying account must send nothing else between
-them: its next two addresses are the ones the fleet was given. `--verify` wants
-an explorer API key in `ETHERSCAN_API_KEY`; leave the flag off and verify
-afterwards if there is none to hand. The record step sends nothing and needs no
-signer.
-
-A simulation leaves Forge's own transaction log under
-`broadcast/DeployKeyfleets.s.sol/<chainId>/dry-run/`, which git ignores. A
-broadcast writes `broadcast/DeployKeyfleets.s.sol/<chainId>/run-latest.json`,
-which is what the record step reads. Forge keeps only the latest broadcast
-there, so each fleet is recorded straight after its own deployment, before the
-next fleet is deployed; the dated `run-<timestamp>.json` beside it keeps each
-fleet's broadcast for good.
-
-No private key goes in a file, an environment variable or a command line.
-Neither step reads one: they read the manifest and the chain, and signing is
-entirely the caller's business. The deployer receives no authority anywhere in
-the release, no spending, no vote and no setting, so the deploying address
-matters only for paying gas.
+When a key's permanent card is published, the backend or the key's holder calls
+`refreshMetadata(tokenId)`, and marketplaces fetch the card. A change to a
+fleet's name, description or image link makes the collection announce a refresh
+of all the fleet's keys.
 
 ## Rehearsing
 
-Every purchase is paid in Base USDC, so a rehearsal that buys keys runs on a
-fork of Base, where the real USDC, REGENT, REGENT staking, VRF coordinator and
-Autolaunch factory exist.
+Every purchase is paid in Base USDC and swapped through the real REGENT pools,
+so a rehearsal that buys keys runs on a fork of Base.
+
+**The fork suites.** With `BASE_RPC_URL` set, the suites in
+`contracts/test/fork/` deploy the system from the committed Base manifest
+through the real deployment and Safe steps, and run fleets, the swap, Lit and
+Autolaunch against Base's own contracts. The contracts README lists them.
 
 **A plain Base fork, for the Base manifest.**
 
@@ -224,18 +407,19 @@ Autolaunch factory exist.
 anvil --fork-url "$BASE_RPC_URL"
 ```
 
-This keeps Base's chain id, 8453, so the Base manifest deploys and records there
-exactly as it would on Base. Create and fund a subscription on the fork from an
-anvil account and write its id into the manifest for the rehearsal only; the
-record step will then refuse it because the Regents Safe does not own it, which
-is the Base rule working. A fork rehearsal writes
-`broadcast/DeployKeyfleets.s.sol/8453/` and
-`deployments/base.<fleet>.deployed.json`; delete both, and put the manifest's
-subscription back, before the real deployment, so nobody mistakes the
-rehearsal for the release. Git keeps both paths on purpose: the Base broadcast
-log and each `base.<fleet>.deployed.json` are the evidence of the real
-deployment and are committed with it, while everything a chain-31337 lab
-rehearsal writes is ignored.
+This keeps Base's chain id, 8453, so the Base manifest deploys there exactly as
+it would on Base, and the Safe steps write their files instead of sending.
+Create and fund a subscription on the fork from an anvil account and write its
+id and a keeper into the manifest for the rehearsal only; the record step will
+then refuse it because the Regents Safe does not own the subscription, which is
+the Base rule working. A fork rehearsal writes
+`broadcast/DeployKeyfleets.s.sol/8453/`, `deployments/safe/base.*.json` and,
+if it gets that far, `deployments/base.deployed.json`. Delete all three, and put
+the manifest's keeper and subscription back, before the real deployment, so
+nobody mistakes the rehearsal for the release. Git keeps those paths on purpose:
+the Base broadcast log, the Safe's batch files and `base.deployed.json` are the
+evidence of the real deployment and are committed with it, while everything a
+chain-31337 rehearsal writes is ignored.
 
 **A fork on chain 31337, for the anvil manifest.**
 
@@ -244,20 +428,33 @@ anvil --fork-url "$BASE_RPC_URL" --chain-id 31337
 export RPC_URL=http://127.0.0.1:8545
 ```
 
-Write a subscription created on the fork and a trait table hash into
-`anvil.json`, then run both steps as above with `KEYFLEET_MANIFEST=anvil`,
-`--rpc-url "$RPC_URL"`, and `--broadcast --unlocked --sender <anvil account>` in
-place of the hardware signer. The subscription's owner adds the fleet between
-the steps:
+Write a subscription created on the fork into `anvil.json`, then deploy with
+`KEYFLEET_MANIFEST=anvil`, `--rpc-url "$RPC_URL"`, and
+`--broadcast --unlocked --sender <anvil account>` in place of the hardware
+signer. On chain 31337 the Safe steps send their calls straight from the Safe's
+address, so let anvil act as the Safe first:
+
+```sh
+cast rpc anvil_impersonateAccount 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e --rpc-url "$RPC_URL"
+cast rpc anvil_setBalance 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e 0x56BC75E2D63100000 --rpc-url "$RPC_URL"
+
+KEYFLEET_MANIFEST=anvil KEYFLEET_STEP=founding-fleets \
+  forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps \
+  --rpc-url "$RPC_URL" --broadcast --unlocked
+```
+
+The subscription's owner adds the collection before the record step:
 
 ```sh
 cast send 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 "addConsumer(uint256,address)" \
-  <subscription id> <fleet> --from <anvil account> --unlocked --rpc-url "$RPC_URL"
+  <subscription id> <collection address> --from <anvil account> --unlocked --rpc-url "$RPC_URL"
+
+KEYFLEET_MANIFEST=anvil \
+  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets --rpc-url "$RPC_URL"
 ```
 
 USDC for a purchase comes from a fork address that already holds it. Amounts are
-atomic USDC: 10000000 is 10 USDC, the price of the first key of Syndicate,
-Cascade and Accelerant; Classic's first key costs 8000000, 8 USDC.
+atomic USDC: 10000000 is 10 USDC, the first key of every founding fleet.
 
 ```sh
 cast rpc anvil_impersonateAccount <address holding USDC> --rpc-url "$RPC_URL"
@@ -266,110 +463,31 @@ cast send 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 "transfer(address,uint256)"
 cast rpc anvil_stopImpersonatingAccount <address holding USDC> --rpc-url "$RPC_URL"
 ```
 
-Buy with a fresh address, not one of anvil's default accounts, which may carry
-delegated code on a fork whose NFT callback reverts, so a key minted to it
-fails.
+The wallet approves the fleet's manager for the price and calls `purchase` on
+the manager. Buy with a fresh address, not one of anvil's default accounts,
+which may carry delegated code on a fork whose NFT callback reverts, so a key
+minted to it fails.
 
-`contracts/script/AnvilLab.s.sol` is separate from both: it puts one Classic
-fleet on a plain local anvil, with stand-ins for USDC, REGENT, REGENT staking,
-the coordinator and the Autolaunch factory, for the site's anvil tests, and returns the addresses of
-the fleet's five contracts and the stand-in staking.
+**The anvil lab.** `contracts/script/AnvilLab.s.sol` is no part of a release:
+it puts the system with Classic #1 on a plain local anvil, with stand-ins for
+USDC, WETH, REGENT, both pools, REGENT staking, the coordinator and the
+Autolaunch factory, for the site's anvil tests.
 
-## What the deployment step refuses
-
-- A manifest whose `chainId` is not the chain it is running on.
-- On Base, a `usdc` other than native Base USDC
-  `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Every key price is written in
-  six-decimal USDC, so a look-alike with other decimals would misprice every key.
-- On Base, a `regentStaking` other than REGENT revenue staking
-  `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, a `regent` other than
-  `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`, and an `autolaunchFactory`
-  other than `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`.
-- On Base, a `vrf.coordinator` other than
-  `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`, or a `vrf.keyHash` other than
-  the 2 gwei or 30 gwei lane.
-- On any chain, a staking contract, REGENT, Autolaunch factory or coordinator
-  that holds no code, a
-  gas lane the coordinator does not know, a subscription the coordinator does
-  not know (which includes the placeholder `"0"`), and a zero `traitTableHash`,
-  which the fleet itself also refuses.
-- A USDC that does not report six decimals, which the fleet itself refuses.
-- A fleet name other than `syndicate`, `cascade`, `classic` or `accelerant`.
-
-## What the record step refuses
-
-- A broadcast with a transaction that has no receipt, or a receipt that did not
-  succeed.
-- A broadcast that created no fleet, or a fleet with no code on the chain it is
-  run against.
-- A ledger, controller, treasury or shard record that holds no code or does not
-  name the fleet as its own.
-- The same chain, USDC, staking, REGENT, Autolaunch factory and randomness
-  refusals as the deployment step.
-- A fleet the subscription does not list as a consumer. The Safe adds it before
-  this step runs.
-- On Base, a subscription whose owner is not the Regents Safe.
-- Any value that differs from the manifest, read back from the chain: the
-  fleet's preset, which must be the one for the fleet named, USDC, the
-  treasury's staking contract, REGENT and Autolaunch factory, the coordinator, subscription, gas lane
-  and trait table hash, and the fleet's name, symbol and metadata base. Every
-  fleet on a chain is checked against the same manifest, so they all share those
-  values.
-
-## What the record step writes
-
-`contracts/deployments/<name>.<fleet>.deployed.json`, the fleet's published
-deployment manifest, such as `base.classic.deployed.json`. Every address and
-every fleet value is read from the chain, not copied from the input. The
-supply, price and split constants come from the `KeyfleetPresets` library the
-record step was compiled with; each of the five contracts' code hash is
-recorded so anyone can check later that the deployed code is the code those
-constants came from. It carries:
-
-- the chain and the deployment block, the lowest block the run's transactions
-  landed in, so a reader starting there misses no purchase made the moment the
-  fleet appeared;
-- under `fleet` the fleet's name in the manifest (`slot`, such as `classic`),
-  its address and code hash, the ledger, controller, treasury and shard record
-  addresses each with its code hash (`rewardsCodeHash`, `votesCodeHash`,
-  `treasuryCodeHash`, `shardsCodeHash`), and the name, symbol and metadata base;
-- USDC and `qUsdc`, the reference price the Syndicate, Cascade and Accelerant
-  ladders start from (10000000 atomic USDC, which is 10 USDC; Classic prices
-  from its own table);
-- REGENT revenue staking, REGENT, the Autolaunch factory
-  (`autolaunchFactory`) and the tag every protocol share deposit carries
-  (`protocolShareTag`);
-- under `bounds` the two supply limits, Classic's 1,024 keys and Accelerant's
-  2,000 (Syndicate and Cascade have none), and under `fees` the 10% protocol
-  share and the Accelerant 20% capital share;
-- under `vrf` the coordinator and its code hash, the subscription id as a
-  decimal string, the gas lane, the three block confirmations, the 100,000 gas
-  each answer is given, and that requests are paid in ETH;
-- the trait table hash;
-- `splitAssets`, the assets the daily split shares at deployment: ETH, REGENT
-  and USDC (OUSD and the fleet's own token join only later, by a vote and by a
-  launch that sold);
-- the terms the release discloses: public-read chat, no refunds, service rewards
-  to keys only, what the 10% fee is and is not, and what the Regents Safe owns.
-
-There is no configuration screen anywhere in the product, so this file is where
-those values are published, and it is what the app is seeded from, one fleet at
-a time.
-
-## What the Safe does next
+## What the Safe does
 
 The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the
-randomness subscription and REGENT revenue staking. After each fleet is
-deployed, and before its record step, the Safe adds the fleet as a consumer with
-`addConsumer(subId, fleet)`. It has no other step: there is no admission list,
-it does not receive the 10%, and it holds no authority over any fleet's votes,
-claims, prices or money.
+randomness subscription and REGENT revenue staking. In the release it adds the
+collection to the subscription, creates the four founding fleets, and moves the
+phase when the founder says sales open. Later it may replace the keeper or allow
+a newer factory for new fleets; existing fleets never change. It receives the
+2.5% resale royalty. It has no vote, claim or price in any fleet, cannot mint or
+move any key, and cannot move a fleet's money.
 
-## The fleet's Lit account
+## A fleet's Lit account
 
-The fleet's treasury owns its Lit account on Base. Setting it up is the key
-holders' business after the record, by proposals: each proposal's calls go from
-the treasury to Lit's account contract,
+A fleet's treasury owns its Lit account on Base. Setting it up is the key
+holders' business after the fleet exists, by proposals: each proposal's calls go
+from the treasury to Lit's account contract,
 `0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` (named by Lit's node
 configuration). The calls create the account, register the inbox action, make
 one group with it, and mint one usage key for the operator that may run that
@@ -384,14 +502,25 @@ depend on Lit.
 ## Decided
 
 **Fully owned fleets (27 September 2026), on Base (6 October 2026).** Regents
-takes 10% of each key purchase, once, in USDC, and nothing else. Every purchase
-sets its 10% aside in the fleet's `protocolShareOwed`, and anyone may call
-`sendProtocolShare()` on the fleet, which deposits the whole owed amount into
-REGENT revenue staking on Base for REGENT stakers. Every other amount a fleet
-receives is its treasury's capital, spent only by a passed proposal's exact
-calls, apart from the daily split that shares a small part of its ETH, REGENT
-and USDC among the keys. The [contracts README](../contracts/README.md) states
-the rules.
+takes 10% of each key purchase, once, in USDC, and nothing from money a fleet
+receives afterwards. Every purchase sets its 10% aside in the fleet manager's
+`protocolShareOwed`, and anyone may call `sendProtocolShare()` on the manager,
+which deposits the whole owed amount into REGENT revenue staking on Base for
+REGENT stakers. Every other amount a fleet's treasury receives is its capital,
+spent only by a passed proposal's exact calls, apart from the daily split that
+shares a small part of its ETH, REGENT and USDC among the keys.
+
+**One collection, phases, and fleets anyone can create (7 October 2026).** One
+collection named "Keyfleet" with the symbol KEYFLEET holds every key, with a
+2.5% resale royalty to the Regents Safe. The Safe opens sales in three phases.
+In phase 3 anyone creates a fleet of any type at a starting price from 10 to
+1,000,000 USDC, buying its key 1, with an optional address list, NFT or token
+balance as joining requirements. A fleet's name, description and image link
+change only by its keys' vote.
+
+**The treasury holds REGENT (7 October 2026).** Keys are paid in USDC; the
+treasury's part of every purchase is swapped to REGENT in the same purchase, at
+the market price with no minimum, through one fixed route.
 
 **The fleet's own token (6 October 2026).** A fleet may launch its own token
 through Autolaunch Revstake v2 on Base, by a passed proposal's call from its
@@ -402,46 +531,26 @@ daily split, once, from the next run, at 100 tokens; only tokens already
 released to the treasury are split. Autolaunch opens its factory to launches
 only when the Regents Safe unpauses it; until then no fleet can launch.
 
-**The key price.** Every key is paid in USDC on Base. The first key of the
-Fibonacci and Accelerant ladders costs 10 USDC (`Q_USDC`, 10,000,000 atomic
-USDC); Fibonacci levels step by 1.2, with no last level, and Accelerant primary
-mints by 1.05 up to 2,000 keys. Classic's 1,024 keys run from 8 USDC for the
-first to 80 USDC for the last, each key about 0.2253% dearer than the one
-before, rounded to the nearest cent, and 32,032.45 USDC for all of them. The
-price is fixed in the contracts, so neither manifest carries it. An Accelerant
-key after the first sends 20% to the treasury and 70% to the holder of the key
-before it.
+**The key price.** Every key is paid in USDC on Base and every price scales from
+the fleet's starting price. The founding fleets start at 10 USDC. Fibonacci
+levels step by 1.2, with no last level, and Accelerant primary mints by the
+fleet's step, 1% to 5% chosen by its creator (5% for Accelerant #1), up to 2,000
+keys. Classic's 1,024 keys run from the starting price to ten times it; at
+10 USDC that is 10 USDC for the first to 100 USDC for the last, each key about
+0.2253% dearer than the one before, rounded to the nearest cent, and
+40,040.48 USDC for all of them. An Accelerant key after the
+first sends 20% to the treasury and 70% to the holder of the key before it.
 
-**Names, symbols and metadata base.** Every fleet's symbol is `KEYFLEET`. The
-collections are named Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic and
-Keyfleet Accelerant. The name of each key, such as "Keyfleet Syndicate #12",
-comes from the site's metadata, not from the contract. The site is keyfleet.ai:
-the Base manifest's metadata base is `https://keyfleet.ai/metadata/<slot>/`, for
-example `https://keyfleet.ai/metadata/syndicate/`. The contract's `tokenURI` is
-that base followed by the key's number, and the site answers it for every key
-sold:
+**Cards and randomness.** Every fleet's cards come from a pre-made deck, of
+which only the fingerprint and size are on chain; decks stay private and only
+the rarities are public. Every key's random number comes from Chainlink VRF
+v2.5, paid from one Regents subscription in ETH on Base's 2 gwei lane, and a
+key asks for it only once its fleet has a deck. Keys beyond a fleet's deck use
+the trait draw from the one trait table the collection fixes.
 
-- until the key's traits are drawn, its name, a description, the Interim
-  Keyfleet Access Pass
-  `https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy`
-  (one picture for every key in every fleet, kept on IPFS like the cards) and the attributes `Level` (for
-  Syndicate and Cascade only) and `Status: Revealing`, with
-  `Cache-Control: max-age=30`;
-- once they are drawn, the same with its traits in place of `Status` and
-  `properties` holding its `seed` and `trait_table_hash`. While its card is
-  being drawn it keeps the pass, with `Cache-Control: max-age=30`; once the
-  card is kept on IPFS, the picture is `https://media.regents.sh/ipfs/<cid>`
-  and `properties.card` is `ipfs://<cid>`, with
-  `Cache-Control: public, max-age=3600`, so a reveal corrected by hand after a
-  reorg shows within the hour;
-- a slot that is not one of the four, or a key not yet sold, is 404.
-
-**Random key traits.** Every key's traits come from Chainlink VRF v2.5 and
-nothing else. One subscription, owned by the Regents Safe, pays for every fleet
-in ETH, on Base's 2 gwei gas lane. Every fleet fixes the trait table's hash at
-deployment, and each trait is drawn by weight from the key's seed as the
-contracts README describes.
-
-The fully owned fleet, key price and random-trait decisions are built into the
-contracts. The others are inputs to the manifest only: none of them changes a
-line of contract code, and the script deploys whatever the manifest says.
+Open questions for the founder, each with the recommendation the build follows
+until answered, are in
+[fleet-manager-factory-design.md](fleet-manager-factory-design.md#13-questions-only-sean-can-answer):
+who records an open fleet's deck (the keeper wallet, recommended), who triggers
+a key's permanent card (the backend, recommended), and which fleet number a
+key's name shows (the number within its type, recommended).

@@ -3,7 +3,7 @@ pragma solidity 0.8.26;
 
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
@@ -24,7 +24,6 @@ contract KeyfleetLitTest is KeyfleetFixture {
     uint256 private constant NEXT_OPERATOR_KEY = uint256(keccak256("lk_operator-two"));
 
     address private mallory = address(0x4A11);
-    address private safe = address(0x5AFE);
 
     event SignatureHashApproved(bytes32 indexed hash);
     event SignatureHashRevoked(bytes32 indexed hash);
@@ -34,10 +33,14 @@ contract KeyfleetLitTest is KeyfleetFixture {
         vm.warp(1_000_000);
     }
 
-    function _classic(uint256 keys) private returns (Keyfleet fleet, KeyfleetTreasury treasury) {
+    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
+    /// treasury opening, by when only a renewed key is present.
+    function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
-        _buyMany(fleet, keys);
+        _buyMany(fleet, count);
+        _mature();
+        _openTreasury(fleet);
     }
 
     function _approveHash(KeyfleetTreasury treasury, bytes32 hash)
@@ -81,15 +84,16 @@ contract KeyfleetLitTest is KeyfleetFixture {
     }
 
     function test_anApprovedHashIsYesWhateverTheSignatureBytes() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         bytes32 hash = keccak256("lit message");
 
         KeyfleetTreasury.Call[] memory calls = _approveHash(treasury, hash);
+        KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(fleet.VOTES().proposal(proposalId).closesAt);
+        vm.warp(votes.proposal(proposalId).closesAt);
         vm.expectEmit(true, true, true, true, address(treasury));
         emit SignatureHashApproved(hash);
-        fleet.VOTES().execute(proposalId, calls);
+        votes.execute(proposalId, calls);
 
         assertTrue(treasury.approvedHash(hash));
         assertEq(treasury.isValidSignature(hash, ""), IERC1271.isValidSignature.selector);
@@ -99,16 +103,17 @@ contract KeyfleetLitTest is KeyfleetFixture {
     }
 
     function test_aRevokedHashIsRefused() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         bytes32 hash = keccak256("lit message");
         _execute(fleet, _approveHash(treasury, hash));
 
         KeyfleetTreasury.Call[] memory calls = _revokeHash(treasury, hash);
+        KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(fleet.VOTES().proposal(proposalId).closesAt);
+        vm.warp(votes.proposal(proposalId).closesAt);
         vm.expectEmit(true, true, true, true, address(treasury));
         emit SignatureHashRevoked(hash);
-        fleet.VOTES().execute(proposalId, calls);
+        votes.execute(proposalId, calls);
 
         assertFalse(treasury.approvedHash(hash));
         assertEq(treasury.isValidSignature(hash, ""), NO);
@@ -116,9 +121,9 @@ contract KeyfleetLitTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: only an approved proposal's call approves or revokes a hash; nobody else
-    /// reaches either, the voting controller and the fleet included.
+    /// reaches either, the voting controller and the manager included.
     function test_onlyAnApprovedCallApprovesOrRevokes() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         bytes32 hash = keccak256("lit message");
 
         address[3] memory callers = [mallory, address(fleet.VOTES()), address(fleet)];
@@ -154,14 +159,15 @@ contract KeyfleetLitTest is KeyfleetFixture {
     }
 
     function test_aRejectedProposalApprovesNothing() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         bytes32 hash = keccak256("lit message");
         KeyfleetVotes votes = fleet.VOTES();
         KeyfleetTreasury.Call[] memory calls = _approveHash(treasury, hash);
 
-        vm.startPrank(fleet.ownerOf(1));
-        uint256 proposalId = votes.propose(1, keccak256("narrative"), uint64(block.timestamp + 1), calls);
-        votes.castBallot(proposalId, _ids(1), KeyfleetVotes.Choice.No);
+        uint256 first = _key(fleet, 1);
+        vm.startPrank(keys.ownerOf(first));
+        uint256 proposalId = votes.propose(first, keccak256("narrative"), uint64(block.timestamp + 1), calls);
+        votes.castBallot(proposalId, _ids(first), KeyfleetVotes.Choice.No);
         vm.stopPrank();
         vm.warp(votes.proposal(proposalId).closesAt);
 
@@ -186,7 +192,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
     /// treasury as the account's admin wallet, and the operator's key may run the inbox action
     /// and nothing else.
     function test_anApprovedProposalSetsUpTheLitAccount() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         MockLitAccountConfig config = new MockLitAccountConfig();
         ILitAccountConfig lit = ILitAccountConfig(address(config));
         uint256 account = LitAdminCalls.accountHash(address(treasury));
@@ -201,7 +207,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
     }
 
     function test_anApprovedProposalReplacesTheOperatorKey() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         ILitAccountConfig lit = ILitAccountConfig(address(new MockLitAccountConfig()));
         _execute(fleet, _setUpAccount(lit, treasury));
 
@@ -218,7 +224,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
     /// @dev Once a proposal transfers the account, the treasury is no longer its admin, so even an
     /// approved proposal's write is refused by Lit and fails its whole batch.
     function test_anApprovedProposalTransfersTheAccount() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         ILitAccountConfig lit = ILitAccountConfig(address(new MockLitAccountConfig()));
         uint256 account = LitAdminCalls.accountHash(address(treasury));
         _execute(fleet, _setUpAccount(lit, treasury));
@@ -243,7 +249,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
     /// every path into the treasury short of an approved proposal's exact calls is refused by the
     /// fleet.
     function test_onlyAnApprovedCallWritesToTheLitAccount() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         ILitAccountConfig lit = ILitAccountConfig(address(new MockLitAccountConfig()));
         uint256 account = LitAdminCalls.accountHash(address(treasury));
         _execute(fleet, _setUpAccount(lit, treasury));
@@ -289,15 +295,17 @@ contract KeyfleetLitTest is KeyfleetFixture {
         vm.etch(LIT_ACCOUNT_CONFIG, hex"fe");
         vm.expectCall(LIT_ACCOUNT_CONFIG, "", 0);
 
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(2);
-        address holder = fleet.ownerOf(1);
-        address seller = fleet.ownerOf(2);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        uint256 first = _key(fleet, 1);
+        uint256 second = _key(fleet, 2);
+        address holder = keys.ownerOf(first);
+        address seller = keys.ownerOf(second);
         vm.prank(seller);
-        fleet.transferFrom(seller, mallory, 2);
+        keys.transferFrom(seller, mallory, second);
 
         KeyfleetVotes votes = fleet.VOTES();
         vm.prank(holder);
-        votes.present(_ids(1));
+        votes.present(_ids(first));
         _execute(fleet, _approveHash(treasury, keccak256("lit message")));
 
         usdc.mint(address(treasury), 1_000e6);
@@ -307,7 +315,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         assets[0] = address(usdc);
         KeyfleetRewards rewards = fleet.REWARDS();
         vm.prank(holder);
-        uint256 paid = rewards.claim(_ids(1), assets)[0];
+        uint256 paid = rewards.claim(_ids(first), assets)[0];
         assertGt(paid, 0, "the split paid the key");
     }
 }

@@ -107,7 +107,7 @@ defmodule Keyfleet.WalletStepsTest do
 
       built = build!(:buy)
       assert built.problem == nil
-      assert %{token_id: 1, price: 8_000_000, approve?: true} = built.figures
+      assert %{token_id: 1, price: 10_000_000, approve?: true} = built.figures
       assert built.figures.blocked == %{"buy" => :approve_usdc_first}
       assert built.review.chain.chain_id == 8453
       assert names(built) == ["approve", "buy"]
@@ -116,16 +116,16 @@ defmodule Keyfleet.WalletStepsTest do
       assert approve.to == @usdc
 
       assert approve.data ==
-               Call.encode("approve(address,uint256)", [fleet.contract_address, 8_000_000])
+               Call.encode("approve(address,uint256)", [fleet.contract_address, 10_000_000])
 
       assert buy.to == fleet.contract_address
 
       assert buy.data ==
-               Call.encode("purchase(address,uint256,uint256)", [@signer, 8_000_000, @now + 600])
+               Call.encode("purchase(address,uint256,uint256)", [@signer, 10_000_000, @now + 600])
     end
 
     test "an allowance of the price or more leaves only the purchase", %{fleet: fleet} do
-      ChainViews.put!([allowance(fleet, 8_000_000)])
+      ChainViews.put!([allowance(fleet, 10_000_000)])
       assert %{figures: %{approve?: false, blocked: blocked}} = built = build!(:buy)
       assert blocked == %{}
       assert names(built) == ["buy"]

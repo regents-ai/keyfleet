@@ -3,16 +3,21 @@ pragma solidity 0.8.26;
 
 import {KeyfleetClassicPrices} from "./KeyfleetClassicPrices.sol";
 
-/// @notice Supply, price, holding-limit and purchase-split arithmetic for the four
-///         fleet presets.
+/// @notice Supply, price and purchase-split arithmetic for the four fleet presets.
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
 ///      the published product contract and is reproduced in the deployment manifest. All arithmetic is
 ///      checked. The two Fibonacci presets have no last level: supply and price carry on by the same rule
-///      for ever, and a level or token id so large that its arithmetic would leave 256 bits reverts. No
+///      for ever, and a level or key number so large that its arithmetic would leave 256 bits reverts. No
 ///      fleet can reach one: a level's price passes a billion USDC at level 103, while the Fibonacci
 ///      sums first leave 256 bits at level 367.
 ///
-///      Every price here is in atomic USDC, millionths of one USDC, and is what a fleet charges.
+///      Every price here is in atomic USDC, millionths of one USDC, and is what a fleet charges. Every
+///      price is scaled from the fleet's starting price, the price of its first key: the Fibonacci and
+///      Accelerant ladders start from it, and the Classic table is multiplied by it over
+///      `CLASSIC_START_USDC`. The four founding fleets start at `Q_USDC`, which gives exactly the
+///      prices the fleets were designed with. An Accelerant fleet also has its own step, the whole
+///      percent each primary mint costs more than the one before, from 1% to 5%; the founding
+///      Accelerant fleet's is 5%.
 library KeyfleetPresets {
     /// @notice The four fleet presets.
     enum Preset {
@@ -36,9 +41,9 @@ library KeyfleetPresets {
 
     /// @notice Fibonacci level zero is rejected; levels start at 1.
     error LevelOutOfBounds();
-    /// @notice Token id is rejected outside the preset's range: zero for Fibonacci, and outside
-    ///         `1 <= tokenId <= CLASSIC_SUPPLY` for Classic.
-    error TokenIdOutOfBounds();
+    /// @notice Key number is rejected outside the preset's range: zero for Fibonacci, and outside
+    ///         `1 <= keyNumber <= CLASSIC_SUPPLY` for Classic.
+    error KeyNumberOutOfBounds();
     /// @notice Accelerant mint index is rejected at or above `MAX_ACCELERANT_KEYS`.
     error MintIndexOutOfBounds();
     /// @notice A purchase of zero is rejected.
@@ -46,15 +51,18 @@ library KeyfleetPresets {
     /// @notice Division by zero in `ceilDiv`.
     error ZeroDenominator();
 
-    /// @notice The reference price Q, 10 USDC, in atomic USDC.
+    /// @notice The reference price Q, 10 USDC, in atomic USDC: the starting price of every founding
+    ///         fleet.
     uint256 internal constant Q_USDC = 10_000_000;
+    /// @notice The first key of the Classic table, 10 USDC: the price the table is written for.
+    uint256 internal constant CLASSIC_START_USDC = 10_000_000;
+    /// @notice The lowest starting price a fleet anyone creates may set: 10 USDC.
+    uint256 internal constant MIN_START_USDC = 10_000_000;
+    /// @notice The highest starting price a fleet anyone creates may set: 1,000,000 USDC.
+    uint256 internal constant MAX_START_USDC = 1_000_000_000_000;
     /// @notice The decimals `Q_USDC` is written in. A fleet refuses a USDC reporting any other.
     uint8 internal constant USDC_DECIMALS = 6;
 
-    /// @notice Highest level whose per-wallet holding limit is a single key.
-    uint256 internal constant FIBONACCI_SINGLE_KEY_MAX_LEVEL = 7;
-    /// @notice Above `FIBONACCI_SINGLE_KEY_MAX_LEVEL` the holding limit is the level supply over this divisor.
-    uint256 internal constant FIBONACCI_HOLDING_DIVISOR = 10;
     /// @notice Each Fibonacci level costs the previous level times 120/100, rounded up.
     uint256 internal constant FIBONACCI_STEP_NUMERATOR = 120;
     uint256 internal constant FIBONACCI_STEP_DENOMINATOR = 100;
@@ -66,9 +74,10 @@ library KeyfleetPresets {
 
     /// @notice Highest number of Fleet.Tech Accelerant keys, so valid mint indexes are 0..1999.
     uint256 internal constant MAX_ACCELERANT_KEYS = 2000;
-    /// @notice Each Accelerant primary mint costs the previous primary mint times 105/100, rounded up.
-    uint256 internal constant ACCELERANT_STEP_NUMERATOR = 105;
-    uint256 internal constant ACCELERANT_STEP_DENOMINATOR = 100;
+    /// @notice The lowest Accelerant step: each primary mint at least 1% dearer than the one before.
+    uint256 internal constant MIN_ACCELERANT_STEP_PERCENT = 1;
+    /// @notice The highest Accelerant step, 5%, which is also the founding Accelerant fleet's.
+    uint256 internal constant MAX_ACCELERANT_STEP_PERCENT = 5;
 
     /// @notice Protocol share of gross for REGENT revenue staking, in basis points: 10%.
     uint256 internal constant PROTOCOL_BPS = 1000;
@@ -108,26 +117,26 @@ library KeyfleetPresets {
         return total;
     }
 
-    /// @notice First token id of a Fibonacci level. Token ids are 1-based and contiguous across levels.
+    /// @notice First key number of a Fibonacci level. Key numbers are 1-based and contiguous across levels.
     function fibonacciLevelStart(uint256 level) internal pure returns (uint256) {
         _requireLevel(level);
         if (level == 1) return 1;
         return fibonacciTotalSupplyThrough(level - 1) + 1;
     }
 
-    /// @notice Last token id of a Fibonacci level.
+    /// @notice Last key number of a Fibonacci level.
     function fibonacciLevelEnd(uint256 level) internal pure returns (uint256) {
         return fibonacciTotalSupplyThrough(level);
     }
 
-    /// @notice Level that owns a Fibonacci token id.
-    function fibonacciLevelOf(uint256 tokenId) internal pure returns (uint256) {
-        if (tokenId == 0) revert TokenIdOutOfBounds();
+    /// @notice Level that owns a Fibonacci key number.
+    function fibonacciLevelOf(uint256 keyNumber) internal pure returns (uint256) {
+        if (keyNumber == 0) revert KeyNumberOutOfBounds();
         uint256 previous = 1;
         uint256 current = 2;
         uint256 cumulative = 2;
         uint256 level = 1;
-        while (tokenId > cumulative) {
+        while (keyNumber > cumulative) {
             (previous, current) = (current, previous + current);
             cumulative += current;
             ++level;
@@ -135,54 +144,49 @@ library KeyfleetPresets {
         return level;
     }
 
-    /// @notice USDC price of a Fibonacci level key. Level 1 costs exactly `Q_USDC`; every further level
+    /// @notice USDC price of a Fibonacci level key. Level 1 costs exactly `start`; every further level
     ///         compounds the previous level's price by 120/100 with upward rounding at each step.
     /// @dev Computed iteratively from level 1, never as a closed-form power, so the rounding is exact.
-    function fibonacciLevelPrice(uint256 level) internal pure returns (uint256) {
+    function fibonacciLevelPrice(uint256 level, uint256 start) internal pure returns (uint256) {
         _requireLevel(level);
-        uint256 price = Q_USDC;
+        uint256 price = start;
         for (uint256 i = 1; i < level; ++i) {
             price = ceilDiv(price * FIBONACCI_STEP_NUMERATOR, FIBONACCI_STEP_DENOMINATOR);
         }
         return price;
     }
 
-    /// @notice Keys of one Fibonacci level a single wallet may hold: one below level 8, a tenth of the
-    ///         level supply from level 8 up.
-    /// @dev The fleet contract applies this on mint and on incoming transfer; the library only computes it.
-    function fibonacciHoldingLimit(uint256 level) internal pure returns (uint256) {
-        _requireLevel(level);
-        if (level <= FIBONACCI_SINGLE_KEY_MAX_LEVEL) return 1;
-        return fibonacciLevelSupply(level) / FIBONACCI_HOLDING_DIVISOR;
-    }
-
-    /// @notice USDC price of Fleet.Tech Classic key `tokenId`: 8 USDC for key 1, 80 USDC for key 1024,
-    ///         each key the same percentage dearer than the one before, rounded to the nearest cent.
+    /// @notice USDC price of Fleet.Tech Classic key `keyNumber` in a fleet starting at `start`: the
+    ///         table's price, 10 USDC for key 1 to 100 USDC for key 1024 with each key the same
+    ///         percentage dearer than the one before, multiplied by `start / CLASSIC_START_USDC` and
+    ///         rounded up to the cent. At `start` 10 USDC that is the table itself.
     /// @dev Read from the generated cent table in `KeyfleetClassicPrices`, the same table the site reads.
-    function classicPrice(uint256 tokenId) internal pure returns (uint256) {
-        if (tokenId == 0 || tokenId > CLASSIC_SUPPLY) revert TokenIdOutOfBounds();
+    function classicPrice(uint256 keyNumber, uint256 start) internal pure returns (uint256) {
+        if (keyNumber == 0 || keyNumber > CLASSIC_SUPPLY) revert KeyNumberOutOfBounds();
         bytes memory cents = KeyfleetClassicPrices.CENTS;
-        uint256 offset = 2 * (tokenId - 1);
-        return ((uint256(uint8(cents[offset])) << 8) | uint8(cents[offset + 1])) * CENT_USDC;
+        uint256 offset = 2 * (keyNumber - 1);
+        uint256 tableCents = (uint256(uint8(cents[offset])) << 8) | uint8(cents[offset + 1]);
+        return ceilDiv(tableCents * start, CLASSIC_START_USDC) * CENT_USDC;
     }
 
-    /// @notice USDC price of the Accelerant primary mint after one priced at `previousPrice`.
-    function accelerantNextPrice(uint256 previousPrice) internal pure returns (uint256) {
-        return ceilDiv(previousPrice * ACCELERANT_STEP_NUMERATOR, ACCELERANT_STEP_DENOMINATOR);
+    /// @notice USDC price of the Accelerant primary mint after one priced at `previousPrice`, in a
+    ///         fleet whose step is `stepPercent`: `stepPercent` percent dearer, rounded up.
+    function accelerantNextPrice(uint256 previousPrice, uint256 stepPercent) internal pure returns (uint256) {
+        return ceilDiv(previousPrice * (100 + stepPercent), 100);
     }
 
     /// @notice USDC price of the Accelerant primary mint at `mintIndex`, where index 0 is the first
-    ///         mint and costs `Q_USDC`.
+    ///         mint and costs `start`, in a fleet whose step is `stepPercent`.
     /// @dev Only primary mints advance the price. Secondary sales of an Accelerant key never advance it,
     ///      so the fleet contract must count primary mints, not transfers, when choosing `mintIndex`.
     ///      The cost is linear in `mintIndex` (about 950k gas at index 1999), so a fleet contract must
     ///      persist its current price and step it with `accelerantNextPrice`, enforcing
     ///      `MAX_ACCELERANT_KEYS` itself; this function is for one-off quotes and views.
-    function accelerantPrice(uint256 mintIndex) internal pure returns (uint256) {
+    function accelerantPrice(uint256 mintIndex, uint256 start, uint256 stepPercent) internal pure returns (uint256) {
         if (mintIndex >= MAX_ACCELERANT_KEYS) revert MintIndexOutOfBounds();
-        uint256 price = Q_USDC;
+        uint256 price = start;
         for (uint256 i = 0; i < mintIndex; ++i) {
-            price = accelerantNextPrice(price);
+            price = accelerantNextPrice(price, stepPercent);
         }
         return price;
     }

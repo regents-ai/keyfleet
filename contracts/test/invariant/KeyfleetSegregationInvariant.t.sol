@@ -3,57 +3,78 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {Keyfleet} from "../../src/Keyfleet.sol";
+import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
+import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
+import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
+import {KeyfleetRegentBuyer} from "../../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
-import {MockToken} from "../KeyfleetIncome.t.sol";
 import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFactory.sol";
+import {MockToken} from "../mocks/MockToken.sol";
 import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev Hands each fleet's treasury random batches of calls exactly as a carried-out proposal
-/// would, aimed at all five of the fleet's contracts, at USDC, at Autolaunch and at the fleet's own
+/// would, aimed at the fleet's manager, controller, treasury and ledger, at the shared collection,
+/// shard record, factory and REGENT buyer, at USDC and REGENT, at Autolaunch and at the fleet's own
 /// token once bound, between purchases that each mint to a wallet of their own and, partway through,
 /// a launch that sells and is bound. Around every batch it records whether anything protected went
-/// down: the core's owed protocol share, its Cascade reserve outside a level completion, a wallet's
-/// credit in the ledger, or the unsettled accrual of a key the treasury does not hold, in USDC and in
-/// the bound token.
+/// down: the manager's owed protocol share, its Cascade reserve outside a level completion, a
+/// wallet's credit in the ledger, or the unsettled accrual of a key the treasury does not hold, in
+/// USDC, in REGENT and in the bound token.
 contract SegregationHandler is Test {
     address internal constant NATIVE = address(0);
 
     uint256 internal constant MAX_KEYS = 60;
 
-    Keyfleet[2] internal fleets;
-    MockToken internal immutable usdc;
+    /// @dev How many calls the menu holds.
+    uint256 internal constant MENU = 33;
+
+    KeyfleetManager[2] internal fleets;
+    KeyfleetKeys internal immutable keys;
+    KeyfleetShards internal immutable shards;
+    KeyfleetFactory internal immutable factory;
+    KeyfleetRegentBuyer internal immutable regentBuyer;
+    IERC20 internal immutable usdc;
+    IERC20 internal immutable regent;
     MockAutolaunchFactory internal immutable autolaunch;
     address internal buyer = address(0xB0B0B0);
 
     /// @notice Set, with the reason, the first time a batch lowered something protected.
     string public breach;
 
-    constructor(Keyfleet cascade, Keyfleet accelerant, MockToken usdc_, MockAutolaunchFactory autolaunch_) {
+    constructor(
+        KeyfleetManager cascade,
+        KeyfleetManager accelerant,
+        KeyfleetFactory factory_,
+        MockAutolaunchFactory autolaunch_
+    ) {
         fleets = [cascade, accelerant];
-        usdc = usdc_;
+        factory = factory_;
+        keys = factory_.KEYS();
+        shards = factory_.SHARDS();
+        regentBuyer = factory_.REGENT_BUYER();
+        usdc = factory_.USDC();
+        regent = factory_.REGENT();
         autolaunch = autolaunch_;
     }
 
-    /// @notice The wallet a purchase of key `tokenId` mints to, one per key so that no Fibonacci
-    /// holding limit is ever met.
+    /// @notice The wallet a purchase of key `tokenId` mints to, one per key.
     function holderOf(uint256 tokenId) public pure returns (address) {
         return address(uint160(0xA0000 + tokenId));
     }
 
     function buy(uint256 fleetSeed) external {
-        Keyfleet fleet = fleets[fleetSeed % 2];
+        KeyfleetManager fleet = fleets[fleetSeed % 2];
         if (fleet.totalMinted() >= MAX_KEYS) return;
         uint256 price = fleet.nextPrice();
-        usdc.mint(buyer, price);
+        MockToken(address(usdc)).mint(buyer, price);
         vm.startPrank(buyer);
         usdc.approve(address(fleet), price);
-        fleet.purchase(holderOf(fleet.totalMinted() + 1), price, block.timestamp);
+        fleet.purchase(_holderOfKey(fleet, fleet.totalMinted() + 1), price, block.timestamp, new bytes32[](0));
         vm.stopPrank();
     }
 
@@ -65,7 +86,7 @@ contract SegregationHandler is Test {
     /// launch sells and anyone binds it. After: the launch's escrow releases vested tokens to the
     /// treasury.
     function launchOrRelease(uint256 fleetSeed, uint256 amount) external {
-        Keyfleet fleet = fleets[fleetSeed % 2];
+        KeyfleetManager fleet = fleets[fleetSeed % 2];
         KeyfleetTreasury treasury = fleet.TREASURY();
         IERC20 token = treasury.launchToken();
         if (address(token) == address(0)) {
@@ -82,7 +103,7 @@ contract SegregationHandler is Test {
     }
 
     function approvedBatch(uint256 fleetSeed, uint256[2] calldata seeds, uint256 length) external {
-        Keyfleet fleet = fleets[fleetSeed % 2];
+        KeyfleetManager fleet = fleets[fleetSeed % 2];
         uint256 minted = fleet.totalMinted();
         if (minted == 0) return;
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](bound(length, 1, 2));
@@ -111,25 +132,30 @@ contract SegregationHandler is Test {
     }
 
     /// @dev Each first holder's credit, and each key's unsettled accrual, zero for a key the
-    /// treasury holds, whose owner may move it: in USDC, then in the bound token, if any.
-    function _ledger(Keyfleet fleet, uint256 minted)
+    /// treasury holds, whose owner may move it: in USDC, in REGENT, then in the bound token, if any.
+    function _ledger(KeyfleetManager fleet, uint256 minted)
         internal
         view
         returns (uint256[] memory credited, uint256[] memory accrued)
     {
         KeyfleetRewards rewards = fleet.REWARDS();
-        address[2] memory assets = [address(usdc), address(fleet.TREASURY().launchToken())];
-        credited = new uint256[](2 * minted);
-        accrued = new uint256[](2 * minted);
-        for (uint256 a = 0; a < 2; ++a) {
+        address[3] memory assets = [address(usdc), address(regent), address(fleet.TREASURY().launchToken())];
+        credited = new uint256[](3 * minted);
+        accrued = new uint256[](3 * minted);
+        for (uint256 a = 0; a < 3; ++a) {
             if (assets[a] == address(0)) continue;
             for (uint256 i = 0; i < minted; ++i) {
-                credited[a * minted + i] = rewards.credits(assets[a], holderOf(i + 1));
-                if (fleet.ownerOf(i + 1) != address(fleet.TREASURY())) {
-                    accrued[a * minted + i] = rewards.accrued(assets[a], i + 1);
+                uint256 tokenId = keys.tokenIdOf(fleet.FLEET_ID(), i + 1);
+                credited[a * minted + i] = rewards.credits(assets[a], holderOf(tokenId));
+                if (keys.ownerOf(tokenId) != address(fleet.TREASURY())) {
+                    accrued[a * minted + i] = rewards.accrued(assets[a], tokenId);
                 }
             }
         }
+    }
+
+    function _holderOfKey(KeyfleetManager fleet, uint256 keyNumber) internal view returns (address) {
+        return holderOf(keys.tokenIdOf(fleet.FLEET_ID(), keyNumber));
     }
 
     function _breach(string memory reason) internal {
@@ -138,7 +164,7 @@ contract SegregationHandler is Test {
 
     /// @dev What one menu call is aimed at and with, drawn from a seed.
     struct Draw {
-        Keyfleet fleet;
+        KeyfleetManager fleet;
         KeyfleetTreasury treasury;
         KeyfleetRewards rewards;
         uint256 arg;
@@ -148,29 +174,34 @@ contract SegregationHandler is Test {
         uint256 amount;
     }
 
-    /// @dev One call from a menu reaching every contract of the fleet, USDC or the bound token, and
-    /// Autolaunch, with arguments drawn from `seed`: payments and advances, raw token moves and
-    /// approvals, purchases, surplus and the protocol share, key transfers, every ledger entry
-    /// point, the controller's and the shard record's, the treasury's own, the daily split and its
-    /// rate and binding a launch included, and a new launch.
-    function _call(Keyfleet fleet, uint256 seed) internal view returns (KeyfleetTreasury.Call memory) {
+    /// @dev One call from a menu reaching every contract of the fleet, the shared contracts, USDC,
+    /// REGENT or the bound token, and Autolaunch, with arguments drawn from `seed`: payments and
+    /// advances, raw token moves and approvals, purchases, surplus and the protocol share, key
+    /// transfers, every ledger entry point, the controller's, the manager's and the collection's,
+    /// the shard record's, the factory's and the REGENT buyer's, the treasury's own, the daily
+    /// split and its rate and binding a launch included, and a new launch.
+    function _call(KeyfleetManager fleet, uint256 seed) internal view returns (KeyfleetTreasury.Call memory) {
         Draw memory d;
         d.fleet = fleet;
         d.treasury = fleet.TREASURY();
         d.rewards = fleet.REWARDS();
         d.arg = uint256(keccak256(abi.encode(seed)));
-        d.tokenId = 1 + d.arg % fleet.totalMinted();
+        d.tokenId = keys.tokenIdOf(fleet.FLEET_ID(), 1 + d.arg % fleet.totalMinted());
         d.someone = d.arg % 4 == 0 ? holderOf(d.tokenId) : address(uint160(d.arg));
         IERC20 launched = d.treasury.launchToken();
-        d.token = address(launched) != address(0) && (d.arg >> 8) % 2 == 0 ? launched : IERC20(address(usdc));
+        uint256 tokenPick = (d.arg >> 8) % 3;
+        d.token = tokenPick == 2 && address(launched) != address(0) ? launched : tokenPick == 1 ? regent : usdc;
         d.amount = d.arg % (d.token.balanceOf(address(d.treasury)) + 2);
-        uint256 pick = seed % 26;
-        return pick < 9 ? _moneyCall(d, pick) : _contractCall(d, pick);
+        uint256 pick = seed % MENU;
+        if (pick < 9) return _moneyCall(d, pick);
+        if (pick < 26) return _contractCall(d, pick);
+        return _sharedCall(d, pick);
     }
 
     function _moneyCall(Draw memory d, uint256 pick) internal view returns (KeyfleetTreasury.Call memory) {
         address treasury = address(d.treasury);
-        address[4] memory targets = [address(d.fleet), address(d.rewards), address(d.fleet.VOTES()), treasury];
+        address[5] memory targets =
+            [address(d.fleet), address(d.rewards), address(d.fleet.VOTES()), treasury, address(regentBuyer)];
         address token = address(d.token);
         if (pick == 0) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (token, d.someone, d.amount)));
         if (pick == 1) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (NATIVE, d.someone, d.arg % 2 ether)));
@@ -179,14 +210,18 @@ contract SegregationHandler is Test {
                 treasury, 0, abi.encodeCall(d.treasury.advance, (d.arg % 4, d.someone, token, d.amount, bytes32(d.arg)))
             );
         }
-        if (pick == 3) return _c(token, 0, abi.encodeCall(IERC20.transfer, (targets[d.arg % 4], d.amount)));
-        if (pick == 4) return _c(token, 0, abi.encodeCall(IERC20.approve, (targets[d.arg % 4], d.amount)));
+        if (pick == 3) return _c(token, 0, abi.encodeCall(IERC20.transfer, (targets[d.arg % 5], d.amount)));
+        if (pick == 4) return _c(token, 0, abi.encodeCall(IERC20.approve, (targets[d.arg % 5], d.amount)));
         if (pick == 5) {
             address from = d.arg % 2 == 0 ? address(d.fleet) : address(d.rewards);
             return _c(token, 0, abi.encodeCall(IERC20.transferFrom, (from, d.someone, d.amount)));
         }
         if (pick == 6) {
-            return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.purchase, (treasury, d.amount, block.timestamp)));
+            return _c(
+                address(d.fleet),
+                0,
+                abi.encodeCall(d.fleet.purchase, (treasury, d.amount, block.timestamp, new bytes32[](0)))
+            );
         }
         if (pick == 7) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.recognizeSurplus, (token)));
         return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.sendProtocolShare, ()));
@@ -198,9 +233,9 @@ contract SegregationHandler is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = d.tokenId;
         if (pick == 9) {
-            address owner = d.fleet.ownerOf(d.tokenId);
+            address owner = keys.ownerOf(d.tokenId);
             return _c(
-                address(d.fleet),
+                address(keys),
                 0,
                 abi.encodeWithSignature("transferFrom(address,address,uint256)", owner, d.someone, d.tokenId)
             );
@@ -235,10 +270,7 @@ contract SegregationHandler is Test {
         if (pick == 17) {
             return _c(address(votes), 0, abi.encodeCall(votes.execute, (1, new KeyfleetTreasury.Call[](0))));
         }
-        if (pick == 18) {
-            KeyfleetShards shards = d.fleet.SHARDS();
-            return _c(address(shards), 0, abi.encodeCall(shards.issue, (ids, d.someone, 30)));
-        }
+        if (pick == 18) return _c(address(shards), 0, abi.encodeCall(shards.issue, (ids, d.someone, 30)));
         if (pick == 19) {
             return _c(address(d.treasury), 0, abi.encodeCall(d.treasury.depositProtocolShare, (d.amount)));
         }
@@ -254,6 +286,37 @@ contract SegregationHandler is Test {
             return _c(address(d.treasury), 0, abi.encodeCall(d.treasury.bindLaunchToken, (d.arg % 4)));
         }
         return _c([address(d.fleet), address(rewards), address(votes)][d.arg % 3], d.arg % 1 ether, "");
+    }
+
+    /// @dev The manager's own entry points and the shared contracts: the collection's mint, deck,
+    /// phase and reveal, the manager's transfer hook, first sale and profile, the REGENT buyer's buy
+    /// and callback, and the factory's creations.
+    function _sharedCall(Draw memory d, uint256 pick) internal view returns (KeyfleetTreasury.Call memory) {
+        if (pick == 26) return _c(address(keys), 0, abi.encodeCall(keys.mint, (d.someone, d.fleet.totalMinted() + 1)));
+        if (pick == 27) {
+            return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.onKeyMoved, (d.tokenId, keys.ownerOf(d.tokenId))));
+        }
+        if (pick == 28) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.sellFirstKey, (d.someone)));
+        if (pick == 29) {
+            return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.buy, (d.amount, address(d.treasury))));
+        }
+        if (pick == 30) {
+            return _c(
+                address(regentBuyer),
+                0,
+                abi.encodeCall(regentBuyer.uniswapV3SwapCallback, (int256(d.amount), int256(d.amount), ""))
+            );
+        }
+        if (pick == 31) {
+            KeyfleetManager.Profile memory renamed =
+                KeyfleetManager.Profile({name: "Renamed fleet", description: "", imageLink: ""});
+            return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.setProfile, (renamed)));
+        }
+        return _c(
+            address(keys),
+            0,
+            abi.encodeCall(keys.setDeck, (d.fleet.FLEET_ID(), keccak256(abi.encode(d.arg)), 1 + d.arg % 1000))
+        );
     }
 
     /// @dev The call that launches a token naming `treasury` as the launch's treasury.
@@ -275,23 +338,24 @@ contract SegregationHandler is Test {
 }
 
 /// @dev Segregation (plan §4.8): no batch of calls a proposal could carry out, against any of the
-/// fleet's five contracts, Autolaunch or the fleet's own token, lowers the core's owed protocol
-/// share or Cascade reserve or what the ledger owes any holder, and the core and the ledger always
-/// hold at least what they have booked, in USDC and in the bound token.
+/// fleet's four contracts, the shared collection, shard record, factory or REGENT buyer, Autolaunch
+/// or the fleet's own token, lowers the manager's owed protocol share or Cascade reserve or what
+/// the ledger owes any holder, and the manager and the ledger always hold at least what they have
+/// booked, in USDC, in REGENT and in the bound token.
 /// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
 contract KeyfleetSegregationInvariantTest is KeyfleetFixture {
     SegregationHandler internal handler;
-    Keyfleet internal cascade;
-    Keyfleet internal accelerant;
+    KeyfleetManager internal cascade;
+    KeyfleetManager internal accelerant;
 
     function setUp() public {
         _setUpFixture();
         vm.warp(1_000_000);
         cascade = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         accelerant = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
-        handler = new SegregationHandler(cascade, accelerant, usdc, autolaunch);
+        handler = new SegregationHandler(cascade, accelerant, factory, autolaunch);
         targetContract(address(handler));
     }
 
@@ -299,13 +363,14 @@ contract KeyfleetSegregationInvariantTest is KeyfleetFixture {
         assertEq(handler.breach(), "");
     }
 
-    function invariant_theCoreAndTheLedgerHoldWhatTheyBooked() public view {
-        Keyfleet[2] memory fleets = [cascade, accelerant];
+    function invariant_theManagerAndTheLedgerHoldWhatTheyBooked() public view {
+        KeyfleetManager[2] memory fleets = [cascade, accelerant];
         for (uint256 f = 0; f < 2; ++f) {
-            Keyfleet fleet = fleets[f];
+            KeyfleetManager fleet = fleets[f];
             KeyfleetRewards rewards = fleet.REWARDS();
             assertGe(usdc.balanceOf(address(fleet)), fleet.cascadeReserve() + fleet.protocolShareOwed());
             assertGe(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)));
+            assertGe(regent.balanceOf(address(rewards)), rewards.backed(address(regent)));
             IERC20 launched = fleet.TREASURY().launchToken();
             if (address(launched) != address(0)) {
                 assertGe(launched.balanceOf(address(rewards)), rewards.backed(address(launched)));

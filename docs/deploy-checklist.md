@@ -291,53 +291,62 @@ refuses anything but staging.
 
 ## Key sales stay off
 
-Nothing above records a deployment, so no fleet is linked to its contracts and
-no page offers a key for sale. Only `/app/bin/seed-deployment` links a fleet to
-its deployed contracts, and running it is a separate decision for the founder.
+Nothing above records a deployment, so no fleet is linked to the contracts and
+no page offers a key for sale. Only `/app/bin/seed-deployment` links the site to
+the deployed contracts, and running it is a separate decision for the founder.
 Do not run it, or deploy the contracts, as part of this launch.
 
 ## Before any key is sold
 
 Key sales stay off until the founder explicitly says so, and not before the
-fleet contracts are complete and deployed on Base (chain 8453). The five
-contracts of a fleet are built to the Build Now spec v0.3 in `contracts/src`;
-the [contracts README](../contracts/README.md) describes them. These must still
-be done first, in order:
+contracts are deployed on Base (chain 8453). The contracts are in
+`contracts/src`, and the [contracts README](../contracts/README.md) describes
+them: one key collection holds every fleet's keys, one factory creates fleets,
+and each fleet is four contracts of its own. These must still be done first, in
+order:
 
-1. **The contracts complete.** The founder decides when they are complete,
-   including the trait table and key art the deploy step requires. A deployed
-   fleet can never be changed.
-2. **The site reads the new contracts.** The chain reader, wallet steps and
-   deployment record are brought to the five Base contracts before any fleet is
-   recorded.
+1. **The contracts complete.** The founder decides when they are complete. A
+   deployed contract can never be changed.
+2. **The site reads the new contracts.** The chain reader, wallet steps, key
+   metadata and `seed-deployment` are brought to the one collection and the one
+   deployment record, `base.deployed.json`, which lists the system and every
+   fleet, before anything is recorded. Each fleet's buy button reads whether the
+   collection has opened that fleet's sales, and shows it disabled with a few
+   words saying sales have not opened while it has not.
 3. **An outside audit.**
 4. **Deployed on Base** with the founder's go, following
-   [deployment.md](deployment.md): each fleet's treasury deposits the 10%
-   protocol share into REGENT revenue staking,
-   `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, and the randomness
-   subscription is owned by the Regents Safe on Base,
-   `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. Then recorded as below.
+   [deployment.md](deployment.md): the system is deployed, the Regents Safe on
+   Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, adds the collection to
+   the randomness subscription it owns and creates the four founding fleets,
+   and the record step writes `contracts/deployments/base.deployed.json`. Every
+   fleet's treasury deposits the 10% protocol share into REGENT revenue
+   staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.
 
-## Opening a fleet later
+## Opening sales
 
-Each fleet is deployed and recorded on its own, when the founder says so and
-only after everything in "Before any key is sold" is done;
-[deployment.md](deployment.md) has the contract steps: each fleet is deployed
-with `KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest
-with
-`/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
-[chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
-puts its keys on sale, all at once: if the fleet cannot be opened, nothing is
-recorded. It refuses a fleet whose chain, USDC or trait table differs from a
-fleet already recorded. A fleet shown as coming soon opens at that moment; every
-other fleet is left as it is. Restart the app afterwards so the chain reader
-starts for it.
+Recording `base.deployed.json` with
+`/app/bin/seed-deployment /tmp/base.deployed.json` (see
+[chain-reader.md](chain-reader.md)) links the site to the system and every
+fleet in it, all at once: if anything in it cannot be recorded, nothing is.
+Restart the app afterwards so the chain reader starts for it.
+
+Recording puts no key on sale. The collection opens sales in phases, and each
+phase is a Safe transaction the founder signs, written by the phase step in
+[deployment.md](deployment.md):
+
+1. Phase 1 opens Classic #1.
+2. Phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1 together.
+3. Phase 3 lets anyone create a fleet, which sells from the moment it is
+   created.
+
+Fleets created in phase 3 join the record when the record step is run again
+and the new `base.deployed.json` is recorded the same way.
 
 Coming-soon fleets get no rooms until they open, because nobody can join them.
-A fleet can also be shown before it is deployed by changing its
+A fleet can also be shown before its sales open by changing its
 `coming_soon?` mark in `platform/lib/keyfleet/fleets.ex` and releasing; it then
 shows "Not on sale yet", and that release's migration step opens its rooms. Its keys
-still stay off sale until its deployment is recorded.
+still stay off sale until the collection opens its sales.
 
 ## Fleet notebook hubs
 

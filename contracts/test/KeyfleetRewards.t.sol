@@ -1,63 +1,48 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {Errors} from "@openzeppelin/contracts/utils/Errors.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
-import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
+import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
+import {IKeyfleetFactory, KeyfleetWiring} from "../src/KeyfleetWiring.sol";
+import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
+import {MockToken} from "./mocks/MockToken.sol";
 
-/// @dev Ownership and mint count only. The real fleet is outside this slice; the test drives
-/// `ownerOf` and `totalMinted` directly so that ownership changes can be sequenced around
-/// settlement.
-contract MockFleet {
-    mapping(uint256 tokenId => address owner) private _owners;
-    uint256 public totalMinted;
+/// @dev Names the factory and deploys a ledger outside any creation, as a deployer would.
+contract RogueRewardsDeployer {
+    IKeyfleetFactory public immutable FACTORY;
 
-    function setOwner(uint256 tokenId, address owner) external {
-        _owners[tokenId] = owner;
+    constructor(IKeyfleetFactory factory) {
+        FACTORY = factory;
     }
 
-    function setTotalMinted(uint256 minted) external {
-        totalMinted = minted;
-    }
-
-    function ownerOf(uint256 tokenId) external view returns (address) {
-        return _owners[tokenId];
+    function deploy() external returns (address) {
+        return address(new KeyfleetRewards());
     }
 }
 
-/// @dev Which wallets hold an active shard of which key.
-contract MockShards {
-    mapping(uint256 tokenId => mapping(address wallet => bool active)) public isActive;
-
-    function setActive(uint256 tokenId, address wallet, bool active) external {
-        isActive[tokenId][wallet] = active;
+/// @dev Code the test places at a treasury's address for one call, to set the split-in-progress
+/// flag the treasury keeps in transient storage. Only the treasury's own split routine sets it, so
+/// this is how the test stands inside that routine and funds the ledger with exact amounts.
+contract SplitFlagWriter {
+    /// @dev Writes the treasury's `SPLIT_IN_PROGRESS` transient slot.
+    function write(bool on) external {
+        assembly ("memory-safe") {
+            tstore(0xd9aca5cd3a42e97768814a58347bfab1c7bcba20bf1fb9c47c8b9d767310a900, on)
+        }
     }
 }
 
-/// @dev Whether the treasury is inside its split routine; the test calls the ledger as it.
-contract MockTreasury {
-    bool public splitInProgress;
-
-    function setSplitting(bool splitting) external {
-        splitInProgress = splitting;
-    }
-}
-
-contract MockERC20 is ERC20 {
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
-
-/// @dev A token whose outgoing transfers can be switched off, standing in for a pausable or
-/// blocklisting USDC.
+/// @dev A token whose outgoing transfers can be switched off, standing in for a split asset that
+/// pauses or blocklists.
 contract RevertingERC20 is ERC20 {
     error TransferDisabled();
 
@@ -79,10 +64,11 @@ contract RevertingERC20 is ERC20 {
     }
 }
 
-/// @dev A token that calls back into the ledger during its own transfer, claiming the credit the
-/// fleet granted to the token contract itself. Without the guard this second payout would settle.
+/// @dev A split asset that also holds a key, and calls back into the ledger during its own transfer
+/// to claim what its key earned. Without the guard this second payout would settle.
 contract ReenteringERC20 is ERC20 {
     KeyfleetRewards private _rewards;
+    uint256[] private _keys;
     bool private _reentering;
 
     constructor() ERC20("Reentering", "RE") {}
@@ -91,8 +77,9 @@ contract ReenteringERC20 is ERC20 {
         _mint(to, amount);
     }
 
-    function setRewards(KeyfleetRewards rewards) external {
+    function arm(KeyfleetRewards rewards, uint256[] calldata tokenIds) external {
         _rewards = rewards;
+        _keys = tokenIds;
     }
 
     function transfer(address to, uint256 amount) public override returns (bool) {
@@ -100,42 +87,56 @@ contract ReenteringERC20 is ERC20 {
             _reentering = true;
             address[] memory assets = new address[](1);
             assets[0] = address(this);
-            _rewards.claim(new uint256[](0), assets);
+            _rewards.claim(_keys, assets);
         }
         return super.transfer(to, amount);
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }
 
 /// @dev A key holder that refuses ETH.
-contract EthRefuser {}
+contract EthRefuser {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+}
 
 /// @dev A key holder that tries to claim again while being paid ETH.
 contract EthReclaimer {
-    KeyfleetRewards private immutable _rewards;
+    KeyfleetRewards private immutable REWARDS;
 
     constructor(KeyfleetRewards rewards) {
-        _rewards = rewards;
+        REWARDS = rewards;
     }
 
     receive() external payable {
         address[] memory assets = new address[](1);
-        _rewards.claim(new uint256[](0), assets);
+        REWARDS.claim(new uint256[](0), assets);
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }
 
-contract KeyfleetRewardsTest is Test {
+/// @dev The reward ledger of real fleets. Purchases enroll keys and transfers settle them, as they
+/// do on chain. To drive the ledger directly, the test calls it as the fleet's manager, and funds
+/// the split as the fleet's treasury from inside its split flag.
+contract KeyfleetRewardsTest is KeyfleetFixture {
     uint256 private constant PRECISION = 1e27;
     address private constant NATIVE = address(0);
     /// @dev The measured worst-case settlement, a cohort accrual and four split assets all cold,
     /// plus twenty percent, rounded up to the nearest thousand.
     uint256 private constant SETTLE_GAS_CEILING = 288_000;
 
-    MockFleet private fleet;
-    MockShards private shards;
-    MockTreasury private treasury;
+    /// @dev The fleet in use, its ledger and its treasury.
+    KeyfleetManager private fleet;
     KeyfleetRewards private rewards;
-    MockERC20 private usdc;
-    MockERC20 private regent;
+    KeyfleetTreasury private treasury;
+    SplitFlagWriter private flagWriter;
 
     address private alice = address(0xA11CE);
     address private bob = address(0xB0B);
@@ -149,29 +150,25 @@ contract KeyfleetRewardsTest is Test {
     event Claimed(address indexed asset, address indexed account, address indexed by, uint256 amount);
 
     function setUp() public {
-        fleet = new MockFleet();
-        shards = new MockShards();
-        treasury = new MockTreasury();
-        usdc = new MockERC20("USD Coin", "USDC");
-        regent = new MockERC20("Regent", "REGENT");
-        rewards = _ledger(address(usdc));
+        _setUpFixture();
+        flagWriter = new SplitFlagWriter();
+        _use(_deploy(KeyfleetPresets.Preset.FleetTechClassic));
     }
 
     // --- helpers ---------------------------------------------------------
 
-    function _ledger(address token) private returns (KeyfleetRewards) {
-        return new KeyfleetRewards(
-            Keyfleet(address(fleet)),
-            token,
-            KeyfleetTreasury(payable(address(treasury))),
-            KeyfleetShards(address(shards))
-        );
+    /// @dev Makes `target` the fleet whose ledger the helpers drive.
+    function _use(KeyfleetManager target) private {
+        fleet = target;
+        rewards = target.REWARDS();
+        treasury = target.TREASURY();
     }
 
-    /// @dev Mints the next key to `owner` and enrolls it, as a purchase does.
-    function _enroll(uint256 tokenId, uint256 cohortId, address owner) private {
-        fleet.setOwner(tokenId, owner);
-        fleet.setTotalMinted(tokenId);
+    /// @dev Enrolls a key that has not been minted, as the manager, into any cohort. The manager is
+    /// the ledger's only writer and names the cohort; this reaches cohorts a real fleet takes
+    /// thousands of purchases to reach.
+    function _enrollAsManager(uint256 keyNumber, uint256 cohortId) private returns (uint256 tokenId) {
+        tokenId = _key(fleet, keyNumber);
         vm.prank(address(fleet));
         rewards.enrollKey(tokenId, cohortId);
     }
@@ -182,20 +179,32 @@ contract KeyfleetRewardsTest is Test {
         rewards.allocateToCohort(address(usdc), cohortId, amount);
     }
 
+    /// @dev Sets or clears `target`'s split-in-progress flag: places the writer's code at the
+    /// treasury for one call, then puts the treasury's own code back. The flag lives in transient
+    /// storage, so it lasts for the rest of the test's transaction.
+    function _setSplitting(KeyfleetTreasury target, bool on) private {
+        bytes memory code = address(target).code;
+        vm.etch(address(target), address(flagWriter).code);
+        SplitFlagWriter(address(target)).write(on);
+        vm.etch(address(target), code);
+        assertEq(target.splitInProgress(), on, "the treasury reports the flag the test set");
+    }
+
     /// @dev Funds a split of `perKey` per minted key, as the treasury's split routine does.
     function _split(address asset, uint256 perKey) private {
-        uint256 keys = fleet.totalMinted();
-        treasury.setSplitting(true);
+        uint256 count = fleet.totalMinted();
+        uint256 amount = perKey * count;
+        _setSplitting(treasury, true);
         if (asset == NATIVE) {
-            vm.deal(address(treasury), perKey * keys);
+            vm.deal(address(treasury), address(treasury).balance + amount);
             vm.prank(address(treasury));
-            rewards.fundSplitNative{value: perKey * keys}(perKey, keys);
+            rewards.fundSplitNative{value: amount}(perKey, count);
         } else {
-            MockERC20(asset).mint(address(rewards), perKey * keys);
+            MockToken(asset).mint(address(rewards), amount);
             vm.prank(address(treasury));
-            rewards.fundSplit(asset, perKey, keys);
+            rewards.fundSplit(asset, perKey, count);
         }
-        treasury.setSplitting(false);
+        _setSplitting(treasury, false);
     }
 
     function _claim(address caller, uint256[] memory ids, address asset) private returns (uint256) {
@@ -214,56 +223,53 @@ contract KeyfleetRewardsTest is Test {
         assets[1] = b;
     }
 
-    function _ids(uint256 a) private pure returns (uint256[] memory ids) {
-        ids = new uint256[](1);
-        ids[0] = a;
-    }
-
-    function _ids(uint256 a, uint256 b) private pure returns (uint256[] memory ids) {
+    function _pair(uint256 a, uint256 b) private pure returns (uint256[] memory ids) {
         ids = new uint256[](2);
-        ids[0] = a;
-        ids[1] = b;
+        (ids[0], ids[1]) = (a, b);
     }
 
     function _none() private pure returns (uint256[] memory ids) {
         ids = new uint256[](0);
     }
 
-    // --- 1. only the fleet writes, only the treasury's split funds ---------
+    // --- 1. only the manager writes, only the treasury's split funds -------
 
-    function test_constructorBindsEverythingAndRejectsZero() public {
-        assertEq(address(rewards.FLEET()), address(fleet));
+    function test_theLedgerIsBoundToItsFleet() public view {
+        assertEq(address(rewards.MANAGER()), address(fleet));
+        assertEq(rewards.FLEET_ID(), fleet.FLEET_ID());
+        assertEq(address(rewards.KEYS()), address(keys));
         assertEq(rewards.USDC(), address(usdc));
         assertEq(address(rewards.TREASURY()), address(treasury));
-        assertEq(address(rewards.SHARDS()), address(shards));
+        assertEq(address(rewards.SHARDS()), address(shards), "the one shared shard record");
+        assertEq(address(treasury.REWARDS()), address(rewards), "the treasury funds this ledger");
         assertEq(rewards.PRECISION(), PRECISION, "cohort index scale is 1e27");
-
-        Keyfleet f = Keyfleet(address(fleet));
-        KeyfleetTreasury t = KeyfleetTreasury(payable(address(treasury)));
-        KeyfleetShards s = KeyfleetShards(address(shards));
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(Keyfleet(address(0)), address(usdc), t, s);
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(f, address(0), t, s);
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(f, address(usdc), KeyfleetTreasury(payable(address(0))), s);
-        vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        new KeyfleetRewards(f, address(usdc), t, KeyfleetShards(address(0)));
     }
 
-    function testFuzz_onlyFleetCanEnrollAllocateCreditAndSettle(address caller) public {
+    /// @dev A ledger exists only as one of a fleet's four contracts, from the factory's own creation.
+    function test_aLedgerCannotBeDeployedOutsideTheFactory() public {
+        vm.expectRevert();
+        new KeyfleetRewards();
+
+        RogueRewardsDeployer rogue = new RogueRewardsDeployer(IKeyfleetFactory(address(factory)));
+        address predicted = vm.computeCreateAddress(address(rogue), 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetWiring.NotWired.selector, predicted));
+        rogue.deploy();
+    }
+
+    function testFuzz_onlyTheManagerCanEnrollAllocateCreditAndSettle(address caller) public {
         vm.assume(caller != address(fleet) && caller != address(vm));
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _key(fleet, 2);
 
         vm.startPrank(caller);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
-        rewards.enrollKey(2, 0);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        rewards.enrollKey(k2, 0);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
         rewards.allocateToCohort(address(usdc), 0, 1);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
         rewards.credit(address(usdc), caller, 1);
-        vm.expectRevert(KeyfleetRewards.OnlyFleet.selector);
-        rewards.settleKey(1, caller);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        rewards.settleKey(k1, caller);
         vm.stopPrank();
 
         assertEq(rewards.cohortSize(0), 1, "no key enrolled by a stranger");
@@ -273,12 +279,12 @@ contract KeyfleetRewardsTest is Test {
 
     function testFuzz_onlyTheTreasuryInsideItsSplitFundsTheSplit(address caller) public {
         vm.assume(caller != address(treasury) && caller != address(vm));
-        _enroll(1, 0, alice);
+        _buy(fleet, alice);
         regent.mint(address(rewards), 1e18);
         vm.deal(caller, 1e18);
         vm.deal(address(treasury), 1e18);
 
-        treasury.setSplitting(true);
+        _setSplitting(treasury, true);
         vm.startPrank(caller);
         vm.expectRevert(KeyfleetRewards.OnlyTreasury.selector);
         rewards.fundSplit(address(regent), 1e18, 1);
@@ -286,7 +292,7 @@ contract KeyfleetRewardsTest is Test {
         rewards.fundSplitNative{value: 1e18}(1e18, 1);
         vm.stopPrank();
 
-        treasury.setSplitting(false);
+        _setSplitting(treasury, false);
         vm.startPrank(address(treasury));
         vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
         rewards.fundSplit(address(regent), 1e18, 1);
@@ -299,10 +305,28 @@ contract KeyfleetRewardsTest is Test {
         assertEq(rewards.rewardAssets().length, 1, "nothing was added to the assets the ledger pays");
     }
 
+    /// @dev An approved proposal's call reaches the ledger from the treasury, but outside the split
+    /// routine, so it cannot fund the split.
+    function test_anApprovedProposalCannotFundTheSplit() public {
+        _buy(fleet, alice);
+        _mature();
+        _openTreasury(fleet);
+        regent.mint(address(rewards), 1e18);
+        KeyfleetTreasury.Call[] memory calls =
+            _one(address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(regent), 1e18, 1)));
+
+        KeyfleetVotes votes = fleet.VOTES();
+        uint256 proposalId = _approve(fleet, calls);
+        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
+        votes.execute(proposalId, calls);
+        assertEq(rewards.splitIndex(address(regent)), 0);
+    }
+
     // --- 2. the cohort lane and direct credits take USDC only ---------------
 
     function test_theCohortLaneAndDirectCreditsTakeUsdcOnly() public {
-        _enroll(1, 0, alice);
+        _buy(fleet, alice);
         regent.mint(address(rewards), 1e18);
 
         vm.startPrank(address(fleet));
@@ -316,20 +340,20 @@ contract KeyfleetRewardsTest is Test {
     // --- 3. cohort allocation math and retained dust ----------------------
 
     function test_threeKeyAllocationPaysFloorSharesAndCarriesTheRemainder() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 0, bob);
-        _enroll(3, 0, carol);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _buy(fleet, bob);
+        uint256 k3 = _buy(fleet, carol);
 
         uint256 amount = 10e18;
         _fundAndAllocate(0, amount);
 
         uint256 share = amount / 3;
         assertEq(rewards.backed(address(usdc)), amount, "the whole allocation is reserved, dust included");
-        assertEq(rewards.accrued(address(usdc), 1), share, "floor share per key");
+        assertEq(rewards.accrued(address(usdc), k1), share, "floor share per key");
 
-        assertEq(_claim(alice, _ids(1), address(usdc)), share, "alice floor share");
-        assertEq(_claim(bob, _ids(2), address(usdc)), share, "bob floor share");
-        assertEq(_claim(carol, _ids(3), address(usdc)), share, "carol floor share");
+        assertEq(_claim(alice, _ids(k1), address(usdc)), share, "alice floor share");
+        assertEq(_claim(bob, _ids(k2), address(usdc)), share, "bob floor share");
+        assertEq(_claim(carol, _ids(k3), address(usdc)), share, "carol floor share");
 
         uint256 dust = amount - 3 * share;
         assertEq(dust, 1, "the remainder of 10e18 over three keys is one atomic unit");
@@ -338,7 +362,7 @@ contract KeyfleetRewardsTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(_ids(1), _assets(address(usdc)));
+        rewards.claim(_ids(k1), _assets(address(usdc)));
     }
 
     // --- 4. eligibility and backing ---------------------------------------
@@ -348,7 +372,7 @@ contract KeyfleetRewardsTest is Test {
         vm.expectRevert(KeyfleetRewards.NoEligibleKeys.selector);
         rewards.allocateToCohort(address(usdc), 0, 1e18);
 
-        _enroll(1, 0, alice);
+        _buy(fleet, alice);
 
         usdc.mint(address(rewards), 1e18 - 1);
         vm.prank(address(fleet));
@@ -396,27 +420,31 @@ contract KeyfleetRewardsTest is Test {
 
     // --- 5. the split lane --------------------------------------------------
 
+    /// @dev On Syndicate a key's cohort is its level, so keys 1 to 6 sit in cohorts 1, 1, 2, 2, 2
+    /// and 3, and the split still gives each the same amount.
     function test_aSplitGivesEveryMintedKeyTheSameWholeAmount() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 3, bob);
-        _enroll(3, 7, carol);
+        _use(_deploy(KeyfleetPresets.Preset.FibonacciSyndicate));
+        _buyMany(fleet, 6);
+        assertEq(rewards.keyCohort(_key(fleet, 1)), 1);
+        assertEq(rewards.keyCohort(_key(fleet, 3)), 2);
+        assertEq(rewards.keyCohort(_key(fleet, 6)), 3, "the keys span three cohorts");
 
-        regent.mint(address(rewards), 15e18);
-        treasury.setSplitting(true);
+        regent.mint(address(rewards), 30e18);
+        _setSplitting(treasury, true);
         vm.prank(address(treasury));
         vm.expectEmit(true, false, false, true, address(rewards));
-        emit SplitFunded(address(regent), 5e18, 3, 5e18);
-        rewards.fundSplit(address(regent), 5e18, 3);
-        treasury.setSplitting(false);
+        emit SplitFunded(address(regent), 5e18, 6, 5e18);
+        rewards.fundSplit(address(regent), 5e18, 6);
+        _setSplitting(treasury, false);
         _split(NATIVE, 1 ether);
 
-        for (uint256 tokenId = 1; tokenId <= 3; ++tokenId) {
-            assertEq(rewards.accrued(address(regent), tokenId), 5e18, "every key, whatever its cohort");
-            assertEq(rewards.accrued(NATIVE, tokenId), 1 ether);
+        for (uint256 n = 1; n <= 6; ++n) {
+            assertEq(rewards.accrued(address(regent), _key(fleet, n)), 5e18, "every key, whatever its cohort");
+            assertEq(rewards.accrued(NATIVE, _key(fleet, n)), 1 ether);
         }
-        assertEq(rewards.backed(address(regent)), 15e18, "the whole allocation is reserved");
-        assertEq(rewards.backed(NATIVE), 3 ether);
-        assertEq(address(rewards).balance, 3 ether);
+        assertEq(rewards.backed(address(regent)), 30e18, "the whole allocation is reserved");
+        assertEq(rewards.backed(NATIVE), 6 ether);
+        assertEq(address(rewards).balance, 6 ether);
 
         address[] memory assets = rewards.rewardAssets();
         assertEq(assets.length, 3, "USDC, then each split asset in the order first funded");
@@ -431,9 +459,9 @@ contract KeyfleetRewardsTest is Test {
     }
 
     function test_aSplitMustCoverExactlyTheMintedKeysAndBeBacked() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 0, bob);
-        treasury.setSplitting(true);
+        _buy(fleet, alice);
+        _buy(fleet, bob);
+        _setSplitting(treasury, true);
         regent.mint(address(rewards), 4e18);
         vm.deal(address(treasury), 10 ether);
 
@@ -460,25 +488,25 @@ contract KeyfleetRewardsTest is Test {
     }
 
     function test_aKeyMintedAfterASplitEarnsOnlyLaterSplits() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         _split(address(regent), 9e18);
         _split(NATIVE, 1 ether);
 
-        _enroll(2, 0, bob);
-        assertEq(rewards.accrued(address(regent), 2), 0, "the newcomer inherits nothing");
-        assertEq(rewards.accrued(NATIVE, 2), 0);
-        assertEq(rewards.keySplitIndex(2, address(regent)), 9e18, "it starts from the current index");
+        uint256 k2 = _buy(fleet, bob);
+        assertEq(rewards.accrued(address(regent), k2), 0, "the newcomer inherits nothing");
+        assertEq(rewards.accrued(NATIVE, k2), 0);
+        assertEq(rewards.keySplitIndex(k2, address(regent)), 9e18, "it starts from the current index");
 
         _split(address(regent), 1e18);
         _split(address(usdc), 3e6); // first split of USDC, after both keys
-        assertEq(rewards.accrued(address(regent), 1), 10e18);
-        assertEq(rewards.accrued(address(regent), 2), 1e18);
-        assertEq(rewards.accrued(address(usdc), 1), 3e6, "an asset first split later is shared by every key");
-        assertEq(rewards.accrued(address(usdc), 2), 3e6);
+        assertEq(rewards.accrued(address(regent), k1), 10e18);
+        assertEq(rewards.accrued(address(regent), k2), 1e18);
+        assertEq(rewards.accrued(address(usdc), k1), 3e6, "an asset first split later is shared by every key");
+        assertEq(rewards.accrued(address(usdc), k2), 3e6);
     }
 
     function test_settlementMovesEveryAssetToTheOutgoingOwner() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         _fundAndAllocate(0, 4e6);
         _split(address(usdc), 1e6);
         _split(address(regent), 2e18);
@@ -486,33 +514,36 @@ contract KeyfleetRewardsTest is Test {
 
         vm.prank(address(fleet));
         vm.expectEmit(true, true, true, true, address(rewards));
-        emit Settled(1, address(usdc), alice, 4e6);
+        emit Settled(k1, address(usdc), alice, 4e6);
         vm.expectEmit(true, true, true, true, address(rewards));
-        emit Settled(1, address(usdc), alice, 1e6);
+        emit Settled(k1, address(usdc), alice, 1e6);
         vm.expectEmit(true, true, true, true, address(rewards));
-        emit Settled(1, address(regent), alice, 2e18);
+        emit Settled(k1, address(regent), alice, 2e18);
         vm.expectEmit(true, true, true, true, address(rewards));
-        emit Settled(1, NATIVE, alice, 3 ether);
-        rewards.settleKey(1, alice);
+        emit Settled(k1, NATIVE, alice, 3 ether);
+        rewards.settleKey(k1, alice);
 
         assertEq(rewards.credits(address(usdc), alice), 5e6, "the cohort and split lanes both");
         assertEq(rewards.credits(address(regent), alice), 2e18);
         assertEq(rewards.credits(NATIVE, alice), 3 ether);
-        assertEq(rewards.accrued(address(usdc), 1), 0, "the key carries nothing forward");
-        assertEq(rewards.accrued(address(regent), 1), 0);
-        assertEq(rewards.accrued(NATIVE, 1), 0);
+        assertEq(rewards.accrued(address(usdc), k1), 0, "the key carries nothing forward");
+        assertEq(rewards.accrued(address(regent), k1), 0);
+        assertEq(rewards.accrued(NATIVE, k1), 0);
     }
 
     // --- 6. accrual belongs to the earning address ------------------------
 
+    /// @dev Each move of the key goes through the collection, which has the manager settle the key
+    /// to its outgoing owner first.
     function test_accruedRewardsNeverTravelWithTheKey() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         _fundAndAllocate(0, 100e18); // allocation A, alice holds the key
         _split(NATIVE, 1 ether);
 
-        vm.prank(address(fleet));
-        rewards.settleKey(1, alice);
-        fleet.setOwner(1, bob);
+        vm.prank(alice);
+        keys.transferFrom(alice, bob, k1);
+        assertEq(rewards.credits(address(usdc), alice), 100e18, "the move settled allocation A to alice");
+        assertEq(rewards.accrued(address(usdc), k1), 0, "and the key carries none of it to bob");
 
         _fundAndAllocate(0, 50e18); // allocation B, bob holds the key
         _split(NATIVE, 2 ether);
@@ -525,106 +556,110 @@ contract KeyfleetRewardsTest is Test {
         assertEq(alice.balance, 1 ether);
 
         vm.prank(bob);
-        paid = rewards.claim(_ids(1), _assets(address(usdc), NATIVE));
+        paid = rewards.claim(_ids(k1), _assets(address(usdc), NATIVE));
         assertEq(paid[0], 50e18, "bob earns only allocation B");
         assertEq(paid[1], 2 ether, "and the second split");
 
         // The key returns to alice. She must not re-earn anything.
-        vm.prank(address(fleet));
-        rewards.settleKey(1, bob);
-        fleet.setOwner(1, alice);
+        vm.prank(bob);
+        keys.transferFrom(bob, alice, k1);
         _fundAndAllocate(0, 25e18);
 
-        assertEq(_claim(alice, _ids(1), address(usdc)), 25e18, "alice earns only C on her return");
+        assertEq(_claim(alice, _ids(k1), address(usdc)), 25e18, "alice earns only C on her return");
         assertEq(usdc.balanceOf(alice), 125e18, "no double counting across re-acquisition");
         assertEq(rewards.backed(address(usdc)), 0, "everything allocated was paid out");
         assertEq(rewards.backed(NATIVE), 0);
     }
 
     function test_settleKeyRejectsZeroOwnerAndUnenrolledKeys() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 unenrolled = _key(fleet, 99);
         vm.startPrank(address(fleet));
         vm.expectRevert(KeyfleetRewards.ZeroAddress.selector);
-        rewards.settleKey(1, address(0));
+        rewards.settleKey(k1, address(0));
         vm.expectRevert(KeyfleetRewards.KeyNotEnrolled.selector);
-        rewards.settleKey(99, alice);
+        rewards.settleKey(unenrolled, alice);
         vm.stopPrank();
 
         vm.expectRevert(KeyfleetRewards.KeyNotEnrolled.selector);
-        rewards.keyCohort(99);
-        assertEq(rewards.keyCohort(1), 0, "enrolled key reports its cohort");
+        rewards.keyCohort(unenrolled);
+        assertEq(rewards.keyCohort(k1), 0, "enrolled key reports its cohort");
     }
 
     /// @dev Cohort ids are the fleet's levels, which have no last one, so the ledger takes any
-    /// cohort id the fleet names.
+    /// cohort id the manager names.
     function test_enrollmentIsPermanentAndTakesAnyCohort() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         vm.startPrank(address(fleet));
         vm.expectRevert(KeyfleetRewards.KeyAlreadyEnrolled.selector);
-        rewards.enrollKey(1, 0);
+        rewards.enrollKey(k1, 0);
         vm.expectRevert(KeyfleetRewards.KeyAlreadyEnrolled.selector);
-        rewards.enrollKey(1, 5);
+        rewards.enrollKey(k1, 5);
         vm.stopPrank();
-        _enroll(2, 41, bob);
-        _enroll(3, 1_000, carol);
-        assertEq(rewards.keyCohort(2), 41, "level 41 is a cohort like any other");
-        assertEq(rewards.keyCohort(3), 1_000);
+
+        vm.expectEmit(true, true, false, false, address(rewards));
+        emit KeyEnrolled(_key(fleet, 2), 41);
+        uint256 k2 = _enrollAsManager(2, 41);
+        uint256 k3 = _enrollAsManager(3, 1_000);
+        assertEq(rewards.keyCohort(k2), 41, "level 41 is a cohort like any other");
+        assertEq(rewards.keyCohort(k3), 1_000);
         assertEq(rewards.cohortSize(0), 1, "one key in cohort 0");
         assertEq(rewards.cohortSize(41), 1, "one key in cohort 41");
 
         _fundAndAllocate(41, 3e18);
-        assertEq(rewards.accrued(address(usdc), 2), 3e18, "and earns like any other");
+        assertEq(rewards.accrued(address(usdc), k2), 3e18, "and earns like any other");
     }
 
     // --- 7. late cohort enrollment and cohort isolation ---------------------
 
     function test_keyEnrolledAfterAnAllocationEarnsOnlyLaterOnes() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         _fundAndAllocate(0, 90e18);
 
-        _enroll(2, 0, bob); // joins after allocation A
-        assertEq(rewards.accrued(address(usdc), 2), 0, "the newcomer inherits nothing");
+        uint256 k2 = _buy(fleet, bob); // joins after allocation A
+        assertEq(rewards.accrued(address(usdc), k2), 0, "the newcomer inherits nothing");
 
         _fundAndAllocate(0, 40e18); // allocation B is split two ways
-        assertEq(rewards.accrued(address(usdc), 2), 20e18, "newcomer earns half of B only");
-        assertEq(rewards.accrued(address(usdc), 1), 110e18, "incumbent earns A plus half of B");
+        assertEq(rewards.accrued(address(usdc), k2), 20e18, "newcomer earns half of B only");
+        assertEq(rewards.accrued(address(usdc), k1), 110e18, "incumbent earns A plus half of B");
 
         // A cohort with no keys cannot receive an allocation at all.
         vm.prank(address(fleet));
         vm.expectRevert(KeyfleetRewards.NoEligibleKeys.selector);
         rewards.allocateToCohort(address(usdc), 7, 1e18);
-        _enroll(3, 7, carol);
+        uint256 k3 = _enrollAsManager(3, 7);
         _fundAndAllocate(7, 1e18);
-        assertEq(rewards.accrued(address(usdc), 3), 1e18, "and earns from the first allocation it can receive");
+        assertEq(rewards.accrued(address(usdc), k3), 1e18, "and earns from the first allocation it can receive");
     }
 
     function test_settlementTouchesOnlyTheKeysOwnCohort() public {
         for (uint256 cohortId = 0; cohortId < 20; ++cohortId) {
-            _enroll(cohortId + 1, cohortId, alice);
+            _enrollAsManager(cohortId + 1, cohortId);
         }
         for (uint256 cohortId = 0; cohortId < 20; ++cohortId) {
             _fundAndAllocate(cohortId, (cohortId + 1) * 1e18);
         }
 
+        uint256 k5 = _key(fleet, 5);
         vm.prank(address(fleet));
-        rewards.settleKey(5, alice);
+        rewards.settleKey(k5, alice);
         assertEq(rewards.credits(address(usdc), alice), 5e18, "one cohort settled, nineteen untouched");
 
         for (uint256 cohortId = 0; cohortId < 20; ++cohortId) {
-            uint256 tokenId = cohortId + 1;
-            uint256 expected = tokenId == 5 ? 0 : (cohortId + 1) * 1e18;
-            assertEq(rewards.accrued(address(usdc), tokenId), expected, "other cohorts unaffected");
+            uint256 keyNumber = cohortId + 1;
+            uint256 expected = keyNumber == 5 ? 0 : (cohortId + 1) * 1e18;
+            assertEq(rewards.accrued(address(usdc), _key(fleet, keyNumber)), expected, "other cohorts unaffected");
         }
     }
 
     // --- 8. worst-case settlement gas -------------------------------------
 
-    /// @dev Worst case: a pending cohort accrual in a high cohort and a pending split in four
-    /// assets, every per-key slot cold and moving from zero.
+    /// @dev Worst case: a pending cohort accrual and a pending split in four assets, every per-key
+    /// slot cold and moving from zero.
     function test_worstCaseSettlementGasStaysUnderCeiling() public {
-        MockERC20 ousd = new MockERC20("Origin Dollar", "OUSD");
-        _enroll(1, 40, alice);
-        _fundAndAllocate(40, 1e18);
+        MockToken ousd = new MockToken("Origin Dollar", "OUSD");
+        uint256 k1 = _buy(fleet, alice);
+        _fundAndAllocate(0, 1e18);
         _split(NATIVE, 1 ether);
         _split(address(regent), 1e18);
         _split(address(usdc), 1e6);
@@ -633,7 +668,7 @@ contract KeyfleetRewardsTest is Test {
         vm.cool(address(rewards));
         vm.prank(address(fleet));
         uint256 before = gasleft();
-        rewards.settleKey(1, alice);
+        rewards.settleKey(k1, alice);
         uint256 used = before - gasleft();
         console2.log("worst-case settleKey gas, cohort plus four split assets (cold slots):", used);
 
@@ -644,47 +679,56 @@ contract KeyfleetRewardsTest is Test {
     // --- 9. who may claim, and who is paid ----------------------------------
 
     function test_claimNeedsTheHolderOrAnActiveShardOfEveryKey() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 0, bob);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _buy(fleet, bob);
         _fundAndAllocate(0, 10e18);
 
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, 1));
-        rewards.claim(_ids(2, 1), _assets(address(usdc)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, k1));
+        rewards.claim(_pair(k2, k1), _assets(address(usdc)));
         assertEq(rewards.credits(address(usdc), bob), 0, "no partial settlement survives the revert");
-        assertEq(rewards.accrued(address(usdc), 2), 5e18, "bob's key untouched");
+        assertEq(rewards.accrued(address(usdc), k2), 5e18, "bob's key untouched");
 
         vm.prank(agent);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, 1));
-        rewards.claim(_ids(1), _assets(address(usdc)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, k1));
+        rewards.claim(_ids(k1), _assets(address(usdc)));
 
-        shards.setActive(2, agent, true);
+        vm.prank(bob);
+        shards.issue(_ids(k2), agent, 30);
         vm.prank(agent);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, 1));
-        rewards.claim(_ids(2, 1), _assets(address(usdc)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, k1));
+        rewards.claim(_pair(k2, k1), _assets(address(usdc)));
 
-        fleet.setOwner(99, alice);
+        // A key of this fleet that was never minted has no holder.
+        uint256 unminted = _key(fleet, 99);
         vm.prank(alice);
-        vm.expectRevert(KeyfleetRewards.KeyNotEnrolled.selector);
-        rewards.claim(_ids(1, 99), _assets(address(usdc)));
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, unminted));
+        rewards.claim(_pair(k1, unminted), _assets(address(usdc)));
+
+        // A shard whose time has run out claims nothing more.
+        vm.warp(block.timestamp + 30 days);
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.NotKeyHolderOrAgent.selector, k2));
+        rewards.claim(_ids(k2), _assets(address(usdc)));
     }
 
     function test_anAgentsClaimPaysEachKeysHolderNeverTheAgent() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 0, bob);
-        _enroll(3, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _buy(fleet, bob);
+        uint256 k3 = _buy(fleet, alice);
         _split(address(regent), 1e18);
         _split(NATIVE, 1 ether);
-        shards.setActive(1, agent, true);
-        shards.setActive(2, agent, true);
-        shards.setActive(3, agent, true);
+        vm.prank(alice);
+        shards.issue(_pair(k1, k3), agent, 30);
+        vm.prank(bob);
+        shards.issue(_ids(k2), agent, 30);
 
         vm.prank(agent);
         vm.expectEmit(true, true, true, true, address(rewards));
         emit Claimed(address(regent), alice, agent, 2e18);
         vm.expectEmit(true, true, true, true, address(rewards));
         emit Claimed(address(regent), bob, agent, 1e18);
-        uint256[] memory paid = rewards.claim(_range3(), _assets(address(regent), NATIVE));
+        uint256[] memory paid = rewards.claim(_range(k1, 3), _assets(address(regent), NATIVE));
 
         assertEq(paid[0], 3e18, "both holders paid in one call");
         assertEq(paid[1], 3 ether);
@@ -697,76 +741,93 @@ contract KeyfleetRewardsTest is Test {
     }
 
     function test_theCallerIsPaidOnlyItsOwnCredit() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         usdc.mint(address(rewards), 7e6);
         vm.prank(address(fleet));
         rewards.credit(address(usdc), agent, 7e6); // the agent once held a key
         _split(address(usdc), 1e6);
-        shards.setActive(1, agent, true);
+        vm.prank(alice);
+        shards.issue(_ids(k1), agent, 30);
 
         vm.prank(agent);
-        assertEq(rewards.claim(_ids(1), _assets(address(usdc)))[0], 8e6, "its own credit and alice's key");
+        assertEq(rewards.claim(_ids(k1), _assets(address(usdc)))[0], 8e6, "its own credit and alice's key");
         assertEq(usdc.balanceOf(agent), 7e6, "the agent's own credit goes to the agent");
         assertEq(usdc.balanceOf(alice), 1e6, "the key's money goes to its holder");
     }
 
     function test_unknownOrRepeatedAssetsPayNothingMore() public {
-        _enroll(1, 0, alice);
+        uint256 k1 = _buy(fleet, alice);
         _split(address(regent), 1e18);
 
         vm.prank(alice);
-        uint256[] memory paid = rewards.claim(_ids(1), _assets(address(regent), address(regent)));
+        uint256[] memory paid = rewards.claim(_ids(k1), _assets(address(regent), address(regent)));
         assertEq(paid[0], 1e18);
         assertEq(paid[1], 0, "a repeated asset finds nothing left");
 
         vm.prank(alice);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
-        rewards.claim(_ids(1), _assets(address(0xBEEF)));
+        rewards.claim(_ids(k1), _assets(address(0xBEEF)));
     }
 
     /// @dev A wallet that refuses ETH stops only a claim that pays it ETH: the same claim without
     /// ETH pays it, and other holders' ETH is unaffected.
     function test_aWalletThatRefusesEthBlocksOnlyItsOwnEth() public {
         address refuser = address(new EthRefuser());
-        _enroll(1, 0, refuser);
-        _enroll(2, 0, bob);
+        uint256 k1 = _buy(fleet, refuser);
+        uint256 k2 = _buy(fleet, bob);
         _split(NATIVE, 1 ether);
         _split(address(regent), 1e18);
-        shards.setActive(1, agent, true);
+        vm.prank(refuser);
+        shards.issue(_ids(k1), agent, 30);
 
         vm.prank(agent);
-        vm.expectRevert();
-        rewards.claim(_ids(1), _assets(NATIVE));
-        assertEq(rewards.accrued(NATIVE, 1), 1 ether, "the ETH stays waiting for the key");
+        vm.expectRevert(Errors.FailedCall.selector);
+        rewards.claim(_ids(k1), _assets(NATIVE));
+        assertEq(rewards.accrued(NATIVE, k1), 1 ether, "the ETH stays waiting for the key");
 
         vm.prank(agent);
-        assertEq(rewards.claim(_ids(1), _assets(address(regent)))[0], 1e18, "the same key's REGENT goes through");
+        assertEq(rewards.claim(_ids(k1), _assets(address(regent)))[0], 1e18, "the same key's REGENT goes through");
         assertEq(regent.balanceOf(refuser), 1e18);
         assertEq(rewards.credits(NATIVE, refuser), 1 ether, "its ETH is now its credit, still backed");
         assertEq(rewards.backed(NATIVE), 2 ether);
 
-        assertEq(_claim(bob, _ids(2), NATIVE), 1 ether, "another holder's ETH is unaffected");
+        assertEq(_claim(bob, _ids(k2), NATIVE), 1 ether, "another holder's ETH is unaffected");
     }
 
     /// @dev A USDC that refuses a payout, as a paused or blocklisting USDC does, reverts the claim
     /// and leaves the accrual and its backing exactly as they were.
-    function test_aRefusedPayoutLeavesTheCreditIntact() public {
+    function test_aRefusedUsdcPayoutLeavesTheCreditIntact() public {
+        uint256 k1 = _buy(fleet, alice);
+        _fundAndAllocate(0, 7e18);
+
+        bytes memory paused = abi.encodeWithSelector(RevertingERC20.TransferDisabled.selector);
+        vm.mockCallRevert(address(usdc), abi.encodeWithSelector(IERC20.transfer.selector), paused);
+        vm.prank(alice);
+        vm.expectRevert(paused);
+        rewards.claim(_ids(k1), _assets(address(usdc)));
+        assertEq(rewards.accrued(address(usdc), k1), 7e18, "the accrual is preserved untouched");
+        assertEq(rewards.backed(address(usdc)), 7e18, "still fully reserved");
+
+        vm.clearMockedCalls();
+        assertEq(_claim(alice, _ids(k1), address(usdc)), 7e18, "claimable again once USDC works");
+        assertEq(rewards.backed(address(usdc)), 0, "reserve released only by the payout");
+    }
+
+    /// @dev The same for a split asset that refuses a payout.
+    function test_aRefusedSplitPayoutLeavesTheCreditIntact() public {
         RevertingERC20 stuck = new RevertingERC20();
-        rewards = _ledger(address(stuck));
-        _enroll(1, 0, alice);
-        stuck.mint(address(rewards), 7e18);
-        vm.prank(address(fleet));
-        rewards.allocateToCohort(address(stuck), 0, 7e18);
+        uint256 k1 = _buy(fleet, alice);
+        _split(address(stuck), 7e18);
 
         stuck.setTransfersFail(true);
         vm.prank(alice);
         vm.expectRevert(RevertingERC20.TransferDisabled.selector);
-        rewards.claim(_ids(1), _assets(address(stuck)));
-        assertEq(rewards.accrued(address(stuck), 1), 7e18, "the accrual is preserved untouched");
+        rewards.claim(_ids(k1), _assets(address(stuck)));
+        assertEq(rewards.accrued(address(stuck), k1), 7e18, "the accrual is preserved untouched");
         assertEq(rewards.backed(address(stuck)), 7e18, "still fully reserved");
 
         stuck.setTransfersFail(false);
-        assertEq(_claim(alice, _ids(1), address(stuck)), 7e18, "claimable again once the token works");
+        assertEq(_claim(alice, _ids(k1), address(stuck)), 7e18, "claimable again once the token works");
         assertEq(rewards.backed(address(stuck)), 0, "reserve released only by the payout");
     }
 
@@ -774,29 +835,27 @@ contract KeyfleetRewardsTest is Test {
 
     function test_aReentrantTokenClaimIsRejectedByTheGuard() public {
         ReenteringERC20 evil = new ReenteringERC20();
-        rewards = _ledger(address(evil));
-        _enroll(1, 0, alice);
-        evil.mint(address(rewards), 10e18);
-        vm.startPrank(address(fleet));
-        rewards.allocateToCohort(address(evil), 0, 6e18);
-        rewards.credit(address(evil), address(evil), 4e18);
-        vm.stopPrank();
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _buy(fleet, address(evil));
+        _split(address(evil), 5e18);
 
-        evil.setRewards(rewards);
+        evil.arm(rewards, _ids(k2));
         vm.prank(alice);
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
-        rewards.claim(_ids(1), _assets(address(evil)));
+        rewards.claim(_ids(k1), _assets(address(evil)));
         assertEq(rewards.backed(address(evil)), 10e18, "reserve intact");
+        assertEq(rewards.accrued(address(evil), k1), 5e18, "alice's key untouched");
+        assertEq(rewards.accrued(address(evil), k2), 5e18, "the token's own key untouched");
     }
 
     function test_aReentrantEthHolderIsRejectedByTheGuard() public {
         address reclaimer = address(new EthReclaimer(rewards));
-        _enroll(1, 0, reclaimer);
+        uint256 k1 = _buy(fleet, reclaimer);
         _split(NATIVE, 1 ether);
 
         vm.prank(reclaimer);
         vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
-        rewards.claim(_ids(1), _assets(NATIVE));
+        rewards.claim(_ids(k1), _assets(NATIVE));
         assertEq(address(rewards).balance, 1 ether, "nothing left the contract");
         assertEq(rewards.backed(NATIVE), 1 ether);
     }
@@ -804,40 +863,43 @@ contract KeyfleetRewardsTest is Test {
     // --- 11. fractional carry in the cohort lane --------------------------
 
     function test_fractionalCarryKeepsLifetimeDustUnderOneUnitPerKey() public {
-        _enroll(1, 0, alice);
-        _enroll(2, 0, bob);
-        _enroll(3, 0, carol);
+        uint256 k1 = _buy(fleet, alice);
+        uint256 k2 = _buy(fleet, bob);
+        _buy(fleet, carol);
 
         for (uint256 i = 0; i < 12; ++i) {
             _fundAndAllocate(0, 100); // atomic units, deliberately indivisible by three
             vm.prank(address(fleet));
-            rewards.settleKey(1, alice); // settle every round: the carry must not compound
+            rewards.settleKey(k1, alice); // settle every round: the carry must not compound
         }
 
-        uint256 paidToAlice = _claim(alice, _ids(1), address(usdc));
+        uint256 paidToAlice = _claim(alice, _ids(k1), address(usdc));
         assertEq(paidToAlice, 399, "twelve settlements lose less than a unit in total, not one per round");
-        uint256 paidToBob = _claim(bob, _ids(2), address(usdc)); // never settled mid-sequence
+        uint256 paidToBob = _claim(bob, _ids(k2), address(usdc)); // never settled mid-sequence
         assertLe(paidToBob - paidToAlice, 1, "settling often costs no more than settling once");
     }
 
     // --- 12. fuzz: the ledger always holds what it owes ---------------------
 
+    /// @dev On Cascade, where a key's cohort is its level and completing a level repays the level
+    /// before it through the ledger, so purchases themselves allocate as well as the steps below.
     function testFuzz_balanceAlwaysCoversBackedAndCredits(uint256 seed) public {
+        _use(_deploy(KeyfleetPresets.Preset.FibonacciCascade));
         address[3] memory holders = [alice, bob, carol];
         for (uint256 i = 0; i < 3; ++i) {
-            _enroll(i + 1, i % 2, holders[i]);
+            _buy(fleet, holders[i]);
         }
 
         for (uint256 step = 0; step < 16; ++step) {
             seed = uint256(keccak256(abi.encode(seed, step)));
             uint256 action = seed % 6;
             address holder = holders[(seed >> 8) % 3];
-            uint256 tokenId = ((seed >> 16) % 3) + 1;
-            uint256 cohortId = (seed >> 24) % 3;
+            uint256 tokenId = _key(fleet, ((seed >> 16) % fleet.totalMinted()) + 1);
+            uint256 cohortId = ((seed >> 24) % 3) + 1;
             uint256 amount = ((seed >> 32) % 1e18) + 1;
 
             if (action == 0) {
-                _enroll(fleet.totalMinted() + 1, cohortId, holder);
+                _buy(fleet, holder);
             } else if (action == 1) {
                 usdc.mint(address(rewards), amount);
                 vm.prank(address(fleet));
@@ -849,12 +911,13 @@ contract KeyfleetRewardsTest is Test {
             } else if (action == 3) {
                 _split((seed >> 40) % 2 == 0 ? address(usdc) : NATIVE, amount % 1e12 + 1);
             } else if (action == 4) {
-                address keyOwner = fleet.ownerOf(tokenId);
-                vm.prank(address(fleet));
-                rewards.settleKey(tokenId, keyOwner);
-                fleet.setOwner(tokenId, holder);
+                address keyOwner = keys.ownerOf(tokenId);
+                if (keyOwner != holder) {
+                    vm.prank(keyOwner);
+                    keys.transferFrom(keyOwner, holder, tokenId);
+                }
             } else {
-                vm.prank(fleet.ownerOf(tokenId));
+                vm.prank(keys.ownerOf(tokenId));
                 try rewards.claim(_ids(tokenId), _assets(address(usdc), NATIVE)) {} catch {}
             }
 
@@ -870,14 +933,167 @@ contract KeyfleetRewardsTest is Test {
         for (uint256 i = 0; i < 3; ++i) {
             outstanding += rewards.credits(asset, holders[i]);
         }
-        for (uint256 id = 1; id <= fleet.totalMinted(); ++id) {
-            outstanding += rewards.accrued(asset, id);
+        for (uint256 n = 1; n <= fleet.totalMinted(); ++n) {
+            outstanding += rewards.accrued(asset, _key(fleet, n));
         }
         assertGe(reserved, outstanding, "reserve covers credits plus unsettled accruals");
     }
 
-    function _range3() private pure returns (uint256[] memory ids) {
-        ids = new uint256[](3);
-        (ids[0], ids[1], ids[2]) = (1, 2, 3);
+    // --- 13. one fleet's ledger never takes another fleet's key -------------
+
+    /// @dev Every pair of the four founding fleets and an open fleet of each type: a key of another
+    /// fleet is refused before the ledger asks who holds it. The key's own holder is refused, a
+    /// wallet holding an active shard of it is refused, a key of that fleet never minted is refused
+    /// with the same error rather than as a missing token, and a claim naming one of its own keys
+    /// as well settles nothing.
+    function test_claimRefusesAKeyOfEveryOtherFleetBeforeAnyOwnershipCheck() public {
+        KeyfleetPresets.Preset[4] memory presets = [
+            KeyfleetPresets.Preset.FleetTechClassic,
+            KeyfleetPresets.Preset.FibonacciSyndicate,
+            KeyfleetPresets.Preset.FleetTechAccelerant,
+            KeyfleetPresets.Preset.FibonacciCascade
+        ];
+        KeyfleetManager[8] memory fleets;
+        for (uint256 i = 0; i < 4; ++i) {
+            fleets[i] = _deploy(presets[i]);
+            _buy(fleets[i], _wallet(100 + i));
+        }
+        for (uint256 i = 0; i < 4; ++i) {
+            fleets[4 + i] = _createOpen(presets[i], 10e6);
+        }
+        for (uint256 i = 0; i < 8; ++i) {
+            uint256 own = _key(fleets[i], 1);
+            vm.prank(keys.ownerOf(own));
+            shards.issue(_ids(own), agent, 30);
+        }
+
+        for (uint256 i = 0; i < 8; ++i) {
+            KeyfleetRewards ledger = fleets[i].REWARDS();
+            uint256 own = _key(fleets[i], 1);
+            address ownHolder = keys.ownerOf(own);
+            for (uint256 j = 0; j < 8; ++j) {
+                if (j == i) continue;
+                uint256 foreign = _key(fleets[j], 1);
+                bytes memory refused = abi.encodeWithSelector(KeyfleetRewards.ForeignKey.selector, foreign);
+
+                vm.prank(keys.ownerOf(foreign));
+                vm.expectRevert(refused);
+                ledger.claim(_ids(foreign), _assets(address(usdc)));
+
+                vm.prank(agent);
+                vm.expectRevert(refused);
+                ledger.claim(_ids(foreign), _assets(address(usdc)));
+
+                uint256 unminted = _key(fleets[j], 999);
+                vm.prank(ownHolder);
+                vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.ForeignKey.selector, unminted));
+                ledger.claim(_ids(unminted), _assets(address(usdc)));
+
+                vm.prank(ownHolder);
+                vm.expectRevert(refused);
+                ledger.claim(_pair(own, foreign), _assets(address(usdc)));
+            }
+
+            uint256 unknownFleet = keys.tokenIdOf(77, 1);
+            vm.prank(ownHolder);
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.ForeignKey.selector, unknownFleet));
+            ledger.claim(_ids(unknownFleet), _assets(address(usdc)));
+        }
+    }
+
+    // --- 14. two fleets' ledgers are fully separate --------------------------
+
+    /// @dev Two fleets of one type, whose keys share key numbers and cohort 0: what one ledger
+    /// credits, allocates, enrolls, splits and holds never shows up in the other, and neither
+    /// fleet's manager or treasury can write the other's.
+    function test_theLedgersOfTwoFleetsAreFullySeparate() public {
+        KeyfleetManager fleetA = fleet;
+        KeyfleetRewards ledgerA = rewards;
+        KeyfleetTreasury treasuryA = treasury;
+        uint256 a1 = _buy(fleetA, alice);
+        uint256 a2 = _buy(fleetA, bob);
+
+        KeyfleetManager fleetB = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
+        KeyfleetRewards ledgerB = fleetB.REWARDS();
+        KeyfleetTreasury treasuryB = fleetB.TREASURY();
+        uint256 b2 = _buy(fleetB, alice);
+        assertTrue(address(ledgerA) != address(ledgerB), "each fleet has its own ledger");
+        assertEq(keys.keyNumberOf(a1), keys.keyNumberOf(_key(fleetB, 1)), "the keys share numbers");
+        assertEq(ledgerA.cohortSize(0), 2, "fleet A enrolled its two keys");
+        assertEq(ledgerB.cohortSize(0), 2, "fleet B its creator's key and alice's");
+
+        // Fleet A's manager allocates and credits; fleet B sees none of it.
+        _fundAndAllocate(0, 30e6);
+        usdc.mint(address(ledgerA), 5e6);
+        vm.prank(address(fleetA));
+        ledgerA.credit(address(usdc), alice, 5e6);
+        assertEq(ledgerA.accrued(address(usdc), a1), 15e6);
+        assertEq(ledgerB.cohortIndex(address(usdc), 0), 0, "fleet B's cohort 0 never moved");
+        assertEq(ledgerB.accrued(address(usdc), b2), 0, "alice's fleet B key earned nothing");
+        assertEq(ledgerB.credits(address(usdc), alice), 0, "and alice has no fleet B credit");
+        assertEq(ledgerB.backed(address(usdc)), 0, "fleet B reserves nothing");
+
+        // Fleet A's split reaches only fleet A's keys.
+        _split(address(regent), 1e18);
+        _split(NATIVE, 1 ether);
+        assertEq(ledgerA.accrued(address(regent), a2), 1e18);
+        assertEq(ledgerB.splitIndex(address(regent)), 0);
+        assertEq(ledgerB.splitIndex(NATIVE), 0);
+        assertEq(ledgerB.rewardAssets().length, 1, "fleet B pays only USDC still");
+
+        // Tokens sent to fleet A's ledger never back fleet B's.
+        vm.prank(address(fleetB));
+        vm.expectRevert(KeyfleetRewards.InsufficientBacking.selector);
+        ledgerB.allocateToCohort(address(usdc), 0, 1);
+
+        // Neither fleet's manager nor treasury writes the other's ledger, and one treasury's split
+        // flag does not open the other's.
+        _setSplitting(treasuryA, true);
+        regent.mint(address(ledgerB), 2e18);
+        uint256 b3 = _key(fleetB, 3);
+        vm.startPrank(address(fleetA));
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        ledgerB.enrollKey(b3, 0);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        ledgerB.credit(address(usdc), alice, 1);
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        ledgerB.settleKey(b2, alice);
+        vm.stopPrank();
+        vm.prank(address(treasuryA));
+        vm.expectRevert(KeyfleetRewards.OnlyTreasury.selector);
+        ledgerB.fundSplit(address(regent), 1e18, 2);
+        vm.prank(address(treasuryB));
+        vm.expectRevert(KeyfleetRewards.NotSplitting.selector);
+        ledgerB.fundSplit(address(regent), 1e18, 2);
+        _setSplitting(treasuryA, false);
+        vm.prank(address(fleetB));
+        vm.expectRevert(KeyfleetRewards.OnlyManager.selector);
+        ledgerA.credit(address(usdc), alice, 1);
+
+        // Alice holds a key in both; each ledger pays her only its own.
+        vm.prank(alice);
+        vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
+        ledgerB.claim(_ids(b2), _assets(address(usdc), address(regent)));
+        vm.prank(alice);
+        uint256[] memory paid = ledgerA.claim(_ids(a1), _assets(address(usdc), address(regent)));
+        assertEq(paid[0], 20e6, "her allocation share and her credit");
+        assertEq(paid[1], 1e18, "her split");
+        assertEq(ledgerB.backed(address(usdc)), 0);
+    }
+
+    /// @dev A real Accelerant rebate is credited in the Accelerant fleet's own ledger and nowhere
+    /// else.
+    function test_aRebateIsCreditedOnlyInItsOwnFleetsLedger() public {
+        KeyfleetManager classic = fleet;
+        KeyfleetManager accelerant = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
+        _buy(accelerant, alice);
+        _buy(classic, alice);
+        _buy(accelerant, bob); // pays alice a rebate for holding the preceding key
+
+        uint256 rebate = accelerant.REWARDS().credits(address(usdc), alice);
+        assertGt(rebate, 0, "the rebate is credited in the Accelerant ledger");
+        assertEq(classic.REWARDS().credits(address(usdc), alice), 0, "and not in the Classic ledger");
+        assertEq(classic.REWARDS().backed(address(usdc)), 0);
+        assertEq(accelerant.REWARDS().backed(address(usdc)), rebate);
     }
 }

@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
@@ -12,7 +12,6 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 import {MockLaunchToken} from "./mocks/MockAutolaunchFactory.sol";
-import {DecimalsToken} from "./KeyfleetSplit.t.sol";
 
 /// @dev Plan §9.2, the Autolaunch path: a fleet launches its own token by an approved call to the
 /// pinned Autolaunch v2 factory, and once that launch has succeeded anyone may bind its token, once,
@@ -20,7 +19,6 @@ import {DecimalsToken} from "./KeyfleetSplit.t.sol";
 contract KeyfleetLaunchTest is KeyfleetFixture {
     uint256 private constant START = 1_000_000;
 
-    address private keeper = address(0x7EE9E2);
     address private stranger = address(0x5743);
 
     event LaunchTokenBound(uint256 indexed launchId, address indexed token, uint256 threshold);
@@ -30,14 +28,27 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         vm.warp(START);
     }
 
-    function _classic(uint256 keys) private returns (Keyfleet fleet, KeyfleetTreasury treasury) {
+    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
+    /// treasury opening, by when only a renewed key is present.
+    function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
-        _buyMany(fleet, keys);
+        _buyMany(fleet, count);
+        _mature();
+        _openTreasury(fleet);
+    }
+
+    /// @dev A second Classic fleet of the same collection, created openly; its creator holds key 1,
+    /// old enough to take part, after its own treasury opening.
+    function _otherFleet() private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
+        fleet = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
+        treasury = fleet.TREASURY();
+        _mature();
+        _openTreasury(fleet);
     }
 
     function _run(KeyfleetTreasury treasury) private {
-        vm.prank(keeper);
+        vm.prank(stranger);
         treasury.runDailySplit();
     }
 
@@ -53,19 +64,21 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         return Math.mulDiv(balance, 50, 10_000) / keys;
     }
 
-    /// @dev Launches the fleet's token, settles the launch as sold, and binds it as `keeper`.
-    function _launchAndBind(Keyfleet fleet) private returns (uint256 launchId, MockLaunchToken token) {
+    /// @dev Launches the fleet's token, settles the launch as sold, and binds it as a stranger.
+    function _launchAndBind(KeyfleetManager fleet) private returns (uint256 launchId, MockLaunchToken token) {
         IERC20 launched;
         (launchId, launched) = _launch(fleet);
         autolaunch.graduate(launchId);
-        vm.prank(keeper);
+        vm.prank(stranger);
         fleet.TREASURY().bindLaunchToken(launchId);
         token = MockLaunchToken(address(launched));
     }
 
     /// @dev Proposes `calls`, lets the vote close, and expects carrying them out to revert with
     /// `reason`.
-    function _expectExecuteReverts(Keyfleet fleet, KeyfleetTreasury.Call[] memory calls, bytes memory reason) private {
+    function _expectExecuteReverts(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls, bytes memory reason)
+        private
+    {
         uint256 proposalId = _approve(fleet, calls);
         KeyfleetVotes votes = fleet.VOTES();
         vm.warp(votes.proposal(proposalId).closesAt);
@@ -79,7 +92,8 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// records as the launcher, naming that treasury as the launch's treasury. The launch takes
     /// nothing from the treasury.
     function test_aFleetLaunchesByAnApprovedCallNamingItsOwnTreasury() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        uint256 regentBefore = regent.balanceOf(address(treasury));
         uint256 usdcBefore = usdc.balanceOf(address(treasury));
 
         (uint256 launchId, IERC20 token) = _launch(fleet);
@@ -89,7 +103,8 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         assertEq(launched.launcher, address(treasury), "The treasury called the factory");
         assertEq(launched.treasury, address(treasury), "And named itself as the launch's treasury");
         assertEq(launched.subject, address(token), "The launched token");
-        assertEq(usdc.balanceOf(address(treasury)), usdcBefore, "Launching cost the treasury nothing");
+        assertEq(regent.balanceOf(address(treasury)), regentBefore, "Launching cost the treasury nothing");
+        assertEq(usdc.balanceOf(address(treasury)), usdcBefore, "Neither REGENT nor USDC");
         assertEq(address(treasury.launchToken()), address(0), "Launching binds nothing by itself");
     }
 
@@ -119,8 +134,8 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// launch naming another treasury, another fleet's launch, and a launch this treasury made for
     /// another treasury. Each of them sold.
     function test_aLaunchThatIsNotThisTreasurysOwnIsRefused() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
-        (Keyfleet other, KeyfleetTreasury otherTreasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager other, KeyfleetTreasury otherTreasury) = _otherFleet();
 
         vm.prank(stranger);
         (uint256 strangersForThisTreasury,,,) = autolaunch.launch(_launchParams(address(treasury)));
@@ -149,7 +164,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// @dev Invariant: a launch is bound only once the strategy records it as graduated; one still
     /// running and one that failed are refused, and a later launch that sold is bound.
     function test_aLaunchThatHasNotSucceededIsRefused() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         (uint256 running,) = _launch(fleet);
         (uint256 failed,) = _launch(fleet);
         autolaunch.fail(failed);
@@ -171,7 +186,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// @dev Invariant: anyone may bind the fleet's sold launch, once; the same launch again and a
     /// second sold launch of the same fleet are both refused, and the first stays bound.
     function test_theLaunchTokenIsBoundOnceByAnyone() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         (uint256 first, IERC20 token) = _launch(fleet);
         (uint256 second,) = _launch(fleet);
         autolaunch.graduate(first);
@@ -196,7 +211,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// @dev Invariant: binding runs under the treasury's one lock, so an approved call cannot bind
     /// in the middle of other calls; anyone binds it directly instead.
     function test_bindingSharesTheTreasurysLock() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         (uint256 launchId,) = _launch(fleet);
         autolaunch.graduate(launchId);
 
@@ -213,14 +228,14 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// @dev Invariant: the launch token held before binding is not split; from the run after
     /// binding it is split last, at 100 tokens or more and not below, like every other bound asset.
     function test_theLaunchTokenIsSplitFromTheNextRun() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(2);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         KeyfleetRewards rewards = fleet.REWARDS();
         (uint256 launchId, IERC20 launched) = _launch(fleet);
         MockLaunchToken token = MockLaunchToken(address(launched));
         token.mint(address(treasury), 100e18 - 1);
         autolaunch.graduate(launchId);
 
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), 0, "Not bound, not split");
 
@@ -229,12 +244,12 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         assertEq(assets.length, 4, "ETH, REGENT, USDC and the launch token");
         assertEq(assets[3], address(token), "Split last");
 
-        vm.warp(START + 2 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), 0, "Just below its threshold");
 
         token.mint(address(treasury), 1);
-        vm.warp(START + 3 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), _perKey(100e18, 2), "At its threshold, from the next run");
         assertEq(
@@ -243,7 +258,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
 
         token.mint(address(treasury), 1_000e18);
         uint256 held = token.balanceOf(address(treasury));
-        vm.warp(START + 4 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(
             rewards.splitIndex(address(token)),
@@ -256,21 +271,21 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// a run. OUSD cannot be admitted as the bound launch token, and a launch whose token was admitted
     /// as OUSD is not bound. With both, the launch token is split after OUSD.
     function test_ousdAndTheLaunchTokenRefuseEachOther() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(1);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         (, MockLaunchToken token) = _launchAndBind(fleet);
         _expectExecuteReverts(
             fleet,
             _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.admitOusd, (IERC20(address(token))))),
             abi.encodeWithSelector(KeyfleetTreasury.OusdInvalid.selector, address(token))
         );
-        DecimalsToken ousd = new DecimalsToken(18);
+        MockLaunchToken ousd = new MockLaunchToken("Origin Dollar", "OUSD");
         _execute(fleet, _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.admitOusd, (IERC20(address(ousd))))));
         address[] memory assets = treasury.splitAssets();
         assertEq(assets.length, 5, "ETH, REGENT, USDC, OUSD and the launch token");
         assertEq(assets[3], address(ousd), "OUSD fourth");
         assertEq(assets[4], address(token), "The launch token last");
 
-        (Keyfleet other, KeyfleetTreasury otherTreasury) = _classic(1);
+        (KeyfleetManager other, KeyfleetTreasury otherTreasury) = _otherFleet();
         (uint256 launchId, IERC20 launched) = _launch(other);
         _execute(other, _selfCall(otherTreasury, abi.encodeCall(KeyfleetTreasury.admitOusd, (launched))));
         autolaunch.graduate(launchId);
@@ -281,7 +296,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
     /// @dev Invariant: the ledger takes launch-token funding only from inside the split routine, so
     /// an approved call that moves the token to the ledger and funds it reverts.
     function test_anApprovedCallCannotFundASplitOfTheLaunchToken() public {
-        (Keyfleet fleet, KeyfleetTreasury treasury) = _classic(2);
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
         KeyfleetRewards rewards = fleet.REWARDS();
         (, MockLaunchToken token) = _launchAndBind(fleet);
         token.mint(address(treasury), 1_000e18);

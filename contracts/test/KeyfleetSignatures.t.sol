@@ -1,48 +1,41 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Test} from "forge-std/Test.sol";
-import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
-import {KeyfleetStack} from "../script/KeyfleetStack.sol";
-import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockToken} from "./KeyfleetIncome.t.sol";
+import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 import {MockContractWallet} from "./mocks/MockContractWallet.sol";
-import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
-import {MockRegent} from "./mocks/MockRegent.sol";
-import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
-import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Signed renewals and ballots: anyone submits them, the signer must be allowed to act for every
 /// key named, and a signature is void after one use, after its deadline, after a key it names
-/// changes hands, and after any change to who may act for such a key.
-contract KeyfleetSignaturesTest is Test {
+/// changes hands, after any change to who may act for such a key, and in every fleet but the one
+/// it was signed for.
+contract KeyfleetSignaturesTest is KeyfleetFixture {
     bytes32 private constant DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     uint256 private constant ALICE_KEY = 0xA11CE;
     uint256 private constant AGENT_KEY = 0xA6E27;
     uint256 private constant MALLORY_KEY = 0x4A11;
-    uint256 private constant SAFE_SIGNER_KEY = 0x5AFE;
+    uint256 private constant WALLET_SIGNER_KEY = 0x5AFE;
+    /// @dev The starting price of the open fleets these tests create: 10 USDC.
+    uint256 private constant OPEN_START = 10_000_000;
     KeyfleetVotes.Choice private constant YES = KeyfleetVotes.Choice.Yes;
     KeyfleetVotes.Choice private constant NO = KeyfleetVotes.Choice.No;
 
-    MockToken private usdc;
-    MockVRFCoordinatorV2Plus private vrf;
-    Keyfleet private fleet;
+    /// @dev The founding Classic fleet, fleet 1, and its voting controller.
+    KeyfleetManager private fleet;
     KeyfleetVotes private votes;
-    KeyfleetShards private shards;
+    /// @dev Keys 1 and 2 of the founding Classic fleet are Alice's, key 3 is Bob's.
+    uint256 private k1;
+    uint256 private k2;
+    uint256 private k3;
 
     address private alice = vm.addr(ALICE_KEY);
     address private agent = vm.addr(AGENT_KEY);
     address private mallory = vm.addr(MALLORY_KEY);
     address private bob = address(0xB0B);
-    address private keeper = address(0x7EE9E2);
-    address private buyer = address(0xB0B0B0);
-    address private constant REGENT = address(0x4E6E7);
-    address private constant AUTOLAUNCH = address(0xA070);
 
     event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
     event BallotCast(
@@ -50,51 +43,20 @@ contract KeyfleetSignaturesTest is Test {
     );
 
     function setUp() public {
-        usdc = new MockToken("USD Coin", "USDC");
-        vrf = new MockVRFCoordinatorV2Plus();
-        uint256 subscription = vrf.createSubscription();
         vm.warp(1_000_000);
         vm.roll(1_000);
-        // Both placed rather than created, so the fleet keeps the address the signed vectors name.
-        deployCodeTo("MockRegent.sol:MockRegent", REGENT);
-        deployCodeTo("MockAutolaunchFactory.sol:MockAutolaunchFactory", AUTOLAUNCH);
-        fleet = KeyfleetStack.deploy(
-            KeyfleetPresets.Preset.FleetTechClassic,
-            usdc,
-            new MockRegentRevenueStaking(usdc),
-            MockRegent(REGENT),
-            MockAutolaunchFactory(AUTOLAUNCH),
-            Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
-            Keyfleet.Randomness({
-                coordinator: IVRFCoordinatorV2Plus(address(vrf)),
-                subscriptionId: subscription,
-                keyHash: keccak256("key hash")
-            }),
-            keccak256("trait table")
-        );
-        vrf.addConsumer(subscription, address(fleet));
+        _setUpFixture();
+        fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         votes = fleet.VOTES();
-        shards = fleet.SHARDS();
-        _buy(alice); // key 1
-        _buy(alice); // key 2
-        _buy(bob); // key 3
+        k1 = _buy(fleet, alice);
+        k2 = _buy(fleet, alice);
+        k3 = _buy(fleet, bob);
+        // Past the keys' automatic presence, so a key is present here only once it is renewed.
+        _mature();
+        _lapse();
     }
 
     // --- helpers ---------------------------------------------------------
-
-    function _buy(address receiver) private returns (uint256 tokenId) {
-        uint256 price = fleet.nextPrice();
-        usdc.mint(buyer, price);
-        vm.startPrank(buyer);
-        usdc.approve(address(fleet), price);
-        tokenId = fleet.purchase(receiver, price, block.timestamp);
-        vm.stopPrank();
-    }
-
-    function _ids(uint256 a) private pure returns (uint256[] memory ids) {
-        ids = new uint256[](1);
-        ids[0] = a;
-    }
 
     function _pair(uint256 a, uint256 b) private pure returns (uint256[] memory ids) {
         ids = new uint256[](2);
@@ -105,46 +67,78 @@ contract KeyfleetSignaturesTest is Test {
         return block.timestamp + 1 hours;
     }
 
-    /// @dev The EIP-712 encoding of the keys, written out independently of the contract.
-    function _keyState(uint256[] memory ids) private view returns (bytes32, bytes32, bytes32) {
+    /// @dev The EIP-712 encoding of the keys, their ownership epochs and their delegation
+    /// revisions: three words, written out independently of the contract.
+    function _keyState(uint256[] memory ids) private view returns (bytes memory) {
         uint64[] memory epochs = new uint64[](ids.length);
         uint64[] memory revisions = new uint64[](ids.length);
         for (uint256 i = 0; i < ids.length; ++i) {
-            epochs[i] = fleet.ownershipEpoch(ids[i]);
+            epochs[i] = keys.ownershipEpoch(ids[i]);
             revisions[i] = shards.delegationRevision(ids[i]);
         }
-        return
-            (
-                keccak256(abi.encodePacked(ids)),
-                keccak256(abi.encodePacked(epochs)),
-                keccak256(abi.encodePacked(revisions))
-            );
+        return abi.encode(
+            keccak256(abi.encodePacked(ids)),
+            keccak256(abi.encodePacked(epochs)),
+            keccak256(abi.encodePacked(revisions))
+        );
     }
 
-    function _digest(bytes32 structHash) private view returns (bytes32) {
+    /// @dev The digest a signer signs for the controller at `verifier`.
+    function _digest(KeyfleetVotes verifier, bytes32 structHash) private view returns (bytes32) {
         bytes32 domain = keccak256(
-            abi.encode(DOMAIN_TYPEHASH, keccak256("KeyfleetVotes"), keccak256("1"), block.chainid, address(votes))
+            abi.encode(DOMAIN_TYPEHASH, keccak256("KeyfleetVotes"), keccak256("1"), block.chainid, address(verifier))
         );
         return keccak256(abi.encodePacked("\x19\x01", domain, structHash));
     }
 
-    function _sign(uint256 privateKey, bytes32 structHash) private view returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, _digest(structHash));
+    function _sign(uint256 privateKey, KeyfleetVotes verifier, bytes32 structHash) private view returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, _digest(verifier, structHash));
         return abi.encodePacked(r, s, v);
     }
 
-    function _presentHash(uint256[] memory ids, address signer, uint256 deadline) private view returns (bytes32) {
-        (bytes32 idHash, bytes32 epochs, bytes32 revisions) = _keyState(ids);
+    function _sign(uint256 privateKey, bytes32 structHash) private view returns (bytes memory) {
+        return _sign(privateKey, votes, structHash);
+    }
+
+    /// @dev A `Present` message naming `manager`, at `nonceFrom`'s current nonce for the signer.
+    function _presentHash(
+        KeyfleetVotes nonceFrom,
+        address manager,
+        uint256[] memory ids,
+        address signer,
+        uint256 deadline
+    ) private view returns (bytes32) {
+        // Every field is one static word, so the parts joined are the whole encoding.
         return keccak256(
-            abi.encode(
-                votes.PRESENT_TYPEHASH(),
-                address(fleet),
-                idHash,
-                epochs,
-                revisions,
-                signer,
-                votes.nonces(signer),
-                deadline
+            bytes.concat(
+                abi.encode(votes.PRESENT_TYPEHASH(), manager),
+                _keyState(ids),
+                abi.encode(signer, nonceFrom.nonces(signer), deadline)
+            )
+        );
+    }
+
+    function _presentHash(uint256[] memory ids, address signer, uint256 deadline) private view returns (bytes32) {
+        return _presentHash(votes, address(fleet), ids, signer, deadline);
+    }
+
+    /// @dev A `Ballot` message on `proposalId` with `proposalHash`, at `nonceFrom`'s current nonce
+    /// for the signer.
+    function _ballotHash(
+        KeyfleetVotes nonceFrom,
+        uint256 proposalId,
+        bytes32 proposalHash,
+        uint256[] memory ids,
+        KeyfleetVotes.Choice choice,
+        address signer,
+        uint256 deadline
+    ) private view returns (bytes32) {
+        // Every field is one static word, so the parts joined are the whole encoding.
+        return keccak256(
+            bytes.concat(
+                abi.encode(votes.BALLOT_TYPEHASH(), proposalId, proposalHash),
+                _keyState(ids),
+                abi.encode(choice, signer, nonceFrom.nonces(signer), deadline)
             )
         );
     }
@@ -156,21 +150,7 @@ contract KeyfleetSignaturesTest is Test {
         address signer,
         uint256 deadline
     ) private view returns (bytes32) {
-        (bytes32 idHash, bytes32 epochs, bytes32 revisions) = _keyState(ids);
-        return keccak256(
-            abi.encode(
-                votes.BALLOT_TYPEHASH(),
-                proposalId,
-                votes.proposal(proposalId).proposalHash,
-                idHash,
-                epochs,
-                revisions,
-                choice,
-                signer,
-                votes.nonces(signer),
-                deadline
-            )
-        );
+        return _ballotHash(votes, proposalId, votes.proposal(proposalId).proposalHash, ids, choice, signer, deadline);
     }
 
     function _signPresent(uint256 privateKey, uint256[] memory ids, uint256 deadline)
@@ -194,40 +174,45 @@ contract KeyfleetSignaturesTest is Test {
     function _propose() private returns (uint256 proposalId) {
         vm.prank(bob);
         proposalId =
-            votes.propose(3, keccak256("record it"), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
+            votes.propose(k3, keccak256("record it"), uint64(block.timestamp + 1 days), new KeyfleetTreasury.Call[](0));
     }
 
     // --- 1. the signed path ------------------------------------------------
 
-    /// @dev Invariant: the contract accepts a renewal signed by an independent EIP-712 library
-    /// (Python `eth_account`, `encode_typed_data`) from the published type string, so a site or CLI
-    /// building the message from the README gets the same digest. The signature was made off line
-    /// with this suite's throwaway key for Alice, over keys 1 and 2 at epochs 1 and 1 and delegation
-    /// revisions 0 and 1, nonce 0 and deadline 2,000,000, on chain 31337 at this suite's addresses.
+    /// @dev Invariant: the contract accepts a renewal signed by an independent EIP-712 encoder from
+    /// the published type string, so a site or CLI building the message from the README gets the
+    /// same digest. The signature was made off line with Foundry's `cast wallet sign --data` (Rust,
+    /// alloy) and this suite's throwaway key for Alice, over keys 1 and 2 of fleet 1 at epochs 1
+    /// and 1 and delegation revisions 0 and 1, nonce 0 and deadline 2,000,000, on chain 31337 at
+    /// this suite's addresses. The fleet contracts are deployed with CREATE2, so a change to their
+    /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(votes), 0xc7183455a4C133Ae270771860664b6B7ec320bB1, "the address the vector was signed for");
-        assertEq(address(fleet), 0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9);
+        assertEq(address(votes), 0x69E0a4074ddD495012170747bab977B83a359F91, "the address the vector was signed for");
+        assertEq(address(fleet), 0xbe712D5699f7B3Fd137d8966095D6925ba18d136, "the manager the vector names");
         assertEq(block.chainid, 31337);
+        assertEq(k1, 10_000_000_001);
+        assertEq(k2, 10_000_000_002);
         vm.prank(alice);
-        shards.issue(_ids(2), bob, 30);
+        shards.issue(_ids(k2), bob, 30);
 
         votes.presentBySig(
-            _pair(1, 2),
+            _pair(k1, k2),
             alice,
             2_000_000,
-            hex"0dc9818ee53ccbf71380113b427ebbd971e25c5e1f6661b875c988c553d5884b38d00510d36c089e32d000b2777931b3e6c0dcaa54a508a27775f40081a8b9b81c"
+            hex"facc9df6e010683eb5e89d5e88bd3531b11a371797e03e6246a3ef4d56086e820379e0cffc7a3f6a362737c3aa47becdab53ac687bd57c0630fd6d3796a17f6f1b"
         );
-        assertTrue(votes.isActive(1) && votes.isActive(2));
+        assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }
 
     /// @dev Invariant: the contract accepts a ballot signed by the same independent encoder, over a
-    /// proposal hash the encoder worked out itself from the published formula, so a site or CLI
-    /// building either from the README gets the same bytes. Bob proposes with key 3 and no calls,
-    /// content `keccak256("record it")`, closing a day after time 1,000,000, at this suite's treasury
-    /// address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation revisions 0 and 0,
-    /// nonce 0 and deadline 2,000,000.
+    /// proposal hash worked out with `cast` from the published formula, so a site or CLI building
+    /// either from the README gets the same bytes. Bob proposes with key 3 of fleet 1 and no calls,
+    /// content `keccak256("record it")`, closing a day after time 1,518,400 (when the keys'
+    /// automatic presence has ended) and open for its calls 48 hours after that, at this suite's
+    /// treasury address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation
+    /// revisions 0 and 0, nonce 0 and deadline 2,000,000.
     function test_aBallotFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(fleet.TREASURY()), 0xa0Cb889707d426A7A386870A03bc70d1b0697598);
+        assertEq(address(fleet.TREASURY()), 0x0dcd618B9948CC861158Ebd2802683B8510A68f8, "the treasury the encoder used");
         uint256 proposalId = _propose();
         assertEq(
             votes.proposal(proposalId).actionsHash,
@@ -236,28 +221,28 @@ contract KeyfleetSignaturesTest is Test {
         );
         assertEq(
             votes.proposal(proposalId).proposalHash,
-            0xf7b7d0c0a22b5c5ada4ae30e3b02dcf260902a1709242a52806cd8b6327514ed,
+            0xf52a2cadcbd57d8d617932f0f0d53a825fef2dc894cdb8cbe1a68ee7ae9297ea,
             "the proposal hash the encoder worked out"
         );
 
         votes.castBallotBySig(
             proposalId,
-            _pair(1, 2),
+            _pair(k1, k2),
             YES,
             alice,
             2_000_000,
-            hex"e3754659b1d36aa390f89ff4b4e7470b8fb35b91b6c6e8b3c512145270f07e7a4eb971ffad8c0702f9b91f53e9d7894595a8abd0c69211e5fbfb4515ca267ad91b"
+            hex"8fa80c398bf0e822088feb25eca426d921c1892a795a44511da9487087fd914f62e830d3dd60041526fd0b5497a1abc3c1a0d1998939311fae4b4655ec4337d71c"
         );
         assertEq(votes.proposal(proposalId).yes, 2);
     }
 
     /// @dev Invariant: the two message types are pinned, so an off-chain signer builds exactly what
-    /// the contract checks.
+    /// the contract checks. A renewal names the fleet's manager.
     function test_theMessageTypesArePinned() public view {
         assertEq(
             votes.PRESENT_TYPEHASH(),
             keccak256(
-                "Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
+                "Present(address manager,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
             )
         );
         assertEq(
@@ -277,16 +262,16 @@ contract KeyfleetSignaturesTest is Test {
     /// @dev Invariant: an owner's signed renewal is submitted by anyone, renews every key it names,
     /// and uses the owner's nonce.
     function test_anyoneSubmitsAnOwnersSignedRenewal() public {
-        uint256[] memory ids = _pair(1, 2);
+        uint256[] memory ids = _pair(k1, k2);
         uint256 deadline = _deadline();
         bytes memory signature = _signPresent(ALICE_KEY, ids, deadline);
 
         vm.expectEmit(true, true, true, true, address(votes));
-        emit Present(2, uint64(block.timestamp), uint64(block.number), 1);
+        emit Present(k2, uint64(block.timestamp), uint64(block.number), 1);
         vm.prank(keeper);
         votes.presentBySig(ids, alice, deadline, signature);
 
-        assertTrue(votes.isActive(1) && votes.isActive(2), "both keys renewed");
+        assertTrue(votes.isActive(k1) && votes.isActive(k2), "both keys renewed");
         assertEq(votes.nonces(alice), 1, "the nonce was used");
     }
 
@@ -295,7 +280,7 @@ contract KeyfleetSignaturesTest is Test {
     function test_aSignedBallotBindsItsChoiceProposalAndKeys() public {
         uint256 first = _propose();
         uint256 second = _propose();
-        uint256[] memory ids = _pair(1, 2);
+        uint256[] memory ids = _pair(k1, k2);
         uint256 deadline = _deadline();
         bytes memory signature = _signBallot(ALICE_KEY, first, ids, YES, deadline);
 
@@ -305,7 +290,7 @@ contract KeyfleetSignaturesTest is Test {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
         votes.castBallotBySig(second, ids, YES, alice, deadline, signature);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.castBallotBySig(first, _ids(1), YES, alice, deadline, signature);
+        votes.castBallotBySig(first, _ids(k1), YES, alice, deadline, signature);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
         votes.presentBySig(ids, alice, deadline, signature);
 
@@ -316,46 +301,46 @@ contract KeyfleetSignaturesTest is Test {
 
         assertEq(votes.proposal(first).yes, 2);
         assertEq(votes.proposal(second).yes, 0);
-        assertTrue(votes.isActive(1) && votes.isActive(2), "a ballot renews the keys");
+        assertTrue(votes.isActive(k1) && votes.isActive(k2), "a ballot renews the keys");
     }
 
     /// @dev Invariant: a signed message is used once. Submitting it again finds the nonce moved on.
     function test_aSignedMessageIsUsedOnce() public {
         uint256 deadline = _deadline();
-        bytes memory signature = _signPresent(ALICE_KEY, _ids(1), deadline);
-        votes.presentBySig(_ids(1), alice, deadline, signature);
+        bytes memory signature = _signPresent(ALICE_KEY, _ids(k1), deadline);
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.presentBySig(_ids(1), alice, deadline, signature);
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
 
         uint256 proposalId = _propose();
-        signature = _signBallot(ALICE_KEY, proposalId, _ids(1), YES, deadline);
-        votes.castBallotBySig(proposalId, _ids(1), YES, alice, deadline, signature);
+        signature = _signBallot(ALICE_KEY, proposalId, _ids(k1), YES, deadline);
+        votes.castBallotBySig(proposalId, _ids(k1), YES, alice, deadline, signature);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.castBallotBySig(proposalId, _ids(1), YES, alice, deadline, signature);
+        votes.castBallotBySig(proposalId, _ids(k1), YES, alice, deadline, signature);
         assertEq(votes.nonces(alice), 2);
     }
 
     /// @dev Invariant: a signed message is good up to and including its deadline, and not after.
     function test_anExpiredSignatureIsRefused() public {
         uint256 deadline = _deadline();
-        bytes memory signature = _signPresent(ALICE_KEY, _ids(1), deadline);
+        bytes memory signature = _signPresent(ALICE_KEY, _ids(k1), deadline);
 
         vm.warp(deadline + 1);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.SignatureExpired.selector, deadline));
-        votes.presentBySig(_ids(1), alice, deadline, signature);
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
 
         vm.warp(deadline);
-        votes.presentBySig(_ids(1), alice, deadline, signature);
-        assertTrue(votes.isActive(1));
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
+        assertTrue(votes.isActive(k1));
     }
 
     /// @dev Invariant: a signed message names its keys strictly ascending, so a set of keys has one
     /// encoding; a repeat, a descending pair and an empty list are refused.
     function test_signedKeysMustAscend() public {
         uint256 deadline = _deadline();
-        uint256[] memory twice = _pair(1, 1);
-        uint256[] memory descending = _pair(2, 1);
+        uint256[] memory twice = _pair(k1, k1);
+        uint256[] memory descending = _pair(k2, k1);
 
         vm.expectRevert(KeyfleetVotes.KeysNotAscending.selector);
         votes.presentBySig(twice, alice, deadline, "");
@@ -375,21 +360,20 @@ contract KeyfleetSignaturesTest is Test {
     /// would still be allowed to make after the key comes back.
     function test_anOldSignatureFailsAfterTheKeyMoves() public {
         uint256 deadline = _deadline();
-        bytes memory signature = _signPresent(ALICE_KEY, _ids(1), deadline);
+        bytes memory signature = _signPresent(ALICE_KEY, _ids(k1), deadline);
         uint256 proposalId = _propose();
-        bytes memory ballot = _signBallot(ALICE_KEY, proposalId, _ids(1), YES, deadline);
+        bytes memory ballot = _signBallot(ALICE_KEY, proposalId, _ids(k1), YES, deadline);
 
-        vm.startPrank(alice);
-        fleet.transferFrom(alice, bob, 1);
-        vm.stopPrank();
+        vm.prank(alice);
+        keys.transferFrom(alice, bob, k1);
         vm.prank(bob);
-        fleet.transferFrom(bob, alice, 1);
-        assertEq(fleet.ownerOf(1), alice, "Alice holds the key again");
+        keys.transferFrom(bob, alice, k1);
+        assertEq(keys.ownerOf(k1), alice, "Alice holds the key again");
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.presentBySig(_ids(1), alice, deadline, signature);
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.castBallotBySig(proposalId, _ids(1), YES, alice, deadline, ballot);
+        votes.castBallotBySig(proposalId, _ids(k1), YES, alice, deadline, ballot);
     }
 
     /// @dev Invariant: ending a shard voids the agent's signatures for that key, and so does any
@@ -397,28 +381,28 @@ contract KeyfleetSignaturesTest is Test {
     /// agent would still be allowed to sign the same message again.
     function test_anOldSignatureFailsAfterTheKeysShardsChange() public {
         vm.prank(alice);
-        shards.issue(_pair(1, 2), agent, 30);
+        shards.issue(_pair(k1, k2), agent, 30);
         uint256 deadline = _deadline();
 
-        bytes memory signature = _signPresent(AGENT_KEY, _ids(1), deadline);
+        bytes memory signature = _signPresent(AGENT_KEY, _ids(k1), deadline);
         vm.prank(alice);
-        shards.end(_ids(1), agent);
+        shards.end(_ids(k1), agent);
         vm.prank(alice);
-        shards.issue(_ids(1), agent, 30);
+        shards.issue(_ids(k1), agent, 30);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, agent));
-        votes.presentBySig(_ids(1), agent, deadline, signature);
+        votes.presentBySig(_ids(k1), agent, deadline, signature);
 
         uint256 proposalId = _propose();
-        bytes memory ballot = _signBallot(AGENT_KEY, proposalId, _ids(2), YES, deadline);
+        bytes memory ballot = _signBallot(AGENT_KEY, proposalId, _ids(k2), YES, deadline);
         vm.startPrank(alice);
-        shards.setAgentVoting(_ids(2), false);
-        shards.setAgentVoting(_ids(2), true);
+        shards.setAgentVoting(_ids(k2), false);
+        shards.setAgentVoting(_ids(k2), true);
         vm.stopPrank();
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, agent));
-        votes.castBallotBySig(proposalId, _ids(2), YES, agent, deadline, ballot);
+        votes.castBallotBySig(proposalId, _ids(k2), YES, agent, deadline, ballot);
 
-        ballot = _signBallot(AGENT_KEY, proposalId, _ids(2), YES, deadline);
-        votes.castBallotBySig(proposalId, _ids(2), YES, agent, deadline, ballot);
+        ballot = _signBallot(AGENT_KEY, proposalId, _ids(k2), YES, deadline);
+        votes.castBallotBySig(proposalId, _ids(k2), YES, agent, deadline, ballot);
         assertEq(votes.proposal(proposalId).yes, 1, "a fresh signature works");
     }
 
@@ -430,25 +414,25 @@ contract KeyfleetSignaturesTest is Test {
     function test_aKeeperCannotMarkSomeoneElsePresentBySignature() public {
         uint256 deadline = _deadline();
         address keeperSigner = vm.addr(0x7EE9);
-        bytes memory signature = _signPresent(0x7EE9, _ids(1), deadline);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, keeperSigner));
-        votes.presentBySig(_ids(1), keeperSigner, deadline, signature);
+        bytes memory signature = _signPresent(0x7EE9, _ids(k1), deadline);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, keeperSigner));
+        votes.presentBySig(_ids(k1), keeperSigner, deadline, signature);
 
         vm.prank(alice);
-        fleet.setApprovalForAll(mallory, true);
-        signature = _signPresent(MALLORY_KEY, _ids(1), deadline);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
-        votes.presentBySig(_ids(1), mallory, deadline, signature);
+        keys.setApprovalForAll(mallory, true);
+        signature = _signPresent(MALLORY_KEY, _ids(k1), deadline);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, mallory));
+        votes.presentBySig(_ids(k1), mallory, deadline, signature);
 
         uint256 proposalId = _propose();
-        signature = _signBallot(MALLORY_KEY, proposalId, _ids(1), YES, deadline);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 1, mallory));
-        votes.castBallotBySig(proposalId, _ids(1), YES, mallory, deadline, signature);
+        signature = _signBallot(MALLORY_KEY, proposalId, _ids(k1), YES, deadline);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, mallory));
+        votes.castBallotBySig(proposalId, _ids(k1), YES, mallory, deadline, signature);
 
-        signature = _signPresent(MALLORY_KEY, _ids(1), deadline);
+        signature = _signPresent(MALLORY_KEY, _ids(k1), deadline);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
-        votes.presentBySig(_ids(1), alice, deadline, signature);
-        assertFalse(votes.isActive(1), "nobody renewed key 1");
+        votes.presentBySig(_ids(k1), alice, deadline, signature);
+        assertFalse(votes.isActive(k1), "nobody renewed key 1");
     }
 
     /// @dev Invariant: an agent holding shards of keys from several owners renews them all with one
@@ -456,15 +440,14 @@ contract KeyfleetSignaturesTest is Test {
     /// agent may still renew it but not vote it.
     function test_anAgentSignsForTheKeysOfManyOwners() public {
         vm.prank(alice);
-        shards.issue(_pair(1, 2), agent, 30);
+        shards.issue(_pair(k1, k2), agent, 30);
         vm.prank(bob);
-        shards.issue(_ids(3), agent, 30);
-        uint256[] memory all = new uint256[](3);
-        (all[0], all[1], all[2]) = (1, 2, 3);
+        shards.issue(_ids(k3), agent, 30);
+        uint256[] memory all = _range(k1, 3);
         uint256 deadline = _deadline();
 
         votes.presentBySig(all, agent, deadline, _signPresent(AGENT_KEY, all, deadline));
-        assertTrue(votes.isActive(1) && votes.isActive(2) && votes.isActive(3));
+        assertTrue(votes.isActive(k1) && votes.isActive(k2) && votes.isActive(k3));
 
         uint256 proposalId = _propose();
         votes.castBallotBySig(
@@ -473,9 +456,9 @@ contract KeyfleetSignaturesTest is Test {
         assertEq(votes.proposal(proposalId).no, 3, "three keys, two owners, one signature");
 
         vm.prank(bob);
-        shards.setAgentVoting(_ids(3), false);
+        shards.setAgentVoting(_ids(k3), false);
         bytes memory ballot = _signBallot(AGENT_KEY, proposalId, all, YES, deadline);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, 3, agent));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k3, agent));
         votes.castBallotBySig(proposalId, all, YES, agent, deadline, ballot);
         votes.presentBySig(all, agent, deadline, _signPresent(AGENT_KEY, all, deadline));
     }
@@ -483,23 +466,150 @@ contract KeyfleetSignaturesTest is Test {
     /// @dev Invariant: a contract wallet that owns keys signs through ERC-1271, for renewing and
     /// voting alike, and a signature its owner did not make is refused.
     function test_aContractWalletSignsThroughErc1271() public {
-        MockContractWallet safe = new MockContractWallet(vm.addr(SAFE_SIGNER_KEY));
-        uint256 tokenId = _buy(address(safe));
+        MockContractWallet wallet = new MockContractWallet(vm.addr(WALLET_SIGNER_KEY));
+        uint256 tokenId = _buy(fleet, address(wallet));
+        _mature();
+        _lapse();
         uint256 deadline = _deadline();
         uint256[] memory ids = _ids(tokenId);
 
-        bytes memory forged = _sign(MALLORY_KEY, _presentHash(ids, address(safe), deadline));
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, address(safe)));
-        votes.presentBySig(ids, address(safe), deadline, forged);
+        bytes memory forged = _sign(MALLORY_KEY, _presentHash(ids, address(wallet), deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, address(wallet)));
+        votes.presentBySig(ids, address(wallet), deadline, forged);
 
         votes.presentBySig(
-            ids, address(safe), deadline, _sign(SAFE_SIGNER_KEY, _presentHash(ids, address(safe), deadline))
+            ids, address(wallet), deadline, _sign(WALLET_SIGNER_KEY, _presentHash(ids, address(wallet), deadline))
         );
         assertTrue(votes.isActive(tokenId), "the wallet's key is present");
 
         uint256 proposalId = _propose();
-        bytes memory ballot = _sign(SAFE_SIGNER_KEY, _ballotHash(proposalId, ids, YES, address(safe), deadline));
-        votes.castBallotBySig(proposalId, ids, YES, address(safe), deadline, ballot);
+        bytes memory ballot = _sign(WALLET_SIGNER_KEY, _ballotHash(proposalId, ids, YES, address(wallet), deadline));
+        votes.castBallotBySig(proposalId, ids, YES, address(wallet), deadline, ballot);
         assertEq(uint256(votes.ballotOf(proposalId, tokenId)), uint256(KeyfleetVotes.Choice.Yes));
+    }
+
+    // --- 4. other fleets -----------------------------------------------------
+
+    /// @dev Two Classic fleets of the same type and starting price, each created by `creator`, who
+    /// holds its key 1, with its key 2 sold to Alice; once the keys are mature and their automatic
+    /// presence has ended, each has proposal 1, made by `creator` with key 1 on identical terms.
+    function _twoFleets() private returns (KeyfleetManager a, KeyfleetManager b) {
+        a = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, OPEN_START);
+        b = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, OPEN_START);
+        _buy(a, alice);
+        _buy(b, alice);
+        _mature();
+        _lapse();
+        uint256 a1 = _key(a, 1);
+        uint256 b1 = _key(b, 1);
+        uint64 closesAt = uint64(block.timestamp + 1 days);
+        KeyfleetVotes votesA = a.VOTES();
+        KeyfleetVotes votesB = b.VOTES();
+        vm.startPrank(creator);
+        votesA.propose(a1, keccak256("record it"), closesAt, new KeyfleetTreasury.Call[](0));
+        votesB.propose(b1, keccak256("record it"), closesAt, new KeyfleetTreasury.Call[](0));
+        vm.stopPrank();
+    }
+
+    /// @dev Invariant: a signed renewal works only in the fleet it was signed for. Replayed in a
+    /// fleet of the same type it is refused, and so is one signed for the other controller or
+    /// naming the other fleet's manager: each binding alone voids it.
+    function test_aSignedRenewalForOneFleetIsVoidInAnother() public {
+        (KeyfleetManager a, KeyfleetManager b) = _twoFleets();
+        KeyfleetVotes votesA = a.VOTES();
+        KeyfleetVotes votesB = b.VOTES();
+        uint256[] memory keyA = _ids(_key(a, 2));
+        uint256[] memory keyB = _ids(_key(b, 2));
+        uint256 deadline = _deadline();
+
+        bytes memory forA = _sign(ALICE_KEY, votesA, _presentHash(votesA, address(a), keyA, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.presentBySig(keyA, alice, deadline, forA);
+
+        bytes memory otherController = _sign(ALICE_KEY, votesA, _presentHash(votesB, address(b), keyB, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.presentBySig(keyB, alice, deadline, otherController);
+
+        bytes memory otherManager = _sign(ALICE_KEY, votesB, _presentHash(votesB, address(a), keyB, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.presentBySig(keyB, alice, deadline, otherManager);
+        assertFalse(votesB.isActive(keyB[0]), "nothing renewed in fleet B");
+        assertEq(votesB.nonces(alice), 0);
+
+        votesA.presentBySig(keyA, alice, deadline, forA);
+        assertTrue(votesA.isActive(keyA[0]), "it works in the fleet it was signed for");
+        bytes memory forB = _sign(ALICE_KEY, votesB, _presentHash(votesB, address(b), keyB, alice, deadline));
+        votesB.presentBySig(keyB, alice, deadline, forB);
+        assertTrue(votesB.isActive(keyB[0]), "and fleet B's own works there");
+        assertEq(votesA.nonces(alice), 1);
+        assertEq(votesB.nonces(alice), 1, "each controller keeps its own nonces");
+    }
+
+    /// @dev Invariant: a signed ballot works only in the fleet it was signed for. The two fleets'
+    /// proposals 1 have identical terms but different proposal hashes, and a ballot replayed in the
+    /// other fleet, signed for the other controller, or naming the other fleet's proposal hash is
+    /// refused.
+    function test_aSignedBallotForOneFleetIsVoidInAnother() public {
+        (KeyfleetManager a, KeyfleetManager b) = _twoFleets();
+        KeyfleetVotes votesA = a.VOTES();
+        KeyfleetVotes votesB = b.VOTES();
+        uint256[] memory keyA = _ids(_key(a, 2));
+        uint256[] memory keyB = _ids(_key(b, 2));
+        bytes32 hashA = votesA.proposal(1).proposalHash;
+        bytes32 hashB = votesB.proposal(1).proposalHash;
+        assertTrue(hashA != hashB, "the same terms, a different proposal");
+        uint256 deadline = _deadline();
+
+        bytes memory forA = _sign(ALICE_KEY, votesA, _ballotHash(votesA, 1, hashA, keyA, YES, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.castBallotBySig(1, keyA, YES, alice, deadline, forA);
+
+        bytes memory otherController =
+            _sign(ALICE_KEY, votesA, _ballotHash(votesB, 1, hashB, keyB, YES, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.castBallotBySig(1, keyB, YES, alice, deadline, otherController);
+
+        bytes memory otherProposal = _sign(ALICE_KEY, votesB, _ballotHash(votesB, 1, hashA, keyB, YES, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votesB.castBallotBySig(1, keyB, YES, alice, deadline, otherProposal);
+        assertEq(votesB.proposal(1).yes, 0, "no ballot in fleet B");
+
+        votesA.castBallotBySig(1, keyA, YES, alice, deadline, forA);
+        bytes memory forB = _sign(ALICE_KEY, votesB, _ballotHash(votesB, 1, hashB, keyB, NO, alice, deadline));
+        votesB.castBallotBySig(1, keyB, NO, alice, deadline, forB);
+        assertEq(votesA.proposal(1).yes, 1, "fleet A's ballot counts in fleet A");
+        assertEq(votesA.proposal(1).no, 0);
+        assertEq(votesB.proposal(1).no, 1, "fleet B's in fleet B");
+        assertEq(votesB.proposal(1).yes, 0);
+    }
+
+    /// @dev Invariant: a signed renewal or ballot naming a key of another fleet is refused with
+    /// `ForeignKey` even when its signature is valid for this controller and its signer owns the
+    /// key; a batch with one foreign key renews and counts nothing.
+    function test_aSignedMessageRefusesAKeyOfAnotherFleet() public {
+        (KeyfleetManager a, KeyfleetManager b) = _twoFleets();
+        KeyfleetVotes votesA = a.VOTES();
+        uint256 ownKey = _key(a, 2);
+        uint256 foreign = _key(b, 2);
+        uint256[] memory both = _pair(ownKey, foreign);
+        uint256 deadline = _deadline();
+
+        bytes memory present = _sign(ALICE_KEY, votesA, _presentHash(votesA, address(a), both, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
+        votesA.presentBySig(both, alice, deadline, present);
+        present = _sign(ALICE_KEY, votesA, _presentHash(votesA, address(a), _ids(foreign), alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
+        votesA.presentBySig(_ids(foreign), alice, deadline, present);
+        assertFalse(votesA.isActive(ownKey), "nothing renewed");
+
+        bytes32 hashA = votesA.proposal(1).proposalHash;
+        bytes memory ballot = _sign(ALICE_KEY, votesA, _ballotHash(votesA, 1, hashA, both, YES, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
+        votesA.castBallotBySig(1, both, YES, alice, deadline, ballot);
+        ballot = _sign(ALICE_KEY, votesA, _ballotHash(votesA, 1, hashA, _ids(foreign), YES, alice, deadline));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
+        votesA.castBallotBySig(1, _ids(foreign), YES, alice, deadline, ballot);
+        assertEq(votesA.proposal(1).yes + votesA.proposal(1).late, 0, "nothing counted");
+        assertEq(votesA.nonces(alice), 0, "no nonce used");
     }
 }

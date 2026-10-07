@@ -78,7 +78,7 @@ defmodule KeyfleetWeb.HomeLive do
       "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
         "the level before it are paid back.",
     "fleet_tech_classic" =>
-      "A fixed set of 1,024 Keys, from 8 USDC for the first to 80 USDC for the last.",
+      "A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last.",
     "fleet_tech_accelerant" =>
       "Up to 2,000 Keys, and most of each sale after the first goes to whoever holds the " <>
         "Key before it."

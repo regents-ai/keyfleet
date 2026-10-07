@@ -4,24 +4,26 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {Keyfleet} from "../../src/Keyfleet.sol";
+import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
+import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {IRegentLBPStrategyV2} from "../../src/interfaces/IRegentLBPStrategyV2.sol";
 import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
-import {MockToken} from "../KeyfleetIncome.t.sol";
+import {MockToken} from "../mocks/MockToken.sol";
 import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFactory.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
-/// @dev Drives a Cascade fleet and an Accelerant fleet through everything that moves money or keys
-/// across all five of each fleet's contracts: purchases, key transfers (each settling the ledger
-/// and telling the controller), shards issued to agents, money sent to the treasury and to the
-/// core, public daily splits as time passes, and approved batches made through the controller's
-/// address that run the split early, change its rate, admit OUSD, launch a token through Autolaunch
-/// or pay money out. Launches sell or fail as the sequence goes on, anyone may try to bind any of
+/// @dev Drives the founding Cascade and Accelerant fleets through everything that moves money or
+/// keys across each fleet's manager, controller, treasury and ledger and the shared collection and
+/// shard record: purchases (whose treasury part arrives as REGENT), key transfers (each settling the
+/// ledger and telling the controller), shards issued to agents, money sent to the treasury and to
+/// the manager, public daily splits as time passes, and approved batches made through the
+/// controller's address that run the split early, change its rate, admit OUSD, launch a token
+/// through Autolaunch or pay money out. Launches sell or fail as the sequence goes on, anyone may try to bind any of
 /// them, and launched tokens reach the treasury before and after binding. Claims are made by
 /// holders, former holders and agents. Around each step it records, as `breach`, the first thing
 /// that went differently from the rules.
@@ -32,7 +34,9 @@ contract FleetHandler is Test {
     uint256 internal constant AGENTS = 3;
     uint256 internal constant MAX_LAUNCHES = 6;
 
-    Keyfleet[2] internal fleets;
+    KeyfleetManager[2] internal fleets;
+    KeyfleetKeys internal immutable keys;
+    KeyfleetShards internal immutable shards;
     MockToken internal immutable usdc;
     MockRegent internal immutable regent;
     MockToken internal immutable ousd;
@@ -51,14 +55,17 @@ contract FleetHandler is Test {
     string public breach;
 
     constructor(
-        Keyfleet cascade,
-        Keyfleet accelerant,
+        KeyfleetManager cascade,
+        KeyfleetManager accelerant,
+        KeyfleetShards shards_,
         MockToken usdc_,
         MockRegent regent_,
         MockToken ousd_,
         MockAutolaunchFactory autolaunch_
     ) {
         fleets = [cascade, accelerant];
+        keys = cascade.KEYS();
+        shards = shards_;
         usdc = usdc_;
         regent = regent_;
         ousd = ousd_;
@@ -73,50 +80,71 @@ contract FleetHandler is Test {
         return address(uint160(0xA6E0700 + i));
     }
 
-    function fleet(uint256 i) external view returns (Keyfleet) {
+    function fleet(uint256 i) external view returns (KeyfleetManager) {
         return fleets[i];
     }
 
     // --- keys ------------------------------------------------------------
 
-    /// @dev Buys one to three keys, each to an actor who may hold it.
+    /// @dev Buys one to three keys, each to an actor. Of each price, whatever the
+    /// manager does not keep as USDC (the protocol share and the Cascade reserve) and the ledger
+    /// does not take as USDC (the Accelerant rebate and the Cascade repayment) reaches the
+    /// treasury as REGENT at the stand-in market's one REGENT per USDC, and the treasury's USDC does
+    /// not move.
     function buy(uint256 fleetSeed, uint256 actorSeed, uint256 count) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         count = bound(count, 1, 3);
         for (uint256 i = 0; i < count; ++i) {
-            uint256 tokenId = f.totalMinted() + 1;
-            if (tokenId > MAX_KEYS) return;
-            (address to, bool found) = _receiver(f, tokenId, actorSeed % ACTORS + i, address(0));
-            if (!found) return;
+            uint256 keyNumber = f.totalMinted() + 1;
+            if (keyNumber > MAX_KEYS) return;
+            address to = actor((actorSeed % ACTORS + i) % ACTORS);
             uint256 price = f.nextPrice();
+            address treasury = address(f.TREASURY());
+            uint256[4] memory before = [
+                usdc.balanceOf(address(f)),
+                usdc.balanceOf(address(f.REWARDS())),
+                usdc.balanceOf(treasury),
+                regent.balanceOf(treasury)
+            ];
             usdc.mint(buyer, price);
             vm.startPrank(buyer);
             usdc.approve(address(f), price);
-            f.purchase(to, price, block.timestamp);
+            f.purchase(to, price, block.timestamp, new bytes32[](0));
             vm.stopPrank();
+            // Whatever of the price, and of a released Cascade reserve, the manager and the ledger
+            // do not keep as USDC reaches the treasury as REGENT at the stand-in market's price.
+            uint256 toTreasury = regent.balanceOf(treasury) - before[3];
+            if (usdc.balanceOf(treasury) != before[2]) _breach("a purchase paid the treasury USDC");
+            if (
+                toTreasury % 1e12 != 0
+                    || usdc.balanceOf(address(f)) + usdc.balanceOf(address(f.REWARDS())) + toTreasury / 1e12
+                        != before[0] + before[1] + price
+            ) {
+                _breach("the treasury's part of a purchase did not arrive as REGENT at the market price");
+            }
         }
     }
 
     function transfer(uint256 fleetSeed, uint256 tokenSeed, uint256 actorSeed) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         uint256 minted = f.totalMinted();
         if (minted == 0) return;
-        uint256 tokenId = 1 + tokenSeed % minted;
-        address from = f.ownerOf(tokenId);
-        (address to, bool found) = _receiver(f, tokenId, actorSeed, from);
-        if (!found) return;
+        uint256 keyNumber = 1 + tokenSeed % minted;
+        uint256 tokenId = keys.tokenIdOf(f.FLEET_ID(), keyNumber);
+        address from = keys.ownerOf(tokenId);
+        address to = actor(actorSeed % ACTORS);
+        if (to == from) to = actor((actorSeed % ACTORS + 1) % ACTORS);
         vm.prank(from);
-        f.transferFrom(from, to, tokenId);
+        keys.transferFrom(from, to, tokenId);
     }
 
     function issueShard(uint256 fleetSeed, uint256 tokenSeed, uint256 agentSeed, uint16 days_) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         uint256 minted = f.totalMinted();
         if (minted == 0) return;
         uint256[] memory ids = new uint256[](1);
-        ids[0] = 1 + tokenSeed % minted;
-        KeyfleetShards shards = f.SHARDS();
-        vm.prank(f.ownerOf(ids[0]));
+        ids[0] = keys.tokenIdOf(f.FLEET_ID(), 1 + tokenSeed % minted);
+        vm.prank(keys.ownerOf(ids[0]));
         shards.issue(ids, agent(agentSeed % AGENTS), uint16(bound(days_, 1, 3)));
     }
 
@@ -127,7 +155,7 @@ contract FleetHandler is Test {
     // --- money in and out of the treasury ------------------------------------
 
     function fund(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         address treasury = address(f.TREASURY());
         uint256 pick = assetSeed % 5;
         if (pick == 0) {
@@ -147,7 +175,7 @@ contract FleetHandler is Test {
     /// @dev An approved payment out of the treasury, to someone outside the fleet, in ETH, REGENT,
     /// USDC or the bound launch token.
     function pay(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         KeyfleetTreasury treasury = f.TREASURY();
         address[4] memory assets = [NATIVE, address(regent), address(usdc), address(treasury.launchToken())];
         uint256 pick = assetSeed % 4;
@@ -184,7 +212,7 @@ contract FleetHandler is Test {
     }
 
     function setRate(uint256 fleetSeed, uint256 bps) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         bps = bound(bps, 0, 250);
         bool valid = bps >= 10 && bps <= 200;
         bool set = _tryBatch(f, abi.encodeCall(KeyfleetTreasury.setDailySplitBps, (bps)));
@@ -193,7 +221,7 @@ contract FleetHandler is Test {
     }
 
     function admitOusd(uint256 fleetSeed) external {
-        Keyfleet f = fleets[fleetSeed % 2];
+        KeyfleetManager f = fleets[fleetSeed % 2];
         bool fresh = address(f.TREASURY().ousd()) == address(0);
         bool admitted = _tryBatch(f, abi.encodeCall(KeyfleetTreasury.admitOusd, (IERC20(address(ousd)))));
         if (admitted != fresh) _breach("OUSD was admitted twice or refused the first time");
@@ -267,13 +295,13 @@ contract FleetHandler is Test {
     /// nobody else anything.
     function claim(uint256 fleetSeed, uint256 callerSeed, uint256 keyMask, uint256 assetMask, bool asAgent) external {
         uint256 index = fleetSeed % 2;
-        Keyfleet f = fleets[index];
+        KeyfleetManager f = fleets[index];
         Claim memory c;
         c.caller = asAgent ? agent(callerSeed % AGENTS) : _holderOrFormer(f, callerSeed);
         c.ids = _claimable(f, c.caller, keyMask);
         c.assets = _pickAssets(f.REWARDS(), assetMask);
         if (c.assets.length == 0) return;
-        c.payees = _payees(f, c.caller, c.ids);
+        c.payees = _payees(c.caller, c.ids);
         c.expected = new uint256[](c.assets.length);
         c.balances = new uint256[](c.assets.length);
         uint256 total;
@@ -297,10 +325,10 @@ contract FleetHandler is Test {
     // --- internals --------------------------------------------------------
 
     /// @dev Mostly a key's holder; one time in four any actor, who may be a former holder.
-    function _holderOrFormer(Keyfleet f, uint256 seed) internal view returns (address) {
+    function _holderOrFormer(KeyfleetManager f, uint256 seed) internal view returns (address) {
         uint256 minted = f.totalMinted();
         if (minted == 0 || seed % 4 == 0) return actor(seed % ACTORS);
-        return f.ownerOf(1 + (seed >> 2) % minted);
+        return keys.ownerOf(keys.tokenIdOf(f.FLEET_ID(), 1 + (seed >> 2) % minted));
     }
 
     struct Claim {
@@ -331,7 +359,7 @@ contract FleetHandler is Test {
         uint256[] indexes;
     }
 
-    function _snapshot(Keyfleet f) internal view returns (Snapshot memory s) {
+    function _snapshot(KeyfleetManager f) internal view returns (Snapshot memory s) {
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetRewards rewards = f.REWARDS();
         s.keys = f.totalMinted();
@@ -353,7 +381,7 @@ contract FleetHandler is Test {
     }
 
     function _checkSplit(uint256 index, Snapshot memory before) internal {
-        Keyfleet f = fleets[index];
+        KeyfleetManager f = fleets[index];
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetRewards rewards = f.REWARDS();
         if (treasury.lastRunAt() != block.timestamp) _breach("a run did not record when it ran");
@@ -372,11 +400,11 @@ contract FleetHandler is Test {
         }
     }
 
-    function _batch(Keyfleet f, bytes memory data) internal {
+    function _batch(KeyfleetManager f, bytes memory data) internal {
         _batchTo(f, address(f.TREASURY()), data);
     }
 
-    function _batchTo(Keyfleet f, address target, bytes memory data) internal {
+    function _batchTo(KeyfleetManager f, address target, bytes memory data) internal {
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](1);
         calls[0] = KeyfleetTreasury.Call(target, 0, data);
@@ -395,7 +423,7 @@ contract FleetHandler is Test {
         return autolaunch.strategy().distribution(autolaunch.launches(id).auction).lifecycle;
     }
 
-    function _tryBatch(Keyfleet f, bytes memory data) internal returns (bool) {
+    function _tryBatch(KeyfleetManager f, bytes memory data) internal returns (bool) {
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](1);
         calls[0] = KeyfleetTreasury.Call(address(treasury), 0, data);
@@ -404,32 +432,15 @@ contract FleetHandler is Test {
         return ok;
     }
 
-    /// @dev The first actor from the seed on, other than `except`, who may hold the key under the
-    /// Fibonacci holding limit.
-    function _receiver(Keyfleet f, uint256 tokenId, uint256 seed, address except)
-        internal
-        view
-        returns (address, bool)
-    {
-        bool fibonacci = f.PRESET() == KeyfleetPresets.Preset.FibonacciCascade;
-        uint256 level = fibonacci ? f.levelOf(tokenId) : 0;
-        for (uint256 i = 0; i < ACTORS; ++i) {
-            address candidate = actor((seed % ACTORS + i) % ACTORS);
-            if (candidate == except) continue;
-            if (!fibonacci || f.heldPerLevel(candidate, level) < f.holdingLimit(level)) return (candidate, true);
-        }
-        return (address(0), false);
-    }
-
     /// @dev The keys in `mask` the caller may claim for: those it holds, or holds an active shard of.
-    function _claimable(Keyfleet f, address caller, uint256 mask) internal view returns (uint256[] memory ids) {
+    function _claimable(KeyfleetManager f, address caller, uint256 mask) internal view returns (uint256[] memory ids) {
         uint256 minted = f.totalMinted();
-        KeyfleetShards shards = f.SHARDS();
         ids = new uint256[](minted);
         uint256 count;
         for (uint256 k = 1; k <= minted; ++k) {
             if ((mask >> (k % 256)) & 1 == 0) continue;
-            if (f.ownerOf(k) == caller || shards.isActive(k, caller)) ids[count++] = k;
+            uint256 tokenId = keys.tokenIdOf(f.FLEET_ID(), k);
+            if (keys.ownerOf(tokenId) == caller || shards.isActive(tokenId, caller)) ids[count++] = tokenId;
         }
         assembly ("memory-safe") {
             mstore(ids, count)
@@ -448,12 +459,12 @@ contract FleetHandler is Test {
         }
     }
 
-    function _payees(Keyfleet f, address caller, uint256[] memory ids) internal view returns (address[] memory list) {
+    function _payees(address caller, uint256[] memory ids) internal view returns (address[] memory list) {
         list = new address[](ids.length + 1);
         list[0] = caller;
         uint256 count = 1;
         for (uint256 i = 0; i < ids.length; ++i) {
-            address holder = f.ownerOf(ids[i]);
+            address holder = keys.ownerOf(ids[i]);
             bool listed;
             for (uint256 p = 0; p < count; ++p) {
                 if (list[p] == holder) listed = true;
@@ -465,7 +476,7 @@ contract FleetHandler is Test {
         }
     }
 
-    function _owed(Keyfleet f, address asset, address[] memory payees, uint256[] memory ids)
+    function _owed(KeyfleetManager f, address asset, address[] memory payees, uint256[] memory ids)
         internal
         view
         returns (uint256 amount)
@@ -494,15 +505,15 @@ contract FleetHandler is Test {
     }
 }
 
-/// @dev The fleet-wide invariants of plan §4.6 and §4.8 over all five contracts, with Sean's daily
+/// @dev The fleet-wide invariants of plan §4.6 and §4.8 over each fleet's four contracts, with Sean's daily
 /// split rules of 6 October: the ledger always holds what it owes in every asset; in every asset
 /// only the split pays, what it holds is exactly what the keys and wallets are owed, which is
 /// exactly what was allocated less what was claimed, launched tokens included; the rate stays
 /// between 10 and 200 bps; the funding flag is down outside a run; an unadmitted OUSD or a launched
 /// token other than the fleet's bound one is never split; a bound launch is the fleet's own sold
 /// launch; and agents are never paid. The handler's own checks, which must never have been
-/// breached, cover run timing, the split formula on the treasury's own balance, exact claims, and
-/// which launches bind.
+/// breached, cover run timing, the split formula on the treasury's own balance, exact claims, which
+/// launches bind, and every purchase's treasury part arriving as REGENT.
 /// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
@@ -519,6 +530,7 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
         handler = new FleetHandler(
             _deploy(KeyfleetPresets.Preset.FibonacciCascade),
             _deploy(KeyfleetPresets.Preset.FleetTechAccelerant),
+            shards,
             usdc,
             regent,
             ousd,
@@ -537,7 +549,7 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
     function invariant_splitAssetsAreOwedExactlyWhatTheLedgerHolds() public view {
         address[] memory assets = _splitOnlyAssets();
         for (uint256 f = 0; f < 2; ++f) {
-            Keyfleet fleet = handler.fleet(f);
+            KeyfleetManager fleet = handler.fleet(f);
             KeyfleetRewards rewards = fleet.REWARDS();
             for (uint256 a = 0; a < assets.length; ++a) {
                 address asset = assets[a];
@@ -557,7 +569,7 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
     /// stays in the ledger: backing covers everything owed, short of it by under a unit per key.
     function invariant_usdcBackingCoversWhatIsOwed() public view {
         for (uint256 f = 0; f < 2; ++f) {
-            Keyfleet fleet = handler.fleet(f);
+            KeyfleetManager fleet = handler.fleet(f);
             KeyfleetRewards rewards = fleet.REWARDS();
             uint256 backed = rewards.backed(address(usdc));
             uint256 owed = _owedToAll(fleet, address(usdc));
@@ -581,7 +593,7 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
     function invariant_anUnadmittedOrUnboundTokenIsNeverSplit() public view {
         uint256 launches = autolaunch.nextLaunchId() - 1;
         for (uint256 f = 0; f < 2; ++f) {
-            Keyfleet fleet = handler.fleet(f);
+            KeyfleetManager fleet = handler.fleet(f);
             KeyfleetTreasury treasury = fleet.TREASURY();
             if (address(treasury.ousd()) == address(0)) {
                 assertEq(fleet.REWARDS().splitIndex(address(ousd)), 0);
@@ -641,11 +653,11 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
     }
 
     /// @dev Every key's unsettled amount plus every actor's credit; only actors ever hold keys.
-    function _owedToAll(Keyfleet fleet, address asset) private view returns (uint256 owed) {
+    function _owedToAll(KeyfleetManager fleet, address asset) private view returns (uint256 owed) {
         KeyfleetRewards rewards = fleet.REWARDS();
         uint256 minted = fleet.totalMinted();
         for (uint256 k = 1; k <= minted; ++k) {
-            owed += rewards.accrued(asset, k);
+            owed += rewards.accrued(asset, _key(fleet, k));
         }
         for (uint256 i = 0; i < 16; ++i) {
             owed += rewards.credits(asset, handler.actor(i));

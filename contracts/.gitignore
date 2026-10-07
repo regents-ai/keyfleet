@@ -3,9 +3,9 @@ local-only-*
 out/
 cache/
 broadcast/**/dry-run/
-# Lab rehearsals on chain 31337. Base broadcasts and each base.<fleet>.deployed.json are deployment
-# evidence.
+# Lab rehearsals on chain 31337. Base broadcasts, base.deployed.json and the Safe's
+# batch files in deployments/safe are deployment evidence.
 /broadcast/*/31337/
-/deployments/anvil.*.deployed.json
+/deployments/anvil.deployed.json
 .env
 .env.*

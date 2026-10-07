@@ -5,15 +5,17 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetKeys} from "./KeyfleetKeys.sol";
+import {KeyfleetManager} from "./KeyfleetManager.sol";
 import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 import {KeyfleetShards} from "./KeyfleetShards.sol";
 import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
+import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.sol";
 
 /// @notice The one fixed vote of a fleet: exact proposals decided by a growing electorate of keys.
-/// @dev One instance is permanently bound to one fleet. It is deployed straight after the fleet, at
-/// the address the fleet was given for it, and refuses to deploy for a fleet that names another
-/// controller. There are no councils, no moderators, no rule amendments, no quorum classes and no
+/// @dev One instance is permanently bound to one fleet, deployed by the factory with the fleet's three
+/// other contracts. Keys are named by their token ids in the shared collection, and every function
+/// that takes a key refuses a key of another fleet before anything else. There are no councils, no moderators, no rule amendments, no quorum classes and no
 /// configurable presets.
 ///
 /// A proposal names an author key, a content hash for its narrative, a closing time at most 48 hours
@@ -22,15 +24,30 @@ import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
 /// treasury, the proposal id, the author key and its ownership epoch, the content, the calls and
 /// both times. A batch with no calls records agreement and moves nothing.
 ///
-/// The electorate grows and never shrinks. When a proposal opens, every expired presence must
+/// The electorate grows and never shrinks. When a proposal opens, every due presence entry must
 /// have been swept, the author key is renewed, and the exact count of present keys is recorded as
 /// `e0` (never zero). A key outside that count that casts its first ballot before closing joins
 /// late and adds one to the denominator `D = e0 + late`. Each key holds one ballot per proposal,
 /// Yes, No or Abstain, which whoever may vote it now may replace until closing; replacing moves
 /// the key's one contribution and repeating it changes nothing. No expiry, change of hands,
-/// abstention or ballot replacement lowers `D`. After closing, a proposal is approved exactly when
-/// `yes > floor(D / 2)`, and anyone may carry it out until its execution expiry. It is never
-/// approved before closing. Its status is worked out from these stored facts; nothing finalises it.
+/// abstention or ballot replacement lowers `D`. Because any ballot may still change until closing,
+/// the outcome is decided only at closing: a proposal is then approved exactly when Yes reaches
+/// `approvalsNeeded(D)`, `APPROVAL_PERCENT` (60%) of `D` rounded up, so one present key alone may
+/// approve anything, and anyone may carry it out from closing until its execution expiry, 48 hours
+/// later. It is never approved before closing, however many Yes ballots it has. Its status is
+/// worked out from these stored facts; nothing finalises it.
+///
+/// A key takes part only once `KEY_MATURITY` (4 days) has passed since it was minted, counted in
+/// block timestamps; a transfer does not start the wait again. Until then it cannot be renewed,
+/// vote, propose or cancel, so it is never among the keys present at an opening and never joins
+/// late. At that moment it becomes present on its own for `PRESENCE_WINDOW`, exactly as if it had
+/// been renewed then; after that it stays present only by being renewed. A change of hands before
+/// that moment leaves it as it is; one after it ends the presence, as it ends any presence.
+///
+/// For `TREASURY_OPENING` (7 days) from the moment the fleet's sales open, a proposal may carry
+/// only calls that move no money: setting the fleet's profile, the daily split rate and whether a
+/// key's edits are restricted, each without value. A proposal with no calls is always allowed, and
+/// the daily split runs as usual.
 ///
 /// A key's current owner may vote it, propose with it and cancel what it authored, and so may a
 /// wallet holding an active shard of it (`KeyfleetShards`) while the key's agent voting is on, which
@@ -90,7 +107,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         bytes32 contentHash;
         bytes32 actionsHash;
         bytes32 proposalHash;
-        uint32 authorKey;
+        uint64 authorKey;
         uint48 openRevision;
         uint64 openedAt;
         uint64 closesAt;
@@ -104,18 +121,18 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         bool executed;
     }
 
-    /// @notice The fleet does not name this contract as its voting controller.
-    error WrongFleet(address fleet);
+    /// @notice The key belongs to another fleet.
+    error ForeignKey(uint256 tokenId);
     /// @notice No proposal carries this id.
     error UnknownProposal(uint256 proposalId);
     /// @notice No key with this id has been sold.
     error KeyNotMinted(uint256 tokenId);
-    /// @notice Only the fleet reports a key changing hands.
-    error OnlyFleet();
+    /// @notice Only the fleet's manager reports a key being sold or changing hands.
+    error OnlyManager();
     /// @notice Only the fleet's treasury, carrying out a proposal, may do this.
     error OnlyTreasury();
-    /// @notice Expired presences are still queued after this call's sweep, so the count of present
-    /// keys is not exact; `sweepExpired` must run before a proposal can open.
+    /// @notice Due presence entries are still listed after this call's sweep, so the count of
+    /// present keys is not exact; `sweepExpired` must run before a proposal can open.
     error MaintenanceRequired();
     /// @notice The account may not act for this key: it neither owns the key nor holds an active
     /// shard of it, or, to vote, propose or cancel, the key's agent voting is off.
@@ -126,10 +143,17 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     error InvalidSignature(address signer);
     /// @notice A signed message's keys are not in strictly ascending order.
     error KeysNotAscending();
+    /// @notice `KEY_MATURITY` has not yet passed since the key was minted.
+    /// @param maturesAt The first second it may take part.
+    error KeyTooNew(uint256 tokenId, uint64 maturesAt);
     /// @notice A call must name at least one key.
     error NoKeys();
     /// @notice A proposal closes after now and at most 48 hours from now.
     error ClosingOutOfRange(uint64 closesAt);
+    /// @notice The fleet is in its opening, during which a proposal may carry only calls that move
+    /// no money.
+    /// @param opensAt The first second any calls may be proposed.
+    error TreasuryOpening(uint64 opensAt);
     /// @notice A ballot is Yes, No or Abstain.
     error InvalidChoice();
     /// @notice The proposal takes no more ballots: it has closed or was cancelled.
@@ -180,10 +204,14 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @notice A key stopped being present because it changed hands.
     event PresenceCleared(uint256 indexed tokenId);
 
-    /// @notice Expired presences were removed from the queue.
-    /// @param removed How many were removed.
-    /// @param due Whether expired presences are still queued.
-    event Swept(uint256 removed, bool due);
+    /// @notice A key was sold: it is present from `startsAt` for 48 hours without being renewed,
+    /// unless it changes hands after that start.
+    event PresenceScheduled(uint256 indexed tokenId, uint64 startsAt);
+
+    /// @notice Due presence entries were moved: started keys became present, ended presences left.
+    /// @param moved How many were moved.
+    /// @param due Whether due entries are still listed.
+    event Swept(uint256 moved, bool due);
 
     /// @notice A key was renewed: it is present until `at` plus 48 hours, unless it changes hands
     /// first.
@@ -193,12 +221,24 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @param epoch The key's ownership epoch the renewal belongs to.
     event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
 
-    /// @notice How many expired presences opening a proposal sweeps before it gives up with
+    /// @notice How many due presence entries opening a proposal sweeps before it gives up with
     /// `MaintenanceRequired`.
     uint256 public constant SWEEP_IN_PROPOSE = 256;
 
     /// @notice How long a renewal keeps a key present: 48 hours, in seconds.
     uint64 public constant PRESENCE_WINDOW = KeyfleetPresence.WINDOW;
+
+    /// @notice How long after its mint a key may first be renewed, vote, propose or cancel, and
+    /// becomes present on its own: 4 days, in seconds.
+    uint64 public constant KEY_MATURITY = 4 days;
+
+    /// @notice How long after the fleet's sales open a proposal may carry only calls that move no
+    /// money: 7 days, in seconds.
+    uint64 public constant TREASURY_OPENING = 7 days;
+
+    /// @notice The share of a proposal's electorate `D`, in percent, whose Yes ballots approve it,
+    /// rounded up (`approvalsNeeded`).
+    uint256 public constant APPROVAL_PERCENT = 60;
 
     /// @notice The longest a proposal may stay open: 48 hours, in seconds.
     uint64 public constant MAX_VOTING_PERIOD = 48 hours;
@@ -209,7 +249,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @notice The EIP-712 type of a signed renewal. The key ids, epochs and delegation revisions
     /// are each hashed as EIP-712 arrays.
     bytes32 public constant PRESENT_TYPEHASH = keccak256(
-        "Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
+        "Present(address manager,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
     );
     /// @notice The EIP-712 type of a signed ballot, a different type from a renewal. `choice` is 1
     /// for Yes, 2 for No and 3 for Abstain.
@@ -217,9 +257,13 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         "Ballot(uint256 proposalId,bytes32 proposalHash,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)"
     );
 
-    /// @notice The fleet that deployed this controller and holds the keys that vote.
-    Keyfleet public immutable FLEET;
-    /// @notice The fleet's shard record, which says which wallets may act for a key.
+    /// @notice This fleet's number in the collection; only its keys vote here.
+    uint256 public immutable FLEET_ID;
+    /// @notice The fleet's manager, which reports its keys moving.
+    KeyfleetManager public immutable MANAGER;
+    /// @notice The shared key collection.
+    KeyfleetKeys public immutable KEYS;
+    /// @notice The shared shard record, which says which wallets may act for a key.
     KeyfleetShards public immutable SHARDS;
     /// @notice The fleet's treasury, which makes an approved proposal's calls.
     KeyfleetTreasury public immutable TREASURY;
@@ -236,14 +280,15 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
     KeyfleetPresence.Queue private _presence;
 
-    /// @notice Binds this controller to its fleet.
-    /// @param fleet The fleet whose keys vote here, which must name this contract's address as its
-    /// voting controller.
-    constructor(Keyfleet fleet) EIP712("KeyfleetVotes", "1") {
-        if (address(fleet.VOTES()) != address(this)) revert WrongFleet(address(fleet));
-        FLEET = fleet;
-        SHARDS = fleet.SHARDS();
-        TREASURY = fleet.TREASURY();
+    /// @notice Binds this controller to its fleet, from the wiring the factory holds while deploying it.
+    constructor() EIP712("KeyfleetVotes", "1") {
+        (IKeyfleetFactory factory, FleetWiring memory wiring) = KeyfleetWiring.read();
+        KeyfleetWiring.requireSelf(wiring.votes);
+        FLEET_ID = wiring.fleetId;
+        MANAGER = KeyfleetManager(wiring.manager);
+        KEYS = factory.KEYS();
+        SHARDS = factory.SHARDS();
+        TREASURY = KeyfleetTreasury(payable(wiring.treasury));
     }
 
     // --- views -----------------------------------------------------------
@@ -255,21 +300,36 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Where a proposal stands now.
     /// @dev Cancelled or Executed once that happened; Open until closing; then Rejected unless
-    /// `yes > floor((e0 + late) / 2)`, else Approved until its execution expiry and
+    /// `yes >= approvalsNeeded(e0 + late)`, else Approved until its execution expiry and
     /// ExecutionExpired from then on. Tallies cannot change after closing, so this is final.
     function status(uint256 proposalId) external view returns (Status) {
         return _status(_require(proposalId));
     }
 
-    /// @notice Whether a key is present now: renewed under its current owner less than 48 hours ago.
+    /// @notice How many Yes ballots approve a proposal whose electorate is `voters` keys:
+    /// `APPROVAL_PERCENT` of them, rounded up.
+    function approvalsNeeded(uint256 voters) public pure returns (uint256) {
+        return (voters * APPROVAL_PERCENT + 99) / 100;
+    }
+
+    /// @notice The first second a proposal may carry calls that move money: `TREASURY_OPENING`
+    /// after the fleet's sales opened. Zero while they have not opened.
+    function treasuryOpensAt() public view returns (uint64) {
+        uint64 salesOpenedAt = KEYS.salesOpenedAt(FLEET_ID);
+        return salesOpenedAt == 0 ? 0 : salesOpenedAt + TREASURY_OPENING;
+    }
+
+    /// @notice Whether a key is present now: less than 48 hours since its latest renewal under its
+    /// current owner, or since its automatic start if it was not renewed or moved after that.
     function isActive(uint256 tokenId) external view returns (bool) {
         return _presence.isActive(tokenId);
     }
 
-    /// @notice When a key was last renewed under its current owner; zero if it changed hands since
-    /// or was never renewed.
-    function lastActiveAt(uint256 tokenId) external view returns (uint64) {
-        return _presence.lastActiveAt(tokenId);
+    /// @notice When a key's latest presence starts: its latest renewal or, for a key not renewed
+    /// since it was sold, its automatic start, which is still to come while it waits. Zero once it
+    /// changed hands after that start.
+    function presentFrom(uint256 tokenId) external view returns (uint64) {
+        return _presence.presentFrom(tokenId);
     }
 
     /// @notice Whether a key was present when a proposal opened, as recorded at its opening
@@ -279,16 +339,34 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         return _presence.wasActive(tokenId, stored.openRevision, stored.openedAt);
     }
 
-    /// @notice The presence queue's ends and its entry count. `queued` includes expired entries
-    /// no sweep has removed yet, so it is the exact count of present keys only when nothing is due.
-    function presenceQueue() external view returns (uint32 head, uint32 tail, uint32 queued) {
-        return (_presence.head, _presence.tail, _presence.queued);
+    /// @notice One presence list's ends and entry count: `waiting`, `automatic` or `renewed`.
+    /// Entries no sweep has moved yet are still counted where they were, so `automatic` plus
+    /// `renewed` is the exact count of present keys only when nothing is due.
+    function presenceList(KeyfleetPresence.Place place) external view returns (uint64 head, uint64 tail, uint32 count) {
+        KeyfleetPresence.List storage list = place == KeyfleetPresence.Place.Waiting
+            ? _presence.waiting
+            : place == KeyfleetPresence.Place.Automatic ? _presence.automatic : _presence.renewed;
+        return (list.head, list.tail, list.count);
     }
 
-    /// @notice A key's queue entry: its neighbours and when it expires, all zero when not queued.
-    function presenceEntry(uint256 tokenId) external view returns (uint32 prev, uint32 next, uint64 expiresAt) {
+    /// @notice A key's presence entry: the list it is in, its neighbours there and when it falls
+    /// due, all zero when it is in none.
+    function presenceEntry(uint256 tokenId)
+        external
+        view
+        returns (KeyfleetPresence.Place place, uint64 prev, uint64 next, uint64 dueAt)
+    {
         KeyfleetPresence.Node storage node = _presence.node[tokenId];
-        return (node.prev, node.next, node.expiresAt);
+        return (node.place, node.prev, node.next, node.dueAt);
+    }
+
+    /// @notice The first second a key may take part: `KEY_MATURITY` after its mint. Reverts for a
+    /// token id that is not a key of this fleet that exists.
+    function maturesAt(uint256 tokenId) external view returns (uint64) {
+        _requireOwnKey(tokenId);
+        uint64 minted = KEYS.mintedAt(tokenId);
+        if (minted == 0) revert KeyNotMinted(tokenId);
+        return minted + KEY_MATURITY;
     }
 
     /// @notice The latest presence revision.
@@ -300,8 +378,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Renews keys: each is present for the next 48 hours unless it changes hands first.
     /// @dev The caller must own every key named or hold an active shard of it; agent voting does
-    /// not matter here. A key renewed again moves to the back of the queue; it is never counted
-    /// twice. Renewing keys changes no open proposal.
+    /// not matter here. Every key must be mature (`KEY_MATURITY`). A key renewed again moves to the
+    /// back of the queue; it is never counted twice. Renewing keys changes no open proposal.
     /// @param tokenIds The keys to renew, each at most once.
     function present(uint256[] calldata tokenIds) external {
         _present(msg.sender, tokenIds);
@@ -318,7 +396,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     {
         bytes32 structHash = keccak256(
             bytes.concat(
-                abi.encode(PRESENT_TYPEHASH, address(FLEET)),
+                abi.encode(PRESENT_TYPEHASH, address(MANAGER)),
                 _keyState(tokenIds),
                 abi.encode(signer, _useNonce(signer), deadline)
             )
@@ -327,28 +405,39 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         _present(signer, tokenIds);
     }
 
-    /// @notice Ends a key's presence because it changed hands. Only the fleet calls this, from every
-    /// transfer.
-    function onKeyMoved(uint256 tokenId) external {
-        if (msg.sender != address(FLEET)) revert OnlyFleet();
-        _presence.clear(tokenId);
-        emit PresenceCleared(tokenId);
+    /// @notice Schedules a newly sold key's automatic presence. Only the fleet's manager calls
+    /// this, from every sale, before the key is minted.
+    /// @dev The one place a key becomes present without being renewed: `KEY_MATURITY` after its
+    /// sale, which is its mint, for `PRESENCE_WINDOW`.
+    function enrollKey(uint256 tokenId) external {
+        if (msg.sender != address(MANAGER)) revert OnlyManager();
+        uint64 startsAt = uint64(block.timestamp) + KEY_MATURITY;
+        _presence.enroll(tokenId, startsAt);
+        emit PresenceScheduled(tokenId, startsAt);
     }
 
-    /// @notice Removes up to `limit` expired presences from the queue. Anyone may call it; it
-    /// renews nothing and changes no proposal.
-    /// @return removed How many were removed.
-    /// @return due Whether expired presences are still queued.
-    function sweepExpired(uint256 limit) external returns (uint256 removed, bool due) {
+    /// @notice Ends a key's presence because it changed hands. Only the fleet's manager calls this,
+    /// from every transfer. A key still waiting for its automatic start keeps it.
+    function onKeyMoved(uint256 tokenId) external {
+        if (msg.sender != address(MANAGER)) revert OnlyManager();
+        if (_presence.clear(tokenId)) emit PresenceCleared(tokenId);
+    }
+
+    /// @notice Moves up to `limit` due presence entries. Anyone may call it; it renews nothing and
+    /// changes no proposal.
+    /// @return moved How many were moved.
+    /// @return due Whether due entries are still listed.
+    function sweepExpired(uint256 limit) external returns (uint256 moved, bool due) {
         return _sweep(limit);
     }
 
     // --- proposals -------------------------------------------------------
 
     /// @notice Proposes an exact batch of treasury calls, or none to record agreement only.
-    /// @dev The caller must be allowed to vote `authorKey`. Up to `SWEEP_IN_PROPOSE` expired
-    /// presences are swept first, and if any are still due the call reverts with
-    /// `MaintenanceRequired` rather than record a count that includes expired keys. The author key
+    /// @dev The caller must be allowed to vote `authorKey`, which must be mature (`KEY_MATURITY`).
+    /// Before `treasuryOpensAt` every call must be one that moves no money. Up to
+    /// `SWEEP_IN_PROPOSE` due presence entries are swept first, and if any are still due the call
+    /// reverts with `MaintenanceRequired` rather than record an inexact count. The author key
     /// is renewed and then the opening is recorded. Proposing casts no ballot and reserves nothing,
     /// and an identical proposal made again is a new proposal with its own id and electorate.
     /// @param authorKey The key proposed with. It is the caller's standing and nothing else.
@@ -364,6 +453,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
             revert ClosingOutOfRange(closesAt);
         }
         _requireGovernor(authorKey, msg.sender);
+        uint64 opensAt = treasuryOpensAt();
+        if (block.timestamp < opensAt && !_movesNoMoney(calls)) revert TreasuryOpening(opensAt);
         (, bool due) = _sweep(SWEEP_IN_PROPOSE);
         if (due) revert MaintenanceRequired();
         _touch(authorKey);
@@ -373,12 +464,12 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         Proposal storage stored = _proposals[proposalId];
         stored.contentHash = contentHash;
         stored.actionsHash = keccak256(abi.encode(calls));
-        stored.authorKey = uint32(authorKey);
+        stored.authorKey = uint64(authorKey);
         stored.openRevision = _presence.mark();
         stored.openedAt = uint64(block.timestamp);
         stored.closesAt = closesAt;
         stored.executionExpiry = closesAt + EXECUTION_WINDOW;
-        stored.e0 = _presence.queued;
+        stored.e0 = _presence.presentCount();
         stored.proposalHash = _proposalHash(proposalId, stored);
         emit ProposalCreated(
             proposalId,
@@ -396,7 +487,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Casts or replaces ballots for a set of keys, all with one choice, and renews each key.
     /// @dev The caller must own every key named, or hold an active shard of it while its agent
-    /// voting is on, and the proposal must be open. A key's first ballot adds it to the electorate
+    /// voting is on, every key must be mature (`KEY_MATURITY`), and the proposal must be open. A
+    /// key's first ballot adds it to the electorate
     /// if it was not present at opening; a later one replaces its contribution. The whole call
     /// reverts if any one key is refused.
     /// @param proposalId The proposal.
@@ -471,11 +563,13 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Sets whether a key's edits are restricted. Only the treasury may, so only an approved
     /// proposal's call can.
-    /// @param tokenId A key already sold.
+    /// @param tokenId A key of this fleet already sold.
     /// @param restricted True to restrict, false to lift it.
     function setEditsRestricted(uint256 tokenId, bool restricted) external {
         if (msg.sender != address(TREASURY)) revert OnlyTreasury();
-        if (tokenId == 0 || tokenId > FLEET.totalMinted()) revert KeyNotMinted(tokenId);
+        _requireOwnKey(tokenId);
+        uint256 keyNumber = KEYS.keyNumberOf(tokenId);
+        if (keyNumber == 0 || keyNumber > MANAGER.totalMinted()) revert KeyNotMinted(tokenId);
         editsRestricted[tokenId] = restricted;
         emit EditsRestrictionSet(tokenId, restricted);
     }
@@ -524,7 +618,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
                 address(TREASURY),
                 proposalId,
                 authorKey,
-                FLEET.ownershipEpoch(authorKey),
+                KEYS.ownershipEpoch(authorKey),
                 stored.contentHash,
                 stored.actionsHash,
                 stored.closesAt,
@@ -537,21 +631,42 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (stored.cancelled) return Status.Cancelled;
         if (stored.executed) return Status.Executed;
         if (block.timestamp < stored.closesAt) return Status.Open;
-        if (stored.yes <= (uint256(stored.e0) + stored.late) / 2) return Status.Rejected;
+        if (stored.yes < approvalsNeeded(uint256(stored.e0) + stored.late)) return Status.Rejected;
         if (block.timestamp >= stored.executionExpiry) return Status.ExecutionExpired;
         return Status.Approved;
     }
 
-    /// @dev Sweeps up to `limit` expired presences, announcing any it removes.
-    function _sweep(uint256 limit) private returns (uint256 removed, bool due) {
-        (removed, due) = _presence.sweep(limit);
-        if (removed != 0) emit Swept(removed, due);
+    /// @dev Whether every call is one a proposal may carry during the fleet's opening: no value,
+    /// and the treasury's `setDailySplitBps`, the manager's `setProfile` or this controller's
+    /// `setEditsRestricted`. None of them moves money.
+    function _movesNoMoney(KeyfleetTreasury.Call[] calldata calls) private view returns (bool) {
+        for (uint256 i = 0; i < calls.length; ++i) {
+            KeyfleetTreasury.Call calldata call = calls[i];
+            if (call.value != 0 || call.data.length < 4) return false;
+            bytes4 selector = bytes4(call.data[:4]);
+            if (
+                !(call.target == address(TREASURY) && selector == KeyfleetTreasury.setDailySplitBps.selector)
+                    && !(call.target == address(MANAGER) && selector == KeyfleetManager.setProfile.selector)
+                    && !(call.target == address(this) && selector == this.setEditsRestricted.selector)
+            ) return false;
+        }
+        return true;
     }
 
-    /// @dev Renews a key the caller has been authorised for.
+    /// @dev Sweeps up to `limit` due presence entries, announcing any it moves.
+    function _sweep(uint256 limit) private returns (uint256 moved, bool due) {
+        (moved, due) = _presence.sweep(limit);
+        if (moved != 0) emit Swept(moved, due);
+    }
+
+    /// @dev Renews a key the caller has been authorised for, refusing one that is not mature yet.
+    /// Every renewal comes through here, and every automatic start falls at maturity, so every
+    /// present key is mature.
     function _touch(uint256 tokenId) private {
+        uint64 maturity = KEYS.mintedAt(tokenId) + KEY_MATURITY;
+        if (block.timestamp < maturity) revert KeyTooNew(tokenId, maturity);
         _presence.touch(tokenId);
-        emit Present(tokenId, uint64(block.timestamp), uint64(block.number), FLEET.ownershipEpoch(tokenId));
+        emit Present(tokenId, uint64(block.timestamp), uint64(block.number), KEYS.ownershipEpoch(tokenId));
     }
 
     /// @dev Renews keys for `account`, who has been authenticated as the caller or a signer.
@@ -559,7 +674,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (tokenIds.length == 0) revert NoKeys();
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
-            if (account != FLEET.ownerOf(tokenId) && !SHARDS.isActive(tokenId, account)) {
+            _requireOwnKey(tokenId);
+            if (account != KEYS.ownerOf(tokenId) && !SHARDS.isActive(tokenId, account)) {
                 revert NotAuthorizedForKey(tokenId, account);
             }
             _touch(tokenId);
@@ -567,10 +683,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     }
 
     /// @dev Who may vote a key, propose with it and cancel what it authored: its current owner, or
-    /// a wallet holding an active shard of it while the key's agent voting is on. A token id that is
-    /// not a minted key reverts in `ownerOf`.
+    /// a wallet holding an active shard of it while the key's agent voting is on. A key of another
+    /// fleet is refused first; a token id that is not a minted key reverts in `ownerOf`.
     function _requireGovernor(uint256 tokenId, address account) private view {
-        if (account != FLEET.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
+        _requireOwnKey(tokenId);
+        if (account != KEYS.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
             revert NotAuthorizedForKey(tokenId, account);
         }
     }
@@ -585,7 +702,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         uint64[] memory revisions = new uint64[](tokenIds.length);
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             if (i != 0 && tokenIds[i] <= tokenIds[i - 1]) revert KeysNotAscending();
-            epochs[i] = FLEET.ownershipEpoch(tokenIds[i]);
+            epochs[i] = KEYS.ownershipEpoch(tokenIds[i]);
             revisions[i] = SHARDS.delegationRevision(tokenIds[i]);
         }
         return abi.encode(
@@ -605,6 +722,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (!SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(structHash), signature)) {
             revert InvalidSignature(signer);
         }
+    }
+
+    /// @dev Refuses a key of another fleet.
+    function _requireOwnKey(uint256 tokenId) private view {
+        if (KEYS.fleetOf(tokenId) != FLEET_ID) revert ForeignKey(tokenId);
     }
 
     function _require(uint256 proposalId) private view returns (Proposal storage stored) {

@@ -2,7 +2,9 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
+import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
@@ -10,15 +12,18 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 
 /// @dev The fleet reader in platform/lib/keyfleet/chain/ matches logs by these topics, reads ballots
 /// and a proposal's status by these numbers and calls these functions, all written out there by
-/// hand. If an event's signature, a function's signature or the numbers change, this fails until both
+/// hand. Key events come from the shared key collection, sale and money events from each fleet's
+/// manager. If an event's signature, a function's signature or the numbers change, this fails until both
 /// sides agree again.
 contract KeyfleetVotesTopicsTest is Test {
     function test_ownershipEpochTopic() public pure {
-        assertEq(Keyfleet.OwnershipEpoch.selector, 0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1);
+        assertEq(
+            KeyfleetKeys.OwnershipEpoch.selector, 0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1
+        );
     }
 
     function test_keyRevealedTopic() public pure {
-        assertEq(Keyfleet.KeyRevealed.selector, 0x6d40ad718cfc10342a32c87c9bc44d44a37c6e9a218a67e550d1631035b05f0e);
+        assertEq(KeyfleetKeys.KeyRevealed.selector, 0x2641319733d9075c8fb8c0e9c0738513e76e459cba32ba76efd9a29096dc8a24);
     }
 
     function test_proposalCreatedTopic() public pure {
@@ -54,20 +59,21 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_forwardedToTreasuryTopic() public pure {
         assertEq(
-            Keyfleet.ForwardedToTreasury.selector, 0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81
+            KeyfleetManager.ForwardedToTreasury.selector,
+            0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81
         );
     }
 
     /// @dev The treasury reader's balance reads, one call each at the same block. The fleet's
-    /// capital is the token balance of the address `TREASURY` returns. A public
+    /// capital is the token balance of the address the manager's `TREASURY` returns. A public
     /// mapping or variable's getter is only reachable through an instance, so those are named
     /// through one at address zero, which is never called.
     function test_treasuryViewSelectors() public view {
         assertEq(KeyfleetRewards.rewardAssets.selector, bytes4(0x880ec04e));
         assertEq(KeyfleetRewards(address(0)).backed.selector, bytes4(0x595b7f21));
-        assertEq(Keyfleet(address(0)).TREASURY.selector, bytes4(0x2d2c5565));
-        assertEq(Keyfleet(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
-        assertEq(Keyfleet(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
+        assertEq(KeyfleetManager(address(0)).TREASURY.selector, bytes4(0x2d2c5565));
+        assertEq(KeyfleetManager(address(0)).cascadeReserve.selector, bytes4(0xfc4e8964));
+        assertEq(KeyfleetManager(address(0)).protocolShareOwed.selector, bytes4(0xc490b9c7));
     }
 
     function test_proposalExecutedTopic() public pure {
@@ -85,7 +91,8 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_protocolShareSentTopic() public pure {
         assertEq(
-            Keyfleet.ProtocolShareSent.selector, 0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3
+            KeyfleetManager.ProtocolShareSent.selector,
+            0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3
         );
     }
 
@@ -108,7 +115,8 @@ contract KeyfleetVotesTopicsTest is Test {
     /// @dev The calls the platform builds for proposing, casting ballots, cancelling and carrying
     /// out, restricting edits through a proposal's call, issuing and ending shards, switching agent
     /// voting, signed renewals and ballots, and sending the protocol share, and the views it reads
-    /// them back through.
+    /// them back through. The one shared shards contract is read from the factory or from a fleet's
+    /// voting controller.
     function test_proposalAndShardSelectors() public view {
         assertEq(KeyfleetVotes.propose.selector, bytes4(0x67975250));
         assertEq(KeyfleetVotes.castBallot.selector, bytes4(0xb6e564ef));
@@ -126,8 +134,9 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetShards.end.selector, bytes4(0x8dbf85b7));
         assertEq(KeyfleetShards.shardOf.selector, bytes4(0xd6617c02));
         assertEq(KeyfleetShards.setAgentVoting.selector, bytes4(0xbef65f32));
-        assertEq(Keyfleet(address(0)).SHARDS.selector, bytes4(0x48db3888));
-        assertEq(Keyfleet.sendProtocolShare.selector, bytes4(0xcb097587));
+        assertEq(KeyfleetFactory(address(0)).SHARDS.selector, bytes4(0x48db3888));
+        assertEq(KeyfleetVotes(address(0)).SHARDS.selector, bytes4(0x48db3888));
+        assertEq(KeyfleetManager.sendProtocolShare.selector, bytes4(0xcb097587));
     }
 
     /// @dev The treasury's payments and advances, which a proposal's calls name, and the events the

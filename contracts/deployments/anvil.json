@@ -1,35 +1,71 @@
 {
   "chainId": 31337,
-  "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "safe": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
+  "keeper": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
-  "regent": "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07",
   "autolaunchFactory": "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
+  "collection": {
+    "name": "Keyfleet",
+    "symbol": "KEYFLEET",
+    "baseTokenURI": "http://localhost:4000/metadata/keys/",
+    "contractURI": "http://localhost:4000/metadata/collection.json"
+  },
   "vrf": {
     "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
     "subscriptionId": "0",
     "keyHash": "0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab"
   },
-  "traitTableHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "fleets": {
-    "syndicate": {
-      "name": "Keyfleet Syndicate",
-      "symbol": "KEYFLEET",
-      "baseTokenURI": "http://localhost:4000/metadata/syndicate/"
-    },
-    "cascade": {
-      "name": "Keyfleet Cascade",
-      "symbol": "KEYFLEET",
-      "baseTokenURI": "http://localhost:4000/metadata/cascade/"
-    },
+  "traitTableHash": "0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe",
+  "route": {
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "weth": "0x4200000000000000000000000000000000000006",
+    "regent": "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07",
+    "v3Pool": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+    "poolManager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+    "v4Pool": {
+      "currency0": "0x4200000000000000000000000000000000000006",
+      "currency1": "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07",
+      "fee": 8388608,
+      "tickSpacing": 200,
+      "hooks": "0xd60D6B218116cFd801E28F78d011a203D2b068Cc"
+    }
+  },
+  "foundingFleets": {
     "classic": {
-      "name": "Keyfleet Classic",
-      "symbol": "KEYFLEET",
-      "baseTokenURI": "http://localhost:4000/metadata/classic/"
+      "deckHash": "0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7",
+      "deckSize": 1000,
+      "profile": {
+        "name": "Classic #1",
+        "description": "",
+        "imageLink": ""
+      }
+    },
+    "syndicate": {
+      "deckHash": "0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706",
+      "deckSize": 1000,
+      "profile": {
+        "name": "Syndicate #1",
+        "description": "",
+        "imageLink": ""
+      }
     },
     "accelerant": {
-      "name": "Keyfleet Accelerant",
-      "symbol": "KEYFLEET",
-      "baseTokenURI": "http://localhost:4000/metadata/accelerant/"
+      "deckHash": "0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d",
+      "deckSize": 1000,
+      "profile": {
+        "name": "Accelerant #1",
+        "description": "",
+        "imageLink": ""
+      }
+    },
+    "cascade": {
+      "deckHash": "0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66",
+      "deckSize": 1000,
+      "profile": {
+        "name": "Cascade #1",
+        "description": "",
+        "imageLink": ""
+      }
     }
   }
 }
