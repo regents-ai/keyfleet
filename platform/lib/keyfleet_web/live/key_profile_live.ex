@@ -77,7 +77,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
           <.reveal :if={is_nil(@profile.traits)} profile={@profile} fleet={@fleet} actor={@actor} />
-          <.claim :if={@profile.yours?} profile={@profile} fleet={@fleet} actor={@actor} />
+          <.claim
+            :if={@profile.yours? or shard_yours?(@profile, @actor)}
+            profile={@profile}
+            fleet={@fleet}
+            actor={@actor}
+          />
           <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
           <.recent_posts profile={@profile} params={@params} />
@@ -284,7 +289,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :actor, :any, required: true
 
   # What the key has earned and not yet been paid, each token claimed with its
-  # own button and paid to the wallet that holds the key.
+  # own button and always paid to the wallet that holds the key, whether its
+  # holder or one of its shards presses.
   defp claim(assigns) do
     ~H"""
     <section
@@ -292,7 +298,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
       class="key-profile__section"
       aria-labelledby="key-profile-claim-title"
     >
-      <h3 id="key-profile-claim-title">Claim income</h3>
+      <h3 id="key-profile-claim-title">
+        Claim
+        <Regent.Primitives.tip id="key-profile-claim-tip" label="About claiming">
+          What the daily split shared with this key waits here until claimed. It is always paid to the key’s holder, and a shard of the key can claim it for them.
+        </Regent.Primitives.tip>
+      </h3>
       <.live_component
         module={WalletPanel}
         id="key-profile-claim-action"
@@ -302,19 +313,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
         token_id={@profile.token_id}
         refresh={@profile.rewards}
       >
-        <:notes>
-          <p class="key-profile-detail">
-            Rewards wait here for the key until they are claimed.
-          </p>
-        </:notes>
         <:buttons :let={panel}>
-          <Regent.Primitives.button
-            :for={waiting <- claimable(panel)}
+          <WalletPanel.step_button
+            :for={waiting <- waiting(panel)}
+            panel={panel}
+            step={"claim-#{waiting.asset}"}
             id={"key-profile-claim-#{waiting.asset}"}
-            data-onchain-step={"claim-#{waiting.asset}"}
           >
-            <span data-press-label>Claim {WalletWords.token_amount(waiting)}</span>
-          </Regent.Primitives.button>
+            Claim {WalletWords.token_amount(waiting)}
+          </WalletPanel.step_button>
         </:buttons>
       </.live_component>
     </section>
@@ -326,8 +333,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :actor, :any, required: true
 
   # A key whose request for its random draw was turned down has no traits
-  # until someone asks again, which anyone may do. The server reads whether
-  # it was turned down, and Try again appears only then.
+  # until someone asks again, which anyone may do. The chain says whether
+  # the draw is on its way or done, and the button says so while it is.
   defp reveal(assigns) do
     ~H"""
     <section
@@ -335,7 +342,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
       class="key-profile__section"
       aria-labelledby="key-profile-reveal-title"
     >
-      <h3 id="key-profile-reveal-title">Drawing traits</h3>
+      <h3 id="key-profile-reveal-title">
+        Traits
+        <Regent.Primitives.tip id="key-profile-reveal-tip" label="About drawing traits">
+          A key’s traits come from a random draw. If the request for it was turned down, anyone can ask again.
+        </Regent.Primitives.tip>
+      </h3>
       <.live_component
         module={WalletPanel}
         id="key-profile-reveal-action"
@@ -344,32 +356,22 @@ defmodule KeyfleetWeb.KeyProfileLive do
         actor={@actor}
         token_id={@profile.token_id}
       >
-        <:notes :let={panel}>
-          <p :if={is_nil(@actor)} class="key-profile-detail">
-            This key’s traits are still being drawn. Sign in to ask again if its draw was turned down.
-          </p>
-          <p :if={WalletPanel.has_step?(panel, "reveal")} class="key-profile-detail">
-            This key’s traits haven’t been drawn yet, because the request for its random draw was turned down. Anyone can ask again.
-          </p>
-        </:notes>
         <:buttons :let={panel}>
-          <Regent.Primitives.button
-            :if={WalletPanel.has_step?(panel, "reveal")}
-            id="key-profile-reveal-again"
-            data-onchain-step="reveal"
-          >
-            <span data-press-label>Try again</span>
-          </Regent.Primitives.button>
+          <WalletPanel.step_button panel={panel} step="reveal" id="key-profile-reveal-again">
+            Ask again
+          </WalletPanel.step_button>
         </:buttons>
       </.live_component>
     </section>
     """
   end
 
-  defp claimable(%{built: %{figures: %{waiting: waiting}}}),
-    do: Enum.reject(waiting, &(&1.amount == 0))
+  defp waiting(panel), do: panel |> WalletPanel.figures() |> Map.get(:waiting, [])
 
-  defp claimable(_panel), do: []
+  defp shard_yours?(%{shards: shards}, %{wallet_addresses: wallets}),
+    do: Enum.any?(shards, &(&1.wallet in wallets))
+
+  defp shard_yours?(_profile, _actor), do: false
 
   attr :profile, :map, required: true
   attr :params, :map, required: true

@@ -713,6 +713,8 @@ defmodule KeyfleetWeb.FleetLive do
         </p>
       </section>
 
+      <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} />
+
       <section aria-labelledby="fleet-contract-title">
         <h3 id="fleet-contract-title">On Ethereum</h3>
         <p :if={@fleet.contract_address} class="fleet-wallet">
@@ -923,6 +925,71 @@ defmodule KeyfleetWeb.FleetLive do
     </section>
     """
   end
+
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+
+  # The fleet's token launch, once an approved proposal has made one: four
+  # buttons anyone may press to settle its sale, add its token to the daily
+  # split, release the tokens set aside for the treasury and collect the
+  # pool's fees.
+  defp launch_upkeep(assigns) do
+    ~H"""
+    <section id="fleet-launch" aria-labelledby="fleet-launch-title">
+      <h3 id="fleet-launch-title">
+        Token launch
+        <Regent.Primitives.tip id="fleet-launch-tip" label="About the token launch">
+          A launch the fleet voted for sells its token through Autolaunch. Once the sale ends, anyone can settle it, add the token to the daily split, release the tokens set aside for the treasury, and collect the pool’s fees for it.
+        </Regent.Primitives.tip>
+      </h3>
+      <.live_component
+        module={WalletPanel}
+        id="fleet-launch-action"
+        flow={:launch_upkeep}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+      >
+        <:buttons :let={panel}>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="settle"
+            id="fleet-launch-settle"
+          >
+            Settle sale
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="bind"
+            id="fleet-launch-bind"
+          >
+            Add to split
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="release"
+            id="fleet-launch-release"
+          >
+            Release tokens
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="collect"
+            id="fleet-launch-collect"
+          >
+            Collect fees
+          </WalletPanel.step_button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  # Until an approved proposal has made a launch, there is nothing to upkeep.
+  defp launched?(panel), do: WalletPanel.figures(panel)[:launch_id] != nil
 
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true

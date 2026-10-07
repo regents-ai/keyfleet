@@ -5,18 +5,22 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   `list/2` is the fleet's proposals, newest first, twenty to a page, with
   its shared money once it is on chain: the latest reading of its treasury,
-  its daily split and its latest money in and out. `detail/3` is one proposal with its
-  votes, fifty to a page. Once the fleet is on chain, each carries the
-  network its wallet buttons send on; the buttons' steps are built by
-  `Keyfleet.WalletSteps`. A page name that is not a proposal number is a
-  page that doesn't exist.
+  its daily split, the advances still out and its latest money in and out.
+  `detail/3` is one proposal with its votes, fifty to a page, its calls in
+  plain words, and where it stands as the vote contract says at the latest
+  block: its status, the keys counted and each tally, never worked out here.
+  Once the fleet is on chain, each carries the network its wallet buttons
+  send on; the buttons' steps are built by `Keyfleet.WalletSteps`. A page
+  name that is not a proposal number is a page that doesn't exist.
   """
 
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.Actions
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.{Reads, VoteSteps}
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
@@ -60,6 +64,7 @@ defmodule KeyfleetWeb.ProposalsPage do
           Map.merge(reading, %{
             number: number,
             proposal: Map.merge(summary(proposal), details(proposal, fleet)),
+            on_chain: reading.deployed? && on_chain(fleet, proposal.number),
             votes: Enum.map(votes, &vote/1),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
             first_votes: if(votes_after > 0, do: path.([]))
@@ -120,9 +125,8 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  # The tokens the payment form lists by name: USDC, then the tokens of the
-  # latest reading (each token an open payment names). The form takes any
-  # other token by its address.
+  # The tokens a payment or an advance can be made in: ETH, REGENT, USDC and
+  # any other token the treasury splits, by name.
   defp propose(fleet),
     do: %{
       assets:
@@ -132,18 +136,18 @@ defmodule KeyfleetWeb.ProposalsPage do
         )
     }
 
-  # A token as the payment form names it: the fleet's own USDC by name, any
-  # other with its address beside its symbol, so a token calling itself USDC
-  # is never taken for it. One that hasn't said its decimals is paid in its
-  # smallest units.
+  # A token as the payment form names it: the fleet's own USDC and ETH by
+  # name, any other with its address beside its symbol, so a token calling
+  # itself USDC is never taken for it.
   defp pay_name(%{usdc?: true}), do: "USDC"
 
-  defp pay_name(%{address: address, symbol: symbol, decimals: decimals})
-       when is_binary(symbol) and is_integer(decimals),
-       do: "#{symbol} #{RegentFormat.short_address(address)}"
+  defp pay_name(%{address: address, symbol: symbol}) when is_binary(symbol) do
+    if address == Treasury.native(),
+      do: symbol,
+      else: "#{symbol} #{RegentFormat.short_address(address)}"
+  end
 
-  defp pay_name(%{address: address}),
-    do: "Token #{RegentFormat.short_address(address)}, in its smallest units"
+  defp pay_name(%{address: address}), do: "Token #{RegentFormat.short_address(address)}"
 
   defp summary(proposal) do
     %{
@@ -166,21 +170,66 @@ defmodule KeyfleetWeb.ProposalsPage do
       content_hash: proposal.content_hash,
       opened_at: proposal.opened_at,
       execution_expiry: proposal.execution_expiry,
-      calls: Enum.map(proposal.calls, &call(&1, assets)),
+      calls: Enum.map(proposal.calls, &call(Actions.decode(&1, fleet), fleet, assets)),
       executor: proposal.execution && proposal.execution.executor,
       cancelled_by: proposal.cancellation && proposal.cancellation.cancelled_by
     }
   end
 
-  # One call the treasury makes if the proposal is carried out, with the ETH
-  # it sends, if any.
-  defp call(call, assets) do
-    %{
-      target: call.target,
-      value: if(call.value > 0, do: amount(call.value, Treasury.native(), assets)),
-      data: call.data
-    }
+  # Where the proposal stands as the vote contract says now, read at the
+  # latest block, or `:unreadable` when the network can't be reached.
+  defp on_chain(fleet, number) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, standing} <- VoteSteps.proposal(reads, fleet, number),
+         {:ok, status} <- VoteSteps.chain_status(reads, fleet, number) do
+      Map.merge(standing, %{status: status, counted: standing.e0 + standing.late})
+    else
+      _unread -> :unreadable
+    end
   end
+
+  # One call carrying the proposal out makes, in plain words: `text`, then
+  # the wallet or token it names in full, if any.
+  defp call({:pay, asset, to, amount}, _fleet, assets),
+    do: %{text: "Pay #{amount(amount, asset, assets).text} to", address: to}
+
+  defp call({:advance, id, operator, asset, amount, _purpose}, _fleet, assets),
+    do: %{
+      text: "Advance #{amount(amount, asset, assets).text} (advance #{id}) to",
+      address: operator
+    }
+
+  defp call({:rate, bps}, _fleet, _assets),
+    do: %{text: "Set the daily split to #{units(bps, 2)}%", address: nil}
+
+  defp call({:signature, :approve, hash}, _fleet, _assets),
+    do: %{text: "Sign a message for the fleet:", address: hash}
+
+  defp call({:signature, :revoke, hash}, _fleet, _assets),
+    do: %{text: "Withdraw the fleet’s signature on", address: hash}
+
+  defp call({:edits, token_id, true}, _fleet, _assets),
+    do: %{text: "Stop key #{Rules.grouped(token_id)} changing the workspace", address: nil}
+
+  defp call({:edits, token_id, false}, _fleet, _assets),
+    do: %{text: "Let key #{Rules.grouped(token_id)} change the workspace again", address: nil}
+
+  defp call({:launch, launch}, _fleet, _assets),
+    do: %{
+      text: "Launch #{launch.name} (#{launch.symbol}) through Autolaunch, for the treasury",
+      address: nil
+    }
+
+  defp call(:voted_split, _fleet, _assets),
+    do: %{text: "Run the daily split now", address: nil}
+
+  defp call({:admit_ousd, token}, _fleet, _assets),
+    do: %{text: "Add OUSD to the daily split:", address: token}
+
+  defp call({:other, target, wei, _data}, _fleet, assets) when wei > 0,
+    do: %{text: "Send #{amount(wei, Treasury.native(), assets).text} and call", address: target}
+
+  defp call({:other, target, 0, _data}, _fleet, _assets), do: %{text: "Call", address: target}
 
   defp vote(vote) do
     %{
@@ -203,11 +252,9 @@ defmodule KeyfleetWeb.ProposalsPage do
     |> Map.merge(figures(fleet, reading, assets))
   end
 
-  defp figures(_fleet, nil, _assets), do: %{read?: false, nothing_owed?: false}
+  defp figures(_fleet, nil, _assets), do: %{read?: false}
 
-  defp figures(fleet, reading, assets) do
-    usdc = &amount(Decimal.to_integer(&1), fleet.usdc_address, assets)
-
+  defp figures(_fleet, reading, assets) do
     %{
       read?: true,
       as_of: reading.block_time,
@@ -221,11 +268,7 @@ defmodule KeyfleetWeb.ProposalsPage do
           }
         ),
       split_rate: "#{units(reading.daily_split_bps, 2)}%",
-      last_run_at: reading.last_run_at,
-      next_run_at: reading.next_run_at,
-      reserve: if(Decimal.gt?(reading.cascade_reserve, 0), do: usdc.(reading.cascade_reserve)),
-      owed: usdc.(reading.protocol_share_owed),
-      nothing_owed?: Decimal.eq?(reading.protocol_share_owed, 0)
+      next_run_at: reading.next_run_at
     }
   end
 
@@ -258,13 +301,20 @@ defmodule KeyfleetWeb.ProposalsPage do
       account: if(event.kind in [:paid, :advanced], do: event.account)
     }
 
-  defp advance(advance, assets),
-    do: %{
-      id: Decimal.to_string(advance.advance_id),
+  # An advance still out, with what is left in whole tokens as a return of
+  # all of it is typed.
+  defp advance(advance, assets) do
+    outstanding = Decimal.to_integer(advance.outstanding)
+    decimals = assets.details |> Map.get(advance.asset, {nil, nil}) |> elem(1)
+
+    %{
+      id: Decimal.to_integer(advance.advance_id),
       operator: advance.operator,
       amount: amount(Decimal.to_integer(advance.amount), advance.asset, assets),
-      outstanding: amount(Decimal.to_integer(advance.outstanding), advance.asset, assets)
+      outstanding: amount(outstanding, advance.asset, assets),
+      typed: units(outstanding, decimals || 0) |> String.replace(",", "")
     }
+  end
 
   defp number!(nil), do: nil
 

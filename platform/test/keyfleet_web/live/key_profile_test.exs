@@ -274,22 +274,24 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   describe "claiming a key's income" do
     @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 
-    # Each token waiting for the key has its own Claim button, built on the
-    # server for the holder's wallet and paid to it.
+    # Each token the key is paid in has its own Claim button, built on the
+    # server for the holder's wallet; the money always goes to the holder.
     test "the holder gets a Claim button for each token waiting, built for their wallet", %{
       conn: conn
     } do
       holder = wallet("e")
-      reward_assets = Call.selector("rewardAssets()")
+      owner_of = Call.encode("ownerOf(uint256)", [12])
+      accrued = Call.encode("accrued(address,uint256)", [@usdc, 12])
 
       rewards_answer(fn
-        _to, ^reward_assets, _hash ->
-          {:ok,
-           <<32::256, 1::256, 0::96>> <>
-             Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)}
+        _to, ^owner_of, _hash ->
+          {:ok, <<0::96>> <> Base.decode16!(String.duplicate("ee", 20), case: :lower)}
 
-        _to, _accrued, _hash ->
+        _to, ^accrued, _hash ->
           {:ok, <<2_500_000::256>>}
+
+        _to, _credits, _hash ->
+          {:ok, <<0::256>>}
       end)
 
       {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
@@ -308,11 +310,28 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert claim.step == "claim-#{@usdc}"
       assert claim.to == @rewards
-      assert claim.data == Call.encode("claim(address,uint256[],address)", [@usdc, [12], holder])
+      assert claim.data == Call.encode("claim(uint256[],address[])", [[12], [@usdc]])
       assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
+      refute has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
+    end
 
-      assert text(view, "#key-profile-claim-action-line") ==
-               "Waiting for this key: 2.5 USDC. Each token is claimed with its own button."
+    test "nothing waiting keeps the button in view, not pressable, and says so", %{conn: conn} do
+      holder = wallet("e")
+      owner_of = Call.encode("ownerOf(uint256)", [12])
+
+      rewards_answer(fn
+        _to, ^owner_of, _hash ->
+          {:ok, <<0::96>> <> Base.decode16!(String.duplicate("ee", 20), case: :lower)}
+
+        _to, _data, _hash ->
+          {:ok, <<0::256>>}
+      end)
+
+      {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      render_async(view)
+
+      assert has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
+      assert has_element?(view, "#key-profile-claim-action", "Nothing to claim")
     end
 
     test "only the key's holder sees where to claim it", %{conn: conn} do
@@ -327,7 +346,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   describe "asking again for a key's draw" do
     @contract "0x" <> String.duplicate("7", 40)
 
-    test "a key whose draw was turned down offers anyone Try again, built on the server",
+    test "a key whose draw was turned down offers anyone Ask again, built on the server",
          %{conn: conn} do
       signer = wallet("f")
       draw_answer(0)
@@ -351,14 +370,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
       refute has_element?(view, "#key-profile-reveal-again[phx-click]")
-      assert text(view, "#key-profile-reveal-again") == "Try again"
+      assert text(view, "#key-profile-reveal-again") == "Ask again"
+      refute has_element?(view, "#key-profile-reveal-again[disabled]")
 
-      assert text(view, "#key-profile-reveal .key-profile-detail") ==
-               "This key’s traits haven’t been drawn yet, because the request for its " <>
-                 "random draw was turned down. Anyone can ask again."
+      assert text(view, "#key-profile-reveal-tip") ==
+               "A key’s traits come from a random draw. If the request for it was turned " <>
+                 "down, anyone can ask again."
     end
 
-    test "Try again pressed as the wallet becomes active is answered with its step",
+    test "Ask again pressed as the wallet becomes active is answered with its step",
          %{conn: conn} do
       signer = wallet("f")
       draw_answer(0)
@@ -393,22 +413,17 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
       render_async(view)
 
-      refute has_element?(view, "#key-profile-reveal-again")
-
-      assert text(view, "#key-profile-reveal-action-line") ==
-               "The request for this key’s random draw was accepted. The draw is on its way, " <>
-                 "and the key’s traits show here when it arrives."
+      # Asking again is certain to fail while the draw is on its way.
+      assert has_element?(view, "#key-profile-reveal-again[disabled]")
+      assert has_element?(view, "#key-profile-reveal-action", "Draw on its way")
     end
 
     test "shows while the key is revealing, and goes once its draw is recorded", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
 
-      assert text(view, "#key-profile-reveal-title") == "Drawing traits"
-      refute has_element?(view, "#key-profile-reveal-again")
-
-      assert text(view, "#key-profile-reveal .key-profile-detail") ==
-               "This key’s traits are still being drawn. Sign in to ask again if its draw " <>
-                 "was turned down."
+      assert text(view, "#key-profile-reveal-title") =~ "Traits"
+      # Signed out, a press says to sign in.
+      assert has_element?(view, "#key-profile-reveal-again", "Ask again")
 
       Keys.record_reveal!(
         %{

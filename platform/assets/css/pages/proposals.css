@@ -226,4 +226,35 @@
   min-width: 0;
 }
 
+/* A table of figures per asset; it scrolls inside its panel on a narrow
+   screen rather than widening the page. */
+.proposals-table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.proposals-table th,
+.proposals-table td {
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.proposals-table th {
+  color: var(--color-fg-muted);
+  font-weight: 400;
+}
+
+.proposals-panel h2,
+.proposals-panel h3 {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 }

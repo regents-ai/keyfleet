@@ -24,6 +24,21 @@
   gap: 0.75rem;
 }
 
+/* A button the chain's own state makes certain to fail stays in view,
+   disabled, with a few words beside it saying why. */
+.wallet-panel-step {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.wallet-panel-why {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
 .wallet-panel-line,
 .wallet-panel-note {
   margin: 0;

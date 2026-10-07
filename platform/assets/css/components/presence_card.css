@@ -1,0 +1,43 @@
+@layer regents-product {
+/* Whether keys are present (KeyfleetWeb.Components.PresenceCard): each key
+   on its own line with when its presence lapses, and a mark when lapsed
+   presences wait to be tidied up. */
+
+.presence-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.presence-keys {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.presence-keys li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+}
+
+.presence-on {
+  color: var(--color-success);
+}
+
+.presence-off {
+  color: var(--color-fg-muted);
+}
+
+.presence-maintenance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-warning);
+}
+}

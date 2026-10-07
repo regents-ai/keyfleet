@@ -1,11 +1,13 @@
 defmodule KeyfleetWeb.KeysLive do
   @moduledoc """
-  One key's page: who owns it, the shards it has given out, and whether a
-  vote of the fleet has stopped it changing the workspace.
+  One key's page: who owns it, whether it is present, the shards it has given
+  out, whether its shards may vote, and whether a vote of the fleet has
+  stopped it changing the workspace.
 
   Everything here is read from what the chain recorded, so a visitor sees the
   same standing the owner does; only the owner is offered the wallet buttons
-  that issue, renew and end shards.
+  that issue, renew and end shards and turn agent voting on or off. Anyone
+  sees the key's presence, and its holder or a shard may mark it present.
   """
 
   use KeyfleetWeb, :html
@@ -15,6 +17,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Profile
+  alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
 
@@ -29,39 +32,46 @@ defmodule KeyfleetWeb.KeysLive do
       <header class="key-heading">
         <p class="key-kicker">{@key.fleet_name || "Keyfleet"}</p>
         <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
-        <p class="key-lede">Who owns this key, and the agents it has given shards to.</p>
       </header>
 
-      <section :if={is_nil(@key.owner_wallet)} class="key-panel">
-        <h2>This key isn’t here yet</h2>
-        <p>Once the key is sold, its owner and shards appear on this page.</p>
+      <section :if={is_nil(@key.owner_wallet)} id="key-not-sold" class="key-panel">
+        <h2>Not sold yet</h2>
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
-        <p :if={@key.refreshing?} class="key-notice">
-          Key ownership is being refreshed, so the shards shown here may be a few minutes behind.
-        </p>
+        <p :if={@key.refreshing?} class="key-notice">Refreshing…</p>
 
         <p :if={@key.edits_restricted?} id="key-edits-restricted" class="key-notice">
-          A vote of the fleet has stopped this key and its shards changing the workspace. They can
-          still read it and chat.
+          Edits restricted
+          <Regent.Primitives.tip id="key-edits-tip" label="About restricted edits">
+            A vote of the fleet stopped this key and its shards changing the workspace. They can still read it and chat.
+          </Regent.Primitives.tip>
         </p>
 
         <section class="key-panel" aria-labelledby="key-owner-title">
           <h2 id="key-owner-title">Owner</h2>
           <p class="key-wallet"><code>{@key.owner_wallet}</code></p>
-          <p :if={@key.owner?} class="key-detail">You own this key.</p>
+          <p :if={@key.owner?} id="key-owner-you" class="key-detail">You</p>
         </section>
 
-        <section id="key-shards" class="key-panel" aria-labelledby="key-shards-title">
-          <h2 id="key-shards-title">Shards</h2>
-          <p class="key-detail">
-            A shard lets an agent’s wallet chat in rooms and work in the workspace as this key, for
-            up to a year. It can’t vote, propose, buy, collect or move money. Every shard ends when
-            the key changes hands.
-          </p>
+        <PresenceCard.card
+          :if={@key.deployed?}
+          id="key-present"
+          class="key-panel"
+          fleet={@key.fleet}
+          actor={@actor}
+          token_id={@key.token_id}
+        />
 
-          <p :if={@key.shards == []} id="key-no-shards">This key has no shards.</p>
+        <section id="key-shards" class="key-panel" aria-labelledby="key-shards-title">
+          <h2 id="key-shards-title">
+            Shards
+            <Regent.Primitives.tip id="key-shards-tip" label="About shards">
+              A shard lets an agent’s wallet chat, work in the workspace, mark the key present and claim for it, for up to a year. With agent voting on, it can also vote and propose. The money always goes to the key’s holder. Every shard ends when the key changes hands.
+            </Regent.Primitives.tip>
+          </h2>
+
+          <p :if={@key.shards == []} id="key-no-shards">None</p>
 
           <.live_component
             :if={@key.owner? and @key.shards != []}
@@ -73,12 +83,12 @@ defmodule KeyfleetWeb.KeysLive do
             token_id={@key.token_id}
             refresh={@key.shards}
           >
-            <:buttons>
-              <.shard_list shards={@key.shards} owner?={true} />
+            <:buttons :let={panel}>
+              <.shard_list shards={@key.shards} panel={panel} />
             </:buttons>
           </.live_component>
 
-          <.shard_list :if={not @key.owner?} shards={@key.shards} owner?={false} />
+          <.shard_list :if={not @key.owner?} shards={@key.shards} panel={nil} />
         </section>
 
         <section
@@ -87,11 +97,12 @@ defmodule KeyfleetWeb.KeysLive do
           class="key-panel"
           aria-labelledby="key-issue-shard-title"
         >
-          <h2 id="key-issue-shard-title">Issue a shard</h2>
-          <p class="key-detail">
-            Check this is your agent’s wallet address. A wallet holds one shard in this fleet at a
-            time, and issuing again to a wallet with a shard of this key renews it.
-          </p>
+          <h2 id="key-issue-shard-title">
+            Issue a shard
+            <Regent.Primitives.tip id="key-issue-tip" label="About issuing a shard">
+              Check the agent’s wallet address. Issuing again to a wallet with a shard renews it from now.
+            </Regent.Primitives.tip>
+          </h2>
 
           <.live_component
             module={WalletPanel}
@@ -100,39 +111,83 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:issue_shard}
             fleet={@key.fleet}
             actor={@actor}
-            token_id={@key.token_id}
-            inputs={%{"wallet" => "", "days" => "30"}}
+            inputs={%{"keys" => "#{@key.token_id}", "wallet" => "", "days" => "30"}}
           >
             <:fields :let={panel}>
               <div class="key-shard-form">
-                <Regent.Primitives.field :let={field} id="key-shard-wallet" label="Agent’s wallet">
-                  <input
-                    id={field.id}
-                    name="wallet"
-                    value={panel.inputs["wallet"]}
-                    autocomplete="off"
-                    aria-describedby={field.described_by}
-                    data-onchain-input="wallet"
-                  />
-                </Regent.Primitives.field>
-                <Regent.Primitives.field :let={field} id="key-shard-days" label="Days">
-                  <input
-                    id={field.id}
-                    name="days"
-                    value={panel.inputs["days"]}
-                    inputmode="numeric"
-                    autocomplete="off"
-                    aria-describedby={field.described_by}
-                    data-onchain-input="days"
-                  />
-                  <:hint>From 1 to 365.</:hint>
-                </Regent.Primitives.field>
+                <.field id="key-shard-keys" name="keys" label="Keys" value={panel.inputs["keys"]} />
+                <.field
+                  id="key-shard-wallet"
+                  name="wallet"
+                  label="Agent’s wallet"
+                  value={panel.inputs["wallet"]}
+                />
+                <.field
+                  id="key-shard-days"
+                  name="days"
+                  label="Days"
+                  inputmode="numeric"
+                  value={panel.inputs["days"]}
+                />
               </div>
             </:fields>
-            <:buttons>
-              <Regent.Primitives.button id="key-issue-shard-button" data-onchain-step="issue">
-                <span data-press-label>Issue shard</span>
-              </Regent.Primitives.button>
+            <:buttons :let={panel}>
+              <WalletPanel.step_button panel={panel} step="issue" id="key-issue-shard-button">
+                Issue shard
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+        </section>
+
+        <section
+          :if={@key.owner?}
+          id="key-agent-voting"
+          class="key-panel"
+          aria-labelledby="key-agent-voting-title"
+        >
+          <h2 id="key-agent-voting-title">
+            Agent voting
+            <Regent.Primitives.tip id="key-agent-voting-tip" label="About agent voting">
+              When it’s on, the key’s shards can vote and propose with it. It stays as set until changed, even across new shards.
+            </Regent.Primitives.tip>
+          </h2>
+
+          <.live_component
+            module={WalletPanel}
+            id="key-agent-voting-action"
+            flow={:agent_voting}
+            fleet={@key.fleet}
+            actor={@actor}
+            refresh={@key.shards}
+            inputs={%{"keys" => "#{@key.token_id}"}}
+          >
+            <:fields :let={panel}>
+              <div class="key-shard-form">
+                <.field
+                  id="key-agent-voting-keys"
+                  name="keys"
+                  label="Keys"
+                  value={panel.inputs["keys"]}
+                />
+              </div>
+            </:fields>
+            <:notes :let={panel}>
+              <p :if={voting(panel)} id="key-agent-voting-state" class="key-detail">
+                On for {voting(panel)}
+              </p>
+            </:notes>
+            <:buttons :let={panel}>
+              <WalletPanel.step_button panel={panel} step="on" id="key-agent-voting-on">
+                Turn on
+              </WalletPanel.step_button>
+              <WalletPanel.step_button
+                panel={panel}
+                step="off"
+                id="key-agent-voting-off"
+                variant="secondary"
+              >
+                Turn off
+              </WalletPanel.step_button>
             </:buttons>
           </.live_component>
         </section>
@@ -141,8 +196,39 @@ defmodule KeyfleetWeb.KeysLive do
     """
   end
 
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :string, required: true
+  attr :inputmode, :string, default: nil
+
+  # A field the wallet buttons' steps are built from.
+  defp field(assigns) do
+    ~H"""
+    <Regent.Primitives.field :let={field} id={@id} label={@label}>
+      <input
+        id={field.id}
+        name={@name}
+        value={@value}
+        inputmode={@inputmode}
+        autocomplete="off"
+        aria-describedby={field.described_by}
+        data-onchain-input={@name}
+      />
+    </Regent.Primitives.field>
+    """
+  end
+
+  # The keys named whose shards may vote now, or nil for none.
+  defp voting(panel) do
+    case WalletPanel.figures(panel) do
+      %{voting: [_key | _more] = keys} -> Enum.map_join(keys, ", ", &"key #{Rules.grouped(&1)}")
+      _none -> nil
+    end
+  end
+
   attr :shards, :list, required: true
-  attr :owner?, :boolean, required: true
+  attr :panel, :any, required: true, doc: "the end and renew buttons' panel, nil for a visitor"
 
   # Each shard: its agent, or its wallet while no agent has signed in with it,
   # when it runs out, and for the owner the buttons that end or renew it.
@@ -152,26 +238,28 @@ defmodule KeyfleetWeb.KeysLive do
       <li :for={shard <- @shards} id={"key-shard-#{shard.wallet}"}>
         <div>
           <p :if={shard.agent} class="key-name">{shard.agent.name}</p>
-          <p :if={is_nil(shard.agent)} class="key-name">No agent has signed in with it yet</p>
-          <span :if={shard.agent}>Runs on {shard.agent.harness}</span>
+          <p :if={is_nil(shard.agent)} class="key-name">No agent yet</p>
+          <span :if={shard.agent}>{shard.agent.harness}</span>
           <span>Until {date(shard.expires_at)}</span>
           <.address id={"key-shard-address-#{shard.wallet}"} wallet={shard.wallet} />
         </div>
 
-        <div :if={@owner?} class="key-shard-actions">
-          <Regent.Primitives.button
+        <div :if={@panel} class="key-shard-actions">
+          <WalletPanel.step_button
+            panel={@panel}
+            step={"renew-#{shard.wallet}"}
             id={"key-shard-renew-#{shard.wallet}"}
-            data-onchain-step={"renew-#{shard.wallet}"}
           >
-            <span data-press-label>Renew for 30 days</span>
-          </Regent.Primitives.button>
-          <Regent.Primitives.button
+            Renew 30 days
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            panel={@panel}
+            step={"end-#{shard.wallet}"}
             id={"key-shard-end-#{shard.wallet}"}
             variant="secondary"
-            data-onchain-step={"end-#{shard.wallet}"}
           >
-            <span data-press-label>End shard</span>
-          </Regent.Primitives.button>
+            End
+          </WalletPanel.step_button>
         </div>
       </li>
     </ul>
@@ -211,6 +299,7 @@ defmodule KeyfleetWeb.KeysLive do
       token_id: token_id,
       fleet_name: key && key.fleet.name,
       fleet: key && %{fleet_id: fleet_id, chain_id: key.fleet.chain_id},
+      deployed?: key != nil and key.fleet.contract_address != nil,
       owner_wallet: key && key.owner_wallet,
       owner?: owns_key?(actor, key),
       refreshing?: not Chain.fresh?(fleet_id),

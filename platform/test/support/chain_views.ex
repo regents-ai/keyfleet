@@ -22,7 +22,8 @@ defmodule Keyfleet.ChainViews do
   Puts the chain answering `views`, each `{to, signature, arguments,
   answer}`: `answer` is `{types, values}`, like `{"uint256", [5]}`, or
   `:revert`. `opts` may name `:head` and `:balances`, the ETH each address
-  holds.
+  holds. A later `put!/2` in the same test changes the answers every process
+  reads from then on, including a page that has read the chain already.
   """
   def put!(views, opts \\ []) do
     answers =
@@ -30,16 +31,30 @@ defmodule Keyfleet.ChainViews do
         {{to, Call.encode(signature, arguments)}, answer}
       end)
 
+    test = self()
+    Process.put(__MODULE__, answers)
+
     StubClient.put_chain(Keyword.get(opts, :head, @head), [],
       balances: Keyword.get(opts, :balances, %{}),
-      calls: fn to, data, _block_hash ->
-        case Map.fetch(answers, {to, data}) do
-          {:ok, :revert} -> {:error, :reverted}
-          {:ok, {types, values}} -> {:ok, words(types, values)}
-          :error -> raise "the test chain has no answer for #{to} #{data}"
-        end
-      end
+      calls: fn to, data, _block_hash -> answer(test, to, data) end
     )
+  end
+
+  # The chain goes with its test: a read still running once the test has
+  # ended finds no node.
+  defp answer(test, to, data) do
+    case Process.info(test, :dictionary) do
+      {:dictionary, dictionary} -> lookup(dictionary[__MODULE__], to, data)
+      nil -> {:error, :unreachable}
+    end
+  end
+
+  defp lookup(answers, to, data) do
+    case Map.fetch(answers, {to, data}) do
+      {:ok, :revert} -> {:error, :reverted}
+      {:ok, {types, values}} -> {:ok, words(types, values)}
+      :error -> raise "the test chain has no answer for #{to} #{data}"
+    end
   end
 
   @doc "`values` of `types`, like `\"address,uint256\"`, as a view returns them."

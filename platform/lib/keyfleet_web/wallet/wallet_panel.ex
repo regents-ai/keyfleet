@@ -12,14 +12,18 @@ defmodule KeyfleetWeb.WalletPanel do
   both, and a press sends nothing and says why. Signed out, nothing is built.
 
   Nothing here disables, hides or holds back a button while anything is
-  pending: every press reaches the wallet, and the contract decides.
+  pending: every press reaches the wallet, and the contract decides. The one
+  exception is a step the chain's own state, read at the latest block, makes
+  certain to fail (`figures.blocked`): `step_button/1` keeps it in view,
+  disabled, with a few words saying why, and the steps are built again every
+  few seconds while any is blocked, so it comes back when that state changes.
 
   The page renders it with `live_component`, giving:
 
     * `id`, `flow` (a `Keyfleet.WalletSteps` flow), `fleet` (its `fleet_id`
       and `chain_id`) and `actor` (the signed-in person, or nil);
-    * `inputs`, each field the steps read with its first value; `proposal`
-      or `token_id` when the flow acts on one; `refresh`, anything whose
+    * `inputs`, each field the steps read with its first value; `proposal`,
+      `token_id` or `advance_id` when the flow acts on one; `refresh`, anything whose
       change means the steps are built again; and `class`;
     * the slots `fields`, `notes` and `buttons`, each given the panel's state
       (`inputs`, `built`, `review`, `presses`, `signer`) to read.
@@ -40,13 +44,50 @@ defmodule KeyfleetWeb.WalletPanel do
   @rebuild_buy_ms 300_000
   # How soon a group whose figures couldn't be read from the chain tries again.
   @reread_ms 10_000
-  # Flows whose figures are read from the chain, so they are built away from
-  # the page's own process.
-  @chain_read [:buy, :claim, :reveal]
+  # How soon a group with a button the chain's state holds back reads it again.
+  @blocked_ms 15_000
 
   @doc "Whether the steps built for the group name `step`."
   def has_step?(%{built: %{review: review}}, step), do: Review.find(review, step) != nil
   def has_step?(_panel, _step), do: false
+
+  @doc "The figures the group's steps were built from, or an empty map before."
+  def figures(%{built: %{figures: figures}}), do: figures
+  def figures(_panel), do: %{}
+
+  @doc "Why the chain's own state makes `step` certain to fail now, or nil."
+  def blocked(panel, step), do: panel |> figures() |> Map.get(:blocked, %{}) |> Map.get(step)
+
+  attr :panel, :map, required: true, doc: "the panel's state, as its slots are given it"
+  attr :step, :string, required: true
+  attr :id, :string, required: true
+  attr :variant, :string, default: "primary"
+  slot :inner_block, required: true
+
+  @doc """
+  One wallet button: it names its step, and when the chain's own state makes
+  that step certain to fail it stays in view, disabled, with why beside it.
+  """
+  def step_button(assigns) do
+    assigns = assign(assigns, reason: blocked(assigns.panel, assigns.step))
+
+    ~H"""
+    <span class="wallet-panel-step">
+      <Regent.Primitives.button
+        id={@id}
+        variant={@variant}
+        data-onchain-step={@step}
+        disabled={@reason != nil}
+        aria-describedby={@reason && "#{@id}-why"}
+      >
+        <span data-press-label>{render_slot(@inner_block)}</span>
+      </Regent.Primitives.button>
+      <span :if={@reason} id={"#{@id}-why"} class="wallet-panel-why">
+        {WalletWords.blocked(@reason)}
+      </span>
+    </span>
+    """
+  end
 
   @doc "Whether `step` has been sent and has not been turned down."
   def sent?(%{presses: presses}, step),
@@ -65,6 +106,7 @@ defmodule KeyfleetWeb.WalletPanel do
        inputs: %{},
        proposal: nil,
        token_id: nil,
+       advance_id: nil,
        refresh: nil,
        class: nil,
        fields: [],
@@ -82,7 +124,7 @@ defmodule KeyfleetWeb.WalletPanel do
   def update(assigns, socket) do
     rebuild? =
       Enum.any?(
-        [:actor, :fleet, :proposal, :token_id, :refresh],
+        [:actor, :fleet, :proposal, :token_id, :advance_id, :refresh],
         &(Map.get(assigns, &1) != Map.get(socket.assigns, &1))
       )
 
@@ -217,12 +259,12 @@ defmodule KeyfleetWeb.WalletPanel do
 
   defp build(socket, nil), do: socket |> assign(built: nil) |> OnchainSteps.put_review(nil)
 
-  defp build(%{assigns: %{flow: flow}} = socket, wallet) when flow in @chain_read do
+  # Every group reads the chain, so its steps are built away from the page's
+  # own process.
+  defp build(socket, wallet) do
     request = request(socket, wallet)
     start_async(socket, :build, fn -> build_steps!(request) end)
   end
-
-  defp build(socket, wallet), do: show(socket, build_steps!(request(socket, wallet)))
 
   defp request(socket, wallet) do
     %{assigns: assigns} = socket
@@ -232,7 +274,12 @@ defmodule KeyfleetWeb.WalletPanel do
       flow: assigns.flow,
       signer: wallet,
       component_id: assigns.id,
-      params: %{inputs: assigns.inputs, proposal: assigns.proposal, token_id: assigns.token_id},
+      params: %{
+        inputs: assigns.inputs,
+        proposal: assigns.proposal,
+        token_id: assigns.token_id,
+        advance_id: assigns.advance_id
+      },
       actor: assigns.actor
     }
   end
@@ -258,6 +305,9 @@ defmodule KeyfleetWeb.WalletPanel do
   end
 
   defp rebuild_later(socket, %{problem: :unread}), do: rebuild_in(socket, @reread_ms)
+
+  defp rebuild_later(socket, %{figures: %{blocked: blocked}}) when blocked != %{},
+    do: rebuild_in(socket, @blocked_ms)
 
   defp rebuild_later(%{assigns: %{flow: :buy}} = socket, _built),
     do: rebuild_in(socket, @rebuild_buy_ms)

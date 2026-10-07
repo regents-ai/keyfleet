@@ -1,16 +1,17 @@
 defmodule KeyfleetWeb.WalletWords do
   @moduledoc """
-  What Keyfleet's wallet buttons say: the line above each group of buttons,
-  naming what a press sends or why it can't be sent as typed, and each sent
-  step's title and outcome. `KeyfleetWeb.OnchainSteps` words the presses that
-  sent nothing and the steps still on their way.
+  What Keyfleet's wallet buttons say, in a few words each: the line above a
+  group of buttons, naming what a press sends or why it can't be sent as
+  typed; the reason beside a button the chain's own state makes certain to
+  fail; and each sent step's title and outcome. `KeyfleetWeb.OnchainSteps`
+  words the presses that sent nothing and the steps still on their way.
   """
 
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.ProposalsPage
 
-  @address_words "Copy it again in full: 0x and 40 more letters and numbers."
+  @address_words "Paste the full address: 0x and 40 letters and numbers."
 
   @doc """
   The line above a group's buttons for what was built, `%{figures: figures,
@@ -19,141 +20,151 @@ defmodule KeyfleetWeb.WalletWords do
   """
   def line(_flow, nil, _inputs), do: nil
 
-  def line(:delegate, %{problem: :delegate_unreadable}, %{"delegate" => typed}) do
-    if String.trim(typed) == "",
-      do: "Type the wallet that may vote for you, or stop any other wallet voting for you.",
-      else: "The wallet to vote for you isn’t a valid address. #{@address_words}"
-  end
-
   def line(:issue_shard, %{problem: :shard_wallet_unreadable}, %{"wallet" => typed}) do
     if String.trim(typed) == "",
-      do: "Type the wallet to issue a shard to.",
-      else: "The wallet isn’t a valid address. #{@address_words}"
+      do: "Paste the agent’s wallet.",
+      else: "That wallet isn’t a full address. #{@address_words}"
   end
 
   def line(_flow, %{problem: problem}, _inputs) when problem != nil, do: problem(problem)
   def line(flow, %{figures: figures}, _inputs), do: says(flow, figures)
 
   defp says(:buy, %{token_id: token_id, price: price, approve?: true}),
-    do:
-      "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}. First approve " <>
-        "#{FleetLive.usdc(price)} for the fleet, then buy it."
+    do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}. Approve, then buy."
 
   defp says(:buy, %{token_id: token_id, price: price, approve?: false}),
-    do: "Key #{Rules.grouped(token_id)} costs #{FleetLive.usdc(price)}, paid from your wallet."
+    do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}."
 
-  defp says(:claim, %{waiting: waiting}),
-    do:
-      "Waiting for this key: " <>
-        (waiting |> Enum.reject(&(&1.amount == 0)) |> Enum.map_join(", ", &token_amount/1)) <>
-        ". Each token is claimed with its own button."
+  defp says(:ballot, %{keys: [_key | _more] = keys}), do: "With #{key_words(keys)}."
 
-  defp says(:vote, %{keys: keys}),
-    do: "Voting, changing or withdrawing uses #{key_words(keys)}. Each key is one vote."
+  defp says(:propose, %{action: action, closes_at: closes_at}),
+    do: "#{action(action)} Voting closes #{at(closes_at)}."
 
-  defp says(:collect, %{keys: keys}), do: "Collects the match of #{key_words(keys)}."
+  defp says(:issue_shard, %{keys: keys, wallet: wallet, days: days}),
+    do: "#{key_words(keys)} to #{RegentFormat.short_address(wallet)}, #{days(days)}."
 
-  defp says(:propose_decision, %{key: key}),
-    do: "Proposes this decision with key #{Rules.grouped(key)}."
+  defp says(:agent_voting, %{keys: keys}), do: "For #{key_words(keys)}."
 
-  defp says(:propose_payment, %{key: key, asset: asset, amount: amount, recipient: recipient}) do
-    paid = asset |> Map.delete(:address) |> Map.merge(%{asset: asset.address, amount: amount})
-
-    "Proposes paying #{token_amount(paid)} to " <>
-      "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
-  end
-
-  defp says(:propose_edits, %{key: key, target: target, restricted: true}),
-    do:
-      "Proposes stopping key #{Rules.grouped(target)} and its shards changing the workspace, " <>
-        "with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
-
-  defp says(:propose_edits, %{key: key, target: target, restricted: false}),
-    do:
-      "Proposes letting key #{Rules.grouped(target)} and its shards change the workspace " <>
-        "again, with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
-
-  defp says(:issue_shard, %{token_id: token_id, wallet: wallet, days: days}),
-    do:
-      "Issues #{RegentFormat.short_address(wallet)} a shard of key #{Rules.grouped(token_id)} " <>
-        "for #{days(days)}. Issuing again to a wallet with a shard renews it."
-
-  defp says(:delegate, %{delegate: delegate}),
-    do:
-      "Lets #{RegentFormat.short_address(delegate)} vote and propose with every key you hold, " <>
-        "or stops any other wallet voting for you."
+  defp says(:send_share, %{owed: owed}) when is_integer(owed) and owed > 0,
+    do: "Owed: #{FleetLive.usdc(owed)}."
 
   defp says(_flow, _figures), do: nil
 
-  defp problem(:no_keys), do: "Type the numbers of the keys to use, like 3, 7, 12."
-  defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
-  defp problem(:key_too_large), do: "That key number is larger than any key number can be."
-  defp problem(:no_key), do: "Name the key you’re proposing with, like 12."
-  defp problem(:no_target), do: "Name the key whose edits this is about, like 12."
-  defp problem(:target_unreadable), do: "Name the key whose edits this is about, like 12."
-  defp problem(:days_unreadable), do: "A shard lasts from 1 to 365 whole days."
-  defp problem(:key_unreadable), do: "Name the key you’re proposing with, like 12."
+  # What carrying out a proposal does, in one short sentence.
+  defp action(:decision), do: "A decision; nothing moves."
 
-  defp problem(:amount_commas),
-    do: "Use a point for decimals, like 12.5. Commas can only group thousands, like 1,250."
+  defp action({:pay, asset, to, amount}),
+    do: "Pays #{token_amount(asset_amount(asset, amount))} to #{RegentFormat.short_address(to)}."
 
-  defp problem(:amount_unreadable), do: "Write the amount as a number, like 12.5."
-  defp problem({:too_many_decimals, 0}), do: "This token is counted in whole units only."
-
-  defp problem({:too_many_decimals, decimals}),
-    do: "This token has at most #{decimals} decimal places."
-
-  defp problem(:amount_too_large), do: "That amount is too large."
-
-  defp problem(:recipient_unreadable),
-    do: "The wallet to pay isn’t a valid address. #{@address_words}"
-
-  defp problem(:asset_unreadable), do: "The token isn’t a valid address. #{@address_words}"
-
-  defp problem(:document_code),
-    do: "A document code is 64 characters, 0 to 9 and a to f. Leave it empty if there isn’t one."
-
-  defp problem(:unread),
-    do: "Ethereum can’t be read right now. This tries again in a few seconds."
-
-  defp problem(:nothing_waiting), do: "Nothing is waiting for this key right now."
-  defp problem(:sold_out), do: "Every key in this fleet has been sold."
-
-  defp problem(:reveal_requested),
+  defp action({:advance, _id, asset, operator, amount}),
     do:
-      "The request for this key’s random draw was accepted. The draw is on its way, and " <>
-        "the key’s traits show here when it arrives."
+      "Advances #{token_amount(asset_amount(asset, amount))} to " <>
+        "#{RegentFormat.short_address(operator)}."
 
-  defp problem(:revealed), do: "This key’s traits have been drawn. They show here in a moment."
+  defp action({:rate, bps}), do: "Sets the daily split to #{ProposalsPage.units(bps, 2)}%."
+
+  defp action({:edits, target, true}), do: "Restricts key #{Rules.grouped(target)}’s edits."
+  defp action({:edits, target, false}), do: "Allows key #{Rules.grouped(target)}’s edits."
+  defp action({:signature, :approve, _hash}), do: "Signs the message for the fleet."
+  defp action({:signature, :revoke, _hash}), do: "Withdraws the fleet’s signature."
+  defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
+
+  defp asset_amount(asset, amount),
+    do:
+      asset
+      |> Map.take([:symbol, :decimals, :usdc?])
+      |> Map.merge(%{asset: asset.address, amount: amount})
+
+  defp problem(:no_keys), do: "Type key numbers, like 3, 7, 12."
+  defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
+  defp problem(:key_too_large), do: "No key has that number."
+  defp problem(:no_key), do: "Type the key you’re proposing with."
+  defp problem(:key_unreadable), do: "A key is a whole number, like 12."
+  defp problem(:no_target), do: "Type the key this is about."
+  defp problem(:target_unreadable), do: "A key is a whole number, like 12."
+  defp problem(:days_unreadable), do: "From 1 to 365 days."
+  defp problem(:hours_unreadable), do: "Choose how long voting lasts."
+  defp problem(:rate_unreadable), do: "From 0.1% to 2%."
+  defp problem(:hash_unreadable), do: "The message code is 0x and 64 letters and numbers."
+  defp problem(:kind_unknown), do: "Choose what to propose."
+  defp problem({:missing, name}), do: "#{field_name(name)} is empty."
+
+  defp problem({:too_long, name, bytes}),
+    do: "#{field_name(name)} is too long: #{bytes} characters at most."
+
+  defp problem(:amount_commas), do: "Use a point for decimals, like 12.5."
+  defp problem(:amount_unreadable), do: "Type the amount as a number, like 12.5."
+  defp problem({:too_many_decimals, 0}), do: "Whole units only."
+  defp problem({:too_many_decimals, decimals}), do: "At most #{decimals} decimal places."
+  defp problem(:amount_too_large), do: "That amount is too large."
+  defp problem(:recipient_unreadable), do: "That wallet isn’t a full address. #{@address_words}"
+  defp problem(:asset_unreadable), do: "Choose a token."
+  defp problem(:advance_unknown), do: "No advance has this number."
+  defp problem(:not_recorded), do: "This proposal isn’t on this page yet."
+  defp problem(:no_launch), do: "No launch yet."
+  defp problem(:unread), do: "Can’t reach the network right now. Trying again."
+  defp problem(:sold_out), do: "Sold out."
+
+  defp field_name(:text), do: "The proposal"
+  defp field_name(:name), do: "The name"
+  defp field_name(:symbol), do: "The symbol"
+  defp field_name(:description), do: "The description"
+  defp field_name(:website), do: "The website"
+  defp field_name(:image), do: "The image link"
+
+  @doc "Why a button can't be pressed now, in a few words."
+  def blocked(:not_your_key), do: "Not your key"
+  def blocked(:no_keys), do: "No keys to use"
+  def blocked(:nothing_to_claim), do: "Nothing to claim"
+  def blocked(:own_wallet), do: "That’s your wallet"
+  def blocked(:shard_ended), do: "Already ended"
+  def blocked(:revealed), do: "Traits drawn"
+  def blocked(:reveal_requested), do: "Draw on its way"
+  def blocked(:voting_closed), do: "Voting closed"
+  def blocked(:open), do: "Voting still open"
+  def blocked(:rejected), do: "Not approved"
+  def blocked(:executed), do: "Already carried out"
+  def blocked(:cancelled), do: "Cancelled"
+  def blocked(:execution_expired), do: "Expired"
+  def blocked(:no_keys_sold), do: "No keys sold yet"
+  def blocked({:opens_at, opens_at}), do: "Opens #{at(opens_at)}"
+  def blocked(:advance_returned), do: "Fully returned"
+  def blocked(:above_outstanding), do: "More than is owed"
+  def blocked(:not_enough), do: "Not enough in your wallet"
+  def blocked(:approve_first), do: "Approve first"
+  def blocked(:nothing_owed), do: "Nothing owed"
+  def blocked(:launch_settled), do: "Already settled"
+  def blocked(:sale_running), do: "Sale still running"
+  def blocked(:bound), do: "Already added"
+  def blocked(:not_sold), do: "Not settled yet"
+  def blocked(:launch_failed), do: "The sale didn’t sell"
 
   @doc "A sent step's title, from the review it was sent from."
-  def title(%{name: "approve"}), do: "Approve USDC"
+  def title(%{name: "approve"}), do: "Approve"
   def title(%{name: "buy"}), do: "Buy key"
-  def title(%{name: "yes"} = entry), do: "Vote yes#{with_keys(entry)}"
-  def title(%{name: "no"} = entry), do: "Vote no#{with_keys(entry)}"
-  def title(%{name: "withdraw"} = entry), do: "Withdraw the votes#{with_keys(entry)}"
-  def title(%{name: "carry_out"}), do: "Carry it out"
-  def title(%{name: "collect"} = entry), do: "Collect#{with_keys(entry)}"
-  def title(%{name: "propose"}), do: "Propose"
-  def title(%{name: "delegate"}), do: "Let a wallet vote for you"
-  def title(%{name: "clear"}), do: "Stop any wallet voting for you"
-  def title(%{name: "send"}), do: "Send Regents its share"
-  def title(%{name: "claim-" <> _asset}), do: "Claim"
   def title(%{name: "reveal"}), do: "Ask again for the draw"
+  def title(%{name: "claim-" <> _asset}), do: "Claim"
+  def title(%{name: "present"}), do: "Mark present"
+  def title(%{name: "sweep"}), do: "Tidy up"
   def title(%{name: "issue"}), do: "Issue a shard"
   def title(%{name: "end-" <> _wallet}), do: "End a shard"
   def title(%{name: "renew-" <> _wallet}), do: "Renew a shard"
+  def title(%{name: "on"}), do: "Let shards vote"
+  def title(%{name: "off"}), do: "Stop shards voting"
+  def title(%{name: "yes"}), do: "Vote yes"
+  def title(%{name: "no"}), do: "Vote no"
+  def title(%{name: "abstain"}), do: "Abstain"
+  def title(%{name: "propose"}), do: "Propose"
+  def title(%{name: "cancel"}), do: "Cancel"
+  def title(%{name: "carry_out"}), do: "Carry it out"
+  def title(%{name: "run_split"}), do: "Run the daily split"
+  def title(%{name: "return"}), do: "Return"
+  def title(%{name: "send_share"}), do: "Send Regents its share"
+  def title(%{name: "settle"}), do: "Settle the sale"
+  def title(%{name: "bind"}), do: "Add to the daily split"
+  def title(%{name: "release"}), do: "Release tokens"
+  def title(%{name: "collect"}), do: "Collect pool fees"
   def title(_unknown), do: "Transaction"
-
-  defp with_keys(%{review: %{inputs: %{"keys" => keys}}}) do
-    case String.split(keys, ~r/[\s,]+/, trim: true) do
-      [] -> ""
-      [key] -> ", key #{key}"
-      keys -> ", keys #{Enum.join(keys, ", ")}"
-    end
-  end
-
-  defp with_keys(_entry), do: ""
 
   @doc """
   What a sent step shows: `shown`, as `KeyfleetWeb.OnchainSteps.describe/2`
@@ -163,108 +174,29 @@ defmodule KeyfleetWeb.WalletWords do
   def outcome(entry, %{state: :reverted} = shown), do: %{shown | words: reverted(entry.name)}
   def outcome(_entry, shown), do: shown
 
-  defp confirmed("approve"), do: "Approved. Now press Buy key."
-  defp confirmed("buy"), do: "Done. The key is yours, and this page shows it in a few seconds."
-
-  defp confirmed(vote) when vote in ["yes", "no"],
-    do: "Done. The count here catches up in a few seconds."
-
-  defp confirmed("withdraw"), do: "Done. Those keys have no vote on this proposal now."
-
-  defp confirmed("carry_out"),
-    do: "Done. It has been carried out, and this page shows it in a few seconds."
-
-  defp confirmed("collect"), do: "Done. Each key’s match was paid to whoever holds it."
-
-  defp confirmed("propose"),
-    do: "Done. Your proposal joins the list in a few seconds, and it is open to votes."
-
-  defp confirmed("delegate"), do: "Done. That wallet can now vote and propose with your keys."
-  defp confirmed("clear"), do: "Done. No other wallet can vote your keys now."
-  defp confirmed("send"), do: "Done. Regents’ share has been sent to Regents."
-  defp confirmed("claim-" <> _asset), do: "Done. It was paid to your wallet."
-
-  defp confirmed("reveal"),
-    do:
-      "Sent. If the draw was accepted this time, the key’s traits show here once it " <>
-        "arrives; if it was turned down again, Try again is back."
-
-  defp confirmed("issue"),
-    do: "Done. The shard is issued, and this page shows it in a few seconds."
-
-  defp confirmed("end-" <> _wallet),
-    do: "Done. The shard has ended, and this page shows it in a few seconds."
-
-  defp confirmed("renew-" <> _wallet),
-    do: "Done. The shard is renewed, and this page shows it in a few seconds."
-
+  defp confirmed("approve"), do: "Approved. Now press the next button."
+  defp confirmed("buy"), do: "Done. The key is yours."
+  defp confirmed("claim-" <> _asset), do: "Done. Paid to the key’s holder."
+  defp confirmed("present"), do: "Done. Present for 48 hours."
+  defp confirmed("propose"), do: "Done. It’s open to votes."
+  defp confirmed("run_split"), do: "Done. Shared with every key."
+  defp confirmed("send_share"), do: "Done. Sent to Regents."
   defp confirmed(_step), do: "Done."
 
-  defp reverted("approve"), do: "The approval didn’t go through and nothing moved."
+  defp reverted("approve"), do: "Not approved. Nothing moved."
+  defp reverted("buy"), do: "Not bought. No USDC was taken."
+  defp reverted("reveal"), do: "Nothing asked. The draw may be on its way."
+  defp reverted("claim-" <> _asset), do: "Nothing claimed."
+  defp reverted("present"), do: "Not marked. A key may have changed hands."
+  defp reverted("propose"), do: "Not proposed. Tidy up first, or check the key."
 
-  defp reverted("buy"),
-    do:
-      "The purchase didn’t go through and no USDC was taken. The key may have sold or its " <>
-        "price risen, the time to buy may have run out, or the wallet may not hold or have " <>
-        "approved enough USDC. The figures above are read again now."
+  defp reverted(choice) when choice in ["yes", "no", "abstain"],
+    do: "Not counted. Voting may have closed."
 
-  defp reverted(vote) when vote in ["yes", "no"],
-    do:
-      "This vote didn’t go through and nothing changed. A key may already have this vote, " <>
-        "may have changed hands after the proposal opened, or may be neither yours nor held " <>
-        "by someone who let your wallet vote for them; or the proposal was already carried out."
-
-  defp reverted("withdraw"),
-    do:
-      "Nothing was withdrawn. A key may have no vote on this proposal, may be neither yours " <>
-        "nor held by someone who let your wallet vote for them, or the proposal was already " <>
-        "carried out."
-
-  defp reverted("carry_out"),
-    do:
-      "This wasn’t carried out and nothing moved. Yes votes may not be enough yet (more " <>
-        "than half of all the keys sold, or 3 of every 5 for a change to a key’s workspace " <>
-        "edits), it may already have been carried out, or a payment and its matches may not " <>
-        "fit in the shared money."
-
-  defp reverted("collect"),
-    do:
-      "Nothing was collected. A key may have voted yes, may already have collected, or may " <>
-        "have been sold after the payment was made."
-
-  defp reverted("propose"),
-    do:
-      "The proposal wasn’t made. The key may be neither yours nor held by someone who let " <>
-        "your wallet vote for them, or a key it is about may not have been sold yet."
-
-  defp reverted(delegate) when delegate in ["delegate", "clear"],
-    do: "This didn’t go through and nothing changed."
-
-  defp reverted("send"),
-    do: "Nothing was sent. Nothing may be set aside for Regents right now."
-
-  defp reverted("claim-" <> _asset),
-    do:
-      "Nothing was claimed. The key may not be held by the wallet that sent this, or nothing " <>
-        "is waiting for it any more."
-
-  defp reverted("reveal"),
-    do: "Nothing was asked. The key’s draw may already be on its way, or its traits drawn."
-
-  defp reverted("issue"),
-    do:
-      "No shard was issued. The key may not be held by the wallet that sent this, the wallet " <>
-        "may be the key’s own, or it may already hold a shard of another key in this fleet."
-
-  defp reverted("end-" <> _wallet),
-    do: "The shard didn’t end. It may have ended already, or the key may have changed hands."
-
-  defp reverted("renew-" <> _wallet),
-    do:
-      "The shard wasn’t renewed. The key may not be held by the wallet that sent this, or the " <>
-        "shard may have ended."
-
-  defp reverted(_step), do: "This did not go through and nothing moved."
+  defp reverted("carry_out"), do: "Not carried out. Nothing moved."
+  defp reverted("run_split"), do: "Not run. It may have run already today."
+  defp reverted("return"), do: "Not returned. Nothing moved."
+  defp reverted(_step), do: "Didn’t go through. Nothing moved."
 
   @doc """
   An amount of a token: the fleet's USDC by name, another token in its own
@@ -274,13 +206,18 @@ defmodule KeyfleetWeb.WalletWords do
   def token_amount(%{amount: amount, usdc?: true}), do: FleetLive.usdc(amount)
 
   def token_amount(%{amount: amount, asset: asset, symbol: symbol, decimals: decimals})
-      when is_binary(symbol) and is_integer(decimals),
-      do:
+      when is_binary(symbol) and is_integer(decimals) do
+    if asset == Keyfleet.Treasury.native(),
+      do: "#{ProposalsPage.units(amount, decimals)} #{symbol}",
+      else:
         "#{ProposalsPage.units(amount, decimals)} #{symbol} (#{RegentFormat.short_address(asset)})"
+  end
 
   def token_amount(%{amount: amount, asset: asset}),
-    do:
-      "#{Rules.grouped(amount)} in the smallest units of token #{RegentFormat.short_address(asset)}"
+    do: "#{Rules.grouped(amount)} units of #{RegentFormat.short_address(asset)}"
+
+  @doc "A time as the wallet buttons say it."
+  def at(datetime), do: Calendar.strftime(datetime, "%-d %b, %H:%M UTC")
 
   defp days(1), do: "1 day"
   defp days(days), do: "#{days} days"
