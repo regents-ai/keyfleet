@@ -9,6 +9,7 @@
 @import "./components/send_agent.css";
 @import "./components/wallet_panel.css";
 @import "./components/presence_card.css";
+@import "./components/fleet_risks.css";
 @import "./components/motion.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";

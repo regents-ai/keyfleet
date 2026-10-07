@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.Count
+  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
@@ -878,6 +879,8 @@ defmodule KeyfleetWeb.FleetLive do
         the purchase is refused and no USDC is taken, though your wallet still pays the
         network fee for trying.
       </p>
+
+      <FleetRisks.disclosure :if={@buy.price} id="buy-key-risks" />
 
       <.live_component
         module={WalletPanel}
