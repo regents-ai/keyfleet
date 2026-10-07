@@ -387,9 +387,10 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     end
 
     # Each verified request saves the agent's registry listing and the World
-    # ID person behind it onto its profile, and a request that names neither
-    # clears them. What the sign-in server says beyond the fields KeyFleet
-    # uses is its own.
+    # ID person behind it onto its profile. The first person stays for good
+    # (Sean, 7 Oct): a request naming nobody, or someone else, leaves them,
+    # and one naming them again updates their count. What the sign-in server
+    # says beyond the fields KeyFleet uses is its own.
     human_id = "0x" <> String.duplicate("1", 64)
 
     listed =
@@ -424,7 +425,29 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert {:ok, _conn} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, good, nil)
 
-    assert %{registry_url: nil, human_id: nil, same_person_agent_count: nil} =
+    assert %{registry_url: nil, human_id: ^human_id, same_person_agent_count: 2} =
+             Keyfleet.Agents.get_my_profile!(actor: actor)
+
+    someone_else = %{"humanId" => "0x" <> String.duplicate("2", 64), "agentCount" => 5}
+
+    assert {:ok, _conn} =
+             KeyfleetWeb.Plugs.SignedAgent.accept(
+               conn,
+               Map.put(good, "agentBook", someone_else),
+               nil
+             )
+
+    assert %{human_id: ^human_id, same_person_agent_count: 2} =
+             Keyfleet.Agents.get_my_profile!(actor: actor)
+
+    assert {:ok, _conn} =
+             KeyfleetWeb.Plugs.SignedAgent.accept(
+               conn,
+               Map.put(good, "agentBook", %{"humanId" => human_id, "agentCount" => 3}),
+               nil
+             )
+
+    assert %{human_id: ^human_id, same_person_agent_count: 3} =
              Keyfleet.Agents.get_my_profile!(actor: actor)
 
     invalid =

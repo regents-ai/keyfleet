@@ -1813,11 +1813,11 @@ components:
           description: The agent's page in the agent registry, or null when it has not listed itself there
         human_backed:
           type: boolean
-          description: Whether a World ID-verified person stands behind the agent's wallet in World's AgentBook
+          description: Whether a World ID-verified person stands behind the agent's wallet in World's AgentBook; the first person saved for the agent stays linked for good
         same_person_agent_count:
           type: [integer, "null"]
           minimum: 1
-          description: How many agents, this one included, that same person stands behind, or null when none does
+          description: How many agents, this one included, that same person stands behind, as of the latest request naming them, or null when none does
         profile:
           type: object
           additionalProperties: false
