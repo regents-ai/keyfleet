@@ -248,7 +248,7 @@ contracts/src/
   KeyfleetShards.sol        changed: capabilities + delegation revision
   KeyfleetTreasury.sol      new: free capital, CALL batches, daily split, advances, ERC-1271
   interfaces/IRegentRevenueStaking.sol  new (one function)
-  interfaces/IAutolaunch*.sol           new, minimal, copied from the selected Autolaunch version
+  interfaces/IRegentsAutolaunchFactoryV2.sol, IRegentLBPStrategyV2.sol   new, minimal, copied from Autolaunch Revstake v2
   vendor/chainlink/*        unchanged
 contracts/deployments/
   base.json                 new; ethereum.json deleted (hard cutover); anvil.json updated
@@ -294,8 +294,7 @@ All of the checks below were read-only, against Base mainnet (chain 8453) at blo
 | VRF subscription id | none yet | — | **Not created.** It must be created and funded on Base by the Regents Safe before a fleet is deployed. The deploy refuses `0`. | Trait reveal |
 | Regents Safe (Base) | `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e` | Regent's own pins: `repos/autolaunch/contracts/v1/src/bindings/BaseBindings.sol:22`, and `repos/regents/contracts/deployments/base-mainnet/autolaunch-history.yaml:61,63`. On chain: Safe v1.4.1 (the Base singleton `0x29fcB43b46531BcA003ddC8FCB67FFE91900C762`, matching Safe's official deployment list), 2 of 3 owners. | Verified, see the warning below | Owns the staking contract and the VRF subscription. **No longer receives the 10%.** |
 | REGENT revenue staking | `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5` | [Basescan, verified source `RegentRevenueStaking`](https://basescan.org/address/0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5#code). Founder decision 40 (4 Oct) and rule 41 a. On chain: 11,757 bytes, not a proxy, not paused, owner and treasury are the Base Regents Safe. | Verified | Receives the protocol share (section 3.2) |
-| Autolaunch v1 factory | `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e` | `repos/autolaunch/contracts/v1/deployments/base-mainnet/deployed-manifest.json` (deployed 22 Sep 2026, packet `0x5ba245ed0af9de1c1749f0b50cd54919a8084faf580d92282ef0592144f35327`). Basescan exact-match source. On chain: opened for launches by the Safe in tx `0x455b771419d2f7ba7ec79b7b884fb6252d99fccc220ebf06207f4838ccac8b67`; no launch yet. | Verified | Launch path and TOKEN slot (section 4.7, decision 10) |
-| Autolaunch v2 factory | predicted `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` | `feat/contracts-v2` plan in `repos/autolaunch` | **Not deployed** (no code on Base). Not bound. | — |
+| Autolaunch Revstake v2 factory | `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` | `repos/autolaunch` `feat/contracts-v2` at `54b6676`, `contracts/revstake-v2/deployments/base-mainnet/deployed-manifest.json` (deployed 6 Oct 2026, Base blocks 52267808–52268160, factory tx `0xd913518b942ce622f9eddd3fefe98b5d1baf75deaf617acb3c4995de1bf1c267`); HQ record `control/hq/decisions/autolaunch-revstake-v2-base-2026-10-06.md`. On chain: code hash `0x99f5e3fa97c511b5cfc001e0ea407eebdbaa66f2cc00631d911a34f2aca01676`, and its strategy `0x4dEEd15f650F45900F2e55a44eADe7bD5Fd556d9` `0x1dcfd811edb76c865fcba2f9381a40fc2d33393f21ee227509258b86bcfb9a08`, both as the manifest records, as are the six other contracts it wires and every wiring readback. Launches paused (only the Regents Safe opens them); no launch yet (`nextLaunchId` 1). | Verified | Launch path and TOKEN slot (sections 4.7 and 9.2). `AUTOLAUNCH()` in the treasury; `autolaunchFactory` in the manifests |
 | OUSD on Base | none | [Origin OUSD registry](https://docs.originprotocol.com/registry/contracts/ousd-registry) lists OUSD tokens only on Ethereum. The only Base entry, `0xB1d624fc40824683e2bFBEfd19eB208DbBE00866`, is a strategy, not a token. | **Unconfigured**, as spec §8.7 expects | OUSD slot stays empty until an approved `admitOusd` |
 | Lit `AccountConfig` diamond | `0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` | Lit's node configuration, `GET https://api.chipotle.litprotocol.com/core/v1/get_node_chain_config` (chain "Base", id 8453), fetched 6 Oct 2026. On chain: a diamond with code on Base; its loupe routes all seven admin writes the treasury uses to one facet, and their selectors match Lit's open-source `WritesFacet` (`LIT-Protocol/chipotle`). The Base fork test runs the treasury's writes against it. | Verified | Lit admin calls. Only a call target inside proposals, never a contract constant. |
 | Trait table hash | zero today | — | **Not produced.** It is generated from the published table before deployment, and the deploy refuses zero. | Trait reveal |
@@ -360,7 +359,7 @@ function depositProtocolShare(uint256 amount) external onlyFleet nonReentrant {
 - **The only approval this path makes** comes from the treasury (the account the spec lets approve), is exact, goes to one pinned non-proxy address, and is asserted back to zero.
 - **Other protocol revenue paths:**
   - No other KeyFleet contract path pays protocol revenue.
-  - Autolaunch v1's per-launch splitter already sends its 2% to this staking contract through `depositUSDC`.
+  - Autolaunch v2's per-launch splitter already sends its 2% of USDC revenue to this staking contract through `depositUSDC`.
   - Any site-side Regents revenue follows rule 41 a off chain (the server deposits it, tagged), not in these contracts.
 
 ---
@@ -613,33 +612,17 @@ address[] splitAssets;                                        // append-only, at
 
 - Purchase capital, released Cascade surplus and non-USDC surplus go to the treasury: free capital, and part of the split base.
 - Recognised USDC income arrives at the core and goes to the keys through `recognizeSurplus` and the existing cohort rule. It is never in the treasury and never split twice.
-- Customers and the Revstake splitter must be told to pay the **core** (income address). Anything they pay to the treasury is treated as capital. That rule is published on the fleet page.
+- Customers must be told to pay the **core** (income address). Anything they pay to the treasury is treated as capital. That rule is published on the fleet page.
 
 **Returned advances.** `returnAdvance(id, amount)` pulls the asset, or takes `msg.value` for ETH. It is capped at `outstanding[id]` and lowers it. Funds above the cap are refused, so the "refund" label cannot be stretched.
 
 The spec's point that an operator could relabel customer receipts as refunds is only partly closed on chain. The cap limits the label to what was advanced, but an operator holding customer income can still return it against an open advance. Disclosure and the evidence links cover the rest. This goes to the reviewer as a known limit.
 
-**Autolaunch launch.** The launch caller and the treasury beneficiary are the fleet's `KeyfleetTreasury`:
+**Autolaunch launch.** Built in C12 against Autolaunch Revstake v2 (P10 b); section 9.2 is the build. The launch caller and the launch's treasury are both the fleet's `KeyfleetTreasury`:
 
-- A launch is an exact approved CALL to the selected Base Autolaunch factory, with the fleet's narrative and exact parameters. The treasury is named as the treasury or vesting recipient, and the revenue receiver points at the core for the fleet's USDC share.
-- `bindLaunchToken(launchId)` is permissionless and runs once. It reads the pinned factory's record and requires `launcher == treasury` and a successful outcome (section 3; the exact "success" read depends on the selected version, decision 10). It then binds the TOKEN slot from the next period.
+- A launch is an exact approved CALL from the treasury to the pinned v2 factory's `launch(params)`, with `params.treasury` the treasury itself.
+- `bindLaunchToken(launchId)` is permissionless and runs once. It requires the factory's record to name the treasury as both launcher and treasury, and the strategy to record the launch as graduated. It then binds the TOKEN slot from the next run.
 - Only the TOKEN balance actually held by the treasury counts. Unvested escrow, liquidity positions and stake are elsewhere, so they are excluded.
-
-**The bound version is Autolaunch v1** (`0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e`), because v2 is not on Base. What v1 offers, from `repos/autolaunch/contracts/v1/src/factory/RegentsAutolaunchFactoryV1.sol:95,226` and `SPEC.md:99`:
-
-- **Launching:** `launch((name, symbol, description, website, image, treasury, uint128 requiredRegentRaised)) returns (launchId, subject, auction, escrow)`.
-  - The caller is only recorded; it gets no rights. Launching is free, with no REGENT and no approval.
-  - The `treasury` is fixed for ever. It receives 85% of the new token as vesting, plus unused REGENT. It may not be the staking contract or six other reserved addresses.
-- **Revenue:** each launch's splitter sends 2% of all USDC revenue to staking through `depositUSDC`, which already satisfies rule 41 a.
-- **Payment receivers:** after a launch's auction finishes, anyone can call `createPaymentReceiver(launchId, beneficiary, referralBps)`.
-
-Not yet known, to be read at commit C12 and decided in decision 10:
-
-- (a) Which v1 read proves a "recorded successful launch". `launches(id)` gives the launcher, subject, auction, escrow and treasury, but the auction's success flag is a separate read on the auction.
-- (b) Where the splitter's remaining USDC (after the 2%) goes, and whether it can be pointed at the fleet core so that it counts as income rather than capital.
-- (c) Whether a fleet launch should use `KeyfleetTreasury` as the v1 `treasury`, which is the recommendation.
-
-Section 4.7's binding rule `launcher == treasury` becomes `launches(id).treasury == KeyfleetTreasury and the auction succeeded`, because v1 does not give the launcher any role.
 
 ### 4.8 Segregated vaults (§3, §4.3)
 
@@ -934,7 +917,7 @@ Sizes are rough source lines changed, tests included.
 | C9 | 5 | **Rewards: multi-asset split index.** `fundSplit` and `fundSplitNative`, split settlement on transfer, ETH claims. | The ownership and rewards tests. Backing invariant per asset. Transfer gas ceiling with 5 bound assets. An approved CALL from the treasury to `fundSplit` or `fundSplitNative` reverts. | ~600 |
 | C10 | 5 | **Daily fair split.** Periods, rate state, thresholds, slots, `processDailySplit` and `processAll`, `admitOusd`. | The daily-allocation tests. Once-per-period invariant. The spec's §8.4 table, row by row. | ~700 |
 | C11 | 5 | **Invariant suite**, combining handlers across all five contracts. | All invariants from section 4 hold over 256 runs × depth 100, or more. | ~500 |
-| C12 | 7 | **Autolaunch path.** Minimal interfaces copied from the selected Base version, `bindLaunchToken`, launch-call template, and the receiver pointing at the core. | Fork test: a whole launch through an approved treasury call on a Base fork. TOKEN is bound only after success, and only released tokens count. | ~700 |
+| C12 | 7 | **Autolaunch path.** Minimal interfaces copied from Autolaunch Revstake v2, the factory pinned in the treasury and manifests, `bindLaunchToken`, and the launch as an approved call (section 9.2). | Fork test: a whole launch through an approved treasury call on a Base fork. TOKEN is bound only after success, and only released tokens count. | ~700 |
 | C13 | 7 | **Lit.** ERC-1271 approved hashes, and a fork test of the treasury's admin writes on the real `AccountConfig`. | The local and fork rows of 4.9. The live row waits on decision 9. | ~400 |
 | C14 | 8 | **Release readiness.** Gas report on a Base fork, README and `docs/deployment.md` rewritten for Base, deploy and record scripts for the five contracts, anvil lab. | `make check-contracts` passes. Deploy and record tests over a mock Base. Ready for outside audit (K-18). | ~600 |
 | S1–S9 | 6 | **Site lane**, after C7 fixes the ABI. S1 config and chain; S2 manifest and fleet resource; S3 scanner and decoders; S4 treasury and rewards readers; S5 wallet steps and TypeScript; S6 SIWA rule; S7 pages and copy; S8 Oban workers; S9 agent API, CLI and WebMCP. | `mix test`, `mix test.external` against an anvil Base copy, and browser chain specs. | — |
@@ -1016,8 +999,48 @@ One admission precondition, written on `admitOusd`: the ledger requires the toke
 
 - No periods or slots. One public `runDailySplit()` splits every bound asset in one call, once 24 hours have passed since `lastRunAt` (the first run 24 hours after `firstMintAt`). `runVotedSplit()` is the proposal's run, at any time. Both set `lastRunAt`. There is no `processDailySplit(slot)` or `processAll()`.
 - The rate is 10–200 bps (P1 a), not 10–100. `setDailySplitBps` applies from the next run, with no pending state.
-- The TOKEN slot and `bindLaunchToken` are not built. OUSD has an empty slot that `admitOusd(token)` fills once, through an approved call, and it is split from the next run.
+- The TOKEN slot and `bindLaunchToken` are not built in C8–C11; C12 builds them (section 9.2). OUSD has an empty slot that `admitOusd(token)` fills once, through an approved call, and it is split from the next run.
 - A token whose transfer to the ledger fails is skipped with `SplitTransferFailed` and the other assets are still split; that day is used for all of them. A transfer that ran out of gas reverts the whole run (`SplitOutOfGas`), so a caller cannot starve one asset.
 - The ledger has no `receive`; ETH reaches it only through the payable `fundSplitNative`.
 - `claim(tokenIds, assets)` replaces `claim(asset, keys, to)`: many keys and assets at once, pressed by the holder or an active shard, each key's money paid to its holder, plus the caller's own credit (a former holder's). There is no `to`.
 - REGENT is named in the deployment manifests (`regent`) and checked against `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07` on Base. The published manifest lists `splitAssets` in place of `rewardTokens`.
+
+### 9.2 The Autolaunch path as built (C12, 6 Oct 2026)
+
+Built against Autolaunch Revstake v2 on Base (P10 b), read from `repos/autolaunch` branch `feat/contracts-v2` at `54b6676`, folder `contracts/revstake-v2/src`. Autolaunch's files and figures below are that version's, read, not remembered. Nothing in Autolaunch was changed.
+
+**What was built.**
+
+- The v2 factory `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` is fixed in each treasury as `AUTOLAUNCH()`, named in both manifests as `autolaunchFactory`, required on Base by the deployment and record steps, required to hold code on every chain, and published in the deployed manifest.
+- `contracts/src/interfaces/IRegentsAutolaunchFactoryV2.sol` and `IRegentLBPStrategyV2.sol` copy only what a fleet uses: `launch`, `launches`, `strategy` and `distribution`.
+- `bindLaunchToken(launchId)`, permissionless and once. `splitAssets()` lists the token last, after OUSD; `admitOusd` refuses the bound token, and binding refuses the admitted OUSD.
+
+**Launching.** A passed proposal's call from the treasury to `launch(params)` (`factory/RegentsAutolaunchFactoryV2.sol:225`), with `params.treasury` the treasury. The factory records the caller as the launcher (`:246`) and gives it no rights. A launch needs:
+
+- No ETH, no REGENT and no approval from the treasury.
+- A name, symbol, description, website and image, each nonempty and at most 64, 16, 512, 256 and 256 bytes.
+- The factory open for launches. It was deployed paused, and only the Regents Safe can open it (`unpauseLaunches`, `:263`). Until then no fleet can launch.
+- Time: the auction opens 300 blocks after the launch, runs 86,401 blocks (about two days on Base), and may be settled 128 blocks after it ends. Anyone settles it with the strategy's `migrate(auction)` (`strategy/RegentLBPStrategyV2.sol:398`).
+- A raise of at least about 0.000000001 REGENT for the launch to sell. Below that it fails and its tokens are retired.
+
+**Which launch binds, and the read that proves it sold.** `bindLaunchToken` requires the factory's record to name the treasury as both the launcher and the launch's treasury, and `strategy().distribution(auction).lifecycle == Graduated`. The strategy writes `Graduated` at `strategy/RegentLBPStrategyV2.sol:471`, inside `migrate` only when the auction itself reports it sold (`:413`), and in the same transaction makes the pool, the splitter, the receiver and starts vesting; any revert undoes all of it. Running, failed and unknown launches are refused.
+
+The launcher check goes beyond "the launch names this treasury". Anyone may call the factory naming any treasury, and a sold launch costs next to nothing, so without it a stranger could launch a token naming a fleet's treasury, sell it for a fraction of a cent and bind it first. Only an approved proposal makes the treasury a launcher.
+
+**Where a launch's tokens sit.** Only the treasury's own balance is split, and by construction it holds only released, liquid tokens:
+
+- 70% of the supply vests to the treasury over 365 days from the sale in the launch's escrow. Anyone may call `release()`, which pays only the treasury (`escrow/ConditionalVestingEscrowV2.sol:170`, transfer at `:189`).
+- The liquidity position is locked in Autolaunch's LP locker (`strategy/RegentLBPStrategyV2.sol:514`).
+- Staked tokens are held by the launch's splitter.
+
+**Where the revenue goes.** None of it passes through anything of Keyfleet but the treasury, and the treasury gets each amount once:
+
+- At the sale, at least half the REGENT raise goes straight to the treasury (`strategy/RegentLBPStrategyV2.sol:520`).
+- The launch's own payment receiver is made at the sale with the treasury as its beneficiary and no referral (`:529`). `pay` (`revenue/PaymentReceiverV1.sol:143`) hands the whole amount to the splitter (`:228`).
+- The splitter (`revenue/SubjectSplitterV1.sol:417`) takes 2%: USDC to REGENT revenue staking (`:428`), REGENT or the launch token to the Regents Safe (`:430`). Of the rest, the share of the launch's stakers stays in the splitter for them to claim, and the treasury is sent the remainder (`:433`), all of it when nobody has staked.
+- Pool fees and swap fees reach the same splitter and the same split (`revenue/RevstakeLPLocker.sol` `collect`, `hook/RegentFeeHook.sol` `_chargeLanes`).
+- What reaches the treasury is ordinary capital, split by the daily split like any other treasury balance. The ledger's holdings are never counted again, so nothing is split twice.
+
+Anyone may also make a custom payment receiver for a sold launch with another beneficiary (`factory/RegentsAutolaunchFactoryV2.sol:275`); only money that reaches the treasury is the fleet's.
+
+**Tests.** `test/KeyfleetLaunch.t.sol` with a stand-in factory: the launch is an approved call naming the treasury; without a launch there is no TOKEN; a stranger's launch naming the treasury, a launch naming another treasury, another fleet's launch and a launch the treasury made for another treasury are all refused; running and failed launches are refused; binding is once, by anyone, and shares the treasury's lock; TOKEN is split from the next run at 100 tokens; OUSD and TOKEN refuse each other; an approved call cannot fund a TOKEN split. `test/fork/KeyfleetAutolaunchFork.t.sol` runs a whole launch on a Base fork through the real factory, auction, strategy, escrow and receiver, acting as the Regents Safe on the fork only to open the factory. The gas test covers all five split assets.

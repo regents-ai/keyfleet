@@ -8,6 +8,7 @@ import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
@@ -40,6 +41,7 @@ contract DeployKeyfleetsTest is Test {
     MockToken private usdc;
     MockRegentRevenueStaking private staking;
     MockRegent private regent;
+    MockAutolaunchFactory private autolaunch;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
 
@@ -48,6 +50,7 @@ contract DeployKeyfleetsTest is Test {
         usdc = new MockToken("USD Coin", "USDC");
         staking = new MockRegentRevenueStaking(usdc);
         regent = new MockRegent();
+        autolaunch = new MockAutolaunchFactory();
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
@@ -91,6 +94,7 @@ contract DeployKeyfleetsTest is Test {
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");
             assertEq(address(fleet.USDC()), address(usdc), "USDC");
             assertEq(address(fleet.TREASURY().REGENT_STAKING()), address(staking), "Staking");
+            assertEq(address(fleet.TREASURY().AUTOLAUNCH()), address(autolaunch), "Launch factory");
             assertEq(address(fleet.REWARDS().FLEET()), address(fleet), "Reward ledger is the fleet's own");
             assertEq(address(fleet.VOTES().FLEET()), address(fleet), "Controller is the fleet's own");
             assertEq(address(fleet.TREASURY().FLEET()), address(fleet), "Treasury is the fleet's own");
@@ -173,6 +177,21 @@ contract DeployKeyfleetsTest is Test {
         script.deploy(manifest);
     }
 
+    /// @dev Invariant: on Base the only launch a fleet can bind as its launch token is one from
+    /// Autolaunch Revstake v2's factory, and on every chain the factory a fleet reads exists.
+    function test_manifestNamingAnyLaunchFactoryButAutolaunchV2OrOneWithoutCodeIsRefused() public {
+        KeyfleetManifest.Manifest memory manifest = _baseManifest();
+        manifest.autolaunchFactory = address(autolaunch);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AutolaunchFactoryNotBase.selector, address(autolaunch)));
+        script.deploy(manifest);
+
+        vm.chainId(ANVIL_CHAIN_ID);
+        manifest = _manifest();
+        manifest.autolaunchFactory = address(0xA070);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.AutolaunchFactoryMissing.selector, address(0xA070)));
+        script.deploy(manifest);
+    }
+
     /// @dev Invariant: on Base the only randomness a release can use is Chainlink's own Base
     /// coordinator on its 2 gwei or 30 gwei gas lane.
     function test_baseManifestNamingAnyVrfCoordinatorOrGasLaneButBaseOnesIsRefused() public {
@@ -230,6 +249,7 @@ contract DeployKeyfleetsTest is Test {
             ' "usdc": "0x00000000000000000000000000000000000000a2",',
             ' "regentStaking": "0x00000000000000000000000000000000000000a3",',
             ' "regent": "0x00000000000000000000000000000000000000a4",',
+            ' "autolaunchFactory": "0x00000000000000000000000000000000000000a5",',
             ' "traitTableHash": "0x00000000000000000000000000000000000000000000000000000000000000c4",',
             ' "vrf": {"keyHash": "0x00000000000000000000000000000000000000000000000000000000000000c3",',
             '  "subscriptionId": "115792089237316195423570985008687907853269984665640564039457584007913129639935",',
@@ -248,6 +268,7 @@ contract DeployKeyfleetsTest is Test {
         assertEq(manifest.usdc, address(0xA2), "usdc");
         assertEq(manifest.regentStaking, address(0xA3), "regentStaking");
         assertEq(manifest.regent, address(0xA4), "regent");
+        assertEq(manifest.autolaunchFactory, address(0xA5), "autolaunchFactory");
         assertEq(address(manifest.vrf.coordinator), address(0xC1), "vrf.coordinator");
         assertEq(manifest.vrf.subscriptionId, type(uint256).max, "vrf.subscriptionId, all 78 digits");
         assertEq(manifest.vrf.keyHash, bytes32(uint256(0xC3)), "vrf.keyHash");
@@ -272,14 +293,17 @@ contract DeployKeyfleetsTest is Test {
     /// carries the final trait table's hash and a zero subscription until the operator writes in the
     /// subscription the Safe owns, so until then no fleet can be deployed on Base; the anvil
     /// manifest carries a zero trait table too. With them written in, every other refusal passes for
-    /// Classic, the fleet that opens first. Both name REGENT revenue staking and REGENT on Base.
+    /// Classic, the fleet that opens first. Both name REGENT revenue staking, REGENT
+    /// and Autolaunch v2's factory on Base.
     function test_committedManifestsPassTheDeploymentRefusalsOnceSubscriptionAndTraitTableAreWrittenIn() public {
         KeyfleetManifest.Manifest memory anvil = script.readManifest("anvil", "classic");
         vm.etch(anvil.usdc, address(usdc).code);
         vm.etch(anvil.regentStaking, address(staking).code);
         vm.etch(anvil.regent, address(regent).code);
+        vm.etch(anvil.autolaunchFactory, address(autolaunch).code);
         assertEq(anvil.regentStaking, script.BASE_REGENT_REVENUE_STAKING(), "The lab forks Base's staking");
         assertEq(anvil.regent, script.BASE_REGENT(), "The lab forks Base's REGENT");
+        assertEq(anvil.autolaunchFactory, script.BASE_AUTOLAUNCH_FACTORY(), "The lab forks Autolaunch v2");
         uint256 labSubscription = _standInForBaseCoordinator();
         assertEq(anvil.usdc, script.BASE_USDC(), "The lab forks Base's USDC");
         assertEq(address(anvil.vrf.coordinator), script.BASE_VRF_COORDINATOR(), "The lab forks Base's coordinator");
@@ -308,6 +332,11 @@ contract DeployKeyfleetsTest is Test {
             "And deposits its protocol share into REGENT revenue staking"
         );
         assertEq(address(release.TREASURY().REGENT()), script.BASE_REGENT(), "And splits REGENT on Base");
+        assertEq(
+            address(release.TREASURY().AUTOLAUNCH()),
+            script.BASE_AUTOLAUNCH_FACTORY(),
+            "And may bind a launch of Autolaunch v2 on Base"
+        );
     }
 
     /// @dev Puts the mock coordinator's code at Base's coordinator address, registers
@@ -322,13 +351,14 @@ contract DeployKeyfleetsTest is Test {
 
     /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
     /// coordinator on its 2 gwei lane, with its protocol share going to REGENT revenue staking and
-    /// splitting REGENT, all
-    /// stood in for by the local mocks' code.
+    /// splitting REGENT and the launch Autolaunch v2 records, all stood in for by the local mocks'
+    /// code.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(script.BASE_USDC(), address(usdc).code);
         vm.etch(script.BASE_REGENT_REVENUE_STAKING(), address(staking).code);
         vm.etch(script.BASE_REGENT(), address(regent).code);
+        vm.etch(script.BASE_AUTOLAUNCH_FACTORY(), address(autolaunch).code);
         uint256 baseSubscription = _standInForBaseCoordinator();
         manifest = _manifest();
         manifest.chainId = BASE_CHAIN_ID;
@@ -340,6 +370,7 @@ contract DeployKeyfleetsTest is Test {
         });
         manifest.regentStaking = script.BASE_REGENT_REVENUE_STAKING();
         manifest.regent = script.BASE_REGENT();
+        manifest.autolaunchFactory = script.BASE_AUTOLAUNCH_FACTORY();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
@@ -347,6 +378,7 @@ contract DeployKeyfleetsTest is Test {
         manifest.usdc = address(usdc);
         manifest.regentStaking = address(staking);
         manifest.regent = address(regent);
+        manifest.autolaunchFactory = address(autolaunch);
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

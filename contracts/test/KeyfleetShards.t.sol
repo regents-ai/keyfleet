@@ -10,6 +10,7 @@ import {KeyfleetShards} from "../src/KeyfleetShards.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockRegent} from "./mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
 
@@ -53,6 +54,7 @@ contract KeyfleetShardsTest is Test {
             usdc,
             new MockRegentRevenueStaking(usdc),
             new MockRegent(),
+            new MockAutolaunchFactory(),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

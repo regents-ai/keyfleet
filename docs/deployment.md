@@ -54,8 +54,8 @@ fleet at a time on a local fork of Base, the three transactions measured:
 | --- | --- |
 | The fleet, with its ledger and shard record | 6,045,638 |
 | The voting controller | 3,210,157 |
-| The treasury | 2,039,359 |
-| All three | 11,295,154 |
+| The treasury | 2,443,275 |
+| All three | 11,699,070 |
 
 A purchase made in the moment between the fleet and its treasury sends its
 capital to the treasury's address, where the treasury finds it once deployed.
@@ -73,6 +73,7 @@ fleet's. Neither step invents a value or falls back on one nobody chose.
 | `usdc` | The USDC every key is paid in. On Base it must be native Base USDC, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`; a fleet refuses a USDC that does not report six decimals. |
 | `regentStaking` | Where each fleet's treasury deposits the 10% protocol share. On Base it must be REGENT revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. |
 | `regent` | The REGENT token the daily split shares among keys. On Base it must be `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. |
+| `autolaunchFactory` | The Autolaunch factory a fleet launches its own token through, and the only one whose launches its treasury will bind to the daily split. On Base it must be Autolaunch Revstake v2's factory, `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`. |
 | `fleets.*` | Per fleet, under `syndicate`, `cascade`, `classic` and `accelerant`: the collection `name`, `symbol` and `baseTokenURI`. A run reads only the fleet it deploys. |
 | `vrf.coordinator` | The Chainlink VRF v2.5 coordinator every key's traits are requested from. On Base it must be `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`. |
 | `vrf.subscriptionId` | The subscription that pays for every request, written as a decimal string because ids are longer than JSON numbers hold exactly. The coordinator must know it. |
@@ -86,8 +87,11 @@ shared base would make `tokenURI` ambiguous across the release.
 Every Base address is pinned in `contracts/script/KeyfleetManifest.sol` with its
 source: USDC from Circle's contract addresses page, the coordinator and gas
 lanes from Chainlink's VRF v2.5 supported-networks page
-(<https://docs.chain.link/vrf/v2-5/supported-networks>), and REGENT and REGENT
-revenue staking from Regent's own Base bindings and verified Basescan source.
+(<https://docs.chain.link/vrf/v2-5/supported-networks>), REGENT and REGENT
+revenue staking from Regent's own Base bindings and verified Basescan source,
+and the Autolaunch factory from the deployment manifest of Autolaunch Revstake
+v2 (6 October 2026), whose recorded code hashes match what is on Base for the
+factory and every contract it wires.
 
 `base.json` carries the final trait table's hash and `"subscriptionId": "0"`, so
 a Base deployment is refused until the Regents subscription id is written in.
@@ -211,8 +215,8 @@ matters only for paying gas.
 ## Rehearsing
 
 Every purchase is paid in Base USDC, so a rehearsal that buys keys runs on a
-fork of Base, where the real USDC, REGENT, REGENT staking and VRF coordinator
-exist.
+fork of Base, where the real USDC, REGENT, REGENT staking, VRF coordinator and
+Autolaunch factory exist.
 
 **A plain Base fork, for the Base manifest.**
 
@@ -267,8 +271,8 @@ delegated code on a fork whose NFT callback reverts, so a key minted to it
 fails.
 
 `contracts/script/AnvilLab.s.sol` is separate from both: it puts one Classic
-fleet on a plain local anvil, with stand-ins for USDC, REGENT, REGENT staking
-and the coordinator, for the site's anvil tests, and returns the addresses of
+fleet on a plain local anvil, with stand-ins for USDC, REGENT, REGENT staking,
+the coordinator and the Autolaunch factory, for the site's anvil tests, and returns the addresses of
 the fleet's five contracts and the stand-in staking.
 
 ## What the deployment step refuses
@@ -278,12 +282,14 @@ the fleet's five contracts and the stand-in staking.
   `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Every key price is written in
   six-decimal USDC, so a look-alike with other decimals would misprice every key.
 - On Base, a `regentStaking` other than REGENT revenue staking
-  `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, and a `regent` other than
-  `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`.
+  `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, a `regent` other than
+  `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`, and an `autolaunchFactory`
+  other than `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`.
 - On Base, a `vrf.coordinator` other than
   `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634`, or a `vrf.keyHash` other than
   the 2 gwei or 30 gwei lane.
-- On any chain, a staking contract, REGENT or coordinator that holds no code, a
+- On any chain, a staking contract, REGENT, Autolaunch factory or coordinator
+  that holds no code, a
   gas lane the coordinator does not know, a subscription the coordinator does
   not know (which includes the placeholder `"0"`), and a zero `traitTableHash`,
   which the fleet itself also refuses.
@@ -298,14 +304,14 @@ the fleet's five contracts and the stand-in staking.
   run against.
 - A ledger, controller, treasury or shard record that holds no code or does not
   name the fleet as its own.
-- The same chain, USDC, staking, REGENT and randomness refusals as the
-  deployment step.
+- The same chain, USDC, staking, REGENT, Autolaunch factory and randomness
+  refusals as the deployment step.
 - A fleet the subscription does not list as a consumer. The Safe adds it before
   this step runs.
 - On Base, a subscription whose owner is not the Regents Safe.
 - Any value that differs from the manifest, read back from the chain: the
   fleet's preset, which must be the one for the fleet named, USDC, the
-  treasury's staking contract and REGENT, the coordinator, subscription, gas lane
+  treasury's staking contract, REGENT and Autolaunch factory, the coordinator, subscription, gas lane
   and trait table hash, and the fleet's name, symbol and metadata base. Every
   fleet on a chain is checked against the same manifest, so they all share those
   values.
@@ -330,8 +336,9 @@ constants came from. It carries:
 - USDC and `qUsdc`, the reference price the Syndicate, Cascade and Accelerant
   ladders start from (10000000 atomic USDC, which is 10 USDC; Classic prices
   from its own table);
-- REGENT revenue staking, REGENT and the tag every protocol share deposit
-  carries (`protocolShareTag`);
+- REGENT revenue staking, REGENT, the Autolaunch factory
+  (`autolaunchFactory`) and the tag every protocol share deposit carries
+  (`protocolShareTag`);
 - under `bounds` the two supply limits, Classic's 1,024 keys and Accelerant's
   2,000 (Syndicate and Cascade have none), and under `fees` the 10% protocol
   share and the Accelerant 20% capital share;
@@ -340,7 +347,8 @@ constants came from. It carries:
   each answer is given, and that requests are paid in ETH;
 - the trait table hash;
 - `splitAssets`, the assets the daily split shares at deployment: ETH, REGENT
-  and USDC;
+  and USDC (OUSD and the fleet's own token join only later, by a vote and by a
+  launch that sold);
 - the terms the release discloses: public-read chat, no refunds, service rewards
   to keys only, what the 10% fee is and is not, and what the Regents Safe owns.
 
@@ -382,8 +390,17 @@ sets its 10% aside in the fleet's `protocolShareOwed`, and anyone may call
 REGENT revenue staking on Base for REGENT stakers. Every other amount a fleet
 receives is its treasury's capital, spent only by a passed proposal's exact
 calls, apart from the daily split that shares a small part of its ETH, REGENT
-and USDC among the keys. There is no token launch. The
-[contracts README](../contracts/README.md) states the rules.
+and USDC among the keys. The [contracts README](../contracts/README.md) states
+the rules.
+
+**The fleet's own token (6 October 2026).** A fleet may launch its own token
+through Autolaunch Revstake v2 on Base, by a passed proposal's call from its
+treasury to the factory, naming the treasury as the launch's treasury.
+Autolaunch's own fees, vesting and liquidity are the factory's and Keyfleet
+changes none of them. Once the launch has sold, anyone may bind its token to the
+daily split, once, from the next run, at 100 tokens; only tokens already
+released to the treasury are split. Autolaunch opens its factory to launches
+only when the Regents Safe unpauses it; until then no fleet can launch.
 
 **The key price.** Every key is paid in USDC on Base. The first key of the
 Fibonacci and Accelerant ladders costs 10 USDC (`Q_USDC`, 10,000,000 atomic

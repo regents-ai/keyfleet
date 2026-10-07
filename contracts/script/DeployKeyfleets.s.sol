@@ -6,6 +6,7 @@ import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 import {KeyfleetStack} from "./KeyfleetStack.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice Step one of two: deploys one fleet, and writes nothing.
 /// @dev Each fleet goes on chain on its own run, as three transactions from the same account: the
@@ -48,6 +49,7 @@ contract DeployKeyfleets is KeyfleetManifest {
             IERC20(manifest.usdc),
             IRegentRevenueStaking(manifest.regentStaking),
             IERC20(manifest.regent),
+            IRegentsAutolaunchFactoryV2(manifest.autolaunchFactory),
             Keyfleet.Metadata({
                 name: manifest.fleet.name, symbol: manifest.fleet.symbol, baseTokenURI: manifest.fleet.baseTokenURI
             }),

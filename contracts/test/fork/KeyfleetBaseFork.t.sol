@@ -12,6 +12,7 @@ import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice The views and the pause of the deployed REGENT revenue staking contract this test reads
 /// and, on the fork only, flips as its owner.
@@ -77,6 +78,7 @@ contract KeyfleetBaseForkTest is Test {
             usdc,
             IRegentRevenueStaking(address(staking)),
             IERC20Metadata(script.BASE_REGENT()),
+            IRegentsAutolaunchFactoryV2(script.BASE_AUTOLAUNCH_FACTORY()),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({coordinator: coordinator, subscriptionId: subscriptionId, keyHash: keyHash}),
             TRAIT_TABLE

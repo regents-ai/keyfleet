@@ -84,9 +84,9 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     address private constant NATIVE = address(0);
     uint256 private constant START = 1_000_000;
     /// @dev The measured cost plus twenty percent, rounded up to the nearest thousand.
-    uint256 private constant TRANSFER_GAS_CEILING = 368_000;
-    uint256 private constant CLAIM_GAS_CEILING = 1_541_000;
-    uint256 private constant REPEAT_CLAIM_GAS_CEILING = 573_000;
+    uint256 private constant TRANSFER_GAS_CEILING = 430_000;
+    uint256 private constant CLAIM_GAS_CEILING = 1_894_000;
+    uint256 private constant REPEAT_CLAIM_GAS_CEILING = 685_000;
 
     address private keeper = address(0x7EE9E2);
 
@@ -520,8 +520,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         assertEq(agent.balance, 0, "the agent was not");
     }
 
-    /// @dev Gas: moving a key with a split pending in all four bound assets, every slot cold and the
-    /// outgoing owner's credits moving from zero, and one wallet claiming ten keys in all four.
+    /// @dev Gas: moving a key with a split pending in all five bound assets, every slot cold and the
+    /// outgoing owner's credits moving from zero, and one wallet claiming ten keys in all five.
     function test_gasOfATransferAndATenKeyClaimWithAllBoundAssets() public {
         Keyfleet fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetTreasury treasury = fleet.TREASURY();
@@ -533,10 +533,14 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         DecimalsToken ousd = new DecimalsToken(18);
         _admit(fleet, ousd);
         ousd.mint(address(treasury), 1_000e18);
+        (, IERC20 launched) = _launch(fleet);
+        autolaunch.graduate(1);
+        treasury.bindLaunchToken(1);
+        deal(address(launched), address(treasury), 1_000e18);
         _hold(treasury, 10 ether, 1_000e18, 1_000e6);
         vm.warp(START + 1 days);
         _run(treasury);
-        assertEq(rewards.rewardAssets().length, 4, "all four bound assets were split");
+        assertEq(rewards.rewardAssets().length, 5, "all five bound assets were split");
 
         vm.cool(address(fleet));
         vm.cool(address(rewards));
@@ -545,7 +549,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         uint256 before = gasleft();
         fleet.transferFrom(holder, address(0xD00D), 11);
         uint256 transferGas = before - gasleft();
-        console2.log("transfer with four split assets pending (cold):", transferGas);
+        console2.log("transfer with five split assets pending (cold):", transferGas);
         assertLt(transferGas, TRANSFER_GAS_CEILING);
 
         address[] memory assets = treasury.splitAssets();
@@ -556,7 +560,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         before = gasleft();
         uint256[] memory paid = rewards.claim(_range(1, 10), assets);
         uint256 claimGas = before - gasleft();
-        console2.log("ten-key claim in four assets (cold):", claimGas);
+        console2.log("ten-key claim in five assets (cold):", claimGas);
         assertLt(claimGas, CLAIM_GAS_CEILING);
         assertEq(paid[0], 11 * _perKey(10 ether, 50, 11), "ten keys' ETH and the eleventh's, settled when it moved");
 
@@ -570,7 +574,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         before = gasleft();
         rewards.claim(_range(1, 10), assets);
         uint256 repeatGas = before - gasleft();
-        console2.log("the next day's ten-key claim in four assets (cold):", repeatGas);
+        console2.log("the next day's ten-key claim in five assets (cold):", repeatGas);
         assertLt(repeatGas, REPEAT_CLAIM_GAS_CEILING);
     }
 }

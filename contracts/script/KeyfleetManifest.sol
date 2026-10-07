@@ -33,6 +33,10 @@ abstract contract KeyfleetManifest is Script {
     /// staking contract a manifest may name there. Every fleet's protocol share is deposited into it
     /// through `depositUSDC`, the only way revenue counts there.
     address public constant BASE_REGENT_REVENUE_STAKING = 0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5;
+    /// @notice Autolaunch Revstake v2's factory on Base (`RegentsAutolaunchFactoryV2`, deployed 6
+    /// October 2026), the only launch factory a manifest may name there. Source: the deployed
+    /// manifest of Autolaunch's `contracts/revstake-v2`, whose recorded code hash it carries.
+    address public constant BASE_AUTOLAUNCH_FACTORY = 0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E;
     /// @notice The Regents Safe on Base, a 2-of-3 Safe v1.4.1. It owns the staking contract and the
     /// VRF subscription. The same address on Ethereum is a different Safe with different signers.
     address public constant BASE_REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
@@ -65,6 +69,8 @@ abstract contract KeyfleetManifest is Script {
     /// must be `BASE_REGENT_REVENUE_STAKING`.
     /// @param regent REGENT, which every fleet's treasury splits among its keys. On Base it must be
     /// `BASE_REGENT`.
+    /// @param autolaunchFactory The Autolaunch factory whose launches every fleet's treasury may
+    /// bind as its launch token. On Base it must be `BASE_AUTOLAUNCH_FACTORY`.
     /// @param vrf The VRF coordinator, subscription and gas lane, the same for every fleet on the
     /// chain. On Base the coordinator must be `BASE_VRF_COORDINATOR` and the gas lane one of the two
     /// Base lanes.
@@ -78,6 +84,7 @@ abstract contract KeyfleetManifest is Script {
         address usdc;
         address regentStaking;
         address regent;
+        address autolaunchFactory;
         Keyfleet.Randomness vrf;
         bytes32 traitTableHash;
         uint8 slot;
@@ -98,6 +105,10 @@ abstract contract KeyfleetManifest is Script {
     error RegentNotBase(address regent);
     /// @notice The manifest's REGENT address holds no code on this chain.
     error RegentMissing(address regent);
+    /// @notice A Base manifest names a launch factory other than Autolaunch Revstake v2's.
+    error AutolaunchFactoryNotBase(address autolaunchFactory);
+    /// @notice The manifest's launch factory address holds no code on this chain.
+    error AutolaunchFactoryMissing(address autolaunchFactory);
     /// @notice The manifest's staking address holds no code on this chain.
     error RegentStakingMissing(address regentStaking);
     /// @notice The manifest's VRF coordinator address holds no code on this chain.
@@ -143,6 +154,7 @@ abstract contract KeyfleetManifest is Script {
         manifest.usdc = vm.parseJsonAddress(json, ".usdc");
         manifest.regentStaking = vm.parseJsonAddress(json, ".regentStaking");
         manifest.regent = vm.parseJsonAddress(json, ".regent");
+        manifest.autolaunchFactory = vm.parseJsonAddress(json, ".autolaunchFactory");
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(vm.parseJsonAddress(json, ".vrf.coordinator")),
             subscriptionId: vm.parseJsonUint(json, ".vrf.subscriptionId"),
@@ -162,8 +174,9 @@ abstract contract KeyfleetManifest is Script {
     }
 
     /// @dev The manifest must fit this chain. Its chain must be this chain. On Base its USDC,
-    /// staking contract, REGENT, VRF coordinator and gas lane must be Base's own, and on every chain
-    /// the staking contract and REGENT must hold code and the coordinator must hold code, know the gas lane and
+    /// staking contract, REGENT, launch factory, VRF coordinator and gas lane must be Base's own, and
+    /// on every chain the staking contract, REGENT and the launch factory must hold code and the
+    /// coordinator must hold code, know the gas lane and
     /// know the subscription; a subscription it does not know reverts with the coordinator's own
     /// `InvalidSubscription`. The trait table hash must not be zero.
     function _requireManifestFitsChain(Manifest memory manifest) internal view {
@@ -180,9 +193,13 @@ abstract contract KeyfleetManifest is Script {
                 revert RegentStakingNotBase(manifest.regentStaking);
             }
             if (manifest.regent != BASE_REGENT) revert RegentNotBase(manifest.regent);
+            if (manifest.autolaunchFactory != BASE_AUTOLAUNCH_FACTORY) {
+                revert AutolaunchFactoryNotBase(manifest.autolaunchFactory);
+            }
         }
         if (manifest.regentStaking.code.length == 0) revert RegentStakingMissing(manifest.regentStaking);
         if (manifest.regent.code.length == 0) revert RegentMissing(manifest.regent);
+        if (manifest.autolaunchFactory.code.length == 0) revert AutolaunchFactoryMissing(manifest.autolaunchFactory);
         if (coordinator.code.length == 0) revert VrfCoordinatorMissing(coordinator);
         (bool keyExists,) = IVRFProvingKeys(coordinator).s_provingKeys(manifest.vrf.keyHash);
         if (!keyExists) revert VrfKeyHashUnknown(manifest.vrf.keyHash);

@@ -2,25 +2,30 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {KeyfleetStack} from "../../script/KeyfleetStack.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "../KeyfleetIncome.t.sol";
+import {MockAutolaunchFactory} from "../mocks/MockAutolaunchFactory.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev A whole fleet on stand-in USDC, REGENT, VRF and staking, with the steps the money tests repeat:
-/// buying keys, and passing and carrying out a proposal's calls.
+/// @dev A whole fleet on stand-in USDC, REGENT, VRF, staking and Autolaunch, with the steps the money
+/// tests repeat: buying keys, passing and carrying out a proposal's calls, and launching the fleet's
+/// token.
 abstract contract KeyfleetFixture is Test {
     MockToken internal usdc;
     MockVRFCoordinatorV2Plus internal vrf;
     uint256 internal vrfSubscription;
     MockRegentRevenueStaking internal staking;
     MockRegent internal regent;
+    MockAutolaunchFactory internal autolaunch;
     address internal buyer = address(0xB0B0B0);
 
     function _setUpFixture() internal {
@@ -29,6 +34,7 @@ abstract contract KeyfleetFixture is Test {
         vrfSubscription = vrf.createSubscription();
         staking = new MockRegentRevenueStaking(usdc);
         regent = new MockRegent();
+        autolaunch = new MockAutolaunchFactory();
     }
 
     function _deploy(KeyfleetPresets.Preset preset) internal returns (Keyfleet fleet) {
@@ -37,6 +43,7 @@ abstract contract KeyfleetFixture is Test {
             usdc,
             staking,
             regent,
+            autolaunch,
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", "https://keys.regents.sh/alpha/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -105,5 +112,31 @@ abstract contract KeyfleetFixture is Test {
         uint256 proposalId = _approve(fleet, calls);
         vm.warp(fleet.VOTES().proposal(proposalId).closesAt);
         fleet.VOTES().execute(proposalId, calls);
+    }
+
+    /// @dev What a launch names, with `treasury` as the launch's treasury.
+    function _launchParams(address treasury) internal pure returns (IRegentsAutolaunchFactoryV2.LaunchParams memory) {
+        return IRegentsAutolaunchFactoryV2.LaunchParams({
+            name: "Fleet Token",
+            symbol: "FLEET",
+            description: "The fleet's own token.",
+            website: "https://keyfleet.ai",
+            image: "https://keyfleet.ai/fleet.png",
+            treasury: treasury
+        });
+    }
+
+    /// @dev The approved call that launches the fleet's token, naming `treasury`.
+    function _launchCall(address treasury) internal view returns (KeyfleetTreasury.Call[] memory) {
+        return
+            _one(address(autolaunch), 0, abi.encodeCall(IRegentsAutolaunchFactoryV2.launch, (_launchParams(treasury))));
+    }
+
+    /// @dev Launches the fleet's token by an approved call naming its own treasury; the launch is
+    /// active until the test settles it.
+    function _launch(Keyfleet fleet) internal returns (uint256 launchId, IERC20 token) {
+        launchId = autolaunch.nextLaunchId();
+        _execute(fleet, _launchCall(address(fleet.TREASURY())));
+        token = IERC20(autolaunch.launches(launchId).subject);
     }
 }

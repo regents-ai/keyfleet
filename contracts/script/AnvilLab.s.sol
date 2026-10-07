@@ -9,6 +9,7 @@ import {KeyfleetStack} from "./KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockRegentRevenueStaking} from "../test/mocks/MockRegentRevenueStaking.sol";
 import {MockRegent} from "../test/mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "../test/mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A six-decimal stand-in for USDC, as a fleet requires, that mints to whoever asks.
@@ -54,6 +55,7 @@ contract AnvilLab is Script {
             usdc,
             regentStaking,
             new MockRegent(),
+            new MockAutolaunchFactory(),
             Keyfleet.Metadata("Anvil Lab Classic", "ALC", "https://keyfleet.ai/metadata/anvil-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH

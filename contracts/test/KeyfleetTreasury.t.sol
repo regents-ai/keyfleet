@@ -9,10 +9,12 @@ import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./KeyfleetIncome.t.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockRegent} from "./mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The fleet's free capital lives in its treasury and nowhere else: the capital part of every
@@ -42,6 +44,7 @@ contract KeyfleetTreasuryTest is Test {
             usdc,
             new MockRegentRevenueStaking(usdc),
             new MockRegent(),
+            new MockAutolaunchFactory(),
             Keyfleet.Metadata("Keyfleet Alpha", "KFA", BASE_URI),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),
@@ -89,14 +92,21 @@ contract KeyfleetTreasuryTest is Test {
         assertEq(address(treasury.REWARDS()), address(fleet.REWARDS()), "the fleet's ledger");
         assertEq(treasury.USDC_THRESHOLD(), 100e6, "100 USDC by its six decimals");
         assertEq(treasury.REGENT_THRESHOLD(), 100e18, "100 REGENT by its eighteen decimals");
+        assertGt(address(treasury.AUTOLAUNCH()).code.length, 0, "a launch factory");
 
         MockRegent regent = new MockRegent();
         IRegentRevenueStaking staking = IRegentRevenueStaking(address(treasury.REGENT_STAKING()));
-        _expectZeroRefused(IRegentRevenueStaking(address(0)), regent);
-        _expectZeroRefused(staking, MockRegent(address(0)));
+        IRegentsAutolaunchFactoryV2 autolaunch = treasury.AUTOLAUNCH();
+        _expectZeroRefused(IRegentRevenueStaking(address(0)), regent, autolaunch);
+        _expectZeroRefused(staking, MockRegent(address(0)), autolaunch);
+        _expectZeroRefused(staking, regent, IRegentsAutolaunchFactoryV2(address(0)));
     }
 
-    function _expectZeroRefused(IRegentRevenueStaking staking, MockRegent regent) private {
+    function _expectZeroRefused(
+        IRegentRevenueStaking staking,
+        MockRegent regent,
+        IRegentsAutolaunchFactoryV2 autolaunch
+    ) private {
         Keyfleet unbound = new Keyfleet(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
@@ -111,7 +121,7 @@ contract KeyfleetTreasuryTest is Test {
         );
         new KeyfleetVotes(unbound);
         vm.expectRevert(KeyfleetTreasury.ZeroAddress.selector);
-        new KeyfleetTreasury(unbound, staking, regent);
+        new KeyfleetTreasury(unbound, staking, regent, autolaunch);
     }
 
     /// @dev Invariant: on every preset, across sales, Cascade completions, Accelerant rebates and

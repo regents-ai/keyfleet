@@ -8,6 +8,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice Deploys one fleet's contracts in the order they bind to each other.
 /// @dev The fleet is deployed first and given the addresses its voting controller and treasury
@@ -20,19 +21,21 @@ library KeyfleetStack {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @notice Deploys a fleet, then its voting controller, then its treasury, which deposits the
-    /// fleet's protocol share into `staking` and splits `regent` among the keys with ETH and USDC.
+    /// fleet's protocol share into `staking`, splits `regent` among the keys with ETH and USDC, and
+    /// binds its launch token from `autolaunch`.
     function deploy(
         KeyfleetPresets.Preset preset,
         IERC20 usdc,
         IRegentRevenueStaking staking,
         IERC20 regent,
+        IRegentsAutolaunchFactoryV2 autolaunch,
         Keyfleet.Metadata memory metadata,
         Keyfleet.Randomness memory randomness,
         bytes32 traitTableHash
     ) internal returns (Keyfleet fleet) {
         fleet = new Keyfleet(preset, usdc, metadata, randomness, traitTableHash, companionsOfNextFleet());
         new KeyfleetVotes(fleet);
-        new KeyfleetTreasury(fleet, staking, regent);
+        new KeyfleetTreasury(fleet, staking, regent, autolaunch);
     }
 
     /// @notice Where the voting controller and the treasury of the fleet the deployer creates next

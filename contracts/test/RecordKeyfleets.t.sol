@@ -11,6 +11,7 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./DeployKeyfleets.t.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockRegent} from "./mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
@@ -28,6 +29,7 @@ contract RecordKeyfleetsTest is Test {
     MockToken private usdc;
     MockRegentRevenueStaking private staking;
     MockRegent private regent;
+    MockAutolaunchFactory private autolaunch;
     MockVRFCoordinatorV2Plus private vrf;
     uint256 private subscriptionId;
 
@@ -37,6 +39,7 @@ contract RecordKeyfleetsTest is Test {
         usdc = new MockToken("USD Coin", "USDC");
         staking = new MockRegentRevenueStaking(usdc);
         regent = new MockRegent();
+        autolaunch = new MockAutolaunchFactory();
         vrf = new MockVRFCoordinatorV2Plus();
         vrf.addProvingKey(KEY_HASH, 30 gwei);
         subscriptionId = vrf.createSubscription();
@@ -70,8 +73,9 @@ contract RecordKeyfleetsTest is Test {
         );
 
         assertEq(vm.parseJsonAddress(json, ".regent"), address(regent), "REGENT");
+        assertEq(vm.parseJsonAddress(json, ".autolaunchFactory"), address(autolaunch), "Launch factory");
         address[] memory splitAssets = vm.parseJsonAddressArray(json, ".splitAssets");
-        assertEq(splitAssets.length, 3, "The assets the daily split shares");
+        assertEq(splitAssets.length, 3, "The assets the daily split shares, before any launch is bound");
         assertEq(splitAssets[0], address(0), "ETH");
         assertEq(splitAssets[1], address(regent), "REGENT");
         assertEq(splitAssets[2], address(usdc), "USDC");
@@ -111,8 +115,9 @@ contract RecordKeyfleetsTest is Test {
     }
 
     /// @dev The committed Base manifest, deployed and recorded over a stand-in Base: the record
-    /// publishes the fleet's five contracts on chain 8453, depositing into REGENT revenue staking
-    /// and splitting REGENT, once the operator writes in the subscription the Regents Safe owns.
+    /// publishes the fleet's five contracts on chain 8453, depositing into REGENT revenue staking,
+    /// splitting REGENT and reading launches from Autolaunch v2's factory, once the operator writes
+    /// in the subscription the Regents Safe owns.
     function test_theBaseManifestDeploysAndRecordsAllFiveContracts() public {
         KeyfleetManifest.Manifest memory stand = _baseManifest();
         KeyfleetManifest.Manifest memory manifest = deployer.readManifest("base", "classic");
@@ -125,6 +130,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonAddress(json, ".usdc"), deployer.BASE_USDC(), "Base USDC");
         assertEq(vm.parseJsonAddress(json, ".regentStaking"), deployer.BASE_REGENT_REVENUE_STAKING(), "Staking");
         assertEq(vm.parseJsonAddress(json, ".regent"), deployer.BASE_REGENT(), "REGENT");
+        assertEq(vm.parseJsonAddress(json, ".autolaunchFactory"), deployer.BASE_AUTOLAUNCH_FACTORY(), "Autolaunch v2");
         assertEq(vm.parseJsonString(json, ".fleet.name"), "Keyfleet Classic", "Name from the Base manifest");
         _assertFiveContracts(json, fleet);
     }
@@ -185,6 +191,10 @@ contract RecordKeyfleetsTest is Test {
         manifest = _manifest();
         manifest.regent = address(new MockRegent());
         _expectRecordRefused(manifest, fleet, _released("regent"));
+
+        manifest = _manifest();
+        manifest.autolaunchFactory = address(new MockAutolaunchFactory());
+        _expectRecordRefused(manifest, fleet, _released("autolaunchFactory"));
 
         manifest = _manifest();
         manifest.vrf.coordinator = IVRFCoordinatorV2Plus(address(_otherCoordinatorKnowing(manifest)));
@@ -407,13 +417,15 @@ contract RecordKeyfleetsTest is Test {
     }
 
     /// @dev A Base manifest on Base, paid in Base USDC and answered by Base's VRF
-    /// coordinator on its 2 gwei lane, depositing into REGENT revenue staking and splitting REGENT,
-    /// all stood in for by the local mocks' code, with the Regents Safe as the subscription's owner.
+    /// coordinator on its 2 gwei lane, depositing into REGENT revenue staking, splitting REGENT and
+    /// reading launches from Autolaunch v2's factory, all stood in for by the local mocks' code, with
+    /// the Regents Safe as the subscription's owner.
     function _baseManifest() private returns (KeyfleetManifest.Manifest memory manifest) {
         vm.chainId(BASE_CHAIN_ID);
         vm.etch(deployer.BASE_USDC(), address(usdc).code);
         vm.etch(deployer.BASE_REGENT_REVENUE_STAKING(), address(staking).code);
         vm.etch(deployer.BASE_REGENT(), address(regent).code);
+        vm.etch(deployer.BASE_AUTOLAUNCH_FACTORY(), address(autolaunch).code);
         MockVRFCoordinatorV2Plus base = MockVRFCoordinatorV2Plus(deployer.BASE_VRF_COORDINATOR());
         vm.etch(address(base), address(vrf).code);
         base.addProvingKey(deployer.BASE_VRF_KEY_HASH_2_GWEI(), 2 gwei);
@@ -426,6 +438,7 @@ contract RecordKeyfleetsTest is Test {
         manifest.vrf.keyHash = deployer.BASE_VRF_KEY_HASH_2_GWEI();
         manifest.regentStaking = deployer.BASE_REGENT_REVENUE_STAKING();
         manifest.regent = deployer.BASE_REGENT();
+        manifest.autolaunchFactory = deployer.BASE_AUTOLAUNCH_FACTORY();
     }
 
     function _manifest() private view returns (KeyfleetManifest.Manifest memory manifest) {
@@ -433,6 +446,7 @@ contract RecordKeyfleetsTest is Test {
         manifest.usdc = address(usdc);
         manifest.regentStaking = address(staking);
         manifest.regent = address(regent);
+        manifest.autolaunchFactory = address(autolaunch);
         manifest.vrf = Keyfleet.Randomness({
             coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
         });

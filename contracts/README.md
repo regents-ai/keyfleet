@@ -30,7 +30,11 @@ this branch does:
   the fleet contract itself by mistake is forwarded to the treasury. The
   treasury spends only by making an approved proposal's exact calls, apart from
   the daily split, which shares a small part of its ETH, REGENT and USDC (and
-  OUSD once a vote admits it) equally across all keys. There is no token launch.
+  OUSD once a vote admits it, and the fleet's own token once launched) equally
+  across all keys.
+- A fleet may launch its own token through Autolaunch Revstake v2 on Base, by a
+  vote. Once the launch has sold, anyone may bind its token to the daily split,
+  once; only tokens already released to the treasury are split.
 - Syndicate and Cascade have no last level: the same Fibonacci supply and 1.2×
   price rule go on for as long as keys sell. Only Classic (1,024 keys) and
   Accelerant (2,000 keys) have a supply limit.
@@ -207,10 +211,10 @@ four assets, every slot cold and moving from zero, measured 239,798 gas; the
 suite asserts a ceiling of 288,000. Each split asset adds about 46,000 to that
 worst case, nearly all of it first writes.
 
-In a whole fleet with all four bound assets split, moving a key costs 306,095
-gas with every slot cold. One wallet claiming ten keys in all four assets costs
-1,283,814 the first time, because each key's watermark in each asset is written
-from zero, and 476,709 for the next day's claim of the same ten keys. The suite
+In a whole fleet with all five bound assets split, moving a key costs 357,671
+gas with every slot cold. One wallet claiming ten keys in all five assets costs
+1,578,156 the first time, because each key's watermark in each asset is written
+from zero, and 570,051 for the next day's claim of the same ten keys. The suite
 asserts ceilings twenty percent above each.
 
 ## Fleet
@@ -249,7 +253,7 @@ and 49,152 bytes of deployment code per contract. Measured with
 | `KeyfleetRewards` | 8,396 | 8,878 |
 | `KeyfleetShards` | 3,604 | 3,810 |
 | `KeyfleetVotes` | 14,531 | 15,647 |
-| `KeyfleetTreasury` | 8,911 | 10,421 |
+| `KeyfleetTreasury` | 10,776 | 12,359 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
@@ -431,11 +435,12 @@ equally across every key minted so far. The bound assets are ETH, REGENT and
 USDC; REGENT is fixed at deployment as `REGENT()`, on Base
 `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07`. OUSD has a slot that starts empty:
 a passed proposal may fill it once with `admitOusd(token)`, which refuses the
-zero address, USDC and REGENT (`OusdInvalid`) and a second admission
-(`OusdAlreadyAdmitted`), and emits `OusdAdmitted(token, threshold)`.
+zero address, USDC, REGENT and the launch token (`OusdInvalid`) and a second admission
+(`OusdAlreadyAdmitted`), and emits `OusdAdmitted(token, threshold)`. The fleet's
+own launched token has a slot that starts empty too (see below).
 `splitAssets()` lists the bound assets in the order they are split: ETH (the
-zero address), REGENT, USDC, then OUSD once admitted. Any other token the
-treasury holds is never split.
+zero address), REGENT, USDC, then OUSD once admitted, then the launch token once
+bound. Any other token the treasury holds is never split.
 
 For each bound asset, with `B` the treasury's balance of it, `N` the number of
 keys minted and the rate in basis points:
@@ -449,7 +454,7 @@ An asset is skipped, with `SplitSkipped(asset, balance)`, when no key has been
 minted, when `B` is below its threshold, or when the share comes to zero
 because there are more keys than units in the cut. The thresholds are 0.05 ETH
 and 100 whole units of each token, read from the token's decimals once (REGENT
-and USDC at deployment, OUSD when admitted); a balance equal to the threshold
+and USDC at deployment, OUSD when admitted, the launch token when bound); a balance equal to the threshold
 qualifies. `B` is only the treasury's own balance, so what the ledger already
 holds for the keys is never counted again. Each asset split emits
 `SplitAllocated(asset, balance, perKey, keys)`.
@@ -482,6 +487,45 @@ funded after; a token that refuses the transfer is skipped with
 transfer that fails because it ran out of gas reverts the whole run with
 `SplitOutOfGas` instead, so nobody can starve one asset of its day by sending
 too little gas.
+
+### The fleet's own token
+
+A fleet launches its own token through Autolaunch Revstake v2, whose factory is
+fixed in the treasury at deployment as `AUTOLAUNCH()`; on Base the deployment
+scripts require `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`. The launch is a
+passed proposal's call from the treasury to the factory's
+`launch(params)`, with the treasury itself as `params.treasury`. The factory
+takes no ETH and no token for it, and records the treasury as the launcher. The
+token's name, symbol, description, website and image are the proposal's own
+(64, 16, 512, 256 and 256 bytes at most). Autolaunch's own fees, vesting and
+liquidity rules are the factory's and nothing here changes them. Autolaunch
+opens its factory to launches only when the Regents Safe unpauses it.
+
+Once the launch has sold, anyone may call `bindLaunchToken(launchId)`, once. It
+refuses a launch the treasury did not make or that names another treasury
+(`NotOwnLaunch`), so a launch a stranger made naming this treasury is never
+bound; a launch whose auction has not sold, still running or failed, as
+Autolaunch's strategy records it (`LaunchNotGraduated`); the token already
+admitted as OUSD (`LaunchTokenIsOusd`); and any second binding
+(`LaunchTokenAlreadyBound`), so the first sold launch bound is the fleet's token
+for good. It records `launchToken()`, `launchId()` and a threshold of 100 tokens
+by the token's decimals (`launchTokenThreshold()`), emits
+`LaunchTokenBound(launchId, token, threshold)` and runs under the treasury's
+reentrancy lock, so a proposal's call cannot bind it in the middle of other
+calls. The token is split from the next run, last.
+
+Only what the treasury itself holds is split. Of a launch's tokens, 70% vest to
+the treasury over a year from the sale in Autolaunch's escrow, which anyone may
+ask to release what has vested so far (`release()`); the pool's liquidity stays
+locked in Autolaunch's locker; and tokens holders stake stay in the launch's
+splitter. None of these is the treasury's balance until it reaches the
+treasury.
+
+A sold launch also pays the treasury: at least half of the auction's REGENT
+raise at the sale, and, of every payment made through the launch's payment
+receiver, what is left after Autolaunch's 2% (to REGENT revenue staking for
+USDC, to the Regents Safe for REGENT or the token) and the share of the launch's
+stakers. Those arrive as ordinary treasury REGENT and USDC, split like any other.
 
 ### Signing for the fleet and its Lit account
 
@@ -801,8 +845,10 @@ the 30 gwei lane
 Chainlink's VRF v2.5 supported-networks page), and a staking contract other
 than REGENT revenue staking `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, and a
 REGENT other than `0x6f89bcA4eA5931EdFCB09786267b251DeE752b07` (the manifest's
-`regent`). On any chain it refuses a staking address or a REGENT that holds no
-code, a coordinator that
+`regent`), and an Autolaunch factory other than Revstake v2's
+`0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` (the manifest's
+`autolaunchFactory`). On any chain it refuses a staking address, a REGENT or an
+Autolaunch factory that holds no code, a coordinator that
 holds no code, a gas lane or subscription
 the coordinator does not know, a zero trait table hash and an unknown fleet
 name.
@@ -812,7 +858,7 @@ because Forge's `run-latest.json` holds only the latest broadcast. It refuses a
 transaction without a receipt or a failed receipt, applies the same manifest
 refusals, reads the fleet back from the chain and refuses a preset other than the
 named fleet's, any value that differs from the manifest (the treasury's
-staking contract and REGENT included), a ledger, controller,
+staking contract, REGENT and Autolaunch factory included), a ledger, controller,
 treasury or shard record that holds no code or does not name the fleet as its
 own (`CompanionNotBound`), a fleet the subscription
 does not list as a consumer and, on Base, a subscription the Regents Safe does
@@ -821,7 +867,7 @@ not own. Only then does it write
 fleet, ledger, controller, treasury and shard record addresses, each with its
 code hash, the deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
-trait table hash, REGENT, the assets the daily split shares at deployment
+trait table hash, REGENT, the Autolaunch factory, the assets the daily split shares at deployment
 (`splitAssets`) and the terms the release discloses.
 
 All three scripts share `script/KeyfleetManifest.sol`, which reads
@@ -832,7 +878,7 @@ how to run each step and what each refuses.
 
 `script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet and
 its controller and treasury, with
-stand-in USDC, REGENT, VRF coordinator and REGENT staking, on a plain local
+stand-in USDC, REGENT, VRF coordinator, REGENT staking and Autolaunch factory, on a plain local
 anvil for the anvil tests in `platform/` (`mix test.external`), and returns the
 addresses of the fleet's five contracts and the stand-in staking.
 
@@ -852,16 +898,16 @@ the call data included, every call run as a transaction of its own
 | `present`, one key | 124,195 |
 | `propose`, one payment | 221,965 |
 | `castBallot`, one key | 110,803 |
-| `runDailySplit`, ETH, REGENT and USDC | 358,185 |
+| `runDailySplit`, ETH, REGENT and USDC | 360,765 |
 | `claim`, one key in all three | 233,324 |
 | `transferFrom`, a key with all three waiting | 287,030 |
-| `execute`, a one-payment proposal | 91,083 |
-| `executeBatch`, one payment | 53,954 |
+| `execute`, a one-payment proposal | 91,075 |
+| `executeBatch`, one payment | 53,946 |
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. Deploying one fleet on a fork of Base took
 6,045,638 gas for the fleet with its ledger and shard record, 3,210,157 for the
-controller and 2,039,359 for the treasury: 11,295,154 in all. To measure again:
+controller and 2,443,275 for the treasury: 11,699,070 in all. To measure again:
 
 ```sh
 BASE_RPC_URL=https://mainnet.base.org forge test --mc KeyfleetBaseGasTest --isolate -vv
@@ -874,8 +920,8 @@ these figures and has not been measured.
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
-payment and advance, daily split, voting, presence, shard, signature, Lit,
-reveal, trait-draw and deployment tests, with the presence queue's invariants run
+payment and advance, daily split, launch token, voting, presence, shard,
+signature, Lit, reveal, trait-draw and deployment tests, with the presence queue's invariants run
 over random renewals, transfers, sweeps, openings and the passing of time, the
 growing electorate's over random proposals, ballots, transfers, renewals,
 sweeps, sales and the passing of time, and segregation's over random batches of
@@ -904,7 +950,7 @@ every jump target the code pushes, and fails if any of them can reach
 `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
 the Classic price table stored at the end of the fleet's code, are data and are
 not judged. Foundry must be installed; the compiler may be
-downloaded on first use. Tests need no RPC, apart from the three suites in
+downloaded on first use. Tests need no RPC, apart from the four suites in
 `test/fork/`, which skip themselves unless `BASE_RPC_URL` is set.
 `KeyfleetBaseFork.t.sol` reads the pinned Base addresses (USDC, REGENT, REGENT staking,
 the Regents Safe, the coordinator and both gas lanes) and runs a fleet against
@@ -913,9 +959,17 @@ including a protocol share deposit and a send refused while the Safe has staking
 paused (on the fork only). `KeyfleetLitFork.t.sol` runs the treasury's Lit
 writes, each carried by a passed proposal, against Lit's real account contract,
 and checks Lit refuses anyone else and refuses the treasury once the account is
-handed on. `KeyfleetBaseGas.t.sol` gives the figures in
+handed on. `KeyfleetAutolaunchFork.t.sol` runs a whole launch of a fleet's
+token through Autolaunch v2's real factory, auction, strategy, escrow and
+payment receiver: the fleet launches by a passed proposal, the launch is refused
+binding while it runs and a stranger's launch naming the treasury is refused,
+one bid sells it, the treasury receives REGENT from the raise, anyone binds it, a
+USDC payment through the launch's receiver reaches the treasury less 2% to
+REGENT staking, and after half a year the released half is split across the
+keys. The factory is still paused on Base, so on the fork only the test acts as
+the Regents Safe to open it. `KeyfleetBaseGas.t.sol` gives the figures in
 [Gas on Base](#gas-on-base) and runs only with `--isolate`. The public
-`https://mainnet.base.org` is enough for all three; run them one suite at a
+`https://mainnet.base.org` is enough for all four; run them one suite at a
 time, as it may refuse a burst of requests.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run

@@ -13,6 +13,7 @@ import {MockToken} from "./KeyfleetIncome.t.sol";
 import {MockContractWallet} from "./mocks/MockContractWallet.sol";
 import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
 import {MockRegent} from "./mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Signed renewals and ballots: anyone submits them, the signer must be allowed to act for every
@@ -41,6 +42,7 @@ contract KeyfleetSignaturesTest is Test {
     address private keeper = address(0x7EE9E2);
     address private buyer = address(0xB0B0B0);
     address private constant REGENT = address(0x4E6E7);
+    address private constant AUTOLAUNCH = address(0xA070);
 
     event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
     event BallotCast(
@@ -53,13 +55,15 @@ contract KeyfleetSignaturesTest is Test {
         uint256 subscription = vrf.createSubscription();
         vm.warp(1_000_000);
         vm.roll(1_000);
-        // Placed rather than created, so the fleet keeps the address the signed vectors name.
+        // Both placed rather than created, so the fleet keeps the address the signed vectors name.
         deployCodeTo("MockRegent.sol:MockRegent", REGENT);
+        deployCodeTo("MockAutolaunchFactory.sol:MockAutolaunchFactory", AUTOLAUNCH);
         fleet = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
             new MockRegentRevenueStaking(usdc),
             MockRegent(REGENT),
+            MockAutolaunchFactory(AUTOLAUNCH),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)),

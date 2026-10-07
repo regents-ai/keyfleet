@@ -103,7 +103,8 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// returns its deployed manifest's JSON.
     /// @dev The fleet's ledger, voting controller, treasury and shard record must exist and be bound
     /// to it. The fleet's preset must be the manifest slot's, and every address it holds the one the
-    /// manifest names, and its treasury must deposit into the manifest's staking contract. The fleet
+    /// manifest names, and its treasury must deposit into the manifest's staking contract and bind
+    /// its launch token from the manifest's launch factory. The fleet
     /// must be a consumer of the subscription, and on Base the subscription must be owned by the
     /// Regents Safe.
     function record(Manifest memory manifest, BroadcastSummary memory summary) public returns (string memory) {
@@ -118,6 +119,9 @@ contract RecordKeyfleets is KeyfleetManifest {
             revert RecordedMismatch("regentStaking");
         }
         if (address(fleet.TREASURY().REGENT()) != manifest.regent) revert RecordedMismatch("regent");
+        if (address(fleet.TREASURY().AUTOLAUNCH()) != manifest.autolaunchFactory) {
+            revert RecordedMismatch("autolaunchFactory");
+        }
         _requireRandomnessMatches(manifest.vrf, fleet);
         if (fleet.TRAIT_TABLE_HASH() != manifest.traitTableHash) revert RecordedMismatch("traitTableHash");
         if (!_equal(fleet.name(), manifest.fleet.name)) revert RecordedMismatch("name");
@@ -138,6 +142,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(root, "qUsdc", KeyfleetPresets.Q_USDC);
         vm.serializeAddress(root, "regentStaking", address(fleet.TREASURY().REGENT_STAKING()));
         vm.serializeAddress(root, "regent", address(fleet.TREASURY().REGENT()));
+        vm.serializeAddress(root, "autolaunchFactory", address(fleet.TREASURY().AUTOLAUNCH()));
         vm.serializeBytes32(root, "protocolShareTag", fleet.TREASURY().PROTOCOL_SHARE_TAG());
         vm.serializeString(root, "fleet", _fleetJson(_fleetKeys()[manifest.slot], fleet));
         vm.serializeString(root, "bounds", _boundsJson());

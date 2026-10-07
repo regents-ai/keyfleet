@@ -12,7 +12,9 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Keyfleet} from "./Keyfleet.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
+import {IRegentLBPStrategyV2} from "./interfaces/IRegentLBPStrategyV2.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice The treasury of one fleet: the fleet's one payment address, the only place its free
 /// capital is held, and the only account of the fleet that approves a token.
@@ -31,13 +33,20 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// stays: the fleet sends it and immediately asks for it to be deposited into REGENT revenue
 /// staking.
 ///
+/// The fleet launches its own token through Autolaunch Revstake v2 by an approved proposal's call
+/// to the pinned factory, naming this treasury as the launch's treasury. Once that launch has
+/// succeeded, anyone may bind its token with `bindLaunchToken`, once, and it is split from the next
+/// run. Only what the treasury itself holds is split: the launch's vesting tokens stay in its escrow
+/// until released here, its liquidity in Autolaunch's locker, and staked tokens in its splitter.
+///
 /// The daily split shares a fixed part of the treasury's balance of each bound asset (ETH, REGENT,
-/// USDC, and OUSD once a proposal admits it) equally across every minted key, through the fleet's
-/// ledger. Anyone may run it once a day has passed since the last run, or since the first mint
-/// before any run; an approved proposal may also run it at any time. Its rate, 0.5% by default,
-/// is between 0.1% and 2% and changes only by an approved proposal. Carrying out calls, the
-/// deposit, returning an advance and the public split run under one reentrancy lock; a voted
-/// split runs inside the calls it is carried out with.
+/// USDC, OUSD once a proposal admits it, and the fleet's launch token once bound) equally across
+/// every minted key, through the fleet's ledger. Anyone may run it once a day has passed since the
+/// last run, or since the first mint before any run; an approved proposal may also run it at any
+/// time. Its rate, 0.5% by default, is between 0.1% and 2% and changes only by an approved
+/// proposal. Carrying out calls, the deposit, returning an advance, binding the launch token and
+/// the public split run under one reentrancy lock; a voted split runs inside the calls it is
+/// carried out with.
 ///
 /// The treasury signs nothing by itself. It answers ERC-1271 `isValidSignature` with yes only for
 /// a hash an approved proposal approved with `approveSignatureHash`, until one revokes it with
@@ -110,6 +119,9 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     uint256 public immutable USDC_THRESHOLD;
     /// @notice The least REGENT the treasury must hold for REGENT to be split: 100 REGENT.
     uint256 public immutable REGENT_THRESHOLD;
+    /// @notice The Autolaunch Revstake v2 factory whose launches this treasury may bind. On Base the
+    /// deployment scripts require `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`.
+    IRegentsAutolaunchFactoryV2 public immutable AUTOLAUNCH;
 
     /// @notice OUSD once an approved proposal admits it, and zero until then.
     IERC20 public ousd;
@@ -119,6 +131,12 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     uint64 public lastRunAt;
     /// @notice The least OUSD the treasury must hold for OUSD to be split: 100 OUSD.
     uint256 public ousdThreshold;
+    /// @notice The fleet's own launched token once bound, and zero until then.
+    IERC20 public launchToken;
+    /// @notice The least of the launch token the treasury must hold for it to be split: 100 tokens.
+    uint256 public launchTokenThreshold;
+    /// @notice The Autolaunch launch the launch token was bound from, and zero until then.
+    uint256 public launchId;
 
     /// @notice Every advance an approved proposal has made, by the id the proposal gave it.
     mapping(uint256 advanceId => Advance advance) public advances;
@@ -155,8 +173,16 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     error SplitOutOfGas();
     /// @notice OUSD has already been admitted.
     error OusdAlreadyAdmitted();
-    /// @notice OUSD cannot be the zero address, USDC or REGENT.
+    /// @notice OUSD cannot be the zero address, USDC, REGENT or the launch token.
     error OusdInvalid(address token);
+    /// @notice A launch token has already been bound.
+    error LaunchTokenAlreadyBound();
+    /// @notice The launch was not made by this treasury, or does not name it as its treasury.
+    error NotOwnLaunch(uint256 launchId);
+    /// @notice The launch has not succeeded: its auction is still running, unsettled or failed.
+    error LaunchNotGraduated(uint256 launchId);
+    /// @notice The launch's token is already split as OUSD.
+    error LaunchTokenIsOusd(address token);
 
     /// @notice An approved proposal paid an asset out of the treasury.
     event Paid(address indexed asset, address indexed to, uint256 amount);
@@ -184,6 +210,8 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     event DailySplitRateSet(uint256 bps);
     /// @notice An approved proposal admitted OUSD as a bound asset of the daily split.
     event OusdAdmitted(address indexed token, uint256 threshold);
+    /// @notice The fleet's launched token is now a bound asset of the daily split.
+    event LaunchTokenBound(uint256 indexed launchId, address indexed token, uint256 threshold);
     /// @notice An approved proposal approved a hash: the treasury now answers ERC-1271 for it.
     event SignatureHashApproved(bytes32 indexed hash);
     /// @notice An approved proposal revoked a hash: the treasury no longer answers for it.
@@ -195,13 +223,16 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     }
 
     /// @notice Binds this treasury to its fleet, to the staking contract the protocol share goes
-    /// to, and to REGENT.
+    /// to, to REGENT and to the Autolaunch factory.
     /// @param fleet The fleet, which must name this contract's address as its treasury.
     /// @param staking REGENT revenue staking. Not zero.
     /// @param regent REGENT. Not zero; its decimals are read once here for its threshold.
-    constructor(Keyfleet fleet, IRegentRevenueStaking staking, IERC20 regent) {
+    /// @param autolaunch The Autolaunch Revstake v2 factory. Not zero.
+    constructor(Keyfleet fleet, IRegentRevenueStaking staking, IERC20 regent, IRegentsAutolaunchFactoryV2 autolaunch) {
         if (address(fleet.TREASURY()) != address(this)) revert WrongFleet(address(fleet));
-        if (address(staking) == address(0) || address(regent) == address(0)) revert ZeroAddress();
+        if (address(staking) == address(0) || address(regent) == address(0) || address(autolaunch) == address(0)) {
+            revert ZeroAddress();
+        }
         FLEET = fleet;
         VOTES = fleet.VOTES();
         USDC = fleet.USDC();
@@ -210,6 +241,7 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         REGENT = regent;
         USDC_THRESHOLD = _hundred(USDC);
         REGENT_THRESHOLD = _hundred(regent);
+        AUTOLAUNCH = autolaunch;
     }
 
     /// @notice Whether the treasury is inside its split routine right now. The fleet's ledger
@@ -324,11 +356,38 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// Base fork before proposing it.
     function admitOusd(IERC20 token) external onlySelf {
         if (address(ousd) != address(0)) revert OusdAlreadyAdmitted();
-        if (address(token) == address(0) || token == USDC || token == REGENT) revert OusdInvalid(address(token));
+        if (address(token) == address(0) || token == USDC || token == REGENT || token == launchToken) {
+            revert OusdInvalid(address(token));
+        }
         uint256 threshold = _hundred(token);
         ousd = token;
         ousdThreshold = threshold;
         emit OusdAdmitted(address(token), threshold);
+    }
+
+    /// @notice Binds the fleet's launched token as a bound asset of the daily split, once, from the
+    /// next run. Anyone may call it.
+    /// @dev The launch must have been made by this treasury, which only an approved proposal's call
+    /// can do, and name it as its treasury; and the pinned strategy must record it as graduated,
+    /// which it does only when the auction sold and the pool, splitter and receiver were made. Its
+    /// token's decimals are read here, once, for its threshold. The first successful launch bound is
+    /// the one: there is no replacement.
+    /// @param id The launch's id at the pinned factory.
+    function bindLaunchToken(uint256 id) external nonReentrant {
+        if (address(launchToken) != address(0)) revert LaunchTokenAlreadyBound();
+        IRegentsAutolaunchFactoryV2.Launch memory launched = AUTOLAUNCH.launches(id);
+        if (launched.launcher != address(this) || launched.treasury != address(this)) revert NotOwnLaunch(id);
+        if (AUTOLAUNCH.strategy().distribution(launched.auction).lifecycle != IRegentLBPStrategyV2.Lifecycle.Graduated)
+        {
+            revert LaunchNotGraduated(id);
+        }
+        IERC20 token = IERC20(launched.subject);
+        if (token == ousd) revert LaunchTokenIsOusd(address(token));
+        uint256 threshold = _hundred(token);
+        launchToken = token;
+        launchTokenThreshold = threshold;
+        launchId = id;
+        emit LaunchTokenBound(id, address(token), threshold);
     }
 
     /// @notice Approves a hash as the treasury's signature, so `isValidSignature` answers yes for
@@ -355,12 +414,16 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     }
 
     /// @notice The assets the daily split shares, in the order it splits them: ETH (`NATIVE`),
-    /// REGENT, USDC, then OUSD once admitted.
+    /// REGENT, USDC, then OUSD once admitted, then the launch token once bound.
     function splitAssets() external view returns (address[] memory assets) {
-        IERC20 admitted = ousd;
-        assets = new address[](address(admitted) == address(0) ? 3 : 4);
+        (IERC20 admitted, IERC20 launched) = (ousd, launchToken);
+        uint256 count = 3;
+        if (address(admitted) != address(0)) ++count;
+        if (address(launched) != address(0)) ++count;
+        assets = new address[](count);
         (assets[0], assets[1], assets[2]) = (NATIVE, address(REGENT), address(USDC));
-        if (assets.length == 4) assets[3] = address(admitted);
+        if (address(admitted) != address(0)) assets[3] = address(admitted);
+        if (address(launched) != address(0)) assets[count - 1] = address(launched);
     }
 
     /// @notice When anyone may next run the daily split: a day after the last run, or a day after
@@ -386,6 +449,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         IERC20 admitted = ousd;
         if (address(admitted) != address(0)) {
             _splitAsset(address(admitted), admitted.balanceOf(address(this)), ousdThreshold, keys, bps);
+        }
+        IERC20 launched = launchToken;
+        if (address(launched) != address(0)) {
+            _splitAsset(address(launched), launched.balanceOf(address(this)), launchTokenThreshold, keys, bps);
         }
         flag.tstore(false);
     }

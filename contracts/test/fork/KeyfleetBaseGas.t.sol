@@ -12,6 +12,7 @@ import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 
 /// @dev The gas a Classic fleet's everyday calls cost against the real Base contracts on a fork of
@@ -59,6 +60,7 @@ contract KeyfleetBaseGasTest is Test {
             usdc,
             IRegentRevenueStaking(staking),
             regent,
+            IRegentsAutolaunchFactoryV2(script.BASE_AUTOLAUNCH_FACTORY()),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({
                 coordinator: coordinator, subscriptionId: subscriptionId, keyHash: script.BASE_VRF_KEY_HASH_2_GWEI()

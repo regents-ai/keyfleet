@@ -12,6 +12,7 @@ import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IRegentRevenueStaking} from "../../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {ILitAccountConfig, LitAdminCalls} from "../helpers/LitAdminCalls.sol";
 
@@ -78,6 +79,7 @@ contract KeyfleetLitForkTest is Test {
             usdc,
             IRegentRevenueStaking(script.BASE_REGENT_REVENUE_STAKING()),
             IERC20Metadata(script.BASE_REGENT()),
+            IRegentsAutolaunchFactoryV2(script.BASE_AUTOLAUNCH_FACTORY()),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             Keyfleet.Randomness({
                 coordinator: coordinator,
