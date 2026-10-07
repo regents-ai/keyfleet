@@ -168,8 +168,6 @@
     text-wrap: balance;
   }
 
-  .roller__lede { color: var(--color-fg-muted); line-height: 1.55; }
-
   /* One canvas draws the whole card on a Charcoal ground, short
      enough that the roll button stays in view on a laptop. */
   .roller__stage {
@@ -378,19 +376,6 @@
     background: color-mix(in srgb, var(--tier) 14%, transparent);
     box-shadow: inset 0 0 0 1px var(--tier);
     font-weight: 600;
-  }
-
-  /* The ladder of chances every trait shares. */
-  .roller__ladder { display: grid; gap: var(--space-2); }
-  .roller__ladder-lede { color: var(--color-fg-muted); font-size: .9375rem; line-height: 1.5; }
-
-  .roller__ladder-tiers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    margin: 0;
-    padding: 0;
-    list-style: none;
   }
 
   .early__footer {
