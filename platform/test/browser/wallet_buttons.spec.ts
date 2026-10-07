@@ -48,7 +48,8 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
 
   await expect(page.locator("#buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
   await expect(page.locator("#buy-key-approve")).toBeVisible()
-  await expect(page.locator("#buy-key-button")).toBeHidden()
+  await expect(page.locator("#buy-key-button")).toBeDisabled()
+  await expect(page.locator("#buy-key-button-why")).toHaveText("Approve USDC first")
 
   // Pressed twice before the wallet answers the first: both reach it.
   await page.locator("#buy-key-approve").click()
@@ -60,9 +61,10 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
     expect(transaction.data.startsWith(approveSelector)).toBe(true)
   }
 
-  // The purchase can be pressed as soon as an approval is sent, and nothing
-  // is done until the server reads it.
-  await expect(page.locator("#buy-key-button")).toBeVisible()
+  // The purchase can be pressed as soon as an approval is sent, before it
+  // lands, and nothing is done until the server reads it.
+  await expect(page.locator("#buy-key-button")).toBeEnabled()
+  await expect(page.locator("#buy-key-button-why")).toBeHidden()
   await expect(sentLine(page, first.hash)).toContainText("Sent. Waiting for Base.")
   await expect(sentLine(page, second.hash)).toContainText("Sent. Waiting for Base.")
 

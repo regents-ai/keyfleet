@@ -741,7 +741,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert_push_event(view, "onchain-steps:review", %{
         component_id: "proposals-return-1",
-        review: %{steps: [approve, give_back]}
+        review: %{steps: [approve, give_back]} = review
       })
 
       assert {approve.to, approve.data} ==
@@ -752,6 +752,21 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert pressable?(view, "approve", ["#proposals-return-1-approve"])
       assert has_element?(view, "#proposals-return-1-button-why", "Approve first")
+
+      # A pending approval is never a reason: the return may be pressed as
+      # soon as the approval is sent, before it lands.
+      hash = "0x" <> String.duplicate("4", 64)
+      TestChainNode.land!(hash, review, approve, "0x1")
+
+      view
+      |> with_target("#proposals-return-1")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "approve",
+        "transaction_hash" => hash
+      })
+
+      assert pressable?(view, "return", ["#proposals-return-1-button"])
 
       # More than is still out is certain to fail.
       view |> form("#proposals-return-1-form", amount: "4") |> render_change()

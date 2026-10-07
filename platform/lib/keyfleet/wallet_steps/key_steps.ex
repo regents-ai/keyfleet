@@ -238,9 +238,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   def purchase_seconds, do: @purchase_seconds
 
   # The key on offer at the price the page shows. The wallet approves exactly
-  # that price when its USDC allowance to the fleet is below it; the purchase
-  # names the price as its most, so a key that has since cost more is refused
-  # and no USDC is taken.
+  # that price when its USDC allowance to the fleet is below it, and until it
+  # does the purchase is certain to fail; the purchase names the price as its
+  # most, so a key that has since cost more is refused and no USDC is taken.
   defp buy(%{fleet: fleet, signer: signer}, progress) do
     price = progress.next_price
     figures = %{token_id: progress.next_token_id, price: price, max_supply: progress.max_supply}
@@ -271,7 +271,11 @@ defmodule Keyfleet.WalletSteps.KeySteps do
           Call.encode("purchase(address,uint256,uint256)", [signer, price, deadline])
         )
 
-      {:ok, if(approve?, do: [approve, buy], else: [buy]), Map.put(figures, :approve?, approve?)}
+      {:ok, if(approve?, do: [approve, buy], else: [buy]),
+       Map.merge(figures, %{
+         approve?: approve?,
+         blocked: if(approve?, do: %{"buy" => :approve_usdc_first}, else: %{})
+       })}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
     end

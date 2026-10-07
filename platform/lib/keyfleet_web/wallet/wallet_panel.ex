@@ -55,8 +55,18 @@ defmodule KeyfleetWeb.WalletPanel do
   def figures(%{built: %{figures: figures}}), do: figures
   def figures(_panel), do: %{}
 
-  @doc "Why the chain's own state makes `step` certain to fail now, or nil."
-  def blocked(panel, step), do: panel |> figures() |> Map.get(:blocked, %{}) |> Map.get(step)
+  @doc """
+  Why the chain's own state makes `step` certain to fail now, or nil. A step
+  that waits on an approval is pressable as soon as the approval is sent from
+  this group, before it lands: a pending transaction is never a reason.
+  """
+  def blocked(panel, step) do
+    reason = panel |> figures() |> Map.get(:blocked, %{}) |> Map.get(step)
+
+    if reason in [:approve_first, :approve_usdc_first] and sent?(panel, "approve"),
+      do: nil,
+      else: reason
+  end
 
   attr :panel, :map, required: true, doc: "the panel's state, as its slots are given it"
   attr :step, :string, required: true

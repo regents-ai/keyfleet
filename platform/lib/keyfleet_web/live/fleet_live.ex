@@ -47,6 +47,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
   alias KeyfleetWeb.WalletPanel
+  alias KeyfleetWeb.WalletWords
   alias KeyfleetWeb.WorkspacePage
 
   # A check-in status changes as time passes, so an open fleet page reads its
@@ -898,14 +899,26 @@ defmodule KeyfleetWeb.FleetLive do
           <Regent.Primitives.button
             id="buy-key-button"
             data-onchain-step="buy"
-            hidden={not buy_shown?(panel)}
-            disabled={is_nil(@buy.price)}
-            aria-describedby={is_nil(@buy.price) && "buy-key-sold-out"}
+            disabled={is_nil(@buy.price) or WalletPanel.blocked(panel, "buy") != nil}
+            aria-describedby={
+              cond do
+                is_nil(@buy.price) -> "buy-key-sold-out"
+                WalletPanel.blocked(panel, "buy") -> "buy-key-button-why"
+                true -> nil
+              end
+            }
           >
             <span data-press-label>Buy key {@buy.token_id && grouped(@buy.token_id)}</span>
           </Regent.Primitives.button>
           <span :if={is_nil(@buy.price)} id="buy-key-sold-out" class="wallet-panel-note">
             {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} keys sold
+          </span>
+          <span
+            :if={@buy.price && WalletPanel.blocked(panel, "buy")}
+            id="buy-key-button-why"
+            class="wallet-panel-why"
+          >
+            {WalletWords.blocked(WalletPanel.blocked(panel, "buy"))}
           </span>
         </:buttons>
       </.live_component>
@@ -994,11 +1007,6 @@ defmodule KeyfleetWeb.FleetLive do
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
   defp approve_shown?(_panel), do: false
-
-  # Buy shows when no approval is needed, or once one has been sent, so a
-  # press on it before the approval lands still reaches the wallet.
-  defp buy_shown?(panel),
-    do: not approve_shown?(panel) or WalletPanel.sent?(panel, "approve")
 
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
   def usdc(atoms) do

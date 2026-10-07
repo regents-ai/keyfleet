@@ -275,15 +275,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
-      assert has_element?(view, "#buy-key-button[hidden]")
+      assert has_element?(view, "#buy-key-button[disabled][aria-describedby=buy-key-button-why]")
+      assert text(view, "#buy-key-button-why") == "Approve USDC first"
     end
 
-    # "When the approval is sent, the next button shows at once": Buy is
-    # there to press while the approval is still on its way, and the steps
-    # are built again once it lands.
-    test "Buy shows as soon as the approval is sent, and the approval's outcome is shown", %{
-      conn: conn
-    } do
+    # A pending transaction is never a reason: Buy can be pressed as soon as
+    # the approval is sent, while it is still on its way, and the steps are
+    # built again once it lands.
+    test "Buy can be pressed as soon as the approval is sent, and the approval's outcome is shown",
+         %{
+           conn: conn
+         } do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       chain!(allowance: 0)
@@ -307,6 +309,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         "transaction_hash" => hash
       })
 
+      refute has_element?(view, "#buy-key-button[disabled]")
+      refute has_element?(view, "#buy-key-button-why")
+
       render_async(view)
 
       assert has_element?(
@@ -316,7 +321,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
              )
 
       assert text(view, "#buy-key-order-sent span") == "Approved. Now press the next button."
-      refute has_element?(view, "#buy-key-button[hidden]")
+      refute has_element?(view, "#buy-key-button[disabled]")
 
       # Built again for the allowance now in place: the purchase alone.
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [%{step: "buy"}]}})
@@ -351,7 +356,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-order-sent span") == "Not bought. No USDC was taken."
 
-      refute has_element?(view, "#buy-key-button[hidden]")
+      refute has_element?(view, "#buy-key-button[disabled]")
     end
 
     # Skill rule 3: another wallet open in the wallet app keeps the figures
@@ -391,7 +396,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
       assert has_element?(view, "#buy-key-order-line[hidden]")
-      refute has_element?(view, "#buy-key-button[hidden]")
+      refute has_element?(view, "#buy-key-button[disabled]")
 
       view
       |> with_target("#buy-key-order")
@@ -427,7 +432,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-elsewhere") =~ "You can still get a key from someone"
       assert has_element?(view, "#buy-key-offer[hidden]")
       assert has_element?(view, "#buy-key-approve[hidden]")
-      refute has_element?(view, "#buy-key-button[hidden]")
+      assert has_element?(view, "#buy-key-button")
 
       assert has_element?(
                view,
