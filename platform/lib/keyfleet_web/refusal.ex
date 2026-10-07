@@ -76,6 +76,15 @@ defmodule KeyfleetWeb.Refusal do
     "key_unknown" =>
       {"This fleet hasn't issued this key, or its sale hasn't been seen yet.",
        "A key sold moments ago is known shortly. Try again then."},
+    "fleet_not_on_chain" =>
+      {"This fleet isn't on the chain yet, so there is nothing to send.",
+       "Try again once its keys are on sale. GET /api/v1/fleets/FLEET_ID shows the fleet."},
+    "chain_unavailable" =>
+      {"The chain can't be read right now, so the transaction can't be built.",
+       "Nothing was sent. Send the same request again in a minute."},
+    "invalid_proposal" =>
+      {"This proposal can't be built as written.",
+       "error.details.problem says what to fix. Correct it, then send the request again."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",
        "A sync lists the fleet's proposals and their numbers."},

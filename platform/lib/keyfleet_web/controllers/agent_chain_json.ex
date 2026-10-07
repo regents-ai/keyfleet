@@ -1,0 +1,87 @@
+defmodule KeyfleetWeb.AgentChainJSON do
+  @moduledoc """
+  What `KeyfleetWeb.AgentChainController` answers: the chain the fleet is on,
+  a line saying what the transactions do (null when there is nothing to
+  say), the transactions in the order to send them, and the figures they were
+  built from. Amounts and wei are decimal strings; times are ISO 8601 in UTC.
+  """
+
+  alias KeyfleetWeb.WalletWords
+
+  @doc "The answer for `flow`, built as `Keyfleet.WalletSteps.Build` describes."
+  def answer(flow, fleet, %{review: review, figures: figures} = built) do
+    %{
+      chain_id: fleet.chain_id,
+      says: WalletWords.line(flow, built, review.inputs),
+      transactions: Enum.map(review.steps, &transaction(&1, figures.blocked))
+    }
+    |> Map.merge(figures(flow, figures))
+  end
+
+  defp transaction(step, blocked) do
+    %{
+      name: step.step,
+      title: WalletWords.title(%{name: step.step}),
+      to: step.to,
+      data: step.data,
+      value:
+        step.value |> String.trim_leading("0x") |> String.to_integer(16) |> Integer.to_string(),
+      blocked: blocked |> Map.get(step.step) |> why()
+    }
+  end
+
+  defp why(nil), do: nil
+  defp why(reason), do: WalletWords.blocked(reason)
+
+  defp figures(:present, %{keys: keys, maintenance?: maintenance?}) do
+    %{
+      keys: Enum.map(keys, &%{token_id: &1.token_id, present_until: &1.until}),
+      maintenance_needed: maintenance?
+    }
+  end
+
+  defp figures(:propose, figures) do
+    Map.take(figures, [:kind, :key, :hours, :closes_at, :content_hash])
+  end
+
+  defp figures(:ballot, %{keys: keys, status: status}), do: %{keys: keys, status: status}
+  defp figures(flow, %{status: status}) when flow in [:cancel, :carry_out], do: %{status: status}
+
+  defp figures(:run_split, figures) do
+    %{
+      rate_bps: figures.rate_bps,
+      keys_sold: figures.keys,
+      last_run_at: figures.last_run_at,
+      opens_at: figures.opens_at,
+      assets:
+        Enum.map(
+          figures.assets,
+          &%{
+            asset: &1.asset,
+            symbol: &1.symbol,
+            decimals: &1.decimals,
+            balance: Integer.to_string(&1.balance),
+            least_to_split: Integer.to_string(&1.threshold),
+            per_key: Integer.to_string(&1.per_key)
+          }
+        )
+    }
+  end
+
+  defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}) do
+    %{
+      token_id: token_id,
+      paid_to: holder,
+      waiting:
+        Enum.map(
+          waiting,
+          &%{
+            asset: &1.asset,
+            symbol: &1.symbol,
+            decimals: &1.decimals,
+            amount: Integer.to_string(&1.amount)
+          }
+        )
+    }
+  end
+end

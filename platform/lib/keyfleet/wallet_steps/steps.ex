@@ -3,9 +3,10 @@ defmodule Keyfleet.WalletSteps.Steps do
   One group of wallet buttons' steps, built for a signer as
   `Keyfleet.WalletSteps.Build` describes.
 
-  Only a signed-in person may build steps, and only for a wallet their
-  account links: the signer is checked against the actor's own wallets, never
-  taken from the page on trust.
+  Only a signed-in person or agent may build steps, and only for their own
+  wallet: one the person's account links, or the agent's own. The signer is
+  checked against the actor's own wallets, never taken from the request on
+  trust.
   """
   use Ash.Resource,
     domain: Keyfleet.WalletSteps,

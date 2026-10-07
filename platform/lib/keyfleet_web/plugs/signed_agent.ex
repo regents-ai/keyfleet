@@ -28,6 +28,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
+  # What an agent's own wallet sends to the fleet's contracts.
+  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
@@ -43,6 +45,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
+  # A proposal holds its text, up to 4,000 bytes, and a launch's fields
+  # beside it, escaped the same way.
+  @propose_max_body 4_000 * 12 + 8 * 1024
+  # What a proposal's body may name: what every proposal has, then the
+  # fields of its kind, each a string as the proposals page's form sends it.
+  @propose_required ~w(kind key hours text)
+  @propose_fields @propose_required ++
+                    ~w(asset amount recipient rate target restricted signature hash name symbol description website image)
+  @choices ~w(yes no abstain)
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
   # workspace and the proposals were read.
@@ -270,6 +281,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @sync_path,
         @proposal_read_path,
+        @chain_path,
         @graph_path
       ],
       &Regex.match?(&1, path)
@@ -284,6 +296,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
+      chain_op(path) == "proposals/create" -> @propose_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
     end
@@ -306,6 +319,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Regex.match?(@mute_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
+      op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
       true -> check_room_body(path, params)
     end
@@ -332,6 +346,37 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         :invalid
     end
   end
+
+  defp chain_op(path) do
+    case Regex.run(@chain_path, path, capture: :all_but_first) do
+      [op] -> op
+      nil -> nil
+    end
+  end
+
+  # Presence, the split and a claim say nothing more than their path. A
+  # proposal names its fields as strings; a vote, a cancellation and carrying
+  # out name the proposal, and a vote its choice.
+  defp check_chain_body(op, params) when op in ["presence", "split"], do: admit(params == %{})
+
+  defp check_chain_body("proposals/create", params) when is_map(params) do
+    admit(
+      Enum.all?(@propose_required, &Map.has_key?(params, &1)) and
+        Enum.all?(params, fn {key, value} -> key in @propose_fields and is_binary(value) end)
+    )
+  end
+
+  defp check_chain_body("proposals/vote", %{"number" => number, "choice" => choice} = params)
+       when map_size(params) == 2 and is_integer(number) and choice in @choices,
+       do: in_range(number in 1..@max_seq)
+
+  defp check_chain_body(op, %{"number" => number} = params)
+       when op in ["proposals/cancel", "proposals/carry_out"] and map_size(params) == 1 and
+              is_integer(number),
+       do: in_range(number in 1..@max_seq)
+
+  defp check_chain_body("keys/" <> _claim, params), do: admit(params == %{})
+  defp check_chain_body(_op, _params), do: :invalid
 
   defp graph_op(path) do
     case Regex.run(@graph_path, path, capture: :all_but_first) do

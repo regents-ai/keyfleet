@@ -40,6 +40,17 @@ defmodule Keyfleet.ChainViews do
     )
   end
 
+  @doc """
+  Lets every process read this test's chain, such as a web server the test
+  started, until the test ends: the views the latest `put!/2` describes, and
+  a chain that can't be read before the first.
+  """
+  def share! do
+    test = self()
+    StubClient.share_chain(@head, calls: fn to, data, _block_hash -> answer(test, to, data) end)
+    ExUnit.Callbacks.on_exit(&StubClient.unshare_chain/0)
+  end
+
   # The chain goes with its test: a read still running once the test has
   # ended finds no node.
   defp answer(test, to, data) do
@@ -48,6 +59,8 @@ defmodule Keyfleet.ChainViews do
       nil -> {:error, :unreachable}
     end
   end
+
+  defp lookup(nil, _to, _data), do: {:error, :unreachable}
 
   defp lookup(answers, to, data) do
     case Map.fetch(answers, {to, data}) do

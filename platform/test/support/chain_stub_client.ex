@@ -40,6 +40,9 @@ defmodule Keyfleet.Chain.StubClient do
   """
   def share_chain(head, opts), do: :persistent_term.put(__MODULE__, new_chain(head, [], opts))
 
+  @doc "Takes back the chain `share_chain/2` put."
+  def unshare_chain, do: :persistent_term.erase(__MODULE__)
+
   defp new_chain(head, logs, opts) do
     %{
       head: head,
