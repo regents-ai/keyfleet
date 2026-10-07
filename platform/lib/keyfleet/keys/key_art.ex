@@ -12,8 +12,13 @@ defmodule Keyfleet.Keys.KeyArt do
   the picture job retries.
   """
 
+  @origin "https://media.regents.sh"
+
+  @doc "Where every card picture is shown from."
+  def origin, do: @origin
+
   @doc "The address a card kept on IPFS at `cid` is shown at."
-  def link(cid), do: "https://media.regents.sh/ipfs/#{cid}"
+  def link(cid), do: "#{@origin}/ipfs/#{cid}"
 
   @doc """
   Has the service draw the card of the key with `seed` from the trait table

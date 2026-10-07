@@ -47,8 +47,8 @@ const failures: Record<Failure, {message: string; hint: string}> = {
     hint: "Sign in, open a wallet on your account in the wallet app, then call again.",
   },
   network_mismatch: {
-    message: "The wallet is on a different network. Nothing was sent.",
-    hint: "Switch the wallet to the network the page names, then call again.",
+    message: "The wallet didn't switch to the page's network. Nothing was sent.",
+    hint: "Switch the wallet to the network the page names, adding it if the wallet doesn't list it, then call again.",
   },
   wallet_declined: {
     message: "The wallet declined this. Nothing was sent.",

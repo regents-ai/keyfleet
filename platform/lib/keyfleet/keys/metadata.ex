@@ -33,7 +33,7 @@ defmodule Keyfleet.Keys.Metadata do
     %{
       name: "Keyfleet",
       description: "Every Keyfleet Key. A Key is a seat in its fleet.",
-      image: KeyArt.link(@interim_pass_cid),
+      image: picture(nil),
       external_link: site
     }
   end
@@ -60,6 +60,20 @@ defmodule Keyfleet.Keys.Metadata do
     end
   end
 
+  @doc """
+  The picture the metadata of Key `token_id` of the fleet names, and the one
+  it will name for a Key not sold yet: the pass until its card is kept on IPFS.
+  """
+  def image(fleet_id, token_id) do
+    case Keys.get_reveal!(fleet_id, token_id) do
+      nil -> picture(nil)
+      reveal -> reveal.id |> Keys.get_picture!() |> picture()
+    end
+  end
+
+  defp picture(nil), do: KeyArt.link(@interim_pass_cid)
+  defp picture(%{cid: cid}), do: KeyArt.link(cid)
+
   defp fleet_of(token_id),
     do: Enum.find(Fleets.list_deployed_fleets!(), &match?({:ok, _number}, Fleet.key_number(&1, token_id)))
 
@@ -68,16 +82,16 @@ defmodule Keyfleet.Keys.Metadata do
       name: name(key),
       description:
         "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
-      image: KeyArt.link(@interim_pass_cid),
+      image: picture(nil),
       attributes: level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
     }
   end
 
   defp revealed(key, reveal, nil),
-    do: {:drawing, with_traits(key, reveal, KeyArt.link(@interim_pass_cid), %{})}
+    do: {:drawing, with_traits(key, reveal, picture(nil), %{})}
 
-  defp revealed(key, reveal, %{cid: cid}),
-    do: {:revealed, with_traits(key, reveal, KeyArt.link(cid), %{card: "ipfs://#{cid}"})}
+  defp revealed(key, reveal, %{cid: cid} = kept),
+    do: {:revealed, with_traits(key, reveal, picture(kept), %{card: "ipfs://#{cid}"})}
 
   defp with_traits(%{fleet: fleet, token_id: token_id} = key, reveal, image, card) do
     hash = fleet.trait_table_hash

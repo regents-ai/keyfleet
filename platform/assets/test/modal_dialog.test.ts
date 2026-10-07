@@ -7,7 +7,7 @@ import {ModalDialog, openerOf, stepTab, watchPresses} from "../js/hooks/modal_di
 type Listener = (event?: unknown) => void
 
 function control(id: string) {
-  return {id, focus: vi.fn(), click: vi.fn()}
+  return {id, focus: vi.fn()}
 }
 
 function mountDialog(dataset: Record<string, string>, page: Record<string, ReturnType<typeof control>> = {}) {
@@ -16,7 +16,6 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
   const dialog = {
     open: false,
     modal: false,
-    returnValue: "",
     dataset,
     scrollTop: 40,
     showModal: vi.fn(() => {
@@ -46,9 +45,8 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
   const hook = {el: dialog, pushEvent}
   ModalDialog.mounted!.call(hook)
 
-  const closeBy = (returnValue = "") => {
+  const closeBy = () => {
     dialog.open = false
-    dialog.returnValue = returnValue
     listeners.get("close")?.()
   }
   const fire = (name: string, event?: unknown) => listeners.get(name)?.(event)
@@ -89,19 +87,6 @@ it("asks the page to close it in place when the visitor arrived on it", () => {
 
   expect(pushEvent).toHaveBeenCalledWith("close_key", {})
   expect(back).not.toHaveBeenCalled()
-})
-
-it("presses the control a closing button names, and leaves focus there", () => {
-  const buy = control("buy-key-button")
-  const opener = control("fleet-key-link-21")
-  const {closeBy, hook} = mountDialog({close: "back", closeEvent: "close_key"}, {active: opener, buy})
-
-  closeBy("buy-key-button")
-  ModalDialog.destroyed!.call(hook)
-
-  expect(buy.click).toHaveBeenCalledOnce()
-  expect(buy.focus).toHaveBeenCalled()
-  expect(opener.focus).not.toHaveBeenCalled()
 })
 
 it("hands focus back to whatever opened it once it has gone", () => {

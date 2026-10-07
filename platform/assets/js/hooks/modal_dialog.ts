@@ -51,9 +51,8 @@ export function stepTab(event: KeyboardEvent, controls: HTMLElement[], active: E
 // A <dialog> the page opens as a modal for as long as it is in the page. It
 // opens with focus on its title, and on its title again when it comes to show
 // something else. Closing it asks the page to take it away: by going back when
-// `data-close` is "back", or else by sending `data-close-event`. A button that
-// closes it may name, as its value, a control on the page to press next. Once
-// it has gone, focus returns to whatever opened it. Signing in from inside it
+// `data-close` is "back", or else by sending `data-close-event`. Once it has
+// gone, focus returns to whatever opened it. Signing in from inside it
 // lets the sign-in window above it be used, and a press back inside makes it
 // modal again.
 export const ModalDialog: Hook = {
@@ -65,12 +64,6 @@ export const ModalDialog: Hook = {
     dialog.addEventListener("close", () => {
       // Closed only to be shown again, modal or not.
       if (dialog.open) return
-      const next = dialog.returnValue && document.getElementById(dialog.returnValue)
-      if (next) {
-        this.opener = next.id
-        next.focus()
-        next.click()
-      }
       if (dialog.dataset.close === "back") history.back()
       else if (dialog.dataset.closeEvent) this.pushEvent(dialog.dataset.closeEvent, {})
     })

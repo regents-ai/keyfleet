@@ -197,75 +197,12 @@
   white-space: nowrap;
 }
 
-/* The card: graphite in both themes, like the object it stands for. */
+/* The Key's picture, the same one its metadata names. */
 .key-profile-card {
+  display: block;
   width: min(100%, 26rem);
-  aspect-ratio: 63 / 88;
-  background: var(--rg-holo-graphite);
-  clip-path: var(--rg-holo-clip);
-}
-
-.key-profile-card .rg-holo__content {
-  height: 100%;
-}
-
-.key-profile-card__face {
-  display: grid;
-  grid-template: auto 1fr auto auto / 1fr auto;
-  height: 100%;
-  gap: 0.35rem;
-}
-
-.key-profile-card__face p {
-  margin: 0;
-}
-
-.key-profile-card__fleet {
-  font-variant: small-caps;
-  letter-spacing: 0.04em;
-}
-
-.key-profile-card__level {
-  font-family: var(--font-family-mono);
-}
-
-.key-profile-card__mark {
-  position: relative;
-  display: grid;
-  grid-column: 1 / -1;
-  place-items: center;
-  align-self: center;
-  width: 78%;
-  justify-self: center;
-}
-
-.key-profile-card__mark svg {
-  width: 100%;
-  fill: none;
-  stroke: var(--rg-holo-ink);
-  stroke-width: 1;
-}
-
-.key-profile-card__mark span {
-  position: absolute;
-  inset: 42% 0 auto;
-  text-align: center;
-  font-family: var(--font-family-mono);
-  font-size: clamp(1.25rem, 4vw, 2.25rem);
-}
-
-.key-profile-card__name,
-.key-profile-card__trait {
-  grid-column: 1 / -1;
-}
-
-.key-profile-card__name {
-  font-size: 1.15rem;
-  font-weight: 600;
-}
-
-.key-profile-card__trait {
-  color: color-mix(in srgb, var(--rg-holo-ink) 75%, transparent);
+  aspect-ratio: 5 / 7;
+  object-fit: contain;
 }
 
 /* Tablets and phones: one column, the title and Close first and kept at the

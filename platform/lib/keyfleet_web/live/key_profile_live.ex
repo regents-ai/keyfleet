@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
   visitor arrived with the key already in it. The next key on sale shows its
-  number, level and price, and a way to buy it.
+  number, level and price, with Approve and Buy.
   """
 
   use KeyfleetWeb, :html
@@ -24,6 +24,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
@@ -56,7 +57,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       aria-labelledby="key-profile-title"
     >
       <div class="key-profile__card">
-        <.card profile={@profile} fleet_name={@fleet.name} />
+        <.card profile={@profile} />
         <.traits :if={@profile.issued?} profile={@profile} />
       </div>
 
@@ -72,7 +73,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </form>
         </header>
 
-        <.next_key :if={not @profile.issued?} profile={@profile} />
+        <.next_key :if={not @profile.issued?} profile={@profile} fleet={@fleet} actor={@actor} />
 
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
@@ -93,33 +94,17 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :profile, :map, required: true
-  attr :fleet_name, :string, required: true
 
-  # The key's face over the Regents foil: its fleet, its level, its number in a
-  # triangle, and whether it is still revealing or the rarest trait it drew.
-  # The card keeps its id from key to key, so only the face changes and the
-  # foil beneath it goes on drawing.
+  # The picture the Key's metadata names, as a wallet or marketplace shows it:
+  # the Interim Keyfleet Access Pass until the Key's own card is drawn.
   defp card(assigns) do
     ~H"""
-    <Regent.HolographicCard.card
+    <img
       id="key-profile-card"
       class="key-profile-card"
-      phx-hook="HolographicCard"
-      data-holo-crown="false"
-    >
-      <div class="key-profile-card__face">
-        <p class="key-profile-card__fleet">{@fleet_name}</p>
-        <p :if={@profile.level} class="key-profile-card__level">L{@profile.level}</p>
-        <div class="key-profile-card__mark" aria-hidden="true">
-          <svg viewBox="0 0 100 88" focusable="false">
-            <polygon points="50,3 97,85 3,85" />
-          </svg>
-          <span>{Rules.grouped(@profile.token_id)}</span>
-        </div>
-        <p class="key-profile-card__name">Key {Rules.grouped(@profile.token_id)}</p>
-        <p class="key-profile-card__trait">{face_note(@profile)}</p>
-      </div>
-    </Regent.HolographicCard.card>
+      src={@profile.image}
+      alt={"The card of Key #{Rules.grouped(@profile.token_id)}"}
+    />
     """
   end
 
@@ -141,9 +126,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :profile, :map, required: true
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
 
-  # Buy closes the profile and takes the reader to "Buying a key", where the
-  # fleet's own Approve and Buy buttons send the purchase from the wallet.
+  # The Key on sale, bought right here with the fleet's own Approve and Buy.
   defp next_key(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-next-title">
@@ -158,11 +144,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd>{FleetLive.usdc(@profile.issue_price)}</dd>
         </div>
       </dl>
-      <form method="dialog">
-        <Regent.Primitives.button id="key-profile-buy" type="submit" value="fleet-get-key">
-          Buy Key {Rules.grouped(@profile.token_id)}
-        </Regent.Primitives.button>
-      </form>
+      <FleetRisks.disclosure id="key-profile-buy-risks" />
+      <FleetLive.buy_order id="key-profile-buy" fleet={@fleet} buy={@fleet.buy} actor={@actor} />
     </section>
     """
   end
@@ -598,10 +581,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
     />
     """
   end
-
-  defp face_note(%{issued?: false}), do: "On sale now"
-  defp face_note(%{traits: nil}), do: "Revealing"
-  defp face_note(%{traits: traits}), do: Enum.min_by(traits, & &1.share).value
 
   defp held_by(%{yours?: true}), do: "You"
   defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)

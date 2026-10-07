@@ -137,7 +137,7 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   def failure_note("network_mismatch", _linked, _active, chain_name),
     do:
-      "Your wallet is on a different network. Switch it to #{chain_name}, then press again. Nothing was sent."
+      "Your wallet didn't switch to #{chain_name}. Switch it there, adding #{chain_name} if your wallet doesn't list it, then press again. Nothing was sent."
 
   def failure_note("wallet_declined", _linked, _active, _chain_name),
     do: "Your wallet declined this. Nothing was sent."

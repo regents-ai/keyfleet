@@ -49,13 +49,14 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
            ]
   end
 
-  test "the reading policy names no other site, and sign-in adds only Privy's sources" do
+  test "the reading policy names no other site, and sign-in adds Privy's sources and Key cards" do
     refute ContentSecurityPolicy.reading() =~ "://"
     refute ContentSecurityPolicy.reading() =~ "'unsafe-eval'"
 
     sign_in = directives(ContentSecurityPolicy.sign_in())
     assert "https://auth.privy.io" in sign_in["connect-src"]
     assert "https://auth.privy.io" in sign_in["frame-src"]
+    assert "https://media.regents.sh" in sign_in["img-src"]
     assert sign_in["frame-ancestors"] == ["'none'"]
     refute ContentSecurityPolicy.sign_in() =~ "'unsafe-eval'"
   end

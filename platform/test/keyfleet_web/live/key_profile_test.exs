@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     assert has_element?(
              view,
-             "#key-profile-card[phx-hook='HolographicCard'][data-holo-crown='false'] svg polygon"
+             "img#key-profile-card[src='https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy']"
            )
 
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
@@ -219,7 +219,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
 
     {:ok, view, _html} = live(conn, @path <> "?key=21")
-    assert has_element?(view, "#key-profile-buy[value='fleet-get-key']", "Buy Key 21")
+    assert has_element?(view, "#key-profile-buy-order #key-profile-buy-button", "Buy Key 21")
     refute has_element?(view, "#key-profile-composer")
   end
 

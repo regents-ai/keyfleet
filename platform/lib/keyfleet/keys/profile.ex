@@ -20,6 +20,7 @@ defmodule Keyfleet.Keys.Profile do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.KeyAttachment
+  alias Keyfleet.Keys.Metadata
   alias Keyfleet.Proposals.Vote
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Message
@@ -116,6 +117,7 @@ defmodule Keyfleet.Keys.Profile do
       fleet_id: fleet_id,
       token_id: token_id,
       issued?: false,
+      image: Metadata.image(fleet_id, token_id),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id)
     }
@@ -135,6 +137,7 @@ defmodule Keyfleet.Keys.Profile do
       fleet_id: fleet_id,
       token_id: token_id,
       issued?: true,
+      image: Metadata.image(fleet_id, token_id),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id),
       traits: traits(fleet_id, token_id),
