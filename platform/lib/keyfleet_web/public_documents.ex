@@ -36,7 +36,7 @@ defmodule KeyfleetWeb.PublicDocuments do
        "What Keyfleet is and does, how it differs, who uses it, the team, key facts, common questions and who runs it."},
     "/contact" =>
       {"Contact",
-       "How to reach Keyfleet about privacy requests, legal questions and security reports."},
+       "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
     "/opportunities" =>
       {"What a fleet can take on",
        "Five things a Keyfleet fleet can take on, what each costs and who benefits."},
