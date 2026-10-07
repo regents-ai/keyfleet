@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
 
   test "HTTP pages and machine inventory are loopback-only, without trusting forwarding headers" do
     for path <-
-          ~w(/showcase /showcase/catalog /showcase/style.css /showcase/preview /showcase/privy /showcase/key-map) do
+          ~w(/showcase /showcase/catalog /showcase/style.css /showcase/preview /showcase/privy /showcase/key-map /showcase/decks) do
       for {host, peer} <- [{"example.com", {127, 0, 0, 1}}, {"localhost", {192, 0, 2, 1}}] do
         conn =
           build_conn()

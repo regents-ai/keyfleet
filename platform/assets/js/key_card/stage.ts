@@ -77,19 +77,36 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
 }
 
 /**
- * Draws a key's card once into an off-screen picture `size` pixels across and answers its pixels,
- * four bytes (red, green, blue, alpha) each, row by row from the top; or nothing when the
- * browser has no WebGPU.
+ * Draws key cards, one after another, into an off-screen picture `size` pixels across, keeping one
+ * GPU for them all; or nothing when the browser has no WebGPU. Each draw answers the card's pixels,
+ * four bytes (red, green, blue, alpha) each, row by row from the top.
  */
-export async function drawStill(job: CardJob, size: readonly [number, number]): Promise<Uint8Array | null> {
+export async function startStills(size: readonly [number, number]): Promise<((job: CardJob) => Promise<Uint8Array>) | null> {
   const gpu = await start()
   if (!gpu) return null
   const out = target(gpu, {size, format: "rgba8unorm"})
-  const fx = effect(gpu, CARD_WGSL, {
-    label: "key-card",
-    set: {u: {res: out.size, zoom: STAGE_ZOOM, ...job.uniforms}, ...uploadCard(gpu, job.paint), samp: linear(gpu)},
-  })
-  await fx.compile({colors: [out.format]})
-  frame(gpu, f => f.pass(out, fx))
-  return out.color.read({mipLevel: 0, region: "all"})
+  const samp = linear(gpu)
+  let fx: Effect | null = null
+
+  return async job => {
+    const textures = uploadCard(gpu, job.paint)
+    const params = {u: {res: out.size, zoom: STAGE_ZOOM, ...job.uniforms}, ...textures}
+    if (fx) {
+      fx.set(params)
+    } else {
+      const made = effect(gpu, CARD_WGSL, {label: "key-card", set: {...params, samp}})
+      await made.compile({colors: [out.format]})
+      fx = made
+    }
+    frame(gpu, f => f.pass(out, fx!))
+    const pixels = await out.color.read({mipLevel: 0, region: "all"})
+    Object.values(textures).forEach(t => t.destroy())
+    return pixels
+  }
+}
+
+/** Draws one key's card into an off-screen picture `size` pixels across, as `startStills` does. */
+export async function drawStill(job: CardJob, size: readonly [number, number]): Promise<Uint8Array | null> {
+  const draw = await startStills(size)
+  return draw && draw(job)
 }
