@@ -42,25 +42,69 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @salt "notebook session"
   @enter "/_keyfleet/enter"
 
-  # What a hub would hand out credentials with, or take them on: personal
-  # tokens, the command line's and apps' sign-in, the MCP connection and its
-  # OAuth, and a notebook's push-sync token. Compared with the decoded,
-  # lowercased path, so no spelling of one reaches the hub.
-  @token_prefixes ~w(
-    /api/v1/me/tokens /api/v1/me/oauth-authorizations /api/v1/me/cli-authorizations
-    /api/v1/me/cli-device-authorizations /api/cli/ /api/sync/ /authorize /token /register
-    /revoke /mcp /.well-known/oauth-
-  )
-  @sync_token ~r"\A/api/v1/projects/[^/]+/notebooks/[^/]+/sync-token"
-
-  # Never passed on: the connection's own, who the client says it is, and
-  # this site's sign-in proof.
+  # Only browser notebook content and the WebSocket handshake reach the hub.
+  # Cookies and all caller identity headers are replaced by our signed pass.
+  @kept_request ~w(accept accept-encoding accept-language content-type content-encoding
+    if-none-match if-modified-since range user-agent sec-websocket-protocol)
   @hop_by_hop ~w(connection keep-alive proxy-connection proxy-authenticate proxy-authorization te
     trailer transfer-encoding upgrade)
-  @dropped_request ~w(host content-length cookie authorization x-keyfleet-assertion forwarded
-    x-real-ip) ++ @hop_by_hop
   @handshake ~w(sec-websocket-key sec-websocket-version sec-websocket-extensions)
 
+  # Notebook UI operations in marimohub f103eb2. Newly added routes stay closed
+  # until reviewed here; credentials, admin, OAuth, MCP and sync routes are absent.
+  @api_routes [
+    "GET /api/v1/me",
+    "GET /api/v1/version",
+    "GET /api/v1/capabilities",
+    "GET /api/v1/theme",
+    "GET /api/v1/projects",
+    "GET /api/v1/projects/:pid",
+    "GET /api/v1/events",
+    "GET /api/v1/projects/:pid/events",
+    "GET /api/v1/projects/:pid/thumbnails",
+    "GET /api/v1/apps",
+    "GET /api/v1/projects/:pid/notebooks/:nid/app",
+    "GET /api/v1/projects/:pid/sessions",
+    "GET /api/v1/projects/:pid/notebooks/:nid/deep-links",
+    "POST /api/v1/projects/:pid/notebooks/:nid/deep-links",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/deep-links/:slug",
+    "GET /api/v1/projects/:pid/notebooks",
+    "POST /api/v1/projects/:pid/notebooks",
+    "POST /api/v1/projects/:pid/notebooks/git",
+    "PATCH /api/v1/projects/:pid/notebooks/:nid/source",
+    "GET /api/v1/projects/:pid/notebooks/:nid/source/drift",
+    "POST /api/v1/projects/:pid/notebooks/:nid/source/sync",
+    "GET /api/v1/projects/:pid/notebooks/:nid",
+    "GET /api/v1/projects/:pid/notebooks/:nid/content",
+    "PATCH /api/v1/projects/:pid/notebooks/:nid",
+    "PUT /api/v1/projects/:pid/notebooks/:nid/security-labels",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/security-labels",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid",
+    "GET /api/v1/projects/:pid/notebooks/:nid/versions",
+    "GET /api/v1/projects/:pid/notebooks/:nid/versions/:vid",
+    "GET /api/v1/projects/:pid/notebooks/:nid/html",
+    "GET /api/v1/projects/:pid/notebooks/:nid/versions/:vid/html",
+    "POST /api/v1/projects/:pid/notebooks/:nid/versions/:vid/restore",
+    "POST /api/v1/projects/:pid/notebooks/:nid/duplicate",
+    "GET /api/v1/projects/:pid/notebooks/:nid/workspace/access",
+    "GET /api/v1/projects/:pid/notebooks/:nid/workspace/entries",
+    "GET /api/v1/projects/:pid/notebooks/:nid/workspace/search",
+    "POST /api/v1/projects/:pid/notebooks/:nid/workspace/directories",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/workspace/entries",
+    "GET /api/v1/projects/:pid/notebooks/:nid/workspace/files",
+    "PUT /api/v1/projects/:pid/notebooks/:nid/workspace/files",
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/sessions/:sid",
+    "GET /api/v1/projects/:pid/notebooks/:nid/sessions/:sid",
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/heartbeat",
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/leave",
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/surfaces/:surface",
+    "GET /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/surfaces/:surface",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/surfaces/:surface",
+    "GET /api/v1/projects/:pid/notebooks/:nid/editor-session",
+    "POST /api/v1/projects/:pid/notebooks/:nid/editor-session/takeover",
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/change-requests"
+  ]
   @impl Plug
   def init(opts), do: opts
 
@@ -70,15 +114,26 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp serve(conn) do
+    if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?() do
+      serve_open(conn)
+    else
+      conn
+      |> put_resp_header("cache-control", "no-store")
+      |> put_resp_header("retry-after", "3600")
+      |> Refusal.json(503, "not_open_yet")
+    end
+  end
+
+  defp serve_open(conn) do
     with {:fleet, {:ok, fleet_id}} <- {:fleet, Notebooks.fleet_for_host(conn.host)},
-         {:path, :ok} <- {:path, check_path(conn.request_path)} do
+         {:path, :ok} <- {:path, check_path(conn.method, conn.request_path)} do
       conn
       |> put_resp_header("cache-control", "no-store")
       |> route(fleet_id)
     else
       {:fleet, :error} -> Refusal.json(conn, 404, "notebooks_not_found")
       {:path, :invalid} -> Refusal.json(conn, 400, "invalid_request")
-      {:path, :token_route} -> Refusal.json(conn, 403, "notebooks_tokens_refused")
+      {:path, :route_refused} -> Refusal.json(conn, 403, "notebooks_tokens_refused")
     end
   end
 
@@ -249,19 +304,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp upstream_headers(conn, fleet_id, subject) do
-    kept =
-      Enum.reject(conn.req_headers, fn {name, _value} ->
-        name in @dropped_request or name in SignedAgent.proof_headers() or
-          String.starts_with?(name, "x-forwarded-")
-      end)
-
-    cookie =
-      fetch_cookies(conn).req_cookies
-      |> Map.delete(@cookie)
-      |> Enum.map_join("; ", fn {name, value} -> name <> "=" <> value end)
-
-    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)}] ++
-      if(cookie == "", do: [], else: [{"cookie", cookie}]) ++ kept
+    kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in @kept_request end)
+    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
   end
 
   defp forward_http(conn, address, headers) do
@@ -370,14 +414,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A hub reads a path the way a browser does: `.` and `..` segments, in any
   # spelling, move up, and a backslash is a slash. None of those reach a hub,
   # so the path compared below is the one the hub routes.
-  defp check_path(path) do
+  defp check_path(method, path) do
     case decode(path) do
       {:ok, decoded} ->
         cond do
           String.contains?(decoded, "\\") -> :invalid
           Enum.any?(String.split(decoded, "/"), &(&1 in [".", ".."])) -> :invalid
-          token_route?(String.replace(decoded, ~r"/{2,}", "/")) -> :token_route
-          true -> :ok
+          allowed_route?(method, decoded) -> :ok
+          true -> :route_refused
         end
 
       :error ->
@@ -386,11 +430,40 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp decode(path) do
-    {:ok, path |> URI.decode() |> String.downcase()}
+    decoded = URI.decode(path)
+    # A second decoding must not turn a permitted path into another route.
+    if String.contains?(decoded, ["%", "\0"]), do: :error, else: {:ok, decoded}
   rescue
     ArgumentError -> :error
   end
 
-  defp token_route?(path),
-    do: String.starts_with?(path, @token_prefixes) or Regex.match?(@sync_token, path)
+  defp allowed_route?("HEAD", path), do: allowed_route?("GET", path)
+
+  defp allowed_route?("GET", @enter), do: true
+  defp allowed_route?("GET", "/"), do: true
+  defp allowed_route?("GET", "/api/health"), do: true
+  defp allowed_route?("GET", "/favicon.ico"), do: true
+  defp allowed_route?("GET", "/manifest.webmanifest"), do: true
+  defp allowed_route?("GET", "/assets/" <> _file), do: true
+  defp allowed_route?("GET", "/projects/" <> _page), do: true
+  defp allowed_route?("GET", "/proxy/" <> path), do: path != ""
+  defp allowed_route?("POST", "/proxy/" <> path), do: path != ""
+  defp allowed_route?("GET", "/surface-proxy/" <> path), do: path != ""
+  defp allowed_route?("POST", "/surface-proxy/" <> path), do: path != ""
+
+  defp allowed_route?(method, path) do
+    parts = String.split(path, "/", trim: false)
+
+    Enum.any?(@api_routes, fn route ->
+      [verb, pattern] = String.split(route, " ", parts: 2)
+      expected = String.split(pattern, "/", trim: false)
+
+      method == verb and length(parts) == length(expected) and
+        Enum.zip(parts, expected)
+        |> Enum.all?(&matching_segment?/1)
+    end)
+  end
+
+  defp matching_segment?({actual, ":" <> _name}), do: actual != ""
+  defp matching_segment?({actual, wanted}), do: actual == wanted
 end
