@@ -19,6 +19,7 @@ defmodule Keyfleet.Treasury do
   # The fleet's USDC, which its contract refuses to be deployed with unless
   # it has six decimals.
   @usdc_decimals 6
+  @regent_decimals 18
   # What the history shows: money into the treasury, out of it, and shared
   # with the keys by the daily split.
   @history_kinds [:forwarded, :protocol_share_sent, :paid, :advanced, :split_allocated]
@@ -56,31 +57,46 @@ defmodule Keyfleet.Treasury do
     do: events_recorded_in_blocks!(fleet_id, from, to, actor: %System{})
 
   @doc """
-  What an amount of the fleet's assets is shown with: `%{usdc: address,
-  details: %{asset => {symbol, decimals}}}`, the fleet's USDC and each
-  asset's symbol and decimals: ETH's own, USDC's, and every other token's as
-  it reported them, either nil when the token has not said.
+  The assets the fleet's deployment names, and so knows by address: ETH, its
+  USDC and REGENT, with their symbols and decimals.
+  """
+  def known_assets(fleet),
+    do: %{
+      @native => {"ETH", 18},
+      fleet.usdc_address => {"USDC", @usdc_decimals},
+      fleet.regent_address => {"REGENT", @regent_decimals}
+    }
+
+  @doc """
+  What an amount of the fleet's assets is shown with: `%{known: addresses,
+  details: %{asset => {symbol, decimals}}}`, the assets the deployment names
+  (`known_assets/1`) and each asset's symbol and decimals: those of the known
+  ones, and every other token's as it reported them, either nil when the
+  token has not said.
   """
   def assets(fleet) do
+    known = known_assets(fleet)
+
     details =
       fleet.id
       |> asset_details!()
       |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
-      |> Map.merge(%{@native => {"ETH", 18}, fleet.usdc_address => {"USDC", @usdc_decimals}})
+      |> Map.merge(known)
 
-    %{usdc: fleet.usdc_address, details: details}
+    %{known: Map.keys(known), details: details}
   end
 
   @doc """
   The assets the treasury holds and splits, in the order the latest reading
   lists them, or just ETH, REGENT and USDC before the first reading. Each is
-  `%{address: address, symbol: symbol, decimals: decimals, usdc?: usdc?}`,
-  symbol and decimals nil when the token has not said, and `usdc?` true only
-  for the fleet's own USDC, so a token calling itself USDC is never taken for
-  it.
+  `%{address: address, symbol: symbol, decimals: decimals, usdc?: usdc?,
+  known?: known?}`, symbol and decimals nil when the token has not said,
+  `usdc?` true only for the fleet's own USDC and `known?` only for the assets
+  the deployment names, so a token calling itself USDC or REGENT is never
+  taken for it.
   """
   def payable_assets(fleet) do
-    %{details: details} = assets(fleet)
+    %{known: known, details: details} = assets(fleet)
 
     listed =
       case get_reading!(fleet.id) do
@@ -90,7 +106,14 @@ defmodule Keyfleet.Treasury do
 
     Enum.map(listed, fn asset ->
       {symbol, decimals} = Map.get(details, asset, {nil, nil})
-      %{address: asset, symbol: symbol, decimals: decimals, usdc?: asset == fleet.usdc_address}
+
+      %{
+        address: asset,
+        symbol: symbol,
+        decimals: decimals,
+        usdc?: asset == fleet.usdc_address,
+        known?: asset in known
+      }
     end)
   end
 

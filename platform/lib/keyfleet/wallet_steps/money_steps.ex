@@ -202,7 +202,7 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
   defp named_asset(fleet, asset) do
     Enum.find(
       Treasury.payable_assets(fleet),
-      %{address: asset, symbol: nil, decimals: nil, usdc?: false},
+      %{address: asset, symbol: nil, decimals: nil, usdc?: false, known?: false},
       &(&1.address == asset)
     )
   end

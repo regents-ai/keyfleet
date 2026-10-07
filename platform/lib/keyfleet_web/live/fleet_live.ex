@@ -716,11 +716,11 @@ defmodule KeyfleetWeb.FleetLive do
       <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} />
 
       <section aria-labelledby="fleet-contract-title">
-        <h3 id="fleet-contract-title">On Ethereum</h3>
+        <h3 id="fleet-contract-title">On Base</h3>
         <p :if={@fleet.contract_address} class="fleet-wallet">
           <a
             id="fleet-contract-link"
-            href={"https://etherscan.io/address/#{@fleet.contract_address}"}
+            href={"https://basescan.org/address/#{@fleet.contract_address}"}
             title={@fleet.contract_address}
             rel="noopener noreferrer"
             target="_blank"
@@ -728,7 +728,7 @@ defmodule KeyfleetWeb.FleetLive do
             <code>{RegentFormat.short_address(@fleet.contract_address)}</code>
           </a>
         </p>
-        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Ethereum yet</p>
+        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
       </section>
     </aside>
     """
@@ -875,7 +875,7 @@ defmodule KeyfleetWeb.FleetLive do
       >
         Sales are still being counted, so this price may already have gone up. If it has,
         the purchase is refused and no USDC is taken, though your wallet still pays the
-        Ethereum network fee for trying.
+        network fee for trying.
       </p>
 
       <.live_component
@@ -912,11 +912,11 @@ defmodule KeyfleetWeb.FleetLive do
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
         You can still get a key from someone who holds one: it moves like any other token on
-        Ethereum, though a key that moves can’t vote on proposals already open.
+        Base.
       </p>
 
       <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Ethereum from your wallet. If your wallet hasn’t already allowed this
+        Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
         much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
       </p>
       <p :if={@buy.price && @buy.level} class="fleet-detail">

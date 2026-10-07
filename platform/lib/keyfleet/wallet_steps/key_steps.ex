@@ -319,8 +319,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
     Enum.map(waiting, fn %{asset: asset} = entry ->
       known
-      |> Map.get(asset, %{symbol: nil, decimals: nil, usdc?: false})
-      |> Map.take([:symbol, :decimals, :usdc?])
+      |> Map.get(asset, %{symbol: nil, decimals: nil, usdc?: false, known?: false})
+      |> Map.take([:symbol, :decimals, :usdc?, :known?])
       |> Map.merge(entry)
     end)
   end

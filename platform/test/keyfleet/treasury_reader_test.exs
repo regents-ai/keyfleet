@@ -66,8 +66,8 @@ defmodule Keyfleet.TreasuryReaderTest do
 
   # Every figure is read at the head's block and kept together, for each
   # asset the daily split shares and no other, and the proposal pages are
-  # told. Only the tokens whose symbol and decimals are not known already are
-  # asked what they are, after the money.
+  # told. ETH, USDC and REGENT are named by the deployment, so no token is
+  # asked what it is.
   test "a reading keeps every figure from the one block it was read at", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
     put_chain(40, chain())
@@ -81,9 +81,8 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert Enum.uniq(for {to, _data, _hash} <- requests, do: to) ==
              [@treasury, @rewards, @regent, @usdc, @contract]
 
-    {money, details} = Enum.split(requests, length(requests) - 2)
-    assert List.last(money) == {@contract, @protocol_share_owed, @head_hash}
-    assert details == [{@regent, @symbol, @head_hash}, {@regent, @decimals, @head_hash}]
+    assert List.last(requests) == {@contract, @protocol_share_owed, @head_hash}
+    refute Enum.any?(requests, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
 
@@ -101,39 +100,37 @@ defmodule Keyfleet.TreasuryReaderTest do
              %{asset: @usdc, held: 100_000_000, backed: 30_000_000}
            ] = reading.assets
 
-    assert details() == %{@regent => {"REGENT", 18}}
+    assert details() == %{}
   end
 
-  # The launch token, once bound, is split and read like the others, and the
-  # reading names it.
+  # The launch token, once bound, is split and read like the others, the
+  # reading names it, and it is asked what it is, after the money.
   test "a bound launch token is read with the others", %{fleet: fleet} do
-    bound =
-      chain()
-      |> Map.put({@treasury, @split_assets}, {:ok, addresses([@eth, @regent, @usdc, @launch])})
-      |> Map.put({@treasury, @launch_token}, {:ok, word(@launch)})
-      |> Map.merge(token(@launch, "LAUNCH", 2_000, 300))
-
-    put_chain(40, bound)
+    put_chain(40, bound())
     assert {:ok, reading} = TreasuryReader.read(fleet, StubClient)
 
     assert reading.launch_token == @launch
     assert %{asset: @launch, held: 2_000, backed: 300} = List.last(reading.assets)
-    assert details()[@launch] == {"LAUNCH", 18}
+
+    {money, details} = Enum.split(StubClient.call_requests(), -2)
+    assert List.last(money) == {@contract, @protocol_share_owed, @head_hash}
+    assert details == [{@launch, @symbol, @head_hash}, {@launch, @decimals, @head_hash}]
+    assert details() == %{@launch => {"LAUNCH", 18}}
   end
 
   # A token's symbol and decimals, once both are known, are not asked again.
   test "a token's symbol and decimals are read once", %{fleet: fleet} do
-    put_chain(40, chain())
+    put_chain(40, bound())
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
 
-    put_chain(41, Map.put(chain(), {@regent, @symbol}, {:ok, text("RGNT")}))
+    put_chain(41, Map.put(bound(), {@launch, @symbol}, {:ok, text("LNCH")}))
     assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
 
     refute Enum.any?(StubClient.call_requests(), fn {_to, data, _hash} ->
              data in [@symbol, @decimals]
            end)
 
-    assert details()[@regent] == {"REGENT", 18}
+    assert details()[@launch] == {"LAUNCH", 18}
   end
 
   # A figure that cannot be read, or reads as something else, keeps nothing,
@@ -167,20 +164,20 @@ defmodule Keyfleet.TreasuryReaderTest do
   # asked again at the next reading.
   test "a token whose call fails is asked again at the next reading", %{fleet: fleet} do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
-    put_chain(40, Map.put(chain(), {@regent, @decimals}, {:error, :chain_unavailable}))
+    put_chain(40, Map.put(bound(), {@launch, @decimals}, {:error, :chain_unavailable}))
 
     log =
       capture_log(fn ->
         assert {:ok, %{block_number: 40}} = TreasuryReader.read(fleet, StubClient)
       end)
 
-    assert log =~ "token #{@regent} was not read"
+    assert log =~ "token #{@launch} was not read"
     assert_received {:balances_changed, @fleet}
     assert details() == %{}
 
-    put_chain(41, chain())
+    put_chain(41, bound())
     assert {:ok, %{block_number: 41}} = TreasuryReader.read(fleet, StubClient)
-    assert details() == %{@regent => {"REGENT", 18}}
+    assert details() == %{@launch => {"LAUNCH", 18}}
   end
 
   # A symbol is shown as written, so a token's is kept only when it is 1 to
@@ -202,9 +199,9 @@ defmodule Keyfleet.TreasuryReaderTest do
           {"\u061CUSDC", nil}
         ] do
       Repo.query!("DELETE FROM keyfleet_app.treasury_asset_details WHERE fleet_id = $1", [@fleet])
-      put_chain(40, Map.put(chain(), {@regent, @symbol}, {:ok, text(symbol)}))
+      put_chain(40, Map.put(bound(), {@launch, @symbol}, {:ok, text(symbol)}))
       assert {:ok, _reading} = TreasuryReader.read(fleet, StubClient)
-      assert details()[@regent] == {kept, 18}, inspect(symbol)
+      assert details()[@launch] == {kept, 18}, inspect(symbol)
     end
   end
 
@@ -281,6 +278,15 @@ defmodule Keyfleet.TreasuryReaderTest do
     }
     |> Map.merge(token(@regent, "REGENT", @max_uint256, 0))
     |> Map.merge(token(@usdc, "USDC", 100_000_000, 30_000_000))
+  end
+
+  # The same, with a launch token bound and split as well: 2,000 held and
+  # 300 backed.
+  defp bound do
+    chain()
+    |> Map.put({@treasury, @split_assets}, {:ok, addresses([@eth, @regent, @usdc, @launch])})
+    |> Map.put({@treasury, @launch_token}, {:ok, word(@launch)})
+    |> Map.merge(token(@launch, "LAUNCH", 2_000, 300))
   end
 
   # What the treasury holds of `token`, what the reward ledger backs, and the

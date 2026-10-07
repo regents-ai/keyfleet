@@ -89,12 +89,12 @@ defmodule KeyfleetWeb.ProposalsPage do
   | nil, symbol?: boolean}`, grouped: in its own units with its symbol when
   the token has reported both, and otherwise as the whole number the chain
   holds. `symbol?` says whether `text` ends in the symbol the token chose.
-  Every asset but ETH and the fleet's own USDC, both known by their
-  addresses, comes with its address as `token`, so a token calling itself
-  USDC is never taken for it. `assets` is as `Keyfleet.Treasury.assets/1`
+  Every asset but the ones the fleet's deployment names (ETH, its USDC and
+  REGENT), known by their addresses, comes with its address as `token`, so a
+  token calling itself USDC is never taken for it. `assets` is as `Keyfleet.Treasury.assets/1`
   reads them.
   """
-  def amount(atoms, asset, %{usdc: usdc, details: details}) do
+  def amount(atoms, asset, %{known: known, details: details}) do
     {text, symbol?} =
       case details[asset] do
         {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.ProposalsPage do
           {"#{units(atoms, 0)} in the smallest units of token", false}
       end
 
-    %{text: text, token: if(asset not in [usdc, Treasury.native()], do: asset), symbol?: symbol?}
+    %{text: text, token: if(asset not in known, do: asset), symbol?: symbol?}
   end
 
   defp with_fleet(fleet_id, read) do
@@ -136,16 +136,13 @@ defmodule KeyfleetWeb.ProposalsPage do
         )
     }
 
-  # A token as the payment form names it: the fleet's own USDC and ETH by
-  # name, any other with its address beside its symbol, so a token calling
-  # itself USDC is never taken for it.
-  defp pay_name(%{usdc?: true}), do: "USDC"
+  # A token as the payment form names it: those the fleet's deployment names
+  # by name, any other with its address beside its symbol, so a token
+  # calling itself USDC is never taken for it.
+  defp pay_name(%{known?: true, symbol: symbol}), do: symbol
 
-  defp pay_name(%{address: address, symbol: symbol}) when is_binary(symbol) do
-    if address == Treasury.native(),
-      do: symbol,
-      else: "#{symbol} #{RegentFormat.short_address(address)}"
-  end
+  defp pay_name(%{address: address, symbol: symbol}) when is_binary(symbol),
+    do: "#{symbol} #{RegentFormat.short_address(address)}"
 
   defp pay_name(%{address: address}), do: "Token #{RegentFormat.short_address(address)}"
 

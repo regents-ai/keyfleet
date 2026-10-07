@@ -17,8 +17,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
   fleet_id}` on `Keyfleet.Proposals.topic/1`.
 
   Once a reading is kept, the symbol and decimals of each of its tokens not
-  yet known in full are read at the same block; ETH and the fleet's USDC are
-  known already. A token that refuses a call, answers with something else,
+  yet known in full are read at the same block; ETH, the fleet's USDC and
+  REGENT are known already. A token that refuses a call, answers with something else,
   or reports a symbol that is not 1 to 32 bytes of text free of control and
   direction characters, has it kept as unknown and is asked again at every
   reading, as is one whose call failed, with a warning, since the node may
@@ -104,11 +104,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
 
   # The symbol and decimals of the reading's tokens not yet read in full.
   defp read_details(fleet, reading, client, block_hash) do
-    known = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
+    read = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
+    named = Treasury.known_assets(fleet)
 
     reading.assets
     |> Enum.map(& &1.asset)
-    |> Enum.reject(&(&1 in [Treasury.native(), fleet.usdc_address] or complete?(known[&1])))
+    |> Enum.reject(&(Map.has_key?(named, &1) or complete?(read[&1])))
     |> Enum.each(&read_token(fleet, &1, client, block_hash))
   end
 

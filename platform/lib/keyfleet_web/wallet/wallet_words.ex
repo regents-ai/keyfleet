@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp asset_amount(asset, amount),
     do:
       asset
-      |> Map.take([:symbol, :decimals, :usdc?])
+      |> Map.take([:symbol, :decimals, :usdc?, :known?])
       |> Map.merge(%{asset: asset.address, amount: amount})
 
   defp problem(:no_keys), do: "Type key numbers, like 3, 7, 12."
@@ -199,19 +199,20 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted(_step), do: "Didn’t go through. Nothing moved."
 
   @doc """
-  An amount of a token: the fleet's USDC by name, another token in its own
-  units with its symbol and address, or in its smallest units when it hasn't
-  said its decimals.
+  An amount of a token: the fleet's USDC exactly, another the fleet's
+  deployment names in its own units with its symbol, any other token with
+  its address too, or in its smallest units when it hasn't said its
+  decimals.
   """
   def token_amount(%{amount: amount, usdc?: true}), do: FleetLive.usdc(amount)
 
+  def token_amount(%{amount: amount, known?: true, symbol: symbol, decimals: decimals}),
+    do: "#{ProposalsPage.units(amount, decimals)} #{symbol}"
+
   def token_amount(%{amount: amount, asset: asset, symbol: symbol, decimals: decimals})
-      when is_binary(symbol) and is_integer(decimals) do
-    if asset == Keyfleet.Treasury.native(),
-      do: "#{ProposalsPage.units(amount, decimals)} #{symbol}",
-      else:
+      when is_binary(symbol) and is_integer(decimals),
+      do:
         "#{ProposalsPage.units(amount, decimals)} #{symbol} (#{RegentFormat.short_address(asset)})"
-  end
 
   def token_amount(%{amount: amount, asset: asset}),
     do: "#{Rules.grouped(amount)} units of #{RegentFormat.short_address(asset)}"

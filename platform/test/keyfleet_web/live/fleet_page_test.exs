@@ -126,7 +126,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(
              view,
-             ~s(#fleet-about a#fleet-contract-link[href="https://etherscan.io/address/#{@contract}"][title="#{@contract}"])
+             ~s(#fleet-about a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
            )
 
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
@@ -147,7 +147,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
-    assert html =~ "Not on Ethereum yet"
+    assert html =~ "Not on Base yet"
     assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
     refute has_element?(view, "#fleet-get-key")
     refute has_element?(view, "#fleet-progress-title")
@@ -497,7 +497,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-number") == "151"
 
       assert text(view, "#buy-key-price-may-move") ==
-               "Sales are still being counted, so this price may already have gone up. If it has, the purchase is refused and no USDC is taken, though your wallet still pays the Ethereum network fee for trying."
+               "Sales are still being counted, so this price may already have gone up. If it has, the purchase is refused and no USDC is taken, though your wallet still pays the network fee for trying."
 
       assert has_element?(view, "#buy-key-button")
     end
