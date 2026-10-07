@@ -15,6 +15,16 @@ config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 # The local sign-in server's activity read token, when it has one.
 config :keyfleet, Keyfleet.AgentListing, read_token: System.get_env("SIWA_ACTIVITY_READ_TOKEN")
 
+# The anvil lab (docs/anvil-lab.md): KEYFLEET_LAB names a local anvil node,
+# and the fleets' wallet buttons send on its chain instead of Base.
+case System.get_env("KEYFLEET_LAB") do
+  lab when lab in [nil, ""] ->
+    :ok
+
+  lab ->
+    config :keyfleet, :wallet_chains, %{31_337 => %{name: "Keyfleet lab", rpc_url: lab}}
+end
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

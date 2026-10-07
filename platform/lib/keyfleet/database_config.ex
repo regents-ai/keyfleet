@@ -19,6 +19,7 @@ defmodule Keyfleet.DatabaseConfig do
   ]
   @deployment_role_error ~s(KEYFLEET_DEPLOYMENT_ROLE must be set to "production" or "staging")
   @remote_target_error "remote database access requires cluster dzx6qo6xqzvojpv5 named regents-platform-prod"
+  @lab_remote_error "the anvil lab runs on its local database only"
 
   def runtime_config!(environment, getenv \\ &System.get_env/1)
 
@@ -27,20 +28,25 @@ defmodule Keyfleet.DatabaseConfig do
     getenv |> database_url!("DATABASE_POOLED_URL", role) |> serving()
   end
 
+  # The anvil lab (docs/anvil-lab.md) keeps its own local database, and never
+  # a remote one.
   def runtime_config!(:dev, getenv) do
-    case remote_target(getenv) do
-      :local ->
+    case {remote_target(getenv), getenv.("KEYFLEET_LAB") not in [nil, ""]} do
+      {:local, lab?} ->
         [
           username: getenv.("USER"),
           password: nil,
           hostname: "127.0.0.1",
           port: 5432,
-          database: "keyfleet_dev",
+          database: if(lab?, do: "keyfleet_lab_dev", else: "keyfleet_dev"),
           pool_size: 2
         ]
 
-      :remote ->
+      {:remote, false} ->
         database_url!(getenv, "DATABASE_POOLED_URL", :remote)
+
+      {:remote, true} ->
+        raise @lab_remote_error
     end
   end
 

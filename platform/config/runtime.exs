@@ -43,11 +43,12 @@ case {config_env(), System.get_env("KEYFLEET_APP_SURFACES")} do
 end
 
 # Fleets are read from the chain only when a node is named, and never by the
-# test suite.
+# test suite. The anvil lab (docs/anvil-lab.md) reads them from its own node.
 rpc_url =
-  case System.get_env("KEYFLEET_RPC_URL") do
-    url when url in [nil, ""] -> nil
-    url -> url
+  case {config_env(), System.get_env("KEYFLEET_LAB"), System.get_env("KEYFLEET_RPC_URL")} do
+    {:dev, lab, _url} when lab not in [nil, ""] -> lab
+    {_env, _lab, url} when url in [nil, ""] -> nil
+    {_env, _lab, url} -> url
   end
 
 if config_env() != :test do
