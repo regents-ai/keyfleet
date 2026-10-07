@@ -428,14 +428,13 @@ contract KeyfleetShardsTest is KeyfleetFixture {
         KeyfleetRewards rewardsA = fleet.REWARDS();
         KeyfleetRewards rewardsB = fleetB.REWARDS();
         KeyfleetTreasury.Call[] memory none = new KeyfleetTreasury.Call[](0);
-        uint64 closesAt = uint64(block.timestamp + 1 days);
         address[] memory usdcOnly = new address[](1);
         usdcOnly[0] = address(usdc);
 
         _issue(k1, carol, 30);
         assertTrue(shards.mayGovern(k1, carol), "Carol may govern fleet A's key 1");
         vm.prank(creator);
-        uint256 proposalB = votesB.propose(b1, keccak256("fleet B"), closesAt, none);
+        uint256 proposalB = votesB.propose(b1, keccak256("fleet B"), none);
 
         bytes memory foreignA = abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, k1);
         bytes memory notCarolsB = abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, b1, carol);
@@ -445,9 +444,9 @@ contract KeyfleetShardsTest is KeyfleetFixture {
         vm.expectRevert(notCarolsB);
         votesB.present(_ids(b1));
         vm.expectRevert(foreignA);
-        votesB.propose(k1, keccak256("fleet A key in fleet B"), closesAt, none);
+        votesB.propose(k1, keccak256("fleet A key in fleet B"), none);
         vm.expectRevert(notCarolsB);
-        votesB.propose(b1, keccak256("fleet B key"), closesAt, none);
+        votesB.propose(b1, keccak256("fleet B key"), none);
         vm.expectRevert(foreignA);
         votesB.castBallot(proposalB, _ids(k1), KeyfleetVotes.Choice.Yes);
         vm.expectRevert(notCarolsB);
@@ -459,7 +458,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
 
         // In fleet A the same shard works.
         votesA.present(_ids(k1));
-        uint256 proposalA = votesA.propose(k1, keccak256("fleet A"), closesAt, none);
+        uint256 proposalA = votesA.propose(k1, keccak256("fleet A"), none);
         votesA.castBallot(proposalA, _ids(k1), KeyfleetVotes.Choice.Yes);
         vm.expectRevert(KeyfleetRewards.NothingToClaim.selector);
         rewardsA.claim(_ids(k1), usdcOnly);

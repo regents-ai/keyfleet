@@ -112,7 +112,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         assertEq(_renewed(votes), 3, "time alone removes nothing from the list");
 
         vm.prank(alice);
-        uint256 proposalId = votes.propose(_k(2), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 proposalId = votes.propose(_k(2), bytes32(0), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1, "only the proposer's key counts");
         assertEq(_renewed(votes), 1);
         assertTrue(votes.wasActiveAtOpening(proposalId, _k(2)));
@@ -138,7 +138,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         assertFalse(votes.isActive(_k(3)), "dormant again");
         assertEq(_renewed(votes), 1, "an ended entry");
         vm.prank(alice);
-        uint256 proposalId = votes.propose(_k(1), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 proposalId = votes.propose(_k(1), bytes32(0), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1);
     }
 
@@ -225,14 +225,14 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
 
         vm.prank(alice);
         vm.expectRevert(KeyfleetVotes.MaintenanceRequired.selector);
-        votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        votes.propose(k1, bytes32(0), _noCalls());
         assertEq(_renewed(votes), count, "the refused opening swept nothing");
 
         (uint256 removed, bool due) = votes.sweepExpired(5);
         assertEq(removed, 5);
         assertTrue(due);
         vm.prank(alice);
-        uint256 proposalId = votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 proposalId = votes.propose(k1, bytes32(0), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1, "an exact count: the proposer's key alone");
         assertEq(_renewed(votes), 1);
     }
@@ -253,9 +253,9 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.startPrank(alice);
         votes.present(_ids(k2));
         keys.transferFrom(alice, bob, k2);
-        uint256 first = votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 first = votes.propose(k1, bytes32(0), _noCalls());
         votes.present(_ids(k3));
-        uint256 second = votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 second = votes.propose(k1, bytes32(0), _noCalls());
         keys.transferFrom(alice, bob, k3);
         vm.stopPrank();
 
@@ -339,7 +339,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         assertTrue(topVotes.isActive(t2));
 
         vm.prank(creator);
-        uint256 proposalId = topVotes.propose(t1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 proposalId = topVotes.propose(t1, bytes32(0), _noCalls());
         assertEq(topVotes.proposal(proposalId).authorKey, t1, "the author key is stored whole");
         assertEq(topVotes.proposal(proposalId).e0, 3);
         assertTrue(topVotes.wasActiveAtOpening(proposalId, t4));
@@ -466,7 +466,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         _lapse();
 
         vm.prank(alice);
-        uint256 proposalId = votes.propose(_k(1), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
+        uint256 proposalId = votes.propose(_k(1), bytes32(0), _noCalls());
         assertTrue(votes.isActive(_k(1)), "the proposer's key");
         assertFalse(votes.isActive(_k(2)));
         vm.prank(alice);

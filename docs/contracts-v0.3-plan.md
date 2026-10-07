@@ -107,7 +107,7 @@ The factory and its four deployers hold nothing of value. The REGENT buyer holds
 
 ### §7 Exact proposals and execution
 
-- One proposal shape: author key, content hash, ordered `Call[]` (stored as a hash, with the full bytes emitted), `closesAt` (at most 48 h after creation), and `executionExpiry` (`closesAt` + 48 h). The lifecycle is Open → Approved, Rejected or Cancelled, then Executed or ExecutionExpired.
+- One proposal shape: author key, content hash, ordered `Call[]` (stored as a hash, with the full bytes emitted), `closesAt` (exactly 24 h after creation, Sean 7 Oct), and `executionExpiry` (`closesAt` + 48 h, plus 1 day for a proposal that moves money, KF-VOTE-DELAY a). The lifecycle is Open → Waiting (money proposals only), Approved, Rejected or Cancelled, then Executed or ExecutionExpired.
 - Cancellation by whoever may vote the author key. Resubmission gets a new id.
 - Typed effects are treasury functions only the treasury itself can call (`onlySelf`), each reached through an exact CALL: `pay`, `advance`, `setDailySplitBps`, `runVotedSplit`, `admitOusd`, `approveSignatureHash` and `revokeSignatureHash`. Restricting edits is a CALL to `Votes.setEditsRestricted`, and changing the fleet's name, description or image a CALL to the manager's `setProfile`, both callable only by the treasury. A Decision is a proposal with an empty call list.
 
@@ -122,7 +122,7 @@ The treasury is the fleet's one payment address (P2 b). Everything a fleet recei
 
 - `recognizeSurplus(asset)` forwards an asset's whole surplus at the manager to the treasury, USDC exactly as any other token, unswapped. Money paid to the manager by mistake is never stranded and never split twice.
 - The manager is not payable, so ETH cannot arrive there by a normal transfer. `selfdestruct` can still force ETH in; nothing in the manager reads its ETH balance, so such ETH is stranded.
-- `advance(id, operator, asset, amount, purposeHash)`, which only the treasury may call, and the permissionless `returnAdvance(id, amount)`, capped at what is still out on that advance.
+- `advance(id, operator, asset, sharePpm, purposeHash)`, which only the treasury may call and which pays a share of the treasury's balance of `asset`, and the permissionless `returnAdvance(id, amount)`, capped at what is still out on that advance.
 - The fleet's own token launches through Autolaunch Revstake v2 on Base and is bound to the daily split with `bindLaunchToken` (sections 4.7 and 9.1).
 
 ### §10 Public actions, chat and culture
@@ -405,7 +405,8 @@ mapping(uint256 id => mapping(uint256 tokenId => Choice)) public ballotOf;
 - `Cancelled` if cancelled; else `Executed` if executed.
 - Else `Open` if `now < closesAt`.
 - Else, with `D = e0 + late`:
-  - `Rejected` unless `yes > floor(D/2)`;
+  - `Rejected` unless `yes >= approvalsNeeded(D)` (60% rounded up);
+  - `Waiting` if `now < executableAt` (a money proposal's day after closing);
   - `ExecutionExpired` if `now ≥ executionExpiry`;
   - otherwise `Approved`.
 
@@ -421,15 +422,16 @@ Tallies cannot change after `closesAt`, so this view is final. The `proposal_fin
 
 ### 4.5 Exact proposals and execution (§7), CALL only
 
-**Creation:** `propose(authorKey, contentHash, closesAt, Call[] calls)`.
+**Creation:** `propose(authorKey, contentHash, Call[] calls)`.
 
-- Requires `now < closesAt ≤ now + 48h` (`ClosingOutOfRange`), and that the caller may vote `authorKey` (section 4.3).
-- Sets `executionExpiry = closesAt + 48h` and `actionsHash = keccak256(abi.encode(calls))`.
+- Requires that the caller may vote `authorKey` (section 4.3).
+- Sets `closesAt = now + 24h`. A proposal that moves no money (no calls, or only `setProfile`, `setDailySplitBps` and `setEditsRestricted`) is carried out from `closesAt`; any other waits 1 day more. `executionExpiry` is 48 h after that, and `executableAt(id)` reads the first moment. Sets `actionsHash = keccak256(abi.encode(calls))`.
+- Refuses a call carrying ETH (`CallCarriesValue`), a `pay` or `advance` share outside 1 to 990,000 parts per million (`ShareOutOfRange`), a second `pay` or `advance` (`OneMoneyMovePerProposal`), and any token-moving or approving call on any address (`TokenMoveRefused`; the list is in the contracts README).
 - `proposalHash = keccak256(abi.encode(block.chainid, votes, treasury, id, authorKey, ownershipEpoch(authorKey), contentHash, actionsHash, closesAt, executionExpiry))`.
-- Emits `ProposalCreated(id, authorKey, proposer, proposalHash, contentHash, closesAt, executionExpiry, e0, openRevision, calls)`, so indexers get the exact bytes.
+- Emits `ProposalCreated(id, authorKey, proposer, proposalHash, contentHash, closesAt, executableAt, executionExpiry, e0, openRevision, calls)`, so indexers get the exact bytes.
 - Casts no ballot and reserves nothing. There is one `proposalCount` per fleet, so every resubmission gets a new id.
 
-**Cancellation:** `cancel(id)` by whoever may vote the author key now, while the status is Open or Approved. It touches the author key.
+**Cancellation:** `cancel(id)` by whoever may vote the author key now, while the status is Open, Waiting or Approved. It touches the author key.
 
 **Execution:** `execute(id, Call[] calls)`.
 
@@ -442,8 +444,8 @@ Tallies cannot change after `closesAt`, so this view is final. The `proposal_fin
 
 | Function | What it does |
 |---|---|
-| `pay(asset, to, amount)` | `SafeERC20.safeTransfer`, so a token that returns `false` reverts; `Address.sendValue` for ETH. The builder sends every token payment through here, never as a raw `transfer` CALL. |
-| `advance(id, operator, asset, amount, purposeHash)` | Like `pay`, and also records the advance as outstanding for the treasury screen. |
+| `pay(asset, to, sharePpm)` | Pays the treasury's balance of `asset` at that moment × `sharePpm` / 1,000,000, rounded down (`ShareRoundsToZero` for nothing; KF-VOTE-AMOUNT a). `SafeERC20.safeTransfer`, so a token that returns `false` reverts; `Address.sendValue` for ETH. Every payment goes through here; raw token moves are refused at proposing. |
+| `advance(id, operator, asset, sharePpm, purposeHash)` | Like `pay`, and also records the amount paid as outstanding for the treasury screen. |
 | `runVotedSplit()` | Runs the daily split now, whenever the last run was (section 4.6). |
 | `setDailySplitBps(bps)` | Section 4.6. |
 | `admitOusd(token)` | Fills the OUSD slot once, split from the next run. |

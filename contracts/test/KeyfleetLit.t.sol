@@ -90,7 +90,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         KeyfleetTreasury.Call[] memory calls = _approveHash(treasury, hash);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(treasury));
         emit SignatureHashApproved(hash);
         votes.execute(proposalId, calls);
@@ -110,7 +110,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         KeyfleetTreasury.Call[] memory calls = _revokeHash(treasury, hash);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(treasury));
         emit SignatureHashRevoked(hash);
         votes.execute(proposalId, calls);
@@ -149,7 +149,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Open));
         votes.execute(proposalId, calls);
 
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(KeyfleetVotes.ActionsMismatch.selector);
         votes.execute(proposalId, _approveHash(treasury, keccak256("another message")));
 
@@ -166,10 +166,10 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
         uint256 first = _key(fleet, 1);
         vm.startPrank(keys.ownerOf(first));
-        uint256 proposalId = votes.propose(first, keccak256("narrative"), uint64(block.timestamp + 1), calls);
+        uint256 proposalId = votes.propose(first, keccak256("narrative"), calls);
         votes.castBallot(proposalId, _ids(first), KeyfleetVotes.Choice.No);
         vm.stopPrank();
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Rejected));
         votes.execute(proposalId, calls);
@@ -236,7 +236,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         calls[0] = LitAdminCalls.removeKey(lit, address(treasury), OPERATOR_KEY);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(
             abi.encodeWithSelector(MockLitAccountConfig.NoAccountAccess.selector, account, address(treasury))
         );
@@ -273,7 +273,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         uint256 proposalId = _approve(fleet, steal);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Open));
         votes.execute(proposalId, steal);
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(KeyfleetVotes.ActionsMismatch.selector);
         votes.execute(
             proposalId, _one(address(lit), 0, LitAdminCalls.transferAccount(lit, address(treasury), mallory).data)

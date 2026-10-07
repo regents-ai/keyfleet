@@ -601,7 +601,7 @@ contract CollectionHandler is Test {
         }
     }
 
-    function propose(uint256 fleetSeed, uint256 keySeed, uint256 kindSeed, uint256 paramSeed, uint256 period)
+    function propose(uint256 fleetSeed, uint256 keySeed, uint256 kindSeed, uint256 paramSeed)
         external
         step(_fleetFrom(fleetSeed))
     {
@@ -616,12 +616,10 @@ contract CollectionHandler is Test {
         if (kind == Kind.SplitRate) param = bound(paramSeed, 10, 200);
         if (kind >= Kind.ForeignProfile) param = 1 + (id + paramSeed % (count - 1)) % count;
         KeyfleetTreasury.Call[] memory calls = _calls(id, kind, param);
-        uint64 closesAt = uint64(block.timestamp + bound(period, 1 hours, 12 hours));
         bool mature = _isMature(tokenId);
-        bool held = block.timestamp < votes.treasuryOpensAt() && kind != Kind.Nothing && kind != Kind.Profile
-            && kind != Kind.SplitRate;
+        bool held = block.timestamp < votes.treasuryOpensAt() && _movesMoney(kind);
         vm.prank(author);
-        try votes.propose(tokenId, keccak256(abi.encode(kind, param)), closesAt, calls) returns (uint256 proposalId) {
+        try votes.propose(tokenId, keccak256(abi.encode(kind, param)), calls) returns (uint256 proposalId) {
             if (!mature) _breach("a key younger than its maturity proposed");
             if (held) _breach("a proposal moving money opened during the fleet's opening");
             _checkOpening(id, votes, proposalId);
@@ -714,6 +712,13 @@ contract CollectionHandler is Test {
         }
         if (!open || !carryOut || !everyCountedKeyVoted) return;
         vm.warp(stored.closesAt);
+        if (_movesMoney(_proposed[id][proposalId].kind)) {
+            if (votes.status(proposalId) != KeyfleetVotes.Status.Waiting) {
+                _breach("a money proposal every key voted for is not waiting at closing");
+            }
+            _checkExecute(id, proposalId);
+            vm.warp(votes.executableAt(proposalId));
+        }
         if (votes.status(proposalId) != KeyfleetVotes.Status.Approved) {
             _breach("a proposal every key voted for was not approved");
         }
@@ -726,7 +731,8 @@ contract CollectionHandler is Test {
         KeyfleetVotes votes = _manager(id).VOTES();
         KeyfleetVotes.Status status = votes.status(proposalId);
         address author = keys.ownerOf(votes.proposal(proposalId).authorKey);
-        bool cancellable = status == KeyfleetVotes.Status.Open || status == KeyfleetVotes.Status.Approved;
+        bool cancellable = status == KeyfleetVotes.Status.Open || status == KeyfleetVotes.Status.Waiting
+            || status == KeyfleetVotes.Status.Approved;
         vm.prank(author);
         try votes.cancel(proposalId) {
             if (!cancellable) _breach("a proposal was cancelled that was past cancelling");
@@ -744,14 +750,25 @@ contract CollectionHandler is Test {
     }
 
     /// @dev Anyone may carry out a proposal; it goes through exactly when it is approved and calls
-    /// only its own fleet, and a call on another fleet's manager or ledger is refused by it.
+    /// only its own fleet, and a call on another fleet's manager or ledger is refused by it. A
+    /// proposal may be carried out from its closing, or a day after it when it moves money, for 48
+    /// hours, and at no other time.
     function _checkExecute(uint256 id, uint256 proposalId) internal {
         KeyfleetVotes votes = _manager(id).VOTES();
         Proposed memory p = _proposed[id][proposalId];
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        uint64 executableAt = votes.executableAt(proposalId);
+        if (executableAt != stored.closesAt + (_movesMoney(p.kind) ? 1 days : 0)) {
+            _breach("a proposal's carry-out time is not its closing plus the money wait");
+        }
+        if (stored.executionExpiry != executableAt + 48 hours) _breach("a carry-out window is not 48 hours");
         bool approved = votes.status(proposalId) == KeyfleetVotes.Status.Approved;
         bool foreign = p.kind >= Kind.ForeignProfile;
         try votes.execute(proposalId, _calls(id, p.kind, p.param)) {
             if (!approved || foreign) _breach("a proposal was carried out that should not have been");
+            if (block.timestamp < executableAt || block.timestamp >= stored.executionExpiry) {
+                _breach("a proposal was carried out outside its window");
+            }
             if (p.kind == Kind.Profile) _records[id].profileHash = keccak256(abi.encode(_renamed(p.param)));
             if (votes.status(proposalId) != KeyfleetVotes.Status.Executed) {
                 _breach("a carried-out proposal is not Executed");
@@ -1095,10 +1112,8 @@ contract CollectionHandler is Test {
         } else if (a.pick == 24) {
             if (a.foreignKey == 0) return;
             a.caller = a.foreignOwner;
-            bytes memory data = abi.encodeCall(
-                KeyfleetVotes.propose,
-                (a.foreignKey, bytes32(0), uint64(block.timestamp + 1 hours), new KeyfleetTreasury.Call[](0))
-            );
+            bytes memory data =
+                abi.encodeCall(KeyfleetVotes.propose, (a.foreignKey, bytes32(0), new KeyfleetTreasury.Call[](0)));
             _attempt(a, v, data, KeyfleetVotes.ForeignKey.selector);
         } else if (a.pick == 25) {
             if (a.foreignKey == 0 || a.openProposal == 0) return;
@@ -1369,6 +1384,11 @@ contract CollectionHandler is Test {
             bytes memory data = abi.encodeCall(KeyfleetRewards.credit, (address(usdc), address(manager.TREASURY()), 1));
             calls[0] = KeyfleetTreasury.Call(address(_manager(param).REWARDS()), 0, data);
         }
+    }
+
+    /// @dev Whether a kind moves money: anything but nothing, a profile or a split rate.
+    function _movesMoney(Kind kind) internal pure returns (bool) {
+        return kind != Kind.Nothing && kind != Kind.Profile && kind != Kind.SplitRate;
     }
 
     function _renamed(uint256 param) internal pure returns (KeyfleetManager.Profile memory) {

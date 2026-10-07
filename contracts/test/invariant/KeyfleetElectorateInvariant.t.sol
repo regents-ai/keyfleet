@@ -68,11 +68,10 @@ contract ElectorateHandler is Test {
         vm.prank(owner);
     }
 
-    function propose(uint256 seed, uint256 period) external checksD {
+    function propose(uint256 seed) external checksD {
         uint256 tokenId = _key(seed);
-        uint64 closesAt = uint64(block.timestamp + bound(period, 1, 48 hours));
         bool mature = _actAsOwner(tokenId);
-        uint256 proposalId = votes.propose(tokenId, bytes32(seed), closesAt, new KeyfleetTreasury.Call[](0));
+        uint256 proposalId = votes.propose(tokenId, bytes32(seed), new KeyfleetTreasury.Call[](0));
         if (!mature) return;
         uint256 presentKeys;
         for (uint256 k = 1; k <= fleet.totalMinted(); ++k) {

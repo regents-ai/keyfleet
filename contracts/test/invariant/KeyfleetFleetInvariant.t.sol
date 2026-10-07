@@ -172,18 +172,24 @@ contract FleetHandler is Test {
         }
     }
 
-    /// @dev An approved payment out of the treasury, to someone outside the fleet, in ETH, REGENT,
-    /// USDC or the bound launch token.
-    function pay(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
+    /// @dev An approved payment out of the treasury, to someone outside the fleet, of a share of
+    /// its ETH, REGENT, USDC or bound launch token, which takes exactly that share of the balance.
+    function pay(uint256 fleetSeed, uint256 assetSeed, uint256 share) external {
         KeyfleetManager f = fleets[fleetSeed % 2];
         KeyfleetTreasury treasury = f.TREASURY();
         address[4] memory assets = [NATIVE, address(regent), address(usdc), address(treasury.launchToken())];
         uint256 pick = assetSeed % 4;
         if (pick == 3 && assets[3] == address(0)) return;
         address asset = assets[pick];
-        amount = bound(amount, 0, _balanceOf(asset, address(treasury)));
+        uint32 sharePpm = uint32(bound(share, 1, 990_000));
+        uint256 balance = _balanceOf(asset, address(treasury));
+        uint256 amount = balance * sharePpm / 1_000_000;
+        if (amount == 0) return;
         address outsider = address(uint160(0xD00D00 + assetSeed % 4));
-        _batch(f, abi.encodeCall(KeyfleetTreasury.pay, (asset, outsider, amount)));
+        _batch(f, abi.encodeCall(KeyfleetTreasury.pay, (asset, outsider, sharePpm)));
+        if (_balanceOf(asset, address(treasury)) != balance - amount) {
+            _breach("a payment did not take exactly its share");
+        }
     }
 
     // --- the daily split ----------------------------------------------------

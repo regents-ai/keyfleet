@@ -17,8 +17,8 @@ import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFac
 import {MockToken} from "../mocks/MockToken.sol";
 import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
-/// @dev Hands each fleet's treasury random batches of calls exactly as a carried-out proposal
-/// would, aimed at the fleet's manager, controller, treasury and ledger, at the shared collection,
+/// @dev Hands each fleet's treasury random batches of calls straight from its controller, so even
+/// the calls proposing refuses (raw token moves and approvals, calls with ETH) are tried, aimed at the fleet's manager, controller, treasury and ledger, at the shared collection,
 /// shard record, factory and REGENT buyer, at USDC and REGENT, at Autolaunch and at the fleet's own
 /// token once bound, between purchases that each mint to a wallet of their own and, partway through,
 /// a launch that sells and is bound. Around every batch it records whether anything protected went
@@ -203,12 +203,16 @@ contract SegregationHandler is Test {
         address[5] memory targets =
             [address(d.fleet), address(d.rewards), address(d.fleet.VOTES()), treasury, address(regentBuyer)];
         address token = address(d.token);
-        if (pick == 0) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (token, d.someone, d.amount)));
-        if (pick == 1) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (NATIVE, d.someone, d.arg % 2 ether)));
+        uint32 share = uint32(1 + d.arg % 990_000);
+        if (pick == 0) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (token, d.someone, share)));
+        if (pick == 1) return _c(treasury, 0, abi.encodeCall(d.treasury.pay, (NATIVE, d.someone, share)));
         if (pick == 2) {
-            return _c(
-                treasury, 0, abi.encodeCall(d.treasury.advance, (d.arg % 4, d.someone, token, d.amount, bytes32(d.arg)))
-            );
+            return
+                _c(
+                    treasury,
+                    0,
+                    abi.encodeCall(d.treasury.advance, (d.arg % 4, d.someone, token, share, bytes32(d.arg)))
+                );
         }
         if (pick == 3) return _c(token, 0, abi.encodeCall(IERC20.transfer, (targets[d.arg % 5], d.amount)));
         if (pick == 4) return _c(token, 0, abi.encodeCall(IERC20.approve, (targets[d.arg % 5], d.amount)));

@@ -79,16 +79,21 @@ what the code on this branch does:
 - Accelerant: the first key sends 10% to staking and 90% to the treasury; every
   later key sends 10% to staking, 20% to the treasury and 70% to whoever holds
   the key before it.
-- A proposal names the key it is made with, a hash of its text, a closing time
-  at most 48 hours away and the exact calls the treasury makes if it passes.
+- A proposal names the key it is made with, a hash of its text and the exact
+  calls the treasury makes if it passes. Every vote lasts exactly 24 hours.
   Each key casts one ballot, Yes, No or Abstain, which can be changed until
   closing. The electorate is the keys present when the proposal opened plus
   every key that joins by casting a ballot; it never shrinks. After closing a
   proposal passes when Yes reaches 60% of that electorate, rounded up (1 of 1,
   2 of 2, 2 of 3, 3 of 4, 3 of 5, 4 of 6, 5 of 7, 5 of 8, 6 of 9, 6 of 10), so
-  abstaining and staying silent count against it, and anyone may carry it out
-  within 48 hours. Whoever may vote the key it was made with may cancel it
-  until then. One present key alone may pass anything.
+  abstaining and staying silent count against it. Anyone may carry it out for
+  48 hours: from closing if it moves no money, or from a day after closing if
+  it does. Whoever may vote the key it was made with may cancel it until then.
+  One present key alone may pass anything.
+- A payment names one asset the treasury holds and a share of the treasury's
+  balance of it, from 0.0001% to 99%, worked out when the proposal is carried
+  out. A proposal makes at most one payment, and no proposal may move tokens or
+  ETH any other way.
 - For its first 7 days after its sales open, a fleet's proposals may only
   change its name, description and image, its daily split rate and whether a
   key's edits are restricted; none may move money.
@@ -805,22 +810,25 @@ It spends only through `executeBatch(calls)`, which only the fleet's voting
 controller may call (`OnlyVotes`), when a passed proposal is carried out: it
 makes the proposal's exact calls in order, each a plain call with its value, and
 the first that reverts reverts the whole batch with its reason. Proposing sets
-nothing aside, so two approved proposals can never spend the same money:
-whichever is carried out second fails if the money is gone, and stays approved
-to be retried.
+nothing aside: every payment is a share of the balance at the moment it is
+carried out, so two approved proposals can never spend the same money, and the
+second takes its share of what the first left.
 
 Two of the treasury's own functions accept only the treasury itself as caller
 (`OnlySelf`), so only a passed proposal's call reaches them:
 
-- `pay(asset, to, amount)` pays a token with OpenZeppelin `SafeERC20`, so a
-  token that answers `false` instead of paying fails the whole batch, or pays
-  ETH when the asset is `NATIVE` (the zero address) with `Address.sendValue`.
-  Proposals pay tokens through here rather than with a raw `transfer` call. It
-  emits `Paid(asset, to, amount)`.
-- `advance(advanceId, operator, asset, amount, purposeHash)` pays the same way
-  and records it under a new id (`AdvanceIdTaken` for one already used), as
-  `advances(advanceId)`: the operator, the asset, what is still outstanding and
-  the hash of what it is for. It emits `Advanced`.
+- `pay(asset, to, sharePpm)` pays `sharePpm` parts per million
+  (`SHARE_DENOMINATOR`, 1,000,000) of the treasury's balance of `asset` at that
+  moment, rounded down, and reverts `ShareRoundsToZero(asset, sharePpm, balance)`
+  when that is nothing. It pays a token with OpenZeppelin `SafeERC20`, so a token
+  that answers `false` instead of paying fails the whole batch, or pays ETH when
+  the asset is `NATIVE` (the zero address) with `Address.sendValue`. It emits
+  `Paid(asset, to, sharePpm, amount)`.
+- `advance(advanceId, operator, asset, sharePpm, purposeHash)` pays a share the
+  same way and records the amount under a new id (`AdvanceIdTaken` for one
+  already used), as `advances(advanceId)`: the operator, the asset, what is still
+  outstanding and the hash of what it is for. It emits
+  `Advanced(advanceId, operator, asset, sharePpm, amount, purposeHash)`.
 
 Anyone may return an advance with `returnAdvance(advanceId, amount)`: an ETH
 advance by sending exactly `amount` with the call, a token advance by approving
@@ -982,15 +990,40 @@ kinds. Every call that takes a key refuses a key of another fleet
 
 ### Proposals
 
-`propose(authorKey, contentHash, closesAt, calls)` opens a proposal. The caller
-must be allowed to vote `authorKey` (below); the key is their standing and
-nothing else, and proposing casts no ballot. `contentHash` is the hash of the
-proposal's text, kept off chain. `closesAt` is when ballots stop: after now and
-at most 48 hours from now (`ClosingOutOfRange`). `calls` is the exact ordered
-batch of `(target, value, data)` calls the treasury makes if the proposal is
-carried out; an empty batch records agreement and moves nothing. The proposal can
-be carried out until `executionExpiry`, 48 hours after closing. An identical
-proposal made again is a new proposal with its own id, hash and electorate.
+`propose(authorKey, contentHash, calls)` opens a proposal. The caller must be
+allowed to vote `authorKey` (below); the key is their standing and nothing else,
+and proposing casts no ballot. `contentHash` is the hash of the proposal's text,
+kept off chain. Ballots stop at `closesAt`, exactly `VOTING_PERIOD` (24 hours)
+after opening. `calls` is the exact ordered batch of `(target, value, data)` calls
+the treasury makes if the proposal is carried out; an empty batch records
+agreement and moves nothing. An identical proposal made again is a new proposal
+with its own id, hash and electorate.
+
+A proposal that moves no money (an empty batch, or only the manager's
+`setProfile`, the treasury's `setDailySplitBps` and this controller's
+`setEditsRestricted`) may be carried out from `closesAt`. Any other proposal moves
+money and waits `MONEY_DELAY` (1 day) after closing. Either way it may then be
+carried out for `EXECUTION_WINDOW` (48 hours), until `executionExpiry`.
+`executableAt(proposalId)` gives the first moment it may be carried out.
+
+Money leaves only as a share of the treasury, and every proposal is checked when
+it is made:
+
+- No call may carry ETH (`CallCarriesValue(index)`).
+- A call to the treasury's `pay` or `advance` names a share from `MIN_SHARE_PPM`
+  (1, 0.0001%) to `MAX_SHARE_PPM` (990,000, 99%) (`ShareOutOfRange(sharePpm)`),
+  and a proposal holds at most one of them (`OneMoneyMovePerProposal`).
+- No call to any address may use a function that moves or approves tokens
+  (`TokenMoveRefused(index, selector)`): ERC-20 `transfer` (`0xa9059cbb`),
+  `transferFrom` (`0x23b872dd`), `approve` (`0x095ea7b3`), `increaseAllowance`
+  (`0x39509351`) and EIP-2612 `permit` (`0xd505accf`); ERC-721 and ERC-1155
+  `setApprovalForAll` (`0xa22cb465`), `safeTransferFrom` (`0x42842e0e`,
+  `0xb88d4fde`, `0xf242432a`) and `safeBatchTransferFrom` (`0x2eb2c2d6`); ERC-1363
+  `transferAndCall` (`0x1296ee62`, `0x4000aea0`), `transferFromAndCall`
+  (`0xd8fbe994`, `0xc1d34b89`) and `approveAndCall` (`0x3177029f`, `0xcae9ca51`);
+  ERC-777 `send` (`0x9bd9bbc6`), `operatorSend` (`0x62ad1b83`) and
+  `authorizeOperator` (`0x959b8c3f`); and Permit2's
+  `approve(address,address,uint160,uint48)` (`0x87517c45`).
 
 For `TREASURY_OPENING`, 7 days from the fleet's `salesOpenedAt` (see Phases and
 sales), a proposal may carry only calls that move no money, each with no value:
@@ -1010,7 +1043,8 @@ keccak256(abi.encode(chainId, votes, treasury, proposalId, authorKey,
 ```
 
 `ProposalCreated(proposalId, authorKey, proposer, proposalHash, contentHash,
-closesAt, executionExpiry, e0, openRevision, calls)` carries the calls in full.
+closesAt, executableAt, executionExpiry, e0, openRevision, calls)` carries the
+calls in full.
 `proposal(proposalId)` returns the whole record (`UnknownProposal` for none).
 
 A proposal changes the fleet's name, description or image link by a call from
@@ -1042,9 +1076,9 @@ open proposal.
 `status(proposalId)` is worked out from the stored facts and the time; nothing
 finalises it. In order: `Cancelled` once cancelled; `Executed` once carried out;
 `Open` until `closesAt`; then `Rejected` unless `yes >= approvalsNeeded(D)`; then
-`Approved` until `executionExpiry` and `ExecutionExpired` from then on (numbered
-0 to 5 in the order Open, Approved, Rejected, Cancelled, Executed,
-ExecutionExpired). `approvalsNeeded(voters)` is `APPROVAL_PERCENT` (60) percent
+`Waiting` until `executableAt` (only a money proposal waits), `Approved` until
+`executionExpiry` and `ExecutionExpired` from then on (numbered 0 to 6 in the
+order Open, Waiting, Approved, Rejected, Cancelled, Executed, ExecutionExpired). `approvalsNeeded(voters)` is `APPROVAL_PERCENT` (60) percent
 of the voters rounded up, `(voters * 60 + 99) / 100`, one rule for every vote:
 
 | Voters | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
@@ -1056,7 +1090,7 @@ counts against it. There is no minimum: one present key voting Yes on a
 proposal nobody else joins passes it at closing.
 
 `cancel(proposalId)` may be called by whoever may vote the author key now, its
-current owner or an agent, while the proposal is open or approved
+current owner or an agent, while the proposal is open, waiting or approved
 (`NotCancellable` otherwise). It renews the author key and emits
 `ProposalCancelled(proposalId, by)`.
 
@@ -1368,7 +1402,7 @@ completed purchase either made its random-number request or said it failed.
 
 ### On a fork of Base
 
-Measured on 7 October 2026 on a fork of Base at about block 52,306,000, against
+Measured on 7 October 2026 on a fork of Base at about block 52,308,000, against
 the real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking
 and the Chainlink VRF coordinator, with the collection a consumer of a funded
 subscription so each founding-fleet purchase makes its real request. Each
@@ -1377,24 +1411,24 @@ every call run as a transaction of its own (`test/fork/KeyfleetBaseGas.t.sol`):
 
 | Call | Gas |
 | --- | --- |
-| `createFoundingFleet`, fleet 1 | 10,741,737 |
-| `createFoundingFleet`, fleet 2 | 10,724,671 |
-| `createFoundingFleet`, fleet 3 | 10,746,849 |
-| `createFoundingFleet`, fleet 4 | 10,724,706 |
+| `createFoundingFleet`, fleet 1 | 11,125,471 |
+| `createFoundingFleet`, fleet 2 | 11,108,405 |
+| `createFoundingFleet`, fleet 3 | 11,130,583 |
+| `createFoundingFleet`, fleet 4 | 11,108,440 |
 | `advancePhase`, to phase 1 | 52,090 |
 | `advancePhase`, to phase 3 | 29,969 |
-| `purchase`, Classic #1's first key, with its swap and request | 1,190,661 |
-| `purchase`, a later key | 1,056,887 |
-| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 11,759,473 |
-| `present`, one key | 111,093 |
-| `propose`, one payment | 239,138 |
-| `castBallot`, one key | 118,827 |
-| `sendProtocolShare`, two sales owed | 143,031 |
-| `runDailySplit`, ETH, REGENT and USDC | 360,225 |
+| `purchase`, Classic #1's first key, with its swap and request | 1,186,925 |
+| `purchase`, a later key | 1,055,951 |
+| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 12,142,271 |
+| `present`, one key | 111,057 |
+| `propose`, one payment | 243,316 |
+| `castBallot`, one key | 118,681 |
+| `sendProtocolShare`, two sales owed | 143,048 |
+| `runDailySplit`, ETH, REGENT and USDC | 360,272 |
 | `claim`, one key in three assets | 249,973 |
-| `transferFrom`, a key with three assets waiting | 279,055 |
-| `execute`, a one-payment proposal | 91,279 |
-| `executeBatch`, one payment | 53,990 |
+| `transferFrom`, a key with three assets waiting | 279,077 |
+| `execute`, a one-payment proposal | 93,893 |
+| `executeBatch`, one payment | 56,246 |
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. The five transactions that deploy the

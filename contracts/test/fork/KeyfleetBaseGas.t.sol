@@ -80,14 +80,14 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         votes.present(key1);
         _log("present, one key");
 
-        // A proposal paying 1 USDC, and a first ballot on it.
+        // A proposal paying 0.01% of the treasury's USDC, and a first ballot on it.
         KeyfleetTreasury.Call[] memory calls = _one(
             KeyfleetTreasury.Call(
-                address(treasury), 0, abi.encodeCall(KeyfleetTreasury.pay, (address(usdc), OPERATOR, 1e6))
+                address(treasury), 0, abi.encodeCall(KeyfleetTreasury.pay, (address(usdc), OPERATOR, uint32(100)))
             )
         );
         vm.prank(ALICE);
-        uint256 proposalId = votes.propose(first, keccak256("narrative"), uint64(block.timestamp + 1), calls);
+        uint256 proposalId = votes.propose(first, keccak256("narrative"), calls);
         _log("propose, one payment");
         vm.prank(ALICE);
         votes.castBallot(proposalId, key1, KeyfleetVotes.Choice.Yes);
@@ -120,14 +120,16 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _log("transferFrom, a key with three assets waiting");
 
         // Carrying out the one-payment proposal once it closes, and the treasury's batch on its own.
-        vm.warp(votes.proposal(proposalId).closesAt);
+        vm.warp(votes.executableAt(proposalId));
+        uint256 firstPay = usdc.balanceOf(address(treasury)) * 100 / 1e6;
         votes.execute(proposalId, calls);
         _log("execute, a one-payment proposal");
-        assertEq(usdc.balanceOf(OPERATOR), 1e6, "paid");
+        assertEq(usdc.balanceOf(OPERATOR), firstPay, "paid its share");
+        uint256 secondPay = usdc.balanceOf(address(treasury)) * 100 / 1e6;
         vm.prank(address(votes));
         treasury.executeBatch(calls);
         _log("executeBatch, one payment");
-        assertEq(usdc.balanceOf(OPERATOR), 2e6, "paid again");
+        assertEq(usdc.balanceOf(OPERATOR), firstPay + secondPay, "paid its share again");
     }
 
     /// @dev A creator makes a Classic fleet at the lowest start price and buys its key 1.

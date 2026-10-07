@@ -28,7 +28,7 @@ contract KeyfleetVotesTopicsTest is Test {
 
     function test_proposalCreatedTopic() public pure {
         assertEq(
-            KeyfleetVotes.ProposalCreated.selector, 0x38b5bfd5a74e1cd21d48353dd73195633860c2a395e3a13467494c2a8a81b462
+            KeyfleetVotes.ProposalCreated.selector, 0x959c9f8f330ac28b7f4719d751c7fa2d25e7be768c2642037e274c468a0ac796
         );
     }
 
@@ -49,12 +49,13 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(uint8(KeyfleetVotes.Choice.Abstain), 3);
         assertEq(uint8(type(KeyfleetVotes.Choice).max), 3);
         assertEq(uint8(KeyfleetVotes.Status.Open), 0);
-        assertEq(uint8(KeyfleetVotes.Status.Approved), 1);
-        assertEq(uint8(KeyfleetVotes.Status.Rejected), 2);
-        assertEq(uint8(KeyfleetVotes.Status.Cancelled), 3);
-        assertEq(uint8(KeyfleetVotes.Status.Executed), 4);
-        assertEq(uint8(KeyfleetVotes.Status.ExecutionExpired), 5);
-        assertEq(uint8(type(KeyfleetVotes.Status).max), 5);
+        assertEq(uint8(KeyfleetVotes.Status.Waiting), 1);
+        assertEq(uint8(KeyfleetVotes.Status.Approved), 2);
+        assertEq(uint8(KeyfleetVotes.Status.Rejected), 3);
+        assertEq(uint8(KeyfleetVotes.Status.Cancelled), 4);
+        assertEq(uint8(KeyfleetVotes.Status.Executed), 5);
+        assertEq(uint8(KeyfleetVotes.Status.ExecutionExpired), 6);
+        assertEq(uint8(type(KeyfleetVotes.Status).max), 6);
     }
 
     function test_forwardedToTreasuryTopic() public pure {
@@ -118,7 +119,8 @@ contract KeyfleetVotesTopicsTest is Test {
     /// them back through. The one shared shards contract is read from the factory or from a fleet's
     /// voting controller.
     function test_proposalAndShardSelectors() public view {
-        assertEq(KeyfleetVotes.propose.selector, bytes4(0x67975250));
+        assertEq(KeyfleetVotes.propose.selector, bytes4(0x4d51a20c));
+        assertEq(KeyfleetVotes.executableAt.selector, bytes4(0x20d0adcb));
         assertEq(KeyfleetVotes.castBallot.selector, bytes4(0xb6e564ef));
         assertEq(KeyfleetVotes.castBallotBySig.selector, bytes4(0xd56f0ce6));
         assertEq(KeyfleetVotes.cancel.selector, bytes4(0x40e58ee5));
@@ -142,12 +144,12 @@ contract KeyfleetVotesTopicsTest is Test {
     /// @dev The treasury's payments and advances, which a proposal's calls name, and the events the
     /// treasury reader matches them by.
     function test_treasuryPaymentAndAdvanceSelectorsAndTopics() public view {
-        assertEq(KeyfleetTreasury.pay.selector, bytes4(0xb3d76188));
-        assertEq(KeyfleetTreasury.advance.selector, bytes4(0x130846af));
+        assertEq(KeyfleetTreasury.pay.selector, bytes4(0x5bc0a2ae));
+        assertEq(KeyfleetTreasury.advance.selector, bytes4(0x18b18d1a));
         assertEq(KeyfleetTreasury.returnAdvance.selector, bytes4(0xf6dd8fda));
         assertEq(KeyfleetTreasury(payable(address(0))).advances.selector, bytes4(0x435cee31));
-        assertEq(KeyfleetTreasury.Paid.selector, 0x9def4e2802183d68ce90a6a226a2962b59298616c27165f12c4fbc5c84cdd778);
-        assertEq(KeyfleetTreasury.Advanced.selector, 0x43b27f372639bed05e9fab94afe302ce65996b9a58d7fa92d3dbfbdca5d0109c);
+        assertEq(KeyfleetTreasury.Paid.selector, 0xadcbed09c0c3a96dbd120d51398fcb6c403f4bfad9a29f7e23e7f5707968220d);
+        assertEq(KeyfleetTreasury.Advanced.selector, 0x48ac236609298a1c7957fb52a75e13423f9df416523ebeec6db95db52d813159);
         assertEq(
             KeyfleetTreasury.AdvanceReturned.selector,
             0x2034cebd1ee980ae5db64594c0a5e13ca3153fb318294274500210fc58592e80

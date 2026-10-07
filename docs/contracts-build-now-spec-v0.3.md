@@ -192,7 +192,7 @@ Governance dormancy never changes distribution eligibility. All minted Keys part
 
 A proposal contains author Key, immutable narrative/content hash, exact ordered action bytes, opening revision/time, closing time, execution expiry, tallies, and lifecycle status.
 
-Use `createdAt < closesAt <= createdAt + 48 hours`. **Implementation default:** execution expiry is 48 hours after closing, fixed in the proposal. Do not add a hidden timelock, pre-snapshot delay, or separate quorum class. The UI may recommend more review time for consequential actions.
+Every vote lasts exactly 24 hours: `closesAt = createdAt + 24 hours` (Sean, 7 Oct). A proposal that moves no money may be carried out for 48 hours from closing; one that moves money waits 1 day after closing, then may be carried out for 48 hours (KF-VOTE-DELAY a). Both times are fixed in the proposal. Every payment names one treasury token and a share of the treasury's balance of it, from 0.0001% to 99%, paid as the balance when carried out × share, rounded down (KF-VOTE-AMOUNT a). Do not add a pre-snapshot or a separate quorum class.
 
 Action types needed now:
 

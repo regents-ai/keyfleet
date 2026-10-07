@@ -1591,6 +1591,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         KeyfleetTreasury.Call[] memory calls = _setProfileCall(fleet, next);
         uint256 id = _pass(otherFleet, calls);
         KeyfleetVotes otherVotes = otherFleet.VOTES();
+        vm.warp(otherVotes.executableAt(id));
         vm.expectRevert(KeyfleetManager.OnlyTreasury.selector);
         otherVotes.execute(id, calls);
         assertEq(fleet.profile().name, "Founding fleet", "the profile is unchanged");
