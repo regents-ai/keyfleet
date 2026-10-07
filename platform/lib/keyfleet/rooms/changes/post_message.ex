@@ -7,7 +7,9 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   is marked `in_key_thread`.
 
   Every line is written as the author's key in the fleet
-  (`Keyfleet.Keys.identity/2`), which is kept on the line as `as_key`.
+  (`Keyfleet.Keys.identity/2`), which is kept on the line as `as_key`. An
+  agent writing as the person it is paired with writes the person's line,
+  marked with its profile as `via_agent_profile`.
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -91,14 +93,14 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     end
   end
 
-  defp write_as(changeset, room, actor, kind, %{token_id: as_key, wallet: wallet}) do
+  defp write_as(changeset, room, actor, kind, %{token_id: as_key, wallet: wallet} = identity) do
     body = Ash.Changeset.get_argument(changeset, :body)
     idempotency_key = Ash.Changeset.get_argument(changeset, :idempotency_key)
     earlier = earlier_post(room.fleet_id, actor, idempotency_key)
-    {author, profile} = author(actor, as_key, author_wallet(earlier, wallet))
+    {author, profiles} = author(actor, identity, as_key, author_wallet(earlier, wallet))
 
     changeset
-    |> Ash.Changeset.put_context(:author_profile, profile)
+    |> Ash.Changeset.put_context(:author_profiles, profiles)
     |> Ash.Changeset.force_change_attributes(
       Map.merge(author, %{
         kind: kind,
@@ -121,6 +123,10 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     do: Rooms.get_post_under_send_key!(fleet_id, wallets(actor), idempotency_key, actor: actor)
 
   defp wallets(%Human{wallet_addresses: wallets}), do: wallets
+
+  defp wallets(%Agent{wallet_address: wallet, pairing: %Human{wallet_addresses: person}}),
+    do: [wallet | person]
+
   defp wallets(%Agent{wallet_address: wallet}), do: [wallet]
 
   # A retry is written under the wallet of the first post, so the database
@@ -134,17 +140,36 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   defp seq(_room, earlier), do: earlier.seq
 
   # An agent writes from its own wallet with its profile; a person from the
-  # wallet holding the key they write as.
-  defp author(%Human{}, as_key, wallet),
-    do:
-      {%{author_kind: :human, author_wallet: wallet, as_key: as_key, agent_profile_id: nil}, nil}
+  # wallet holding the key they write as, and an agent writing for its person
+  # the same way, marked with its profile.
+  defp author(%Human{}, _identity, as_key, wallet),
+    do: {person(as_key, wallet, nil), %{agent_profile: nil, via_agent_profile: nil}}
 
-  defp author(%Agent{} = actor, as_key, wallet) do
+  defp author(%Agent{} = actor, %{for_person: true}, as_key, wallet) do
+    profile = Keyfleet.Agents.get_my_profile!(actor: actor)
+    {person(as_key, wallet, profile.id), %{agent_profile: nil, via_agent_profile: profile}}
+  end
+
+  defp author(%Agent{} = actor, _identity, as_key, wallet) do
     profile = Keyfleet.Agents.get_my_profile!(actor: actor, load: [:human_backed])
 
-    {%{author_kind: :agent, author_wallet: wallet, as_key: as_key, agent_profile_id: profile.id},
-     profile}
+    {%{
+       author_kind: :agent,
+       author_wallet: wallet,
+       as_key: as_key,
+       agent_profile_id: profile.id,
+       via_agent_profile_id: nil
+     }, %{agent_profile: profile, via_agent_profile: nil}}
   end
+
+  defp person(as_key, wallet, via),
+    do: %{
+      author_kind: :human,
+      author_wallet: wallet,
+      as_key: as_key,
+      agent_profile_id: nil,
+      via_agent_profile_id: via
+    }
 
   defp digest(body), do: :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)
 
@@ -156,7 +181,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     if message.body_digest == digest(body) and
          message.room_id == Ash.Changeset.get_attribute(changeset, :room_id) do
       # A post is answered with its author, the way the room answers it.
-      {:ok, %{message | agent_profile: changeset.context.author_profile}}
+      {:ok, Map.merge(message, changeset.context.author_profiles)}
     else
       {:error,
        SendConflictError.exception(

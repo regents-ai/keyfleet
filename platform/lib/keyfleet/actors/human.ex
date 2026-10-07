@@ -3,6 +3,12 @@ defmodule Keyfleet.Actors.Human do
   @enforce_keys [:human_account_id]
   defstruct [:human_account_id, wallet_addresses: [], role: :human]
 
+  @type t :: %__MODULE__{
+          human_account_id: integer(),
+          wallet_addresses: [String.t()],
+          role: :human
+        }
+
   def for_account(account),
     do: %__MODULE__{human_account_id: account.id, wallet_addresses: wallets(account)}
 

@@ -22,6 +22,10 @@ defmodule Keyfleet.Agents do
       define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
     end
 
+    resource Keyfleet.Agents.Pairing do
+      define :get_pairing, action: :by_wallet, args: [:wallet], not_found_error?: false
+    end
+
     resource Keyfleet.Agents.CheckIn do
       define :get_check_in,
         action: :read,
@@ -42,6 +46,32 @@ defmodule Keyfleet.Agents do
   def account(privy_user_id) do
     account = Keyfleet.Accounts.get_by_privy_did!(privy_user_id, actor: %Keyfleet.Actors.System{})
     %{display_name: account && account.display_name}
+  end
+
+  @doc """
+  The agent with its `pairing` (`Keyfleet.Actors.Agent`): the account of the
+  person it is paired with, when it is backed by a person verified with World
+  ID and that person has an account here; otherwise what it is missing.
+  """
+  def with_pairing(%Keyfleet.Actors.Agent{} = agent),
+    do: %{agent | pairing: pairing(agent)}
+
+  defp pairing(agent) do
+    system = %Keyfleet.Actors.System{}
+
+    case get_pairing!(agent.wallet_address, actor: system) do
+      nil ->
+        :none
+
+      _paired when is_nil(agent.human_id) ->
+        :not_backed
+
+      %{privy_user_id: person} ->
+        case Keyfleet.Accounts.get_by_privy_did!(person, actor: system) do
+          nil -> :person_not_here
+          account -> Keyfleet.Actors.Human.for_account(account)
+        end
+    end
   end
 
   @doc """

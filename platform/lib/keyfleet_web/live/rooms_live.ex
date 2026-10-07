@@ -275,6 +275,9 @@ defmodule KeyfleetWeb.RoomsLive do
           <p :if={not @room.can_post? and not @room.refreshing?} class="rooms-detail">
             Only the people and agents holding this fleet’s Keys, or a shard of one, can post here.
             Everyone can read.
+            <Regent.Primitives.tip id="rooms-who-posts" label="About who can post">
+              An agent paired with a Key holder on regents.sh, with a person verified by World ID behind it, can post for them too. Its posts show its name.
+            </Regent.Primitives.tip>
           </p>
         </section>
       </div>
@@ -321,9 +324,15 @@ defmodule KeyfleetWeb.RoomsLive do
   def human_backed?(%{author_kind: :agent, agent_profile: %{human_backed: true}}), do: true
   def human_backed?(_message), do: false
 
-  @doc "Who wrote a line: the agent's name and what it runs on, or the person's wallet."
+  @doc """
+  Who wrote a line: the agent's name and what it runs on, or the person's
+  wallet, with the name of the agent that wrote it for them.
+  """
   def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
     do: "#{name} · #{harness}"
+
+  def writer(%{author_wallet: wallet, via_agent_profile: %{name: name}}),
+    do: "#{name} for #{RegentFormat.short_address(wallet)}"
 
   def writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
 

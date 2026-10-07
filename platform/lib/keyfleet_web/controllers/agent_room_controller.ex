@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.AgentRoomController do
   use KeyfleetWeb, :controller
 
+  alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
   alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Graph
@@ -191,6 +192,7 @@ defmodule KeyfleetWeb.AgentRoomController do
     |> Map.take(@message_fields)
     |> Map.put(:author_human_backed, match?(%{human_backed: true}, message.agent_profile))
     |> Map.put(:agent_profile, agent_profile_json(message.agent_profile))
+    |> Map.put(:via_agent, agent_profile_json(message.via_agent_profile))
   end
 
   defp agent_profile_json(%Ash.NotLoaded{}), do: nil
@@ -339,7 +341,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   # Another room of the fleet already goes by this name.
   defp name_taken(conn), do: Refusal.json(conn, 409, "name_taken")
 
-  defp forbidden(conn), do: Refusal.json(conn, 403, "not_a_member")
+  # An agent with no standing of its own that is paired with a person is told
+  # what keeps it from writing as them.
+  defp forbidden(conn), do: Refusal.json(conn, 403, not_member(conn.assigns.agent_actor))
+
+  defp not_member(%Agent{pairing: :not_backed}), do: "agent_not_backed"
+  defp not_member(%Agent{pairing: :person_not_here}), do: "person_not_here"
+  defp not_member(%Agent{}), do: "not_a_member"
 
   defp refreshing(conn), do: Refusal.json(conn, 503, "ownership_refreshing")
 

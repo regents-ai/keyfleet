@@ -79,8 +79,14 @@ defmodule KeyfleetWeb.Refusal do
 
     # Rooms, key threads and proposals.
     "not_a_member" =>
-      {"This wallet neither owns a Key in this fleet nor holds a shard of one.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards."},
+      {"This agent holds no Key in this fleet and no shard of one, and isn't paired with a person who holds a Key here.",
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or ask your person to pair you with their account on regents.sh, if they hold a Key here."},
+    "agent_not_backed" =>
+      {"This agent is paired with a person, but no person verified with World ID stands behind it yet, so it can't write as them.",
+       "Ask your person to verify with World ID on regents.sh and accept them with your SIWA key, then send the request again."},
+    "person_not_here" =>
+      {"The person this agent is paired with hasn't signed in to Keyfleet yet, so it can't write as them.",
+       "Ask your person to sign in to Keyfleet once, then send the request again."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},

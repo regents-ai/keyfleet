@@ -150,6 +150,11 @@ defmodule Keyfleet.Keys do
   holding it. An agent is the highest-ranked key its wallet holds, or else the
   highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
   either writes in the fleet is written as that key.
+
+  An agent with neither, paired with a person whose account is here and backed
+  by World ID (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
+  `for_person: true`: what it writes there is the person's, marked as the
+  agent's.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
     case held_identity_key!(fleet_id, wallets, actor: actor) do
@@ -159,15 +164,24 @@ defmodule Keyfleet.Keys do
   end
 
   def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
-    with true <- Agent.valid?(actor),
-         %{token_id: token_id} <- held_or_shard(fleet_id, wallet, actor) do
-      %{token_id: token_id, wallet: wallet}
-    else
-      _none -> nil
+    if Agent.valid?(actor) do
+      case held_or_shard(fleet_id, wallet, actor) do
+        %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
+        nil -> for_person(actor.pairing, fleet_id)
+      end
     end
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  defp for_person(%Human{} = person, fleet_id) do
+    case identity(person, fleet_id) do
+      nil -> nil
+      identity -> Map.put(identity, :for_person, true)
+    end
+  end
+
+  defp for_person(_missing, _fleet_id), do: nil
 
   defp held_or_shard(fleet_id, wallet, actor),
     do:

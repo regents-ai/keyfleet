@@ -248,7 +248,10 @@ defmodule KeyfleetWeb.DirectoryMD do
     do: inline(name, @name_length) <> " (✓ Verified human)"
 
   defp author(%{kind: :agent, name: name}), do: inline(name, @name_length)
-  defp author(%{kind: :human, wallet: wallet}), do: wallet
+  defp author(%{kind: :human, wallet: wallet, via_agent: nil}), do: wallet
+
+  defp author(%{kind: :human, wallet: wallet, via_agent: name}),
+    do: inline(name, @name_length) <> " for " <> wallet
 
   defp footer(json) do
     "#{DirectoryJSON.note()}\n" <>

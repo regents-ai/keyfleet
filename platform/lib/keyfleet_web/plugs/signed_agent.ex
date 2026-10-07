@@ -54,9 +54,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @propose_max_body 4_000 * 12 + 8 * 1024
   # What a proposal's body may name: what every proposal has, then the
   # fields of its kind, each a string as the proposals page's form sends it.
-  @propose_required ~w(kind key hours text)
+  @propose_required ~w(kind key text)
   @propose_fields @propose_required ++
-                    ~w(asset amount recipient rate target restricted signature hash name symbol description website image)
+                    ~w(asset share recipient rate target restricted signature hash name symbol description website image)
   @choices ~w(yes no abstain)
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
@@ -224,7 +224,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Agent.valid?(actor) ->
         :ok = Keyfleet.Agents.save_listing(actor)
-        {:ok, assign(conn, :agent_actor, actor)}
+        {:ok, assign(conn, :agent_actor, Keyfleet.Agents.with_pairing(actor))}
 
       smart_wallet_on_ethereum?(actor) ->
         {:error, %{reason: :smart_wallet_on_ethereum}}

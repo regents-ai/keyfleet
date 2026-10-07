@@ -24,6 +24,14 @@ defmodule Keyfleet.Actors.Agent do
   registry, and the World ID person behind it with how many agents that person
   stands behind (`RegentAgents.HumanBacking`), each nil when there is none. The
   agent's profile saves them. The person's number is never shown or logged.
+
+  `pairing` says whether the agent may also write as the person it is paired
+  with (`Keyfleet.Agents.pairing/1`): that person's account here, as a
+  `Keyfleet.Actors.Human`, when the agent is paired with them on regents.sh and
+  backed by a person verified with World ID; otherwise what it is missing,
+  `:none` (not paired), `:not_backed` or `:person_not_here` (the person has no
+  account here). It never signs with the person's wallets: what it writes as
+  them is marked as its own.
   """
   @enforce_keys [:wallet_address, :chain_id, :verification_method, :audience]
   @derive {Inspect, except: [:human_id]}
@@ -35,7 +43,8 @@ defmodule Keyfleet.Actors.Agent do
     :credential_ref,
     :registry_url,
     :human_id,
-    :same_person_agent_count
+    :same_person_agent_count,
+    pairing: :none
   ]
 
   @type t :: %__MODULE__{
@@ -46,7 +55,8 @@ defmodule Keyfleet.Actors.Agent do
           credential_ref: String.t() | nil,
           registry_url: String.t() | nil,
           human_id: String.t() | nil,
-          same_person_agent_count: pos_integer() | nil
+          same_person_agent_count: pos_integer() | nil,
+          pairing: Keyfleet.Actors.Human.t() | :none | :not_backed | :person_not_here
         }
 
   def valid?(%__MODULE__{

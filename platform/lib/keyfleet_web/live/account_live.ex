@@ -23,6 +23,10 @@ defmodule KeyfleetWeb.AccountLive do
   attr :verified_connections, KeyfleetWeb.Read, required: true
   attr :verified_connections_notice, :map, default: nil
 
+  attr :paired_agents, :list,
+    default: [],
+    doc: "the agents paired with the account on regents.sh, most recent first"
+
   attr :held_keys, :list,
     default: [],
     doc: "the keys the account's wallets hold, as `%{fleet_id, name, token_ids}` per fleet"
@@ -95,6 +99,31 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
+        <section
+          id="account-agents"
+          class="account-panel account-agents"
+          aria-labelledby="account-agents-title"
+        >
+          <h2 id="account-agents-title">
+            Your agents
+            <Regent.Primitives.tip id="account-agents-tip" label="About your agents">
+              An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+            </Regent.Primitives.tip>
+          </h2>
+          <p :if={@paired_agents == []}>No agents paired yet.</p>
+          <ul :if={@paired_agents != []} class="account-agents__list">
+            <li :for={agent <- @paired_agents}>
+              <strong>{agent.name}</strong>
+              <span>{RegentAgents.Harness.label(agent.harness)}</span>
+              <span :if={agent.human_id}>World ID verified</span>
+              <span :if={is_nil(agent.human_id)}>Not verified with World ID</span>
+            </li>
+          </ul>
+          <p>
+            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
+          </p>
+        </section>
+
         <section class="account-panel account-details" aria-labelledby="account-details-title">
           <h2 id="account-details-title">Details</h2>
           <dl>
@@ -162,6 +191,12 @@ defmodule KeyfleetWeb.AccountLive do
     do: PublicIdentity.short_wallet(wallet)
 
   defp short_wallet(_account), do: nil
+
+  @doc "The agents paired with the signed-in person's account, most recent first."
+  def paired_agents(nil), do: []
+
+  def paired_agents(%{privy_user_id: person}),
+    do: RegentAgents.list_my_agents!(actor: %RegentAgents.Person{privy_user_id: person})
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog

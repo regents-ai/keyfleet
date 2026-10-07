@@ -64,6 +64,8 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
+       paired_agents: [],
+       agents_topic: nil,
        fleet: nil,
        fleet_params: nil,
        keys_topic: nil,
@@ -250,6 +252,13 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info(%Broadcast{event: "room_head"}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
 
+  # The person's agents changed on any Regent site: paired, checked in,
+  # corrected or unpaired.
+  def handle_info(:agents_changed, socket) do
+    account = current_account(socket.assigns.access_context)
+    {:noreply, assign(socket, :paired_agents, AccountLive.paired_agents(account))}
+  end
+
   def handle_info(%Broadcast{event: "key_activity"} = notice, socket),
     do: KeyProfileLive.handle_info(notice, socket)
 
@@ -397,6 +406,7 @@ defmodule KeyfleetWeb.ShellLive do
           verified_connections={@verified_connections}
           verified_connections_notice={@verified_connections_notice}
           held_keys={@held_keys}
+          paired_agents={@paired_agents}
         />
 
         <FleetLive.page
@@ -668,10 +678,29 @@ defmodule KeyfleetWeb.ShellLive do
     assign(socket, verified_connections_notice: notice, connection_outcome: nil)
   end
 
-  defp load_held_keys(socket, %{route_id: :account}),
-    do: assign(socket, :held_keys, AccountLive.held_keys(human_actor(socket)))
+  defp load_held_keys(socket, %{route_id: :account}) do
+    account = current_account(socket.assigns.access_context)
+
+    socket
+    |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
+    |> assign(:paired_agents, AccountLive.paired_agents(account))
+    |> follow_agents(account)
+  end
 
   defp load_held_keys(socket, _route_spec), do: assign(socket, :held_keys, [])
+
+  # Hears when the person's agents change, once per page.
+  defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do
+    if connected?(socket) do
+      topic = RegentAgents.topic(person)
+      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+      assign(socket, :agents_topic, topic)
+    else
+      socket
+    end
+  end
+
+  defp follow_agents(socket, _account), do: socket
 
   defp identity_request("link", provider, _identities) do
     {:ok, %{action: :link, provider: provider}}

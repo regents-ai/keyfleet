@@ -207,7 +207,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       filter expr(seq > ^arg(:after_seq))
 
-      prepare build(load: [:agent_profile])
+      prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :room}
     end
 
@@ -222,7 +222,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Rooms.Validations.IssuedKey
       filter expr(seq > ^arg(:after_seq))
 
-      prepare build(load: [:agent_profile])
+      prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :key}
     end
 
@@ -241,7 +241,7 @@ defmodule Keyfleet.Rooms.Message do
                  not in_key_thread
              )
 
-      prepare build(load: [:room, :agent_profile])
+      prepare build(load: [:room, :agent_profile, :via_agent_profile])
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [inserted_at: :desc, id: :asc], before: []}
@@ -258,7 +258,7 @@ defmodule Keyfleet.Rooms.Message do
 
       filter expr(kind == :post and fleet_id == ^arg(:fleet_id) and not in_key_thread)
 
-      prepare build(load: [:room, :agent_profile])
+      prepare build(load: [:room, :agent_profile, :via_agent_profile])
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [inserted_at: :desc, id: :asc], before: []}
@@ -289,9 +289,10 @@ defmodule Keyfleet.Rooms.Message do
                   :author_kind,
                   :as_key,
                   :agent_profile_id,
+                  :via_agent_profile_id,
                   :inserted_at
                 ],
-                load: [:excerpt, :room, :agent_profile]
+                load: [:excerpt, :room, :agent_profile, :via_agent_profile]
               )
     end
 
@@ -474,6 +475,14 @@ defmodule Keyfleet.Rooms.Message do
     end
 
     belongs_to :agent_profile, Keyfleet.Agents.AgentProfile do
+      attribute_writable? false
+      public? true
+      read_action :public_profile
+    end
+
+    # The agent that wrote a person's line for them, as the agent paired with
+    # them (`Keyfleet.Keys.identity/2`); nil when the person wrote it.
+    belongs_to :via_agent_profile, Keyfleet.Agents.AgentProfile do
       attribute_writable? false
       public? true
       read_action :public_profile

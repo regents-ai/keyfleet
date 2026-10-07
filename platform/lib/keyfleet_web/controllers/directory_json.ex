@@ -93,8 +93,8 @@ defmodule KeyfleetWeb.DirectoryJSON do
     |> Map.put(:url, room_url(fleet.id, post.room))
   end
 
-  defp author(%{kind: :human, wallet: wallet}),
-    do: %{kind: :human, wallet: RegentFormat.short_address(wallet)}
+  defp author(%{kind: :human, wallet: wallet} = person),
+    do: %{person | wallet: RegentFormat.short_address(wallet)}
 
   defp author(agent), do: agent
 
