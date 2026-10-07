@@ -13,7 +13,7 @@ defmodule Keyfleet.WalletSteps.Build do
 
   Reads go to the site's own node through `Keyfleet.Chain.Client`, at the
   latest block. Key sales need a fleet the site has recorded as deployed,
-  which is how they stay off: no fleet is recorded on Ethereum yet.
+  which is how they stay off: no fleet is recorded on Base yet.
   """
   use Ash.Resource.Actions.Implementation
 

@@ -252,9 +252,9 @@ defmodule Keyfleet.ChainTest do
       assert owner == wallet("a")
     end
 
-    # The second reading covers the 32 blocks below the cursor and no more, and
+    # The second reading covers the 30 blocks below the cursor and no more, and
     # never reaches below the deployment for a fleet younger than that.
-    test "the second reading spans the last 32 blocks, from the deployment at the earliest", %{
+    test "the second reading spans the last 30 blocks, from the deployment at the earliest", %{
       fleet: fleet
     } do
       StubClient.put_chain(head(@deployed + 5), [log(1, 1, "a", @deployed, 0)])
@@ -267,17 +267,17 @@ defmodule Keyfleet.ChainTest do
       end)
 
       Chain.clear_divergence!(@fleet)
-      edge = [log(2, 1, "b", @deployed + 168, 0), log(3, 1, "c", @deployed + 169, 0)]
+      edge = [log(2, 1, "b", @deployed + 170, 0), log(3, 1, "c", @deployed + 171, 0)]
       StubClient.put_chain(head(@deployed + 200), [log(1, 1, "a", @deployed, 0) | edge])
       assert Scanner.step(fleet, StubClient) == :ok
       assert next_block() == @deployed + 201
 
       StubClient.put_chain(head(@deployed + 201), [log(1, 1, "a", @deployed, 0)],
-        block_hashes: %{(@deployed + 168) => @new_hash, (@deployed + 169) => @new_hash}
+        block_hashes: %{(@deployed + 170) => @new_hash, (@deployed + 171) => @new_hash}
       )
 
       capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 169}
+        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 171}
       end)
     end
   end
@@ -301,12 +301,12 @@ defmodule Keyfleet.ChainTest do
       classic = Fleets.get_fleet!("fleet_tech_classic")
 
       assert %{
-               chain_id: 1,
+               chain_id: 8453,
                deployed_block: 42,
                contract_address: "0xc1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
                rewards_address: "0xd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
                votes_address: "0x9191919191919191919191919191919191919191",
-               usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+               usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
              } = classic
 
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
@@ -346,7 +346,7 @@ defmodule Keyfleet.ChainTest do
       bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
       for {key, value, field} <- [
-            {"chainId", 8_453, "chain_id"},
+            {"chainId", 1, "chain_id"},
             {"usdc", "0x" <> String.duplicate("0b", 20), "usdc_address"},
             {"traitTableHash", "0x" <> String.duplicate("b2", 32), "trait_table_hash"}
           ] do
@@ -441,12 +441,12 @@ defmodule Keyfleet.ChainTest do
 
   defp deployment(contract) do
     %{
-      chain_id: 1,
+      chain_id: 8453,
       contract_address: contract,
       rewards_address: "0x" <> String.duplicate("8", 40),
       votes_address: "0x" <> String.duplicate("9", 40),
       shards_address: "0x" <> String.duplicate("6", 40),
-      usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
       deployed_block: @deployed,
       trait_table_hash: "0x" <> String.duplicate("a", 64)
     }
@@ -459,9 +459,9 @@ defmodule Keyfleet.ChainTest do
 
     Map.merge(
       %{
-        "chainId" => 1,
+        "chainId" => 8453,
         "deploymentBlock" => 42,
-        "usdc" => "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "usdc" => "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         "traitTableHash" => "0x" <> String.duplicate("A1", 32),
         "fleet" => %{
           "slot" => slot,

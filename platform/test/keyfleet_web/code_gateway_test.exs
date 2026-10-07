@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
              "aud" => "keyfleet-code",
              "fleet" => @fleet,
              "scope" => "push",
-             "sub" => "did:pkh:eip155:1:" <> @holder_wallet
+             "sub" => "did:pkh:eip155:8453:" <> @holder_wallet
            } = claims
 
     assert claims["exp"] - claims["iat"] <= 600
@@ -159,7 +159,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     receive_pack = "/#{@owner}/#{@fleet}/git-receive-pack"
     assert_receive {:store, "POST", ^receive_pack, claims, ^body}
-    assert claims["sub"] == "did:pkh:eip155:1:" <> @agent_wallet
+    assert claims["sub"] == "did:pkh:eip155:8453:" <> @agent_wallet
     assert pushed.resp_body == report()
 
     assert_receive {:code_pushed, @fleet}

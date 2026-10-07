@@ -447,9 +447,9 @@ defmodule Keyfleet.ProposalsChainTest do
       assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
                [
                  {@deployed, @deployed + 9_999},
-                 {@deployed + 9_968, @deployed + 9_999},
+                 {@deployed + 9_970, @deployed + 9_999},
                  {@deployed + 10_000, @deployed + 19_999},
-                 {@deployed + 19_968, @deployed + 19_999},
+                 {@deployed + 19_970, @deployed + 19_999},
                  {@deployed + 20_000, @deployed + 25_000}
                ]
     end
@@ -1264,12 +1264,12 @@ defmodule Keyfleet.ProposalsChainTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: @votes,
         shards_address: @shards,
-        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: @deployed,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

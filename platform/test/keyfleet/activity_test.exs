@@ -537,7 +537,7 @@ defmodule Keyfleet.ActivityTest do
           seq: seq,
           event_id: "evt_#{seq}",
           type: type,
-          actor: "member:1:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
+          actor: "member:8453:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
           timestamp: DateTime.to_iso8601(at),
           payload: payload
         }

@@ -39,12 +39,12 @@ defmodule Keyfleet.GraphTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         shards_address: "0x" <> String.duplicate("6", 40),
-        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },
@@ -90,7 +90,7 @@ defmodule Keyfleet.GraphTest do
 
     assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
     [command] = for %{type: "keyfleet.command"} = event <- events, do: event
-    assert command.payload["principal"] == "member:1:#{@contract}:1@1/human:#{@owner}"
+    assert command.payload["principal"] == "member:8453:#{@contract}:1@1/human:#{@owner}"
 
     {:ok, %{"result" => %{"events" => logged}}} =
       Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
@@ -119,7 +119,7 @@ defmodule Keyfleet.GraphTest do
     ChainHelpers.issue_shard!(@fleet, 1, @agent.wallet_address)
 
     assert {:ok, %{result: %{"id" => "note#1"}}} = write(@agent, 1, "s-1")
-    assert principal("s-1") == "member:1:#{@contract}:1@1/agent:#{@agent.wallet_address}"
+    assert principal("s-1") == "member:8453:#{@contract}:1@1/agent:#{@agent.wallet_address}"
 
     # Another key, a wallet with no shard, and the shard once its owner ends it.
     epoch!(2, @owner)
@@ -138,7 +138,7 @@ defmodule Keyfleet.GraphTest do
 
     assert {:error, %Ash.Error.Forbidden{}} = write(@agent, 1, "o-1")
     assert {:ok, _written} = write(@agent, 2, "o-2")
-    assert principal("o-2") == "member:1:#{@contract}:2@1/agent:#{@agent.wallet_address}"
+    assert principal("o-2") == "member:8453:#{@contract}:2@1/agent:#{@agent.wallet_address}"
   end
 
   test "while a vote has restricted a key's edits, neither its owner nor its shard writes" do

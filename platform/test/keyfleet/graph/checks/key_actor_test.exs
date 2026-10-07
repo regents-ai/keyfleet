@@ -203,12 +203,12 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         shards_address: "0x" <> String.duplicate("6", 40),
-        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

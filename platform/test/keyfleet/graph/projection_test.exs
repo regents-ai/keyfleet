@@ -583,9 +583,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
   defp stamped(id) do
     %{
       id: id,
-      principal: "member:1:#{@contract}:17@3/agent:#{@wallet}",
+      principal: "member:8453:#{@contract}:17@3/agent:#{@wallet}",
       auth: %{
-        key: %{chain_id: 1, contract: @contract, token_id: 17},
+        key: %{chain_id: 8453, contract: @contract, token_id: 17},
         ownership_epoch: 3,
         kind: "agent",
         operator_wallet: @wallet,

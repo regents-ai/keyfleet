@@ -6,8 +6,8 @@ defmodule Keyfleet.Chain.Scanner do
   which keys' workspace edits a vote restricted, from its vote contract; and
   the shards its keys' owners issued and ended, from its shard record.
 
-  Each pass reads the head, reads again the last 32 blocks it already
-  recorded (one Ethereum epoch, about six minutes), then records what
+  Each pass reads the head, reads again the last 30 blocks it already
+  recorded (about a minute of Base), then records what
   happened after them up to the head. Each stretch of blocks is one request
   for all three contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
@@ -67,7 +67,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
 
-  @rescan_blocks 32
+  @rescan_blocks 30
   @max_range 10_000
   @system %System{}
 

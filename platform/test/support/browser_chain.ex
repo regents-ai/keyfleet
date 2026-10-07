@@ -3,7 +3,7 @@ defmodule Keyfleet.BrowserChain do
   The browser tests' chain. Called on the browser test server's own node, it
   sells and moves keys of one fleet, and issues and ends their shards, through
   the real chain reader, so a page open in the browser hears of them exactly
-  as it would from Ethereum.
+  as it would from Base.
 
   Every pass reads blocks well past the last one recorded, so the reader's
   second look at recent blocks never finds a record the made-up chain has
@@ -43,8 +43,8 @@ defmodule Keyfleet.BrowserChain do
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
-  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-  @chain_id 1
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @chain_id 8_453
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
@@ -52,7 +52,7 @@ defmodule Keyfleet.BrowserChain do
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @shard_issued ShardsLog.topics() |> hd()
   @shard_ended ShardsLog.topics() |> List.last()
-  # A plain wallet's sign-in on Base counts on Ethereum, where the keys are.
+  # A plain wallet signed in on Base, where the keys are.
   @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,

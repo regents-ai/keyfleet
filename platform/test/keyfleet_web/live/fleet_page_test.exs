@@ -24,7 +24,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @stranger "0x" <> String.duplicate("b", 40)
   @agent "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
-  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 
   setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
@@ -270,7 +270,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-order-line") ==
                "Key 151 costs 42.99817 USDC. First approve 42.99817 USDC for the fleet, then buy it."
 
-      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Ethereum."
+      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
       assert has_element?(view, "#buy-key-button[hidden]")
     end
@@ -1137,7 +1137,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: @contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),

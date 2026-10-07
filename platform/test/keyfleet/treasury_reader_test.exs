@@ -15,7 +15,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   @fleet "fleet_tech_accelerant"
   @contract "0x" <> String.duplicate("7", 40)
   @rewards "0x" <> String.duplicate("8", 40)
-  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   @junk "0x" <> String.duplicate("3", 40)
   @named "0x" <> String.duplicate("4", 40)
   @paid "0x" <> String.duplicate("6", 40)
@@ -42,7 +42,7 @@ defmodule Keyfleet.TreasuryReaderTest do
       |> Fleets.get_fleet!()
       |> Fleets.record_deployment!(
         %{
-          chain_id: 1,
+          chain_id: 8453,
           contract_address: @contract,
           rewards_address: @rewards,
           votes_address: "0x" <> String.duplicate("9", 40),

@@ -14,7 +14,7 @@ defmodule Keyfleet.ChainClientTest do
       Review.new(
         "proof",
         @signer,
-        %{chain_id: 1, name: "Ethereum", rpc_url: "http://127.0.0.1:1"},
+        %{chain_id: 8453, name: "Base", rpc_url: "http://127.0.0.1:1"},
         [Review.step("pay", @to, "0x12345678")]
       )
 

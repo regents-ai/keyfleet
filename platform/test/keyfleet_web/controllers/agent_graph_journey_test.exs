@@ -173,7 +173,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     [first | _] = commands
 
     assert first["payload"] == %{
-             "principal" => "member:1:#{@contract}:1@1/agent:#{ann.address}",
+             "principal" => "member:8453:#{@contract}:1@1/agent:#{ann.address}",
              "op" => "create",
              "result" => %{"id" => goal["id"], "version" => 1},
              "events" => first["payload"]["events"]
@@ -183,7 +183,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     [stamp | _] = logged_commands()
 
     assert %{
-             "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => 1},
+             "key" => %{"chain_id" => 8453, "contract" => @contract, "token_id" => 1},
              "ownership_epoch" => 1,
              "kind" => "agent",
              "operator_wallet" => operator,
@@ -359,7 +359,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     for {field, value} <- [
           actor: "system",
-          principal: "member:1:#{@contract}:2@1/human:#{@owners[2]}",
+          principal: "member:8453:#{@contract}:2@1/human:#{@owners[2]}",
           auth: %{kind: "human"},
           writable_scopes: ["fleet", "level:1"],
           sys: %{archived: true}
@@ -862,7 +862,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     assert wallet == cal.address
     assert [command] = commands(c, cal)
-    assert command["payload"]["principal"] == "member:1:#{@contract}:1@2/agent:#{cal.address}"
+    assert command["payload"]["principal"] == "member:8453:#{@contract}:1@2/agent:#{cal.address}"
     assert [stamp] = logged_commands()
     assert stamp["payload"]["auth"]["ownership_epoch"] == 2
   end
@@ -1067,12 +1067,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: contract,
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
         shards_address: "0x" <> String.duplicate("6", 40),
-        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)
       },

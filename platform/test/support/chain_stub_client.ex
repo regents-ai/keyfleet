@@ -22,7 +22,7 @@ defmodule Keyfleet.Chain.StubClient do
 
   @doc """
   Sets the head and the logs the chain answers with. `opts` may name the
-  `:chain_id` (1), `:block_hashes`, a map from block number to the hash
+  `:chain_id` (8453), `:block_hashes`, a map from block number to the hash
   that block has now, `:max_logs`, the most logs one answer may hold, as a
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
@@ -42,7 +42,7 @@ defmodule Keyfleet.Chain.StubClient do
     %{
       head: head,
       logs: logs,
-      chain_id: Keyword.get(opts, :chain_id, 1),
+      chain_id: Keyword.get(opts, :chain_id, 8453),
       block_hashes: Keyword.get(opts, :block_hashes, %{}),
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),

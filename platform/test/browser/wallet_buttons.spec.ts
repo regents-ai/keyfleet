@@ -11,7 +11,7 @@ const me = "0x1111111111111111111111111111111111111111"
 const stranger = "0x9999999999999999999999999999999999999999"
 const fleetContract = "0x5555555555555555555555555555555555555555"
 const rewardsContract = "0x6666666666666666666666666666666666666666"
-const usdc = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 const approveSelector = "0x095ea7b3"
 const purchaseSelector = "0x98968f15"
 const requestRevealSelector = "0x40261cdd"
@@ -46,7 +46,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   const errors = await openBuying(page)
   await useStandInWallet(page, me)
 
-  await expect(page.locator("#buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Ethereum.")
+  await expect(page.locator("#buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
   await expect(page.locator("#buy-key-approve")).toBeVisible()
   await expect(page.locator("#buy-key-button")).toBeHidden()
 
@@ -63,8 +63,8 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   // The purchase can be pressed as soon as an approval is sent, and nothing
   // is done until the server reads it.
   await expect(page.locator("#buy-key-button")).toBeVisible()
-  await expect(sentLine(page, first.hash)).toContainText("Sent. Waiting for Ethereum.")
-  await expect(sentLine(page, second.hash)).toContainText("Sent. Waiting for Ethereum.")
+  await expect(sentLine(page, first.hash)).toContainText("Sent. Waiting for Base.")
+  await expect(sentLine(page, second.hash)).toContainText("Sent. Waiting for Base.")
 
   // The first approval lands; the steps are built again from the allowance
   // it gave, exactly the next key's price, which leaves only the purchase.

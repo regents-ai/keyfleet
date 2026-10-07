@@ -19,7 +19,7 @@ defmodule Keyfleet.WalletStepsTest do
     hash: "0x" <> String.duplicate("c", 64),
     timestamp: ~U[2026-09-27 12:00:00Z]
   }
-  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
@@ -72,9 +72,9 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{token_id: 1, price: 8_000_000, approve?: true} = built.figures
 
       assert built.review.chain == %{
-               chain_id: 1,
-               name: "Ethereum",
-               rpc_url: "https://eth.merkle.io"
+               chain_id: 8453,
+               name: "Base",
+               rpc_url: "https://mainnet.base.org"
              }
 
       deadline = DateTime.to_unix(@head.timestamp) + 600
