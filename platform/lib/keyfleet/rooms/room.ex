@@ -175,7 +175,7 @@ defmodule Keyfleet.Rooms.Room do
 
       validate match(:slug, @slug), message: "must be lowercase letters, digits and single dashes"
       validate match(:slug, @not_own_slug), message: "is one of the fleet's own rooms"
-      validate match(:slug, @not_key_slug), message: "is kept for a key's messages"
+      validate match(:slug, @not_key_slug), message: "is kept for a Key's messages"
       validate match(:name, @plain_text), message: @plain_text_message
       validate Keyfleet.Graph.Validations.KnownFleet
 

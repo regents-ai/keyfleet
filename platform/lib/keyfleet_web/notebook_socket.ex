@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.NotebookSocket do
 
   alias Keyfleet.Notebooks
 
-  @closed_reason "Your key no longer opens these notebooks."
+  @closed_reason "Your Key no longer opens these notebooks."
   @signed_out_reason "You signed out of KeyFleet."
 
   @doc """

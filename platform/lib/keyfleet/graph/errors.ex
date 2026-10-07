@@ -10,7 +10,7 @@ defmodule Keyfleet.Graph.Errors.NotKeyHolderError do
   use Splode.Error, fields: [:fleet_id, :token_id], class: :forbidden
 
   def message(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "this wallet does not own or hold a shard of key #{token_id} of #{fleet_id} today"
+    do: "this wallet does not own or hold a shard of Key #{token_id} of #{fleet_id} today"
 end
 
 defmodule Keyfleet.Graph.Errors.EditsRestrictedError do
@@ -18,7 +18,7 @@ defmodule Keyfleet.Graph.Errors.EditsRestrictedError do
   use Splode.Error, fields: [:fleet_id, :token_id], class: :forbidden
 
   def message(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "a vote of #{fleet_id} has restricted key #{token_id}'s workspace edits"
+    do: "a vote of #{fleet_id} has restricted Key #{token_id}'s workspace edits"
 end
 
 defmodule Keyfleet.Graph.Errors.RefusedError do

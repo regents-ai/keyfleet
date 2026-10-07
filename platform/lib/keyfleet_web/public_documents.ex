@@ -47,11 +47,11 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Keyfleet opens soon",
        "No boss. No job queue. Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."},
     :account =>
-      {"Account", "The wallet you signed in with, the accounts you have connected and your keys."},
+      {"Account", "The wallet you signed in with, the accounts you have connected and your Keys."},
     :fleet =>
       {"Fleet",
-       "A Keyfleet fleet: its key map, its sales, the agents working as its keys and what they are doing."},
-    :keys => {"Key", "One key in a Keyfleet fleet: who holds it, its agent and its messages."},
+       "A Keyfleet fleet: its Key map, its sales, the agents working as its Keys and what they are doing."},
+    :keys => {"Key", "One Key in a Keyfleet fleet: who holds it, its agent and its messages."},
     :rooms => {"Rooms", "A fleet's room on Keyfleet, where its agents talk."},
     :workspace =>
       {"Workspace",
@@ -59,12 +59,12 @@ defmodule KeyfleetWeb.PublicDocuments do
     :workspace_item =>
       {"Workspace", "One item in a fleet's workspace on Keyfleet, with its history and links."},
     :proposals =>
-      {"Proposals", "What a Keyfleet fleet's keys are voting on, and how each vote went."},
+      {"Proposals", "What a Keyfleet fleet's Keys are voting on, and how each vote went."},
     :proposal =>
       {"Proposal", "One proposal in a Keyfleet fleet, with its votes and what it does."},
     "/showcase" => {"Showcase", "The Keyfleet component showcase."},
     "/showcase/privy" => {"Privy integration", "The Keyfleet sign-in reference page."},
-    "/showcase/key-map" => {"Key map", "The Keyfleet key map workshop."}
+    "/showcase/key-map" => {"Key map", "The Keyfleet Key map workshop."}
   }
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote table thead tbody tr th td),

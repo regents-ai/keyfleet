@@ -26,7 +26,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   @kinds %{
     decision: "Decision",
     pay: "Payment from shared money",
-    restrict_edits: "Workspace edits for a key"
+    restrict_edits: "Workspace edits for a Key"
   }
 
   @doc """

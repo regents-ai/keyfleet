@@ -151,7 +151,7 @@ test.describe("the fleet page's map", () => {
     const key = sellKey(fleet, me)
     const errors = await openFleet(page)
     const chosen = page.locator("#key-map-selected")
-    await expect(chosen).toHaveText("No key chosen yet.")
+    await expect(chosen).toHaveText("No Key chosen yet.")
 
     const at = await tileAt(page, key)
     expect(at, `key ${key} is on screen`).toBeDefined()
@@ -164,7 +164,7 @@ test.describe("the fleet page's map", () => {
     await page.goBack()
     await expect(page).toHaveURL(new RegExp(`/app/fleets/${fleet}$`))
     await expect(page.locator("#key-profile")).toHaveCount(0)
-    await expect(chosen).toHaveText("No key chosen yet.")
+    await expect(chosen).toHaveText("No Key chosen yet.")
     await expectMarks(page, key, [], ["selected"])
 
     await page.goForward()

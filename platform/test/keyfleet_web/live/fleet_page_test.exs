@@ -56,7 +56,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @path) end)
 
     assert Enum.max(rows) <= 101
-    assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+    assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
     assert shown_keys(view) == Enum.to_list(1..100)
     refute has_element?(view, "#fleet-keys-previous")
 
@@ -127,7 +127,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
     assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
-    assert has_element?(view, ~s(.fleet-bar__nav a[href="#fleet-keys"]), "List of keys")
+    assert has_element?(view, ~s(.fleet-bar__nav a[href="#fleet-keys"]), "List of Keys")
   end
 
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
@@ -187,7 +187,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         refute has_element?(view, "##{id}")
       end
 
-      refute html =~ "keys sold"
+      refute html =~ "Keys sold"
       refute html =~ "USDC"
     end
 
@@ -214,7 +214,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!()
 
       {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+      assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
       assert has_element?(view, "#fleet-get-key")
       refute has_element?(view, "#fleet-soon")
     end
@@ -230,12 +230,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert text(view, "#fleet-about #buy-key-title") == "Buying a key"
+      assert text(view, "#fleet-about #buy-key-title") == "Buying a Key"
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#buy-key-level") == "9"
-      assert text(view, "#buy-key") =~ "One wallet may hold 8 keys of level 9."
-      assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy key 151"
+      assert text(view, "#buy-key") =~ "One wallet may hold 8 Keys of level 9."
+      assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy Key 151"
       refute has_element?(view, "#buy-key-sold-out")
     end
 
@@ -312,7 +312,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                "Approve USDC"
              )
 
-      assert text(view, "#buy-key-order-sent span") == "Approved. Now press Buy key."
+      assert text(view, "#buy-key-order-sent span") == "Approved. Now press Buy Key."
       refute has_element?(view, "#buy-key-button[hidden]")
 
       # Built again for the allowance now in place: the purchase alone.
@@ -345,7 +345,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       })
 
       render_async(view)
-      assert has_element?(view, "#buy-key-order-sent li[data-state=reverted] strong", "Buy key")
+      assert has_element?(view, "#buy-key-order-sent li[data-state=reverted] strong", "Buy Key")
 
       assert text(view, "#buy-key-order-sent span") =~
                "The purchase didn’t go through and no USDC was taken."
@@ -422,8 +422,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
       active!(view, @owner)
 
-      assert text(view, "#buy-key-sold-out") == "1,024/1,024 keys sold"
-      assert text(view, "#buy-key-elsewhere") =~ "You can still get a key from someone"
+      assert text(view, "#buy-key-sold-out") == "1,024/1,024 Keys sold"
+      assert text(view, "#buy-key-elsewhere") =~ "You can still get a Key from someone"
       assert has_element?(view, "#buy-key-offer[hidden]")
       assert has_element?(view, "#buy-key-approve[hidden]")
       refute has_element?(view, "#buy-key-button[hidden]")
@@ -431,7 +431,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(
                view,
                "#buy-key-button[disabled][aria-describedby=buy-key-sold-out]",
-               "Buy key"
+               "Buy Key"
              )
 
       refute has_element?(view, "#fleet-get-key")
@@ -478,10 +478,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       issue!("fleet_tech_classic", 1_024, @owner)
       send(view.pid, {:keys_changed, "fleet_tech_classic", [1_024]})
 
-      assert text(view, "#buy-key-sold-out") == "1,024/1,024 keys sold"
+      assert text(view, "#buy-key-sold-out") == "1,024/1,024 Keys sold"
       assert has_element?(view, "#buy-key-button[disabled]")
-      assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy key")
-      assert text(view, "#buy-key-order-sent span") =~ "Done. The key is yours"
+      assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy Key")
+      assert text(view, "#buy-key-order-sent span") =~ "Done. The Key is yours"
     end
 
     # Stopping here would hold back a press the contract can answer: a key
@@ -562,8 +562,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(view, "#key-map-next", "Next key")
-      assert has_element?(view, "#key-map-mine", "Your keys")
+      assert has_element?(view, "#key-map-next", "Next Key")
+      assert has_element?(view, "#key-map-mine", "Your Keys")
 
       assert option_values(view, "#key-map-level-choice option") ==
                Enum.map(1..9, &to_string/1)
@@ -635,7 +635,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       render_patch(view, @path <> "?key=152")
       assert_push_event(view, "keymap:select", %{token_id: nil})
-      assert text(view, "#key-map-selected") == "No key chosen yet."
+      assert text(view, "#key-map-selected") == "No Key chosen yet."
     end
 
     # A key sold, moved or given a shard reaches an open page as that key's new marks.
@@ -651,7 +651,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert Scanner.step(fleet, StubClient) == :ok
       assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
       assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
-      assert text(view, "#fleet-sales") == "2 keys sold · 0 agents here"
+      assert text(view, "#fleet-sales") == "2 Keys sold · 0 agents here"
 
       StubClient.put_chain(chain_head(5_000_020), [
         ownership_log(1, 1, @owner, 5_000_003),
@@ -693,17 +693,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainHelpers.seed_cursor!(@fleet)
       agent_profile!()
       {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+      assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
 
       issued = shard_log(:issued, 7, 1_010)
       scan!(1_020, [issued])
       assert_pushed(view, "keymap:patch", %{keys: [[7, 3]]})
-      assert text(view, "#fleet-sales") == "150 keys sold · 1 agent here"
+      assert text(view, "#fleet-sales") == "150 Keys sold · 1 agent here"
       assert has_element?(view, "#fleet-who-list", "Orbit runner")
 
       scan!(1_040, [issued, shard_log({:ended, @owner}, 7, 1_030)])
       assert_pushed(view, "keymap:patch", %{keys: [[7, 1]]})
-      assert text(view, "#fleet-sales") == "150 keys sold · 0 agents here"
+      assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
       assert has_element?(view, "#fleet-who-empty")
     end
 
@@ -773,7 +773,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       for key <- ["abc", "-1", "0", "152", "99999999999999999999999", "1.5", ""] do
         {:ok, view, _html} = live(conn, @path <> "?" <> URI.encode_query(key: key))
 
-        assert text(view, "#key-map-selected") == "No key chosen yet."
+        assert text(view, "#key-map-selected") == "No Key chosen yet."
         refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
       end
     end

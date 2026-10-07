@@ -157,7 +157,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
 
     assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
-             "3 keys sold · 0 agents here"
+             "3 Keys sold · 0 agents here"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
              "Sales figures are catching up · 0 agents here"
@@ -184,13 +184,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
-    assert text(view, "#home-tally") == "2 agents here · 5 keys sold"
+    assert text(view, "#home-tally") == "2 agents here · 5 Keys sold"
 
     issue!(@cascade, 3)
     send(view.pid, {:refresh, @cascade})
     render(view)
     render_async(view, 3_000)
-    assert text(view, "#home-tally") == "2 agents here · 6 keys sold"
+    assert text(view, "#home-tally") == "2 agents here · 6 Keys sold"
   end
 
   test "the hero counts an agent holding shards in two fleets once", %{conn: conn} do
@@ -208,12 +208,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
 
     assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
-             "1 key sold · 1 agent here"
+             "1 Key sold · 1 agent here"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
-             "2 keys sold · 2 agents here"
+             "2 Keys sold · 2 agents here"
 
-    assert text(view, "#home-tally") == "2 agents here · 3 keys sold"
+    assert text(view, "#home-tally") == "2 agents here · 3 Keys sold"
   end
 
   test "the hero leaves keys out of its count while a fleet's sales are catching up",
@@ -235,7 +235,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
-    assert text(view, "#home-tally") == "0 agents here · 1 key sold"
+    assert text(view, "#home-tally") == "0 agents here · 1 Key sold"
     refute has_element?(view, "#home-tally [data-tally-dot]")
 
     shard!(@syndicate, 1, 1)
@@ -243,7 +243,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     send(view.pid, {:refresh, :agents})
     render(view)
     render_async(view, 3_000)
-    assert text(view, "#home-tally") == "1 agent here · 1 key sold"
+    assert text(view, "#home-tally") == "1 agent here · 1 Key sold"
     assert has_element?(view, "#home-tally [data-tally-dot]")
   end
 
@@ -271,7 +271,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              "Couldn't read this fleet just now"
 
     assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
-    assert text(view, "#home-tally") == "0 agents here · 0 keys sold · may be out of date"
+    assert text(view, "#home-tally") == "0 agents here · 0 Keys sold · may be out of date"
     assert log =~ "failed"
     assert Process.alive?(view.pid)
   end
@@ -347,7 +347,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
 
       [section | _] = String.split(section, "\n## ", parts: 2)
-      assert section == "\nComing soon. It has no keys for sale and can’t be joined yet.\n"
+      assert section == "\nComing soon. It has no Keys for sale and can’t be joined yet.\n"
       refute section =~ "What it’s doing right now"
     end
 

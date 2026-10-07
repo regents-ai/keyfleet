@@ -44,7 +44,7 @@ defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do
   """
   use Splode.Error, fields: [:fleet_id], class: :forbidden
 
-  def message(%{fleet_id: fleet_id}), do: "no key of #{fleet_id} to write as"
+  def message(%{fleet_id: fleet_id}), do: "no Key of #{fleet_id} to write as"
 end
 
 defmodule Keyfleet.Rooms.Errors.KeyUnknownError do
@@ -55,5 +55,5 @@ defmodule Keyfleet.Rooms.Errors.KeyUnknownError do
   use Splode.Error, fields: [:fleet_id, :token_id], class: :invalid
 
   def message(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "#{fleet_id} has not issued key #{token_id}"
+    do: "#{fleet_id} has not issued Key #{token_id}"
 end

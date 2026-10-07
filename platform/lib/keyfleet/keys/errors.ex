@@ -3,5 +3,5 @@ defmodule Keyfleet.Keys.Errors.OwnershipRefreshingError do
   use Splode.Error, fields: [:fleet_id], class: :forbidden
 
   def message(%{fleet_id: fleet_id}),
-    do: "key ownership in #{fleet_id} is being refreshed; try again in a moment"
+    do: "Key ownership in #{fleet_id} is being refreshed; try again in a moment"
 end

@@ -28,10 +28,10 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
   test "members' words stay as written on a page and are escaped in Markdown" do
     assert ActivityLines.text(@post) ==
-             "Ada *bold* (key 7) in Hull [survey](x): “Ship *v2* [now](https://example.com)”"
+             "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* [now](https://example.com)”"
 
     assert ActivityLines.markdown(@post) ==
-             ~S"“Ada \*bold\*” (key 7) in “Hull \[survey\]\(x\)”: “Ship \*v2\* \[now\]\(https://example.com\)”"
+             ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\]\(x\)”: “Ship \*v2\* \[now\]\(https://example.com\)”"
   end
 
   test "characters that can't be seen or reverse the text are shown nowhere" do
@@ -42,8 +42,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
         excerpt: "Ship\u2066 it\nnow\e[31m"
       })
 
-    assert ActivityLines.text(post) == "Ada (key 7) in Hull: “Ship it now[31m”"
-    assert ActivityLines.markdown(post) == ~S"“Ada” (key 7) in “Hull”: “Ship it now\[31m”"
+    assert ActivityLines.text(post) == "Ada (Key 7) in Hull: “Ship it now[31m”"
+    assert ActivityLines.markdown(post) == ~S"“Ada” (Key 7) in “Hull”: “Ship it now\[31m”"
   end
 
   test "an item whose title has nothing to see still has words to link" do
@@ -177,7 +177,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     }
 
     assert ActivityLines.text(proposed) ==
-             "The holder of key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab..cd34: “Pay the designer”"
+             "The holder of Key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab..cd34: “Pay the designer”"
   end
 
   test "a vote on a key's edits names the key and what would change" do
@@ -198,10 +198,10 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     end
 
     assert ActivityLines.text(asked.(true)) ==
-             "The holder of key 4 put Proposal 5 to a vote to stop key 1,234 editing the workspace: “Key 1234 keeps deleting findings”"
+             "The holder of Key 4 put Proposal 5 to a vote to stop Key 1,234 editing the workspace: “Key 1234 keeps deleting findings”"
 
     assert ActivityLines.text(asked.(false)) ==
-             "The holder of key 4 put Proposal 5 to a vote to let key 1,234 edit the workspace again: “Key 1234 keeps deleting findings”"
+             "The holder of Key 4 put Proposal 5 to a vote to let Key 1,234 edit the workspace again: “Key 1234 keeps deleting findings”"
   end
 
   test "a carried-out vote on a key's edits says what the fleet did" do
@@ -220,10 +220,10 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     end
 
     assert ActivityLines.text(done.(true)) ==
-             "The fleet stopped key 7 editing the workspace (Proposal 5)."
+             "The fleet stopped Key 7 editing the workspace (Proposal 5)."
 
     assert ActivityLines.text(done.(false)) ==
-             "The fleet let key 7 edit the workspace again (Proposal 5)."
+             "The fleet let Key 7 edit the workspace again (Proposal 5)."
   end
 
   defp paid(asset, details, amount) do

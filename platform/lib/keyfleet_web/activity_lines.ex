@@ -125,16 +125,16 @@ defmodule KeyfleetWeb.ActivityLines do
   def parts(%{kind: :shard_issued, facts: f}),
     do: [
       shard_holder(f),
-      " holds a shard of key #{Rules.grouped(f.token_id)} until " <>
+      " holds a shard of Key #{Rules.grouped(f.token_id)} until " <>
         Calendar.strftime(f.expires_at, "%-d %B %Y") <> "."
     ]
 
   def parts(%{kind: :shard_ended, facts: %{stepped_down?: true} = f}),
-    do: [shard_holder(f), " stepped down from its shard of key #{Rules.grouped(f.token_id)}."]
+    do: [shard_holder(f), " stepped down from its shard of Key #{Rules.grouped(f.token_id)}."]
 
   def parts(%{kind: :shard_ended, facts: f}),
     do: [
-      "The owner of key #{Rules.grouped(f.token_id)} ended the shard of ",
+      "The owner of Key #{Rules.grouped(f.token_id)} ended the shard of ",
       shard_holder(f),
       "."
     ]
@@ -275,7 +275,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp confidence(_item), do: []
 
   defp holder(%{token_id: token_id}) when is_integer(token_id),
-    do: "The holder of key #{Rules.grouped(token_id)}"
+    do: "The holder of Key #{Rules.grouped(token_id)}"
 
   defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
 
@@ -305,16 +305,16 @@ defmodule KeyfleetWeb.ActivityLines do
   defp amount(%{text: text, token: token, symbol?: true}), do: {:amount, visible(text), token}
 
   defp edits_asked(%{token_id: token_id, restricted: true}),
-    do: "stop key #{Rules.grouped(token_id)} editing the workspace"
+    do: "stop Key #{Rules.grouped(token_id)} editing the workspace"
 
   defp edits_asked(%{token_id: token_id, restricted: false}),
-    do: "let key #{Rules.grouped(token_id)} edit the workspace again"
+    do: "let Key #{Rules.grouped(token_id)} edit the workspace again"
 
   defp edits_done(%{token_id: token_id, restricted: true}),
-    do: "stopped key #{Rules.grouped(token_id)} editing the workspace"
+    do: "stopped Key #{Rules.grouped(token_id)} editing the workspace"
 
   defp edits_done(%{token_id: token_id, restricted: false}),
-    do: "let key #{Rules.grouped(token_id)} edit the workspace again"
+    do: "let Key #{Rules.grouped(token_id)} edit the workspace again"
 
   defp voted(%{count: 0}, _word), do: nil
 
@@ -341,9 +341,9 @@ defmodule KeyfleetWeb.ActivityLines do
     Enum.intersperse(rest, ", ") ++ [" and ", last]
   end
 
-  @doc ~S|How a key is named on a page: "Key 1,234", or "Ada (key 1,234)" when an agent wrote as it.|
+  @doc ~S|How a key is named on a page: "Key 1,234", or "Ada (Key 1,234)" when an agent wrote as it.|
   def key_name(token_id, nil), do: "Key #{Rules.grouped(token_id)}"
-  def key_name(token_id, agent), do: "#{agent} (key #{Rules.grouped(token_id)})"
+  def key_name(token_id, agent), do: "#{agent} (Key #{Rules.grouped(token_id)})"
 
   @doc ~S|How a proposal is named on a page: "Proposal 12".|
   def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
@@ -365,7 +365,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:key, token_id, nil}), do: key_name(token_id, nil)
 
   defp marked({:key, token_id, agent}),
-    do: said(agent, :key) <> " (key #{Rules.grouped(token_id)})"
+    do: said(agent, :key) <> " (Key #{Rules.grouped(token_id)})"
 
   defp marked({:item, _id, nil}), do: "an item"
   defp marked({:item, _id, title}), do: said(title, :item)

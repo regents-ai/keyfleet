@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
     <main class="sc key-map-reference">
       <header class="sc-header">
         <a class="sc-wordmark" href="/showcase">Ash <span>Workshop</span></a>
-        <span class="sc-local">Local only · made-up keys</span>
+        <span class="sc-local">Local only · made-up Keys</span>
       </header>
 
       <div class="key-map-reference__content">
@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
           <p class="sc-eyebrow">Working reference</p>
           <h1>Key map</h1>
           <p id="key-map-help">
-            Drag, scroll or use the arrow keys to move around. Click a key, or press Enter, to choose it. Home returns to the next key on sale.
+            Drag, scroll or use the arrow keys to move around. Click a Key, or press Enter, to choose it. Home returns to the next Key on sale.
           </p>
           <div class="key-map-reference__fleets" role="group" aria-label="Fleet">
             <button
@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
           data-layout={@fleet.layout}
           tabindex="0"
           role="application"
-          aria-roledescription="key map"
+          aria-roledescription="Key map"
           aria-label="Key map"
           aria-describedby="key-map-help"
         >
@@ -69,24 +69,24 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
         </div>
 
         <p id="key-map-selected" role="status">
-          {if @selected, do: "Key #{group(@selected)} chosen.", else: "No key chosen yet."}
+          {if @selected, do: "Key #{group(@selected)} chosen.", else: "No Key chosen yet."}
         </p>
 
         <section class="key-map-reference__notes">
           <h2>What the marks mean</h2>
           <ul>
-            <li>An orange rim is a key you hold.</li>
-            <li>A blue dot is a key with an agent.</li>
-            <li>The outlined key marked Next is the one on sale.</li>
-            <li>The filled key is the one you chose.</li>
-            <li>Faint keys are not sold yet.</li>
+            <li>An orange rim is a Key you hold.</li>
+            <li>A blue dot is a Key with an agent.</li>
+            <li>The outlined Key marked Next is the one on sale.</li>
+            <li>The filled Key is the one you chose.</li>
+            <li>Faint Keys are not sold yet.</li>
             <li>
               Each level has its own shade and an outline: solid once it has sold out, dashed
               until it goes on sale, and a thick moving dash round the level on sale now.
             </li>
           </ul>
           <p>
-            The map repeats in every direction, so a key can appear more than once on screen. Every copy is the same key.
+            The map repeats in every direction, so a Key can appear more than once on screen. Every copy is the same Key.
           </p>
         </section>
       </div>
@@ -123,7 +123,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   def handle_event("select_key", _params, socket), do: {:noreply, socket}
 
   defp size(nil), do: "new levels keep opening"
-  defp size(max_supply), do: "#{group(max_supply)} keys"
+  defp size(max_supply), do: "#{group(max_supply)} Keys"
 
   defp group(number) do
     number

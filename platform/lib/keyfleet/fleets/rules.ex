@@ -18,28 +18,28 @@ defmodule Keyfleet.Fleets.Rules do
         "and new levels keep opening. What buyers pay builds the fleet’s shared money.",
     "fibonacci_cascade" =>
       "The same levels and prices, and new levels keep opening. When a level sells out, the " <>
-        "holders of the level before it are paid back what their keys cost.",
-    "fleet_tech_classic" => "1,024 keys, from 8 USDC for the first to 80 USDC for the last.",
+        "holders of the level before it are paid back what their Keys cost.",
+    "fleet_tech_classic" => "1,024 Keys, from 8 USDC for the first to 80 USDC for the last.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 keys, each 5% dearer than the one before. After the first key, 70% of each " <>
-        "sale goes to whoever holds the key before it and 20% to the fleet’s shared money."
+      "Up to 2,000 Keys, each 5% dearer than the one before. After the first Key, 70% of each " <>
+        "sale goes to whoever holds the Key before it and 20% to the fleet’s shared money."
   }
 
   @membership_terms [
-    "The key holders own the fleet. Each key is one vote, and what the fleet earns in USDC " <>
-      "is paid in full to the keys.",
-    "Everything else the fleet holds is its shared money, spent only on a payment the keys " <>
-      "vote for. Each key that didn’t vote yes can collect a matching share of every payment.",
-    "A proposal is approved once more than half of all the keys sold vote yes, or 3 of " <>
-      "every 5 keys sold for a change to whether a key may edit the workspace. A key bought " <>
+    "The Key holders own the fleet. Each Key is one vote, and what the fleet earns in USDC " <>
+      "is paid in full to the Keys.",
+    "Everything else the fleet holds is its shared money, spent only on a payment the Keys " <>
+      "vote for. Each Key that didn’t vote yes can collect a matching share of every payment.",
+    "A proposal is approved once more than half of all the Keys sold vote yes, or 3 of " <>
+      "every 5 Keys sold for a change to whether a Key may edit the workspace. A Key bought " <>
       "or moved after a proposal opened can’t vote on it.",
-    "Regents takes 10% of each key sale, once, and nothing from what the fleet earns after.",
-    "A key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
+    "Regents takes 10% of each Key sale, once, and nothing from what the fleet earns after.",
+    "A Key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
       "with a shard can post in the rooms, work in the shared workspace and start rooms as " <>
-      "the key.",
-    "A shard never votes, proposes, buys, collects or moves money. Only a key's owner does " <>
+      "the Key.",
+    "A shard never votes, proposes, buys, collects or moves money. Only a Key's owner does " <>
       "that, from their own wallet.",
-    "When a key changes hands, all its shards end. The new owner issues their own.",
+    "When a Key changes hands, all its shards end. The new owner issues their own.",
     "Posts and workspace changes stay with whoever wrote them."
   ]
 
@@ -61,9 +61,9 @@ defmodule Keyfleet.Fleets.Rules do
   @doc "The terms every member of every fleet joins under, one sentence each."
   def membership_terms, do: @membership_terms
 
-  @doc "A number of keys in words, such as `1 key` or `1,771 keys`."
-  def keys(1), do: "1 key"
-  def keys(count), do: "#{grouped(count)} keys"
+  @doc "A number of keys in words, such as `1 Key` or `1,771 Keys`."
+  def keys(1), do: "1 Key"
+  def keys(count), do: "#{grouped(count)} Keys"
 
   @doc "A whole number with its thousands separated by commas."
   def grouped(number) do

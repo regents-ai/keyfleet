@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   defp sold(assigns) do
     ~H"""
-    <Count.count id={@id} value={@sales.keys} one="key" many="keys" /> sold
+    <Count.count id={@id} value={@sales.keys} one="Key" many="Keys" /> sold
     """
   end
 
@@ -172,7 +172,7 @@ defmodule KeyfleetWeb.FleetLive do
               aria-controls="fleet-about"
               phx-click={get_key()}
             >
-              Get a key
+              Get a Key
             </Regent.Primitives.button>
             <SendAgent.button
               id="fleet-send-agent"
@@ -248,7 +248,7 @@ defmodule KeyfleetWeb.FleetLive do
             >
               Who’s here
             </Regent.Primitives.button>
-            <a href="#fleet-keys" class="rg-button rg-button--secondary">List of keys</a>
+            <a href="#fleet-keys" class="rg-button rg-button--secondary">List of Keys</a>
           </nav>
         </header>
 
@@ -272,7 +272,7 @@ defmodule KeyfleetWeb.FleetLive do
         aria-labelledby="fleet-keys-title"
       >
         <h2 id="fleet-keys-title">Keys</h2>
-        <p :if={@fleet.no_keys?}>No keys have been issued yet.</p>
+        <p :if={@fleet.no_keys?}>No Keys have been issued yet.</p>
 
         <ol id="fleet-key-list" class="fleet-key-list" phx-update="stream">
           <li :for={{dom_id, key} <- @keys} id={dom_id}>
@@ -300,7 +300,7 @@ defmodule KeyfleetWeb.FleetLive do
         <nav
           :if={@fleet.pages.previous || @fleet.pages.next}
           class="fleet-pages"
-          aria-label="More keys"
+          aria-label="More Keys"
         >
           <.link :if={@fleet.pages.previous} id="fleet-keys-previous" patch={@fleet.pages.previous}>
             Previous
@@ -339,7 +339,7 @@ defmodule KeyfleetWeb.FleetLive do
         <section class="fleet-soon" aria-labelledby="fleet-soon-title">
           <h2 id="fleet-soon-title">Coming soon</h2>
           <p>
-            This fleet opens later. Until then it has no keys for sale, and nobody can join it.
+            This fleet opens later. Until then it has no Keys for sale, and nobody can join it.
           </p>
           <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
         </section>
@@ -716,7 +716,7 @@ defmodule KeyfleetWeb.FleetLive do
           New levels keep opening.
         </p>
         <p :if={@fleet.current? and is_nil(@fleet.progress.next_price)} class="fleet-detail">
-          Every key has been issued.
+          Every Key has been issued.
         </p>
       </section>
 
@@ -777,7 +777,7 @@ defmodule KeyfleetWeb.FleetLive do
           variant="secondary"
           phx-click={JS.dispatch("keymap:next", to: @map)}
         >
-          Next key
+          Next Key
         </Regent.Primitives.button>
         <Regent.Primitives.button
           :if={@fleet.signed_in?}
@@ -785,7 +785,7 @@ defmodule KeyfleetWeb.FleetLive do
           variant="secondary"
           phx-click={JS.dispatch("keymap:mine", to: @map)}
         >
-          Your keys
+          Your Keys
         </Regent.Primitives.button>
         <form
           :if={@fleet.levels != []}
@@ -810,7 +810,7 @@ defmodule KeyfleetWeb.FleetLive do
         data-selected={@fleet.chosen_key}
         tabindex="0"
         role="application"
-        aria-roledescription="key map"
+        aria-roledescription="Key map"
         aria-label="Key map"
         aria-describedby="key-map-help"
       >
@@ -819,13 +819,13 @@ defmodule KeyfleetWeb.FleetLive do
 
       <div class="fleet-map-notes">
         <p id="key-map-help">
-          Drag to look around. Arrow keys move between keys, and Enter chooses one. Every key is
-          also in the list of keys.
+          Drag to look around. Arrow keys move between Keys, and Enter chooses one. Every Key is
+          also in the list of Keys.
         </p>
         <p id="key-map-selected" role="status">
           {if @fleet.chosen_key,
             do: "Key #{grouped(@fleet.chosen_key)} chosen.",
-            else: "No key chosen yet."}
+            else: "No Key chosen yet."}
         </p>
       </div>
     </section>
@@ -850,7 +850,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
-      <h3 id="buy-key-title" tabindex="-1">Buying a key</h3>
+      <h3 id="buy-key-title" tabindex="-1">Buying a Key</h3>
 
       <div id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
         <dl class="fleet-buy-facts">
@@ -907,17 +907,17 @@ defmodule KeyfleetWeb.FleetLive do
             disabled={is_nil(@buy.price)}
             aria-describedby={is_nil(@buy.price) && "buy-key-sold-out"}
           >
-            <span data-press-label>Buy key {@buy.token_id && grouped(@buy.token_id)}</span>
+            <span data-press-label>Buy Key {@buy.token_id && grouped(@buy.token_id)}</span>
           </Regent.Primitives.button>
           <span :if={is_nil(@buy.price)} id="buy-key-sold-out" class="wallet-panel-note">
-            {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} keys sold
+            {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} Keys sold
           </span>
         </:buttons>
       </.live_component>
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
-        You can still get a key from someone who holds one: it moves like any other token on
-        Ethereum, though a key that moves can’t vote on proposals already open.
+        You can still get a Key from someone who holds one: it moves like any other token on
+        Ethereum, though a Key that moves can’t vote on proposals already open.
       </p>
 
       <p :if={@buy.price} class="fleet-detail">

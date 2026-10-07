@@ -459,7 +459,7 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
     if values.get("assignee_key") not in (None, command.auth.key.token_id):
         raise Refusal(
             "forbidden_field",
-            "a task may be assigned only to the acting key, or cleared",
+            "a task may be assigned only to the acting Key, or cleared",
             {"fields": ["assignee_key"]},
         )
 

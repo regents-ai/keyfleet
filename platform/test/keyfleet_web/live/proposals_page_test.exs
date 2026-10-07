@@ -63,7 +63,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     refute html =~ "Vote counts are catching up."
 
     assert cards(view) == [
-             {"5", "Workspace edits for a key", "Carried out"},
+             {"5", "Workspace edits for a Key", "Carried out"},
              {"4", "Payment from shared money", "Paid"},
              {"3", "Decision", "Open"},
              {"2", "Decision", "Approved"},
@@ -71,7 +71,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            ]
 
     assert has_element?(view, ~s([data-proposal="1"]), "Hire a designer")
-    assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 7 keys sold")
+    assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 7 Keys sold")
 
     view |> element(~s([data-proposal="2"] a)) |> render_click()
     assert_patch(view, "/app/fleets/#{@fleet}/proposals/2")
@@ -90,9 +90,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, view, _html} = live(conn, "#{@list}/1")
     {:ok, list, _html} = live(conn, @list)
     assert has_element?(view, "#proposal-status", "Approved")
-    assert has_element?(view, "#proposal-yes", "2 keys")
-    assert has_element?(view, "#proposal-no", "0 keys")
-    assert has_element?(view, "#proposal-keys-sold", "3 keys")
+    assert has_element?(view, "#proposal-yes", "2 Keys")
+    assert has_element?(view, "#proposal-no", "0 Keys")
+    assert has_element?(view, "#proposal-keys-sold", "3 Keys")
 
     ProposalHelpers.keys_sold!(@fleet, [4])
 
@@ -103,10 +103,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     )
 
     assert shows?(fn -> has_element?(view, "#proposal-status", "Open") end)
-    assert has_element?(view, "#proposal-keys-sold", "4 keys")
+    assert has_element?(view, "#proposal-keys-sold", "4 Keys")
 
     assert shows?(fn ->
-             has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no, of 4 keys sold")
+             has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no, of 4 Keys sold")
            end)
   end
 
@@ -119,12 +119,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
     assert has_element?(view, "#proposal-status", "Open")
-    assert has_element?(view, "#proposal-yes", "1 key")
-    assert has_element?(view, "#proposal-no", "0 keys")
+    assert has_element?(view, "#proposal-yes", "1 Key")
+    assert has_element?(view, "#proposal-no", "0 Keys")
     assert [yes, no, withdrawn] = votes(view)
-    assert yes =~ ~r/^Yes.*with keys 1, 2$/
-    assert no =~ ~r/^No.*with key 3$/
-    assert withdrawn =~ ~r/^Withdrawn.*with keys 2, 3$/
+    assert yes =~ ~r/^Yes.*with Keys 1, 2$/
+    assert no =~ ~r/^No.*with Key 3$/
+    assert withdrawn =~ ~r/^Withdrawn.*with Keys 2, 3$/
   end
 
   test "a proposal's page shows its text, its outcome and every vote, fifty at a time", %{
@@ -146,14 +146,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
            |> LazyHTML.text() ==
              "Hire a designer\nfor the launch"
 
-    assert has_element?(view, "#proposal-yes", "51 keys")
+    assert has_element?(view, "#proposal-yes", "51 Keys")
     assert has_element?(view, ".proposals-rule", @rule)
     assert length(votes(view)) == 50
-    assert hd(votes(view)) =~ "with key 1"
+    assert hd(votes(view)) =~ "with Key 1"
 
     view |> element("#proposal-more-votes") |> render_click()
     assert [only] = votes(view)
-    assert only =~ "with key 51"
+    assert only =~ "with Key 51"
 
     view |> element("#proposal-first-votes") |> render_click()
     assert length(votes(view)) == 50
@@ -231,12 +231,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "[data-asset='#{fake}'] div") == [
              {"Shared money", "1 USDC 0xdddd..dddd"},
-             {"Set aside for key holders", "3 USDC 0xdddd..dddd"}
+             {"Set aside for Key holders", "3 USDC 0xdddd..dddd"}
            ]
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", "1 USDC"},
-             {"Set aside for key holders", "0 USDC"}
+             {"Set aside for Key holders", "0 USDC"}
            ]
 
     tokens =
@@ -301,7 +301,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(list, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", whole},
-             {"Set aside for key holders", whole}
+             {"Set aside for Key holders", whole}
            ]
   end
 
@@ -323,23 +323,23 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "#proposal-edits div") == [
              {"Key", "Key 2"},
-             {"Change", "Stop the key’s workspace edits"}
+             {"Change", "Stop the Key’s workspace edits"}
            ]
 
     assert has_element?(view, "#proposal-status", "Open")
-    assert has_element?(view, "#proposal-carry-out-button", "Stop the key’s workspace edits")
+    assert has_element?(view, "#proposal-carry-out-button", "Stop the Key’s workspace edits")
 
     assert has_element?(
              view,
              "#proposal-carry-out-note-open",
-             "Yes votes aren’t yet 3 of every 5 keys sold"
+             "Yes votes aren’t yet 3 of every 5 Keys sold"
            )
 
     {:ok, view, _html} = live(conn, "#{@list}/2")
 
     assert fields(view, "#proposal-edits div") == [
              {"Key", "Key 1,234"},
-             {"Change", "Let the key edit the workspace again"}
+             {"Change", "Let the Key edit the workspace again"}
            ]
 
     assert has_element?(view, "#proposal-status", "Approved")
@@ -412,10 +412,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
     {:ok, list, _html} = live(conn, @list)
-    assert has_element?(view, "#proposal-yes", "0 keys")
+    assert has_element?(view, "#proposal-yes", "0 Keys")
 
     ProposalHelpers.vote!(@fleet, 1, @voter, true, [1, 2])
-    assert has_element?(view, "#proposal-yes", "0 keys")
+    assert has_element?(view, "#proposal-yes", "0 Keys")
 
     Phoenix.PubSub.broadcast(
       Keyfleet.PubSub,
@@ -423,7 +423,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:proposals_changed, @fleet}
     )
 
-    assert shows?(fn -> has_element?(view, "#proposal-yes", "2 keys") end)
+    assert shows?(fn -> has_element?(view, "#proposal-yes", "2 Keys") end)
     assert shows?(fn -> has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no") end)
   end
 
@@ -470,12 +470,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", "100 USDC"},
-             {"Set aside for key holders", "30 USDC"}
+             {"Set aside for Key holders", "30 USDC"}
            ]
 
     assert fields(view, "[data-asset='#{weth}'] div") == [
              {"Shared money", "2 WETH 0xcccc..cccc"},
-             {"Set aside for key holders", "0 WETH 0xcccc..cccc"}
+             {"Set aside for Key holders", "0 WETH 0xcccc..cccc"}
            ]
 
     assert fields(view, "#proposals-held div") == [{"Set aside for Regents", "2.5 USDC"}]
@@ -486,7 +486,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "Figures as of 20 September 2026 at 12:00 UTC."
            )
 
-    assert has_element?(view, "#proposals-income li", "10 USDC paid to key holders")
+    assert has_element?(view, "#proposals-income li", "10 USDC paid to Key holders")
 
     assert has_element?(view, "#proposals-payments li", "5 USDC")
     assert has_element?(view, "#proposals-payments li", "to #{ProposalHelpers.wallet("b")}")
@@ -525,7 +525,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", "50 USDC"},
-             {"Set aside for key holders", "0 USDC"}
+             {"Set aside for Key holders", "0 USDC"}
            ]
 
     assert fields(view, "#proposals-held div") == [
@@ -611,7 +611,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     active!(view, "#proposal-vote-action", @holder)
 
     assert text(view, "#proposal-vote-action-line") ==
-             "Type the numbers of the keys to use, like 3, 7, 12."
+             "Type the numbers of the Keys to use, like 3, 7, 12."
 
     view |> form("#proposal-vote-action-form", keys: "1, 3") |> render_change()
 
@@ -630,7 +630,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              {"withdraw", Call.encode("withdrawVote(uint256,uint256[])", [1, [1, 3]])}
 
     assert text(view, "#proposal-vote-action-line") ==
-             "Voting, changing or withdrawing uses keys 1, 3. Each key is one vote."
+             "Voting, changing or withdrawing uses Keys 1, 3. Each Key is one vote."
 
     assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Ethereum."
   end
@@ -663,7 +663,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert has_element?(
              view,
              "#proposal-vote-action-sent li[data-state=reverted] strong",
-             "Vote yes, key 2"
+             "Vote yes, Key 2"
            )
 
     assert text(view, "#proposal-vote-action-sent span") =~
@@ -691,8 +691,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
           {1, "Open", "Record the decision", "Yes votes aren’t yet more than half"},
           {2, "Approved", "Record the decision", nil},
           {3, "Paid", "Make the payment", "It has already been carried out"},
-          {4, "Approved", "Stop the key’s workspace edits", nil},
-          {5, "Carried out", "Let the key edit the workspace again",
+          {4, "Approved", "Stop the Key’s workspace edits", nil},
+          {5, "Carried out", "Let the Key edit the workspace again",
            "It has already been carried out"}
         ] do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
@@ -746,7 +746,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, view, _html} = live(signed_in_as(conn, @holder), "#{@list}/1")
 
     assert text(view, "#proposal-match") =~
-             "Every key sold when this was paid that didn’t vote yes can collect 2.5 USDC"
+             "Every Key sold when this was paid that didn’t vote yes can collect 2.5 USDC"
 
     assert has_element?(view, "#proposal-match-pending[hidden]")
 
@@ -759,7 +759,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     })
 
     assert collect.data == Call.encode("collect(uint256,uint256[])", [1, [3]])
-    assert text(view, "#proposal-collect-action-line") == "Collects the match of key 3."
+    assert text(view, "#proposal-collect-action-line") == "Collects the match of Key 3."
 
     # Nothing to collect on a proposal that isn't a payment.
     {:ok, view, _html} = live(conn, "#{@list}/2")
@@ -833,7 +833,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "0x" <> code
              ])
 
-    assert text(view, "#propose-decision-action-line") == "Proposes this decision with key 7."
+    assert text(view, "#propose-decision-action-line") == "Proposes this decision with Key 7."
 
     active!(view, "#propose-payment-action", @holder)
 
@@ -863,7 +863,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-payment-action-line") ==
-             "Proposes paying 1.5 WETH (0xcccc..cccc) to 0xbbbb..bbbb, with key 7."
+             "Proposes paying 1.5 WETH (0xcccc..cccc) to 0xbbbb..bbbb, with Key 7."
 
     # Another token, pasted, is paid in its smallest units.
     pasted = ProposalHelpers.wallet("5")
@@ -888,7 +888,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-payment-action-line") ==
-             "Proposes paying 250 in the smallest units of token 0x5555..5555 to 0xbbbb..bbbb, with key 7."
+             "Proposes paying 250 in the smallest units of token 0x5555..5555 to 0xbbbb..bbbb, with Key 7."
 
     view
     |> form("#propose-payment-action-form", other_asset: "0x12")
@@ -918,8 +918,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-edits-action-line") ==
-             "Proposes stopping key 12 and its shards changing the workspace, with key 7. " <>
-               "Needs 3 of every 5 keys sold."
+             "Proposes stopping Key 12 and its shards changing the workspace, with Key 7. " <>
+               "Needs 3 of every 5 Keys sold."
 
     view
     |> form("#propose-edits-action-form", restricted: "false", text: "Settled down")
@@ -940,8 +940,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ])
 
     assert text(view, "#propose-edits-action-line") ==
-             "Proposes letting key 12 and its shards change the workspace again, with key 7. " <>
-               "Needs 3 of every 5 keys sold."
+             "Proposes letting Key 12 and its shards change the workspace again, with Key 7. " <>
+               "Needs 3 of every 5 Keys sold."
   end
 
   test "letting another wallet vote is built for the wallet typed, and clearing names no wallet",

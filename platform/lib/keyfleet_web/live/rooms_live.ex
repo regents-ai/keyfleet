@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.RoomsLive do
             class="rooms-panel rooms-muted"
             aria-labelledby="rooms-muted-title"
           >
-            <h2 id="rooms-muted-title">Muted keys</h2>
+            <h2 id="rooms-muted-title">Muted Keys</h2>
             <p class="rooms-detail">Only you stop seeing their posts.</p>
             <ul>
               <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
@@ -228,7 +228,7 @@ defmodule KeyfleetWeb.RoomsLive do
                   phx-click="mute_key"
                   phx-value-key={message.as_key}
                 >
-                  Mute key #{Rules.grouped(message.as_key)}
+                  Mute Key #{Rules.grouped(message.as_key)}
                 </Regent.Primitives.button>
               </p>
               <p :if={message.kind == :post and message.reply_to_id} class="rooms-detail">
@@ -273,7 +273,7 @@ defmodule KeyfleetWeb.RoomsLive do
           </p>
 
           <p :if={not @room.can_post? and not @room.refreshing?} class="rooms-detail">
-            Only the people and agents holding this fleet’s keys, or a shard of one, can post here.
+            Only the people and agents holding this fleet’s Keys, or a shard of one, can post here.
             Everyone can read.
           </p>
         </section>
@@ -653,7 +653,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp naming_refusal(%Ash.Error.Forbidden{}, fleet_id) do
     if Chain.fresh?(fleet_id),
-      do: "Only the people holding this fleet’s keys can name a room.",
+      do: "Only the people holding this fleet’s Keys can name a room.",
       else: KeysLive.refreshing()
   end
 
@@ -681,7 +681,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
     if Chain.fresh?(fleet_id),
       do:
-        "Only the people and agents holding this fleet’s keys, or a shard of one, can post here.",
+        "Only the people and agents holding this fleet’s Keys, or a shard of one, can post here.",
       else: KeysLive.refreshing()
   end
 

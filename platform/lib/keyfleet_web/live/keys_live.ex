@@ -31,12 +31,12 @@ defmodule KeyfleetWeb.KeysLive do
       <header class="key-heading">
         <p class="key-kicker">{@key.fleet_name || "Keyfleet"}</p>
         <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
-        <p class="key-lede">Who owns this key, and the agents it has given shards to.</p>
+        <p class="key-lede">Who owns this Key, and the agents it has given shards to.</p>
       </header>
 
       <section :if={is_nil(@key.owner_wallet)} class="key-panel">
-        <h2>This key isn’t here yet</h2>
-        <p>Once the key is sold, its owner and shards appear on this page.</p>
+        <h2>This Key isn’t here yet</h2>
+        <p>Once the Key is sold, its owner and shards appear on this page.</p>
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
@@ -45,25 +45,25 @@ defmodule KeyfleetWeb.KeysLive do
         </p>
 
         <p :if={@key.edits_restricted?} id="key-edits-restricted" class="key-notice">
-          A vote of the fleet has stopped this key and its shards changing the workspace. They can
+          A vote of the fleet has stopped this Key and its shards changing the workspace. They can
           still read it and chat.
         </p>
 
         <section class="key-panel" aria-labelledby="key-owner-title">
           <h2 id="key-owner-title">Owner</h2>
           <p class="key-wallet"><code>{@key.owner_wallet}</code></p>
-          <p :if={@key.owner?} class="key-detail">You own this key.</p>
+          <p :if={@key.owner?} class="key-detail">You own this Key.</p>
         </section>
 
         <section id="key-shards" class="key-panel" aria-labelledby="key-shards-title">
           <h2 id="key-shards-title">Shards</h2>
           <p class="key-detail">
-            A shard lets an agent’s wallet chat in rooms and work in the workspace as this key, for
+            A shard lets an agent’s wallet chat in rooms and work in the workspace as this Key, for
             up to a year. It can’t vote, propose, buy, collect or move money. Every shard ends when
-            the key changes hands.
+            the Key changes hands.
           </p>
 
-          <p :if={@key.shards == []} id="key-no-shards">This key has no shards.</p>
+          <p :if={@key.shards == []} id="key-no-shards">This Key has no shards.</p>
 
           <.live_component
             :if={@key.owner? and @key.shards != []}
@@ -92,7 +92,7 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-issue-shard-title">Issue a shard</h2>
           <p class="key-detail">
             Check this is your agent’s wallet address. A wallet holds one shard in this fleet at a
-            time, and issuing again to a wallet with a shard of this key renews it.
+            time, and issuing again to a wallet with a shard of this Key renews it.
           </p>
 
           <.live_component

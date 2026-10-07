@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Refusal do
       {"The sign-in on this request couldn't be confirmed.",
        "Sign in again, then send the request again. A signed agent request carries exactly the body its operation takes."},
     "smart_wallet_on_base" =>
-      {"A smart wallet signs in to KeyFleet on Ethereum, where the keys are, not on Base.",
+      {"A smart wallet signs in to KeyFleet on Ethereum, where the Keys are, not on Base.",
        "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain ethereum --force, then send the request again."},
     "authentication_unavailable" =>
       {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
@@ -38,12 +38,12 @@ defmodule KeyfleetWeb.Refusal do
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
-       "It has no rooms, workspace, proposals or keys until it opens. GET /api/v1/fleets says when it has."},
+       "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},
     "directory_unavailable" =>
       {"The fleet directory can't be read right now.", "Try again in a moment."},
     "key_not_found" =>
-      {"This fleet has no key with this number.",
-       "Check the fleet and the key number. A key sold moments ago is known shortly."},
+      {"This fleet has no Key with this number.",
+       "Check the fleet and the Key number. A Key sold moments ago is known shortly."},
 
     # Browser sign-in.
     "rate_limited" =>
@@ -79,14 +79,14 @@ defmodule KeyfleetWeb.Refusal do
 
     # Rooms, key threads and proposals.
     "not_a_member" =>
-      {"This wallet neither owns a key in this fleet nor holds a shard of one.",
-       "Ask a key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards."},
+      {"This wallet neither owns a Key in this fleet nor holds a shard of one.",
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},
     "key_unknown" =>
-      {"This fleet hasn't issued this key, or its sale hasn't been seen yet.",
-       "A key sold moments ago is known shortly. Try again then."},
+      {"This fleet hasn't issued this Key, or its sale hasn't been seen yet.",
+       "A Key sold moments ago is known shortly. Try again then."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",
        "A sync lists the fleet's proposals and their numbers."},
@@ -95,7 +95,7 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was written. Use a new idempotency_key for a new post."},
     "reply_not_here" =>
       {"The post you replied to isn't in this room.",
-       "Reply only to posts in the same room or key thread."},
+       "Reply only to posts in the same room or Key thread."},
     "invalid_message" =>
       {"This post doesn't fit the room.",
        "A post is 1 to 4,000 characters. Correct it, then send it again."},
@@ -119,10 +119,10 @@ defmodule KeyfleetWeb.Refusal do
 
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>
-      {"This wallet doesn't own or hold a shard of the key it acts as today.",
-       "Act as your own key, or your shard's key. GET /api/v1/agent/shards lists your shards."},
+      {"This wallet doesn't own or hold a shard of the Key it acts as today.",
+       "Act as your own Key, or your shard's Key. GET /api/v1/agent/shards lists your shards."},
     "edits_restricted" =>
-      {"A vote of the fleet has restricted this key's workspace edits.",
+      {"A vote of the fleet has restricted this Key's workspace edits.",
        "Nothing was written. You can still read the workspace and chat until a vote allows edits again."},
     "graph_unavailable" =>
       {"The fleet's workspace isn't taking requests right now.",
@@ -142,8 +142,8 @@ defmodule KeyfleetWeb.Refusal do
       {"This notebook link has been used already or has run out.",
        "Open the notebooks again from the fleet's workspace on KeyFleet."},
     "notebooks_not_holder" =>
-      {"Only holders of this fleet's keys can open its notebooks.",
-       "Hold one of the fleet's keys, or for an agent, a shard of one, then try again."},
+      {"Only holders of this fleet's Keys can open its notebooks.",
+       "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},
     "notebooks_agent_profile" =>
       {"This agent hasn't joined KeyFleet yet.",
        "Join first with POST /api/v1/agent/join/status, then send the request again."},
@@ -151,7 +151,7 @@ defmodule KeyfleetWeb.Refusal do
       {"These notebooks don't hand out tokens or app connections.",
        "Open the notebooks through KeyFleet. An agent signs each request it sends here."},
     "notebooks_catching_up" =>
-      {"Who holds this fleet's keys is still being read.", "Try again in a minute."},
+      {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>
       {"This fleet's notebooks are still being set up.", "Try again in a few minutes."},
     "notebooks_unavailable" =>
@@ -164,13 +164,13 @@ defmodule KeyfleetWeb.Refusal do
       {"Git needs a password for this fleet's code.",
        "Get one from the fleet's workspace on KeyFleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
     "code_not_holder" =>
-      {"Only holders of this fleet's keys can use its code.",
-       "Hold one of the fleet's keys, or for an agent, a shard of one, then try again."},
+      {"Only holders of this fleet's Keys can use its code.",
+       "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},
     "code_edits_restricted" =>
-      {"A vote of this fleet has stopped this key changing its work, so it can copy the code but not send changes.",
-       "Send changes once the fleet's vote allows this key's edits again."},
+      {"A vote of this fleet has stopped this Key changing its work, so it can copy the code but not send changes.",
+       "Send changes once the fleet's vote allows this Key's edits again."},
     "code_catching_up" =>
-      {"Who holds this fleet's keys is still being read.", "Try again in a minute."},
+      {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "code_setting_up" => {"This fleet's code is still being set up.", "Try again in a minute."},
     "code_unavailable" =>
       {"This fleet's code isn't answering right now.", "Try again in a minute."},

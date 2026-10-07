@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     refused = git(:get, "/#{@fleet}.git/info/refs?service=git-upload-pack", password)
     assert refused.status == 403
-    assert refused.resp_body =~ "Only holders of this fleet's keys"
+    assert refused.resp_body =~ "Only holders of this fleet's Keys"
     refute_received {:store, _method, _path, _claims, _body}
   end
 

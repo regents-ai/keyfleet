@@ -77,9 +77,9 @@ defmodule KeyfleetWeb.AccountLive do
           class="account-panel account-keys"
           aria-labelledby="account-keys-title"
         >
-          <h2 id="account-keys-title">Your keys</h2>
+          <h2 id="account-keys-title">Your Keys</h2>
           <p :if={@held_keys == []}>
-            Your wallets don’t hold any keys yet. Choose a fleet on the
+            Your wallets don’t hold any Keys yet. Choose a fleet on the
             <.link navigate={~p"/"}>home page</.link>
             to buy one.
           </p>
