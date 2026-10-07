@@ -1,4 +1,5 @@
 import {selectConnectedEthereumWallet} from "./wallet_actions/connected_wallet"
+import {DeckViewer} from "./hooks/deck_viewer"
 import {PrivyShowcase} from "./hooks/privy_showcase"
 
 
@@ -307,4 +308,4 @@ const ShowcaseWallet = {
     this.cleanup?.()
   },
 }
-export const hooks = {Showcase, ShowcaseWallet, PrivyShowcase}
+export const hooks = {Showcase, ShowcaseWallet, PrivyShowcase, DeckViewer}

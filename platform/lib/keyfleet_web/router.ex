@@ -129,6 +129,7 @@ defmodule KeyfleetWeb.Router do
         live "/preview", ShowcaseLive, :preview
         live "/privy", PrivyShowcaseLive, :index
         live "/key-map", KeyMapShowcaseLive, :index
+        live "/decks", DeckShowcaseLive, :index
       end
     end
   end

@@ -41,6 +41,15 @@ defmodule Keyfleet.Decks do
     end
   end
 
+  @doc "The hashes of the decks in the deck directory, in order."
+  def hashes do
+    Application.fetch_env!(:keyfleet, __MODULE__)[:directory]
+    |> Path.join("0x*.json")
+    |> Path.wildcard()
+    |> Enum.map(&Path.basename(&1, ".json"))
+    |> Enum.sort()
+  end
+
   @doc """
   The cards a deck of `size` cards deals, in order, to keys revealing with
   `seeds`: the seeds of the fleet's keys numbered 1 to `size`, in the order
