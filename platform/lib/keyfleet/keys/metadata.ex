@@ -4,7 +4,8 @@ defmodule Keyfleet.Keys.Metadata do
   `baseTokenURI`, `<site>/metadata/<slot>/`, followed by the key's number.
 
   A key is known once its purchase is recorded. Until its reveal is recorded
-  it shows the fleet's revealing picture and `Status: Revealing`; from then on
+  it shows the Interim KeyFleet Access Pass, the same picture for every key in
+  every fleet, and `Status: Revealing`; from then on
   it shows the traits drawn from its seed with the fleet's trait table, which
   change only if an operator corrects the reveal by hand after a reorg.
   """
@@ -41,12 +42,12 @@ defmodule Keyfleet.Keys.Metadata do
     end
   end
 
-  defp revealing(%{fleet: fleet, slot: slot, token_id: token_id, site_url: site_url} = key) do
+  defp revealing(%{fleet: fleet, token_id: token_id, site_url: site_url} = key) do
     %{
       name: name(key),
       description:
         "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
-      image: "#{site_url}/art/#{slot}/revealing.png",
+      image: "#{site_url}/images/keys/interim-keyfleet-access-pass.png",
       attributes: level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
     }
   end
