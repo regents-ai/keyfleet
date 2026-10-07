@@ -22,6 +22,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Actors.System
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.NoAgentProfileError
   alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
@@ -97,23 +98,28 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     body = Ash.Changeset.get_argument(changeset, :body)
     idempotency_key = Ash.Changeset.get_argument(changeset, :idempotency_key)
     earlier = earlier_post(room.fleet_id, actor, idempotency_key)
-    {author, profiles} = author(actor, identity, as_key, author_wallet(earlier, wallet))
 
-    changeset
-    |> Ash.Changeset.put_context(:author_profiles, profiles)
-    |> Ash.Changeset.force_change_attributes(
-      Map.merge(author, %{
-        kind: kind,
-        in_key_thread: room.kind == :key,
-        fleet_id: room.fleet_id,
-        room_id: room.id,
-        seq: seq(room, earlier),
-        body: body,
-        body_digest: digest(body),
-        idempotency_key: idempotency_key,
-        reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id)
-      })
-    )
+    case author(actor, identity, as_key, author_wallet(earlier, wallet)) do
+      nil ->
+        Ash.Changeset.add_error(changeset, NoAgentProfileError.exception([]))
+
+      {author, profiles} ->
+        changeset
+        |> Ash.Changeset.put_context(:author_profiles, profiles)
+        |> Ash.Changeset.force_change_attributes(
+          Map.merge(author, %{
+            kind: kind,
+            in_key_thread: room.kind == :key,
+            fleet_id: room.fleet_id,
+            room_id: room.id,
+            seq: seq(room, earlier),
+            body: body,
+            body_digest: digest(body),
+            idempotency_key: idempotency_key,
+            reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id)
+          })
+        )
+    end
   end
 
   # A send key belongs to the sender, not to one of its wallets: a person's
@@ -141,26 +147,30 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
 
   # An agent writes from its own wallet with its profile; a person from the
   # wallet holding the key they write as, and an agent writing for its person
-  # the same way, marked with its profile.
+  # the same way, marked with its profile. An agent without a profile has
+  # nothing to write as: nil.
   defp author(%Human{}, _identity, as_key, wallet),
     do: {person(as_key, wallet, nil), %{agent_profile: nil, via_agent_profile: nil}}
 
-  defp author(%Agent{} = actor, %{for_person: true}, as_key, wallet) do
-    profile = Keyfleet.Agents.get_my_profile!(actor: actor)
-    {person(as_key, wallet, profile.id), %{agent_profile: nil, via_agent_profile: profile}}
+  defp author(%Agent{} = actor, identity, as_key, wallet) do
+    case Keyfleet.Agents.get_my_profile!(actor: actor, load: [:human_backed]) do
+      nil -> nil
+      profile -> agent_author(profile, identity, as_key, wallet)
+    end
   end
 
-  defp author(%Agent{} = actor, _identity, as_key, wallet) do
-    profile = Keyfleet.Agents.get_my_profile!(actor: actor, load: [:human_backed])
+  defp agent_author(profile, %{for_person: true}, as_key, wallet),
+    do: {person(as_key, wallet, profile.id), %{agent_profile: nil, via_agent_profile: profile}}
 
-    {%{
-       author_kind: :agent,
-       author_wallet: wallet,
-       as_key: as_key,
-       agent_profile_id: profile.id,
-       via_agent_profile_id: nil
-     }, %{agent_profile: profile, via_agent_profile: nil}}
-  end
+  defp agent_author(profile, _identity, as_key, wallet),
+    do:
+      {%{
+         author_kind: :agent,
+         author_wallet: wallet,
+         as_key: as_key,
+         agent_profile_id: profile.id,
+         via_agent_profile_id: nil
+       }, %{agent_profile: profile, via_agent_profile: nil}}
 
   defp person(as_key, wallet, via),
     do: %{

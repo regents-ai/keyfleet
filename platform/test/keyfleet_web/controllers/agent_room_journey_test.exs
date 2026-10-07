@@ -205,6 +205,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert "general" in Enum.map(answer.body["rooms"], & &1["slug"])
   end
 
+  test "an agent with a shard but no profile is told to make one before it posts", c do
+    ChainHelpers.issue_shard!("fibonacci_syndicate", 1, c.signer.address)
+
+    refused = send_signed(c, "POST", @send_general, send_body("Hull survey started", "k-1"))
+    assert refused.status == 404
+    assert refused.body == refused("profile_not_found")
+  end
+
   test "an agent with a shard posts once however often it sends the same post", c do
     shard(c)
 

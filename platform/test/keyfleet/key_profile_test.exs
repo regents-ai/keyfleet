@@ -178,13 +178,14 @@ defmodule Keyfleet.KeyProfileTest do
            } = Profile.read(@fleet, 4, nil)
   end
 
-  test "the next key on sale has only its number, level and price" do
+  test "the next key on sale has only its number, picture, level and price" do
     epoch!(@fleet, 1, 1, wallet("a"))
 
     assert Profile.read(@fleet, 2, nil) == %{
              fleet_id: @fleet,
              token_id: 2,
              issued?: false,
+             image: "https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy",
              level: 1,
              issue_price: 10_000_000
            }

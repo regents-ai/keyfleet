@@ -47,6 +47,13 @@ defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do
   def message(%{fleet_id: fleet_id}), do: "no Key of #{fleet_id} to write as"
 end
 
+defmodule Keyfleet.Rooms.Errors.NoAgentProfileError do
+  @moduledoc "Raised when an agent writes before it has made its profile with join/status."
+  use Splode.Error, fields: [], class: :invalid
+
+  def message(_error), do: "this agent has no profile yet"
+end
+
 defmodule Keyfleet.Rooms.Errors.KeyUnknownError do
   @moduledoc """
   Raised when a fleet has not issued the key a caller named, as far as its sales

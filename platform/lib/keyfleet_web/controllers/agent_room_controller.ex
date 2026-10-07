@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias Keyfleet.Rooms.Errors.NoAgentProfileError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
@@ -278,6 +279,9 @@ defmodule KeyfleetWeb.AgentRoomController do
 
       Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
         Refusal.json(conn, 404, "key_unknown")
+
+      Enum.any?(errors, &match?(%NoAgentProfileError{}, &1)) ->
+        Refusal.json(conn, 404, "profile_not_found")
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
         invalid(conn, "idempotency_conflict")
