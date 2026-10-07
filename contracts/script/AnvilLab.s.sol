@@ -37,8 +37,11 @@ contract AnvilLab is Script {
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
 
     /// @notice Builds the lab, broadcast from `--sender`, which owns the subscription and buys
-    /// both keys.
-    function run() external returns (address fleet, address staking, address shards) {
+    /// both keys, and returns where the fleet's five contracts and the stand-in staking are.
+    function run()
+        external
+        returns (address fleet, address rewards, address shards, address votes, address treasury, address staking)
+    {
         vm.startBroadcast();
         AnvilLabUsdc usdc = new AnvilLabUsdc();
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
@@ -67,6 +70,13 @@ contract AnvilLab is Script {
         vrf.setRevertAll(false);
         vm.stopBroadcast();
 
-        return (address(classic), address(regentStaking), address(classic.SHARDS()));
+        return (
+            address(classic),
+            address(classic.REWARDS()),
+            address(classic.SHARDS()),
+            address(classic.VOTES()),
+            address(classic.TREASURY()),
+            address(regentStaking)
+        );
     }
 }

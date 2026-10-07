@@ -62,12 +62,12 @@ this branch does:
   or has its shards or agent voting changed.
 - A key asks Chainlink VRF for its traits once, and can ask again only after a
   refused request.
+- The treasury owns the fleet's Lit account. It signs nothing by itself: it
+  answers a signature check (ERC-1271) only for a hash a passed proposal
+  approved, and every write to the Lit account is a passed proposal's call.
 - Keyfleet Classic, decided 28 September 2026: 1,024 keys, the first at 8 USDC
   and the last at 80 USDC, each key the same percentage dearer than the one
   before, rounded to the nearest cent.
-- Referrals, the receipt fee, the 20/80 budget split, the pay cap and period,
-  the shared asset registry, proposal kinds, the three-fifths rule and
-  withdrawing a vote are deleted.
 
 On hold or not yet done:
 
@@ -82,10 +82,11 @@ On hold or not yet done:
   traits of sixteen values each, every trait's weights adding up to 1,000) and a
   VRF subscription of 0, so a Base deployment is refused until the Regents
   subscription id is written in.
+- Lit's own servers (registering the treasury's account, checking its answer to
+  a signed request, minting a usage key and running the inbox action) work only
+  against a treasury deployed on Base itself, so they are untested until one is.
 - Deferred until the Cascade fleet type is next: the reserve of a level that
   never completes.
-- The purchase and send gas figures on a fork of Base have not been measured;
-  the figures below are from the suite's stand-ins.
 - Each key's Chainlink VRF request is paid in ETH from the Regents subscription
   on Base's 2 gwei lane (the 30 gwei lane is also allowed). The VRF cost of one
   key on Base has not been measured against the 10% Regents takes from that
@@ -248,7 +249,7 @@ and 49,152 bytes of deployment code per contract. Measured with
 | `KeyfleetRewards` | 8,396 | 8,878 |
 | `KeyfleetShards` | 3,604 | 3,810 |
 | `KeyfleetVotes` | 14,531 | 15,647 |
-| `KeyfleetTreasury` | 8,346 | 9,856 |
+| `KeyfleetTreasury` | 8,911 | 10,421 |
 
 A fleet that deployed its controller and treasury itself would carry their
 deployment code inside its own; when it did, its deployment code measured
@@ -327,8 +328,8 @@ very first sale, which also writes `firstMintAt`; later sales skip that write.
 
 The suite asserts a ceiling of 509,000, the level-40 Cascade figure plus a fifth.
 That is a regression bound on the fleet's own work. Real Base USDC is a proxy
-and costs more per transfer, so the figures to publish must be measured on a
-fork of Base.
+and costs more per transfer; the figures against it are in
+[Gas on Base](#gas-on-base).
 
 ### The protocol share
 
@@ -481,6 +482,40 @@ funded after; a token that refuses the transfer is skipped with
 transfer that fails because it ran out of gas reverts the whole run with
 `SplitOutOfGas` instead, so nobody can starve one asset of its day by sending
 too little gas.
+
+### Signing for the fleet and its Lit account
+
+The treasury answers ERC-1271's `isValidSignature(hash, signature)` with the
+magic value `0x1626ba7e` exactly when `approvedHash(hash)` is true, and with
+`0xffffffff` otherwise. The signature bytes are ignored: the treasury has no key,
+and nothing is signed for it unless a proposal said so.
+`approveSignatureHash(hash)` and `revokeSignatureHash(hash)` accept only the
+treasury itself as caller (`OnlySelf`), so only a passed proposal's call sets or
+clears a hash, and they emit `SignatureHashApproved(hash)` and
+`SignatureHashRevoked(hash)`.
+
+This is how the fleet owns its Lit account. Lit's account contract on Base,
+`0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` (named by Lit's node
+configuration, `GET https://api.chipotle.litprotocol.com/core/v1/get_node_chain_config`),
+lets a wallet, a contract included, own an account outright: the account is the
+hash of the owner's address, and only that address may write to it. The
+treasury is that owner. Every write is a call in a passed proposal, sent from
+the treasury: creating the account, adding the inbox action, making one group
+with it (Lit numbers it 1), minting one usage key for the operator that may run
+that action and nothing else, then replacing or removing that key, and at the
+end, if the keys vote for it, handing the account to another owner, after which
+Lit refuses the treasury. The fleet's contracts hold no Lit address; it appears
+only in proposals' calls.
+
+When Lit wants the owner's signature on a request, such as `CreateWallet` for a
+key, a proposal approves that request's EIP-712 digest (domain name
+`Lit ChainSecured`, version `1`, Base's chain id, no verifying contract) and Lit
+asks the treasury. Lit takes a signed request only within 300 seconds either side
+of the time it names, and each digest only once, so the proposal names the time
+it will be carried out and the operator sends the request straight after. Lit
+does not support wallets that are not yet deployed, so the treasury must be on
+chain first. Voting, claims and the daily split never call Lit: a Lit outage
+stops nothing on chain.
 
 ## Votes
 
@@ -783,8 +818,8 @@ own (`CompanionNotBound`), a fleet the subscription
 does not list as a consumer and, on Base, a subscription the Regents Safe does
 not own. Only then does it write
 `deployments/<name>.<fleet>.deployed.json`, the fleet's published manifest: the
-fleet, ledger, controller, treasury and shard record addresses, the fleet's code hash, the
-deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
+fleet, ledger, controller, treasury and shard record addresses, each with its
+code hash, the deployment block, the staking contract and the protocol share tag, the supply limits of Classic and
 Accelerant, the reference price, the fee basis points, the randomness terms, the
 trait table hash, REGENT, the assets the daily split shares at deployment
 (`splitAssets`) and the terms the release discloses.
@@ -798,13 +833,48 @@ how to run each step and what each refuses.
 `script/AnvilLab.s.sol` is no part of a release. It puts one Classic fleet and
 its controller and treasury, with
 stand-in USDC, REGENT, VRF coordinator and REGENT staking, on a plain local
-anvil for the anvil tests in `platform/` (`mix test.external`).
+anvil for the anvil tests in `platform/` (`mix test.external`), and returns the
+addresses of the fleet's five contracts and the stand-in staking.
+
+## Gas on Base
+
+Measured on 6 October 2026 on a fork of Base, against the real USDC (a proxy),
+REGENT, REGENT revenue staking and Chainlink VRF coordinator, with a Classic
+fleet a consumer of a funded subscription so each purchase makes its real
+randomness request. Each figure is the whole transaction, the 21,000 base and
+the call data included, every call run as a transaction of its own
+(`test/fork/KeyfleetBaseGas.t.sol`):
+
+| Call | Gas |
+| --- | --- |
+| `purchase`, the fleet's first key | 394,246 |
+| `purchase`, a later key | 286,593 |
+| `present`, one key | 124,195 |
+| `propose`, one payment | 221,965 |
+| `castBallot`, one key | 110,803 |
+| `runDailySplit`, ETH, REGENT and USDC | 358,185 |
+| `claim`, one key in all three | 233,324 |
+| `transferFrom`, a key with all three waiting | 287,030 |
+| `execute`, a one-payment proposal | 91,083 |
+| `executeBatch`, one payment | 53,954 |
+
+`executeBatch` is only ever called by the voting controller inside `execute`;
+its line is the treasury's own part. Deploying one fleet on a fork of Base took
+6,045,638 gas for the fleet with its ledger and shard record, 3,210,157 for the
+controller and 2,039,359 for the treasury: 11,295,154 in all. To measure again:
+
+```sh
+BASE_RPC_URL=https://mainnet.base.org forge test --mc KeyfleetBaseGasTest --isolate -vv
+```
+
+The VRF cost of one key's answer, paid in ETH from the subscription, is not in
+these figures and has not been measured.
 
 ## Checks
 
 Run `make check-contracts` from the repository root to check formatting, build,
 and run the preset, ledger, purchase, money-sorting and protocol share, treasury,
-payment and advance, daily split, voting, presence, shard, signature,
+payment and advance, daily split, voting, presence, shard, signature, Lit,
 reveal, trait-draw and deployment tests, with the presence queue's invariants run
 over random renewals, transfers, sweeps, openings and the passing of time, the
 growing electorate's over random proposals, ballots, transfers, renewals,
@@ -834,14 +904,19 @@ every jump target the code pushes, and fails if any of them can reach
 `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
 the Classic price table stored at the end of the fleet's code, are data and are
 not judged. Foundry must be installed; the compiler may be
-downloaded on first use. Tests need no RPC, apart from
-`test/fork/KeyfleetBaseFork.t.sol`, which skips itself unless `BASE_RPC_URL`
-is set. It then reads the pinned Base addresses (USDC, REGENT, REGENT staking,
+downloaded on first use. Tests need no RPC, apart from the three suites in
+`test/fork/`, which skip themselves unless `BASE_RPC_URL` is set.
+`KeyfleetBaseFork.t.sol` reads the pinned Base addresses (USDC, REGENT, REGENT staking,
 the Regents Safe, the coordinator and both gas lanes) and runs a fleet against
 the real Chainlink coordinator, USDC and REGENT staking on a fork of Base,
 including a protocol share deposit and a send refused while the Safe has staking
-paused (on the fork only). The public
-`https://mainnet.base.org` is enough for it.
+paused (on the fork only). `KeyfleetLitFork.t.sol` runs the treasury's Lit
+writes, each carried by a passed proposal, against Lit's real account contract,
+and checks Lit refuses anyone else and refuses the treasury once the account is
+handed on. `KeyfleetBaseGas.t.sol` gives the figures in
+[Gas on Base](#gas-on-base) and runs only with `--isolate`. The public
+`https://mainnet.base.org` is enough for all three; run them one suite at a
+time, as it may refuse a burst of requests.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run
 `git submodule update --init`.

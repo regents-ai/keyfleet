@@ -16,8 +16,9 @@ interface IFleetBound {
 /// @dev Nothing here is taken on trust from the deployment step. The broadcast Forge wrote names
 /// the fleet and the blocks the transactions landed in. Every address and value and the token the
 /// ledger pays are read from the chain through that fleet. The supply, USDC price and split constants
-/// are the ones this script was compiled with from `KeyfleetPresets`, and the fleet's runtime code
-/// hash is recorded so it can be re-verified against the deployed code. A receipt that failed, a
+/// are the ones this script was compiled with from `KeyfleetPresets`, and the runtime code hash of
+/// each of the fleet's five contracts is recorded so each can be re-verified against its deployed
+/// code. A receipt that failed, a
 /// transaction with no receipt, a fleet with no code, a fleet whose five contracts do not all
 /// exist and point at each other, a fleet of another preset, any value that
 /// differs from the manifest, or a fleet the VRF subscription does not yet list as a consumer stops
@@ -184,16 +185,21 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeBool(vrf, "nativePayment", true);
     }
 
-    /// @dev The fleet, with `slot` the key the input manifest names it by.
+    /// @dev The fleet and its four other contracts, each with its runtime code hash, with `slot`
+    /// the key the input manifest names the fleet by.
     function _fleetJson(string memory fleetKey, Keyfleet fleet) private returns (string memory) {
         string memory fleetJson = "fleet";
         vm.serializeString(fleetJson, "slot", fleetKey);
         vm.serializeAddress(fleetJson, "address", address(fleet));
         vm.serializeBytes32(fleetJson, "codeHash", address(fleet).codehash);
         vm.serializeAddress(fleetJson, "rewards", address(fleet.REWARDS()));
+        vm.serializeBytes32(fleetJson, "rewardsCodeHash", address(fleet.REWARDS()).codehash);
         vm.serializeAddress(fleetJson, "votes", address(fleet.VOTES()));
+        vm.serializeBytes32(fleetJson, "votesCodeHash", address(fleet.VOTES()).codehash);
         vm.serializeAddress(fleetJson, "treasury", address(fleet.TREASURY()));
+        vm.serializeBytes32(fleetJson, "treasuryCodeHash", address(fleet.TREASURY()).codehash);
         vm.serializeAddress(fleetJson, "shards", address(fleet.SHARDS()));
+        vm.serializeBytes32(fleetJson, "shardsCodeHash", address(fleet.SHARDS()).codehash);
         vm.serializeString(fleetJson, "name", fleet.name());
         vm.serializeString(fleetJson, "symbol", fleet.symbol());
         return vm.serializeString(fleetJson, "baseTokenURI", fleet.baseTokenURI());

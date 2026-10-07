@@ -75,6 +75,17 @@ contract DeployKeyfleetsTest is Test {
             Keyfleet fleet = script.deploy(manifest);
 
             assertEq(vm.getNonce(address(script)) - nonceBefore, 3, "One fleet's three deployments and nothing else");
+            assertEq(address(fleet), vm.computeCreateAddress(address(script), nonceBefore), "The fleet first");
+            assertEq(
+                address(fleet.VOTES()),
+                vm.computeCreateAddress(address(script), nonceBefore + 1),
+                "Then its voting controller, at the address the fleet was given"
+            );
+            assertEq(
+                address(fleet.TREASURY()),
+                vm.computeCreateAddress(address(script), nonceBefore + 2),
+                "Then its treasury, at the address the fleet was given"
+            );
             assertTrue(fleet.PRESET() == presets[slot], "Preset of the slot");
             assertEq(fleet.name(), manifest.fleet.name, "Name");
             assertEq(fleet.symbol(), manifest.fleet.symbol, "Symbol");

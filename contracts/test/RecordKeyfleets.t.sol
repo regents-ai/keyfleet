@@ -60,10 +60,7 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonString(json, ".fleet.slot"), "classic", "The key the manifest names the fleet by");
         assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
         assertEq(vm.parseJsonBytes32(json, ".fleet.codeHash"), address(fleet).codehash, "Fleet code");
-        assertEq(vm.parseJsonAddress(json, ".fleet.rewards"), address(fleet.REWARDS()), "Ledger");
-        assertEq(vm.parseJsonAddress(json, ".fleet.votes"), address(fleet.VOTES()), "Controller");
-        assertEq(vm.parseJsonAddress(json, ".fleet.treasury"), address(fleet.TREASURY()), "Treasury");
-        assertEq(vm.parseJsonAddress(json, ".fleet.shards"), address(fleet.SHARDS()), "Shard record");
+        _assertFiveContracts(json, fleet);
         assertEq(vm.parseJsonString(json, ".fleet.name"), manifest.fleet.name, "Name");
         assertEq(vm.parseJsonString(json, ".fleet.symbol"), manifest.fleet.symbol, "Symbol");
         assertEq(
@@ -111,6 +108,25 @@ contract RecordKeyfleetsTest is Test {
         assertEq(vm.parseJsonUint(json, ".vrf.requestConfirmations"), 3, "Confirmations");
         assertEq(vm.parseJsonUint(json, ".vrf.callbackGasLimit"), 100_000, "Callback gas");
         assertTrue(vm.parseJsonBool(json, ".vrf.nativePayment"), "Paid in ETH");
+    }
+
+    /// @dev The committed Base manifest, deployed and recorded over a stand-in Base: the record
+    /// publishes the fleet's five contracts on chain 8453, depositing into REGENT revenue staking
+    /// and splitting REGENT, once the operator writes in the subscription the Regents Safe owns.
+    function test_theBaseManifestDeploysAndRecordsAllFiveContracts() public {
+        KeyfleetManifest.Manifest memory stand = _baseManifest();
+        KeyfleetManifest.Manifest memory manifest = deployer.readManifest("base", "classic");
+        manifest.vrf.subscriptionId = stand.vrf.subscriptionId;
+        Keyfleet fleet = _deployAndAddConsumer(manifest);
+
+        string memory json = recorder.record(manifest, _summary(fleet));
+
+        assertEq(vm.parseJsonUint(json, ".chainId"), BASE_CHAIN_ID, "Base");
+        assertEq(vm.parseJsonAddress(json, ".usdc"), deployer.BASE_USDC(), "Base USDC");
+        assertEq(vm.parseJsonAddress(json, ".regentStaking"), deployer.BASE_REGENT_REVENUE_STAKING(), "Staking");
+        assertEq(vm.parseJsonAddress(json, ".regent"), deployer.BASE_REGENT(), "REGENT");
+        assertEq(vm.parseJsonString(json, ".fleet.name"), "Keyfleet Classic", "Name from the Base manifest");
+        _assertFiveContracts(json, fleet);
     }
 
     /// @dev Each fleet records on its own, straight after its own deployment, under its own key,
@@ -353,6 +369,26 @@ contract RecordKeyfleetsTest is Test {
         other = new MockVRFCoordinatorV2Plus();
         other.addProvingKey(manifest.vrf.keyHash, 30 gwei);
         other.openSubscription(manifest.vrf.subscriptionId, address(this));
+    }
+
+    /// @dev The record names the fleet's four other contracts and every one of the five
+    /// contracts' runtime code hashes, as the chain reports them.
+    function _assertFiveContracts(string memory json, Keyfleet fleet) private view {
+        assertEq(vm.parseJsonAddress(json, ".fleet.address"), address(fleet), "Fleet");
+        assertEq(vm.parseJsonBytes32(json, ".fleet.codeHash"), address(fleet).codehash, "Fleet code");
+        assertEq(vm.parseJsonAddress(json, ".fleet.rewards"), address(fleet.REWARDS()), "Ledger");
+        assertEq(vm.parseJsonBytes32(json, ".fleet.rewardsCodeHash"), address(fleet.REWARDS()).codehash, "Ledger code");
+        assertEq(vm.parseJsonAddress(json, ".fleet.votes"), address(fleet.VOTES()), "Controller");
+        assertEq(vm.parseJsonBytes32(json, ".fleet.votesCodeHash"), address(fleet.VOTES()).codehash, "Controller code");
+        assertEq(vm.parseJsonAddress(json, ".fleet.treasury"), address(fleet.TREASURY()), "Treasury");
+        assertEq(
+            vm.parseJsonBytes32(json, ".fleet.treasuryCodeHash"), address(fleet.TREASURY()).codehash, "Treasury code"
+        );
+        assertEq(vm.parseJsonAddress(json, ".fleet.shards"), address(fleet.SHARDS()), "Shard record");
+        assertEq(
+            vm.parseJsonBytes32(json, ".fleet.shardsCodeHash"), address(fleet.SHARDS()).codehash, "Shard record code"
+        );
+        assertTrue(address(fleet.TREASURY()).codehash != bytes32(0), "Code is on chain");
     }
 
     function _expectRecordRefused(KeyfleetManifest.Manifest memory manifest, Keyfleet fleet, bytes memory expected)
