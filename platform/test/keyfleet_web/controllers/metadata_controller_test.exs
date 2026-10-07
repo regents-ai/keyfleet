@@ -18,6 +18,9 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   # keccak256 of the fixture table in test/support/fixtures/trait_tables.
   @table_hash "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
 
+  # The Interim Keyfleet Access Pass on IPFS, docs/still-pictures/interim-pass.
+  @interim_pass "https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy"
+
   setup do
     Fleets.bootstrap_catalog!()
 
@@ -28,12 +31,11 @@ defmodule KeyfleetWeb.MetadataControllerTest do
 
     buy!("fibonacci_cascade", 3)
     buy!("fleet_tech_accelerant", 1)
-    %{site: KeyfleetWeb.Endpoint.url()}
+    :ok
   end
 
   test "a key waiting for its traits shows the interim access pass for 30 seconds", %{
-    conn: conn,
-    site: site
+    conn: conn
   } do
     cascade = get(conn, "/metadata/cascade/3")
 
@@ -43,7 +45,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              "name" => "Keyfleet Cascade #3",
              "description" =>
                "Key 3 of Keyfleet Cascade. Its traits appear here once they are drawn.",
-             "image" => "#{site}/images/keys/interim-keyfleet-access-pass.png",
+             "image" => @interim_pass,
              "attributes" => [
                %{"trait_type" => "Level", "value" => 2},
                %{"trait_type" => "Status", "value" => "Revealing"}
@@ -65,8 +67,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   # draw contracts/test/KeyfleetTraitDraw.t.sol pins. A reveal queues its
   # card's drawing; until the card is in the bucket the key keeps the pass.
   test "a revealed key shows its traits, then its card once drawn, kept for an hour", %{
-    conn: conn,
-    site: site
+    conn: conn
   } do
     seed = Traits.keccak256("golden-1")
     reveal!("fibonacci_cascade", 3, seed)
@@ -91,7 +92,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     assert get_resp_header(drawing, "cache-control") == ["max-age=30"]
 
     assert json_response(drawing, 200) ==
-             Map.put(revealed, "image", "#{site}/images/keys/interim-keyfleet-access-pass.png")
+             Map.put(revealed, "image", @interim_pass)
 
     test = self()
     png = <<0x89, "PNG\r\n", 0x1A, "\n", "card">>

@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.MetadataController do
   alias Keyfleet.Keys.Metadata
 
   def show(conn, %{"slot" => slot, "token_id" => token_id}) do
-    case Metadata.for_key(slot, token_id, KeyfleetWeb.Endpoint.url()) do
+    case Metadata.for_key(slot, token_id) do
       {waiting, metadata} when waiting in [:revealing, :drawing] ->
         conn |> put_resp_header("cache-control", "max-age=30") |> json(metadata)
 

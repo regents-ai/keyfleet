@@ -14,10 +14,11 @@ keep full shine; all eight test keys' pictures are byte-identical to before.
 
 | File | Size | sha256 |
 | --- | --- | --- |
-| `platform/priv/static/images/keys/interim-keyfleet-access-pass.png` | 800 × 1120 PNG | `cba040220d14a34d34e7f9c0bd888cc70bc112ede869fd6ec2b8184cc9b1c25c` |
+| `interim-keyfleet-access-pass.png` (this folder) | 800 × 1120 PNG | `cba040220d14a34d34e7f9c0bd888cc70bc112ede869fd6ec2b8184cc9b1c25c` |
 
-The site serves it at `/images/keys/interim-keyfleet-access-pass.png`, and every waiting key's metadata names that
-address as its image. It is drawn by the Key Lab page (version 9 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv,
+It is kept on IPFS through Regent's Lighthouse account at `QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy`
+(uploaded 7 October 2026), like every key's card, and every waiting key's metadata names
+`https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy` as its image. It is drawn by the Key Lab page (version 9 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv,
 section "The interim pass") with Chromium's CPU renderer; two separate runs gave byte-identical files. The pass is
 drawn by the same card renderer as the real keys, so it shares their light, edge and studio. It does not depend on
 the trait table.

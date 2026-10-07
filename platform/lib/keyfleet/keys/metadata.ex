@@ -18,24 +18,28 @@ defmodule Keyfleet.Keys.Metadata do
   alias Keyfleet.Keys.KeyArt
   alias Keyfleet.Traits
 
+  # The Interim Keyfleet Access Pass, kept on IPFS like every key's card
+  # (docs/still-pictures/interim-pass).
+  @interim_pass_cid "QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy"
+
   # The key numbers a `tokenURI` can name: the contract's decimal digits, and
   # no more of them than a database integer holds.
   @token_id ~r/\A[1-9][0-9]{0,17}\z/
 
   @doc """
   The metadata of the key numbered `token_id` in the fleet at deployment
-  `slot`, both as the URL gives them, with the interim pass under `site_url`:
+  `slot`, both as the URL gives them:
   `{:revealing, metadata}`, `{:drawing, metadata}` (revealed, its card not
   drawn yet), `{:revealed, metadata}`, or `:not_found` for no such slot or no
   recorded key.
   """
-  def for_key(slot, token_id, site_url) do
+  def for_key(slot, token_id) do
     with fleet_id when is_binary(fleet_id) <- Fleets.slot_fleet_id(slot),
          true <- token_id =~ @token_id,
          token_id = String.to_integer(token_id),
          %{} <- Keys.current_key!(fleet_id, token_id) do
       fleet = Fleets.get_fleet!(fleet_id)
-      key = %{fleet: fleet, token_id: token_id, site_url: site_url}
+      key = %{fleet: fleet, token_id: token_id}
 
       case Keys.get_reveal!(fleet_id, token_id) do
         nil -> {:revealing, revealing(key)}
@@ -51,13 +55,13 @@ defmodule Keyfleet.Keys.Metadata do
       name: name(key),
       description:
         "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
-      image: interim_pass(key),
+      image: KeyArt.link(@interim_pass_cid),
       attributes: level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
     }
   end
 
   defp revealed(key, reveal, nil),
-    do: {:drawing, with_traits(key, reveal, interim_pass(key), %{})}
+    do: {:drawing, with_traits(key, reveal, KeyArt.link(@interim_pass_cid), %{})}
 
   defp revealed(key, reveal, %{cid: cid}),
     do: {:revealed, with_traits(key, reveal, KeyArt.link(cid), %{card: "ipfs://#{cid}"})}
@@ -79,9 +83,6 @@ defmodule Keyfleet.Keys.Metadata do
       properties: Map.merge(%{seed: reveal.seed, trait_table_hash: hash}, card)
     }
   end
-
-  defp interim_pass(%{site_url: site_url}),
-    do: "#{site_url}/images/keys/interim-keyfleet-access-pass.png"
 
   defp name(%{fleet: fleet, token_id: token_id}), do: "#{fleet.name} ##{token_id}"
 

@@ -55,7 +55,7 @@ Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yT
 | Accelerant #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` |
 
 - **Before the reveal.** From mint until a Key's traits are drawn and its own picture is ready, it shows the Interim Keyfleet Access Pass: a black card with an uncut Key and the words INTERIM / KEYFLEET / ACCESS PASS in the Regents colours (Sean chose this Shadow look on 6 Oct). It is the same picture for every Key in every fleet. The Key's details then update to its own card.
-- **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass. After a Key's reveal, a job draws its own picture, keeps it on IPFS through Regent's Lighthouse account and the Key's details then name it. The test run is recorded in `docs/still-pictures/README.md`.
+- **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass, which is kept on IPFS through Regent's Lighthouse account and shown from media.regents.sh like every card (Sean, 7 Oct). After a Key's reveal, a job draws its own picture, keeps it on IPFS through Regent's Lighthouse account and the Key's details then name it. The test run is recorded in `docs/still-pictures/README.md`.
 
 ## Shared work and chat
 
