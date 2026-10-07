@@ -9,7 +9,10 @@ import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
+import {IRegentLBPStrategyV2} from "../../src/interfaces/IRegentLBPStrategyV2.sol";
+import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {MockToken} from "../KeyfleetIncome.t.sol";
+import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFactory.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
@@ -17,20 +20,27 @@ import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 /// across all five of each fleet's contracts: purchases, key transfers (each settling the ledger
 /// and telling the controller), shards issued to agents, money sent to the treasury and to the
 /// core, public daily splits as time passes, and approved batches made through the controller's
-/// address that run the split early, change its rate, admit OUSD or pay money out. Claims are made
-/// by holders, former holders and agents. Around each step it records, as `breach`, the first
-/// thing that went differently from the rules.
+/// address that run the split early, change its rate, admit OUSD, launch a token through Autolaunch
+/// or pay money out. Launches sell or fail as the sequence goes on, anyone may try to bind any of
+/// them, and launched tokens reach the treasury before and after binding. Claims are made by
+/// holders, former holders and agents. Around each step it records, as `breach`, the first thing
+/// that went differently from the rules.
 contract FleetHandler is Test {
     address internal constant NATIVE = address(0);
     uint256 internal constant MAX_KEYS = 30;
     uint256 internal constant ACTORS = 16;
     uint256 internal constant AGENTS = 3;
+    uint256 internal constant MAX_LAUNCHES = 6;
 
     Keyfleet[2] internal fleets;
     MockToken internal immutable usdc;
     MockRegent internal immutable regent;
     MockToken internal immutable ousd;
+    MockAutolaunchFactory internal immutable autolaunch;
     address internal buyer = address(0xB0B0B0);
+
+    /// @notice Per fleet, the last launch its treasury made, zero before any.
+    mapping(uint256 fleet => uint256 launchId) public lastLaunch;
 
     /// @notice Per fleet and asset, everything the split has sent the ledger and everything claims
     /// have paid out.
@@ -40,11 +50,19 @@ contract FleetHandler is Test {
     /// @notice Set, with the reason, the first time a step went differently from the rules.
     string public breach;
 
-    constructor(Keyfleet cascade, Keyfleet accelerant, MockToken usdc_, MockRegent regent_, MockToken ousd_) {
+    constructor(
+        Keyfleet cascade,
+        Keyfleet accelerant,
+        MockToken usdc_,
+        MockRegent regent_,
+        MockToken ousd_,
+        MockAutolaunchFactory autolaunch_
+    ) {
         fleets = [cascade, accelerant];
         usdc = usdc_;
         regent = regent_;
         ousd = ousd_;
+        autolaunch = autolaunch_;
     }
 
     function actor(uint256 i) public pure returns (address) {
@@ -126,13 +144,17 @@ contract FleetHandler is Test {
         }
     }
 
-    /// @dev An approved payment out of the treasury, to someone outside the fleet.
+    /// @dev An approved payment out of the treasury, to someone outside the fleet, in ETH, REGENT,
+    /// USDC or the bound launch token.
     function pay(uint256 fleetSeed, uint256 assetSeed, uint256 amount) external {
         Keyfleet f = fleets[fleetSeed % 2];
         KeyfleetTreasury treasury = f.TREASURY();
-        address asset = [NATIVE, address(regent), address(usdc)][assetSeed % 3];
+        address[4] memory assets = [NATIVE, address(regent), address(usdc), address(treasury.launchToken())];
+        uint256 pick = assetSeed % 4;
+        if (pick == 3 && assets[3] == address(0)) return;
+        address asset = assets[pick];
         amount = bound(amount, 0, _balanceOf(asset, address(treasury)));
-        address outsider = address(uint160(0xD00D00 + assetSeed % 3));
+        address outsider = address(uint160(0xD00D00 + assetSeed % 4));
         _batch(f, abi.encodeCall(KeyfleetTreasury.pay, (asset, outsider, amount)));
     }
 
@@ -175,6 +197,67 @@ contract FleetHandler is Test {
         bool fresh = address(f.TREASURY().ousd()) == address(0);
         bool admitted = _tryBatch(f, abi.encodeCall(KeyfleetTreasury.admitOusd, (IERC20(address(ousd)))));
         if (admitted != fresh) _breach("OUSD was admitted twice or refused the first time");
+    }
+
+    // --- the fleet's launch ------------------------------------------------------
+
+    /// @dev An approved proposal's call launches a token through Autolaunch, naming this fleet's
+    /// treasury as the launch's treasury, or one time in four the other fleet's.
+    function launch(uint256 fleetSeed, uint256 namesSeed) external {
+        if (autolaunch.nextLaunchId() > MAX_LAUNCHES) return;
+        uint256 index = fleetSeed % 2;
+        address named = address(fleets[namesSeed % 4 == 1 ? 1 - index : index].TREASURY());
+        IRegentsAutolaunchFactoryV2.LaunchParams memory params = IRegentsAutolaunchFactoryV2.LaunchParams({
+            name: "Fleet Token",
+            symbol: "FLEET",
+            description: "The fleet's own token.",
+            website: "https://keyfleet.ai",
+            image: "https://keyfleet.ai/fleet.png",
+            treasury: named
+        });
+        lastLaunch[index] = autolaunch.nextLaunchId();
+        _batchTo(fleets[index], address(autolaunch), abi.encodeCall(IRegentsAutolaunchFactoryV2.launch, (params)));
+    }
+
+    /// @dev An active launch's auction ends, usually the fleet's last launch: it sells, or one time
+    /// in three it fails. Either is final.
+    function settleLaunch(uint256 fleetSeed, uint256 idSeed) external {
+        uint256 id = _launchId(fleetSeed, idSeed);
+        if (id == 0 || _lifecycle(id) != IRegentLBPStrategyV2.Lifecycle.Active) return;
+        if ((idSeed >> 2) % 3 == 1) autolaunch.fail(id);
+        else autolaunch.graduate(id);
+    }
+
+    /// @dev A sold launch's escrow releases vested tokens, usually the fleet's last launch, paying
+    /// them to the launch's treasury, bound or not, as `release()` does.
+    function releaseVested(uint256 fleetSeed, uint256 idSeed, uint256 amount) external {
+        uint256 id = _launchId(fleetSeed, idSeed);
+        if (id == 0 || _lifecycle(id) != IRegentLBPStrategyV2.Lifecycle.Graduated) return;
+        IRegentsAutolaunchFactoryV2.Launch memory launched = autolaunch.launches(id);
+        MockLaunchToken(launched.subject).mint(launched.treasury, bound(amount, 100e18, 1_000_000e18));
+    }
+
+    /// @dev Anyone tries to bind a launch to either fleet: usually the fleet's last launch,
+    /// otherwise any id, launched or not. It binds exactly when the fleet has none bound, its
+    /// treasury both made the launch and is named as its treasury, and the launch sold; and then it
+    /// binds that launch's token with its threshold.
+    function bindLaunchToken(uint256 fleetSeed, uint256 idSeed) external {
+        KeyfleetTreasury treasury = fleets[fleetSeed % 2].TREASURY();
+        uint256 id = _launchId(fleetSeed, idSeed);
+        IRegentsAutolaunchFactoryV2.Launch memory launched = autolaunch.launches(id);
+        bool due = address(treasury.launchToken()) == address(0) && launched.launcher == address(treasury)
+            && launched.treasury == address(treasury) && _lifecycle(id) == IRegentLBPStrategyV2.Lifecycle.Graduated;
+        vm.prank(address(0x5EED));
+        (bool bound_,) = address(treasury).call(abi.encodeCall(KeyfleetTreasury.bindLaunchToken, (id)));
+        if (bound_ != due) {
+            _breach(bound_ ? "a launch was bound against the rules" : "a launch due to bind was refused");
+        }
+        if (
+            bound_
+                && (address(treasury.launchToken()) != launched.subject
+                    || treasury.launchId() != id
+                    || treasury.launchTokenThreshold() != 100e18)
+        ) _breach("a bound launch did not record its token, id and threshold");
     }
 
     // --- claims ---------------------------------------------------------------
@@ -260,7 +343,9 @@ contract FleetHandler is Test {
         s.thresholds[0] = treasury.ETH_THRESHOLD();
         s.thresholds[1] = treasury.REGENT_THRESHOLD();
         s.thresholds[2] = treasury.USDC_THRESHOLD();
-        if (s.assets.length == 4) s.thresholds[3] = treasury.ousdThreshold();
+        for (uint256 i = 3; i < s.assets.length; ++i) {
+            s.thresholds[i] = s.assets[i] == address(ousd) ? treasury.ousdThreshold() : treasury.launchTokenThreshold();
+        }
         for (uint256 i = 0; i < s.assets.length; ++i) {
             s.balances[i] = _balanceOf(s.assets[i], address(treasury));
             s.indexes[i] = rewards.splitIndex(s.assets[i]);
@@ -288,11 +373,26 @@ contract FleetHandler is Test {
     }
 
     function _batch(Keyfleet f, bytes memory data) internal {
+        _batchTo(f, address(f.TREASURY()), data);
+    }
+
+    function _batchTo(Keyfleet f, address target, bytes memory data) internal {
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](1);
-        calls[0] = KeyfleetTreasury.Call(address(treasury), 0, data);
+        calls[0] = KeyfleetTreasury.Call(target, 0, data);
         vm.prank(address(f.VOTES()));
         treasury.executeBatch(calls);
+    }
+
+    /// @dev Three times in four the fleet's last launch, otherwise any id up to one past the last
+    /// launch.
+    function _launchId(uint256 fleetSeed, uint256 idSeed) internal view returns (uint256) {
+        if (idSeed % 4 != 1) return lastLaunch[fleetSeed % 2];
+        return (idSeed >> 2) % (autolaunch.nextLaunchId() + 1);
+    }
+
+    function _lifecycle(uint256 id) internal view returns (IRegentLBPStrategyV2.Lifecycle) {
+        return autolaunch.strategy().distribution(autolaunch.launches(id).auction).lifecycle;
     }
 
     function _tryBatch(Keyfleet f, bytes memory data) internal returns (bool) {
@@ -397,10 +497,12 @@ contract FleetHandler is Test {
 /// @dev The fleet-wide invariants of plan §4.6 and §4.8 over all five contracts, with Sean's daily
 /// split rules of 6 October: the ledger always holds what it owes in every asset; in every asset
 /// only the split pays, what it holds is exactly what the keys and wallets are owed, which is
-/// exactly what was allocated less what was claimed; the rate stays between 10 and 200 bps; the
-/// funding flag is down outside a run; an unadmitted token is never split; and agents are never
-/// paid. The handler's own checks, which must never have been breached, cover run timing, the
-/// split formula on the treasury's own balance, and exact claims.
+/// exactly what was allocated less what was claimed, launched tokens included; the rate stays
+/// between 10 and 200 bps; the funding flag is down outside a run; an unadmitted OUSD or a launched
+/// token other than the fleet's bound one is never split; a bound launch is the fleet's own sold
+/// launch; and agents are never paid. The handler's own checks, which must never have been
+/// breached, cover run timing, the split formula on the treasury's own balance, exact claims, and
+/// which launches bind.
 /// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
@@ -419,7 +521,8 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
             _deploy(KeyfleetPresets.Preset.FleetTechAccelerant),
             usdc,
             regent,
-            ousd
+            ousd,
+            autolaunch
         );
         targetContract(address(handler));
     }
@@ -428,15 +531,15 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
         assertEq(handler.breach(), "");
     }
 
-    /// @dev In ETH, REGENT and OUSD the split is the only way in: the ledger's balance is exactly
-    /// its backing, which is exactly every key's unsettled share plus every wallet's credit, and
-    /// exactly what the split allocated less what claims paid.
+    /// @dev In ETH, REGENT, OUSD and every launched token the split is the only way in: the
+    /// ledger's balance is exactly its backing, which is exactly every key's unsettled share plus
+    /// every wallet's credit, and exactly what the split allocated less what claims paid.
     function invariant_splitAssetsAreOwedExactlyWhatTheLedgerHolds() public view {
-        address[3] memory assets = [NATIVE, address(regent), address(ousd)];
+        address[] memory assets = _splitOnlyAssets();
         for (uint256 f = 0; f < 2; ++f) {
             Keyfleet fleet = handler.fleet(f);
             KeyfleetRewards rewards = fleet.REWARDS();
-            for (uint256 a = 0; a < 3; ++a) {
+            for (uint256 a = 0; a < assets.length; ++a) {
                 address asset = assets[a];
                 uint256 backed = rewards.backed(asset);
                 assertEq(_balanceOf(asset, address(rewards)), backed, "the ledger holds exactly its backing");
@@ -475,26 +578,65 @@ contract KeyfleetFleetInvariantTest is KeyfleetFixture {
         }
     }
 
-    function invariant_anUnadmittedTokenIsNeverSplit() public view {
+    function invariant_anUnadmittedOrUnboundTokenIsNeverSplit() public view {
+        uint256 launches = autolaunch.nextLaunchId() - 1;
         for (uint256 f = 0; f < 2; ++f) {
             Keyfleet fleet = handler.fleet(f);
-            if (address(fleet.TREASURY().ousd()) == address(0)) {
+            KeyfleetTreasury treasury = fleet.TREASURY();
+            if (address(treasury.ousd()) == address(0)) {
                 assertEq(fleet.REWARDS().splitIndex(address(ousd)), 0);
             }
+            for (uint256 id = 1; id <= launches; ++id) {
+                address token = autolaunch.launches(id).subject;
+                if (token != address(treasury.launchToken())) {
+                    assertEq(fleet.REWARDS().splitIndex(token), 0, "a launched token the fleet has not bound");
+                }
+            }
+        }
+    }
+
+    /// @dev A bound launch was made by the fleet's own treasury, names it, and sold.
+    function invariant_aBoundLaunchIsTheFleetsOwnSoldLaunch() public view {
+        for (uint256 f = 0; f < 2; ++f) {
+            KeyfleetTreasury treasury = handler.fleet(f).TREASURY();
+            if (address(treasury.launchToken()) == address(0)) continue;
+            IRegentsAutolaunchFactoryV2.Launch memory launched = autolaunch.launches(treasury.launchId());
+            assertEq(launched.subject, address(treasury.launchToken()));
+            assertEq(launched.launcher, address(treasury));
+            assertEq(launched.treasury, address(treasury));
+            assertEq(
+                uint256(autolaunch.strategy().distribution(launched.auction).lifecycle),
+                uint256(IRegentLBPStrategyV2.Lifecycle.Graduated)
+            );
         }
     }
 
     /// @dev Agents press claim but are never paid and never owed.
     function invariant_agentsAreNeverPaid() public view {
-        address[4] memory assets = [NATIVE, address(regent), address(usdc), address(ousd)];
+        address[] memory split = _splitOnlyAssets();
+        address[] memory assets = new address[](split.length + 1);
+        assets[0] = address(usdc);
+        for (uint256 a = 0; a < split.length; ++a) {
+            assets[a + 1] = split[a];
+        }
         for (uint256 i = 0; i < 3; ++i) {
             address wallet = handler.agent(i);
-            for (uint256 a = 0; a < 4; ++a) {
+            for (uint256 a = 0; a < assets.length; ++a) {
                 assertEq(_balanceOf(assets[a], wallet), 0, "an agent's balance");
                 for (uint256 f = 0; f < 2; ++f) {
                     assertEq(handler.fleet(f).REWARDS().credits(assets[a], wallet), 0, "an agent's credit");
                 }
             }
+        }
+    }
+
+    /// @dev ETH, REGENT, OUSD and every token launched so far, by either fleet.
+    function _splitOnlyAssets() private view returns (address[] memory assets) {
+        uint256 launches = autolaunch.nextLaunchId() - 1;
+        assets = new address[](3 + launches);
+        (assets[0], assets[1], assets[2]) = (NATIVE, address(regent), address(ousd));
+        for (uint256 id = 1; id <= launches; ++id) {
+            assets[2 + id] = autolaunch.launches(id).subject;
         }
     }
 

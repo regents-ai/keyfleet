@@ -143,14 +143,14 @@ The rule: four responsibilities, not a new framework (§3). After the change the
 
 - **New:** the threshold applies to the free balance before the cut (`B ≥ threshold`).
 - **New:** at most one allocation per asset per 24-hour period.
-- **Stays:** the USDC income route, unchanged (see §9 below).
+- **Changes:** there is no separate USDC income route (P2 b). All USDC a fleet receives outside a purchase is treasury capital (see §9 below).
 - **OUSD:** its slot stays unconfigured.
 - **Stays:** prices, supply, fees, Cascade, the Accelerant rebate and the income weights.
 
 ### §3 Four responsibilities
 
 - **New:** `KeyfleetTreasury`.
-- **Changes:** free capital moves out of `Keyfleet` into it. Purchase capital, released Cascade surplus and non-USDC surplus are sent to the treasury at the moment they are booked.
+- **Changes:** free capital moves out of `Keyfleet` into it. Purchase capital and released Cascade surplus are sent to the treasury at the moment they are booked, and any other balance at the core, USDC included, is forwarded to it.
 - **Deleted from `Keyfleet`:** the `freeCapital` mapping, `payFromBudget`, `SharedMoneyRecognized` (replaced by a forward-to-treasury event), and the `OnlyVotes` and `AboveYesShare` errors.
 
 ### §4 Immutable membership and protected accounting
@@ -206,18 +206,17 @@ Changes: Rewards stops being USDC-only. `rewardAssets()` becomes the cohort inco
 
 ### §9 Income versus capital
 
-Stays: the preserved USDC income route. USDC that reaches `Keyfleet` (the core), outside a purchase, is income; `recognizeSurplus(USDC)` sends it to the keys by the existing cohort rule. It is never part of the split base, because it never enters the treasury.
+The treasury is the fleet's one payment address (P2 b). Everything a fleet receives outside a purchase, USDC included, is treasury capital and reaches the keys only through the daily split.
 
 Changes:
 
-- `recognizeSurplus(non-USDC)` forwards the token to the treasury, where it is free capital.
+- `recognizeSurplus(asset)` forwards an asset's whole surplus at the core to the treasury, USDC exactly as any other token. Money paid to the core by mistake is never stranded and never split twice.
 - The core is not payable, so ETH cannot arrive there by a normal transfer. Note: `selfdestruct` can still force ETH in. Nothing in the core reads its ETH balance, so the core treats such ETH as stranded.
 
 New:
 
 - `advance(id, operator, asset, amount, purposeHash)`, which only the treasury may call, and the permissionless `returnAdvance(id, amount)`, capped at what is still out on that advance.
-- The published income address is the core. The capital address is the treasury.
-- The Autolaunch path is in section 4.7 of this plan.
+- The fleet's own token launches through Autolaunch Revstake v2 on Base and is bound to the daily split with `bindLaunchToken` (sections 4.7 and 9.2).
 
 ### §10 Public actions, chat and culture
 
@@ -608,11 +607,11 @@ address[] splitAssets;                                        // append-only, at
 
 ### 4.7 Income versus capital, and Autolaunch (§9)
 
-**Where money arrives:**
+**Where money arrives:** at the treasury, the fleet's one payment address, published on the fleet page.
 
-- Purchase capital, released Cascade surplus and non-USDC surplus go to the treasury: free capital, and part of the split base.
-- Recognised USDC income arrives at the core and goes to the keys through `recognizeSurplus` and the existing cohort rule. It is never in the treasury and never split twice.
-- Customers must be told to pay the **core** (income address). Anything they pay to the treasury is treated as capital. That rule is published on the fleet page.
+- Purchase capital and released Cascade surplus are sent there when booked. Anything paid to the core by mistake, USDC included, is forwarded there by `recognizeSurplus`.
+- A launch's REGENT raise, its payment receiver's remainder and its vested tokens arrive there too (section 9.2).
+- All of it is free capital and part of the split base. The ledger's holdings are never counted, so nothing is split twice.
 
 **Returned advances.** `returnAdvance(id, amount)` pulls the asset, or takes `msg.value` for ETH. It is capped at `outstanding[id]` and lowers it. Funds above the cap are refused, so the "refund" label cannot be stretched.
 
@@ -772,7 +771,7 @@ Kinds of test:
 
 | Spec test | Kind |
 |---|---|
-| USDC income route versus USDC capital route | U |
+| USDC paid to the core is forwarded to the treasury as capital | U |
 | Sale and settlement obligations kept: today's purchase, Cascade and Accelerant suites, carried over | U |
 | Returned advances are not counted twice | U |
 | No splitter loop | U |
@@ -1043,4 +1042,4 @@ The launcher check goes beyond "the launch names this treasury". Anyone may call
 
 Anyone may also make a custom payment receiver for a sold launch with another beneficiary (`factory/RegentsAutolaunchFactoryV2.sol:275`); only money that reaches the treasury is the fleet's.
 
-**Tests.** `test/KeyfleetLaunch.t.sol` with a stand-in factory: the launch is an approved call naming the treasury; without a launch there is no TOKEN; a stranger's launch naming the treasury, a launch naming another treasury, another fleet's launch and a launch the treasury made for another treasury are all refused; running and failed launches are refused; binding is once, by anyone, and shares the treasury's lock; TOKEN is split from the next run at 100 tokens; OUSD and TOKEN refuse each other; an approved call cannot fund a TOKEN split. `test/fork/KeyfleetAutolaunchFork.t.sol` runs a whole launch on a Base fork through the real factory, auction, strategy, escrow and receiver, acting as the Regents Safe on the fork only to open the factory. The gas test covers all five split assets.
+**Tests.** `test/KeyfleetLaunch.t.sol` with a stand-in factory: the launch is an approved call naming the treasury; without a launch there is no TOKEN; a stranger's launch naming the treasury, a launch naming another treasury, another fleet's launch and a launch the treasury made for another treasury are all refused; running and failed launches are refused; binding is once, by anyone, and shares the treasury's lock; TOKEN is split from the next run at 100 tokens; OUSD and TOKEN refuse each other; an approved call cannot fund a TOKEN split. `test/fork/KeyfleetAutolaunchFork.t.sol` runs a whole launch on a Base fork through the real factory, auction, strategy, escrow and receiver, acting as the Regents Safe on the fork only to open the factory. The gas test covers all five split assets. The fleet-wide invariants launch, settle and try to bind launches at random partway through each sequence, and cover every launched token's backing exactly like ETH, REGENT and OUSD; the segregation invariant binds a sold launch partway through and protects the ledger's credits, accruals and backing in the bound token from any approved batch.

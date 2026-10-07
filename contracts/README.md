@@ -925,23 +925,30 @@ signature, Lit, reveal, trait-draw and deployment tests, with the presence queue
 over random renewals, transfers, sweeps, openings and the passing of time, the
 growing electorate's over random proposals, ballots, transfers, renewals,
 sweeps, sales and the passing of time, and segregation's over random batches of
-calls a proposal could make against all five contracts and USDC, the daily
-split and its rate included: none lowers the owed protocol share, the Cascade
-reserve outside a level completion, any wallet's credit or any key's accrual,
-and the fleet and the ledger always hold what they have booked.
+calls a proposal could make against all five contracts, USDC, Autolaunch and the
+fleet's own token once a launch has sold and been bound partway through, the
+daily split, its rate and binding included: none lowers the owed protocol share,
+the Cascade reserve outside a level completion, or any wallet's credit or any
+key's accrual in USDC or the bound token, and the fleet and the ledger always
+hold what they have booked.
 
 The fleet-wide invariants (`test/invariant/KeyfleetFleetInvariant.t.sol`) run a
 Cascade fleet and an Accelerant fleet through random purchases, key transfers,
 shards given to agents, money sent to the treasury and the fleet, payments out,
-public and voted daily splits, rate changes, OUSD admission, claims by holders,
-former holders and agents, and the passing of time. In ETH, REGENT and OUSD the
-ledger holds exactly what it owes, which is exactly what the split sent it less
-what claims paid; in USDC it holds at least what it owes, short by under a unit
-per key at most. The rate stays between 10 and 200, the split's funding flag is
-never left up, a token not admitted is never split and an agent is never paid.
-Every public run goes through exactly when it is due, every run gives each key
-exactly the formula's share of the treasury's own balance, and every claim pays
-exactly what is owed to exactly the right wallets. Every invariant suite runs
+public and voted daily splits, rate changes, OUSD admission, token launches
+through a stand-in Autolaunch factory that sell or fail, vested tokens released
+to a launch's treasury, attempts by anyone to bind any launch to either fleet,
+claims by holders, former holders and agents, and the passing of time. In ETH,
+REGENT, OUSD and every launched token the ledger holds exactly what it owes,
+which is exactly what the split sent it less what claims paid; in USDC it holds
+at least what it owes, short by under a unit per key at most. The rate stays
+between 10 and 200, the split's funding flag is never left up, an OUSD not
+admitted or a launched token the fleet has not bound is never split, a bound
+launch is always the fleet's own sold launch, and an agent is never paid. Every
+public run goes through exactly when it is due, every run gives each key exactly
+the formula's share of the treasury's own balance, every claim pays exactly what
+is owed to exactly the right wallets, and a launch binds exactly when the rules
+allow. Every invariant suite runs
 256 sequences of 100 calls or more.
 
 Last, `script/check_bytecode.sh` disassembles the deployed code of the five

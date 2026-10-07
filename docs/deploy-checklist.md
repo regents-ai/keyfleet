@@ -158,8 +158,8 @@ If it does exist, these migrations need care, and some counts go to the founder:
 - **Failed launch block** (`20260927092503`). It adds the optional
   `failed_launch_block` column to `treasury_readings`, approved for
   production. Nothing to check; `20260929064211` removes it again.
-- **No token launches** (`20260929064211`). Fleets no longer launch tokens.
-  It deletes the
+- **No token launches** (`20260929064211`). It removes the site's old
+  token-launch planning. It deletes the
   `graph_launch_plan_revisions` and `proposal_launch_envelopes` tables, the
   `kind` column of `budget_receipts`, the `l1_fee_wei` column of `keeper_txs`,
   the `envelope_hash` column of `proposals` and the `failed_launch_block`
