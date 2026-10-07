@@ -17,6 +17,8 @@ defmodule Keyfleet.AnvilLab do
   @base_fee "10000000"
   # Anvil's own chain id.
   @chain_id 31_337
+  # The fields of the script's `Lab` struct, in order.
+  @lab [:keys, :factory, :manager, :rewards, :shards, :votes, :treasury, :staking, :usdc, :regent]
 
   @doc """
   Starts an anvil, waits until it answers, and points the fleet reader's node
@@ -104,8 +106,9 @@ defmodule Keyfleet.AnvilLab do
 
   @doc """
   Builds the lab on the anvil at `url` with `contracts/script/AnvilLab.s.sol`,
-  sent from `sender`, an account anvil has unlocked, and returns the
-  addresses the script returned, by name, in lower case.
+  sent from `sender`, an account anvil has unlocked, and returns where the
+  script says its contracts are, by the names of its `Lab` struct, in lower
+  case.
   """
   def lab!(url, sender) do
     {output, status} =
@@ -119,14 +122,17 @@ defmodule Keyfleet.AnvilLab do
 
     if status != 0, do: flunk("AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}")
 
-    output
-    |> String.split("\n")
-    |> Enum.find_value(fn line ->
-      case Jason.decode(line) do
-        {:ok, %{"returns" => returns}} -> returns
-        _other -> nil
-      end
-    end)
-    |> Map.new(fn {name, %{"value" => address}} -> {name, String.downcase(address)} end)
+    "(" <> addresses =
+      output
+      |> String.split("\n")
+      |> Enum.find_value(fn line ->
+        case Jason.decode(line) do
+          {:ok, %{"returns" => %{"lab" => %{"value" => value}}}} -> value
+          _other -> nil
+        end
+      end)
+
+    addresses = addresses |> String.trim_trailing(")") |> String.split(", ")
+    Map.new(Enum.zip(@lab, addresses), fn {name, address} -> {name, String.downcase(address)} end)
   end
 end
