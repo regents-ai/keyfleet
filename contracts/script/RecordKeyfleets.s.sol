@@ -71,6 +71,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(root, "vrf", _vrfJson(keys));
         vm.serializeBytes32(root, "traitTableHash", keys.TRAIT_TABLE_HASH());
         vm.serializeString(root, "startPrice", _startPriceJson());
+        vm.serializeString(root, "accelerantStepPercent", _accelerantStepJson());
         vm.serializeString(root, "bounds", _boundsJson());
         vm.serializeString(root, "fees", _feesJson());
         vm.serializeString(root, "fleets", _fleetsJson(manifest, factory, keys));
@@ -169,7 +170,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         }
     }
 
-    /// @dev One fleet: its type and numbers, starting price, deck, four contracts with their code
+    /// @dev One fleet: its type and numbers, starting price, Accelerant step (zero for other types), deck, four contracts with their code
     /// hashes, profile, joining requirements, the tag its protocol share is deposited under and the
     /// assets its daily split shares.
     function _fleetJson(KeyfleetKeys keys, uint256 fleetId, KeyfleetManager manager) private returns (string memory) {
@@ -178,6 +179,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(object, "type", _typeKey(fleet.preset));
         vm.serializeUint(object, "typeNumber", fleet.typeNumber);
         vm.serializeUint(object, "startPrice", manager.START_PRICE());
+        vm.serializeUint(object, "accelerantStepPercent", manager.ACCELERANT_STEP_PERCENT());
         vm.serializeBytes32(object, "deckHash", fleet.deckHash);
         vm.serializeUint(object, "deckSize", fleet.deckSize);
         vm.serializeAddress(object, "manager", address(manager));
@@ -289,6 +291,13 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeUint(object, "min", KeyfleetPresets.MIN_START_USDC);
         vm.serializeUint(object, "max", KeyfleetPresets.MAX_START_USDC);
         return vm.serializeUint(object, "step", KeyfleetPresets.CENT_USDC);
+    }
+
+    /// @dev The whole-percent steps anyone creating an Accelerant fleet may choose.
+    function _accelerantStepJson() private returns (string memory) {
+        string memory object = "accelerantStepPercent";
+        vm.serializeUint(object, "min", KeyfleetPresets.MIN_ACCELERANT_STEP_PERCENT);
+        return vm.serializeUint(object, "max", KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT);
     }
 
     /// @dev The published supply limits. Only the two Fleet.Tech types have one; the Fibonacci

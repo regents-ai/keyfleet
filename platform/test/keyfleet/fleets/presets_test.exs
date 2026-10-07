@@ -76,21 +76,21 @@ defmodule Keyfleet.Fleets.PresetsTest do
   # Pinned to contracts/test/KeyfleetPresets.t.sol. The formula is worked out
   # here in double precision, which is exact enough: no key's exact price lies
   # within a billionth of a cent of a half cent.
-  test "every Classic key costs 8 USDC times 10^((n - 1) / 1023), rounded to the cent" do
+  test "every Classic key costs 10 USDC times 10^((n - 1) / 1023), rounded to the cent" do
     prices = Enum.map(1..1_024, &Presets.issue_price("fleet_tech_classic", &1))
 
     assert prices ==
              Enum.map(1..1_024, fn n ->
-               round(800 * :math.pow(10, (n - 1) / 1023)) * 10_000
+               round(1000 * :math.pow(10, (n - 1) / 1023)) * 10_000
              end)
 
     assert Enum.map([1, 144, 512, 1_024], &Enum.at(prices, &1 - 1)) ==
-             [8_000_000, 11_040_000, 25_270_000, 80_000_000]
+             [10_000_000, 13_800_000, 31_590_000, 100_000_000]
 
-    assert Enum.sum(prices) == 32_032_450_000
+    assert Enum.sum(prices) == 40_040_480_000
 
     assert %{
-             next_price: 80_000_000,
+             next_price: 100_000_000,
              next_token_id: 1_024,
              max_supply: 1_024,
              completed_levels: nil

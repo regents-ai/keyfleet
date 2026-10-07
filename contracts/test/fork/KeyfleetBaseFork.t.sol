@@ -142,6 +142,13 @@ abstract contract KeyfleetForkFixture is Test {
         ids[0] = tokenId;
     }
 
+    /// @dev Moves time to the end of `fleet`'s 7-day opening, when a proposal may move money. Key 1,
+    /// bought when sales opened, is then past its wait and its automatic presence.
+    function _openTreasury(KeyfleetManager fleet) internal {
+        uint256 opensAt = fleet.VOTES().treasuryOpensAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+    }
+
     /// @dev Key 1's owner proposes `calls` and votes Yes; nobody else is present, so it is approved
     /// once it closes a second later.
     function _approve(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls)

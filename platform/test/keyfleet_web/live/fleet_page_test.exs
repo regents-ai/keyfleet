@@ -406,7 +406,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
       assert text(view, "#buy-key-number") == "1"
-      assert text(view, "#buy-key-price") == "8 USDC"
+      assert text(view, "#buy-key-price") == "10 USDC"
       refute has_element?(view, "#buy-key-level")
       refute html =~ "One wallet may hold"
     end
@@ -454,15 +454,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..1_023, do: issue!("fleet_tech_classic", token_id)
-      chain!(allowance: 80_000_000)
+      chain!(allowance: 100_000_000)
       {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
       assert text(view, "#buy-key-number") == "1,024"
-      assert text(view, "#buy-key-price") == "80 USDC"
+      assert text(view, "#buy-key-price") == "100 USDC"
 
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
       hash = "0x" <> String.duplicate("3", 64)
-      chain!(allowance: 80_000_000)
+      chain!(allowance: 100_000_000)
       TestChainNode.land!(hash, review, buy, "0x1")
 
       view

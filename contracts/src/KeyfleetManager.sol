@@ -79,6 +79,9 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     KeyfleetPresets.Preset public immutable PRESET;
     /// @notice The USDC price of key 1, from which every later price is scaled.
     uint256 public immutable START_PRICE;
+    /// @notice Accelerant only: how many percent each primary mint costs more than the one before,
+    /// 1 to 5. Zero on every other type. It can never change.
+    uint256 public immutable ACCELERANT_STEP_PERCENT;
     /// @notice The shared key collection.
     KeyfleetKeys public immutable KEYS;
     /// @notice The USDC every key is paid in.
@@ -104,8 +107,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     uint256 public protocolShareOwed;
     /// @notice Whether the factory has written the profile and the requirements.
     bool public initialized;
-    /// @notice Fibonacci only: keys of one level an address currently holds.
-    mapping(address account => mapping(uint256 level => uint256 held)) public heldPerLevel;
     /// @notice Cascade only: gross USDC paid for all primary keys of a level.
     mapping(uint256 level => uint256 gross) public levelGrossPaid;
     /// @notice Cascade only: whether a level has been fully minted and its reserve released.
@@ -128,8 +129,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     error PriceAboveMax(uint256 price, uint256 maxPrice);
     /// @notice Every key this fleet can sell has been sold.
     error SoldOut();
-    /// @notice The recipient already holds as many keys of this level as the preset allows.
-    error HoldingLimitExceeded(address account, uint256 level, uint256 limit);
     /// @notice Levels exist only on the two Fibonacci presets.
     error NotFibonacciPreset();
     /// @notice A supply limit exists only on the two Fleet.Tech presets.
@@ -189,6 +188,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         FLEET_ID = wiring.fleetId;
         PRESET = wiring.preset;
         START_PRICE = wiring.startPrice;
+        ACCELERANT_STEP_PERCENT = wiring.accelerantStepPercent;
         KEYS = factory.KEYS();
         USDC = factory.USDC();
         REGENT_BUYER = factory.REGENT_BUYER();
@@ -272,12 +272,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         return KeyfleetPresets.fibonacciLevelOf(keyNumber);
     }
 
-    /// @notice Keys of one level a single address may hold. Reverts on the two Fleet.Tech presets.
-    function holdingLimit(uint256 level) public view returns (uint256) {
-        if (!_isFibonacci()) revert NotFibonacciPreset();
-        return KeyfleetPresets.fibonacciHoldingLimit(level);
-    }
-
     /// @notice Balance of an asset this manager has already recorded a purpose for: for USDC the
     /// Cascade reserve plus the owed protocol share, and nothing for any other token.
     function accountedBalance(address asset) public view returns (uint256) {
@@ -340,26 +334,16 @@ contract KeyfleetManager is ReentrancyGuardTransient {
 
     // --- the collection --------------------------------------------------
 
-    /// @notice A key of this fleet is being minted or is moving. Only the collection calls this,
-    /// before ownership changes.
-    /// @dev Settles the key's rewards to the outgoing owner and clears its presence, then enforces
-    /// the Fibonacci holding limit on the incoming owner. Not locked: it runs inside this fleet's own
-    /// purchases, makes no token transfer and calls only this fleet's own ledger and controller.
-    function onKeyMoved(uint256 tokenId, address from, address to) external {
+    /// @notice A key of this fleet is moving from `from`. Only the collection calls this, before
+    /// ownership changes.
+    /// @dev Settles the key's rewards to the outgoing owner and clears its presence. Not locked: it
+    /// may run inside this fleet's own purchase, when a receiver passes a key on from its mint
+    /// hook, and it makes no token transfer and calls only this fleet's own ledger and controller.
+    function onKeyMoved(uint256 tokenId, address from) external {
         if (msg.sender != address(KEYS)) revert OnlyKeys();
         if (KEYS.fleetOf(tokenId) != FLEET_ID) revert ForeignKey(tokenId);
-        if (from != address(0)) {
-            REWARDS.settleKey(tokenId, from);
-            VOTES.onKeyMoved(tokenId);
-        }
-        if (_isFibonacci()) {
-            uint256 level = KeyfleetPresets.fibonacciLevelOf(KEYS.keyNumberOf(tokenId));
-            if (from != address(0)) heldPerLevel[from][level] -= 1;
-            uint256 held = heldPerLevel[to][level] + 1;
-            uint256 limit = KeyfleetPresets.fibonacciHoldingLimit(level);
-            if (held > limit) revert HoldingLimitExceeded(to, level, limit);
-            heldPerLevel[to][level] = held;
-        }
+        REWARDS.settleKey(tokenId, from);
+        VOTES.onKeyMoved(tokenId);
     }
 
     // --- profile ---------------------------------------------------------
@@ -426,10 +410,11 @@ contract KeyfleetManager is ReentrancyGuardTransient {
                 USDC.safeTransfer(address(REWARDS), split.rebate);
                 REWARDS.credit(address(USDC), predecessor, split.rebate);
             }
-            currentPrice = KeyfleetPresets.accelerantNextPrice(gross);
+            currentPrice = KeyfleetPresets.accelerantNextPrice(gross, ACCELERANT_STEP_PERCENT);
         }
 
         REWARDS.enrollKey(tokenId, level);
+        VOTES.enrollKey(tokenId);
         emit Purchased(tokenId, buyer, to, gross, split.protocol, split.capital, split.reserve, split.rebate);
 
         if (PRESET == KeyfleetPresets.Preset.FibonacciCascade && keyNumber == KeyfleetPresets.fibonacciLevelEnd(level))
@@ -478,8 +463,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         emit ProfileChanged(profile_.name, profile_.description, profile_.imageLink);
     }
 
-    /// @dev `account`'s balance of `token` by a read-only call; zero when the call reverts or does
-    /// not answer one word.
     /// @dev `token.balanceOf(account)` with at most `REQUIREMENT_READ_GAS` gas and only the first
     /// 32 bytes of the answer copied. A call that fails or answers with fewer than 32 bytes reads as
     /// zero.

@@ -4,8 +4,8 @@
 # ///
 """Writes the Keyfleet Classic key prices, the one source both the contract and the site read.
 
-Key n of 1,024 costs 8 USDC times 10^((n - 1) / 1023), rounded to the nearest cent: key 1 costs
-exactly 8.00 USDC, key 1,024 exactly 80.00 USDC, and each key the same percentage more than the
+Key n of 1,024 costs 10 USDC times 10^((n - 1) / 1023), rounded to the nearest cent: key 1 costs
+exactly 10.00 USDC, key 1,024 exactly 100.00 USDC, and each key the same percentage more than the
 one before. The prices are worked out here to 60 significant digits and written as whole cents to:
 
 - contracts/src/KeyfleetClassicPrices.sol, a table of 1,024 two-byte big-endian cent values;
@@ -18,8 +18,8 @@ from decimal import ROUND_HALF_UP, Decimal, getcontext
 from pathlib import Path
 
 SUPPLY = 1024
-FIRST_CENTS = 800
-LAST_CENTS = 8000
+FIRST_CENTS = 1000
+LAST_CENTS = 10000
 
 ROOT = Path(__file__).resolve().parent.parent
 SOLIDITY = ROOT / "contracts/src/KeyfleetClassicPrices.sol"
@@ -52,7 +52,7 @@ pragma solidity 0.8.26;
 
 /// @notice The price of every Fleet.Tech Classic key, in whole US cents.
 /// @dev Written by `scripts/classic_prices.py`; change the script, never this file. Key n of
-///      {SUPPLY:,} costs 800 * 10^((n - 1) / 1023) cents, rounded to the nearest cent, and is the
+///      {SUPPLY:,} costs {FIRST_CENTS} * 10^((n - 1) / 1023) cents, rounded to the nearest cent, and is the
 ///      big-endian two-byte value at byte offset 2 * (n - 1) of `CENTS`.
 library KeyfleetClassicPrices {{
     bytes internal constant CENTS =

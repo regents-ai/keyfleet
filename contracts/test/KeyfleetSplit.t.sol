@@ -150,6 +150,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// bps; 9, 201 and 0 are refused and only an approved call reaches the setter.
     function test_theRateIsTenToTwoHundredBpsAndOnlyAVoteSetsIt() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        _mature();
         assertEq(treasury.dailySplitBps(), 50, "half a percent by default");
 
         uint256[3] memory accepted = [uint256(10), 200, 50];
@@ -182,9 +183,11 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// pending in between.
     function test_aRateChangeAppliesFromTheNextRun() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
         KeyfleetRewards rewards = fleet.REWARDS();
         _hold(treasury, 10 ether, 0, 0);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         assertEq(rewards.splitIndex(NATIVE), _perKey(10 ether, 50, 2), "the first run at 50 bps");
 
@@ -309,6 +312,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// whole units read from its decimals when admitted.
     function test_ousdIsAdmittedOnceWithAThresholdByItsDecimals() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        _mature();
+        _openTreasury(fleet);
         DecimalsToken six = new DecimalsToken(6);
         assertEq(treasury.splitAssets().length, 3, "ETH, REGENT and USDC until OUSD is admitted");
 
@@ -339,11 +344,13 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         againVotes.execute(againId, again);
 
         KeyfleetManager other = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, KeyfleetPresets.MIN_START_USDC);
+        _mature();
+        _openTreasury(other);
         _admit(other, new DecimalsToken(18));
         assertEq(other.TREASURY().ousdThreshold(), 100e18, "100 units of an eighteen-decimal token");
 
         six.mint(address(treasury), 100e6 - 1);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         assertEq(fleet.REWARDS().splitIndex(address(six)), 0, "just below its threshold");
         six.mint(address(treasury), 1);
@@ -374,10 +381,12 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// unit, so the asset is skipped and nothing moves.
     function test_moreKeysThanUnitsInTheCutIsSkipped() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(6);
+        _mature();
+        _openTreasury(fleet);
         DecimalsToken whole = new DecimalsToken(0);
         _admit(fleet, whole);
         whole.mint(address(treasury), 1_000); // a cut of 5 units for 6 keys
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         vm.expectEmit(true, false, false, true, address(treasury));
         emit SplitSkipped(address(whole), 1_000);
         _run(treasury);
@@ -439,9 +448,11 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// rate and by the same formula, and that run restarts the public timer.
     function test_aVotedRunMayRunInsideTheDay() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
         KeyfleetRewards rewards = fleet.REWARDS();
         _hold(treasury, 4 ether, 0, 0);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         uint256 afterFirst = address(treasury).balance;
 
@@ -479,6 +490,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// REGENT that purchase bought included.
     function test_aKeyMintedDuringFundingCannotShareTheAllocation() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
         MintingToken minting = new MintingToken();
         _admit(fleet, minting);
         minting.mint(address(treasury), 1_000e18);
@@ -487,7 +500,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         vm.deal(address(treasury), 1 ether);
         uint256 regentHeld = regent.balanceOf(address(treasury));
 
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         vm.prank(runner);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.KeyCountChanged.selector, 2, 3));
         treasury.runDailySplit();
@@ -501,6 +514,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// @dev Invariant: a bound token that refuses to move is skipped and the others are split.
     function test_oneFailedAssetDoesNotStopTheOthers() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
         KeyfleetRewards rewards = fleet.REWARDS();
         MisbehavingToken paused = new MisbehavingToken();
         _admit(fleet, paused);
@@ -508,7 +523,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         paused.setRefusing(true);
         _hold(treasury, 1 ether, 1_000e18, 1_000e6);
 
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         vm.expectEmit(true, false, false, true, address(treasury));
         emit SplitTransferFailed(address(paused), 2 * _perKey(1_000e18, 50, 2));
         _run(treasury);
@@ -522,11 +537,13 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// skipped, so a caller cannot starve one asset of its day by sending too little gas.
     function test_aTransferThatRunsOutOfGasRevertsTheRun() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
+        _mature();
+        _openTreasury(fleet);
         MisbehavingToken burner = new MisbehavingToken();
         _admit(fleet, burner);
         burner.mint(address(treasury), 1_000e18);
         burner.setBurning(true);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
 
         vm.prank(runner);
         vm.expectRevert(KeyfleetTreasury.SplitOutOfGas.selector);
@@ -538,7 +555,9 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// approved batch; the voted run is made from inside the batch, under its lock.
     function test_theSplitSharesTheTreasurysLock() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        vm.warp(START + 1 days);
+        _mature();
+        _openTreasury(fleet);
+        // The first public run has been due since a day after the first mint.
         KeyfleetTreasury.Call[] memory calls = _selfCall(treasury, abi.encodeCall(KeyfleetTreasury.runDailySplit, ()));
         uint256 proposalId = _approve(fleet, calls);
         vm.warp(block.timestamp + 1);
@@ -554,9 +573,11 @@ contract KeyfleetSplitTest is KeyfleetFixture {
     /// towards the next split.
     function test_theSplitLeavesLessFreeCapitalAndNeverCountsTheLedger() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
         KeyfleetRewards rewards = fleet.REWARDS();
         _hold(treasury, 0, 0, 1_000e6);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         uint256 free = usdc.balanceOf(address(treasury));
         assertEq(free, 1_000e6 - 2 * _perKey(1_000e6, 50, 2));
@@ -570,7 +591,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         vm.expectRevert();
         votes.execute(proposalId, whole);
 
-        vm.warp(START + 2 days);
+        vm.warp(treasury.nextRunAt());
         vm.expectEmit(true, false, false, true, address(treasury));
         emit SplitAllocated(address(usdc), free, _perKey(free, 50, 2), 2);
         _run(treasury);
@@ -609,6 +630,8 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         for (uint256 i = 0; i < 11; ++i) {
             _buy(fleet, holder);
         }
+        _mature();
+        _openTreasury(fleet);
         DecimalsToken ousd = new DecimalsToken(18);
         _admit(fleet, ousd);
         ousd.mint(address(treasury), 1_000e18);
@@ -617,7 +640,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         treasury.bindLaunchToken(launchId);
         deal(address(launched), address(treasury), 1_000e18);
         _hold(treasury, 10 ether, 1_000e18, 1_000e6);
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         assertEq(rewards.rewardAssets().length, 5, "all five bound assets were split");
 
@@ -647,7 +670,7 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         assertEq(paid[0], 11 * _perKey(10 ether, 50, 11), "ten keys' ETH and the eleventh's, settled when it moved");
 
         // The first claim writes each key's fresh per-asset watermark; a later claim rewrites them.
-        vm.warp(START + 2 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         vm.cool(address(keys));
         vm.cool(address(rewards));

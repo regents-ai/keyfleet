@@ -434,7 +434,8 @@ contract KeyfleetKeysTest is KeyfleetFixture {
     // --- 8. ownership epochs and the transfer hook --------------------------------
 
     /// @dev Invariant: the epoch counts ownership changes, so a key returning to a previous owner
-    /// carries a strictly higher epoch than it did the first time, and each key counts its own.
+    /// carries a strictly higher epoch than it did the first time, and each key counts its own. The
+    /// mint time is written at the mint and no transfer moves it.
     function test_epochIncrementsOnMintAndOnEveryTransferIncludingAReturn() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         uint256 k1 = _key(fleet, 1);
@@ -448,18 +449,27 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         vm.prank(buyer);
         fleet.purchase(alice, price, block.timestamp, new bytes32[](0));
         assertEq(keys.ownershipEpoch(k1), 1, "the mint is epoch 1");
+        assertEq(keys.mintedAt(k1), block.timestamp, "the mint time is recorded");
+        uint256 mintedAt = block.timestamp;
+
+        vm.warp(block.timestamp + 1 days);
 
         vm.expectEmit(true, true, true, true, address(keys));
         emit KeyfleetKeys.OwnershipEpoch(k1, 2, alice, bob);
         vm.prank(alice);
         keys.transferFrom(alice, bob, k1);
         assertEq(keys.ownershipEpoch(k1), 2);
+        assertEq(keys.mintedAt(k1), mintedAt, "a transfer keeps the mint time");
+
+        vm.warp(block.timestamp + 1 hours);
 
         vm.expectEmit(true, true, true, true, address(keys));
         emit KeyfleetKeys.OwnershipEpoch(k1, 3, bob, alice);
         vm.prank(bob);
         keys.transferFrom(bob, alice, k1);
         assertEq(keys.ownershipEpoch(k1), 3, "returning to Alice is a third epoch");
+        assertEq(keys.mintedAt(k1), mintedAt, "and so does a return");
+        assertEq(keys.mintedAt(_key(fleet, 2)), 0, "a key not minted has no time");
 
         uint256 k2 = _buy(fleet, carol);
         assertEq(keys.ownershipEpoch(k2), 1, "each key counts its own epochs");
@@ -468,8 +478,7 @@ contract KeyfleetKeysTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: on a transfer the key's own manager hears first, settling what the key earned
-    /// to the seller, then the epoch moves, then ownership changes; a refusal by the manager stops
-    /// the transfer before the epoch moves.
+    /// to the seller, then the epoch moves, then ownership changes.
     function test_aTransferSettlesThenBumpsTheEpochThenMovesTheKey() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         KeyfleetRewards rewards = fleet.REWARDS();
@@ -505,35 +514,25 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         assertLt(epochAt, transferAt, "and the epoch moves before ownership changes");
         assertLt(transferAt, logs.length);
         assertEq(rewards.credits(address(usdc), alice), owed);
-
-        // Bob already holds a level-1 key, so the manager refuses a second and nothing moves.
-        uint256 k2 = _key(fleet, 2);
-        address k2Owner = keys.ownerOf(k2);
-        vm.prank(k2Owner);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManager.HoldingLimitExceeded.selector, bob, 1, 1));
-        keys.transferFrom(k2Owner, bob, k2);
-        assertEq(keys.ownershipEpoch(k2), 1, "a refused transfer leaves the epoch");
     }
 
     /// @dev Invariant: a caller who may not move a key is refused with ERC-721's approval error
-    /// before the key's manager hears anything, even when the manager would also refuse the
-    /// receiver; an approved operator then moves it through the manager as the owner would.
+    /// before the key's manager hears anything; an approved operator then moves it through the
+    /// manager as the owner would.
     function test_anUnapprovedTransferIsRefusedBeforeTheManagerHears() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         uint256 k1 = _buy(fleet, alice);
         uint256 k2 = _buy(fleet, bob);
 
-        // Bob already holds a level-1 key, so the manager, had it heard first, would have refused
-        // him a second one with its holding limit.
+        vm.expectCall(address(fleet), abi.encodeCall(KeyfleetManager.onKeyMoved, (k1, alice)), 0);
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721InsufficientApproval.selector, bob, k1));
         keys.transferFrom(alice, bob, k1);
         assertEq(keys.ownershipEpoch(k1), 1, "nothing moved");
 
-        address carol = _wallet(9);
         vm.prank(bob);
         keys.approve(carol, k2);
-        vm.expectCall(address(fleet), abi.encodeCall(KeyfleetManager.onKeyMoved, (k2, bob, carol)), 1);
+        vm.expectCall(address(fleet), abi.encodeCall(KeyfleetManager.onKeyMoved, (k2, bob)), 1);
         vm.prank(carol);
         keys.transferFrom(bob, carol, k2);
         assertEq(keys.ownerOf(k2), carol, "the approved operator moves it");

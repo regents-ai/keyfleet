@@ -9,11 +9,13 @@ import {KeyfleetShards} from "./KeyfleetShards.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactoryV2.sol";
 
-/// @notice What one fleet's four contracts are built with: the fleet, its type and starting price,
-/// and the address of each of the four, which the factory works out before deploying any.
+/// @notice What one fleet's four contracts are built with: the fleet, its type, starting price and
+/// Accelerant step, and the address of each of the four, which the factory works out before deploying any.
 /// @param fleetId The fleet's number in the collection.
 /// @param preset The fleet's type.
 /// @param startPrice The USDC price of the fleet's first key, in atomic USDC.
+/// @param accelerantStepPercent On Accelerant, how many percent each primary mint costs more than
+/// the one before, 1 to 5; zero on every other type.
 /// @param manager Where the fleet's `KeyfleetManager` is deployed.
 /// @param votes Where the fleet's `KeyfleetVotes` is deployed.
 /// @param treasury Where the fleet's `KeyfleetTreasury` is deployed.
@@ -22,6 +24,7 @@ struct FleetWiring {
     uint256 fleetId;
     KeyfleetPresets.Preset preset;
     uint256 startPrice;
+    uint256 accelerantStepPercent;
     address manager;
     address votes;
     address treasury;

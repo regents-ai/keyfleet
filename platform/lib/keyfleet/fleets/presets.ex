@@ -7,7 +7,7 @@ defmodule Keyfleet.Fleets.Presets do
   applied one level or one mint at a time, so a ladder computed here rounds
   exactly where the contract's does.
 
-  Classic's 1,024 prices, 8 USDC for the first key to 80 USDC for the last,
+  Classic's 1,024 prices, 10 USDC for the first key to 100 USDC for the last,
   are read from `classic_key_prices.txt` beside this module, which
   `scripts/classic_prices.py` writes together with the contract's own table.
 

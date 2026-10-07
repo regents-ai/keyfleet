@@ -51,6 +51,9 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         k1 = _buy(fleet, alice);
         k2 = _buy(fleet, alice);
         k3 = _buy(fleet, bob);
+        // Past the keys' automatic presence, so a key is present here only once it is renewed.
+        _mature();
+        _lapse();
     }
 
     // --- helpers ---------------------------------------------------------
@@ -184,8 +187,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// this suite's addresses. The fleet contracts are deployed with CREATE2, so a change to their
     /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(votes), 0x95a5Db62f5ebD444856f256CB693539f1c6691d8, "the address the vector was signed for");
-        assertEq(address(fleet), 0x0BBfE3Ce86688D0E45F6956c198afE3F67cbb69f, "the manager the vector names");
+        assertEq(address(votes), 0x69E0a4074ddD495012170747bab977B83a359F91, "the address the vector was signed for");
+        assertEq(address(fleet), 0xbe712D5699f7B3Fd137d8966095D6925ba18d136, "the manager the vector names");
         assertEq(block.chainid, 31337);
         assertEq(k1, 10_000_000_001);
         assertEq(k2, 10_000_000_002);
@@ -196,7 +199,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             _pair(k1, k2),
             alice,
             2_000_000,
-            hex"58bdbda72638be5fe90025f8c254f891a8b3341085d342c9cd410df3501389d049d1b084662506f7af97feb2f15696e5cd3a18a4d5ea3b551ca3e807c13b1d291b"
+            hex"facc9df6e010683eb5e89d5e88bd3531b11a371797e03e6246a3ef4d56086e820379e0cffc7a3f6a362737c3aa47becdab53ac687bd57c0630fd6d3796a17f6f1b"
         );
         assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }
@@ -204,11 +207,12 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// @dev Invariant: the contract accepts a ballot signed by the same independent encoder, over a
     /// proposal hash worked out with `cast` from the published formula, so a site or CLI building
     /// either from the README gets the same bytes. Bob proposes with key 3 of fleet 1 and no calls,
-    /// content `keccak256("record it")`, closing a day after time 1,000,000, at this suite's
+    /// content `keccak256("record it")`, closing a day after time 1,518,400 (when the keys'
+    /// automatic presence has ended) and open for its calls 48 hours after that, at this suite's
     /// treasury address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation
     /// revisions 0 and 0, nonce 0 and deadline 2,000,000.
     function test_aBallotFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(fleet.TREASURY()), 0xCEA6B0151812958b290C6a45bb5B3b8746B6D482, "the treasury the encoder used");
+        assertEq(address(fleet.TREASURY()), 0x0dcd618B9948CC861158Ebd2802683B8510A68f8, "the treasury the encoder used");
         uint256 proposalId = _propose();
         assertEq(
             votes.proposal(proposalId).actionsHash,
@@ -217,7 +221,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         );
         assertEq(
             votes.proposal(proposalId).proposalHash,
-            0x78cedfa57ac3982084dcf841f9423d6b4a7c286725c28c2deb1fc325addae748,
+            0xf52a2cadcbd57d8d617932f0f0d53a825fef2dc894cdb8cbe1a68ee7ae9297ea,
             "the proposal hash the encoder worked out"
         );
 
@@ -227,7 +231,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             YES,
             alice,
             2_000_000,
-            hex"8b8bf80ab997a91e8374243513269c1fbbd8ad5b875111de8a80840b9f4430e54e999b59ee0b08a94bf1b7e172635e2d909a3f7cd3e46aacc8b56f72df62c3321c"
+            hex"8fa80c398bf0e822088feb25eca426d921c1892a795a44511da9487087fd914f62e830d3dd60041526fd0b5497a1abc3c1a0d1998939311fae4b4655ec4337d71c"
         );
         assertEq(votes.proposal(proposalId).yes, 2);
     }
@@ -464,6 +468,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     function test_aContractWalletSignsThroughErc1271() public {
         MockContractWallet wallet = new MockContractWallet(vm.addr(WALLET_SIGNER_KEY));
         uint256 tokenId = _buy(fleet, address(wallet));
+        _mature();
+        _lapse();
         uint256 deadline = _deadline();
         uint256[] memory ids = _ids(tokenId);
 
@@ -485,13 +491,15 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     // --- 4. other fleets -----------------------------------------------------
 
     /// @dev Two Classic fleets of the same type and starting price, each created by `creator`, who
-    /// holds its key 1, with its key 2 sold to Alice; each has proposal 1, made by `creator` with
-    /// key 1 on identical terms.
+    /// holds its key 1, with its key 2 sold to Alice; once the keys are mature and their automatic
+    /// presence has ended, each has proposal 1, made by `creator` with key 1 on identical terms.
     function _twoFleets() private returns (KeyfleetManager a, KeyfleetManager b) {
         a = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, OPEN_START);
         b = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, OPEN_START);
         _buy(a, alice);
         _buy(b, alice);
+        _mature();
+        _lapse();
         uint256 a1 = _key(a, 1);
         uint256 b1 = _key(b, 1);
         uint64 closesAt = uint64(block.timestamp + 1 days);

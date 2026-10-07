@@ -85,6 +85,7 @@ contract KeyfleetAutolaunchForkTest is KeyfleetForkFixture {
         classic = _fleet(1);
         treasury = classic.TREASURY();
         _buy(classic, BUYER);
+        _openTreasury(classic);
 
         // The factory is deployed paused, and only the Regents Safe opens it. On this fork only, the
         // test acts as the Safe to open it, so that a launch can be made at all.

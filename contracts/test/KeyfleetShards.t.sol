@@ -420,6 +420,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
     /// a fleet-B key does not.
     function test_aShardOfOneFleetsKeyAuthorisesNothingInAnotherFleet() public {
         KeyfleetManager fleetB = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
+        _mature();
         uint256 b1 = _key(fleetB, 1);
         assertEq(keys.keyNumberOf(b1), keys.keyNumberOf(k1), "The two keys share their number");
         KeyfleetVotes votesA = fleet.VOTES();

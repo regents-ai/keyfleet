@@ -49,7 +49,7 @@ What each answer decides (round 2 numbering → id):
 | 19 | KF-SOL-8 | Name "Keyfleet", symbol KEYFLEET |
 | 20 | KF-SOL-9 | ERC-2981 resale fee of 2.5% to the Regents Safe |
 
-**Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md), as changed by everything above. Supplies, splits, vote, presence, daily split and claim rules are unchanged. Those docs are brought up to date in step B7.
+**Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md), as changed by everything above. Supplies, splits, daily split and claim rules are unchanged; the vote, presence, holding and price rules Sean changed on 7 Oct are in 5.1 and 8.4. Those docs are brought up to date in step B7.
 
 Words used below: a **fleet** is what Sean calls a "set" or "keyfleet". A **key** is one ERC-721 token. The **collection** is the one shared ERC-721 contract. A fleet's **manager set** is the per-fleet contracts the factory creates. The **Safe** is the Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. The four **founding fleets** are Classic #1, Syndicate #1, Accelerant #1 and Cascade #1. An **open fleet** is one anyone creates in phase 3. The **keeper** is the Regents backend wallet that records open fleets' decks and asks for card refreshes (3.5).
 
@@ -84,7 +84,7 @@ Each fleet is five contracts with no shared state. `Keyfleet` (14.6 KB runtime) 
 | `KeyfleetShards` | one | Agent shards and agent-voting switches, per key | `KeyfleetShards.sol`, rebound from one fleet to the collection |
 | `KeyfleetFactory` | one | Shared bindings (USDC, REGENT, staking, Autolaunch); nothing of value | new |
 | `KeyfleetRegentBuyer` | one | Nothing between calls; the fixed swap route | new (section 7) |
-| `KeyfleetManager` | one per fleet | Type, starting price, prices, `totalMinted`, `firstMintAt`, Cascade reserve, owed protocol share, Fibonacci holding counts, name, description, image link, joining requirements | sale and money parts of `Keyfleet.sol`, plus round 2 |
+| `KeyfleetManager` | one per fleet | Type, starting price, Accelerant step, prices, `totalMinted`, `firstMintAt`, Cascade reserve, owed protocol share, name, description, image link, joining requirements | sale and money parts of `Keyfleet.sol`, plus round 2 |
 | `KeyfleetVotes`, `KeyfleetTreasury`, `KeyfleetRewards` | one each per fleet | Exactly what they hold today | today's files, rebound to the manager and collection |
 | four small deployers | one each | Nothing; each holds one per-fleet contract's creation code | new (4.3) |
 
@@ -111,10 +111,10 @@ Every fleet gets a number from the collection when it is created: `1, 2, 3, ...`
 
 ### 3.3 Ownership epochs and transfers
 
-`ownershipEpoch[tokenId]` moves into the collection unchanged: 1 at mint, plus one on every transfer. On every mint and transfer, `KeyfleetKeys._update` does, in today's order:
+`ownershipEpoch[tokenId]` moves into the collection unchanged: 1 at mint, plus one on every transfer. The collection also records `mintedAt[tokenId]`, the block time of the mint, which no transfer changes; a key's voting wait counts from it (5.1). On every mint and transfer, `KeyfleetKeys._update` does, in this order:
 
-1. Calls the key's own fleet manager, `managerOf[fleetOf(tokenId)].onKeyMoved(tokenId, from, to)`. The manager settles the key's rewards to `from`, clears its presence in the fleet's Votes, and enforces the Fibonacci holding limit on `to`, exactly what `Keyfleet._update` does today. A transfer only ever calls the one manager the key belongs to.
-2. Bumps the epoch and emits `OwnershipEpoch`.
+1. On a transfer only, calls the key's own fleet manager, `managerOf[fleetOf(tokenId)].onKeyMoved(tokenId, from)`. The manager settles the key's rewards to `from` and tells the fleet's Votes, which ends the key's presence (or leaves a not-yet-started automatic presence in place, 5.1). A transfer only ever calls the one manager the key belongs to. A mint calls no manager: the sale itself already enrolled the key in the fleet's Rewards and Votes. There is no holding limit.
+2. Bumps the epoch, records `mintedAt` on a mint, and emits `OwnershipEpoch`.
 3. Moves ownership (`super._update`).
 
 ### 3.4 Reveal, `tokenURI` and ERC-4906
@@ -172,7 +172,7 @@ The reveal order is final only once the reveals' blocks are final, so the site d
 **Founding fleets, `createFoundingFleet(preset, deckHash, deckSize, profile)`, Safe only.**
 - Exactly four, in fixed order: fleet 1 Classic, 2 Syndicate, 3 Accelerant, 4 Cascade. Any other order, or a fifth, is refused.
 - Each comes with its deck.
-- Each uses its type's standard starting price (Classic 8 USDC rising to 80; the others 10 USDC), so founding fleets sell at exactly today's prices.
+- Each starts at 10 USDC (Classic rising to 100 USDC for key 1,024), and the founding Accelerant steps 5% per key.
 - No joining requirements.
 - The Safe sets the name, description and image in the same call; after that they are the fleet's own to change by vote (8.3).
 - They are created with sales closed; the phase steps open them (section 6). The Safe buys no key.
@@ -183,9 +183,9 @@ Both run the same steps in one transaction:
 
 1. The collection registers a new fleet: it assigns the fleet number and per-type number, and records the type, deck (founding only) and the manager's predicted address.
 2. The factory deploys the fleet's `KeyfleetManager`, `KeyfleetVotes`, `KeyfleetTreasury` and `KeyfleetRewards`, each at an address computed in advance (4.3), each bound to the others and to the collection, the shared shards, the REGENT buyer, USDC, REGENT, REGENT staking and the Autolaunch factory.
-3. It emits `FleetCreated(fleet, preset, typeNumber, creator, startPrice, manager, votes, treasury, rewards)`.
+3. It emits `FleetCreated(fleet, preset, typeNumber, creator, startPrice, accelerantStepPercent, manager, votes, treasury, rewards)`.
 
-A fleet's economic inputs are its **type** (one of the four rule sets, with all of its supply, level, holding-limit and split rules) and its **starting price**. Nobody can set a split, supply, rate, threshold or address for a fleet.
+A fleet's economic inputs are its **type** (one of the four rule sets, with all of its supply, level and split rules), its **starting price** and, for Accelerant only, its **step** of 1 to 5% (8.4). Nobody can set a split, supply, rate, threshold or address for a fleet.
 
 ### 4.2 Full deploys, not clones
 
@@ -225,7 +225,7 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 | Uniswap v3 pool / v4 PoolManager → REGENT buyer callbacks | Only during a swap the buyer started | `msg.sender` is the fixed pool or PoolManager, and the buyer's transient "swap in progress" flag is set |
 | Collection → manager `onKeyMoved` | The transfer hook | `msg.sender == KEYS` |
 | Treasury → manager `setProfile` | An approved proposal of that fleet's Keys (8.3) | `msg.sender == TREASURY` |
-| Manager → Votes `onKeyMoved`, → Rewards `enroll/settle/credit/allocate` | As today | `msg.sender == MANAGER` |
+| Manager → Votes `enrollKey` and `onKeyMoved`, → Rewards `enroll/settle/credit/allocate` | As today, plus the sale enrolling the key's automatic presence | `msg.sender == MANAGER` |
 | Votes → Treasury `executeBatch`; Treasury → Votes `setEditsRestricted`; Treasury → Rewards funding | As today | as today, plus the split flag |
 | Manager → Treasury `depositProtocolShare` | As today | `msg.sender == MANAGER` |
 
@@ -246,7 +246,27 @@ What stays per fleet, unchanged: the presence queue and its counts, every propos
 - **Transfers:** settle-then-clear-then-epoch, as 3.3. Joining requirements are not checked on transfers (KF-SOL-17 a).
 - **Delegation:** one shared `KeyfleetShards`, keyed by token id; a shard can never reach another fleet.
 - **Signatures:** the EIP-712 domain's verifying contract is the fleet's own Votes, and the message names the fleet's manager and globally unique key ids, so a signed Present or Ballot for fleet A cannot be replayed in fleet B.
-- **Presence ids:** `KeyfleetPresence` widens from 32-bit to 64-bit ids (`prev`, `next`, `expiresAt` still share one storage slot).
+- **Presence ids:** `KeyfleetPresence` widens from 32-bit to 64-bit ids (`prev`, `next`, `dueAt` and the list tag share one storage slot).
+
+### 5.1 Vote, presence and opening-week rules (Sean, 7 Oct)
+
+Every fleet, founding or open, runs these in its own `KeyfleetVotes`. They replace the earlier vote, presence and holding rules.
+
+- **Approval: 60% of the voters, rounded up, one formula for every vote.** The voters are the keys present when the proposal opens (`e0`) plus any key that joins late by casting its first ballot. `approvalsNeeded(voters) = (voters × 60 + 99) / 100`, in whole numbers:
+
+  | Voters | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | Yes needed | 1 | 2 | 2 | 3 | 3 | 4 | 5 | 5 | 6 | 6 |
+
+  There is no minimum: one voter may pass anything 1/1, treasury payments included. A lone key that is not present presses Present (a "roll call") and can then propose and pass alone.
+- **The outcome is decided at closing.** Every ballot may change until the closing time; the proposal is approved exactly when Yes reaches the number above at closing, never earlier. Anyone may carry it out from closing until 48 hours later.
+- **A new key waits 4 days.** From its mint (`KEY_MATURITY`), a key cannot press Present, vote, propose or cancel. The wait counts from the mint only; a transfer never starts it again.
+- **Then it is present on its own for 2 days.** When its wait ends (day 4), the key is present without anyone pressing anything, until day 6 (`PRESENCE_WINDOW`, 48 hours), exactly as if it had pressed Present at day 4. It counts in every proposal that opens in that time, and joins an already open proposal late if it votes. After day 6 it stays present only by pressing Present, voting, proposing or cancelling, each of which renews it for 48 hours.
+- **Changing hands.** A key sold on before day 4 keeps its automatic start. One that changes hands after day 4 loses its presence, as any present key does on a transfer; the new owner presses Present.
+- **How the exact count is kept.** `KeyfleetPresence` keeps three lists, each ordered by when its entries fall due: keys waiting for their automatic start, keys present from it, and keys present from a renewal. A sale enrols the key (`enrollKey`, from the manager) in the waiting list with its start time already recorded, so presence checks at any past moment stay exact. `sweepExpired` moves started keys to the automatic list and drops ended presences; a proposal opens only once nothing is due, so `e0` is always the exact count of present keys.
+- **A 7-day opening.** For 7 days from the moment the fleet's sales open (`TREASURY_OPENING`, from `KeyfleetKeys.salesOpenedAt`, section 6), a proposal may carry only calls that move no money, each with no value: the fleet's name, description and image (`setProfile`), the daily split rate (`setDailySplitBps`), and whether a key's edits are restricted (`setEditsRestricted`). Anything else, a mixed batch included, is refused with `TreasuryOpening(opensAt)`. A proposal with no calls is always allowed, and the daily split runs as usual. Admitting OUSD is held for the opening because it can never be undone and touches the money path.
+- **No holding limit, no matured-balance rule.** A wallet may hold any number of a fleet's keys, and treasury money is spendable as soon as it arrives.
+- **Pending Sean's answer:** his 7 Oct reply "3. b, but actually change the 4 day rule to a 2 day rule" reads two ways: a matured-balance rule for treasury money with a 2-day delay, or a 2-day new-key wait instead of 4. Neither is built; the wait stays 4 days and there is no matured-balance rule until he answers.
 
 ---
 
@@ -263,6 +283,7 @@ The collection holds `phase`, 0 to 3, which only the Safe changes, only upward a
 | 2 | Safe `advancePhase()` | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 2–4 exist |
 | 3 | Safe `advancePhase()` | `createFleet` for anyone; each open fleet sells from the moment it is created, starting with its creator's key 1 | — |
 
+- **When sales opened:** the collection records `salesOpenedAt[fleet]`, the block time each fleet's sales opened: fleet 1 at phase 1, fleets 2–4 at phase 2, an open fleet at its creation. `salesOpen(fleet)` is `salesOpenedAt[fleet] != 0`. Each fleet's 7-day opening counts from it (5.1).
 - **Where sales are gated:** `KeyfleetKeys.mint` reverts `SalesClosed(fleet)` unless that fleet is open: fleet 1 from phase 1, fleets 2–4 from phase 2, an open fleet from its creation. Every purchase in every fleet ends in this one function. There is no other mint path.
 - **Nothing else moves a phase**, and there is no step back.
 - **The site:** the fleet page reads `salesOpen(fleet)` and, while it is closed, shows the buy button disabled with a few words saying sales have not opened (rule 11's exception). The create-a-fleet page does the same from `phase()`. The site's own purchase gate stays as it is.
@@ -333,6 +354,7 @@ The swap takes the pool's price at that moment, with no minimum and no oracle: S
 - **Description:** 0 to 2,000 bytes, on chain.
 - **Image link:** optional, up to 512 bytes, on chain, stored as given.
 - **Starting price:** 10 to 1,000,000 USDC, in whole cents.
+- **Accelerant step:** for an Accelerant fleet only, 1 to 5% in whole percent; every other type gives 0.
 - **Joining requirements:** optional (section 9).
 - **Deadline** for the creation and the creator's key 1.
 
@@ -349,10 +371,10 @@ They live in the manager. `setProfile(name, description, imageLink)` is callable
 Key 1 costs the starting price and later keys follow the type's curve scaled to it:
 
 - **Syndicate and Cascade:** level 1 costs the starting price; each later level costs 20% more.
-- **Accelerant:** key 1 costs the starting price; each later key costs 5% more.
-- **Classic:** today's 1,024-step table from 8 to 80 USDC, multiplied by starting price ÷ 8, rounded up to the cent.
+- **Accelerant:** key 1 costs the starting price; each later key costs the creator's step more (1 to 5%, whole percent, Sean 7 Oct), rounded up.
+- **Classic:** the 1,024-step table from 10 USDC for key 1 to 100 USDC for key 1,024, each key the same percentage dearer than the one before (key 144 costs 13.80 USDC; all 1,024 total 40,040.48 USDC), multiplied by starting price ÷ 10, rounded up to the cent.
 
-Founding fleets use 8 USDC (Classic) and 10 USDC (others), which gives today's prices exactly.
+Founding fleets all start at 10 USDC, and the founding Accelerant steps 5%.
 
 ### 8.5 Creation risks
 
@@ -399,7 +421,7 @@ There is still no upgrade path, proxy, pause, burn, setter of economics, or `del
 
 ### 10.2 Reentrancy across collection, manager and swap
 
-- `purchase` holds the manager's lock and calls `KEYS.mint`, which calls back into the same manager (`onKeyMoved`) from inside `_update`. That callback does not take the manager's lock; it is `onlyKeys`, makes no token transfer and calls only the fleet's own Rewards and Votes bookkeeping.
+- `purchase` holds the manager's lock and calls `KEYS.mint`; a mint calls no manager back. A transfer calls the key's manager (`onKeyMoved`) from inside `_update`. That callback does not take the manager's lock; it is `onlyKeys`, makes no token transfer and calls only the fleet's own Rewards and Votes bookkeeping.
 - `KEYS.mint` holds a collection-wide lock shared with `requestReveal`, so a receiver cannot mint again or add a second VRF request from inside `onERC721Received`.
 - Purchase order: checks (deadline, price, joining requirement), USDC in, then everything booked before any outside call: the price step, the split, an Accelerant rebate, the key's enrolment, the `Purchased` event, and a Cascade level completion with its repayment to the level before. Then the swap of the treasury's part (7.5), which runs the REGENT pool's hook, and last the mint (`onERC721Received`), which asks for the key's draw when the fleet has a deck. Because a level's repayment is booked before the mint, a receiver that passes on one of the repaid keys from inside its own `onERC721Received` takes that key's repayment with it as the outgoing owner.
 - Each joining requirement's `balanceOf` gets at most 100,000 gas and only its first 32 bytes are read, so a requirement contract that burns gas or answers at length cannot use up the gas a buyer brought for another requirement (KF-SOL-16 a).
@@ -442,7 +464,7 @@ Run with the four founding fleets and two open fleets on one collection, against
 2. The sum of every fleet's `totalMinted` equals the collection's mint count.
 3. A fleet whose sales are closed has `totalMinted == 0`; the phase only ever rose, one step at a time, by the Safe; no open fleet exists before phase 3.
 4. Registry entries never change; fleet numbers only grow.
-5. No action in fleet B changes fleet A's presence queue, tallies, electorates, ledger backing, credits, treasury balances, holding counts or profile.
+5. No action in fleet B changes fleet A's presence queue, tallies, electorates, ledger backing, credits, treasury balances or profile.
 6. Ownership epochs only increase; a shard ends when its key moves.
 7. The collection, factory and REGENT buyer hold no tokens or ETH after any call and leave no approvals.
 8. Each fleet's four contracts point at each other and at nothing else.
@@ -460,9 +482,9 @@ Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELF
 
 | Today | After |
 |---|---|
-| `src/Keyfleet.sol` | **Deleted.** ERC-721, epochs, VRF reveal, `tokenURI`, ERC-4906 → `KeyfleetKeys.sol`. Sale, prices, Cascade, rebate, protocol share, holding limits, `recognizeSurplus`, `firstMintAt` → `KeyfleetManager.sol`. |
+| `src/Keyfleet.sol` | **Deleted.** ERC-721, epochs, VRF reveal, `tokenURI`, ERC-4906 → `KeyfleetKeys.sol`. Sale, prices, Cascade, rebate, protocol share, `recognizeSurplus`, `firstMintAt` → `KeyfleetManager.sol`. Holding limits are deleted (Sean, 7 Oct). |
 | USDC capital paid to the treasury | **Replaced** by the swap to REGENT (7.3). |
-| `KeyfleetPresets` prices fixed at Q = 10 USDC and Classic's table | Prices scale from the fleet's starting price (8.4); supplies, levels, holding limits and splits unchanged. |
+| `KeyfleetPresets` prices fixed at Q = 10 USDC and Classic's table | Prices scale from the fleet's starting price (8.4); Classic runs 10 to 100 USDC; Accelerant's step is the creator's 1 to 5%; supplies, levels and splits unchanged; holding limits deleted. |
 | `Keyfleet.Metadata` (per-fleet name, symbol, metadata base) | **Deleted.** One name, symbol, base, `contractURI` and royalty on the collection; each fleet's profile on its manager. |
 | `Keyfleet.Randomness`, per-fleet `TRAIT_TABLE_HASH` | Move to the collection, once. |
 | `Keyfleet.Companions` and nonce prediction per fleet | **Deleted.** Replaced by CREATE2 + transient wiring (4.3). |

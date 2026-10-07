@@ -10,9 +10,9 @@ import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "./vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "./vendor/chainlink/libraries/VRFV2PlusClient.sol";
 
-/// @notice What the collection tells a fleet's manager when one of its keys is minted or moves.
+/// @notice What the collection tells a fleet's manager when one of its keys moves.
 interface IKeyfleetKeyHook {
-    function onKeyMoved(uint256 tokenId, address from, address to) external;
+    function onKeyMoved(uint256 tokenId, address from) external;
 }
 
 /// @notice The one Keyfleet collection: every key of every fleet, the fleet registry, the phases
@@ -21,9 +21,9 @@ interface IKeyfleetKeyHook {
 /// fleet `fleet`; fleets are numbered from 1 and never reused, keys from 1 within their fleet.
 ///
 /// Only a registered fleet manager mints, and only into its own fleet: the fleet is looked up from
-/// the caller, never taken from an argument. Every mint and every transfer first calls the key's
-/// own fleet manager, which settles the key's rewards, clears its presence and enforces holding
-/// limits, then bumps the key's ownership epoch.
+/// the caller, never taken from an argument. Every transfer first calls the key's own fleet
+/// manager, which settles the key's rewards and clears its presence. Every mint and every transfer
+/// bumps the key's ownership epoch, and a mint records when the key was minted.
 ///
 /// Sales open in phases the Regents Safe moves forward, one step at a time and never back: phase 1
 /// opens fleet 1, phase 2 fleets 2 to 4, and phase 3 lets anyone create a fleet, which sells from
@@ -75,6 +75,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         uint32 typeNumber;
         uint32 deckSize;
         bytes32 deckHash;
+    }
+
+    /// @notice A key's ownership record.
+    /// @param epoch Its ownership epoch: 1 at mint, plus one on every transfer.
+    /// @param mintedAt When it was minted. Transfers never change it.
+    struct Holding {
+        uint64 epoch;
+        uint64 mintedAt;
     }
 
     /// @notice A key's token id is its fleet times this, plus its key number.
@@ -129,14 +137,16 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(address manager => uint256 fleetId) public fleetOfManager;
     /// @notice Fleets registered of each type.
     mapping(KeyfleetPresets.Preset preset => uint256 count) public typeCount;
-    /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer.
-    mapping(uint256 tokenId => uint64 epoch) public ownershipEpoch;
+    /// @notice When a fleet's sales opened: fleet 1 at phase 1, fleets 2 to 4 at phase 2, any later
+    /// fleet at its registration. Zero until they open, and for a fleet that does not exist.
+    mapping(uint256 fleetId => uint64 openedAt) public salesOpenedAt;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
 
     mapping(uint256 fleetId => Fleet fleet) private _fleets;
+    mapping(uint256 tokenId => Holding holding) private _holdings;
     mapping(uint256 requestId => uint256 tokenId) private _requestToken;
     string private _baseTokenURI;
     string private _contractURI;
@@ -258,6 +268,17 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     // --- views -----------------------------------------------------------
 
+    /// @notice Ownership epoch of a key: 1 at mint, plus one on every transfer. Zero for a key that
+    /// does not exist.
+    function ownershipEpoch(uint256 tokenId) external view returns (uint64) {
+        return _holdings[tokenId].epoch;
+    }
+
+    /// @notice When a key was minted. Zero for a key that does not exist.
+    function mintedAt(uint256 tokenId) external view returns (uint64) {
+        return _holdings[tokenId].mintedAt;
+    }
+
     /// @notice The token id of key `keyNumber` of fleet `fleetId`.
     function tokenIdOf(uint256 fleetId, uint256 keyNumber) public pure returns (uint256) {
         return fleetId * TOKEN_ID_STRIDE + keyNumber;
@@ -299,13 +320,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         return (stored.deckHash, stored.deckSize);
     }
 
-    /// @notice Whether a fleet's keys may be minted now: fleet 1 from phase 1, fleets 2 to 4 from
-    /// phase 2, and any later fleet from its registration. False for a fleet that does not exist.
+    /// @notice Whether a fleet's keys may be minted now: once `salesOpenedAt` is set.
     function salesOpen(uint256 fleetId) public view returns (bool) {
-        if (fleetId == 0 || fleetId > fleetCount) return false;
-        if (fleetId == 1) return phase >= 1;
-        if (fleetId <= FOUNDING_FLEETS) return phase >= 2;
-        return true;
+        return salesOpenedAt[fleetId] != 0;
     }
 
     /// @notice The metadata base every `tokenURI` starts with.
@@ -339,6 +356,12 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         uint256 needed = next == 1 ? 1 : next == 2 ? FOUNDING_FLEETS : 0;
         if (fleetCount < needed) revert FleetsMissing(needed, fleetCount);
         phase = next;
+        if (next == 1) salesOpenedAt[1] = uint64(block.timestamp);
+        if (next == 2) {
+            for (uint256 fleetId = 2; fleetId <= FOUNDING_FLEETS; ++fleetId) {
+                salesOpenedAt[fleetId] = uint64(block.timestamp);
+            }
+        }
         emit PhaseAdvanced(next);
     }
 
@@ -392,6 +415,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             deckHash: deckHash
         });
         fleetOfManager[manager] = fleetId;
+        if (phase == FINAL_PHASE) salesOpenedAt[fleetId] = uint64(block.timestamp);
         emit FleetRegistered(fleetId, preset, typeNumber, manager, msg.sender);
         if (hasDeck) emit DeckSet(fleetId, deckHash, deckSize);
     }
@@ -500,17 +524,20 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         }
     }
 
-    /// @dev Checks the caller may move the key, then tells the key's own fleet manager, then bumps
-    /// the ownership epoch, all before ownership changes, so a caller without approval is refused
-    /// with ERC-721's own error before any fleet bookkeeping runs. There is no burn, so `to` is never
-    /// zero.
+    /// @dev Checks the caller may move the key, then, on a transfer, tells the key's own fleet
+    /// manager, then bumps the ownership epoch, and on a mint records the mint time, all before
+    /// ownership changes, so a caller without approval is refused with ERC-721's own error before
+    /// any fleet bookkeeping runs. A mint has nothing to settle or clear, so the manager hears only
+    /// of transfers. There is no burn, so `to` is never zero.
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
         if (auth != address(0)) _checkAuthorized(from, auth, tokenId);
-        IKeyfleetKeyHook(_fleets[fleetOf(tokenId)].manager).onKeyMoved(tokenId, from, to);
+        if (from != address(0)) IKeyfleetKeyHook(_fleets[fleetOf(tokenId)].manager).onKeyMoved(tokenId, from);
 
-        uint64 epoch = ownershipEpoch[tokenId] + 1;
-        ownershipEpoch[tokenId] = epoch;
+        Holding storage holding = _holdings[tokenId];
+        uint64 epoch = holding.epoch + 1;
+        holding.epoch = epoch;
+        if (from == address(0)) holding.mintedAt = uint64(block.timestamp);
         emit OwnershipEpoch(tokenId, epoch, from, to);
 
         return super._update(to, tokenId, address(0));

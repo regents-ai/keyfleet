@@ -91,10 +91,14 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         vm.warp(1_000_000);
     }
 
+    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
+    /// treasury opening, by when only a renewed key is present.
     function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
         _buyMany(fleet, count);
+        _mature();
+        _openTreasury(fleet);
     }
 
     function _pay(KeyfleetTreasury treasury, address asset, address to, uint256 amount)
@@ -540,13 +544,13 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         a[3] = _attempt(
             "own onKeyMoved",
             address(fleet),
-            abi.encodeCall(KeyfleetManager.onKeyMoved, (ownKey, keys.ownerOf(ownKey), treasury)),
+            abi.encodeCall(KeyfleetManager.onKeyMoved, (ownKey, keys.ownerOf(ownKey))),
             onlyKeys
         );
         a[4] = _attempt(
             "other onKeyMoved",
             address(another),
-            abi.encodeCall(KeyfleetManager.onKeyMoved, (otherKey, keys.ownerOf(otherKey), treasury)),
+            abi.encodeCall(KeyfleetManager.onKeyMoved, (otherKey, keys.ownerOf(otherKey))),
             onlyKeys
         );
         a[5] = _attempt(

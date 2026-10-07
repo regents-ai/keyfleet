@@ -158,19 +158,24 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
             uint256 id = i + 1;
             (address manager, address votes, address treasury, address rewards) = factory.predict(id);
             vm.expectEmit(address(factory));
+            uint256 step = order[i] == KeyfleetPresets.Preset.FleetTechAccelerant
+                ? KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT
+                : 0;
             emit KeyfleetFactory.FleetCreated(
-                id, order[i], 1, safe, KeyfleetPresets.foundingStartPrice(order[i]), manager, votes, treasury, rewards
+                id, order[i], 1, safe, KeyfleetPresets.Q_USDC, step, manager, votes, treasury, rewards
             );
             KeyfleetManager fleet = _createFounding(order[i]);
             assertEq(address(fleet), manager);
             _assertBound(fleet, id, order[i]);
+            assertEq(fleet.START_PRICE(), KeyfleetPresets.Q_USDC);
+            assertEq(fleet.ACCELERANT_STEP_PERCENT(), step);
             (bytes32 deckHash, uint256 deckSize) = keys.deckOf(id);
             assertEq(deckHash, _deckHash(id));
             assertEq(deckSize, DECK_SIZE);
             assertFalse(keys.salesOpen(id));
             assertEq(fleet.totalMinted(), 0);
         }
-        assertEq(KeyfleetManager(keys.managerOf(1)).nextPrice(), 8e6);
+        assertEq(KeyfleetManager(keys.managerOf(1)).nextPrice(), 10e6);
         assertEq(KeyfleetManager(keys.managerOf(2)).nextPrice(), 10e6);
         assertEq(KeyfleetManager(keys.managerOf(3)).nextPrice(), 10e6);
         assertEq(KeyfleetManager(keys.managerOf(4)).nextPrice(), 10e6);
@@ -503,6 +508,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         assertEq(w.fleetId, 0);
         assertEq(uint8(w.preset), 0);
         assertEq(w.startPrice, 0);
+        assertEq(w.accelerantStepPercent, 0);
         assertEq(w.manager, address(0));
         assertEq(w.votes, address(0));
         assertEq(w.treasury, address(0));

@@ -98,20 +98,13 @@ contract ForwardingReceiver is IERC721Receiver {
     KeyfleetKeys private immutable KEYS;
     address private _destination;
     uint256 private _tokenId;
-    uint256 private _observedLevel;
 
-    /// @notice What the collection and the fleet reported about the new key while the hook was running.
+    /// @notice What the collection reported about the new key while the hook was running.
     uint64 public observedEpoch;
-    uint256 public observedHeld;
 
     constructor(KeyfleetManager fleet, KeyfleetKeys keys) {
         FLEET = fleet;
         KEYS = keys;
-    }
-
-    /// @dev A level of zero skips the holding-count read, which has no answer on Fleet.Tech presets.
-    function observeLevel(uint256 level) external {
-        _observedLevel = level;
     }
 
     function approveFleet(IERC20 token) external {
@@ -134,7 +127,6 @@ contract ForwardingReceiver is IERC721Receiver {
 
     function onERC721Received(address, address, uint256 tokenId, bytes calldata) external returns (bytes4) {
         observedEpoch = KEYS.ownershipEpoch(tokenId);
-        if (_observedLevel != 0) observedHeld = FLEET.heldPerLevel(address(this), _observedLevel);
         if (_destination != address(0)) {
             KEYS.transferFrom(address(this), _destination, _tokenId == 0 ? tokenId : _tokenId);
         }
@@ -198,15 +190,17 @@ contract LongAnswer {
 contract KeyfleetManagerTest is KeyfleetFixture {
     using stdStorage for StdStorage;
 
-    /// @dev The reference price, 10 USDC in atomic units: the start of every founding fleet but Classic.
+    /// @dev The reference price, 10 USDC in atomic units: the start of every founding fleet.
     uint256 private constant Q = KeyfleetPresets.Q_USDC;
     /// @dev The 10% protocol share of a ten-USDC purchase.
     uint256 private constant Q_PROTOCOL = Q / 10;
-    /// @dev The founding Classic fleet's start, 8 USDC.
+    /// @dev The start the Classic table is written for, 10 USDC.
     uint256 private constant CLASSIC_START = KeyfleetPresets.CLASSIC_START_USDC;
-    /// @dev The costliest first purchase measured, a Syndicate key at level 40 (709,279 gas), plus
-    /// twenty percent, rounded up to the nearest thousand.
-    uint256 private constant PURCHASE_GAS_CEILING = 852_000;
+    /// @dev The founding Accelerant fleet's step, and the one the fixture gives open Accelerant fleets.
+    uint256 private constant STEP = KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT;
+    /// @dev The costliest first purchase measured, the founding Accelerant fleet's key 1 (784,684
+    /// gas), plus twenty percent, rounded up to the nearest thousand.
+    uint256 private constant PURCHASE_GAS_CEILING = 942_000;
 
     StdStorage private fleetStore;
 
@@ -349,7 +343,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
     // --- 1. wiring and access --------------------------------------------
 
     /// @dev Invariant: a founding fleet starts with nothing sold, nothing owed and USDC as its one
-    /// reward asset, at its type's founding starting price; only Accelerant keeps a running price.
+    /// reward asset, at 10 USDC; only Accelerant keeps a running price, and only it has a step.
     function test_aFoundingFleetStartsEmptyAtItsFoundingPrice() public {
         for (uint256 p = 0; p < 4; ++p) {
             KeyfleetPresets.Preset preset = KeyfleetPresets.Preset(p);
@@ -361,9 +355,10 @@ contract KeyfleetManagerTest is KeyfleetFixture {
             assertEq(fleet.firstMintAt(), 0);
             assertEq(fleet.protocolShareOwed(), 0);
             assertEq(fleet.cascadeReserve(), 0);
-            assertEq(fleet.START_PRICE(), KeyfleetPresets.foundingStartPrice(preset));
-            assertEq(fleet.nextPrice(), KeyfleetPresets.foundingStartPrice(preset), "key 1 costs the start");
+            assertEq(fleet.START_PRICE(), Q);
+            assertEq(fleet.nextPrice(), Q, "key 1 costs the start");
             bool accelerant = preset == KeyfleetPresets.Preset.FleetTechAccelerant;
+            assertEq(fleet.ACCELERANT_STEP_PERCENT(), accelerant ? 5 : 0, "a 5% step on Accelerant only");
             assertEq(fleet.currentPrice(), accelerant ? Q : 0, "only Accelerant persists a price");
         }
     }
@@ -396,7 +391,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: only the collection tells a manager a key moved, so nobody can fake a move to
-    /// settle rewards, clear presence or shift holding counts.
+    /// settle rewards or clear presence.
     function test_onlyTheCollectionCallsTheKeyHook() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetManager otherFleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
@@ -406,9 +401,9 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         for (uint256 i = 0; i < callers.length; ++i) {
             vm.prank(callers[i]);
             vm.expectRevert(KeyfleetManager.OnlyKeys.selector);
-            fleet.onKeyMoved(k1, alice, bob);
+            fleet.onKeyMoved(k1, alice);
         }
-        assertEq(fleet.heldPerLevel(alice, 1), 1, "the holding count did not move");
+        assertEq(keys.ownerOf(k1), alice, "the key did not move");
     }
 
     /// @dev Invariant: only the factory writes a fleet's profile and requirements, once, and sells
@@ -460,7 +455,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
-    /// 8 USDC to 80 USDC; 10% of every sale is owed to REGENT staking in USDC and the other 90% is in
+    /// 10 USDC to 100 USDC; 10% of every sale is owed to REGENT staking in USDC and the other 90% is in
     /// the treasury as REGENT.
     function test_classicSellsExactlyOneThousandTwentyFourKeysAlongItsPriceCurve() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
@@ -475,7 +470,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
             _buy(fleet, _wallet(i));
         }
 
-        assertEq(paid, 32_032_450_000, "the whole fleet cost 32,032.45 USDC");
+        assertEq(paid, 40_040_480_000, "the whole fleet cost 40,040.48 USDC");
         assertEq(fleet.protocolShareOwed(), paid / 10, "10% of every sale is owed to staking");
         assertEq(_treasuryRegent(fleet), _regentFor(paid - paid / 10), "and the rest is REGENT in the treasury");
         _assertBalanceInvariant(fleet);
@@ -500,11 +495,11 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(fleet.maxSupply(), 2000);
 
         for (uint256 i = 0; i < 30; ++i) {
-            assertEq(fleet.currentPrice(), KeyfleetPresets.accelerantPrice(i, Q), "one step per primary mint");
+            assertEq(fleet.currentPrice(), KeyfleetPresets.accelerantPrice(i, Q, STEP), "one step per primary mint");
             _buy(fleet, alice);
         }
 
-        uint256 last = KeyfleetPresets.accelerantPrice(1999, Q);
+        uint256 last = KeyfleetPresets.accelerantPrice(1999, Q, STEP);
         fleetStore.target(address(fleet)).sig("totalMinted()").checked_write(uint256(1999));
         fleetStore.target(address(fleet)).sig("currentPrice()").checked_write(last);
         assertEq(fleet.remainingSupply(), 1, "one key left");
@@ -539,13 +534,11 @@ contract KeyfleetManagerTest is KeyfleetFixture {
             assertEq(fleet.levelOf(endOfForty), 40, "the last key of level 40");
             assertEq(fleet.levelOf(endOfForty + 1), 41, "the next key opens level 41");
             assertEq(fleet.nextPrice(), KeyfleetPresets.fibonacciLevelPrice(41, Q), "at level 41's price");
-            assertEq(fleet.holdingLimit(41), KeyfleetPresets.fibonacciLevelSupply(41) / 10, "by the same limit rule");
 
             uint256 tokenId = _buy(fleet, alice);
             assertEq(tokenId, _key(fleet, endOfForty + 1));
             assertEq(keys.keyNumberOf(tokenId), endOfForty + 1);
             assertEq(keys.ownerOf(tokenId), alice, "the purchase goes through");
-            assertEq(fleet.heldPerLevel(alice, 41), 1);
             assertEq(fleet.REWARDS().keyCohort(tokenId), 41, "and the key joins its level's cohort");
         }
     }
@@ -662,9 +655,9 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         for (uint256 i = 0; i < 6; ++i) {
             if (i < 3) assertEq(fleet.nextPrice(), pinned[i], "pinned USDC price");
             assertEq(fleet.nextPrice(), expected, "quoted price follows the ladder");
-            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(i, Q), "and matches the library");
+            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(i, Q, STEP), "and matches the library");
             _buy(fleet, _wallet(i));
-            expected = KeyfleetPresets.accelerantNextPrice(expected);
+            expected = KeyfleetPresets.accelerantNextPrice(expected, STEP);
         }
 
         uint256 beforeTransfer = fleet.nextPrice();
@@ -861,10 +854,9 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         uint256 totalPaid;
         for (uint256 level = 1; level <= 20; ++level) {
             uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
-            uint256 perWallet = KeyfleetPresets.fibonacciHoldingLimit(level);
             for (uint256 i = 0; i < supply; ++i) {
                 vm.prank(buyer);
-                fleet.purchase(_wallet(i / perWallet), type(uint256).max, block.timestamp, _noProof());
+                fleet.purchase(_wallet(i), type(uint256).max, block.timestamp, _noProof());
             }
             totalPaid += fleet.levelGrossPaid(level);
 
@@ -912,95 +904,46 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         _assertBalanceInvariant(fleet);
     }
 
-    // --- 6. Fibonacci holding limits --------------------------------------
+    // --- 6. no wallet cap -----------------------------------------------------
 
-    /// @dev Invariant: the per-wallet limit is applied on a mint as well as on an incoming transfer,
-    /// and a wallet that sells frees the slot again.
-    function test_holdingLimitAppliesOnMintAndOnIncomingTransfer() public {
-        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        assertEq(fleet.holdingLimit(1), 1, "one key per wallet at level 1");
-
-        _buy(fleet, alice);
-        assertEq(fleet.heldPerLevel(alice, 1), 1);
-
-        uint256 price = fleet.nextPrice();
-        usdc.mint(buyer, price);
-        vm.startPrank(buyer);
-        usdc.approve(address(fleet), price);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManager.HoldingLimitExceeded.selector, alice, 1, 1));
-        fleet.purchase(alice, 2 * price, block.timestamp, _noProof());
-        vm.stopPrank();
-
-        uint256 k1 = _key(fleet, 1);
-        uint256 k2 = _buy(fleet, bob);
-        vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManager.HoldingLimitExceeded.selector, alice, 1, 1));
-        keys.transferFrom(bob, alice, k2);
-
-        vm.prank(alice);
-        keys.transferFrom(alice, carol, k1);
-        assertEq(fleet.heldPerLevel(alice, 1), 0, "selling frees the slot");
-        vm.prank(bob);
-        keys.transferFrom(bob, alice, k2);
-        assertEq(fleet.heldPerLevel(alice, 1), 1);
-    }
-
-    /// @dev Invariant: holding limits count per fleet: a wallet at its limit in one Syndicate fleet
-    /// may still buy the same level in another.
-    function test_holdingLimitsAreCountedPerFleet() public {
-        KeyfleetManager founding = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        KeyfleetManager open = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
-        _buy(founding, alice);
-        _buy(open, alice);
-        assertEq(founding.heldPerLevel(alice, 1), 1);
-        assertEq(open.heldPerLevel(alice, 1), 1, "the other fleet counts its own keys");
-    }
-
-    /// @dev Invariant: from level 8 the limit is a tenth of the level supply, so a wallet may hold
-    /// five of level 8's fifty-five keys and no more.
-    function test_levelEightAllowsFiveKeysPerWalletAndRejectsTheSixth() public {
-        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        assertEq(fleet.holdingLimit(8), 5, "a tenth of fifty-five keys");
-
-        // Fill levels 1 through 7 with one key per wallet per level.
-        uint256 filled = KeyfleetPresets.fibonacciTotalSupplyThrough(7);
-        for (uint256 level = 1; level <= 7; ++level) {
-            uint256 supply = KeyfleetPresets.fibonacciLevelSupply(level);
-            for (uint256 i = 0; i < supply; ++i) {
-                _buy(fleet, _wallet(i));
+    /// @dev Invariant: no preset caps how many keys one wallet buys or holds, of one level or of
+    /// many, by purchase or by transfer.
+    function test_aWalletMayBuyAndHoldAnyNumberOfKeysOnEveryPreset() public {
+        KeyfleetPresets.Preset[4] memory presets = [
+            KeyfleetPresets.Preset.FibonacciSyndicate,
+            KeyfleetPresets.Preset.FibonacciCascade,
+            KeyfleetPresets.Preset.FleetTechClassic,
+            KeyfleetPresets.Preset.FleetTechAccelerant
+        ];
+        for (uint256 p = 0; p < presets.length; ++p) {
+            KeyfleetManager fleet = _deploy(presets[p]);
+            uint256 balanceBefore = keys.balanceOf(alice);
+            for (uint256 i = 0; i < 6; ++i) {
+                _buy(fleet, alice);
             }
+            uint256 fromBob = _buy(fleet, bob);
+            vm.prank(bob);
+            keys.transferFrom(bob, alice, fromBob);
+            assertEq(keys.balanceOf(alice) - balanceBefore, 7, "six bought and one received");
         }
-        assertEq(fleet.totalMinted(), filled);
-        assertEq(fleet.levelOf(filled + 1), 8, "the next key opens level 8");
+    }
 
-        for (uint256 i = 0; i < 5; ++i) {
+    /// @dev Invariant: on a Fibonacci fleet one wallet may hold every key of a level.
+    function test_oneWalletMayHoldAWholeFibonacciLevel() public {
+        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
+        uint256 throughTwo = KeyfleetPresets.fibonacciTotalSupplyThrough(2);
+        for (uint256 i = 0; i < throughTwo; ++i) {
             _buy(fleet, alice);
         }
-        assertEq(fleet.heldPerLevel(alice, 8), 5);
-
-        uint256 price = fleet.nextPrice();
-        usdc.mint(buyer, price);
-        vm.startPrank(buyer);
-        usdc.approve(address(fleet), price);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetManager.HoldingLimitExceeded.selector, alice, 8, 5));
-        fleet.purchase(alice, 2 * price, block.timestamp, _noProof());
-        vm.stopPrank();
+        assertEq(fleet.levelOf(throughTwo), 2);
+        assertEq(keys.balanceOf(alice), throughTwo, "Alice holds every key of levels 1 and 2");
     }
 
-    /// @dev Invariant: the two Fleet.Tech presets have no levels and no per-wallet cap, so one wallet
-    /// may accumulate keys freely.
-    function test_fleetTechPresetsHaveNoLevelsAndNoWalletCap() public {
+    /// @dev Invariant: the two Fleet.Tech presets have no levels.
+    function test_fleetTechPresetsHaveNoLevels() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-
-        _buy(fleet, alice);
-        _buy(fleet, alice);
-        _buy(fleet, alice);
-        assertEq(keys.balanceOf(alice), 3, "no cap on Classic");
-
         vm.expectRevert(KeyfleetManager.NotFibonacciPreset.selector);
         fleet.levelOf(1);
-        vm.expectRevert(KeyfleetManager.NotFibonacciPreset.selector);
-        fleet.holdingLimit(1);
     }
 
     // --- 7. first sale ------------------------------------------------------
@@ -1126,7 +1069,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
     /// @dev Invariant: because a key is enrolled and the purchase fully booked before it is minted, a
     /// router-style receiver may forward a key on from inside the mint hook. The forwarded key lands
-    /// on the destination with its second epoch and correct holding counts. A Cascade completion is
+    /// on the destination with its second epoch. A Cascade completion is
     /// booked before the mint, so when the completing key's receiver passes on a level-1 key from
     /// inside the hook, the receiver held that key at completion and the repayment is settled to it.
     function test_aReceiverMayForwardAKeyFromItsMintHook() public {
@@ -1141,14 +1084,11 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
         // The key it is handed goes straight on to Alice.
         receiver.setForward(alice, 0);
-        receiver.observeLevel(1);
         assertEq(receiver.buy(), k1);
         assertEq(receiver.observedEpoch(), 1, "the hook already sees the mint epoch");
-        assertEq(receiver.observedHeld(), 1, "and already sees itself holding the key");
         assertEq(keys.ownerOf(k1), alice, "the hook forwarded the key it was handed");
         assertEq(keys.ownershipEpoch(k1), 2, "mint then forward is the second epoch");
-        assertEq(fleet.heldPerLevel(address(receiver), 1), 0, "the router holds nothing");
-        assertEq(fleet.heldPerLevel(alice, 1), 1, "and the destination holds one");
+        assertEq(keys.balanceOf(address(receiver)), 0, "the router holds nothing");
 
         // Keep the next key, which completes level 1.
         receiver.disableForward();
@@ -1171,9 +1111,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(rewards.accrued(address(usdc), k1), Q, "Alice's level-1 key was repaid too");
         assertEq(keys.ownerOf(k5), address(receiver), "the router kept the key it bought");
         assertEq(keys.ownershipEpoch(k5), 1);
-        assertEq(fleet.heldPerLevel(address(receiver), 1), 0);
-        assertEq(fleet.heldPerLevel(address(receiver), 2), 1);
-        assertEq(fleet.heldPerLevel(dave, 1), 1);
+        assertEq(keys.balanceOf(address(receiver)), 1, "the router holds only the key it kept");
         _assertBalanceInvariant(fleet);
     }
 
@@ -1232,14 +1170,9 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(fleet.levelOf(3), 2);
         assertEq(fleet.levelOf(46_365), 20);
         assertEq(fleet.levelOf(46_366), 21);
-        assertEq(fleet.holdingLimit(7), 1);
-        assertEq(fleet.holdingLimit(20), KeyfleetPresets.fibonacciLevelSupply(20) / 10);
-        assertEq(fleet.holdingLimit(40), KeyfleetPresets.fibonacciLevelSupply(40) / 10);
 
         vm.expectRevert(KeyfleetPresets.KeyNumberOutOfBounds.selector);
         fleet.levelOf(0);
-        vm.expectRevert(KeyfleetPresets.LevelOutOfBounds.selector);
-        fleet.holdingLimit(0);
     }
 
     // --- 10. surplus and the protocol share --------------------------------
@@ -1373,7 +1306,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         _buy(fleet, alice);
         assertEq(fleet.REWARDS().credits(address(usdc), creator), 21e6 - 2_100_000 - 4_200_000, "70% to the creator");
         for (uint256 i = 2; i < 12; ++i) {
-            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(i, start), "the scaled ladder");
+            assertEq(fleet.nextPrice(), KeyfleetPresets.accelerantPrice(i, start, STEP), "the scaled ladder");
             _buy(fleet, _wallet(i));
         }
         _assertBalanceInvariant(fleet);
@@ -1612,6 +1545,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
     function test_theFleetsOwnTreasuryChangesItsProfileThroughAnApprovedProposal() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _buy(fleet, alice);
+        _mature();
         KeyfleetManager.Profile memory next = KeyfleetManager.Profile({
             name: "Night Fleet", description: "Keys that keep watch.", imageLink: "https://media.regents.sh/ipfs/night"
         });
@@ -1652,6 +1586,8 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         }
 
         _buy(otherFleet, bob);
+        _mature();
+        _openTreasury(otherFleet);
         KeyfleetTreasury.Call[] memory calls = _setProfileCall(fleet, next);
         uint256 id = _pass(otherFleet, calls);
         KeyfleetVotes otherVotes = otherFleet.VOTES();
@@ -1740,14 +1676,20 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
     /// @dev The execution-gas ceiling covers the first purchase on a founding fleet, with every
     /// account it touches starting cold. A Fibonacci purchase walks the levels up to its own a few
-    /// times, so its cost grows slowly with the level; it is measured at levels 1, 30 and 40. Now
-    /// that the treasury's part is swapped for REGENT in the purchase, a purchase that swaps costs
-    /// more than one that does not, so a Syndicate key, which always swaps, costs more than a
-    /// Cascade key that only adds to the reserve, and the ceiling is the level-40 Syndicate figure
-    /// plus twenty percent, rounded up to the nearest thousand. Measured against stand-in USDC,
-    /// pools and VRF coordinator, so it is a regression bound on the fleet's own work, not the
-    /// figure to publish: the figures to publish are measured on a fork of Base. The
-    /// level-completing Cascade purchase, which also swaps, is measured alongside it.
+    /// times, so its cost grows slowly with the level; it is measured at levels 1, 30 and 40. Level 1
+    /// is the dearer of 1 and 30 only because its purchase writes the mint count from zero, which
+    /// the later levels, whose count is written beforehand, do not. The treasury's part is swapped
+    /// for REGENT in the purchase, so a purchase that swaps costs more than one that does not: a
+    /// Syndicate key, which always swaps, costs more than a Cascade key that only adds to the
+    /// reserve. Every sale also schedules its key's automatic presence in the fleet's voting
+    /// controller, writing the key's waiting entry, its first checkpoint and the presence revision,
+    /// and the collection records its mint time; those writes are a large part of every first
+    /// purchase. The costliest first purchase is the founding Accelerant fleet's key 1, and the
+    /// ceiling is that figure plus twenty percent, rounded up to the nearest
+    /// thousand. Measured against stand-in USDC, pools and VRF coordinator, so it is a regression
+    /// bound on the fleet's own work, not the figure to publish: the figures to publish are
+    /// measured on a fork of Base. The level-completing Cascade purchase, which also swaps, is
+    /// measured alongside it.
     function test_purchaseGasStaysUnderTheCeiling() public {
         uint256 cascade = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade, 1);
         uint256 cascade30 = _measureFirstPurchase(KeyfleetPresets.Preset.FibonacciCascade, 30);
@@ -1765,14 +1707,13 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         console2.log("first purchase gas, Accelerant:", accelerant);
         console2.log("first purchase gas, Classic:", classic);
 
-        assertLt(syndicate40, PURCHASE_GAS_CEILING, "the worst first purchase stays under the ceiling");
+        uint256[7] memory measured = [cascade, cascade30, cascade40, syndicate, syndicate40, accelerant, classic];
+        for (uint256 i = 0; i < measured.length; ++i) {
+            assertLt(measured[i], PURCHASE_GAS_CEILING, "every first purchase stays under the ceiling");
+        }
         assertGt(cascade40, cascade30, "a higher level costs a little more");
-        assertGt(cascade30, cascade);
-        assertGt(syndicate40, syndicate);
         assertGt(syndicate40, cascade40, "a purchase that swaps costs more than one that reserves");
         assertGt(syndicate, cascade);
-        assertGt(syndicate40, accelerant);
-        assertGt(syndicate40, classic);
 
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciCascade);
         _buy(fleet, alice);

@@ -309,6 +309,8 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
     /// routine, so it cannot fund the split.
     function test_anApprovedProposalCannotFundTheSplit() public {
         _buy(fleet, alice);
+        _mature();
+        _openTreasury(fleet);
         regent.mint(address(rewards), 1e18);
         KeyfleetTreasury.Call[] memory calls =
             _one(address(rewards), 0, abi.encodeCall(KeyfleetRewards.fundSplit, (address(regent), 1e18, 1)));
@@ -897,7 +899,7 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
             uint256 amount = ((seed >> 32) % 1e18) + 1;
 
             if (action == 0) {
-                if (_mayHold(holder, fleet.totalMinted() + 1)) _buy(fleet, holder);
+                _buy(fleet, holder);
             } else if (action == 1) {
                 usdc.mint(address(rewards), amount);
                 vm.prank(address(fleet));
@@ -910,7 +912,7 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
                 _split((seed >> 40) % 2 == 0 ? address(usdc) : NATIVE, amount % 1e12 + 1);
             } else if (action == 4) {
                 address keyOwner = keys.ownerOf(tokenId);
-                if (keyOwner != holder && _mayHold(holder, keys.keyNumberOf(tokenId))) {
+                if (keyOwner != holder) {
                     vm.prank(keyOwner);
                     keys.transferFrom(keyOwner, holder, tokenId);
                 }
@@ -922,12 +924,6 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
             _assertBacked(address(usdc), usdc.balanceOf(address(rewards)), holders);
             _assertBacked(NATIVE, address(rewards).balance, holders);
         }
-    }
-
-    /// @dev Whether `account` may take one more key of `keyNumber`'s level under the holding limit.
-    function _mayHold(address account, uint256 keyNumber) private view returns (bool) {
-        uint256 level = fleet.levelOf(keyNumber);
-        return fleet.heldPerLevel(account, level) < fleet.holdingLimit(level);
     }
 
     function _assertBacked(address asset, uint256 balance, address[3] memory holders) private view {

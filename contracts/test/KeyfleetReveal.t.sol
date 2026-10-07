@@ -452,8 +452,9 @@ contract KeyfleetRevealTest is RevealFixture {
 
     /// @dev Invariant: against a coordinator that costs what the real one costs, no gas limit
     /// completes a purchase silently: every completed purchase either made its request or said it
-    /// failed. The search finds the least gas that completes a purchase, then every limit in the
-    /// few thousand gas above it is tried, which is where a starved request would show.
+    /// failed. The search finds the least gas that completes a purchase, then every fourth limit in
+    /// the four thousand gas above it is tried, which is where a starved request would show. A finer
+    /// step would not fit the whole walk in one test's gas.
     function test_everyCompletedPurchaseEitherRequestedOrSaidItFailed() public {
         KeyfleetManager fleet = _classic();
         _fund(fleet);
@@ -469,7 +470,7 @@ contract KeyfleetRevealTest is RevealFixture {
         }
         console2.log("least gas that completes a purchase:", low);
 
-        for (uint256 gasLimit = low; gasLimit < low + 4000; gasLimit += 3) {
+        for (uint256 gasLimit = low; gasLimit < low + 4000; gasLimit += 4) {
             uint256 snapshot = vm.snapshotState();
             (bool ok, uint8 outcome) = _purchaseWithGas(fleet, gasLimit);
             vm.revertToState(snapshot);

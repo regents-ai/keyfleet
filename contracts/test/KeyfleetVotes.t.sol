@@ -5,6 +5,7 @@ import {console2} from "forge-std/console2.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetPresence} from "../src/KeyfleetPresence.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
@@ -44,9 +45,9 @@ contract RogueVotesDeployer {
 
 contract KeyfleetVotesTest is KeyfleetFixture {
     /// @dev The published ceiling (contracts README) on an agent casting ten first ballots on
-    /// Classic keys in one call through its shards. Measured 1,050,026 on a factory-made fleet.
+    /// Classic keys in one call through its shards. Measured 838,670 on a factory-made fleet.
     uint256 private constant TEN_KEY_BALLOT_CEILING = 1_250_000;
-    /// @dev The published ceiling on one more key in an agent's ballot. Measured 104,472.
+    /// @dev The published ceiling on one more key in an agent's ballot. Measured 83,338.
     uint256 private constant PER_KEY_BALLOT_CEILING = 125_000;
     /// @dev The starting price of the open fleets these tests create: 10 USDC.
     uint256 private constant OPEN_START = 10_000_000;
@@ -195,6 +196,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// execution expiry, binds them in one hash, renews its author key and casts no ballot.
     function test_aProposalRecordsItsOpeningAndBindsItsWholeContent() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         uint256 k1 = _k(1);
         _present(votes, _ids(_k(2)));
 
@@ -219,7 +222,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         );
 
         vm.expectEmit(true, true, true, true, address(votes));
-        emit ProposalCreated(1, k1, _wallet(1), proposalHash, content, closesAt, expiry, 2, 3, calls);
+        emit ProposalCreated(1, k1, _wallet(1), proposalHash, content, closesAt, expiry, 2, 6, calls);
         vm.prank(_wallet(1));
         uint256 proposalId = votes.propose(k1, content, closesAt, calls);
 
@@ -229,7 +232,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(stored.contentHash, content);
         assertEq(stored.actionsHash, actionsHash);
         assertEq(stored.proposalHash, proposalHash);
-        assertEq(stored.openRevision, 3, "key 2's renewal, the author's renewal, then the opening");
+        assertEq(stored.openRevision, 6, "three sales, key 2's renewal, the author's renewal, then the opening");
         assertEq(stored.openedAt, uint64(block.timestamp));
         assertEq(stored.closesAt, closesAt);
         assertEq(stored.executionExpiry, expiry, "48 hours after closing");
@@ -244,6 +247,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// the range checked.
     function test_aProposalClosesWithinFortyEightHours() public {
         _buyMany(fleet, 1);
+        _mature();
         uint256 k1 = _k(1);
         uint64 nowAt = uint64(block.timestamp);
 
@@ -262,6 +266,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// its owner, or a wallet holding an active shard of it while its agent voting is on.
     function test_proposingRequiresAKeyTheCallerMayVote() public {
         _buyMany(fleet, 2);
+        _mature();
         uint256 k1 = _k(1);
         uint64 closesAt = uint64(block.timestamp + 1 days);
 
@@ -284,6 +289,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// and electorate; nothing deduplicates it and nothing is reserved.
     function test_anIdenticalResubmissionIsANewProposal() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         KeyfleetTreasury.Call[] memory calls = _restrict(votes, _k(2), true);
         uint256 first = _propose(votes, _k(1), calls);
         _present(votes, _ids(_k(2)));
@@ -301,6 +308,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// @dev Invariant: every entry point refuses an id that names no proposal.
     function test_anUnknownProposalIsRefusedEverywhere() public {
         _buyMany(fleet, 1);
+        _mature();
         _propose(votes);
 
         uint256[2] memory unknown = [uint256(0), 2];
@@ -328,6 +336,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// not before: it is open until then and cannot be carried out early.
     function test_oneKeyPresentAndItsYesPassesAtTheDeadline() public {
         _buyMany(fleet, 5);
+        _mature();
+        _lapse();
         uint256 proposalId = _propose(votes);
         _ballot(votes, proposalId, _k(1), YES);
 
@@ -342,10 +352,12 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Approved));
     }
 
-    /// @dev Invariant: Yes must be more than half of D. A tie fails, and so does Yes at exactly
+    /// @dev Invariant: Yes must reach 60% of D, rounded up. A tie fails, and so does Yes at exactly
     /// half with the rest abstaining.
     function test_tiesFail() public {
         _buyMany(fleet, 4);
+        _mature();
+        _lapse();
         _present(votes, _range(_k(2), 3));
         uint256 proposalId = _propose(votes);
         _ballots(votes, proposalId, _k(1), 2, YES);
@@ -358,6 +370,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         _closeOf(votes, tie);
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         assertEq(_d(votes, proposalId), 4);
+        assertEq(votes.approvalsNeeded(4), 3, "60% of four, rounded up");
         assertEq(stored.yes, 2);
         assertEq(stored.abstain, 2);
         assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Rejected), "2 of 4 fails");
@@ -366,10 +379,12 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: a key that was not present at opening joins by casting a ballot, whatever
-    /// its choice, and adds exactly one to D; a key present at opening adds nothing when it votes,
-    /// and a key bought after opening joins the same way.
+    /// its choice, and adds exactly one to D; a key present at opening adds nothing when it votes.
+    /// A key bought after opening cannot join: it is still too new when the proposal closes.
     function test_lateBallotsJoinTheElectorate() public {
         _buyMany(fleet, 5);
+        _mature();
+        _lapse();
         _present(votes, _ids(_k(2)));
         uint256 proposalId = _propose(votes);
         assertEq(_d(votes, proposalId), 2);
@@ -383,8 +398,12 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(_d(votes, proposalId), 5);
 
         uint256 minted = _buy(fleet, carol);
-        _ballot(votes, proposalId, minted, NO);
-        assertEq(_d(votes, proposalId), 6, "a key minted during voting joins by voting");
+        uint64 maturesAt = uint64(block.timestamp) + votes.KEY_MATURITY();
+        assertGe(maturesAt, votes.proposal(proposalId).closesAt, "it matures only once voting has closed");
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyTooNew.selector, minted, maturesAt));
+        votes.castBallot(proposalId, _ids(minted), NO);
+        assertEq(_d(votes, proposalId), 5, "a key minted during voting does not join");
         assertFalse(votes.wasActiveAtOpening(proposalId, minted));
     }
 
@@ -392,6 +411,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// that was included adds nothing when it votes later.
     function test_anIncludedKeyThatExpiresStaysCounted() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         _present(votes, _range(_k(2), 2));
         vm.warp(block.timestamp + 47 hours);
         vm.prank(_wallet(1));
@@ -411,6 +432,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// adds a ballot.
     function test_aTransferredKeyReplacesItsBallotWithoutDoubleCounting() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         uint256 k2 = _k(2);
         uint256 k3 = _k(3);
         _present(votes, _ids(k2));
@@ -438,6 +461,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// @dev Invariant: renewing a key changes no open proposal: D moves only by a ballot.
     function test_presentAloneLeavesAnOpenElectorateUnchanged() public {
         _buyMany(fleet, 4);
+        _mature();
+        _lapse();
         uint256 proposalId = _propose(votes);
         _present(votes, _range(_k(2), 3));
         assertEq(_d(votes, proposalId), 1, "three keys renewed, none joined");
@@ -448,6 +473,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// @dev Invariant: repeating a ballot changes no tally, though it renews the key.
     function test_repeatingABallotChangesNothingButRenewsTheKey() public {
         _buyMany(fleet, 2);
+        _mature();
+        _lapse();
         uint256 k2 = _k(2);
         uint256 proposalId = _propose(votes);
         _ballot(votes, proposalId, k2, YES);
@@ -462,13 +489,15 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         assertEq(stored.yes, 1, "one key, one Yes");
         assertEq(stored.late, 1);
-        assertEq(votes.lastActiveAt(k2), uint64(block.timestamp), "renewed by the repeat");
+        assertEq(votes.presentFrom(k2), uint64(block.timestamp), "renewed by the repeat");
     }
 
     /// @dev Invariant: from closing on, no ballot is accepted, late or not, and none on a cancelled
     /// proposal; a ballot is Yes, No or Abstain and names at least one key.
     function test_noBallotAfterClosingOrCancelling() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         uint256 proposalId = _propose(votes);
         uint256 cancelled = _propose(votes);
 
@@ -492,9 +521,12 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertEq(_d(votes, proposalId), 1);
     }
 
-    /// @dev The spec's §6 example table, row by row, on one fleet of twelve keys.
+    /// @dev The spec's §6 example table, row by row, on one fleet of twelve keys, at the threshold
+    /// of 60% of D rounded up: row 3 needs six Yes of nine, row 4 seven of eleven.
     function test_theSpecExampleTable() public {
         _buyMany(fleet, 12);
+        _mature();
+        _lapse();
         uint256 t0 = block.timestamp;
 
         // Row 1: D=1, Yes=1 passes at the deadline.
@@ -507,35 +539,36 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         _ballots(votes, four, _k(1), 2, YES);
         _ballots(votes, four, _k(3), 2, ABSTAIN);
 
-        // Row 3: D=9, Yes=5 meets the threshold but cannot be carried out early. Keys 1 and 2
-        // vote at the opening; keys 3 to 5 an hour later.
+        // Row 3: D=9, Yes=6 meets the threshold but cannot be carried out early. Keys 1 to 3
+        // vote at the opening; keys 4 to 6 an hour later.
         _present(votes, _range(_k(5), 5));
         vm.prank(_wallet(1));
         uint256 nine = votes.propose(_k(1), bytes32(0), uint64(t0 + 48 hours), _noCalls());
-        _ballots(votes, nine, _k(1), 2, YES);
+        _ballots(votes, nine, _k(1), 3, YES);
         vm.warp(t0 + 1 hours);
-        _ballots(votes, nine, _k(3), 3, YES);
+        _ballots(votes, nine, _k(4), 3, YES);
         assertEq(_d(votes, nine), 9);
-        assertGt(votes.proposal(nine).yes, _d(votes, nine) / 2, "5 of 9 meets the threshold now");
+        assertEq(votes.proposal(nine).yes, votes.approvalsNeeded(9), "6 of 9 meets the threshold now");
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Open));
         votes.execute(nine, _noCalls());
 
-        // Row 4: two dormant keys vote No: D=11, Yes=5 does not meet the threshold.
+        // Row 4: two dormant keys vote No: D=11, Yes=6 does not meet the threshold.
         vm.warp(t0 + 2 hours);
         _ballots(votes, nine, _k(10), 2, NO);
         assertEq(_d(votes, nine), 11);
-        assertEq(votes.proposal(nine).yes, 5);
+        assertEq(votes.proposal(nine).yes, 6);
+        assertLt(votes.proposal(nine).yes, votes.approvalsNeeded(11), "7 of 11 are needed");
 
         vm.warp(t0 + 1 days);
         assertEq(uint256(_status(votes, single)), uint256(KeyfleetVotes.Status.Approved), "row 1 passed");
         assertEq(uint256(_status(votes, four)), uint256(KeyfleetVotes.Status.Rejected), "row 2 failed");
 
-        // Row 5: six included keys expire (1, 2 and 6 to 9, renewed at t0); D stays 11.
+        // Row 5: six included keys expire (1 to 3 and 7 to 9, renewed at t0); D stays 11.
         vm.warp(t0 + 48 hours);
         (uint256 removed,) = votes.sweepExpired(100);
         assertEq(removed, 6, "six included keys expired");
         assertEq(_d(votes, nine), 11, "D stays 11");
-        assertEq(uint256(_status(votes, nine)), uint256(KeyfleetVotes.Status.Rejected), "5 of 11 fails");
+        assertEq(uint256(_status(votes, nine)), uint256(KeyfleetVotes.Status.Rejected), "6 of 11 fails");
 
         // Row 6: the next proposal opens with one active key and has D=1; the old one keeps 11.
         vm.warp(t0 + 51 hours);
@@ -553,6 +586,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         for (uint256 i = 0; i < 3; ++i) {
             _buy(fleet, carol);
         }
+        _mature();
         uint256 k1 = _k(1);
         uint256 k2 = _k(2);
         vm.prank(carol);
@@ -579,6 +613,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// with it on.
     function test_agentVotingOffStopsTheAgentVotingButNotRenewing() public {
         _buyMany(fleet, 3);
+        _mature();
         uint256 k2 = _k(2);
         vm.prank(_wallet(2));
         shards.issue(_ids(k2), bob, 30);
@@ -614,6 +649,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// one call; a batch with one key it holds no shard of is refused whole.
     function test_anAgentVotesTheKeysOfManyOwnersInOneCall() public {
         _buyMany(fleet, 4);
+        _mature();
         for (uint256 n = 1; n <= 3; ++n) {
             vm.prank(_wallet(n));
             shards.issue(_ids(_k(n)), bob, 30);
@@ -638,6 +674,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     function test_aMarketplaceApprovalIsNotDelegation() public {
         _buyMany(fleet, 1);
         _buy(fleet, _wallet(1)); // key 2
+        _mature();
         uint256 k1 = _k(1);
         uint256 proposalId = _propose(votes);
         vm.startPrank(_wallet(1));
@@ -663,6 +700,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// approved, renewing that key; nobody else can, and nothing closed can be cancelled.
     function test_theAuthorKeyCancelsWhileOpenOrApproved() public {
         _buyMany(fleet, 2);
+        _mature();
+        _lapse();
         uint256 k1 = _k(1);
         uint256 open = _propose(votes);
         uint256 approved = _propose(votes);
@@ -705,13 +744,15 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// the treasury makes; carrying out renews no key.
     function test_anApprovedProposalIsCarriedOutOnceWithItsExactCalls() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         uint256 k1 = _k(1);
         uint256 k3 = _k(3);
         KeyfleetTreasury.Call[] memory calls = _restrict(votes, k3, true);
         uint256 proposalId = _propose(votes, k1, calls);
         _ballot(votes, proposalId, k1, YES);
         _closeOf(votes, proposalId);
-        uint64 renewedAt = votes.lastActiveAt(k1);
+        uint64 renewedAt = votes.presentFrom(k1);
 
         vm.expectEmit(true, true, true, true, address(votes));
         emit EditsRestrictionSet(k3, true);
@@ -722,7 +763,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
 
         assertTrue(votes.editsRestricted(k3));
         assertEq(uint256(_status(votes, proposalId)), uint256(KeyfleetVotes.Status.Executed));
-        assertEq(votes.lastActiveAt(k1), renewedAt, "carrying out renewed nobody");
+        assertEq(votes.presentFrom(k1), renewedAt, "carrying out renewed nobody");
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Executed));
         votes.execute(proposalId, calls);
     }
@@ -731,6 +772,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// order, a dropped call or an extra one is refused.
     function test_changedCallsAreRefused() public {
         _buyMany(fleet, 3);
+        _mature();
+        _lapse();
         uint256 k2 = _k(2);
         uint256 k3 = _k(3);
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](2);
@@ -765,6 +808,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// proposal stays approved and can be retried until its execution expiry, never after.
     function test_aFailedBatchCanBeRetriedUntilItExpires() public {
         _buyMany(fleet, 3);
+        _mature();
+        _openTreasury(fleet);
         uint256 k1 = _k(1);
         uint256 k3 = _k(3);
         MockSwitch target = new MockSwitch();
@@ -805,6 +850,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// @dev Invariant: an approved call cannot carry out another proposal inside itself.
     function test_anApprovedCallCannotCarryOutAnotherProposal() public {
         _buyMany(fleet, 3);
+        _mature();
+        _openTreasury(fleet);
         uint256 k1 = _k(1);
         KeyfleetTreasury.Call[] memory inner = _restrict(votes, _k(2), true);
         uint256 innerId = _propose(votes, k1, inner);
@@ -824,6 +871,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// fleet already sold; only the voting controller hands the treasury calls.
     function test_onlyACarriedOutProposalReachesTheTreasuryAndTheRestriction() public {
         _buyMany(fleet, 1);
+        _mature();
         uint256 k1 = _k(1);
         KeyfleetTreasury treasury = fleet.TREASURY();
 
@@ -867,13 +915,19 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     }
 
     /// @dev Invariant: renewing refuses a key of another fleet with `ForeignKey` before anything
-    /// else, even when the caller owns it and could renew it in its own fleet; a token id of a
-    /// fleet that does not exist, and token id zero, are foreign too, and a batch with one foreign
-    /// key renews nothing.
+    /// else, its age included, even when the caller owns it and could renew it in its own fleet; a
+    /// token id of a fleet that does not exist, and token id zero, are foreign too, and a batch
+    /// with one foreign key renews nothing.
     function test_renewingRefusesAKeyOfAnotherFleetFirst() public {
         KeyfleetManager other = _otherFleet();
         uint256 foreign = _key(other, 2);
 
+        assertGt(other.VOTES().maturesAt(foreign), block.timestamp, "the foreign key is still too new");
+        vm.prank(_wallet(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
+        votes.present(_ids(foreign));
+
+        _mature();
         vm.startPrank(_wallet(1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.ForeignKey.selector, foreign));
         votes.present(_ids(foreign));
@@ -893,9 +947,9 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         votes.present(_ids(0));
         vm.stopPrank();
 
-        (,, uint32 queued) = votes.presenceQueue();
-        assertEq(queued, 0, "nothing was renewed here");
-        assertEq(votes.presenceRevision(), 0);
+        (,, uint32 renewed) = votes.presenceList(KeyfleetPresence.Place.Renewed);
+        assertEq(renewed, 0, "nothing was renewed here");
+        assertEq(votes.presenceRevision(), 1, "only key 1's sale is recorded here");
         assertFalse(votes.isActive(foreign));
 
         KeyfleetVotes otherVotes = other.VOTES();
@@ -934,6 +988,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// foreign key is refused whole and moves no tally.
     function test_castingABallotRefusesAKeyOfAnotherFleetFirst() public {
         KeyfleetManager other = _otherFleet();
+        _mature();
         uint256 foreign = _key(other, 2);
         uint256 proposalId = _propose(votes);
 
@@ -965,6 +1020,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
     /// stays approved. Another fleet's treasury cannot set this fleet's restrictions at all.
     function test_restrictingEditsRefusesAKeyOfAnotherFleet() public {
         KeyfleetManager other = _otherFleet();
+        _mature();
         uint256 foreign = _key(other, 2);
         KeyfleetTreasury.Call[] memory calls = _restrict(votes, foreign, true);
         uint256 proposalId = _propose(votes, _k(1), calls);
@@ -989,8 +1045,11 @@ contract KeyfleetVotesTest is KeyfleetFixture {
 
     /// @dev Everything one fleet's controller records that another fleet's activity could touch.
     function _snapshot(KeyfleetVotes v, uint256[] memory tokenIds) private view returns (bytes32) {
-        (uint64 head, uint64 tail, uint32 queued) = v.presenceQueue();
-        bytes memory state = abi.encode(head, tail, queued, v.presenceRevision(), v.proposalCount());
+        bytes memory state = abi.encode(v.presenceRevision(), v.proposalCount());
+        for (uint8 place = 1; place <= uint8(KeyfleetPresence.Place.Renewed); ++place) {
+            (uint64 head, uint64 tail, uint32 count) = v.presenceList(KeyfleetPresence.Place(place));
+            state = bytes.concat(state, abi.encode(head, tail, count));
+        }
         for (uint256 id = 1; id <= v.proposalCount(); ++id) {
             state = bytes.concat(state, abi.encode(v.proposal(id), v.status(id)));
         }
@@ -1000,16 +1059,16 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         return keccak256(state);
     }
 
-    /// @dev One key's queue entry, presence, ballot on proposal 1 and edit restriction.
+    /// @dev One key's presence entry, presence, ballot on proposal 1 and edit restriction.
     function _keySnapshot(KeyfleetVotes v, uint256 tokenId) private view returns (bytes memory) {
-        (uint64 prev, uint64 next, uint64 expiresAt) = v.presenceEntry(tokenId);
+        (KeyfleetPresence.Place place, uint64 prev, uint64 next, uint64 dueAt) = v.presenceEntry(tokenId);
         return bytes.concat(
-            abi.encode(prev, next, expiresAt, v.isActive(tokenId), v.lastActiveAt(tokenId)),
+            abi.encode(place, prev, next, dueAt, v.isActive(tokenId), v.presentFrom(tokenId)),
             abi.encode(v.ballotOf(1, tokenId), v.editsRestricted(tokenId))
         );
     }
 
-    /// @dev Invariant: two fleets of the same type keep separate presence queues, electorates,
+    /// @dev Invariant: two fleets of the same type keep separate presence lists, electorates,
     /// tallies and proposals. Renewals, proposals, ballots, transfers, cancelling, carrying out and
     /// sweeping in fleet B, by the same wallets that hold fleet A's keys, change nothing in fleet A,
     /// and fleet B's first proposal counts only fleet B's present keys.
@@ -1022,6 +1081,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
             _buy(a, _wallet(n));
             _buy(b, _wallet(n));
         }
+        _mature();
+        _lapse();
 
         _present(votesA, _range(_key(a, 2), 2));
         uint256 proposalA = _propose(votesA);
@@ -1056,8 +1117,8 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         (uint256 removed,) = votesB.sweepExpired(100);
         assertEq(removed, 3, "fleet B's three present keys expired; the moved key 2 was not queued");
         assertEq(_snapshot(votesA, keysA), expired, "fleet A unchanged by a sweep in B");
-        (,, uint32 queuedA) = votesA.presenceQueue();
-        assertEq(queuedA, 4, "fleet A's expired entries wait for its own sweep");
+        (,, uint32 renewedA) = votesA.presenceList(KeyfleetPresence.Place.Renewed);
+        assertEq(renewedA, 4, "fleet A's expired entries wait for its own sweep");
 
         vm.warp(block.timestamp - 3 days);
         assertEq(_snapshot(votesA, keysA), later, "fleet A unchanged by carrying out in B");
@@ -1071,22 +1132,26 @@ contract KeyfleetVotesTest is KeyfleetFixture {
 
     /// @dev Invariant: casting ballots is the one call whose cost grows with what it is asked, and
     /// only with the number of keys named, never with the fleet. Each first ballot costs the slot,
-    /// the fleet check, the authority check, the look-up of the key at opening and the key's
-    /// renewal, and the preset makes no difference. It is measured for the dearer caller, an agent
+    /// the fleet check, the authority check, the look-up of the key at opening, the key's maturity
+    /// check and its renewal, and the preset makes no difference. It is measured for the dearer caller, an agent
     /// through its shards.
     function test_ballotsCostAFixedAmountPerKeyNamed() public {
         for (uint256 i = 0; i < 40; ++i) {
             _buy(fleet, _wallet(1));
         }
+        _mature();
+        _lapse();
         vm.prank(_wallet(1));
         shards.issue(_range(_k(1), 40), bob, 30);
         uint256 flatTen = _measureBallot(votes, bob, _k(2), 10);
         uint256 flatPerKey = (_measureBallot(votes, bob, _k(12), 29) - flatTen) / 19;
 
-        // One agent for ten Fibonacci keys across three levels: each owner issues Bob a shard, which
-        // is also the only way a single call can name keys the holding limit spreads over wallets.
+        // One agent for ten Fibonacci keys across three levels, each held by its own wallet: each
+        // owner issues Bob a shard, so one call names keys of many wallets.
         KeyfleetManager levelled = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         _buyMany(levelled, 10);
+        _mature();
+        _lapse();
         for (uint256 n = 1; n <= 10; ++n) {
             uint256 tokenId = _key(levelled, n);
             vm.prank(_wallet(n));

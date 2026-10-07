@@ -7,6 +7,7 @@ import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.s
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
+import {KeyfleetPresence} from "../../src/KeyfleetPresence.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "../../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
@@ -50,8 +51,6 @@ contract CollectionHandler is Test {
     uint256 internal constant MAX_FLEETS = 6;
     uint256 internal constant MAX_KEYS = 24;
     uint256 internal constant MAX_PROPOSALS = 3;
-    /// @dev The Fibonacci levels a fleet of `MAX_KEYS` reaches.
-    uint256 internal constant LEVELS = 5;
     uint256 internal constant ATTACKS = 46;
 
     /// @dev What a proposal carries out: nothing, a new profile, a voted split or a new daily rate
@@ -73,6 +72,7 @@ contract CollectionHandler is Test {
         uint32 deckSize;
         bytes32 deckHash;
         uint256 startPrice;
+        uint256 accelerantStepPercent;
         address creator;
         uint256 firstPricePaid;
         address nftRequirement;
@@ -220,37 +220,35 @@ contract CollectionHandler is Test {
     /// @notice Everything of fleet `fleetId` that no action in another fleet may change: its presence
     /// queue and every key's presence, its proposals with their tallies and electorates, its ledger's
     /// backing, split indexes and every known wallet's credits, its treasury's balances and split
-    /// settings, its manager's books, holding counts and profile.
+    /// settings, its manager's books and profile.
     function fingerprint(uint256 fleetId) public view returns (bytes32 h) {
         KeyfleetManager manager = _manager(fleetId);
         h = _governanceFingerprint(manager);
         h = keccak256(abi.encode(h, _moneyFingerprint(manager)));
-        bool fibonacci = _isFibonacci(_records[fleetId].preset);
         KeyfleetRewards rewards = manager.REWARDS();
         for (uint256 i = 0; i < _accounts.length; ++i) {
             address account = _accounts[i];
             h = keccak256(
                 abi.encode(h, rewards.credits(address(usdc), account), rewards.credits(address(regent), account))
             );
-            if (!fibonacci) continue;
-            for (uint256 level = 1; level <= LEVELS; ++level) {
-                h = keccak256(abi.encode(h, manager.heldPerLevel(account, level)));
-            }
         }
     }
 
     function _governanceFingerprint(KeyfleetManager manager) internal view returns (bytes32 h) {
         KeyfleetVotes votes = manager.VOTES();
-        (uint64 head, uint64 tail, uint32 queued) = votes.presenceQueue();
         uint256 count = votes.proposalCount();
-        h = keccak256(abi.encode(head, tail, queued, votes.presenceRevision(), count));
+        h = keccak256(abi.encode(votes.presenceRevision(), count));
+        for (uint8 place = 1; place <= 3; ++place) {
+            (uint64 head, uint64 tail, uint32 listed) = votes.presenceList(KeyfleetPresence.Place(place));
+            h = keccak256(abi.encode(h, head, tail, listed));
+        }
         for (uint256 id = 1; id <= count; ++id) {
             h = keccak256(abi.encode(h, votes.proposal(id)));
         }
         uint256 minted = manager.totalMinted();
         for (uint256 k = 1; k <= minted; ++k) {
             uint256 tokenId = keys.tokenIdOf(manager.FLEET_ID(), k);
-            h = keccak256(abi.encode(h, votes.lastActiveAt(tokenId), votes.editsRestricted(tokenId)));
+            h = keccak256(abi.encode(h, votes.presentFrom(tokenId), votes.editsRestricted(tokenId)));
         }
     }
 
@@ -332,8 +330,7 @@ contract CollectionHandler is Test {
         KeyfleetManager manager = _manager(id);
         uint256 keyNumber = manager.totalMinted() + 1;
         if (keyNumber > MAX_KEYS) return;
-        (address to, bool found) = _receiver(manager, keyNumber, actorSeed);
-        if (!found) return;
+        address to = _accounts[actorSeed % ACTORS];
         uint256 price = manager.nextPrice();
         bool open = _salesOpen(id, keys.phase());
         bool meets = _records[id].nftRequirement == address(0) || keys.balanceOf(to) > 0;
@@ -354,13 +351,17 @@ contract CollectionHandler is Test {
     }
 
     /// @notice Creates the next open fleet as its creator, who buys key 1 at the starting price: 10
-    /// to 100 USDC in whole cents, open to anyone or only to holders of any Keyfleet key.
+    /// to 100 USDC in whole cents, with an Accelerant step of 1% to 5%, open to anyone or only to
+    /// holders of any Keyfleet key.
     function createOpenFleet(uint256 presetSeed, uint256 priceSeed, bool keyHolders) public step(0) {
         uint256 id = keys.fleetCount() + 1;
         if (id > MAX_FLEETS) return;
         KeyfleetFactory.FleetTerms memory terms;
         terms.preset = KeyfleetPresets.Preset(presetSeed % 4);
         terms.startPrice = bound(priceSeed, 1000, 10_000) * 10_000;
+        if (terms.preset == KeyfleetPresets.Preset.FleetTechAccelerant) {
+            terms.accelerantStepPercent = 1 + (presetSeed / 4) % 5;
+        }
         terms.profile = _profileNamed(id);
         if (keyHolders) terms.requirements.nft = address(keys);
         terms.deadline = block.timestamp;
@@ -447,6 +448,11 @@ contract CollectionHandler is Test {
         uint256 tokenId = keys.tokenIdOf(id, keyNumber);
         if (keys.ownerOf(tokenId) != to) _breach("a sale minted to the wrong wallet");
         if (keys.ownershipEpoch(tokenId) != 1) _breach("a new key's epoch is not 1");
+        if (keys.mintedAt(tokenId) != block.timestamp) _breach("a new key's mint time is not its sale");
+        KeyfleetVotes votes = _manager(id).VOTES();
+        if (votes.presentFrom(tokenId) != block.timestamp + votes.KEY_MATURITY()) {
+            _breach("a new key's automatic presence does not start at its maturity");
+        }
         _checkDraw(tokenId, before.vrfNonce, _records[id].deckHash != bytes32(0));
     }
 
@@ -512,12 +518,17 @@ contract CollectionHandler is Test {
         (uint256 id, uint256 tokenId, address from) = _pickKey(fleetSeed, keySeed);
         if (tokenId == 0) return;
         KeyfleetManager manager = _manager(id);
-        (address to, bool found) = _receiverOther(manager, keys.keyNumberOf(tokenId), toSeed, from);
-        if (!found) return;
+        address to = _accountOtherThan(toSeed, from);
         uint64 epoch = keys.ownershipEpoch(tokenId);
+        uint64 mintedAt = keys.mintedAt(tokenId);
+        uint64 startsAt = mintedAt + manager.VOTES().KEY_MATURITY();
         vm.prank(from);
         keys.transferFrom(from, to, tokenId);
         if (keys.ownershipEpoch(tokenId) != epoch + 1) _breach("a move did not raise the key's epoch by one");
+        if (keys.mintedAt(tokenId) != mintedAt) _breach("a move changed the key's mint time");
+        if (block.timestamp < startsAt && manager.VOTES().presentFrom(tokenId) != startsAt) {
+            _breach("a move before a key's automatic start cancelled it");
+        }
         for (uint256 i = 0; i < AGENTS; ++i) {
             if (shards.isActive(tokenId, _agent(i))) _breach("a shard outlived its key's move");
         }
@@ -565,6 +576,7 @@ contract CollectionHandler is Test {
         KeyfleetVotes votes = _manager(id).VOTES();
         address caller = callerSeed % 2 == 0 ? owner : _agent(callerSeed);
         bool allowed = caller == owner || shards.isActive(tokenId, caller);
+        bool mature = _isMature(tokenId);
         bool ok;
         bytes memory err;
         if (bySig) {
@@ -576,11 +588,15 @@ contract CollectionHandler is Test {
             vm.prank(caller);
             (ok, err) = address(votes).call(abi.encodeCall(KeyfleetVotes.present, (_ids(tokenId))));
         }
-        if (ok != allowed) _breach("presence was granted or refused wrongly");
-        if (!ok && bytes4(err) != KeyfleetVotes.NotAuthorizedForKey.selector) {
+        if (ok != (allowed && mature)) _breach("presence was granted or refused wrongly");
+        if (
+            !ok
+                && bytes4(err)
+                    != (allowed ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.NotAuthorizedForKey.selector)
+        ) {
             _breach("presence was refused for the wrong reason");
         }
-        if (ok && (!votes.isActive(tokenId) || votes.lastActiveAt(tokenId) != block.timestamp)) {
+        if (ok && (!votes.isActive(tokenId) || votes.presentFrom(tokenId) != block.timestamp)) {
             _breach("a key presented is not present");
         }
     }
@@ -601,10 +617,35 @@ contract CollectionHandler is Test {
         if (kind >= Kind.ForeignProfile) param = 1 + (id + paramSeed % (count - 1)) % count;
         KeyfleetTreasury.Call[] memory calls = _calls(id, kind, param);
         uint64 closesAt = uint64(block.timestamp + bound(period, 1 hours, 12 hours));
+        bool mature = _isMature(tokenId);
+        bool held = block.timestamp < votes.treasuryOpensAt() && kind != Kind.Nothing && kind != Kind.Profile
+            && kind != Kind.SplitRate;
         vm.prank(author);
-        uint256 proposalId = votes.propose(tokenId, keccak256(abi.encode(kind, param)), closesAt, calls);
-        _proposed[id][proposalId] = Proposed(kind, param);
-        _proposals.push([id, proposalId]);
+        try votes.propose(tokenId, keccak256(abi.encode(kind, param)), closesAt, calls) returns (uint256 proposalId) {
+            if (!mature) _breach("a key younger than its maturity proposed");
+            if (held) _breach("a proposal moving money opened during the fleet's opening");
+            _checkOpening(id, votes, proposalId);
+            _proposed[id][proposalId] = Proposed(kind, param);
+            _proposals.push([id, proposalId]);
+        } catch (bytes memory err) {
+            bytes4 expected = held ? KeyfleetVotes.TreasuryOpening.selector : KeyfleetVotes.KeyTooNew.selector;
+            if ((mature && !held) || bytes4(err) != expected) _breach("a proposal was refused wrongly");
+        }
+    }
+
+    /// @dev Every key a proposal counted as present at its opening was minted at least
+    /// `KEY_MATURITY` before, and `e0` is exactly the number of the fleet's keys present then.
+    function _checkOpening(uint256 id, KeyfleetVotes votes, uint256 proposalId) internal {
+        uint256 minted = _manager(id).totalMinted();
+        uint256 presentKeys;
+        for (uint256 k = 1; k <= minted; ++k) {
+            uint256 tokenId = keys.tokenIdOf(id, k);
+            if (votes.isActive(tokenId)) ++presentKeys;
+            if (votes.wasActiveAtOpening(proposalId, tokenId) && !_isMature(tokenId)) {
+                _breach("an opening counted a key younger than its maturity");
+            }
+        }
+        if (votes.proposal(proposalId).e0 != presentKeys) _breach("an opening's e0 is not the keys present then");
     }
 
     /// @dev `voterSeed` picks both the voter (an agent one time in three, else the owner) and the
@@ -626,12 +667,15 @@ contract CollectionHandler is Test {
         address voter = voterSeed % 3 == 0 ? _agent(voterSeed / 3) : owner;
         KeyfleetVotes.Choice choice = KeyfleetVotes.Choice(1 + (voterSeed / 3) % 3);
         bool allowed = voter == owner || shards.mayGovern(tokenId, voter);
+        bool mature = _isMature(tokenId);
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         bool open = !stored.cancelled && block.timestamp < stored.closesAt;
         (bool ok, bytes memory err) = _ballot(votes, proposalId, tokenId, choice, voter, bySig);
-        if (ok != (open && allowed)) _breach("a ballot was taken or refused wrongly");
+        if (ok != (open && allowed && mature)) _breach("a ballot was taken or refused wrongly");
         if (!ok) {
-            bytes4 expected = open ? KeyfleetVotes.NotAuthorizedForKey.selector : KeyfleetVotes.BallotsClosed.selector;
+            bytes4 expected = !open
+                ? KeyfleetVotes.BallotsClosed.selector
+                : allowed ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.NotAuthorizedForKey.selector;
             if (bytes4(err) != expected) _breach("a ballot was refused for the wrong reason");
         } else if (votes.ballotOf(proposalId, tokenId) != choice) {
             _breach("a ballot was not recorded");
@@ -639,8 +683,9 @@ contract CollectionHandler is Test {
     }
 
     /// @notice Every key's owner votes Yes on one proposal, as a fleet agreeing on it would; while
-    /// ballots are open each ballot is taken, and afterwards each is refused as closed. With
-    /// `carryOut`, the fleet then waits for the ballots to close and carries the proposal out.
+    /// ballots are open each mature key's ballot is taken and a key younger than its maturity is
+    /// refused, and afterwards each is refused as closed. Once every key counted voted Yes, with
+    /// `carryOut` the fleet waits for the ballots to close and carries the proposal out.
     function rally(uint256 pairSeed, bool carryOut) external step(_proposalFleet(pairSeed)) {
         (uint256 id, uint256 proposalId) = _pickProposal(pairSeed);
         if (id == 0) return;
@@ -648,22 +693,26 @@ contract CollectionHandler is Test {
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
         bool open = !stored.cancelled && block.timestamp < stored.closesAt;
         uint256 minted = _manager(id).totalMinted();
+        bool everyCountedKeyVoted = true;
         for (uint256 k = 1; k <= minted; ++k) {
             uint256 tokenId = keys.tokenIdOf(id, k);
+            bool mature = _isMature(tokenId);
             vm.prank(keys.ownerOf(tokenId));
             try votes.castBallot(proposalId, _ids(tokenId), KeyfleetVotes.Choice.Yes) {
-                if (!open) _breach("a ballot was taken after ballots closed");
+                if (!open || !mature) _breach("a ballot was taken after ballots closed or from a new key");
             } catch (bytes memory err) {
-                if (open || bytes4(err) != KeyfleetVotes.BallotsClosed.selector) {
-                    _breach("an owner's ballot was refused other than as closed");
+                bytes4 expected = open ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.BallotsClosed.selector;
+                if ((open && mature) || bytes4(err) != expected) {
+                    _breach("an owner's ballot was refused other than as closed or too new");
                 }
+                if (open && votes.wasActiveAtOpening(proposalId, tokenId)) everyCountedKeyVoted = false;
             }
         }
         stored = votes.proposal(proposalId);
-        if (open && stored.yes != uint256(stored.e0) + stored.late) {
+        if (open && everyCountedKeyVoted && stored.yes != uint256(stored.e0) + stored.late) {
             _breach("a proposal every key voted for does not count every key as Yes");
         }
-        if (!open || !carryOut) return;
+        if (!open || !carryOut || !everyCountedKeyVoted) return;
         vm.warp(stored.closesAt);
         if (votes.status(proposalId) != KeyfleetVotes.Status.Approved) {
             _breach("a proposal every key voted for was not approved");
@@ -998,11 +1047,11 @@ contract CollectionHandler is Test {
                 a, m, abi.encodeCall(KeyfleetManager.sellFirstKey, (a.caller)), KeyfleetManager.OnlyFactory.selector
             );
         } else if (a.pick == 15 && a.ownKey != 0) {
-            bytes memory data = abi.encodeCall(KeyfleetManager.onKeyMoved, (a.ownKey, a.ownOwner, a.caller));
+            bytes memory data = abi.encodeCall(KeyfleetManager.onKeyMoved, (a.ownKey, a.ownOwner));
             _attempt(a, m, data, KeyfleetManager.OnlyKeys.selector);
         } else if (a.pick == 16 && a.foreignKey != 0) {
             a.caller = address(keys);
-            bytes memory data = abi.encodeCall(KeyfleetManager.onKeyMoved, (a.foreignKey, a.foreignOwner, a.ownOwner));
+            bytes memory data = abi.encodeCall(KeyfleetManager.onKeyMoved, (a.foreignKey, a.foreignOwner));
             _attempt(a, m, data, KeyfleetManager.ForeignKey.selector);
         } else if (a.pick == 17) {
             _attempt(
@@ -1279,25 +1328,15 @@ contract CollectionHandler is Test {
         return 0;
     }
 
-    /// @dev An actor who may receive key `keyNumber` of `manager`'s fleet within its holding limit.
-    function _receiver(KeyfleetManager manager, uint256 keyNumber, uint256 seed) internal view returns (address, bool) {
-        return _receiverOther(manager, keyNumber, seed, address(0));
+    /// @dev Whether a key was minted at least `KEY_MATURITY` ago.
+    function _isMature(uint256 tokenId) internal view returns (bool) {
+        return block.timestamp >= keys.mintedAt(tokenId) + _manager(keys.fleetOf(tokenId)).VOTES().KEY_MATURITY();
     }
 
-    function _receiverOther(KeyfleetManager manager, uint256 keyNumber, uint256 seed, address not)
-        internal
-        view
-        returns (address, bool)
-    {
-        bool fibonacci = _isFibonacci(manager.PRESET());
-        uint256 level = fibonacci ? _levelOf(keyNumber) : 0;
-        for (uint256 i = 0; i < ACTORS; ++i) {
-            address actor = _accounts[(seed % ACTORS + i) % ACTORS];
-            if (actor == not) continue;
-            if (fibonacci && manager.heldPerLevel(actor, level) != 0) continue;
-            return (actor, true);
-        }
-        return (address(0), false);
+    /// @dev An actor other than `not`, chosen by `seed`.
+    function _accountOtherThan(uint256 seed, address not) internal view returns (address actor) {
+        actor = _accounts[seed % ACTORS];
+        if (actor == not) actor = _accounts[(seed % ACTORS + 1) % ACTORS];
     }
 
     function _salesOpen(uint256 fleetId, uint8 phase) internal pure returns (bool) {
@@ -1448,10 +1487,6 @@ contract CollectionHandler is Test {
         ids[0] = tokenId;
     }
 
-    function _isFibonacci(KeyfleetPresets.Preset preset) internal pure returns (bool) {
-        return preset == KeyfleetPresets.Preset.FibonacciSyndicate || preset == KeyfleetPresets.Preset.FibonacciCascade;
-    }
-
     /// @dev Fibonacci levels hold 2, 3, 5, 8, 13, ... keys.
     function _levelOf(uint256 keyNumber) internal pure returns (uint256 level) {
         (uint256 size, uint256 next, uint256 end) = (2, 3, 2);
@@ -1482,7 +1517,8 @@ contract CollectionHandler is Test {
             typeNumber: uint32(typeNumber),
             deckSize: stored.deckSize,
             deckHash: stored.deckHash,
-            startPrice: stored.preset == KeyfleetPresets.Preset.FleetTechClassic ? 8e6 : 10e6,
+            startPrice: 10e6,
+            accelerantStepPercent: stored.preset == KeyfleetPresets.Preset.FleetTechAccelerant ? 5 : 0,
             creator: address(0),
             firstPricePaid: 0,
             nftRequirement: address(0),
@@ -1502,6 +1538,7 @@ contract CollectionHandler is Test {
             deckSize: 0,
             deckHash: bytes32(0),
             startPrice: terms.startPrice,
+            accelerantStepPercent: terms.accelerantStepPercent,
             creator: creator,
             firstPricePaid: paid,
             nftRequirement: terms.requirements.nft,
@@ -1675,7 +1712,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
             }
         }
         FleetWiring memory w = factory.wiring();
-        assertEq(w.fleetId + w.startPrice, 0, "no wiring outside a creation");
+        assertEq(w.fleetId + w.startPrice + w.accelerantStepPercent, 0, "no wiring outside a creation");
         assertEq(w.manager, address(0), "no wiring outside a creation");
     }
 
@@ -1780,6 +1817,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
             KeyfleetManager manager = _manager(id);
             CollectionHandler.FleetRecord memory record = handler.recordOf(id);
             assertEq(manager.START_PRICE(), record.startPrice, "a fleet keeps its starting price");
+            assertEq(manager.ACCELERANT_STEP_PERCENT(), record.accelerantStepPercent, "a fleet keeps its step");
             if (id >= 5) {
                 uint256 first = keys.tokenIdOf(id, 1);
                 assertEq(record.firstPricePaid, record.startPrice, "the creator paid the starting price for key 1");
@@ -1788,26 +1826,30 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
                 }
             }
             uint256 keyNumber = manager.totalMinted() + 1;
-            assertEq(manager.nextPrice(), _curvePrice(record.preset, record.startPrice, keyNumber), "the curve, scaled");
+            assertEq(
+                manager.nextPrice(),
+                _curvePrice(record.preset, record.startPrice, record.accelerantStepPercent, keyNumber),
+                "the curve, scaled"
+            );
         }
     }
 
-    function _curvePrice(KeyfleetPresets.Preset preset, uint256 start, uint256 keyNumber)
+    function _curvePrice(KeyfleetPresets.Preset preset, uint256 start, uint256 stepPercent, uint256 keyNumber)
         internal
         pure
         returns (uint256 price)
     {
         price = start;
         if (preset == KeyfleetPresets.Preset.FleetTechClassic) {
-            // The table at the founding price of 8 USDC, in cents, scaled to `start` and rounded up
+            // The table at the founding price of 10 USDC, in cents, scaled to `start` and rounded up
             // to a whole cent.
-            uint256 cents = KeyfleetPresets.classicPrice(keyNumber, 8e6) / 10_000;
-            return (cents * start + 8e6 - 1) / 8e6 * 10_000;
+            uint256 cents = KeyfleetPresets.classicPrice(keyNumber, 10e6) / 10_000;
+            return (cents * start + 10e6 - 1) / 10e6 * 10_000;
         }
         uint256 steps;
         uint256 numerator;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) {
-            (steps, numerator) = (keyNumber - 1, 105);
+            (steps, numerator) = (keyNumber - 1, 100 + stepPercent);
         } else {
             (uint256 size, uint256 next, uint256 end) = (2, 3, 2);
             while (keyNumber > end) {
@@ -1853,15 +1895,15 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _openCreation();
         _startHandler();
+        // Three keys in each fleet to start from, the key-holders-only fleet last. The founding
+        // fleets are past their opening by the time the open fleets are created, so proposals that
+        // move money are both refused and carried out as the sequence goes on.
+        _buyRounds(1, 4);
+        vm.warp(block.timestamp + KeyfleetManager(keys.managerOf(1)).VOTES().TREASURY_OPENING());
         handler.createOpenFleet(uint256(KeyfleetPresets.Preset.FleetTechClassic), 1250, false);
         handler.createOpenFleet(uint256(KeyfleetPresets.Preset.FibonacciCascade), 2500, true);
         require(keys.fleetCount() == 6, "six fleets");
-        // Three keys in each fleet to start from, the key-holders-only fleet last.
-        for (uint256 round = 0; round < 3; ++round) {
-            for (uint256 id = 1; id <= 6; ++id) {
-                handler.buy(id - 1, round * 6 + id);
-            }
-        }
+        _buyRounds(5, 6);
 
         bytes4[] memory selectors = new bytes4[](31);
         selectors[0] = CollectionHandler.buy.selector;
@@ -1897,6 +1939,14 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         selectors[30] = CollectionHandler.attack.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+    }
+
+    function _buyRounds(uint256 firstFleet, uint256 lastFleet) private {
+        for (uint256 round = 0; round < 3; ++round) {
+            for (uint256 id = firstFleet; id <= lastFleet; ++id) {
+                handler.buy(id - 1, round * 6 + id);
+            }
+        }
     }
 }
 

@@ -65,12 +65,15 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     /// @notice What the creator of an open fleet chooses.
     /// @param preset The fleet's type.
     /// @param startPrice The USDC price of key 1, in whole cents, from 10 to 1,000,000 USDC.
+    /// @param accelerantStepPercent On Accelerant, how many percent each primary mint costs more
+    /// than the one before, a whole number from 1 to 5; zero on every other type.
     /// @param profile The fleet's name, description and image link.
     /// @param requirements Who may buy its keys; all zero for anyone.
     /// @param deadline Last block timestamp at which the creation may execute.
     struct FleetTerms {
         KeyfleetPresets.Preset preset;
         uint256 startPrice;
+        uint256 accelerantStepPercent;
         KeyfleetManager.Profile profile;
         KeyfleetManager.Requirements requirements;
         uint256 deadline;
@@ -101,7 +104,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     /// @notice Deploys each fleet's reward ledger.
     KeyfleetDeployer public immutable REWARDS_DEPLOYER;
 
-    /// @dev Transient: the first of the seven words of the wiring being deployed, in `FleetWiring`
+    /// @dev Transient: the first of the eight words of the wiring being deployed, in `FleetWiring`
     /// order. All zero outside a creation.
     uint256 private constant WIRING_SLOT = uint256(keccak256("keyfleet.factory.wiring"));
 
@@ -119,6 +122,8 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     error Expired(uint256 deadline);
     /// @notice A starting price outside 10 to 1,000,000 USDC, or not in whole cents.
     error StartPriceInvalid(uint256 startPrice);
+    /// @notice An Accelerant step outside 1 to 5 percent, or a step given for another type.
+    error AccelerantStepInvalid(KeyfleetPresets.Preset preset, uint256 accelerantStepPercent);
 
     /// @notice A fleet was created.
     /// @param fleetId Its number in the collection.
@@ -126,12 +131,14 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     /// @param typeNumber Its number among fleets of its type.
     /// @param creator The Safe for a founding fleet; otherwise the creator, who bought key 1.
     /// @param startPrice The USDC price of key 1.
+    /// @param accelerantStepPercent Its Accelerant step in whole percent; zero on other types.
     event FleetCreated(
         uint256 indexed fleetId,
         KeyfleetPresets.Preset indexed preset,
         uint256 typeNumber,
         address indexed creator,
         uint256 startPrice,
+        uint256 accelerantStepPercent,
         address manager,
         address votes,
         address treasury,
@@ -171,10 +178,11 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         w.fleetId = _tload(0);
         w.preset = KeyfleetPresets.Preset(_tload(1));
         w.startPrice = _tload(2);
-        w.manager = address(uint160(_tload(3)));
-        w.votes = address(uint160(_tload(4)));
-        w.treasury = address(uint160(_tload(5)));
-        w.rewards = address(uint160(_tload(6)));
+        w.accelerantStepPercent = _tload(3);
+        w.manager = address(uint160(_tload(4)));
+        w.votes = address(uint160(_tload(5)));
+        w.treasury = address(uint160(_tload(6)));
+        w.rewards = address(uint160(_tload(7)));
     }
 
     /// @notice Where the four contracts of fleet `fleetId` are, or will be, deployed.
@@ -190,8 +198,8 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     }
 
     /// @notice Creates the next founding fleet: fleet 1 Classic, 2 Syndicate, 3 Accelerant,
-    /// 4 Cascade, each with its deck, its type's standard starting price and no joining
-    /// requirements. Its sales stay closed until the Safe opens them.
+    /// 4 Cascade, each with its deck, a starting price of 10 USDC, a 5% step for the Accelerant
+    /// fleet and no joining requirements. Its sales stay closed until the Safe opens them.
     /// @dev Only the Safe. The collection refuses a fifth, one out of order and one without a deck.
     function createFoundingFleet(
         KeyfleetPresets.Preset preset,
@@ -201,9 +209,13 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     ) external nonReentrant returns (uint256 fleetId) {
         if (msg.sender != SAFE) revert OnlySafe(msg.sender);
         KeyfleetManager.Requirements memory anyone;
-        (fleetId,) = _create(
-            preset, KeyfleetPresets.foundingStartPrice(preset), deckHash, deckSize, profile, anyone, msg.sender
-        );
+        FleetWiring memory w;
+        w.preset = preset;
+        w.startPrice = KeyfleetPresets.Q_USDC;
+        if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) {
+            w.accelerantStepPercent = KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT;
+        }
+        (fleetId,) = _create(w, deckHash, deckSize, profile, anyone, msg.sender);
     }
 
     /// @notice Creates a fleet on the creator's terms and sells its key 1 to the creator, once the
@@ -221,31 +233,37 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
             startPrice < KeyfleetPresets.MIN_START_USDC || startPrice > KeyfleetPresets.MAX_START_USDC
                 || startPrice % KeyfleetPresets.CENT_USDC != 0
         ) revert StartPriceInvalid(startPrice);
+        uint256 step = terms.accelerantStepPercent;
+        bool accelerant = terms.preset == KeyfleetPresets.Preset.FleetTechAccelerant;
+        if (accelerant
+                ? step < KeyfleetPresets.MIN_ACCELERANT_STEP_PERCENT
+                    || step > KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT
+                : step != 0) revert AccelerantStepInvalid(terms.preset, step);
 
+        FleetWiring memory w;
+        w.preset = terms.preset;
+        w.startPrice = startPrice;
+        w.accelerantStepPercent = step;
         KeyfleetManager manager;
-        (fleetId, manager) =
-            _create(terms.preset, startPrice, bytes32(0), 0, terms.profile, terms.requirements, msg.sender);
+        (fleetId, manager) = _create(w, bytes32(0), 0, terms.profile, terms.requirements, msg.sender);
         USDC.safeTransferFrom(msg.sender, address(manager), manager.nextPrice());
         tokenId = manager.sellFirstKey(msg.sender);
     }
 
     /// @dev Registers the fleet, deploys its four contracts with the wiring held only during the
-    /// deploys, and writes its profile and requirements.
+    /// deploys, and writes its profile and requirements. `w` comes with the fleet's type, starting
+    /// price and Accelerant step; this fills in the rest.
     function _create(
-        KeyfleetPresets.Preset preset,
-        uint256 startPrice,
+        FleetWiring memory w,
         bytes32 deckHash,
         uint256 deckSize,
         KeyfleetManager.Profile calldata profile,
         KeyfleetManager.Requirements memory requirements,
         address creator
     ) private returns (uint256 fleetId, KeyfleetManager manager) {
-        FleetWiring memory w;
         w.fleetId = fleetId = KEYS.fleetCount() + 1;
-        w.preset = preset;
-        w.startPrice = startPrice;
         (w.manager, w.votes, w.treasury, w.rewards) = predict(fleetId);
-        (, uint256 typeNumber) = KEYS.registerFleet(preset, w.manager, deckHash, deckSize);
+        (, uint256 typeNumber) = KEYS.registerFleet(w.preset, w.manager, deckHash, deckSize);
 
         _storeWiring(w);
         MANAGER_DEPLOYER.deploy(fleetId);
@@ -257,17 +275,33 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
 
         manager = KeyfleetManager(w.manager);
         manager.initialize(profile, requirements);
-        emit FleetCreated(fleetId, preset, typeNumber, creator, startPrice, w.manager, w.votes, w.treasury, w.rewards);
+        _announce(w, typeNumber, creator);
+    }
+
+    function _announce(FleetWiring memory w, uint256 typeNumber, address creator) private {
+        emit FleetCreated(
+            w.fleetId,
+            w.preset,
+            typeNumber,
+            creator,
+            w.startPrice,
+            w.accelerantStepPercent,
+            w.manager,
+            w.votes,
+            w.treasury,
+            w.rewards
+        );
     }
 
     function _storeWiring(FleetWiring memory w) private {
         _tstore(0, w.fleetId);
         _tstore(1, uint256(w.preset));
         _tstore(2, w.startPrice);
-        _tstore(3, uint160(w.manager));
-        _tstore(4, uint160(w.votes));
-        _tstore(5, uint160(w.treasury));
-        _tstore(6, uint160(w.rewards));
+        _tstore(3, w.accelerantStepPercent);
+        _tstore(4, uint160(w.manager));
+        _tstore(5, uint160(w.votes));
+        _tstore(6, uint160(w.treasury));
+        _tstore(7, uint160(w.rewards));
     }
 
     function _requireDeployer(KeyfleetDeployer deployer) private view {

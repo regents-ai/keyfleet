@@ -33,10 +33,14 @@ contract KeyfleetLitTest is KeyfleetFixture {
         vm.warp(1_000_000);
     }
 
+    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
+    /// treasury opening, by when only a renewed key is present.
     function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
         _buyMany(fleet, count);
+        _mature();
+        _openTreasury(fleet);
     }
 
     function _approveHash(KeyfleetTreasury treasury, bytes32 hash)

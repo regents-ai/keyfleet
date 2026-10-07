@@ -69,10 +69,12 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _log("advancePhase, to phase 3");
         _createFleet();
 
-        // Presence: a key's first renewal.
+        // Presence: a key's first renewal, once the fleet's opening has passed, so both keys are
+        // mature and their automatic presence has ended.
         KeyfleetVotes votes = classic.VOTES();
         KeyfleetTreasury treasury = classic.TREASURY();
         KeyfleetRewards rewards = classic.REWARDS();
+        vm.warp(votes.treasuryOpensAt());
         uint256[] memory key1 = _ids(first);
         vm.prank(ALICE);
         votes.present(key1);
@@ -95,8 +97,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         classic.sendProtocolShare();
         _log("sendProtocolShare, two sales");
 
-        // The daily split, a day after the first sale, of ETH, REGENT and USDC.
-        vm.warp(treasury.nextRunAt());
+        // The daily split, due since a day after the first sale, of ETH, REGENT and USDC.
         vm.deal(address(treasury), 1 ether);
         deal(address(regent), address(treasury), 10_000e18);
         deal(address(usdc), address(treasury), 10_000e6);
@@ -118,7 +119,8 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         keys.transferFrom(BOB, CAROL, second);
         _log("transferFrom, a key with three assets waiting");
 
-        // Carrying out the one-payment proposal, and the treasury's batch on its own.
+        // Carrying out the one-payment proposal once it closes, and the treasury's batch on its own.
+        vm.warp(votes.proposal(proposalId).closesAt);
         votes.execute(proposalId, calls);
         _log("execute, a one-payment proposal");
         assertEq(usdc.balanceOf(OPERATOR), 1e6, "paid");
@@ -134,6 +136,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         KeyfleetFactory.FleetTerms memory terms = KeyfleetFactory.FleetTerms({
             preset: KeyfleetPresets.Preset.FleetTechClassic,
             startPrice: startPrice,
+            accelerantStepPercent: 0,
             profile: KeyfleetManager.Profile("A creator's fleet", "", ""),
             requirements: KeyfleetManager.Requirements(bytes32(0), address(0), address(0), 0),
             deadline: block.timestamp

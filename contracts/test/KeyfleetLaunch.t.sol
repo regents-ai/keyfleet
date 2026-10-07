@@ -28,16 +28,23 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         vm.warp(START);
     }
 
+    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
+    /// treasury opening, by when only a renewed key is present.
     function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
         _buyMany(fleet, count);
+        _mature();
+        _openTreasury(fleet);
     }
 
-    /// @dev A second Classic fleet of the same collection, created openly; its creator holds key 1.
+    /// @dev A second Classic fleet of the same collection, created openly; its creator holds key 1,
+    /// old enough to take part, after its own treasury opening.
     function _otherFleet() private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
         treasury = fleet.TREASURY();
+        _mature();
+        _openTreasury(fleet);
     }
 
     function _run(KeyfleetTreasury treasury) private {
@@ -228,7 +235,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         token.mint(address(treasury), 100e18 - 1);
         autolaunch.graduate(launchId);
 
-        vm.warp(START + 1 days);
+        // The first public run has been due since a day after the first mint.
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), 0, "Not bound, not split");
 
@@ -237,12 +244,12 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
         assertEq(assets.length, 4, "ETH, REGENT, USDC and the launch token");
         assertEq(assets[3], address(token), "Split last");
 
-        vm.warp(START + 2 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), 0, "Just below its threshold");
 
         token.mint(address(treasury), 1);
-        vm.warp(START + 3 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(rewards.splitIndex(address(token)), _perKey(100e18, 2), "At its threshold, from the next run");
         assertEq(
@@ -251,7 +258,7 @@ contract KeyfleetLaunchTest is KeyfleetFixture {
 
         token.mint(address(treasury), 1_000e18);
         uint256 held = token.balanceOf(address(treasury));
-        vm.warp(START + 4 days);
+        vm.warp(treasury.nextRunAt());
         _run(treasury);
         assertEq(
             rewards.splitIndex(address(token)),

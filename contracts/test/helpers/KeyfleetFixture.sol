@@ -176,6 +176,7 @@ abstract contract KeyfleetFixture is Test {
         fleet = KeyfleetManager(keys.managerOf(id));
     }
 
+    /// @dev An open fleet's terms; an Accelerant fleet takes the founding fleet's 5% step.
     function _terms(KeyfleetPresets.Preset preset, uint256 startPrice, KeyfleetManager.Requirements memory requirements)
         internal
         view
@@ -184,6 +185,9 @@ abstract contract KeyfleetFixture is Test {
         return KeyfleetFactory.FleetTerms({
             preset: preset,
             startPrice: startPrice,
+            accelerantStepPercent: preset == KeyfleetPresets.Preset.FleetTechAccelerant
+                ? KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT
+                : 0,
             profile: _profile("Open fleet"),
             requirements: requirements,
             deadline: block.timestamp
@@ -223,6 +227,26 @@ abstract contract KeyfleetFixture is Test {
         }
     }
 
+    /// @dev Waits out the key maturity, so every key bought or moved so far may be renewed, vote,
+    /// propose and cancel. Tests call it right after their purchases, before any key takes part.
+    /// Every fleet's controller has the same maturity, so it is read from fleet 1's.
+    function _mature() internal {
+        vm.warp(block.timestamp + KeyfleetManager(keys.managerOf(1)).VOTES().KEY_MATURITY());
+    }
+
+    /// @dev Waits out the automatic presence every key sold so far began at its maturity, so from
+    /// here on a key is present only once it is renewed. Tests call it right after `_mature`.
+    function _lapse() internal {
+        vm.warp(block.timestamp + KeyfleetManager(keys.managerOf(1)).VOTES().PRESENCE_WINDOW());
+    }
+
+    /// @dev Waits until `fleet`'s treasury opening is over, so its proposals may carry calls that
+    /// move money. A time already past it is left as it is.
+    function _openTreasury(KeyfleetManager fleet) internal {
+        uint256 opensAt = fleet.VOTES().treasuryOpensAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+    }
+
     function _wallet(uint256 index) internal pure returns (address) {
         return address(uint160(0x100000 + index));
     }
@@ -256,7 +280,10 @@ abstract contract KeyfleetFixture is Test {
     }
 
     /// @dev Proposes `calls` with key 1, as its owner, and votes it Yes; nobody else is present, so
-    /// it is approved once it closes a second later.
+    /// it is approved once it closes a second later. It does not wait itself: the caller has made
+    /// key 1 mature (`_mature`) and ended the other keys' automatic presence (`_lapse`), or, for
+    /// calls that move money, waited out the treasury opening (`_openTreasury`), which does both
+    /// for keys bought when sales opened.
     function _approve(KeyfleetManager fleet, KeyfleetTreasury.Call[] memory calls)
         internal
         returns (uint256 proposalId)

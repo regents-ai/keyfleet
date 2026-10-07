@@ -4,13 +4,15 @@ pragma solidity 0.8.26;
 import {console2} from "forge-std/console2.sol";
 import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetPresence} from "../src/KeyfleetPresence.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 
-/// @dev Presence: a key is present for 48 hours after it is renewed under its current owner,
-/// stops being present when it changes hands, and a proposal opens only on an exact count.
+/// @dev Presence: a key is present for 48 hours from its automatic start at maturity and for 48
+/// hours after it is renewed under its current owner, stops being present when it changes hands, and
+/// a proposal opens only on an exact count.
 contract KeyfleetPresenceTest is KeyfleetFixture {
     using stdStorage for StdStorage;
 
@@ -29,7 +31,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
 
     event Present(uint256 indexed tokenId, uint64 at, uint64 blockNumber, uint64 epoch);
     event PresenceCleared(uint256 indexed tokenId);
-    event Swept(uint256 removed, bool due);
+    event Swept(uint256 moved, bool due);
 
     function setUp() public {
         vm.warp(1_000_000);
@@ -52,8 +54,9 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         }
     }
 
-    function _queued(KeyfleetVotes v) private view returns (uint32 queued) {
-        (,, queued) = v.presenceQueue();
+    /// @dev How many keys `v` lists as present from a renewal, swept or not.
+    function _renewed(KeyfleetVotes v) private view returns (uint32 count) {
+        (,, count) = v.presenceList(KeyfleetPresence.Place.Renewed);
     }
 
     function _noCalls() private pure returns (KeyfleetTreasury.Call[] memory) {
@@ -62,22 +65,30 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
 
     // --- the window -----------------------------------------------------
 
-    /// @dev Invariant: a renewal keeps a key present for exactly 48 hours: one second before the
-    /// end it is present, at the end it is not.
+    /// @dev Invariant: the automatic start and a renewal each keep a key present for exactly 48
+    /// hours: one second before the end it is present, at the end it is not.
     function test_aKeyIsPresentForExactlyFortyEightHours() public {
         _buy(fleet, alice, 1);
         uint256 k1 = _k(1);
-        assertFalse(votes.isActive(k1), "a key nobody renewed is not present");
-        assertEq(votes.lastActiveAt(k1), 0);
+        uint256 startsAt = block.timestamp + votes.KEY_MATURITY();
+        assertFalse(votes.isActive(k1), "a key still waiting is not present");
+        assertEq(votes.presentFrom(k1), startsAt, "it starts at maturity");
+        _mature();
+        assertTrue(votes.isActive(k1), "present from its automatic start");
+        vm.warp(startsAt + WINDOW - 1);
+        assertTrue(votes.isActive(k1), "present one second before the automatic end");
+        vm.warp(startsAt + WINDOW);
+        assertFalse(votes.isActive(k1), "not present at the automatic end");
 
         uint256 t = block.timestamp;
         vm.expectEmit(true, true, true, true, address(votes));
         emit Present(k1, uint64(t), uint64(block.number), 1);
         vm.prank(alice);
         votes.present(_ids(k1));
-        assertEq(votes.lastActiveAt(k1), t);
-        (,, uint64 expiresAt) = votes.presenceEntry(k1);
-        assertEq(expiresAt, t + WINDOW, "queued to expire 48 hours on");
+        assertEq(votes.presentFrom(k1), t);
+        (KeyfleetPresence.Place place,,, uint64 expiresAt) = votes.presenceEntry(k1);
+        assertEq(uint8(place), uint8(KeyfleetPresence.Place.Renewed));
+        assertEq(expiresAt, t + WINDOW, "listed to end 48 hours on");
 
         vm.warp(t + WINDOW - 1);
         assertTrue(votes.isActive(k1), "present one second before the end");
@@ -90,6 +101,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     /// its proposer's key.
     function test_afterThreeDaysWithoutTransactionsNoKeyIsPresent() public {
         _buy(fleet, alice, 3);
+        _mature();
         vm.prank(alice);
         votes.present(_range(_k(1), 3));
 
@@ -97,12 +109,12 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         for (uint256 n = 1; n <= 3; ++n) {
             assertFalse(votes.isActive(_k(n)), "no key is present");
         }
-        assertEq(_queued(votes), 3, "time alone removes nothing from the queue");
+        assertEq(_renewed(votes), 3, "time alone removes nothing from the list");
 
         vm.prank(alice);
         uint256 proposalId = votes.propose(_k(2), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1, "only the proposer's key counts");
-        assertEq(_queued(votes), 1);
+        assertEq(_renewed(votes), 1);
         assertTrue(votes.wasActiveAtOpening(proposalId, _k(2)));
         assertFalse(votes.wasActiveAtOpening(proposalId, _k(1)));
     }
@@ -112,14 +124,19 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     function test_aKeyMayBeRenewedAndProposeWhenEveryKeyIsDormant() public {
         _buy(fleet, alice, 2);
         _buy(fleet, bob, 1);
-        assertEq(_queued(votes), 0, "nothing is present");
+        _mature();
+        _lapse();
+        for (uint256 n = 1; n <= 3; ++n) {
+            assertFalse(votes.isActive(_k(n)), "nothing is present");
+        }
 
         vm.prank(bob);
         votes.present(_ids(_k(3)));
         assertTrue(votes.isActive(_k(3)));
 
         vm.warp(block.timestamp + WINDOW);
-        assertEq(_queued(votes), 1, "an expired entry");
+        assertFalse(votes.isActive(_k(3)), "dormant again");
+        assertEq(_renewed(votes), 1, "an ended entry");
         vm.prank(alice);
         uint256 proposalId = votes.propose(_k(1), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1);
@@ -129,6 +146,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     /// to the back with a new expiry; the key is never queued twice.
     function test_renewingAnUnsweptExpiredEntryRequeuesItOnce() public {
         _buy(fleet, alice, 2);
+        _mature();
         uint256 k1 = _k(1);
         uint256 k2 = _k(2);
         vm.prank(alice);
@@ -139,11 +157,12 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.prank(alice);
         votes.present(_ids(k1));
 
-        (uint64 head, uint64 tail, uint32 queued) = votes.presenceQueue();
+        (uint64 head, uint64 tail, uint32 queued) = votes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(queued, 2, "still one entry per key");
         assertEq(head, k2, "the expired key 2 is at the front");
         assertEq(tail, k1, "the renewed key 1 is at the back");
-        (uint64 prev, uint64 next, uint64 expiresAt) = votes.presenceEntry(k1);
+        (KeyfleetPresence.Place place, uint64 prev, uint64 next, uint64 expiresAt) = votes.presenceEntry(k1);
+        assertEq(uint8(place), uint8(KeyfleetPresence.Place.Renewed));
         assertEq(prev, k2);
         assertEq(next, 0);
         assertEq(expiresAt, block.timestamp + WINDOW);
@@ -152,7 +171,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         (uint256 removed, bool due) = votes.sweepExpired(10);
         assertEq(removed, 1, "only key 2 was due");
         assertFalse(due);
-        (head, tail, queued) = votes.presenceQueue();
+        (head, tail, queued) = votes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, k1);
         assertEq(tail, k1);
         assertEq(queued, 1);
@@ -164,6 +183,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     /// and never removes an entry that has not expired.
     function test_sweepingIsBoundedByItsLimit() public {
         _buy(fleet, alice, 12);
+        _mature();
         vm.prank(alice);
         votes.present(_range(_k(1), 8));
         vm.warp(block.timestamp + 1);
@@ -176,13 +196,13 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         (uint256 removed, bool due) = votes.sweepExpired(3);
         assertEq(removed, 3, "no more than the limit");
         assertTrue(due, "and more are due");
-        assertEq(_queued(votes), 9);
+        assertEq(_renewed(votes), 9);
 
         (removed, due) = votes.sweepExpired(1_000);
         assertEq(removed, 5, "only the expired entries");
         assertFalse(due);
-        assertEq(_queued(votes), 4, "the later four have not expired");
-        (uint64 head,,) = votes.presenceQueue();
+        assertEq(_renewed(votes), 4, "the later four have not expired");
+        (uint64 head,,) = votes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, _k(9));
 
         (removed, due) = votes.sweepExpired(1_000);
@@ -197,6 +217,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     function test_aStaleCountIsRefusedWhenOpeningAProposal() public {
         uint256 count = votes.SWEEP_IN_PROPOSE() + 4;
         _buy(fleet, alice, count);
+        _mature();
         uint256 k1 = _k(1);
         vm.prank(alice);
         votes.present(_range(k1, count));
@@ -205,7 +226,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.prank(alice);
         vm.expectRevert(KeyfleetVotes.MaintenanceRequired.selector);
         votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
-        assertEq(_queued(votes), count, "the refused opening swept nothing");
+        assertEq(_renewed(votes), count, "the refused opening swept nothing");
 
         (uint256 removed, bool due) = votes.sweepExpired(5);
         assertEq(removed, 5);
@@ -213,7 +234,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.prank(alice);
         uint256 proposalId = votes.propose(k1, bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
         assertEq(votes.proposal(proposalId).e0, 1, "an exact count: the proposer's key alone");
-        assertEq(_queued(votes), 1);
+        assertEq(_renewed(votes), 1);
     }
 
     /// @dev Invariant: inside one block the order of renewals, transfers and openings decides who
@@ -221,6 +242,8 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     /// not present. Renew, open, then transfer: present, though no longer present now.
     function test_sameBlockRenewalTransferAndOpeningKeepTheirOrder() public {
         _buy(fleet, alice, 3);
+        _mature();
+        _lapse();
         uint256 k1 = _k(1);
         uint256 k2 = _k(2);
         uint256 k3 = _k(3);
@@ -243,13 +266,14 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         assertTrue(votes.wasActiveAtOpening(second, k3), "renewed, opened, then moved: present");
         assertEq(votes.proposal(second).e0, 2);
         assertFalse(votes.isActive(k3), "but not present now");
-        assertEq(votes.lastActiveAt(k3), 0);
+        assertEq(votes.presentFrom(k3), 0);
     }
 
     /// @dev Invariant: presence is measured in seconds, never in blocks. Many blocks in no time
     /// leave a key present; 48 hours in one block end it.
     function test_presenceIsMeasuredInSecondsNotBlocks() public {
         _buy(fleet, alice, 1);
+        _mature();
         uint256 k1 = _k(1);
         vm.prank(alice);
         votes.present(_ids(k1));
@@ -273,6 +297,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         KeyfleetVotes topVotes = top.VOTES();
         assertEq(top.FLEET_ID(), lastFleet, "the last fleet the collection numbers");
         _buy(top, alice, 3);
+        _mature();
 
         uint256 t1 = keys.tokenIdOf(lastFleet, 1);
         uint256 t2 = t1 + 1;
@@ -287,11 +312,11 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         topVotes.present(_ids(t1));
         vm.prank(alice);
         topVotes.present(_range(t2, 3));
-        (uint64 head, uint64 tail, uint32 queued) = topVotes.presenceQueue();
+        (uint64 head, uint64 tail, uint32 queued) = topVotes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, t1);
         assertEq(tail, t4);
         assertEq(queued, 4);
-        (uint64 prev, uint64 next, uint64 expiresAt) = topVotes.presenceEntry(t2);
+        (, uint64 prev, uint64 next, uint64 expiresAt) = topVotes.presenceEntry(t2);
         assertEq(prev, t1);
         assertEq(next, t3);
         assertEq(expiresAt, block.timestamp + WINDOW);
@@ -301,12 +326,12 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         topVotes.present(_ids(t2));
         vm.prank(alice);
         keys.transferFrom(alice, bob, t3);
-        (prev, next,) = topVotes.presenceEntry(t1);
+        (, prev, next,) = topVotes.presenceEntry(t1);
         assertEq(next, t4, "key 2 moved to the back and key 3 left: 1, 4, 2");
-        (prev, next,) = topVotes.presenceEntry(t4);
+        (, prev, next,) = topVotes.presenceEntry(t4);
         assertEq(prev, t1);
         assertEq(next, t2);
-        (head, tail, queued) = topVotes.presenceQueue();
+        (head, tail, queued) = topVotes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, t1);
         assertEq(tail, t2);
         assertEq(queued, 3);
@@ -327,7 +352,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         (uint256 removed, bool due) = topVotes.sweepExpired(10);
         assertEq(removed, 4, "every entry swept by its whole id");
         assertFalse(due);
-        (head, tail, queued) = topVotes.presenceQueue();
+        (head, tail, queued) = topVotes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, 0);
         assertEq(tail, 0);
         assertEq(queued, 0);
@@ -341,6 +366,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     function test_aKeeperCannotMarkSomeoneElsePresent() public {
         _buy(fleet, alice, 2);
         _buy(fleet, mallory, 1);
+        _mature();
         uint256 k1 = _k(1);
 
         vm.prank(alice);
@@ -356,7 +382,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotAuthorizedForKey.selector, k1, keeper));
         votes.present(_ids(k1));
-        assertEq(_queued(votes), 0, "nothing was renewed");
+        assertEq(_renewed(votes), 0, "nothing was renewed");
 
         vm.startPrank(alice);
         shards.issue(_range(k1, 2), bob, 30);
@@ -372,6 +398,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
     /// presence; the manager can.
     function test_onlyTheManagerReportsAKeyMoving() public {
         _buy(fleet, alice, 1);
+        _mature();
         uint256 k1 = _k(1);
         vm.prank(alice);
         votes.present(_ids(k1));
@@ -384,23 +411,24 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
             votes.onKeyMoved(k1);
         }
         assertTrue(votes.isActive(k1), "still present");
-        assertEq(_queued(votes), 1);
+        assertEq(_renewed(votes), 1);
 
         vm.expectEmit(true, true, true, true, address(votes));
         emit PresenceCleared(k1);
         vm.prank(address(fleet));
         votes.onKeyMoved(k1);
         assertFalse(votes.isActive(k1), "the manager ends it");
-        assertEq(_queued(votes), 0);
+        assertEq(_renewed(votes), 0);
     }
 
-    /// @dev Invariant: a sale writes no presence, a transfer ends the key's presence at once and
-    /// takes it out of the queue, and the new owner renews it under the new ownership epoch.
+    /// @dev Invariant: a sale only schedules its key's automatic start, a transfer ends the key's
+    /// presence at once and takes it off its list, and the new owner renews it under the new
+    /// ownership epoch.
     function test_aTransferEndsPresenceAndTheNewOwnerRenewsIt() public {
         _buy(fleet, alice, 2);
+        _mature();
         uint256 k1 = _k(1);
-        uint48 revision = votes.presenceRevision();
-        assertEq(revision, 0, "a sale writes no presence");
+        assertEq(votes.presenceRevision(), 2, "each sale schedules one automatic start");
 
         vm.prank(alice);
         votes.present(_range(k1, 2));
@@ -409,8 +437,8 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         vm.prank(alice);
         keys.transferFrom(alice, bob, k1);
         assertFalse(votes.isActive(k1), "not present after it changed hands");
-        assertEq(_queued(votes), 1, "and out of the queue");
-        (uint64 head,,) = votes.presenceQueue();
+        assertEq(_renewed(votes), 1, "and off the list");
+        (uint64 head,,) = votes.presenceList(KeyfleetPresence.Place.Renewed);
         assertEq(head, _k(2));
 
         vm.prank(alice);
@@ -428,12 +456,14 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         assertFalse(votes.isActive(k1), "a transfer of a key nobody renewed since is harmless too");
         vm.prank(alice);
         keys.transferFrom(alice, bob, k1);
-        assertEq(_queued(votes), 1);
+        assertEq(_renewed(votes), 1);
     }
 
     /// @dev Invariant: voting and proposing renew the keys they name, as renewing does.
     function test_votingAndProposingRenewTheirKeys() public {
         _buy(fleet, alice, 3);
+        _mature();
+        _lapse();
 
         vm.prank(alice);
         uint256 proposalId = votes.propose(_k(1), bytes32(0), uint64(block.timestamp + 1 days), _noCalls());
@@ -443,7 +473,7 @@ contract KeyfleetPresenceTest is KeyfleetFixture {
         votes.castBallot(proposalId, _range(_k(2), 2), KeyfleetVotes.Choice.Yes);
         assertTrue(votes.isActive(_k(2)), "each voted key");
         assertTrue(votes.isActive(_k(3)));
-        assertEq(_queued(votes), 3);
+        assertEq(_renewed(votes), 3);
     }
 }
 
@@ -458,6 +488,9 @@ contract KeyfleetPresenceGasTest is KeyfleetFixture {
     uint256 private constant LATER_RENEWAL_CEILING = 85_000;
     /// @dev Measured marginal cost of sweeping one expired entry, plus a fifth, rounded up.
     uint256 private constant SWEEP_PER_ENTRY_CEILING = 6_000;
+    /// @dev Measured cost of moving one started key from waiting to automatic in a sweep (26,130),
+    /// plus a fifth, rounded up.
+    uint256 private constant SWEEP_PER_START_CEILING = 32_000;
     /// @dev Measured cost of transferring a present key, plus a fifth, rounded up.
     uint256 private constant PRESENT_TRANSFER_CEILING = 144_000;
 
@@ -474,6 +507,7 @@ contract KeyfleetPresenceGasTest is KeyfleetFixture {
         for (uint256 i = 0; i < 41; ++i) {
             _buy(fleet, alice);
         }
+        _mature();
         uint256[] memory renewed = _range(_key(fleet, 1), 40);
         vm.prank(alice);
         votes.present(renewed);
@@ -517,6 +551,8 @@ contract KeyfleetPresenceGasTest is KeyfleetFixture {
     /// @dev Invariant: sweeping costs a fixed amount per expired entry.
     function test_sweepingCostsAFixedAmountPerEntry() public {
         vm.warp(block.timestamp + WINDOW);
+        // The one key never renewed, whose automatic presence ended too, leaves its own list first.
+        votes.sweepExpired(1);
         _cool();
         uint256 before = gasleft();
         votes.sweepExpired(10);
@@ -530,11 +566,34 @@ contract KeyfleetPresenceGasTest is KeyfleetFixture {
         assertLt(perEntry, SWEEP_PER_ENTRY_CEILING);
     }
 
+    /// @dev Invariant: sweeping costs a fixed amount per key whose automatic start has come.
+    function test_sweepingStartedKeysCostsAFixedAmountPerKey() public {
+        for (uint256 i = 0; i < 41; ++i) {
+            _buy(fleet, bob);
+        }
+        vm.warp(block.timestamp + votes.KEY_MATURITY());
+        // Key 41, whose automatic presence has ended, leaves the waiting list first.
+        votes.sweepExpired(1);
+        _cool();
+        uint256 before = gasleft();
+        votes.sweepExpired(10);
+        uint256 ten = before - gasleft();
+        _cool();
+        before = gasleft();
+        votes.sweepExpired(30);
+        uint256 thirty = before - gasleft();
+        (,, uint32 automatic) = votes.presenceList(KeyfleetPresence.Place.Automatic);
+        assertEq(automatic, 40, "forty of the new keys started");
+        uint256 perKey = (thirty - ten) / 20;
+        console2.log("sweep gas per started key:", perKey);
+        assertLt(perKey, SWEEP_PER_START_CEILING);
+    }
+
     /// @dev Invariant: transferring a present key pays a fixed amount on top of the transfer to end
-    /// its presence.
+    /// its presence, whether it came from a renewal or from its automatic start.
     function test_transferringAPresentKeyCostsAFixedAmount() public {
         uint256 present = _key(fleet, 20);
-        uint256 absent = _key(fleet, 41);
+        uint256 automatic = _key(fleet, 41);
         _cool();
         vm.prank(alice);
         uint256 before = gasleft();
@@ -543,10 +602,11 @@ contract KeyfleetPresenceGasTest is KeyfleetFixture {
         _cool();
         vm.prank(alice);
         before = gasleft();
-        keys.transferFrom(alice, bob, absent);
-        uint256 absentGas = before - gasleft();
-        console2.log("transfer of a present key gas:", presentGas);
-        console2.log("transfer of a key never renewed gas:", absentGas);
+        keys.transferFrom(alice, bob, automatic);
+        uint256 automaticGas = before - gasleft();
+        console2.log("transfer of a renewed key gas:", presentGas);
+        console2.log("transfer of a key present from its automatic start gas:", automaticGas);
         assertLt(presentGas, PRESENT_TRANSFER_CEILING);
+        assertLt(automaticGas, PRESENT_TRANSFER_CEILING);
     }
 }

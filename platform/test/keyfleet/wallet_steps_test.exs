@@ -69,7 +69,7 @@ defmodule Keyfleet.WalletStepsTest do
 
       assert {:ok, built} = build(:buy)
       assert built.problem == nil
-      assert %{token_id: 1, price: 8_000_000, approve?: true} = built.figures
+      assert %{token_id: 1, price: 10_000_000, approve?: true} = built.figures
 
       assert built.review.chain == %{
                chain_id: 1,
@@ -83,18 +83,18 @@ defmodule Keyfleet.WalletStepsTest do
       assert approve.to == @usdc
 
       assert approve.data ==
-               Call.encode("approve(address,uint256)", [fleet.contract_address, 8_000_000])
+               Call.encode("approve(address,uint256)", [fleet.contract_address, 10_000_000])
 
       assert buy.to == fleet.contract_address
 
       assert buy.data ==
-               Call.encode("purchase(address,uint256,uint256)", [@signer, 8_000_000, deadline])
+               Call.encode("purchase(address,uint256,uint256)", [@signer, 10_000_000, deadline])
 
       assert Enum.map(built.review.steps, & &1.step) == ["approve", "buy"]
     end
 
     test "an allowance of the price or more leaves only the purchase" do
-      answering(allowance: 8_000_000)
+      answering(allowance: 10_000_000)
       assert {:ok, built} = build(:buy)
       assert Map.keys(steps(built)) == ["buy"]
       assert built.figures.approve? == false

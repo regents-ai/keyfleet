@@ -86,7 +86,7 @@ contract FleetHandler is Test {
 
     // --- keys ------------------------------------------------------------
 
-    /// @dev Buys one to three keys, each to an actor who may hold it. Of each price, whatever the
+    /// @dev Buys one to three keys, each to an actor. Of each price, whatever the
     /// manager does not keep as USDC (the protocol share and the Cascade reserve) and the ledger
     /// does not take as USDC (the Accelerant rebate and the Cascade repayment) reaches the
     /// treasury as REGENT at the stand-in market's one REGENT per USDC, and the treasury's USDC does
@@ -97,8 +97,7 @@ contract FleetHandler is Test {
         for (uint256 i = 0; i < count; ++i) {
             uint256 keyNumber = f.totalMinted() + 1;
             if (keyNumber > MAX_KEYS) return;
-            (address to, bool found) = _receiver(f, keyNumber, actorSeed % ACTORS + i, address(0));
-            if (!found) return;
+            address to = actor((actorSeed % ACTORS + i) % ACTORS);
             uint256 price = f.nextPrice();
             address treasury = address(f.TREASURY());
             uint256[4] memory before = [
@@ -133,8 +132,8 @@ contract FleetHandler is Test {
         uint256 keyNumber = 1 + tokenSeed % minted;
         uint256 tokenId = keys.tokenIdOf(f.FLEET_ID(), keyNumber);
         address from = keys.ownerOf(tokenId);
-        (address to, bool found) = _receiver(f, keyNumber, actorSeed, from);
-        if (!found) return;
+        address to = actor(actorSeed % ACTORS);
+        if (to == from) to = actor((actorSeed % ACTORS + 1) % ACTORS);
         vm.prank(from);
         keys.transferFrom(from, to, tokenId);
     }
@@ -302,7 +301,7 @@ contract FleetHandler is Test {
         c.ids = _claimable(f, c.caller, keyMask);
         c.assets = _pickAssets(f.REWARDS(), assetMask);
         if (c.assets.length == 0) return;
-        c.payees = _payees(f, c.caller, c.ids);
+        c.payees = _payees(c.caller, c.ids);
         c.expected = new uint256[](c.assets.length);
         c.balances = new uint256[](c.assets.length);
         uint256 total;
@@ -433,23 +432,6 @@ contract FleetHandler is Test {
         return ok;
     }
 
-    /// @dev The first actor from the seed on, other than `except`, who may hold key `keyNumber`
-    /// under the Fibonacci holding limit.
-    function _receiver(KeyfleetManager f, uint256 keyNumber, uint256 seed, address except)
-        internal
-        view
-        returns (address, bool)
-    {
-        bool fibonacci = f.PRESET() == KeyfleetPresets.Preset.FibonacciCascade;
-        uint256 level = fibonacci ? f.levelOf(keyNumber) : 0;
-        for (uint256 i = 0; i < ACTORS; ++i) {
-            address candidate = actor((seed % ACTORS + i) % ACTORS);
-            if (candidate == except) continue;
-            if (!fibonacci || f.heldPerLevel(candidate, level) < f.holdingLimit(level)) return (candidate, true);
-        }
-        return (address(0), false);
-    }
-
     /// @dev The keys in `mask` the caller may claim for: those it holds, or holds an active shard of.
     function _claimable(KeyfleetManager f, address caller, uint256 mask) internal view returns (uint256[] memory ids) {
         uint256 minted = f.totalMinted();
@@ -477,11 +459,7 @@ contract FleetHandler is Test {
         }
     }
 
-    function _payees(KeyfleetManager f, address caller, uint256[] memory ids)
-        internal
-        view
-        returns (address[] memory list)
-    {
+    function _payees(address caller, uint256[] memory ids) internal view returns (address[] memory list) {
         list = new address[](ids.length + 1);
         list[0] = caller;
         uint256 count = 1;

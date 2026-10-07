@@ -3,7 +3,8 @@
 **Date:** 6 October 2026  
 **Audience:** Keyfleet product, local coding agent, and contract reviewer  
 **Status:** Implementation specification, not deployed behavior or an audit. It does not authorize a deployment, asset migration, transaction, credential change, or external publication.  
-**Replaces:** incompatible recommendations in `keyfleet-base-governance-spec-v0.2.md` and the earlier collaboration defaults. The latest founder instructions prevail.
+**Replaces:** incompatible recommendations in `keyfleet-base-governance-spec-v0.2.md` and the earlier collaboration defaults. The latest founder instructions prevail.  
+**Contract shape:** one key collection, one factory and four contracts per fleet, as decided on 7 October 2026 and set out in [fleet-manager-factory-design.md](fleet-manager-factory-design.md); this specification is written to that shape.
 
 ## 1. Product and scope
 
@@ -16,8 +17,8 @@ The intended sequence is **collaborate → produce something useful → decide w
 | Area | Requirement |
 |---|---|
 | Chain | All new membership, governance, treasury, and rewards contracts on Base mainnet, chain ID 8453. |
-| Membership | Transferable ERC-721 Keys, existing purchase presets, and explicit owner-to-agent delegation. No new mandatory identity standard. |
-| Governance | One Key, one ballot slot; rolling 48-hour presence; an opening electorate plus late voters; no denominator shrinkage; simple majority; no minimum coalition. |
+| Membership | Transferable ERC-721 Keys, all in one collection, each Key counting only in its own fleet; the four purchase presets, priced from each fleet's starting price; fleets created through one factory, the four founding fleets by the Regents Safe and later fleets by anyone; key sales opened in phases the Regents Safe signs; explicit owner-to-agent delegation. No new mandatory identity standard. |
+| Governance | One Key, one ballot slot; a 4-day wait from mint, then 48 hours of automatic presence, then rolling 48-hour presence; an opening electorate plus late voters; no denominator shrinkage; 60% approval rounded up; no minimum coalition; a 7-day opening with no money calls. |
 | Execution | Approve exact transaction or batch bytes; execute the approved payload once. Ordinary `CALL`, not caller-selected `DELEGATECALL`. |
 | Work funding | Small explicit payments or capped advances to an operating account. Renew by a new approval; no Superfluid or generic mandate framework. |
 | Daily fair split | Allocate a configured 0.1%–1.0% of eligible free treasury balances, default 0.5%, equally per minted Key, independently of activity. |
@@ -41,7 +42,7 @@ Do not make a new code store, new chat system, notebook provisioning, or new age
 | Threshold meaning | **Implementation interpretation:** 100 tokens / 0.05 ETH are minimum **free treasury balances before the haircut**, not minimum total payouts or per-Key payouts. No USD price conversion. Show this interpretation in product review. |
 | Recipient set | All existing minted Keys at each asset's allocation transaction, including dormant, muted, and restricted Keys. Unminted supply gets nothing. Multiple Keys earn multiple equal shares. |
 | Old USDC-income rule | The previously supplied product spec sends recognized USDC income to Keys. This request does not explicitly repeal that commitment. Preserve it as a distinct income route; add the daily split to **free treasury capital**. Do not silently redirect obligated income to working capital or distribute the same receipt twice. |
-| Other preset economics | Do not change purchase prices, supply, protocol fees, Cascade settlement, Accelerant rebates, or existing income weights in this work. New daily treasury allocations are equal per Key even where another existing payout lane uses different weights. |
+| Other preset economics | Supplies, the 10% protocol fee, Cascade settlement, Accelerant rebates and existing income weights are unchanged. Every price ladder is scaled from the fleet's starting price, so the founding fleets keep their original prices. Keys are paid in USDC; the fleet treasury's part of each purchase is swapped to REGENT in the same purchase, while the protocol fee, the Cascade reserve and repayments and the Accelerant rebate stay USDC. New daily treasury allocations are equal per Key even where another existing payout lane uses different weights. |
 | Days without a checkpoint | **Implementation default:** process at most one allocation per asset in the current 24-hour period. Do not reconstruct or compound missed historical distributions against today's assets and owners. |
 | OUSD on Base | **Integration gate:** verify the actual Base token and accounting behavior. Do not copy the Ethereum address, invent a token, add a bridge, or silently substitute wOUSD. Other assets must work without this slot. |
 
@@ -55,10 +56,10 @@ Reuse current contract boundaries where practical. Presence belongs inside the g
 
 | Responsibility | Suggested home | Permitted authority |
 |---|---|---|
-| Keys and owner delegation | Existing `Keyfleet` and shard/delegation records | Purchase/mint under the chosen preset, authorized transfers, owner-controlled agent permissions, ownership epochs. |
+| Keys and owner delegation | `KeyfleetKeys` (one collection for every fleet), each fleet's `KeyfleetManager`, and the shared `KeyfleetShards` | Purchase under the chosen preset (manager), mint, authorized transfers and ownership epochs (collection), owner-controlled agent permissions (shards). |
 | Presence and decisions | `KeyfleetVotes` | Authenticate participants, maintain activity, record immutable proposals, count ballots, finalize/cancel, authorize exact execution. |
 | Spendable capital and execution | `KeyfleetTreasury` or adapted existing execution account | Hold free capital, perform daily allocations, execute approved `CALL` batches, own the fleet's Lit account. |
-| Protected obligations | Existing core settlement accounting and `KeyfleetRewards` | Fund and settle the specific obligations they record; member claims cannot be governed away. |
+| Protected obligations | Each fleet's `KeyfleetManager` (the Cascade reserve and the owed protocol fee) and `KeyfleetRewards` | Fund and settle the specific obligations they record; member claims cannot be governed away. |
 
 The account that makes arbitrary approved external calls must **not** also hold other people's reward backing or purchase-settlement reserves. Physically segregating those assets is preferable to trying to interpret arbitrary external calldata against a mixed balance.
 
@@ -87,7 +88,7 @@ Protected accounting records **money already owed under an existing rule**, incl
 - a fixed protocol share already owed;
 - another existing, specifically funded liability—not a hypothetical future expense or unapproved proposal.
 
-Everything else admitted as free treasury capital remains subject to active governance. There is no new 70% reserve, minority matching payment, or guaranteed redemption. A majority can authorize risking all free capital.
+Everything else admitted as free treasury capital remains subject to active governance. There is no new 70% reserve, minority matching payment, or guaranteed redemption. An approving 60% of the voters can authorize risking all free capital.
 
 An unapproved proposal reserves nothing. An approved proposal also does not reserve funds merely by being marked Approved: execution checks available capital atomically. The public UI shows when an approval is not fully fundable anymore.
 
@@ -107,16 +108,18 @@ On transfer, invalidate the previous ownership epoch's agent permissions and cle
 
 ### 5.2 Activity uses elapsed seconds
 
-Maintain `lastActiveAt` and `ownershipEpoch`; `lastActiveBlock` may also be stored/emitted for audit. Use timestamps for the 48-hour rule, not an assumed number of Base blocks. Solidity exposes block number and timestamp separately; timestamp is measured in seconds. [S2]
+Maintain `presentFrom` (the start of the Key's latest presence: its last touch, or its automatic start) and `ownershipEpoch`; `lastActiveBlock` may also be stored/emitted for audit. Use timestamps for the 48-hour rule, not an assumed number of Base blocks. Solidity exposes block number and timestamp separately; timestamp is measured in seconds. [S2]
 
 ```text
 WINDOW = 172800 seconds
 active(key,t) = key exists
                 AND activity belongs to current ownership epoch
-                AND lastActiveAt <= t < lastActiveAt + WINDOW
+                AND presentFrom <= t < presentFrom + WINDOW
 ```
 
 At the exact expiry instant, the Key is dormant for new proposal openings. An untouched/default record is not active.
+
+**New Keys (Sean, 7 Oct).** A Key cannot be touched, vote, propose or cancel for 4 days from its mint (`KEY_MATURITY`); a transfer does not restart the wait. At day 4 it becomes present on its own for one `WINDOW`, until day 6, exactly as if it had been touched then; the sale records that start in advance. After that it stays present only by being touched. A transfer before day 4 keeps the automatic start; a transfer after it clears presence like any other.
 
 A permanent pinned **Present** card allows an owner or authorized agent to renew without any substantive proposal. Presence automation is allowed. All-dormant fleets can recover through this same method without asking another member for approval.
 
@@ -128,9 +131,7 @@ Offchain chats, read requests, ordinary website activity, and third-party keeper
 
 An indexed active count can increment on reactivation and decrement on recorded expiry/removal. **It cannot decrement itself merely because 48 hours passed.** Solidity contracts have no autonomous cron; a transaction must execute the maintenance. [S3]
 
-Recommended initial implementation: an expiry-ordered linked queue. Because all accepted renewals set `expiresAt = current block.timestamp + WINDOW`, a touched Key can be removed and appended to the tail in constant time. Maintain one queue entry per Key, not one entry per renewal. Remove expired entries from the head in bounded permissionless `sweepExpired(limit)` calls.
-
-This is an engineering recommendation, not a new governance rule. A different reviewed structure is fine if it preserves the same behavior and measured gas bounds.
+Implementation: three due-time-ordered linked lists, one entry per Key at most. `waiting` holds sold Keys due at their automatic start (mint + 4 days), `automatic` holds Keys present from that start, due when it ends, and `renewed` holds Keys present from a touch, due at `block.timestamp + WINDOW`. Every list's due times are a fixed offset from a block time, so appending at the tail keeps each list ordered and a Key is removed and re-appended in constant time. Bounded permissionless `sweepExpired(limit)` calls move started Keys from `waiting` to `automatic` (or out, if that presence has also ended) and remove ended presences from the heads. The exact present count is `automatic` plus `renewed` once nothing is due.
 
 A stored indexed count may include unswept expired records. Never label that value as an exact live count. Before opening a proposal, clean all due expiries or return a clear maintenance-required result; do not accept a stale denominator. Allow multiple bounded cleanup transactions rather than an unbounded scan.
 
@@ -149,7 +150,7 @@ E0(P)   = Keys active at P's recorded opening revision/time
 L(P,t)  = additional Keys that cast a valid ballot on P before closing
 E(P,t)  = E0(P) union L(P,t)
 D(P,t)  = size(E(P,t))
-passes  = D > 0 AND Yes > floor(D / 2)
+passes  = D > 0 AND Yes >= ceil(D * 60 / 100)    (decided at closing)
 ```
 
 The proposer is touched before E0 is recorded but does not automatically cast Yes.
@@ -166,16 +167,20 @@ Present renews global participation for future openings. To join a particular ex
 
 No expiry, transfer, mute, delegation revocation, ballot replacement, or abstention reduces D. Treat ballot withdrawal as Abstain rather than removal from the electorate. After closing, no late ballot is accepted just because finalization has not yet been submitted.
 
-Newly minted Keys can join open proposals by voting. Buying influence is allowed; buying an already-counted Key changes control of its one existing slot. No holding-age delay or minimum coalition is added.
+Newly minted Keys can join open proposals by voting once their 4-day wait has passed. Buying influence is allowed; buying an already-counted Key changes control of its one existing slot. There is no minimum coalition and no holding limit; one voter may pass anything 1/1.
+
+Yes needed for 1 to 10 voters: 1, 2, 2, 3, 3, 4, 5, 5, 6, 6.
+
+**Opening week (Sean, 7 Oct).** For 7 days from the moment a fleet's sales open, a proposal may carry only value-free calls that move no money: setting the fleet's profile, the daily split rate, and a Key's edit restriction. A proposal with no calls is always allowed, and the daily split runs as usual.
 
 Examples:
 
 | Situation | Outcome |
 |---|---|
 | D=1, Yes=1 | Passes at the deadline. |
-| D=4, Yes=2, No=0, Abstain=2 | Fails: Yes must exceed half of D. |
-| D=9, Yes=5 | Currently meets threshold, but cannot execute early. |
-| Two new/dormant Keys then vote No | D=11, Yes=5: does not meet threshold. |
+| D=4, Yes=2, No=0, Abstain=2 | Fails: Yes must reach 3, 60% of D rounded up. |
+| D=9, Yes=6 | Currently meets threshold, but cannot execute early; ballots may still change until closing. |
+| Two new/dormant Keys then vote No | D=11, Yes=6: needs 7, does not meet threshold. |
 | Six included Keys subsequently expire | D stays 11 for this proposal. |
 | The next proposal opens with one active Key | That new proposal can have D=1; the old one does not shrink. |
 
@@ -348,7 +353,7 @@ Keep customer income, new financing, purchase capital, returned advances, and in
 
 For a fleet without a launch, existing declared income rules still apply. For a launched service, use the approved customer-receiver/splitter path first. Only the remainder actually belonging to Keyfleet is eligible for its downstream rules; do not split token-staker funds again as fleet capital.
 
-Under the preserved prior USDC-income commitment, recognized fleet USDC income is allocated to member rewards through its existing rule; it is not also added to the new fair-split treasury base. Purchase capital, authorized financing, and properly returned advances can remain free treasury capital and participate in the new daily split. A later explicit decision could replace the future income model, but that change is not smuggled into this build.
+Under the preserved prior USDC-income commitment, recognized fleet USDC income is allocated to member rewards through its existing rule; it is not also added to the new fair-split treasury base. Purchase capital, which reaches the treasury as REGENT, authorized financing, and properly returned advances can remain free treasury capital and participate in the new daily split. A later explicit decision could replace the future income model, but that change is not smuggled into this build.
 
 A returning operating account must use a provenance-aware return path tied to the original advance; an unrestricted caller cannot relabel customer receipts as “refunds” to evade commitments. Internal treasury-to-rewards funding is not new revenue and pays no new fee invented by this specification.
 
@@ -428,7 +433,7 @@ No hosted provider step is performed merely because someone opens a page. No new
 |---|---|---|
 | 1 | Base configuration and source inventory | Exact chain/token/VRF bindings verified; old deployments/claims inventoried; no silent economics migration. |
 | 2 | Immutable rights and segregated capital | Protected backing cannot be reached through approved external calls; no upgrade/delegate execution bypass. |
-| 3 | Presence and majority governance | Correct initial counts, late entry, no shrinking, no minimum, transfers, and deadline closure. |
+| 3 | Presence and 60% governance | Correct initial counts, late entry, no shrinking, no minimum, transfers, and deadline closure. |
 | 4 | Exact CALL batches and payments | No replay, payload mutation, partial batch success, or unauthorized claim spending; small advances work without payroll machinery. |
 | 5 | Daily split and claims | 10–100 bps bounds, per-asset periods/thresholds, equal minted-Key allocations, funded pull claims, and transfer settlement. |
 | 6 | Shared proposal UI and agent path | Present/reviews/claims remain accessible under chat restrictions; public and financial approvals cannot be confused. |
@@ -463,7 +468,7 @@ The coding agent can implement this build without inventing new governance polic
 
 ## Sources and provenance
 
-**Conversation sources:** the founder's latest build-now instructions; the supplied KeyFleet product one-pager; the Base governance v0.2 artifact for historical context only. The new daily split and simple-majority rule supersede incompatible recommendations. This document does not claim a fresh inspection of the live Keyfleet repository.
+**Conversation sources:** the founder's latest build-now instructions; the supplied Keyfleet product one-pager; the Base governance v0.2 artifact for historical context only. The new daily split and the 60% approval rule supersede incompatible recommendations. This document does not claim a fresh inspection of the live Keyfleet repository.
 
 Public sources checked 6 October 2026, used only for the technical facts identified above:
 

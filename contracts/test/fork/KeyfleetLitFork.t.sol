@@ -66,6 +66,7 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
         votes = classic.VOTES();
         account = LitAdminCalls.accountHash(address(treasury));
         _buy(classic, BUYER);
+        _openTreasury(classic);
     }
 
     function test_litsAccountConfigIsLiveOnBase() public view {

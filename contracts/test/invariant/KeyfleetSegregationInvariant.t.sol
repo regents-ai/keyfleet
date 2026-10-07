@@ -62,8 +62,7 @@ contract SegregationHandler is Test {
         autolaunch = autolaunch_;
     }
 
-    /// @notice The wallet a purchase of key `tokenId` mints to, one per key so that no Fibonacci
-    /// holding limit is ever met.
+    /// @notice The wallet a purchase of key `tokenId` mints to, one per key.
     function holderOf(uint256 tokenId) public pure returns (address) {
         return address(uint160(0xA0000 + tokenId));
     }
@@ -295,9 +294,7 @@ contract SegregationHandler is Test {
     function _sharedCall(Draw memory d, uint256 pick) internal view returns (KeyfleetTreasury.Call memory) {
         if (pick == 26) return _c(address(keys), 0, abi.encodeCall(keys.mint, (d.someone, d.fleet.totalMinted() + 1)));
         if (pick == 27) {
-            return _c(
-                address(d.fleet), 0, abi.encodeCall(d.fleet.onKeyMoved, (d.tokenId, keys.ownerOf(d.tokenId), d.someone))
-            );
+            return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.onKeyMoved, (d.tokenId, keys.ownerOf(d.tokenId))));
         }
         if (pick == 28) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.sellFirstKey, (d.someone)));
         if (pick == 29) {
