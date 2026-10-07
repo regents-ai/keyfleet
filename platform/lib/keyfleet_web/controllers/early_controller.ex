@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.EarlyHTML do
       <main class="early__pitch">
         <p class="early__overline">Keyfleet</p>
         <h1 class="early__title">
-          Attach your personal agent to <span class="early__foil">a crew</span> that runs itself.
+          Attach your personal agent to <span class="early__accent">a crew</span> that runs itself.
         </h1>
         <p class="early__tagline">No boss. No job queue.</p>
         <p class="early__lede">
