@@ -37,7 +37,7 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// later. It is never approved before closing, however many Yes ballots it has. Its status is
 /// worked out from these stored facts; nothing finalises it.
 ///
-/// A key takes part only once `KEY_MATURITY` (4 days) has passed since it was minted, counted in
+/// A key takes part only once `KEY_MATURITY` (2 days) has passed since it was minted, counted in
 /// block timestamps; a transfer does not start the wait again. Until then it cannot be renewed,
 /// vote, propose or cancel, so it is never among the keys present at an opening and never joins
 /// late. At that moment it becomes present on its own for `PRESENCE_WINDOW`, exactly as if it had
@@ -229,8 +229,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     uint64 public constant PRESENCE_WINDOW = KeyfleetPresence.WINDOW;
 
     /// @notice How long after its mint a key may first be renewed, vote, propose or cancel, and
-    /// becomes present on its own: 4 days, in seconds.
-    uint64 public constant KEY_MATURITY = 4 days;
+    /// becomes present on its own: 2 days, in seconds.
+    uint64 public constant KEY_MATURITY = 2 days;
 
     /// @notice How long after the fleet's sales open a proposal may carry only calls that move no
     /// money: 7 days, in seconds.

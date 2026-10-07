@@ -18,7 +18,7 @@ The intended sequence is **collaborate → produce something useful → decide w
 |---|---|
 | Chain | All new membership, governance, treasury, and rewards contracts on Base mainnet, chain ID 8453. |
 | Membership | Transferable ERC-721 Keys, all in one collection, each Key counting only in its own fleet; the four purchase presets, priced from each fleet's starting price; fleets created through one factory, the four founding fleets by the Regents Safe and later fleets by anyone; key sales opened in phases the Regents Safe signs; explicit owner-to-agent delegation. No new mandatory identity standard. |
-| Governance | One Key, one ballot slot; a 4-day wait from mint, then 48 hours of automatic presence, then rolling 48-hour presence; an opening electorate plus late voters; no denominator shrinkage; 60% approval rounded up; no minimum coalition; a 7-day opening with no money calls. |
+| Governance | One Key, one ballot slot; a 2-day wait from mint, then 48 hours of automatic presence, then rolling 48-hour presence; an opening electorate plus late voters; no denominator shrinkage; 60% approval rounded up; no minimum coalition; a 7-day opening with no money calls. |
 | Execution | Approve exact transaction or batch bytes; execute the approved payload once. Ordinary `CALL`, not caller-selected `DELEGATECALL`. |
 | Work funding | Small explicit payments or capped advances to an operating account. Renew by a new approval; no Superfluid or generic mandate framework. |
 | Daily fair split | Allocate a configured 0.1%–1.0% of eligible free treasury balances, default 0.5%, equally per minted Key, independently of activity. |
@@ -119,7 +119,7 @@ active(key,t) = key exists
 
 At the exact expiry instant, the Key is dormant for new proposal openings. An untouched/default record is not active.
 
-**New Keys (Sean, 7 Oct).** A Key cannot be touched, vote, propose or cancel for 4 days from its mint (`KEY_MATURITY`); a transfer does not restart the wait. At day 4 it becomes present on its own for one `WINDOW`, until day 6, exactly as if it had been touched then; the sale records that start in advance. After that it stays present only by being touched. A transfer before day 4 keeps the automatic start; a transfer after it clears presence like any other.
+**New Keys (Sean, 7 Oct).** A Key cannot be touched, vote, propose or cancel for 2 days from its mint (`KEY_MATURITY`); a transfer does not restart the wait. At day 2 it becomes present on its own for one `WINDOW`, until day 4, exactly as if it had been touched then; the sale records that start in advance. After that it stays present only by being touched. A transfer before day 2 keeps the automatic start; a transfer after it clears presence like any other.
 
 A permanent pinned **Present** card allows an owner or authorized agent to renew without any substantive proposal. Presence automation is allowed. All-dormant fleets can recover through this same method without asking another member for approval.
 
@@ -131,7 +131,7 @@ Offchain chats, read requests, ordinary website activity, and third-party keeper
 
 An indexed active count can increment on reactivation and decrement on recorded expiry/removal. **It cannot decrement itself merely because 48 hours passed.** Solidity contracts have no autonomous cron; a transaction must execute the maintenance. [S3]
 
-Implementation: three due-time-ordered linked lists, one entry per Key at most. `waiting` holds sold Keys due at their automatic start (mint + 4 days), `automatic` holds Keys present from that start, due when it ends, and `renewed` holds Keys present from a touch, due at `block.timestamp + WINDOW`. Every list's due times are a fixed offset from a block time, so appending at the tail keeps each list ordered and a Key is removed and re-appended in constant time. Bounded permissionless `sweepExpired(limit)` calls move started Keys from `waiting` to `automatic` (or out, if that presence has also ended) and remove ended presences from the heads. The exact present count is `automatic` plus `renewed` once nothing is due.
+Implementation: three due-time-ordered linked lists, one entry per Key at most. `waiting` holds sold Keys due at their automatic start (mint + 2 days), `automatic` holds Keys present from that start, due when it ends, and `renewed` holds Keys present from a touch, due at `block.timestamp + WINDOW`. Every list's due times are a fixed offset from a block time, so appending at the tail keeps each list ordered and a Key is removed and re-appended in constant time. Bounded permissionless `sweepExpired(limit)` calls move started Keys from `waiting` to `automatic` (or out, if that presence has also ended) and remove ended presences from the heads. The exact present count is `automatic` plus `renewed` once nothing is due.
 
 A stored indexed count may include unswept expired records. Never label that value as an exact live count. Before opening a proposal, clean all due expiries or return a clear maintenance-required result; do not accept a stale denominator. Allow multiple bounded cleanup transactions rather than an unbounded scan.
 
@@ -167,7 +167,7 @@ Present renews global participation for future openings. To join a particular ex
 
 No expiry, transfer, mute, delegation revocation, ballot replacement, or abstention reduces D. Treat ballot withdrawal as Abstain rather than removal from the electorate. After closing, no late ballot is accepted just because finalization has not yet been submitted.
 
-Newly minted Keys can join open proposals by voting once their 4-day wait has passed. Buying influence is allowed; buying an already-counted Key changes control of its one existing slot. There is no minimum coalition and no holding limit; one voter may pass anything 1/1.
+Newly minted Keys can join open proposals by voting once their 2-day wait has passed. Buying influence is allowed; buying an already-counted Key changes control of its one existing slot. There is no minimum coalition and no holding limit; one voter may pass anything 1/1.
 
 Yes needed for 1 to 10 voters: 1, 2, 2, 3, 3, 4, 5, 5, 6, 6.
 

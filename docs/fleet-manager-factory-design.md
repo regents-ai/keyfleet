@@ -48,6 +48,14 @@ What each answer decides (round 2 numbering → id):
 | 18 | KF-SOL-6 | The Chainlink coordinator is fixed forever |
 | 19 | KF-SOL-8 | Name "Keyfleet", symbol KEYFLEET |
 | 20 | KF-SOL-9 | ERC-2981 resale fee of 2.5% to the Regents Safe |
+| 21 | KF-SOL-24 | A Regents keeper wallet records each open fleet's deck once, before any of its Keys has a random number; the Safe can replace it; it can't touch money (3.5) |
+| 22 | KF-SOL-25 | The site, through the keeper, asks for the metadata refresh as soon as a card is published; the holder may also ask |
+| 23 | KF-SOL-26 | A Key's name uses the fleet number within its type: Syndicate #1's key 5 is `SYNDICATE—001—005` |
+| 24 | KF-SOL-28 | Admitting OUSD waits until the 7-day opening ends (5.1) |
+| 25 | KF-SOL-29 | A Key sold on before day 2 keeps its automatic start (5.1) |
+| 26 | KF-SOL-30 | The automatic presence at the end of a new Key's wait stays as built (5.1) |
+| 27 | KF-SOL-31 | The founding fleets are named "Classic #1", "Syndicate #1", "Accelerant #1" and "Cascade #1"; each gets a picture, written into the manifest's `imageLink` at deploy |
+| 28 | KF-TREAS-4 | No matured-balance rule for treasury money, for good; a new Key waits 2 days to vote (5.1) |
 
 **Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md), as changed by everything above. Supplies, splits, daily split and claim rules are unchanged; the vote, presence, holding and price rules Sean changed on 7 Oct are in 5.1 and 8.4. Those docs are brought up to date in step B7.
 
@@ -260,13 +268,12 @@ Every fleet, founding or open, runs these in its own `KeyfleetVotes`. They repla
 
   There is no minimum: one voter may pass anything 1/1, treasury payments included. A lone key that is not present presses Present (a "roll call") and can then propose and pass alone.
 - **The outcome is decided at closing.** Every ballot may change until the closing time; the proposal is approved exactly when Yes reaches the number above at closing, never earlier. Anyone may carry it out from closing until 48 hours later.
-- **A new key waits 4 days.** From its mint (`KEY_MATURITY`), a key cannot press Present, vote, propose or cancel. The wait counts from the mint only; a transfer never starts it again.
-- **Then it is present on its own for 2 days.** When its wait ends (day 4), the key is present without anyone pressing anything, until day 6 (`PRESENCE_WINDOW`, 48 hours), exactly as if it had pressed Present at day 4. It counts in every proposal that opens in that time, and joins an already open proposal late if it votes. After day 6 it stays present only by pressing Present, voting, proposing or cancelling, each of which renews it for 48 hours.
-- **Changing hands.** A key sold on before day 4 keeps its automatic start. One that changes hands after day 4 loses its presence, as any present key does on a transfer; the new owner presses Present.
+- **A new key waits 2 days.** From its mint (`KEY_MATURITY`), a key cannot press Present, vote, propose or cancel. The wait counts from the mint only; a transfer never starts it again.
+- **Then it is present on its own for 2 days.** When its wait ends (day 2), the key is present without anyone pressing anything, until day 4 (`PRESENCE_WINDOW`, 48 hours), exactly as if it had pressed Present at day 2. It counts in every proposal that opens in that time, and joins an already open proposal late if it votes. After day 4 it stays present only by pressing Present, voting, proposing or cancelling, each of which renews it for 48 hours.
+- **Changing hands.** A key sold on before day 2 keeps its automatic start. One that changes hands after day 2 loses its presence, as any present key does on a transfer; the new owner presses Present.
 - **How the exact count is kept.** `KeyfleetPresence` keeps three lists, each ordered by when its entries fall due: keys waiting for their automatic start, keys present from it, and keys present from a renewal. A sale enrols the key (`enrollKey`, from the manager) in the waiting list with its start time already recorded, so presence checks at any past moment stay exact. `sweepExpired` moves started keys to the automatic list and drops ended presences; a proposal opens only once nothing is due, so `e0` is always the exact count of present keys.
 - **A 7-day opening.** For 7 days from the moment the fleet's sales open (`TREASURY_OPENING`, from `KeyfleetKeys.salesOpenedAt`, section 6), a proposal may carry only calls that move no money, each with no value: the fleet's name, description and image (`setProfile`), the daily split rate (`setDailySplitBps`), and whether a key's edits are restricted (`setEditsRestricted`). Anything else, a mixed batch included, is refused with `TreasuryOpening(opensAt)`. A proposal with no calls is always allowed, and the daily split runs as usual. Admitting OUSD is held for the opening because it can never be undone and touches the money path.
-- **No holding limit, no matured-balance rule.** A wallet may hold any number of a fleet's keys, and treasury money is spendable as soon as it arrives.
-- **Pending Sean's answer:** his 7 Oct reply "3. b, but actually change the 4 day rule to a 2 day rule" reads two ways: a matured-balance rule for treasury money with a 2-day delay, or a 2-day new-key wait instead of 4. Neither is built; the wait stays 4 days and there is no matured-balance rule until he answers.
+- **No holding limit, no matured-balance rule.** A wallet may hold any number of a fleet's keys, and treasury money is spendable as soon as it arrives. Sean settled this on 7 Oct: "no treasury money rule anymore, a 2 day wait on new keys to vote" (KF-TREAS-4), so there is no matured-balance rule, for good, and the new-key wait is 2 days.
 
 ---
 
@@ -530,23 +537,6 @@ Each step leaves `forge build` and `forge test` green, deletes what it replaces,
 
 ## 13. Questions only Sean can answer
 
-The build follows each recommendation until Sean answers. Answered questions are in the table at the top.
+None are open. Sean's 7 Oct answers to the last round are rows 21 to 28 of the table at the top, verbatim in part: "3) no treasury money rule anymore, a 2 day wait on new keys to vote ... 7) a , and the cards minted on a new keyfleet always come from that keyfleet's random seed 8) a - when a metadata update happens, the site should display the new one, and Opensea has a refresh button".
 
-**1. (KF-SOL-24) Who records the card deck for a fleet made by anyone?**
-- a) A Regents backend wallet (the keeper), named at deploy, which the Safe can replace. It can only record a deck once, for a fleet with none, before any of its Keys has a random number, and can't touch money. New fleets get their cards within minutes. *(recommended)*
-- b) The Safe signs every deck. Each new fleet's cards wait for two of three signers.
-
-*Changes B1.*
-
-**2. (KF-SOL-25) Who triggers "the metadata update" that reveals a Key's permanent card?** The contract lets both happen.
-- a) The backend, automatically, as soon as the card is published. *(recommended)*
-- b) The Key's holder presses a "reveal" button.
-- c) Both: automatic, plus a button for holders.
-
-*Changes the site and backend lanes only.*
-
-**3. (KF-SOL-26) In a Key's name, which fleet number shows?**
-- a) The number within its type, matching the card titles: Syndicate #1's key 5 is `SYNDICATE—001—005`. *(recommended)*
-- b) The fleet's number across all fleets: Syndicate #1 is fleet 2, so `SYNDICATE—002—005`.
-
-*Changes the site lane only; the chain records both.*
+**Each fleet's cards come only from its own seeds and deck.** A Key's seed is `keccak256(TRAIT_SEED_TAG, chainId, collection, tokenId, word)`, and the token id carries the fleet, so no two Keys share a seed. Each fleet's deck fingerprint and size are its own, written once, and only before any of its Keys has asked for a random number. The site deals each fleet's cards from that fleet's deck alone, in the order of that fleet's own `KeyRevealed` events (indexed by fleet). Only two things off chain could break this: the site dealing from another fleet's reveals, or the keeper recording one deck file for two fleets. The chain does not stop the second, so the keeper must make a new deck for every fleet.

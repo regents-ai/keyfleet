@@ -94,9 +94,9 @@ what the code on this branch does:
   key's edits are restricted; none may move money.
 - A key's edits are restricted, or freed again, only by a passed proposal's
   call.
-- A new key waits 4 days from its mint before it can take part; a transfer does
+- A new key waits 2 days from its mint before it can take part; a transfer does
   not restart the wait. It is then present on its own for 48 hours, until day
-  6. After that a key is present for 48 hours after its owner or an agent
+  4. After that a key is present for 48 hours after its owner or an agent
   holding a shard of it renews it, casts a ballot for it, proposes with it or
   cancels with it. A present key stops being present the moment it changes
   hands; a key sold on during its wait keeps its automatic start.
@@ -1120,7 +1120,7 @@ contract wallets such as a Safe (ERC-1271). `PRESENT_TYPEHASH`,
 
 ### Presence
 
-A new key waits `KEY_MATURITY`, 4 days from its mint (`KeyfleetKeys.mintedAt`),
+A new key waits `KEY_MATURITY`, 2 days from its mint (`KeyfleetKeys.mintedAt`),
 before it takes part: until then it cannot be renewed, vote, propose or cancel
 (`KeyTooNew(tokenId, maturesAt)`), and `maturesAt(tokenId)` gives the moment. A
 transfer does not start the wait again. When the wait ends, the key is present
@@ -1297,6 +1297,17 @@ without six decimals, a zero keeper and a zero trait table hash.
   and the keeper. It creates Classic #1 with a stand-in deck, moves to phase 1,
   buys two keys while the coordinator refuses every request, and leaves the
   sender holding and having approved the USDC for a third key.
+- `script/BaseForkLab.s.sol` and `script/base-fork-lab.sh` are no part of a
+  release either. They put the system with Classic #1 selling on a local anvil
+  fork of Base run as chain 31337, for the site on `http://localhost:4097`,
+  against Base's own USDC, swap route, REGENT staking and Autolaunch factory
+  from `deployments/base.json`, with a stand-in VRF coordinator. The Safe is
+  anvil's first default account and the keeper its second. `deploy` deploys,
+  creates Classic #1 with its real deck and moves to phase 1; `record` writes
+  `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of
+  the release's deployed record; `fulfil` answers every draw still waiting.
+  The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
+  Every step refuses any chain but 31337 (`WrongChain`).
 
 The scripts' cores take and return values, so the suite runs the real
 deployment, the real Safe steps and the real record against local stand-ins
@@ -1410,7 +1421,7 @@ purchase money and the REGENT buyer, the protocol share and money sent to a
 fleet, the treasury's payments and advances, the daily split, the launch token,
 the rewards ledger, votes and proposal topics, carrying out proposals, presence,
 shards, signed messages, Lit, the deployment, Safe-step and record scripts and
-the anvil lab. Shared set-up is in `test/helpers` and the stand-ins in
+the anvil lab. `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. Shared set-up is in `test/helpers` and the stand-ins in
 `test/mocks`.
 
 `test/invariant/` holds the handler-based invariant suites, which `forge test`

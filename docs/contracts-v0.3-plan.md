@@ -23,7 +23,7 @@ One collection, `KeyfleetKeys`, holds every key of every fleet; one `KeyfleetFac
 
 ### 1.3 Economic commitments
 
-These are the commitments the spec (§2, "Other preset economics") keeps, with the round 3 changes Sean chose on 7 October 2026: prices scale from each fleet's starting price, and the treasury's part of each purchase is swapped to REGENT; and his later 7 October rules: Classic from 10 to 100 USDC, a creator-chosen Accelerant step, 60% approval, a 4-day wait then 2 days of automatic presence, a 7-day opening, and no holding limit.
+These are the commitments the spec (§2, "Other preset economics") keeps, with the round 3 changes Sean chose on 7 October 2026: prices scale from each fleet's starting price, and the treasury's part of each purchase is swapped to REGENT; and his later 7 October rules: Classic from 10 to 100 USDC, a creator-chosen Accelerant step, 60% approval, a 2-day wait then 2 days of automatic presence, a 7-day opening, and no holding limit.
 
 | Commitment | Rule | Where |
 |---|---|---|
@@ -38,7 +38,7 @@ These are the commitments the spec (§2, "Other preset economics") keeps, with t
 | Accelerant rebate | Key 1: 90% to the treasury as REGENT. Later keys: 20% to the treasury as REGENT, and 70% (plus dust) in USDC credited in Rewards to the current holder of the previous key. | `_sell`, `REWARDS.credit` |
 | Money sent outside a purchase | Any asset at the manager above what it books is forwarded whole to the treasury, unswapped, by anyone. | `recognizeSurplus` |
 | Votes | One key, one ballot. Ballots may change until closing; at closing a proposal passes when Yes reaches 60%, rounded up, of the keys present at its opening plus every key that joined by voting (1/1, 2/2, 2/3, 3/4, 3/5, 4/6, 5/7, 5/8, 6/9, 6/10). One voter may pass anything. | `KeyfleetVotes.approvalsNeeded` |
-| New keys | A key cannot vote or be marked present for 4 days from its mint; a transfer does not restart the wait. From day 4 to day 6 it is present on its own, then only by renewing. A transfer before day 4 keeps that start. | `KeyfleetVotes.KEY_MATURITY`, `KeyfleetPresence` |
+| New keys | A key cannot vote or be marked present for 2 days from its mint; a transfer does not restart the wait. From day 2 to day 4 it is present on its own, then only by renewing. A transfer before day 2 keeps that start. | `KeyfleetVotes.KEY_MATURITY`, `KeyfleetPresence` |
 | Opening week | For 7 days from a fleet's sales opening, proposals may only set the profile, the daily split rate and key edit restrictions, with no value. | `KeyfleetVotes.TREASURY_OPENING`, `KeyfleetKeys.salesOpenedAt` |
 | Card and trait draw | One VRF v2.5 word per key, paid in native ETH from the Regents subscription; 3 confirmations, 100,000 callback gas; seed `keccak256(TAG, chainid, collection, tokenId, word)`. A key asks only once its fleet has a deck. Keys up to the deck's size get deck cards; later keys draw traits off chain from the seed and the one trait table the collection fixes. Retry only after a refused request. | `KeyfleetKeys`; README "Key reveals" |
 | Shards | Owner grants of 1 to 365 days to any number of agent wallets, ended by any transfer, with a per-key agent voting switch. | `KeyfleetShards` |
@@ -94,7 +94,7 @@ The factory and its four deployers hold nothing of value. The REGENT buyer holds
 - New and transferred keys may join an open proposal by voting.
 - One delegation mechanism: shards, keyed by token id and wallet, with a per-key agent voting switch and a per-key delegation revision. A shard is epoch-bound, so a transfer ends it.
 - EIP-712 signed Present and Ballot messages. Each binds the chain id, the fleet's Votes as verifying contract, the fleet's manager or proposal, the keys, their ownership epochs and delegation revisions, a nonce and a deadline. They are verified with OpenZeppelin `SignatureChecker`, which covers ordinary wallets and ERC-1271 contract wallets.
-- Presence: `presentFrom`, a 48-hour window, a 4-day wait then automatic presence, three due-ordered lists, `sweepExpired`, and per-key activity checkpoints keyed by a global state revision.
+- Presence: `presentFrom`, a 48-hour window, a 2-day wait then automatic presence, three due-ordered lists, `sweepExpired`, and per-key activity checkpoints keyed by a global state revision.
 - The collection's transfer hook calls the key's manager, which calls `VOTES.onKeyMoved(tokenId)` to clear presence and write a checkpoint.
 - `ownershipEpoch` on the collection; `firstMintAt` on the manager, the anchor for the daily split.
 

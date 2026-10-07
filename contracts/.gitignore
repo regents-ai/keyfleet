@@ -7,5 +7,6 @@ broadcast/**/dry-run/
 # batch files in deployments/safe are deployment evidence.
 /broadcast/*/31337/
 /deployments/anvil.deployed.json
+/deployments/base-fork-lab.json
 .env
 .env.*
