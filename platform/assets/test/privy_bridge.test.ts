@@ -14,7 +14,6 @@ const productionPrivyHooks = vi.hoisted(() => ({
   unlinkOAuth: vi.fn(async () => undefined),
   unlinkFarcaster: vi.fn(async () => undefined),
   connectWallet: vi.fn(async () => ({})),
-  connectActiveWallet: vi.fn(async () => ({})),
   // Privy answers a finished connect on this callback, and never answers an
   // abandoned one at all, so a test drives it to say the visitor came back.
   connectWalletCallbacks: undefined as {onSuccess?: (params: unknown) => void} | undefined,
@@ -32,10 +31,7 @@ vi.mock("@privy-io/react-auth", () => ({
     productionPrivyHooks.connectWalletCallbacks = callbacks
     return {connectWallet: productionPrivyHooks.connectWallet}
   },
-  useActiveWallet: () => ({
-    wallet: undefined,
-    connect: productionPrivyHooks.connectActiveWallet,
-  }),
+  useActiveWallet: () => ({wallet: undefined}),
   useToken: (callbacks?: PrivyEvents["accessToken"]) => {
     productionPrivyHooks.tokenCallbacks = callbacks
     return {getAccessToken: vi.fn(async () => null)}
@@ -376,21 +372,19 @@ describe("Privy session bridge", () => {
     const render = installAccountBridgeRenderer()
     const {localStorage} = stubBrowserGlobals("sign-out")
     const wallet = ethereumWallet("0x1111111111111111111111111111111111111111")
-    let release: ((value: {wallet: typeof wallet}) => void) | undefined
+    const connectWallet = vi.fn(async () => ({}))
     const startup = bridge.startPrivyBridge({}, {
       appId: "test-app", authenticated: true, ready: true, walletsReady: true, wallets: [wallet], activeWallet: wallet,
-      getAccessToken: async () => "verified", logout: async () => undefined,
-      connectActiveWallet: () => new Promise(resolve => { release = resolve }),
+      getAccessToken: async () => "verified", logout: async () => undefined, connectWallet,
     } as unknown as bridge.PrivyBridgeProviderState)
     render(renderedAccountBridge())
     const handle = await startup
     await until(() => activeEthereumWallet() !== null)
-    const connecting = handle.request("connect-wallet")
-    await until(() => release !== undefined)
+    await handle.request("connect-wallet")
+    expect(connectWallet).toHaveBeenCalledOnce()
     await disconnectEveryEthereumWallet(window)
-    const refused = expect(connecting).rejects.toMatchObject({name: "AbortError"})
-    release!({wallet})
-    await refused
+    productionPrivyHooks.connectWalletCallbacks?.onSuccess?.({wallet})
+    await settled()
     expect(activeEthereumWallet()).toBeNull()
     expect(localStorage.getItem("regent:wallet-disconnected:v1")).toBe("true")
     handle.dispose?.()
@@ -1398,7 +1392,6 @@ describe("Privy session bridge", () => {
     const sessionRequests = stubSessionRequests()
     const login = vi.fn()
     const connectWallet = vi.fn(async () => ({}))
-    const connectActiveWallet = vi.fn(async () => ({}))
     productionPrivyHooks.login = login
 
     const startup = bridge.startPrivyBridge({}, {
@@ -1409,7 +1402,6 @@ describe("Privy session bridge", () => {
       ready: true,
       walletsReady: true,
       wallets: [],
-      connectActiveWallet,
       connectWallet,
     })
     renderAccountBridge(renderedAccountBridge())
@@ -1421,7 +1413,6 @@ describe("Privy session bridge", () => {
       walletChainType: "ethereum-only",
       description: "Connect the wallet you want to use here.",
     })
-    expect(connectActiveWallet).not.toHaveBeenCalled()
     expect(login).not.toHaveBeenCalled()
     expect(sessionRequests).toEqual([])
   })
@@ -1641,6 +1632,46 @@ describe("Privy session bridge", () => {
     expect(reload).toHaveBeenCalledOnce()
   })
 
+  // Privy names no wallet after a sign-in that skipped its window. The signed-in
+  // wallet, connected in this tab, must still send; any other wallet must not.
+  it("selects the connected wallet the signed-in account is linked to", async () => {
+    productionRootRender.mockReset()
+    replaceActiveEthereumWallet(null)
+    const renderAccountBridge = installAccountBridgeRenderer()
+    stubBrowserGlobals()
+    const zerion = ethereumWallet("0x9b2c414614AEe294202c1219520955eF3b596031", {walletClientType: "zerion"})
+    const other = ethereumWallet("0x2222222222222222222222222222222222222222")
+    const providerState = {
+      appId: "test-app",
+      authenticated: true,
+      getAccessToken: async () => "current-token",
+      logout: async () => undefined,
+      ready: true,
+      walletsReady: true,
+      wallets: [other, zerion],
+      activeWallet: undefined as typeof zerion | undefined,
+      linkedWallets: ["0x9b2c414614aee294202c1219520955ef3b596031"],
+      setActiveWallet: vi.fn((wallet: typeof zerion) => { providerState.activeWallet = wallet }),
+    }
+
+    const startup = bridge.startPrivyBridge({}, providerState as unknown as bridge.PrivyBridgeProviderState)
+    const accountElement = renderedAccountBridge()
+    renderAccountBridge(accountElement)
+    await startup
+    await until(() => activeEthereumWallet()?.provider === zerion.provider)
+    expect(providerState.setActiveWallet).toHaveBeenCalledWith(zerion)
+
+    // Two linked wallets connected at once are a choice for the customer.
+    replaceActiveEthereumWallet(null)
+    providerState.activeWallet = undefined
+    providerState.setActiveWallet.mockClear()
+    providerState.linkedWallets = [zerion.address.toLowerCase(), other.address]
+    renderAccountBridge(accountElement)
+    await settled()
+    expect(providerState.setActiveWallet).not.toHaveBeenCalled()
+    expect(activeEthereumWallet()).toBeNull()
+  })
+
   // Privy can move the selection without changing the connected set. Stake reads
   // the selection, so that change has to reach the page as a wallet-state event.
   it("P1_ACTIVE_WALLET_ONLY: publishes the selection and announces a selection-only change", async () => {
@@ -1757,7 +1788,6 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [] as Array<typeof wallet>,
       activeWallet: undefined as typeof wallet | undefined,
-      connectActiveWallet: vi.fn(async () => ({})),
       connectWallet,
     }
 

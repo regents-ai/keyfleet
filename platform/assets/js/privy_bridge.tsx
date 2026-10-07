@@ -670,7 +670,7 @@ export type PrivyBridgeProviderState = {
   walletsReady: ReturnType<typeof useWallets>["ready"]
   wallets: ReturnType<typeof useWallets>["wallets"]
   activeWallet?: ReturnType<typeof useActiveWallet>["wallet"]
-  connectActiveWallet?: ReturnType<typeof useActiveWallet>["connect"]
+  linkedWallets?: string[]
   setActiveWallet?: ReturnType<typeof useActiveWallet>["setActiveWallet"]
   connectWallet?: ReturnType<typeof useConnectWallet>["connectWallet"]
 }
@@ -709,9 +709,16 @@ function AccountBridge({mode, providerState, publishRequestHandler, lifetime}: A
   const walletsReady = providerState?.walletsReady ?? providerWallets.ready
   const wallets = providerState?.wallets ?? providerWallets.wallets
   const activeWallet = providerState?.activeWallet ?? providerActiveWallet.wallet
-  const connectActiveWallet = providerState?.connectActiveWallet ?? providerActiveWallet.connect
   const setActiveWallet = providerState?.setActiveWallet ?? providerActiveWallet.setActiveWallet
   const connectWallet = providerState?.connectWallet ?? providerWalletConnector.connectWallet
+  // The Ethereum wallets the signed-in account is linked to, joined so a render
+  // with the same accounts leaves the wallet sync below alone.
+  const linkedWallets = (
+    providerState?.linkedWallets ??
+    (privy.user?.linkedAccounts ?? []).flatMap(account =>
+      account.type === "wallet" && account.chainType === "ethereum" ? [account.address] : [],
+    )
+  ).map(address => address.toLowerCase()).join(",")
   const signOutOnly = mode === "sign-out-only"
   const signOutOnlyState = React.useRef<"preterminal" | "terminal">(
     signOutOnly ? "preterminal" : "terminal",
@@ -938,6 +945,20 @@ function AccountBridge({mode, providerState, publishRequestHandler, lifetime}: A
         forgetEthereumWalletSelection()
       }
     }
+    // Privy names no wallet after a sign-in that skipped its window, or in a new
+    // tab. The signed-in wallet then sends as this tab has it connected: the one
+    // connected wallet the account is linked to. Two such wallets are no wallet;
+    // the press opens Privy's connect window and the customer picks.
+    if (!selectedWallet && !pendingSelection && ready && walletsReady && linkedWallets) {
+      const linked = linkedWallets.split(",")
+      const signedIn = wallets.filter(wallet =>
+        wallet.type === "ethereum" && linked.includes(wallet.address.toLowerCase()),
+      )
+      if (signedIn.length === 1) {
+        selectedWallet = signedIn[0]
+        setActiveWallet(selectedWallet)
+      }
+    }
     const switchedAccount = selectedWallet || pendingSelection ? null : switchedAccountOf(selectedWalletRef.current, wallets)
 
     // The wallet the customer just left stops being the active wallet here, before
@@ -1012,6 +1033,7 @@ function AccountBridge({mode, providerState, publishRequestHandler, lifetime}: A
     window.dispatchEvent(new CustomEvent("ash:wallet-state"))
   }, [
     activeWallet,
+    linkedWallets,
     ready,
     reconcileProviderSession,
     setActiveWallet,
@@ -1035,32 +1057,16 @@ function AccountBridge({mode, providerState, publishRequestHandler, lifetime}: A
     }
   }, [signOutOnly, synchronizeWallets])
 
+  // Privy's connect window, for a wallet this tab does not have yet or for a
+  // choice between wallets. Its own success callback above says the visitor
+  // came back with one, so there is nothing to read from this answer.
   const connectSelectedWallet = React.useCallback(async () => {
     requireCurrent(() => !lifetime.aborted)
-    const epoch = walletWorkEpoch()
-    connectEpoch.current = epoch
-    if (wallets.length === 0) {
-      // Privy's window says whether the visitor finished, on the connector's own
-      // success callback above, so there is nothing to read from this answer.
-      await Promise.resolve(
-        connectWallet({
-          walletChainType: "ethereum-only",
-          description: "Connect the wallet you want to use here.",
-        }),
-      )
-      return
-    }
-
-    // Privy already holds this wallet, so connecting it answers with the wallet
-    // itself. An answer carrying one is the visitor back with a wallet.
-    const {wallet} = await connectActiveWallet()
-    requireCurrent(() => !lifetime.aborted && walletWorkEpoch() === epoch)
-    if (wallet && wallet.type !== "ethereum") throw new AccountAuthFailure("provider", "provider_error")
-    if (wallet) {
-      forgetEthereumWalletSelection()
-      finishWalletConnection()
-    }
-  }, [connectActiveWallet, connectWallet, finishWalletConnection, wallets.length, lifetime])
+    connectEpoch.current = walletWorkEpoch()
+    await Promise.resolve(
+      connectWallet({walletChainType: "ethereum-only", description: "Connect the wallet you want to use here."}),
+    )
+  }, [connectWallet, lifetime])
 
   const markSignOutTerminal = React.useCallback(() => {
     signOutOnlyState.current = "terminal"
