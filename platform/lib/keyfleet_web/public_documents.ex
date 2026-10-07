@@ -113,7 +113,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       suffix: suffix,
       description: description,
       canonical: url(path),
-      image: url("/mark.png"),
+      image: url(KeyfleetWeb.Endpoint.static_path("/images/keyfleet-share.png")),
       markdown?: path in @documents,
       site_type: @site_type
     }
