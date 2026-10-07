@@ -1,6 +1,6 @@
 // The key-art service: draws one key's card as a PNG for the site's picture job.
-// POST /draw with {"seed", "top_line", "table"} answers the picture (200, image/png), or why it
-// could not be drawn (422, JSON). GET /healthz answers 200 while the browser is up. Every
+// POST /draw with {"seed", "top_line", "table"} answers the picture (200, image/png), why the
+// body is unreadable (400, JSON) or why it could not be drawn (422, JSON). GET /healthz answers 200 while the browser is up. Every
 // other GET serves the drawing page in dist/, which this server's own browser opens.
 import {createServer} from "node:http"
 import {readFile} from "node:fs/promises"
