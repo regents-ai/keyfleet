@@ -20,7 +20,6 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
   def steps(:run_split, %{fleet: fleet}) do
     treasury = fleet.treasury_address
     uint = &Reads.one(&1, treasury, &2, [], {:uint, 256})
-    figures = %{assets: [], blocked: %{}}
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, assets} <- Reads.one(reads, treasury, "splitAssets()", [], {:array, :address}),
@@ -49,7 +48,8 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
          blocked: blocked
        }}
     else
-      _unread -> {:problem, :unread, figures}
+      # No preview: the page says the network can't be reached.
+      _unread -> {:problem, :unread, %{blocked: %{}}}
     end
   end
 
