@@ -5,6 +5,10 @@ defmodule Keyfleet.Decks do
   key dealt card `i` shows the traits `Keyfleet.Traits.draw/2` gives that seed
   from the deck's trait table, under the key's own top line.
 
+  Nothing about a card is drawn, stored or served before the key it is dealt
+  to is minted and revealed: its picture is drawn and kept on IPFS only after
+  that reveal, like every key's (`Keyfleet.Keys.DrawPicture`).
+
   A deck is the JSON file named by its hash, lowercase, in the release's
   `priv/decks`; the tests keep theirs elsewhere with
   `config :keyfleet, Keyfleet.Decks, directory: ...`. It names the fleet it was
