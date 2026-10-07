@@ -993,6 +993,9 @@ One admission precondition, written on `admitOusd`: the ledger requires the toke
 - P13 a: the product spec is updated (on main, by the chief engineer).
 - P14 a: keys stack in a wallet; every key action is batchable.
 - KF-CLAIM: the owner or an agent holding an active shard of the key may press claim (batched over many keys); the money always goes to the wallet that holds the key, never to the agent.
+- KF-SPLIT-FAIL a (7 Oct): when a token refuses the transfer to the ledger, the daily split skips that token and still splits the others; that day is used for all of them.
+- KF-RELEASE a (7 Oct): the launch's upkeep (settle the sale, bind the token, release vested tokens, collect pool fees) is pressed from buttons on the fleet page that anyone may press. The contracts do not do it themselves.
+- KF-SITE a (7 Oct): the site moves to the five Base contracts now, locally; nothing is released without Sean's separate go.
 
 ### 9.1 Where the build differs from sections 4.6 and 6 (C8–C11, 6 Oct 2026)
 
