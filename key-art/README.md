@@ -11,8 +11,9 @@ Draws a revealed key's card as a 767×959 PNG for the site's picture job
   answers:
   - `GET /healthz`: 200 once the browser is up.
   - `POST /draw` with JSON `{"seed", "top_line", "table"}`: 200 and the PNG;
-    422 and `{"error": <reason>}` for a seed that is not 32 bytes of lowercase
-    hex, a missing top line or a table other than
+    400 and `{"error": <reason>}` for a body that is not JSON with those three
+    strings; 422 and `{"error": <reason>}` for a seed that is not 32 bytes of
+    lowercase hex, an empty top line or a table other than
     `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`.
 - The same seed, table and top line always give the same bytes on one kind of
   machine. Mac and Linux pictures differ in about 1% of pixels (letter edges);
