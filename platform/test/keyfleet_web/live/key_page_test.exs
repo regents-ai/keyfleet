@@ -166,6 +166,13 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
       assert has_element?(view, "#key-present-mark[disabled]")
       assert has_element?(view, "#key-present-action", "Not your key")
       assert has_element?(view, "#key-present-sweep:not([disabled])")
+
+      # A visitor reads it too, with no buttons.
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view)
+
+      assert has_element?(view, "#key-present-keys [data-key='1']", "Present until")
+      refute has_element?(view, "#key-present [data-onchain-step]")
     end
 
     test "a lapsed presence says it isn't present", %{conn: conn} do

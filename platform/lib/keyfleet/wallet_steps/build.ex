@@ -55,36 +55,45 @@ defmodule Keyfleet.WalletSteps.Build do
 
   @impl true
   def run(input, _opts, _context) do
-    %{fleet_id: fleet_id, flow: flow, signer: signer, component_id: component_id} =
-      input.arguments
+    %{signer: signer, component_id: component_id} = input.arguments
 
-    inputs = Map.get(input.arguments, :inputs, %{})
+    with {:ok, request, built} <- build(input.arguments, String.downcase(signer)) do
+      {:ok,
+       %{
+         review:
+           Review.new(component_id, request.signer, request.chain, built.steps, request.inputs),
+         figures: built.figures,
+         problem: built.problem
+       }}
+    end
+  end
 
-    with {:ok, fleet} <- deployed(fleet_id),
+  @doc """
+  The steps `arguments` name, built for `signer`, or for nil, a visitor, who
+  acts for no key: `{:ok, request, %{steps, figures, problem}}`.
+  """
+  def build(arguments, signer) do
+    with {:ok, fleet} <- deployed(arguments.fleet_id),
          {:ok, chain} <- chain(fleet.chain_id) do
       request = %{
         fleet: fleet,
         chain: chain,
-        signer: String.downcase(signer),
-        inputs: inputs,
-        proposal: Map.get(input.arguments, :proposal),
-        token_id: Map.get(input.arguments, :token_id),
-        advance_id: Map.get(input.arguments, :advance_id)
+        signer: signer,
+        inputs: Map.get(arguments, :inputs, %{}),
+        proposal: Map.get(arguments, :proposal),
+        token_id: Map.get(arguments, :token_id),
+        advance_id: Map.get(arguments, :advance_id)
       }
 
       {steps, figures, problem} =
-        case Map.fetch!(@builders, flow).steps(flow, request) do
+        case Map.fetch!(@builders, arguments.flow).steps(arguments.flow, request) do
           {:ok, steps, figures} -> {steps, figures, nil}
           {:ok, steps, figures, problem} -> {steps, figures, problem}
           {:problem, problem, figures} -> {[], figures, problem}
         end
 
-      {:ok,
-       %{
-         review: Review.new(component_id, request.signer, chain, steps, inputs),
-         figures: Map.put_new(figures, :blocked, %{}),
-         problem: problem
-       }}
+      {:ok, request,
+       %{steps: steps, figures: Map.put_new(figures, :blocked, %{}), problem: problem}}
     end
   end
 

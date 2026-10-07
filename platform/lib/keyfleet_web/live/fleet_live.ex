@@ -965,6 +965,28 @@ defmodule KeyfleetWeb.FleetLive do
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
       >
+        <:notes :let={panel}>
+          <dl :if={is_nil(@actor) and launched?(panel)} id="fleet-launch-facts" class="fleet-facts">
+            <div>
+              <dt>Token</dt>
+              <dd>
+                <code title={WalletPanel.figures(panel).token}>
+                  {RegentFormat.short_address(WalletPanel.figures(panel).token)}
+                </code>
+              </dd>
+            </div>
+            <div>
+              <dt>Sale</dt>
+              <dd id="fleet-launch-sale">{sale(panel)}</dd>
+            </div>
+            <div>
+              <dt>Daily split</dt>
+              <dd id="fleet-launch-split">
+                {if WalletPanel.figures(panel).bound?, do: "Included", else: "Not yet"}
+              </dd>
+            </div>
+          </dl>
+        </:notes>
         <:buttons :let={panel}>
           <WalletPanel.step_button
             :if={launched?(panel)}
@@ -1006,6 +1028,17 @@ defmodule KeyfleetWeb.FleetLive do
 
   # Until an approved proposal has made a launch, there is nothing to upkeep.
   defp launched?(panel), do: WalletPanel.figures(panel)[:launch_id] != nil
+
+  # Where the launch's sale stands, for a visitor, who sees no buttons.
+  defp sale(panel) do
+    case WalletPanel.figures(panel) do
+      %{lifecycle: :active, blocked: %{"settle" => :sale_running}} -> "On sale"
+      %{lifecycle: :active} -> "Ended, ready to settle"
+      %{lifecycle: :graduated} -> "Sold"
+      %{lifecycle: :failed} -> "Didn’t sell"
+      %{lifecycle: :none} -> "Not started"
+    end
+  end
 
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true

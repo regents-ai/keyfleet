@@ -91,6 +91,8 @@ defmodule Keyfleet.WalletSteps.Reads do
   end
 
   defp allowed(_reads, _fleet, _wallet, _key, nil, _shard_check), do: {:ok, false}
+  # A visitor, with no wallet, acts for no key.
+  defp allowed(_reads, _fleet, nil, _key, _holder, _shard_check), do: {:ok, false}
   defp allowed(_reads, _fleet, wallet, _key, wallet, _shard_check), do: {:ok, true}
 
   defp allowed(reads, fleet, wallet, key, _holder, shard_check),

@@ -10,6 +10,7 @@ defmodule Keyfleet.WalletSteps do
   resources do
     resource Keyfleet.WalletSteps.Steps do
       define :build_steps, action: :build, args: [:fleet_id, :flow, :signer, :component_id]
+      define :read_figures, action: :figures, args: [:fleet_id, :flow]
     end
   end
 

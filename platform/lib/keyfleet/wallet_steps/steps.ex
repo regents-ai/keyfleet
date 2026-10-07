@@ -7,6 +7,10 @@ defmodule Keyfleet.WalletSteps.Steps do
   wallet: one the person's account links, or the agent's own. The signer is
   checked against the actor's own wallets, never taken from the request on
   trust.
+
+  Anyone may read the figures some groups show, which are public on the
+  chain: the daily split's preview, whether keys are present, and the
+  fleet's launch. They are read the same way, and nothing is built to send.
   """
   use Ash.Resource,
     domain: Keyfleet.WalletSteps,
@@ -57,11 +61,28 @@ defmodule Keyfleet.WalletSteps.Steps do
 
       run Keyfleet.WalletSteps.Build
     end
+
+    action :figures, :map do
+      description "What a group of wallet buttons shows, for anyone, with nothing to send."
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :flow, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:run_split, :present, :launch_upkeep]]
+
+      argument :token_id, :integer, constraints: [min: 1]
+
+      run Keyfleet.WalletSteps.Figures
+    end
   end
 
   policies do
     policy action(:build) do
       authorize_if Keyfleet.WalletSteps.LinkedSigner
+    end
+
+    policy action(:figures) do
+      authorize_if always()
     end
   end
 end

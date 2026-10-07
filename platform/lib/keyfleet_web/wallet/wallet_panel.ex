@@ -9,7 +9,9 @@ defmodule KeyfleetWeb.WalletPanel do
   wallet that may send them: Privy's active wallet, when the signed-in account
   links it. The page receives them before anyone presses. With another wallet
   active, the figures are built for the account's own wallet, a note names
-  both, and a press sends nothing and says why. Signed out, nothing is built.
+  both, and a press sends nothing and says why. Signed out, nothing is built;
+  the daily split's preview, presence and the launch still show their
+  figures, read from the chain the same way, without their buttons.
 
   Nothing here disables, hides or holds back a button while anything is
   pending: every press reaches the wallet, and the contract decides. The one
@@ -49,6 +51,8 @@ defmodule KeyfleetWeb.WalletPanel do
   @reread_ms 10_000
   # How soon a group with a button the chain's state holds back reads it again.
   @blocked_ms 15_000
+  # The groups whose figures a visitor sees, read-only.
+  @shown_to_visitors [:run_split, :present, :launch_upkeep]
 
   @doc "Whether the steps built for the group name `step`."
   def has_step?(%{built: %{review: review}}, step), do: Review.find(review, step) != nil
@@ -287,6 +291,19 @@ defmodule KeyfleetWeb.WalletPanel do
 
   defp drop_other_signer(socket, _signer), do: socket
 
+  defp build(%{assigns: %{actor: nil, flow: flow}} = socket, nil)
+       when flow in @shown_to_visitors do
+    %{fleet: %{fleet_id: fleet_id}, token_id: token_id} = socket.assigns
+
+    socket
+    |> OnchainSteps.put_review(nil)
+    |> start_async(:build, fn ->
+      fleet_id
+      |> WalletSteps.read_figures!(flow, %{token_id: token_id})
+      |> Map.put(:review, nil)
+    end)
+  end
+
   defp build(socket, nil), do: socket |> assign(built: nil) |> OnchainSteps.put_review(nil)
 
   # Every group reads the chain, so its steps are built away from the page's
@@ -366,7 +383,8 @@ defmodule KeyfleetWeb.WalletPanel do
       assign(assigns,
         panel: Map.take(assigns, [:inputs, :built, :review, :presses, :signer]),
         line: WalletWords.line(assigns.flow, assigns.built, assigns.inputs),
-        chain: chain_name(%{assigns: assigns})
+        chain: chain_name(%{assigns: assigns}),
+        read_only: assigns.actor == nil and assigns.flow in @shown_to_visitors
       )
 
     ~H"""
@@ -403,7 +421,9 @@ defmodule KeyfleetWeb.WalletPanel do
         {@mismatch} Switch to a wallet on your account to send from here.
       </p>
 
-      <div class="wallet-panel-buttons">{render_slot(@buttons, @panel)}</div>
+      <div :if={!@read_only} class="wallet-panel-buttons">
+        {render_slot(@buttons, @panel)}
+      </div>
 
       <p :if={@press_note} id={"#{@id}-press-note"} class="wallet-panel-note" role="status">
         {@press_note}

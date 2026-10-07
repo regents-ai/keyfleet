@@ -839,15 +839,25 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert send.data == Call.encode("sendProtocolShare()", [])
     end
 
-    # Signed out, nothing is built, so nothing holds a button back: every
-    # press reaches the wallet, which asks to sign in.
-    test "signed out, every button is in view and takes the press", %{conn: conn} do
-      {:ok, view, _html} = live(conn, @list)
+    # Signed out, the split preview and presence are read from the chain as
+    # for a member and shown without their buttons. Nothing is built for the
+    # other buttons, so nothing holds them back: every press reaches the
+    # wallet, which asks to sign in.
+    test "signed out, the split and presence show read-only, and the other buttons take the press",
+         %{conn: conn} do
+      ChainViews.put!(
+        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}], queue: [2, 3, 2])
+      )
 
-      assert pressable?(view, "present", ["#proposals-present-mark"])
-      assert pressable?(view, "sweep", ["#proposals-present-sweep"])
+      {:ok, view, _html} = live(conn, @list)
+      render_async(view)
+
+      assert preview(view, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
+      assert has_element?(view, "#proposals-present-maintenance", "Maintenance needed")
+      refute has_element?(view, "#proposals-split-action [data-onchain-step]")
+      refute has_element?(view, "#proposals-present-action [data-onchain-step]")
+
       assert pressable?(view, "propose", ["#propose-button"])
-      assert pressable?(view, "run_split", ["#proposals-run-split"])
       assert pressable?(view, "send_share", ["#proposals-send-share"])
     end
   end

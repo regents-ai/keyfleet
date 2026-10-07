@@ -938,6 +938,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#fleet-launch-bind-why") == "Already added"
       assert has_element?(view, "#fleet-launch-release:not([disabled])", "Release tokens")
       assert has_element?(view, "#fleet-launch-collect:not([disabled])", "Collect fees")
+      refute has_element?(view, "#fleet-launch-facts")
+
+      # A visitor reads where the launch stands, with no buttons.
+      {:ok, view, _html} = live(build_conn(), @path)
+      render_async(view)
+
+      assert text(view, "#fleet-launch-sale") == "Sold"
+      assert text(view, "#fleet-launch-split") == "Included"
+      refute has_element?(view, "#fleet-launch [data-onchain-step]")
     end
 
     test "a sale that didn't sell says so beside each button that needs one", %{conn: conn} do

@@ -106,9 +106,15 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # Marking keys present: the one key a key's page is about, or every key the
   # signer holds or holds an active shard of. A key's page shows whether its
   # key is present whoever is looking. Tidy up clears presences that have
-  # lapsed, which anyone may do.
+  # lapsed, which anyone may do. A visitor holds no keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
-    candidates = if token_id, do: [token_id], else: Build.own_keys(fleet, signer)
+    candidates =
+      cond do
+        token_id -> [token_id]
+        signer -> Build.own_keys(fleet, signer)
+        true -> []
+      end
+
     figures = %{keys: [], maintenance?: false}
 
     with {:ok, reads} <- Reads.at_head(),
