@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -36,9 +37,15 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// before any run; an approved proposal may also run it at any time. Its rate, 0.5% by default,
 /// is between 0.1% and 2% and changes only by an approved proposal. Carrying out calls, the
 /// deposit, returning an advance and the public split run under one reentrancy lock; a voted
-/// split runs inside the calls it is carried out with. There is no administrator, no upgrade path
-/// and no pause.
-contract KeyfleetTreasury is ReentrancyGuardTransient {
+/// split runs inside the calls it is carried out with.
+///
+/// The treasury signs nothing by itself. It answers ERC-1271 `isValidSignature` with yes only for
+/// a hash an approved proposal approved with `approveSignatureHash`, until one revokes it with
+/// `revokeSignatureHash`. That is how the fleet owns a Lit ChainSecured account on Base: every
+/// administrative write to Lit's `AccountConfig` is an exact call of an approved proposal, and
+/// every message Lit asks the owner to sign is a hash an approved proposal approved first.
+/// There is no administrator, no upgrade path and no pause.
+contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     using SafeERC20 for IERC20;
     using TransientSlot for *;
 
@@ -116,6 +123,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     /// @notice Every advance an approved proposal has made, by the id the proposal gave it.
     mapping(uint256 advanceId => Advance advance) public advances;
 
+    /// @notice The hashes the treasury answers for as its own signature, each approved by an
+    /// approved proposal and not since revoked.
+    mapping(bytes32 hash => bool approved) public approvedHash;
+
     /// @notice The fleet does not name this contract as its treasury.
     error WrongFleet(address fleet);
     /// @notice The staking or REGENT address is zero.
@@ -173,6 +184,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
     event DailySplitRateSet(uint256 bps);
     /// @notice An approved proposal admitted OUSD as a bound asset of the daily split.
     event OusdAdmitted(address indexed token, uint256 threshold);
+    /// @notice An approved proposal approved a hash: the treasury now answers ERC-1271 for it.
+    event SignatureHashApproved(bytes32 indexed hash);
+    /// @notice An approved proposal revoked a hash: the treasury no longer answers for it.
+    event SignatureHashRevoked(bytes32 indexed hash);
 
     modifier onlySelf() {
         if (msg.sender != address(this)) revert OnlySelf();
@@ -314,6 +329,29 @@ contract KeyfleetTreasury is ReentrancyGuardTransient {
         ousd = token;
         ousdThreshold = threshold;
         emit OusdAdmitted(address(token), threshold);
+    }
+
+    /// @notice Approves a hash as the treasury's signature, so `isValidSignature` answers yes for
+    /// it. Only an approved proposal's call reaches it.
+    /// @dev Approve only a digest that names its own domain, such as an EIP-712 digest, so the
+    /// approval means one message to one verifier.
+    function approveSignatureHash(bytes32 hash) external onlySelf {
+        approvedHash[hash] = true;
+        emit SignatureHashApproved(hash);
+    }
+
+    /// @notice Revokes a hash, so `isValidSignature` answers no for it again. Only an approved
+    /// proposal's call reaches it.
+    function revokeSignatureHash(bytes32 hash) external onlySelf {
+        approvedHash[hash] = false;
+        emit SignatureHashRevoked(hash);
+    }
+
+    /// @notice ERC-1271: the magic value `0x1626ba7e` exactly when an approved proposal approved
+    /// `hash` and none has revoked it since, and `0xffffffff` otherwise. The signature bytes are
+    /// not read: the approval is the signature.
+    function isValidSignature(bytes32 hash, bytes calldata) external view returns (bytes4) {
+        return approvedHash[hash] ? IERC1271.isValidSignature.selector : bytes4(0xffffffff);
     }
 
     /// @notice The assets the daily split shares, in the order it splits them: ETH (`NATIVE`),

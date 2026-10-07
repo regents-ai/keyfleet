@@ -297,7 +297,7 @@ All of the checks below were read-only, against Base mainnet (chain 8453) at blo
 | Autolaunch v1 factory | `0x635615cCEF2Ef24D0655fC2eBC47a14e005FEF6e` | `repos/autolaunch/contracts/v1/deployments/base-mainnet/deployed-manifest.json` (deployed 22 Sep 2026, packet `0x5ba245ed0af9de1c1749f0b50cd54919a8084faf580d92282ef0592144f35327`). Basescan exact-match source. On chain: opened for launches by the Safe in tx `0x455b771419d2f7ba7ec79b7b884fb6252d99fccc220ebf06207f4838ccac8b67`; no launch yet. | Verified | Launch path and TOKEN slot (section 4.7, decision 10) |
 | Autolaunch v2 factory | predicted `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` | `feat/contracts-v2` plan in `repos/autolaunch` | **Not deployed** (no code on Base). Not bound. | — |
 | OUSD on Base | none | [Origin OUSD registry](https://docs.originprotocol.com/registry/contracts/ousd-registry) lists OUSD tokens only on Ethereum. The only Base entry, `0xB1d624fc40824683e2bFBEfd19eB208DbBE00866`, is a strategy, not a token. | **Unconfigured**, as spec §8.7 expects | OUSD slot stays empty until an approved `admitOusd` |
-| Lit `AccountConfig` diamond | read from `GET /get_node_chain_config` | [Lit account modes](https://developer.litprotocol.com/management/account_modes) | **UNVERIFIED.** Not fetched; it is only a call target inside proposals, never a constant. | Lit admin calls |
+| Lit `AccountConfig` diamond | `0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` | Lit's node configuration, `GET https://api.chipotle.litprotocol.com/core/v1/get_node_chain_config` (chain "Base", id 8453), fetched 6 Oct 2026. On chain: a diamond with code on Base; its loupe routes all seven admin writes the treasury uses to one facet, and their selectors match Lit's open-source `WritesFacet` (`LIT-Protocol/chipotle`). The Base fork test runs the treasury's writes against it. | Verified | Lit admin calls. Only a call target inside proposals, never a contract constant. |
 | Trait table hash | zero today | — | **Not produced.** It is generated from the published table before deployment, and the deploy refuses zero. | Trait reveal |
 
 Also recorded, not bound: the VRF wrapper `0xb0407dbe851f8318bd31404A49e658143C982F23` appears only on the Chainlink page, and its code was not checked. It is not used, because fleets use a subscription.
@@ -671,6 +671,7 @@ Design:
 - **The treasury implements ERC-1271.** `isValidSignature(h, sig)` returns the magic value exactly when `approvedHash[h]` is true. A proposal that calls `approveSignatureHash(h)` sets it, and a later one can revoke it. No raw bytes are ever signed by default, and no backend signer exists.
 - **Flow:** every write to `AccountConfig` is a CALL in an approved proposal, and every signed message is approved first with `approveSignatureHash`. The steps are: create the account, create one inbox group with its action, mint one execute-only usage key for the operator, then replace or revoke that key.
 - **Base governance and claims never depend on Lit.**
+- **Signed requests have a five-minute window.** Lit's server (`lit-api-server/src/core/eip712.rs`) takes a signed request such as `CreateWallet` only within 300 seconds either side of its `issuedAt`, and each digest only once. Its domain is name "Lit ChainSecured", version "1" and the chain id, with no verifying contract, and the message is `(address, issuedAt)`. So a proposal that approves a Lit digest sets `issuedAt` to when it will be carried out, at or after it closes, and the operator posts the request to Lit within five minutes of that.
 
 What can and cannot be tested before a real deployment:
 
@@ -678,7 +679,7 @@ What can and cannot be tested before a real deployment:
 |---|---|
 | ERC-1271 yes/no, approval and revocation of a hash, a revoked hash refused | Unit (local) |
 | Admin writes are exact CALLs a proposal can carry; a non-approved call cannot reach `AccountConfig` | Unit, with a mock `AccountConfig` |
-| The real `AccountConfig` accepts the treasury's admin write (ownership, group, usage-key mint) | **Fork of Base**, against the real diamond read from `get_node_chain_config` |
+| The real `AccountConfig` accepts the treasury's admin write (ownership, group, usage-key mint) | **Fork of Base**, against the real diamond read from `get_node_chain_config` (`test/fork/KeyfleetLitFork.t.sol`) |
 | Lit's server registers the contract-owned account, checks ERC-1271 on the real treasury, mints a usage key, runs the inbox Action, and refuses admin from the execute-only key | **Not testable locally or on a fork.** Lit's servers run only against Base mainnet, so this needs a real treasury on Base mainnet. Decision 9. |
 | A Lit outage leaves voting and claims working | Unit (Lit is never on that path) |
 
