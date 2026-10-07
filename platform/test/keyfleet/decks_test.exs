@@ -23,12 +23,12 @@ defmodule Keyfleet.DecksTest do
     assert cards |> Tuple.to_list() |> Enum.uniq() |> length() == 5
   end
 
-  # Anyone can recompute every card from the chain's reveals, the deck and
-  # the rule in priv/decks/README.md, so the rule must never change. Pinned
+  # Every Key's card follows from the chain's reveals, the deck and the rule
+  # in priv/decks/README.md, so the rule must never change. Pinned
   # from a separate JavaScript copy of the rule over the seeds
   # keccak256("deal-1") to keccak256("deal-10").
   @tag :tmp_dir
-  test "a deck deals by the published rule, every card once" do
+  test "a deck deals by the rule in its README, every card once" do
     seeds = for i <- 1..10, do: Keyfleet.Traits.keccak256("deal-#{i}")
 
     assert Decks.deal(10, seeds) == [2, 6, 8, 5, 1, 4, 3, 7, 9, 0]
