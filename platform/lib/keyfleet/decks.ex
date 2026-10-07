@@ -51,7 +51,7 @@ defmodule Keyfleet.Decks do
   each seed, read as a 256-bit unsigned number, the card dealt is the one at
   `seed mod (cards remaining)` in that list; the list's last card then takes
   its place and the list is one shorter. No card is dealt twice.
-  `priv/decks/README.md` states the same rule for anyone checking.
+  `priv/decks/README.md` states the same rule.
   """
   def deal(size, seeds) when size > 0 do
     remaining = Map.new(0..(size - 1), &{&1, &1})

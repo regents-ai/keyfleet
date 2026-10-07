@@ -4,7 +4,7 @@ Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 each have a deck of 1,000
 cards, made before the fleet was created. Keys 1 to 1,000 of those fleets each
 show one card from their fleet's deck; Keys 1,001 onward, and every other
 fleet, draw their own card from their own seed. With this rule, the fleet's
-reveals on chain and the deck file, anyone can work out every Key's card.
+reveals on chain and the deck file give every Key's card.
 
 ## A deck file
 
