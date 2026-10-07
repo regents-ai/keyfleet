@@ -42,7 +42,7 @@ defmodule Keyfleet.ShardsChainTest do
       assert_receive {:keys_changed, @fleet, [7]}
 
       assert {:ok, %{token_id: 7, kind: :issued, expires_at: ^expires, ownership_epoch: 1}} =
-               Keys.active_shard(@fleet, wallet("b"))
+               Keys.active_shard(@fleet, 7, wallet("b"))
 
       assert [%{token_id: 7, wallet: wallet_b}] = Keys.active_shards_of_keys!(@fleet, [7])
       assert wallet_b == wallet("b")
@@ -52,7 +52,7 @@ defmodule Keyfleet.ShardsChainTest do
       read(fleet, issued ++ [ended(7, "b", "a", @deployed + 11, 0)], @deployed + 20)
 
       assert_receive {:keys_changed, @fleet, [7]}
-      assert {:ok, nil} = Keys.active_shard(@fleet, wallet("b"))
+      assert {:ok, nil} = Keys.active_shard(@fleet, 7, wallet("b"))
       assert Keys.active_shards_of_keys!(@fleet, [7]) == []
 
       assert [
@@ -63,27 +63,31 @@ defmodule Keyfleet.ShardsChainTest do
       assert ended_by == wallet("a")
     end
 
-    test "issuing again renews a shard, and a wallet holds one shard in a fleet",
+    test "issuing again renews a shard, and a wallet holds a shard of each key it is given",
          %{fleet: fleet} do
       renewed = in_days(90)
 
-      read(
-        fleet,
-        [
-          ownership(7, "a", 1, @deployed + 1, 0),
-          ownership(8, "a", 1, @deployed + 1, 1),
-          issued(7, "b", in_days(30), 1, @deployed + 2, 0),
-          issued(7, "b", renewed, 1, @deployed + 3, 0),
-          issued(7, "c", in_days(5), 1, @deployed + 3, 1),
-          issued(8, "c", in_days(10), 1, @deployed + 4, 0)
-        ],
-        @deployed + 10
-      )
+      logs = [
+        ownership(7, "a", 1, @deployed + 1, 0),
+        ownership(8, "a", 1, @deployed + 1, 1),
+        issued(7, "b", in_days(30), 1, @deployed + 2, 0),
+        issued(7, "b", renewed, 1, @deployed + 3, 0),
+        issued(7, "c", in_days(5), 1, @deployed + 3, 1),
+        issued(8, "c", in_days(10), 1, @deployed + 4, 0),
+        ended(8, "c", "a", @deployed + 5, 0)
+      ]
 
-      assert {:ok, %{token_id: 7, expires_at: ^renewed}} = Keys.active_shard(@fleet, wallet("b"))
-      assert {:ok, %{token_id: 8}} = Keys.active_shard(@fleet, wallet("c"))
+      read(fleet, logs, @deployed + 10)
 
-      assert [%{token_id: 7}, %{token_id: 8}] =
+      assert {:ok, %{expires_at: ^renewed}} = Keys.active_shard(@fleet, 7, wallet("b"))
+      assert {:ok, %{token_id: 7}} = Keys.active_shard(@fleet, 7, wallet("c"))
+      assert {:ok, nil} = Keys.active_shard(@fleet, 8, wallet("c"))
+
+      read(fleet, logs ++ [issued(8, "c", in_days(10), 1, @deployed + 11, 0)], @deployed + 20)
+
+      assert [%{token_id: 7}, %{token_id: 8}] = Keys.active_shards_held_by!(wallet("c"))
+
+      assert [%{token_id: 7}, %{token_id: 7}, %{token_id: 8}] =
                Keys.active_shards_of_keys!(@fleet, [7, 8])
     end
 
@@ -100,8 +104,8 @@ defmodule Keyfleet.ShardsChainTest do
         @deployed + 10
       )
 
-      assert {:ok, nil} = Keys.active_shard(@fleet, wallet("b"))
-      assert {:ok, nil} = Keys.active_shard(@fleet, wallet("c"))
+      assert {:ok, nil} = Keys.active_shard(@fleet, 7, wallet("b"))
+      assert {:ok, nil} = Keys.active_shard(@fleet, 8, wallet("c"))
       assert Keys.keys_with_shards!(@fleet) == []
     end
 

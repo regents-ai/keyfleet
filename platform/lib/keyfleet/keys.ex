@@ -55,8 +55,8 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :before_seq, :limit]
 
       define :active_shard,
-        action: :active_for_wallet,
-        args: [:fleet_id, :wallet],
+        action: :active_of_key_held_by,
+        args: [:fleet_id, :token_id, :wallet],
         not_found_error?: false
 
       define :active_shards_held_by, action: :active_held_by, args: [:wallet]
@@ -121,7 +121,7 @@ defmodule Keyfleet.Keys do
   Keys rank by the order they were sold, the first key sold ranking highest. A
   person is the highest-ranked key their wallets hold, and `wallet` is the one
   holding it. An agent is the highest-ranked key its wallet holds, or else the
-  key of the shard it holds in the fleet, and `wallet` is its own. Everything
+  highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
   either writes in the fleet is written as that key.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
@@ -145,7 +145,7 @@ defmodule Keyfleet.Keys do
   defp held_or_shard(fleet_id, wallet, actor),
     do:
       held_identity_key!(fleet_id, [wallet], actor: actor) ||
-        active_shard!(fleet_id, wallet, actor: actor)
+        Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
 
   @doc """
   Up to `limit` of the fleet's keys numbered 1 to `minted` that have no

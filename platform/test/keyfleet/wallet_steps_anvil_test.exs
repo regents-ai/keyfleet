@@ -426,15 +426,17 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert stranger.figures.blocked == %{"issue" => :not_your_key}
       assert pressed(url, stranger, "issue") == {:ok, :reverted}
 
-      # The site keeps one shard per wallet in a fleet, its latest: key 2's.
+      # Each key shows its own shard, and each is renewed or ended on its own.
       scan!()
-      shards = build!(:end_shard, @buyer, token_id: 2)
-      assert names(shards) == ["end-#{@third}", "renew-#{@third}"]
-      assert pressed(url, shards, "renew-#{@third}") == {:ok, :confirmed}
-      assert pressed(url, shards, "end-#{@third}") == {:ok, :confirmed}
-      refute shard_active?(url, lab, 2, @third)
-      assert pressed(url, shards, "end-#{@third}") == {:ok, :reverted}
-      assert shard_active?(url, lab, 1, @third)
+
+      for token_id <- [1, 2] do
+        shards = build!(:end_shard, @buyer, token_id: token_id)
+        assert names(shards) == ["end-#{@third}", "renew-#{@third}"]
+        assert pressed(url, shards, "renew-#{@third}") == {:ok, :confirmed}
+        assert pressed(url, shards, "end-#{@third}") == {:ok, :confirmed}
+        refute shard_active?(url, lab, token_id, @third)
+        assert pressed(url, shards, "end-#{@third}") == {:ok, :reverted}
+      end
     end
 
     test "with agent voting on, a shard votes its key; turned off, it can't", %{url: url} do

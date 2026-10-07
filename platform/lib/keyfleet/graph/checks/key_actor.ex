@@ -147,7 +147,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     read = [actor: actor] ++ opts
 
     with {:ok, nil} <- Keys.held_identity_key(fleet_id, [wallet], read),
-         {:ok, %{token_id: ^token_id} = shard} <- Keys.active_shard(fleet_id, wallet, read) do
+         {:ok, %{} = shard} <- Keys.active_shard(fleet_id, token_id, wallet, read) do
       {:ok, stamp(shard.ownership_epoch, "agent", wallet, actor.credential_ref)}
     else
       {:ok, _other} -> not_a_holder(fleet_id, token_id)
