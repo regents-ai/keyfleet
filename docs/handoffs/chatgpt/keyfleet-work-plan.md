@@ -1,4 +1,4 @@
-# KeyFleet work plan — 7 October 2026
+# Keyfleet work plan — 7 October 2026
 
 Branch: `gpt/keyfleet-work-plan`. Worktree: `/Users/sean/Documents/regent/worktrees/chatgpt/keyfleet`. Base: live v23, `aecccaa`; Fly still serves that image tag.
 

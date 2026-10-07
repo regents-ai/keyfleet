@@ -20,7 +20,7 @@ check-required-fixes:
 # here, run by uv straight from GitHub. Move the pin in a commit.
 REGENTS_CLI_REV := 65722c6
 check-cli:
-	python3 scripts/check_command_docs.py
+	uv run --no-project scripts/check_command_docs.py
 	uv run --no-project --with "regents-cli[check] @ git+https://github.com/regents-ai/regents-cli@$(REGENTS_CLI_REV)" \
 	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
 check-contracts:

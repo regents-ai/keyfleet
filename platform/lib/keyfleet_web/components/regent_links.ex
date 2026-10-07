@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
       assign(assigns, :apps, [
         {"Patchbay", "https://patchbay.help"},
         {"Autolaunch", "https://autolaunch.sh"},
-        {"KeyFleet", "https://keyfleet.ai"},
+        {"Keyfleet", "https://keyfleet.ai"},
         {"Techtree", "https://techtree.sh"},
         {"Protocol", "https://regents.sh/stake"},
         {"Account", "https://regents.sh/account"}
