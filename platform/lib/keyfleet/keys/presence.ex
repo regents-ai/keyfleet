@@ -1,11 +1,15 @@
 defmodule Keyfleet.Keys.Presence do
   @moduledoc """
-  One `Present` or `PresenceCleared` log of a fleet's vote contract: a key
-  renewed at `at`, present for 48 hours under the ownership epoch it was
-  renewed in, or a key that changed hands and stopped being present. Only
-  the chain reader writes it, and nothing ever changes it.
+  One `PresenceScheduled`, `Present` or `PresenceCleared` log of a fleet's
+  vote contract: a newly sold Key whose automatic presence starts at `at`, 2
+  days after its sale, and lasts 48 hours (`:scheduled`); a Key renewed at
+  `at`, present for 48 hours under the ownership epoch it was renewed in
+  (`:present`); or a Key that changed hands and stopped being present
+  (`:cleared`). A Key still waiting for its automatic start keeps it when it
+  changes hands. Only the chain reader writes it, and nothing ever changes
+  it.
 
-  A key is renewed whenever it proposes, votes, cancels or is renewed on its
+  A Key is renewed whenever it proposes, votes, cancels or is renewed on its
   own. Whether a key was present when a proposal opened is worked out from
   these records (`Keyfleet.Proposals.Calculations.LateKeys`), never stored.
   """
@@ -22,11 +26,12 @@ defmodule Keyfleet.Keys.Presence do
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      # A renewal carries its time and the ownership it belongs to; a change of
-      # hands carries neither.
+      # A renewal carries its time and the ownership it belongs to, an
+      # automatic start only its time, and a change of hands neither.
       check_constraint(:kind, "key_presences_shape",
         check: """
         (kind = 'present' AND at IS NOT NULL AND ownership_epoch >= 1)
+        OR (kind = 'scheduled' AND at IS NOT NULL AND ownership_epoch IS NULL)
         OR (kind = 'cleared' AND at IS NULL AND ownership_epoch IS NULL)
         """
       )
@@ -132,7 +137,7 @@ defmodule Keyfleet.Keys.Presence do
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:present, :cleared]]
+      constraints: [one_of: [:scheduled, :present, :cleared]]
 
     attribute :token_id, :integer,
       allow_nil?: false,

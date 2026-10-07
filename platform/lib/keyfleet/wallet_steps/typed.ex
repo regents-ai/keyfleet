@@ -129,8 +129,10 @@ defmodule Keyfleet.WalletSteps.Typed do
 
   @doc "How many hours a proposal is open to votes: one of the choices the form offers."
   def hours(text) do
-    case Integer.parse(String.trim(text)) do
-      {hours, ""} when hours in [1, 6, 24, 48] -> {:ok, hours}
+    with {hours, ""} <- Integer.parse(String.trim(text)),
+         true <- hours in Keyfleet.Proposals.vote_hours() do
+      {:ok, hours}
+    else
       _other -> {:error, :hours_unreadable}
     end
   end

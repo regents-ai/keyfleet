@@ -8,6 +8,7 @@ defmodule Keyfleet.Keys do
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Decks
 
   resources do
     resource Keyfleet.Keys.KeyAttachment do
@@ -41,6 +42,7 @@ defmodule Keyfleet.Keys do
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :get_reveal_by_id, action: :read, get_by: [:id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+      define :reveals_in_deck_order, action: :in_deck_order, args: [:fleet_id, :deck_size]
     end
 
     resource Keyfleet.Keys.KeyPicture do
@@ -103,6 +105,24 @@ defmodule Keyfleet.Keys do
       define :latest_edits_restrictions,
         action: :latest_for_keys,
         args: [:fleet_id, :token_ids]
+    end
+  end
+
+  @doc """
+  The seed a revealed Key's card shows, for `fleet` with its deck loaded as
+  the fleet's record names it. Keys 1 to the deck's size are dealt the deck's
+  cards (`Keyfleet.Decks.deal/2`) in the order the fleet's own reveals were
+  logged on chain, so only this fleet's reveals decide them; a Key past the
+  deck shows its own seed.
+  """
+  def card_seed(%{id: fleet_id, deck_hash: deck_hash, deck_size: size}, reveal) do
+    if reveal.token_id > size do
+      reveal.seed
+    else
+      dealt = reveals_in_deck_order!(fleet_id, size)
+      cards = Decks.deal(size, Enum.map(dealt, & &1.seed))
+      place = Enum.find_index(dealt, &(&1.id == reveal.id))
+      elem(Decks.deck!(deck_hash).cards, Enum.at(cards, place))
     end
   end
 

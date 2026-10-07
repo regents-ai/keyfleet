@@ -460,7 +460,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               name="hours"
               label="Voting time"
               value={panel.inputs["hours"]}
-              options={[{"1", "1 hour"}, {"6", "6 hours"}, {"24", "24 hours"}, {"48", "48 hours"}]}
+              options={vote_hour_options()}
             />
             <.text_area
               id="propose-text"
@@ -1035,4 +1035,11 @@ abstain, of {keys(@proposal.counted)} counted</span>|
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)
+
+  defp vote_hour_options,
+    do: for(hours <- Keyfleet.Proposals.vote_hours(), do: {"#{hours}", hours_words(hours)})
+
+  defp hours_words(1), do: "1 hour"
+  defp hours_words(hours), do: "#{hours} hours"
+
 end

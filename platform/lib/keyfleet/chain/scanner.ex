@@ -1,18 +1,19 @@
 defmodule Keyfleet.Chain.Scanner do
   @moduledoc """
-  One pass over a deployed fleet's history: who holds each key, each key's
-  reveal, and what it forwarded to its treasury or sent as the protocol
-  share, from the fleet contract; its proposals, votes, cancellations and
-  executions, which keys' workspace edits a proposal restricted, and each
-  key's presence, from its vote contract; the shards its keys' owners issued
-  and ended and whether those shards may vote, from its shard record; what
-  its treasury paid, advanced, got back and split, from its treasury; and
-  rewards settled and paid out, from its reward ledger.
+  One pass over a deployed fleet's history: who holds each of its Keys and
+  each Key's reveal, from the Key collection every fleet shares; what it
+  forwarded to its treasury or sent as the protocol share, from its manager;
+  its proposals, votes, cancellations and executions, which Keys' workspace
+  edits a proposal restricted, and each Key's presence, from its vote
+  contract; the shards its Keys' owners issued and ended and whether those
+  shards may vote, from the shard record every fleet shares; what its
+  treasury paid, advanced, got back and split, from its treasury; and rewards
+  settled and paid out, from its reward ledger.
 
   Each pass reads the head, reads again the last 30 blocks it already
   recorded (about a minute of Base), then records what
   happened after them up to the head. Each stretch of blocks is one request
-  for all five contracts, and its records are made in the order the chain made
+  for all six contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
   whole, such as one whose logs are more than it sends at once, is asked for
   again in halves, down to single blocks, and each answered piece is recorded
@@ -163,15 +164,7 @@ defmodule Keyfleet.Chain.Scanner do
   defp each_piece(_fleet, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
   defp each_piece(fleet, from, to, client, acc, handle) do
-    addresses = [
-      fleet.contract_address,
-      fleet.votes_address,
-      fleet.shards_address,
-      fleet.treasury_address,
-      fleet.rewards_address
-    ]
-
-    case client.get_logs(addresses, Logs.topics(), from, to) do
+    case client.get_logs(Logs.addresses(fleet), Logs.topics(), from, to) do
       {:ok, logs} ->
         with {:ok, records} <- Logs.decode(logs, fleet, from, to),
              do: handle.(from, to, records, acc)

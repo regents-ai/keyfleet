@@ -12,20 +12,6 @@ defmodule Keyfleet.Fleets.Validations.SameDeployment do
 
   require Ash.Query
 
-  @fields [
-    :chain_id,
-    :contract_address,
-    :rewards_address,
-    :votes_address,
-    :treasury_address,
-    :shards_address,
-    :usdc_address,
-    :regent_address,
-    :regent_staking_address,
-    :autolaunch_factory_address,
-    :deployed_block,
-    :trait_table_hash
-  ]
 
   @impl true
   def validate(changeset, _opts, _context) do
@@ -38,13 +24,13 @@ defmodule Keyfleet.Fleets.Validations.SameDeployment do
     |> compare(changeset)
   end
 
-  defp compare(%{contract_address: nil}, _changeset), do: :ok
+  defp compare(%{manager_address: nil}, _changeset), do: :ok
 
   defp compare(fleet, changeset) do
-    if Enum.all?(@fields, &(Map.fetch!(fleet, &1) == Ash.Changeset.get_attribute(changeset, &1))) do
+    if Enum.all?(changeset.resource.deployment_fields(), &(Map.fetch!(fleet, &1) == Ash.Changeset.get_attribute(changeset, &1))) do
       :ok
     else
-      {:error, field: :contract_address, message: "fleet is already bound to another deployment"}
+      {:error, field: :manager_address, message: "fleet is already bound to another deployment"}
     end
   end
 end

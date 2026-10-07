@@ -532,7 +532,7 @@ defmodule KeyfleetWeb.RoomsLive do
   # Only someone signed in to a live fleet is told that posting waits on key
   # ownership being refreshed; everyone else is told who can post.
   defp posting_paused?(%Human{}, [room | _rooms], fleet_id),
-    do: room.fleet.contract_address != nil and not Chain.fresh?(fleet_id)
+    do: room.fleet.manager_address != nil and not Chain.fresh?(fleet_id)
 
   defp posting_paused?(_actor, _rooms, _fleet_id), do: false
 

@@ -181,7 +181,7 @@ defmodule KeyfleetWeb.HomeLive do
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current, and shows no count.
   defp sales(fleet_id, recorded) do
-    deployed? = recorded != nil and recorded.contract_address != nil
+    deployed? = recorded != nil and recorded.manager_address != nil
     {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
     %{deployed?: deployed?, current?: deployed? and Chain.fresh?(fleet_id), keys: minted}
   end

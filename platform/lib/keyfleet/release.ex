@@ -36,14 +36,15 @@ defmodule Keyfleet.Release do
   end
 
   @doc """
-  Binds one fleet to the deployment a deployed manifest records, the JSON
-  `contracts/script/RecordKeyfleets.s.sol` writes for that fleet, opens the
-  fleet's fixed and open rooms, and prints what it is now bound to. The fleet
-  is bound and its rooms opened together or not at all.
-  `bin/seed-deployment <path>` runs it. This is what puts a fleet's keys on
-  sale, a coming-soon fleet's included; every other fleet is left as it is.
+  Binds the catalog's fleets to the deployment a deployed record describes,
+  the JSON `contracts/script/RecordKeyfleets.s.sol` writes
+  (`Keyfleet.Fleets.record_manifest!/1`), opens their fixed and open rooms,
+  and prints what each is now bound to. The fleets are bound and their rooms
+  opened together or not at all. `bin/seed-deployment <path>` runs it. This
+  is what shows a fleet's Keys on sale, a coming-soon fleet's included; every
+  fleet the record doesn't hold is left as it is.
 
-  Recording the same manifest again changes nothing; a manifest naming other
+  Recording the same record again changes nothing; a record naming other
   contracts for a bound fleet, or wiring that differs from the fleets already
   bound, is refused and changes nothing. The running site starts reading a
   newly bound fleet within a minute (`Keyfleet.Chain.Watch`).
@@ -56,17 +57,21 @@ defmodule Keyfleet.Release do
   def seed_deployment!(path) do
     manifest = path |> File.read!() |> Jason.decode!()
 
-    fleet =
+    fleets =
       case Ash.transact([Keyfleet.Fleets.Fleet, Keyfleet.Rooms.Room], fn ->
-             fleet = Keyfleet.Fleets.record_manifest!(manifest)
-             Keyfleet.Rooms.bootstrap_rooms!([fleet.id])
-             fleet
+             fleets = Keyfleet.Fleets.record_manifest!(manifest)
+             Keyfleet.Rooms.bootstrap_rooms!(Enum.map(fleets, & &1.id))
+             fleets
            end) do
-        {:ok, fleet} -> fleet
+        {:ok, fleets} -> fleets
         {:error, error} -> raise error
       end
 
-    IO.puts("#{fleet.id}: #{fleet.contract_address} from block #{fleet.deployed_block}")
+    for fleet <- fleets do
+      IO.puts(
+        "#{fleet.id}: fleet #{fleet.chain_fleet_id} at #{fleet.manager_address} from block #{fleet.deployed_block}"
+      )
+    end
 
     :ok
   end

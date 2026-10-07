@@ -1,12 +1,12 @@
 defmodule Keyfleet.Proposals.Calculations.LateKeys do
   @moduledoc """
-  How many of the keys that voted on a proposal were not present when it
+  How many of the Keys that voted on a proposal were not present when it
   opened, as the contract counts them (`KeyfleetVotes.wasActiveAtOpening`):
-  a key was present when its last presence record before the proposal, in
-  chain order, is a renewal less than 48 hours before the proposal opened. A
-  key whose last record is its change of hands, or that has none, was not.
-  The contract adds each such key, once, to the keys a proposal needs more
-  than half of.
+  a Key was present when its last presence record before the proposal, in
+  chain order, is a renewal or an automatic start at or before the opening
+  and less than 48 hours before it. A Key whose last record is its change of
+  hands, or that has none, was not. The contract adds each such Key, once, to
+  the voters a proposal needs 60% of.
   """
 
   use Ash.Resource.Calculation
@@ -36,13 +36,15 @@ defmodule Keyfleet.Proposals.Calculations.LateKeys do
             ORDER BY presence.block_number DESC, presence.log_index DESC
             LIMIT 1
           ) AS last
-          WHERE last.kind = 'present' AND ? < last.at + make_interval(secs => ?)
+          WHERE last.kind IN ('present', 'scheduled') AND last.at <= ?
+            AND ? < last.at + make_interval(secs => ?)
         ))
         """,
         id,
         fleet_id,
         block_number,
         log_index,
+        opened_at,
         opened_at,
         ^@window_seconds
       )

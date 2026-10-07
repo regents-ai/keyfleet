@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.AgentShardController do
   """
   use KeyfleetWeb, :controller
 
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias RegentChain.Call
 
@@ -35,7 +36,11 @@ defmodule KeyfleetWeb.AgentShardController do
       step_down: %{
         chain_id: shard.fleet.chain_id,
         to: shard.fleet.shards_address,
-        data: Call.encode("end(uint256[],address)", [[shard.token_id], wallet]),
+        data:
+          Call.encode("end(uint256[],address)", [
+            [Fleet.onchain_token_id(shard.fleet, shard.token_id)],
+            wallet
+          ]),
         value: "0"
       }
     }

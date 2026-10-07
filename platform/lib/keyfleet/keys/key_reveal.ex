@@ -106,6 +106,16 @@ defmodule Keyfleet.Keys.KeyReveal do
       filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
       prepare build(sort: [record_seq: :asc])
     end
+
+    # The fleet's reveals of Keys 1 to `deck_size`, in the order they were
+    # logged on chain: the order its deck's cards are dealt in.
+    read :in_deck_order do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :deck_size, :integer, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and token_id <= ^arg(:deck_size))
+      prepare build(sort: [block_number: :asc, log_index: :asc])
+    end
   end
 
   policies do

@@ -27,7 +27,7 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
          {:ok, last_run_at} <- uint.(reads, "lastRunAt()"),
          {:ok, next_run_at} <- uint.(reads, "nextRunAt()"),
          {:ok, keys} <-
-           Reads.one(reads, fleet.contract_address, "totalMinted()", [], {:uint, 256}),
+           Reads.one(reads, fleet.manager_address, "totalMinted()", [], {:uint, 256}),
          {:ok, preview} <- Reads.each(assets, &preview(reads, fleet, &1, bps, keys)) do
       opens_at = if next_run_at > 0, do: DateTime.from_unix!(next_run_at)
 
@@ -94,10 +94,10 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, owed} <-
-           Reads.one(reads, fleet.contract_address, "protocolShareOwed()", [], {:uint, 256}) do
+           Reads.one(reads, fleet.manager_address, "protocolShareOwed()", [], {:uint, 256}) do
       {:ok,
        [
-         Review.step("send_share", fleet.contract_address, Call.encode("sendProtocolShare()", []))
+         Review.step("send_share", fleet.manager_address, Call.encode("sendProtocolShare()", []))
        ], %{owed: owed, blocked: if(owed == 0, do: %{"send_share" => :nothing_owed}, else: %{})}}
     else
       _unread -> {:problem, :unread, figures}

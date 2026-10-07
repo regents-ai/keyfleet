@@ -19,7 +19,7 @@ defmodule Keyfleet.Chain.ReadBalances do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
-    with %{contract_address: address} = fleet when is_binary(address) <-
+    with %{manager_address: address} = fleet when is_binary(address) <-
            Fleets.get_fleet!(fleet_id),
          {:error, reason} <- TreasuryReader.read(fleet, Client.configured()) do
       Logger.warning("Fleet #{fleet_id}: reading its balances failed: #{inspect(reason)}")

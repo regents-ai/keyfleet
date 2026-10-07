@@ -1,6 +1,6 @@
 defmodule Keyfleet.Chain.OwnershipLog do
   @moduledoc """
-  Reads a fleet contract's `OwnershipEpoch(uint256 indexed tokenId, uint64
+  Reads the Key collection's `OwnershipEpoch(uint256 indexed tokenId, uint64
   epoch, address indexed from, address indexed to)` logs into the fields
   `Keyfleet.Keys.record_epoch/2` takes.
   """

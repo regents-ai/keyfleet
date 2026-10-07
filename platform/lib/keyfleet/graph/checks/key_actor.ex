@@ -92,13 +92,13 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     end
   end
 
-  # A key is named on the chain by its fleet's contract and its number. Only a
-  # deployed fleet's chain is read, and a deployment is for good, so a fleet
-  # with a fresh reading always has its contract.
+  # A Key is named by its fleet's manager contract and its number in the
+  # fleet. Only a deployed fleet's chain is read, and a deployment is for
+  # good, so a fleet with a fresh reading always has its manager.
   defp key_coordinate(fleet_id, token_id, deadline) do
     with {:ok, opts} <- within(deadline, fleet_id),
          {:ok, fleet} <- Keyfleet.Fleets.get_fleet(fleet_id, [not_found_error?: true] ++ opts) do
-      {:ok, %{chain_id: fleet.chain_id, contract: fleet.contract_address, token_id: token_id}}
+      {:ok, %{chain_id: fleet.chain_id, contract: fleet.manager_address, token_id: token_id}}
     end
   end
 

@@ -27,11 +27,12 @@ defmodule Keyfleet.Keys.DrawPicture do
     end
   end
 
-  defp draw(%{id: id, fleet_id: fleet_id, token_id: token_id, seed: seed}) do
-    %{trait_table_hash: hash} = Fleets.get_fleet!(fleet_id)
+  defp draw(%{id: id, fleet_id: fleet_id, token_id: token_id} = reveal) do
+    %{trait_table_hash: hash} = fleet = Fleets.get_fleet!(fleet_id)
     filename = "#{Fleets.slot(fleet_id)}-#{token_id}.png"
+    seed = Keys.card_seed(fleet, reveal)
 
-    with {:ok, png} <- KeyArt.draw(seed, Fleets.card_top_line(fleet_id, token_id), hash),
+    with {:ok, png} <- KeyArt.draw(seed, Fleets.key_name(fleet_id, token_id), hash),
          {:ok, cid} <- Lighthouse.add(png, filename, "image/png") do
       Keys.record_picture!(%{reveal_id: id, cid: cid}, actor: %Keyfleet.Actors.System{})
       :ok

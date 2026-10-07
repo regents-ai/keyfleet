@@ -113,7 +113,7 @@ defmodule KeyfleetWeb.ProposalsPage do
         %{fleet_id: fleet_id, fleet_name: nil}
 
       fleet ->
-        deployed? = fleet.contract_address != nil
+        deployed? = fleet.manager_address != nil
 
         read.(fleet, %{
           fleet_id: fleet_id,

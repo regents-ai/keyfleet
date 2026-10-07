@@ -721,18 +721,18 @@ defmodule KeyfleetWeb.FleetLive do
 
       <section aria-labelledby="fleet-contract-title">
         <h3 id="fleet-contract-title">On Base</h3>
-        <p :if={@fleet.contract_address} class="fleet-wallet">
+        <p :if={@fleet.manager_address} class="fleet-wallet">
           <a
             id="fleet-contract-link"
-            href={"https://basescan.org/address/#{@fleet.contract_address}"}
-            title={@fleet.contract_address}
+            href={"https://basescan.org/address/#{@fleet.manager_address}"}
+            title={@fleet.manager_address}
             rel="noopener noreferrer"
             target="_blank"
           >
-            <code>{RegentFormat.short_address(@fleet.contract_address)}</code>
+            <code>{RegentFormat.short_address(@fleet.manager_address)}</code>
           </a>
         </p>
-        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
+        <p :if={is_nil(@fleet.manager_address)} class="fleet-detail">Not on Base yet</p>
       </section>
     </aside>
     """
@@ -1166,7 +1166,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp show_with_keys(socket, fleet_id, fleet, params, actor) do
     page = FleetPage.key_page!(fleet_id, params, actor)
     pages = FleetPage.page_links(fleet_id, page, params)
-    deployed? = fleet.contract_address != nil
+    deployed? = fleet.manager_address != nil
     current? = deployed? and Chain.fresh?(fleet_id)
     progress = if deployed?, do: Chain.progress(fleet_id)
 
@@ -1176,7 +1176,7 @@ defmodule KeyfleetWeb.FleetLive do
       name: fleet.name,
       coming_soon?: false,
       chain_id: fleet.chain_id,
-      contract_address: fleet.contract_address,
+      manager_address: fleet.manager_address,
       rewards_address: fleet.rewards_address,
       usdc_address: fleet.usdc_address,
       deployed?: deployed?,

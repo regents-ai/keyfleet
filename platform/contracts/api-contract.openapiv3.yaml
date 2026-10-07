@@ -1104,18 +1104,35 @@ paths:
               schema: {$ref: "#/components/schemas/SharedAgentError"}
         "503": {$ref: "#/components/responses/SharedAgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-  /metadata/{slot}/{token_id}:
+  /metadata/collection.json:
+    get:
+      operationId: getCollectionMetadata
+      description: >-
+        The Key collection's own metadata (ERC-7572), at the address its contractURI gives: its
+        name, description, picture and this site's address. May be cached for an hour. Needs no
+        sign-in.
+      responses:
+        "200":
+          description: The collection's metadata
+          headers:
+            Cache-Control:
+              schema: {type: string, const: "public, max-age=3600"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CollectionMetadata"}
+  /metadata/keys/{collection_token_id}:
     get:
       operationId: getKeyMetadata
       description: >-
-        A Key's ERC-721 metadata, at the address its fleet's tokenURI gives: the fleet's metadata
-        base followed by the Key's number. Until the Key's traits are drawn it shows the waiting
+        A Key's ERC-721 metadata, at the address the Key collection's tokenURI gives: the
+        collection's metadata base followed by the Key's token id, its fleet's number times
+        10,000,000,000 plus its Key number. Its name is the fleet's type, the fleet's number
+        within its type and the Key's number, such as CLASSIC—001—072. Until the Key's traits are drawn it shows the waiting
         picture and Status Revealing, and may be cached for 30 seconds. Once drawn, the Key shows
         its traits; it keeps the waiting picture, cached for 30 seconds, while its card is being
         drawn, then shows its card and may be cached for an hour. Needs no sign-in.
       parameters:
-        - {$ref: "#/components/parameters/Slot"}
-        - {$ref: "#/components/parameters/TokenId"}
+        - {$ref: "#/components/parameters/CollectionTokenId"}
       responses:
         "200":
           description: The Key's metadata, waiting for its traits or with them
@@ -1129,7 +1146,7 @@ paths:
                   - {$ref: "#/components/schemas/KeyMetadataRevealing"}
                   - {$ref: "#/components/schemas/KeyMetadataRevealed"}
         "404":
-          description: There is no fleet by this slot, or no Key by this number has been bought
+          description: No Key with this token id has been bought
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyNotFoundError"}
@@ -1210,12 +1227,14 @@ components:
       in: path
       required: true
       schema: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
-    Slot:
-      name: slot
+    CollectionTokenId:
+      name: collection_token_id
       in: path
       required: true
-      description: The fleet's place in the deployment, as its metadata base names it
-      schema: {type: string, enum: [syndicate, cascade, classic, accelerant]}
+      description: >-
+        The Key's token id in the Key collection, in decimal without leading zeros: its fleet's
+        number times 10,000,000,000 plus its Key number
+      schema: {type: string, pattern: '^[1-9][0-9]{0,17}$'}
   requestBodies:
     AgentEmpty:
       description: >-
@@ -3432,6 +3451,15 @@ components:
             code: {type: string, enum: [unauthorized]}
             message: {type: string}
             hint: {type: string}
+    CollectionMetadata:
+      type: object
+      additionalProperties: false
+      required: [name, description, image, external_link]
+      properties:
+        name: {type: string, const: Keyfleet}
+        description: {type: string, minLength: 1}
+        image: {type: string, pattern: '^https?://'}
+        external_link: {type: string, pattern: '^https?://'}
     KeyMetadataRevealing:
       type: object
       additionalProperties: false

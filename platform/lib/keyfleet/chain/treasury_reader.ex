@@ -64,8 +64,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
          {:ok, [last_run_at]} <- at.(treasury, {@last_run_at, [{:uint, 63}]}),
          {:ok, [next_run_at]} <- at.(treasury, {@next_run_at, [{:uint, 63}]}),
          {:ok, [launch_token]} <- at.(treasury, {@launch_token, [:address]}),
-         {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
-         {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
+         {:ok, [reserve]} <- at.(fleet.manager_address, {@cascade_reserve, [{:uint, 256}]}),
+         {:ok, [owed]} <- at.(fleet.manager_address, {@protocol_share_owed, [{:uint, 256}]}),
          {:ok, reading} <-
            Treasury.record_reading(
              %{

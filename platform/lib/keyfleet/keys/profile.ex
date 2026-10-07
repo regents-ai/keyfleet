@@ -175,7 +175,7 @@ defmodule Keyfleet.Keys.Profile do
         weights = Map.new(table, &{&1.name, {Map.new(&1.values), &1.total}})
 
         table
-        |> Traits.draw(reveal.seed)
+        |> Traits.draw(Keys.card_seed(reveal.fleet, reveal))
         |> Enum.map(fn {trait, value} ->
           {values, total} = weights[trait]
           %{trait: trait, value: value, share: values[value] / total}

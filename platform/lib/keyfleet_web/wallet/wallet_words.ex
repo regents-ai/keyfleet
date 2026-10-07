@@ -133,6 +133,8 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:not_enough), do: "Not enough in your wallet"
   def blocked(:approve_first), do: "Approve first"
   def blocked(:approve_usdc_first), do: "Approve USDC first"
+  def blocked(:sales_not_open), do: "Sales aren’t open yet"
+  def blocked(:too_new), do: "Too new: Keys wait 2 days"
   def blocked(:nothing_owed), do: "Nothing owed"
   def blocked(:launch_settled), do: "Already settled"
   def blocked(:sale_running), do: "Sale still running"

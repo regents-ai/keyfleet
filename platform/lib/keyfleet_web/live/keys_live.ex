@@ -307,7 +307,7 @@ defmodule KeyfleetWeb.KeysLive do
       token_id: token_id,
       fleet_name: key && key.fleet.name,
       fleet: key && %{fleet_id: fleet_id, chain_id: key.fleet.chain_id},
-      deployed?: key != nil and key.fleet.contract_address != nil,
+      deployed?: key != nil and key.fleet.manager_address != nil,
       owner_wallet: key && key.owner_wallet,
       owner?: owns_key?(actor, key),
       refreshing?: not Chain.fresh?(fleet_id),

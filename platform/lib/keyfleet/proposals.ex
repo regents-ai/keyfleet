@@ -102,8 +102,8 @@ defmodule Keyfleet.Proposals do
 
     * `:cancelled` and `:executed` once that is recorded;
     * `:open` until it closes;
-    * then `:rejected` unless more than half of the keys present when it
-      opened and the keys that voted late voted yes;
+    * then `:rejected` unless at least `approvals_needed/1` of the Keys
+      present when it opened and the Keys that voted late voted yes;
     * otherwise `:approved` until its execution expiry, and
       `:execution_expired` from then on.
   """
@@ -112,11 +112,25 @@ defmodule Keyfleet.Proposals do
       proposal.cancellation -> :cancelled
       proposal.execution -> :executed
       DateTime.before?(now, proposal.closes_at) -> :open
-      proposal.yes_keys <= div(proposal.opening_count + proposal.late_keys, 2) -> :rejected
+      proposal.yes_keys < approvals_needed(proposal.opening_count + proposal.late_keys) -> :rejected
       DateTime.compare(now, proposal.execution_expiry) != :lt -> :execution_expired
       true -> :approved
     end
   end
+
+  @doc """
+  How long a proposal may be open to votes, in hours: the choices the
+  proposal form offers, each within the vote contract's 48 hours. The one
+  place the voting times are set.
+  """
+  def vote_hours, do: [1, 6, 24, 48]
+
+  @doc """
+  How many Yes votes approve a proposal `voters` Keys may vote on: 60% of
+  them, rounded up, as `KeyfleetVotes.approvalsNeeded` counts. One present
+  Key can approve a proposal on its own.
+  """
+  def approvals_needed(voters), do: div(voters * 60 + 99, 100)
 
   @doc "The fleet's proposal `number`, as `status/2` needs it, or nil."
   def get_by_number(fleet_id, number),

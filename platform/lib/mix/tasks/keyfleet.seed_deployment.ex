@@ -1,16 +1,16 @@
 defmodule Mix.Tasks.Keyfleet.SeedDeployment do
-  @shortdoc "Binds one fleet to its recorded deployment"
+  @shortdoc "Binds the catalog's fleets to their recorded deployment"
 
   @moduledoc """
-  Reads the deployed manifest `contracts/script/RecordKeyfleets.s.sol` wrote
-  for one fleet and binds that fleet to its five contracts and shared wiring,
-  with the manifest's chain and deployment block, and opens the
-  fleet's fixed and open rooms. A release runs the same step as
-  `bin/seed-deployment`.
+  Reads the deployed record `contracts/script/RecordKeyfleets.s.sol` wrote,
+  binds each catalog fleet it holds to its contracts and the shared wiring,
+  with the record's chain and deployment block, and opens those fleets' fixed
+  and open rooms. A release runs the same step as `bin/seed-deployment`; the
+  anvil lab runs it with the lab's own record.
 
-      mix keyfleet.seed_deployment ../contracts/deployments/base.classic.deployed.json
+      mix keyfleet.seed_deployment ../contracts/deployments/base.deployed.json
 
-  Running it again with the same manifest changes nothing. A manifest naming
+  Running it again with the same record changes nothing. A record naming
   different contracts for a fleet that is already bound is refused.
   """
 

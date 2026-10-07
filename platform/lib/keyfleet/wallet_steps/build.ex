@@ -99,7 +99,7 @@ defmodule Keyfleet.WalletSteps.Build do
 
   defp deployed(fleet_id) do
     case Fleets.get_fleet!(fleet_id) do
-      %{contract_address: address} = fleet when is_binary(address) -> {:ok, fleet}
+      %{manager_address: address} = fleet when is_binary(address) -> {:ok, fleet}
       _missing_or_not_on_chain -> {:error, "fleet #{fleet_id} is not on chain"}
     end
   end

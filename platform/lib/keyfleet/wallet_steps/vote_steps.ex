@@ -7,9 +7,11 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   A ballot is cast with every key the signer may vote: those it holds, and
   those it holds an active shard of while the key's agent voting is on. A
   proposal is made with one key, and its calls come from the kind of proposal
-  chosen (`Keyfleet.Proposals.Actions`).
+  chosen (`Keyfleet.Proposals.Actions`). Pages name Keys by their number in
+  the fleet; every step names them by their id in the Key collection.
   """
 
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Proposals
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.Treasury
@@ -24,6 +26,9 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   @propose "propose(uint256,bytes32,uint64,(address,uint256,bytes)[])"
   # Each launch field's most bytes, as Autolaunch v2's factory takes them.
   @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
+  # The kinds of proposal whose calls move money, which the vote contract
+  # refuses during a fleet's first 7 days of sales.
+  @money_kinds ["pay", "advance", "signature", "launch"]
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
@@ -47,7 +52,11 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           Review.step(
             name,
             fleet.votes_address,
-            Call.encode("castBallot(uint256,uint256[],uint8)", [proposal, keys, choice])
+            Call.encode("castBallot(uint256,uint256[],uint8)", [
+              proposal,
+              Enum.map(keys, &Fleet.onchain_token_id(fleet, &1)),
+              choice
+            ])
           )
         end
 
@@ -101,9 +110,12 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  # One proposal of the kind chosen, made with the key typed, open to votes
+  # One proposal of the kind chosen, made with the Key typed, open to votes
   # for the hours chosen from the latest block's own clock. Its text is
-  # hashed into the proposal; the text itself stays off the chain.
+  # hashed into the proposal; the text itself stays off the chain. The vote
+  # contract refuses a Key sold less than two days ago, and a proposal that
+  # moves money during the fleet's first 7 days of sales, so those presses are
+  # certain to fail.
   def steps(:propose, %{fleet: fleet, signer: signer, inputs: inputs}) do
     kind = Build.field(inputs, "kind")
 
@@ -113,10 +125,21 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          {:ok, text} <- Build.typed(inputs, "text", &Typed.text(&1, :text, 4_000), figures),
          {:ok, reads} <- reads(figures),
          {:ok, action, details} <- action(kind, fleet, inputs, reads, text, figures),
-         {:ok, %{^key => {_holder, governs?}}} <- acting(reads, fleet, signer, key, figures) do
-      closes_at = DateTime.to_unix(Reads.now(reads)) + hours * 3600
+         {:ok, %{^key => {_holder, governs?}}} <- acting(reads, fleet, signer, key, figures),
+         {:ok, opens_at} <- read(reads, fleet.votes_address, "treasuryOpensAt()", figures),
+         {:ok, matures_at} <- matures_at(reads, fleet, key, figures) do
+      now = DateTime.to_unix(Reads.now(reads))
+      closes_at = now + hours * 3600
       content_hash = content_hash(text)
       calls = Actions.encode(action, fleet)
+
+      reason =
+        cond do
+          not governs? -> :not_your_key
+          matures_at == nil or matures_at > now -> :too_new
+          kind in @money_kinds and (opens_at == 0 or opens_at > now) -> opening(opens_at)
+          true -> nil
+        end
 
       figures =
         Map.merge(figures, %{
@@ -124,7 +147,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           closes_at: DateTime.from_unix!(closes_at),
           content_hash: content_hash,
           action: details,
-          blocked: if(governs?, do: %{}, else: %{"propose" => :not_your_key})
+          blocked: if(reason, do: %{"propose" => reason}, else: %{})
         })
 
       {:ok,
@@ -132,7 +155,12 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          Review.step(
            "propose",
            fleet.votes_address,
-           Call.encode(@propose, [key, content_hash, closes_at, calls])
+           Call.encode(@propose, [
+             Fleet.onchain_token_id(fleet, key),
+             content_hash,
+             closes_at,
+             calls
+           ])
          )
        ], figures}
     end
@@ -239,6 +267,20 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
+  # A Key's first second of taking part; a Key not sold yet never may.
+  defp matures_at(reads, fleet, key, figures) do
+    onchain = Fleet.onchain_token_id(fleet, key)
+
+    case Reads.one(reads, fleet.votes_address, "maturesAt(uint256)", [onchain], {:uint, 64}) do
+      {:ok, at} -> {:ok, at}
+      {:error, :reverted} -> {:ok, nil}
+      {:error, _reason} -> {:problem, :unread, figures}
+    end
+  end
+
+  defp opening(0), do: :sales_not_open
+  defp opening(opens_at), do: {:opens_at, DateTime.from_unix!(opens_at)}
+
   defp acting(reads, fleet, signer, key, figures) do
     case Reads.acting(reads, fleet, signer, [key], "mayGovern") do
       {:ok, standing} -> {:ok, standing}
@@ -273,13 +315,14 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
       [_content, _actions, _hash, author, _revision, _opened, _closes, _expiry | counts] = words
       [e0, late, yes, no, abstain, _cancelled, _executed] = counts
 
-      {:ok, %{author_key: author, e0: e0, late: late, yes: yes, no: no, abstain: abstain}}
+      with {:ok, author_key} <- Fleet.key_number(fleet, author),
+           do: {:ok, %{author_key: author_key, e0: e0, late: late, yes: yes, no: no, abstain: abstain}}
     end
   end
 
   defp proposal_types,
     do:
-      [:bytes32, :bytes32, :bytes32, {:uint, 32}, {:uint, 48}] ++
+      [:bytes32, :bytes32, :bytes32, {:uint, 64}, {:uint, 48}] ++
         List.duplicate({:uint, 64}, 3) ++ List.duplicate({:uint, 32}, 5) ++ [:bool, :bool]
 
   defp author_key(reads, fleet, proposal) do

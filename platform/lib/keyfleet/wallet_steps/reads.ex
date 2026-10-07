@@ -8,6 +8,7 @@ defmodule Keyfleet.WalletSteps.Reads do
   """
 
   alias Keyfleet.Chain
+  alias Keyfleet.Fleets.Fleet
   alias RegentChain.{Abi, Call}
 
   @enforce_keys [:client, :head]
@@ -82,9 +83,12 @@ defmodule Keyfleet.WalletSteps.Reads do
          do: {:ok, {key, {holder, allowed?}}}
   end
 
-  @doc "Who holds a key, or nil for a key not sold yet, which the fleet refuses to name."
+  @doc """
+  Who holds the fleet's Key number `key`, or nil for a Key not sold yet, which
+  the Key collection refuses to name.
+  """
   def holder(reads, fleet, key) do
-    case one(reads, fleet.contract_address, "ownerOf(uint256)", [key], :address) do
+    case one(reads, fleet.keys_address, "ownerOf(uint256)", [Fleet.onchain_token_id(fleet, key)], :address) do
       {:error, :reverted} -> {:ok, nil}
       answer -> answer
     end
@@ -95,8 +99,10 @@ defmodule Keyfleet.WalletSteps.Reads do
   defp allowed(_reads, _fleet, nil, _key, _holder, _shard_check), do: {:ok, false}
   defp allowed(_reads, _fleet, wallet, _key, wallet, _shard_check), do: {:ok, true}
 
-  defp allowed(reads, fleet, wallet, key, _holder, shard_check),
-    do: one(reads, fleet.shards_address, "#{shard_check}(uint256,address)", [key, wallet], :bool)
+  defp allowed(reads, fleet, wallet, key, _holder, shard_check) do
+    token_id = Fleet.onchain_token_id(fleet, key)
+    one(reads, fleet.shards_address, "#{shard_check}(uint256,address)", [token_id, wallet], :bool)
+  end
 
   defp decode(returned, types) do
     case Abi.decode(returned, types) do

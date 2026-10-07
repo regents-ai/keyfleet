@@ -49,15 +49,16 @@ defmodule Keyfleet.Chain.RewardsWaiting do
 
     with {:ok, head} <- client.head(),
          {:ok, [assets]} <- at.(@reward_assets, {:array, :address}, head.hash),
-         {:ok, waiting} <- each_asset(assets, token_id, holder, at, head.hash) do
+         onchain_token_id = Keyfleet.Fleets.Fleet.onchain_token_id(fleet, token_id),
+         {:ok, waiting} <- each_asset(assets, onchain_token_id, holder, at, head.hash) do
       :ets.insert(@table, {key, waiting, now})
       {:ok, waiting}
     end
   end
 
-  defp each_asset(assets, token_id, holder, at, block_hash) do
+  defp each_asset(assets, onchain_token_id, holder, at, block_hash) do
     Enum.reduce_while(assets, {:ok, []}, fn asset, {:ok, waiting} ->
-      accrued = Call.encode("accrued(address,uint256)", [asset, token_id])
+      accrued = Call.encode("accrued(address,uint256)", [asset, onchain_token_id])
       credit = Call.encode("credits(address,address)", [asset, holder])
 
       with {:ok, [accrued]} <- at.(accrued, {:uint, 256}, block_hash),

@@ -1,19 +1,21 @@
 defmodule Keyfleet.Keys.Metadata do
   @moduledoc """
-  A key's ERC-721 metadata, as each fleet's `tokenURI` names it: the fleet's
-  `baseTokenURI`, `<site>/metadata/<slot>/`, followed by the key's number.
+  A Key's ERC-721 metadata, as the Key collection's `tokenURI` names it: its
+  `baseTokenURI`, `<site>/metadata/keys/`, followed by the Key's token id,
+  its fleet's number times 10,000,000,000 plus its Key number; and the
+  collection's own, which its `contractURI` names.
 
-  A key is known once its purchase is recorded. Until its reveal is recorded
-  it shows the Interim Keyfleet Access Pass, the same picture for every key in
-  every fleet, and `Status: Revealing`. From then on it shows the traits drawn
-  from its seed with the fleet's trait table, which change only if an
+  A Key is known once its purchase is recorded. Until its reveal is recorded
+  it shows the Interim Keyfleet Access Pass, the same picture for every Key in
+  every fleet, and `Status: Revealing`. From then on it shows the traits of
+  its card (`Keyfleet.Keys.card_seed/2`) from the fleet's trait table, which change only if an
   operator corrects the reveal by hand after a reorg. While its card is being
   drawn (`Keyfleet.Keys.DrawPicture`) it keeps the pass; once the card is kept
   on IPFS, it shows the card and names its IPFS address in `properties`.
   """
 
   alias Keyfleet.Fleets
-  alias Keyfleet.Fleets.Presets
+  alias Keyfleet.Fleets.{Fleet, Presets}
   alias Keyfleet.Keys
   alias Keyfleet.Keys.KeyArt
   alias Keyfleet.Traits
@@ -22,26 +24,34 @@ defmodule Keyfleet.Keys.Metadata do
   # (docs/still-pictures/interim-pass).
   @interim_pass_cid "QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy"
 
-  # The key numbers a `tokenURI` can name: the contract's decimal digits, and
+  # The token ids a `tokenURI` can name: the contract's decimal digits, and
   # no more of them than a database integer holds.
   @token_id ~r/\A[1-9][0-9]{0,17}\z/
 
-  @doc """
-  The metadata of the key numbered `token_id` in the fleet at deployment
-  `slot`, both as the URL gives them:
-  `{:revealing, metadata}`, `{:drawing, metadata}` (revealed, its card not
-  drawn yet), `{:revealed, metadata}`, or `:not_found` for no such slot or no
-  recorded key.
-  """
-  def for_key(slot, token_id) do
-    with fleet_id when is_binary(fleet_id) <- Fleets.slot_fleet_id(slot),
-         true <- token_id =~ @token_id,
-         token_id = String.to_integer(token_id),
-         %{} <- Keys.current_key!(fleet_id, token_id) do
-      fleet = Fleets.get_fleet!(fleet_id)
-      key = %{fleet: fleet, token_id: token_id}
+  @doc "The collection's own metadata (ERC-7572), as its `contractURI` names it."
+  def collection(site) do
+    %{
+      name: "Keyfleet",
+      description: "Every Keyfleet Key. A Key is a seat in its fleet.",
+      image: KeyArt.link(@interim_pass_cid),
+      external_link: site
+    }
+  end
 
-      case Keys.get_reveal!(fleet_id, token_id) do
+  @doc """
+  The metadata of the Key with token id `token_id`, as the URL gives it:
+  `{:revealing, metadata}`, `{:drawing, metadata}` (revealed, its card not
+  drawn yet), `{:revealed, metadata}`, or `:not_found` for no recorded Key.
+  """
+  def for_key(token_id) do
+    with true <- token_id =~ @token_id,
+         token_id = String.to_integer(token_id),
+         %Fleet{} = fleet <- fleet_of(token_id),
+         {:ok, number} <- Fleet.key_number(fleet, token_id),
+         %{} <- Keys.current_key!(fleet.id, number) do
+      key = %{fleet: fleet, token_id: number}
+
+      case Keys.get_reveal!(fleet.id, number) do
         nil -> {:revealing, revealing(key)}
         reveal -> revealed(key, reveal, Keys.get_picture!(reveal.id))
       end
@@ -49,6 +59,9 @@ defmodule Keyfleet.Keys.Metadata do
       _unknown -> :not_found
     end
   end
+
+  defp fleet_of(token_id),
+    do: Enum.find(Fleets.list_deployed_fleets!(), &match?({:ok, _number}, Fleet.key_number(&1, token_id)))
 
   defp revealing(%{fleet: fleet, token_id: token_id} = key) do
     %{
@@ -72,7 +85,7 @@ defmodule Keyfleet.Keys.Metadata do
     traits =
       hash
       |> Traits.table!()
-      |> Traits.draw(reveal.seed)
+      |> Traits.draw(Keys.card_seed(fleet, reveal))
       |> Enum.map(fn {trait, value} -> %{trait_type: trait, value: value} end)
 
     %{
@@ -84,7 +97,7 @@ defmodule Keyfleet.Keys.Metadata do
     }
   end
 
-  defp name(%{fleet: fleet, token_id: token_id}), do: "#{fleet.name} ##{token_id}"
+  defp name(%{fleet: fleet, token_id: token_id}), do: Fleets.key_name(fleet.id, token_id)
 
   defp level(%{fleet: fleet, token_id: token_id}) do
     if Presets.levelled?(fleet.id),

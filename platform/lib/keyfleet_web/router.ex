@@ -148,7 +148,8 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/agent-skills/index.json", AgentFilesController, :index
     get "/.well-known/agent-skills/keyfleet.zip", AgentFilesController, :archive
     get "/.well-known/agent-skills/keyfleet/SKILL.md", AgentFilesController, :skill
-    get "/metadata/:slot/:token_id", MetadataController, :show
+    get "/metadata/collection.json", MetadataController, :collection
+    get "/metadata/keys/:token_id", MetadataController, :show
   end
 
   scope "/", KeyfleetWeb do

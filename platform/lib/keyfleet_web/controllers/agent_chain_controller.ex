@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.AgentChainController do
   defp on_chain(fleet_id) do
     case Fleets.get_fleet!(fleet_id) do
       nil -> {:refuse, 404, "fleet_unknown"}
-      %{contract_address: nil} -> {:refuse, 409, "fleet_not_on_chain"}
+      %{manager_address: nil} -> {:refuse, 409, "fleet_not_on_chain"}
       fleet -> {:ok, fleet}
     end
   end

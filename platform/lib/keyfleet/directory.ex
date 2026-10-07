@@ -135,7 +135,7 @@ defmodule Keyfleet.Directory do
   # read gives no figures, so a price that may have moved is never shown.
   defp sales(id, recorded) do
     cond do
-      recorded == nil or recorded.contract_address == nil -> %{on_sale: false}
+      recorded == nil or recorded.manager_address == nil -> %{on_sale: false}
       not Chain.fresh?(id) -> %{on_sale: true, current: false}
       true -> figures(id, Chain.progress(id))
     end

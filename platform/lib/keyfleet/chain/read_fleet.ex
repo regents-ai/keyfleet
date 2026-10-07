@@ -28,7 +28,7 @@ defmodule Keyfleet.Chain.ReadFleet do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
     case Fleets.get_fleet!(fleet_id) do
-      %{contract_address: address} = fleet when is_binary(address) ->
+      %{manager_address: address} = fleet when is_binary(address) ->
         pass(fleet, Client.configured())
 
       _not_deployed ->

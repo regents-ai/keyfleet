@@ -1,9 +1,10 @@
 defmodule Keyfleet.Fleets.Validations.SharedWiring do
   @moduledoc """
-  Every deployed fleet sells on one chain, for one USDC, pays Regents' share
-  through one REGENT token and staking contract, launches its token through
-  one Autolaunch factory and draws traits from one trait table, so a
-  deployment whose wiring differs from any other bound fleet's is refused.
+  Every deployed fleet lives on one chain, in one Key collection with one shard
+  record, sells for one USDC, pays Regents' share through one REGENT token and
+  staking contract, launches its token through one Autolaunch factory and
+  draws traits from one trait table, so a deployment whose wiring differs from
+  any other bound fleet's is refused.
 
   It runs inside the action's transaction and first locks every fleet row, in
   id order, so two recordings for different fleets are checked one after the
@@ -15,6 +16,8 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
 
   @fields [
     :chain_id,
+    :keys_address,
+    :shards_address,
     :usdc_address,
     :regent_address,
     :regent_staking_address,
@@ -32,7 +35,7 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
 
     mismatch =
       for bound <- fleets,
-          bound.id != changeset.data.id and bound.contract_address != nil,
+          bound.id != changeset.data.id and bound.manager_address != nil,
           field <- @fields,
           Map.fetch!(bound, field) != Ash.Changeset.get_attribute(changeset, field) do
         {field, bound.id}

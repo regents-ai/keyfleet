@@ -14,9 +14,11 @@ defmodule Keyfleet.Chain.VotesLog do
       `ProposalExecuted` `{:execution, fields}`.
     * `EditsRestrictionSet` is `{:edits_restriction, fields}`: a carried-out
       proposal restricted a key's workspace edits, or lifted that.
-    * `Present` and `PresenceCleared` are `{:presence, fields}`: a key was
-      renewed, present for 48 hours unless it changes hands first, or it
-      changed hands and stopped being present.
+    * `PresenceScheduled`, `Present` and `PresenceCleared` are
+      `{:presence, fields}`: a newly sold Key's automatic presence was set to
+      start 2 days after its sale, for 48 hours; a Key was renewed, present
+      for 48 hours unless it changes hands first; or it changed hands and
+      stopped being present.
 
   `Swept`, which only counts the expired presences it removed, is not read.
   """
@@ -33,6 +35,7 @@ defmodule Keyfleet.Chain.VotesLog do
   @edits_set Event.topic0("EditsRestrictionSet(uint256,bool)")
   @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
   @cleared Event.topic0("PresenceCleared(uint256)")
+  @scheduled Event.topic0("PresenceScheduled(uint256,uint64)")
 
   # The contract's `Choice` numbers, pinned in contracts/test/KeyfleetVotesTopics.t.sol;
   # `None` is never cast.
@@ -41,7 +44,8 @@ defmodule Keyfleet.Chain.VotesLog do
   @head_words 7
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@created, @ballot, @cancelled, @executed, @edits_set, @present, @cleared]
+  def topics,
+    do: [@created, @ballot, @cancelled, @executed, @edits_set, @present, @cleared, @scheduled]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
@@ -126,6 +130,18 @@ defmodule Keyfleet.Chain.VotesLog do
     with {:ok, token_id} <- number(token),
          {:ok, []} <- Abi.decode(data, []) do
       {:ok, {:presence, %{kind: :cleared, token_id: token_id, at: nil, ownership_epoch: nil}}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@scheduled, [token], data) do
+    with {:ok, token_id} <- number(token),
+         {:ok, [starts_at]} <- Abi.decode(data, [{:uint, 63}]),
+         {:ok, starts_at} <- DateTime.from_unix(starts_at) do
+      {:ok,
+       {:presence,
+        %{kind: :scheduled, token_id: token_id, at: starts_at, ownership_epoch: nil}}}
     else
       _malformed -> :error
     end

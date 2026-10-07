@@ -8,10 +8,11 @@ defmodule Keyfleet.Proposals.Actions do
   Every call but a launch is made to the fleet's own treasury or vote
   contract: paying, advancing, the daily split's rate, approving or revoking
   a hash the treasury will answer as its signature, and restricting a key's
-  edits. A launch calls Autolaunch v2's factory and names the fleet's
+  edits, which names the Key by its id in the Key collection. A launch calls Autolaunch v2's factory and names the fleet's
   treasury as the launch's treasury. A decision makes no call at all.
   """
 
+  alias Keyfleet.Fleets.Fleet
   alias RegentChain.{Abi, Call}
 
   @pay "pay(address,address,uint256)"
@@ -35,7 +36,7 @@ defmodule Keyfleet.Proposals.Actions do
       amount, purpose}` from the treasury;
     * `{:rate, bps}`, the daily split's rate;
     * `{:signature, :approve | :revoke, hash}`;
-    * `{:edits, token_id, restricted?}`;
+    * `{:edits, token_id, restricted?}`, `token_id` the fleet's Key number;
     * `{:launch, %{name:, symbol:, description:, website:, image:}}`.
   """
   def encode(:decision, _fleet), do: []
@@ -55,7 +56,10 @@ defmodule Keyfleet.Proposals.Actions do
     do: [treasury(fleet, Call.encode(@revoke_hash, [hash]))]
 
   def encode({:edits, token_id, restricted?}, fleet),
-    do: [{fleet.votes_address, 0, Call.encode(@edits, [token_id, restricted?])}]
+    do: [
+      {fleet.votes_address, 0,
+       Call.encode(@edits, [Fleet.onchain_token_id(fleet, token_id), restricted?])}
+    ]
 
   def encode({:launch, launch}, fleet) do
     params =
@@ -77,7 +81,7 @@ defmodule Keyfleet.Proposals.Actions do
     {selector, arguments} = String.split_at(data, 10)
 
     with {:ok, bytes} <- Abi.bytes("0x" <> arguments),
-         {:ok, action} <- action(contract(target, fleet), selector, bytes) do
+         {:ok, action} <- action(contract(target, fleet), selector, bytes, fleet) do
       action
     else
       _other -> {:other, target, 0, data}
@@ -95,10 +99,10 @@ defmodule Keyfleet.Proposals.Actions do
     end
   end
 
-  defp action(contract, selector, bytes) do
+  defp action(contract, selector, bytes, fleet) do
     case {contract, selector} do
       {:treasury, selector} -> treasury_action(selector, bytes)
-      {:votes, selector} -> if selector == Call.selector(@edits), do: edits(bytes), else: :error
+      {:votes, selector} -> if selector == Call.selector(@edits), do: edits(bytes, fleet), else: :error
       {:autolaunch, selector} -> if selector == launch_selector(), do: launch(bytes), else: :error
       _other -> :error
     end
@@ -137,9 +141,14 @@ defmodule Keyfleet.Proposals.Actions do
     end
   end
 
-  defp edits(bytes) do
+  # A Key of another fleet is no action of this one.
+  defp edits(bytes, fleet) do
     with {:ok, [token_id, restricted?]} <- Abi.decode(bytes, [{:uint, 256}, :bool]),
-         do: {:ok, {:edits, token_id, restricted?}}
+         {:ok, key} <- Fleet.key_number(fleet, token_id) do
+      {:ok, {:edits, key, restricted?}}
+    else
+      _other -> :error
+    end
   end
 
   # The launch's one argument is a tuple with strings in it, so its head is

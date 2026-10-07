@@ -4,16 +4,21 @@ defmodule Keyfleet.Chain.Logs do
   reader makes, in the order the chain made them.
 
   Each log is sent, by its contract and topic0, to
-  `Keyfleet.Chain.OwnershipLog`, `Keyfleet.Chain.RevealLog` or
-  `Keyfleet.Chain.MoneyLog`, for the fleet contract,
-  `Keyfleet.Chain.VotesLog`, for its vote contract,
-  `Keyfleet.Chain.ShardsLog`, for its shard record, or
-  `Keyfleet.Chain.MoneyLog`, for its treasury and reward ledger, and carries
-  its fleet and its place on the chain. A proposal takes the time it opened
-  from the renewal of its author key logged just before it, in the same
-  transaction. A log the node lists twice is read once. One log that cannot
-  be read, two different logs in one place, or a proposal without its
-  author's renewal refuses the whole stretch, and the reason names the log.
+  `Keyfleet.Chain.OwnershipLog` or `Keyfleet.Chain.RevealLog`, for the Key
+  collection every fleet shares, `Keyfleet.Chain.ShardsLog`, for the shard
+  record every fleet shares, `Keyfleet.Chain.VotesLog`, for the fleet's vote
+  contract, or `Keyfleet.Chain.MoneyLog`, for its manager, treasury and
+  reward ledger, and carries its fleet and its place on the chain.
+
+  The chain names a Key by its token id in the collection; each record names
+  it by its number in the fleet (`Keyfleet.Fleets.Fleet.key_number/2`). A log
+  of the shared contracts about another fleet's Key is left out. A proposal
+  takes the time it opened from the renewal of its author Key logged just
+  before it, in the same transaction. A log the node lists twice is read
+  once. One log that cannot be read, a log of the fleet's own contracts about
+  another fleet's Key, two different logs in one place, or a proposal without
+  its author's renewal refuses the whole stretch, and the reason names the
+  log.
   """
 
   alias Keyfleet.Chain.MoneyLog
@@ -21,7 +26,19 @@ defmodule Keyfleet.Chain.Logs do
   alias Keyfleet.Chain.RevealLog
   alias Keyfleet.Chain.ShardsLog
   alias Keyfleet.Chain.VotesLog
+  alias Keyfleet.Fleets.Fleet
   alias RegentChain.Abi
+
+  @doc "The contracts whose logs the reader asks for, for `fleet`."
+  def addresses(fleet),
+    do: [
+      fleet.keys_address,
+      fleet.manager_address,
+      fleet.votes_address,
+      fleet.shards_address,
+      fleet.treasury_address,
+      fleet.rewards_address
+    ]
 
   @doc "The topic0 of every event the reader asks for."
   def topics,
@@ -41,8 +58,9 @@ defmodule Keyfleet.Chain.Logs do
   transaction hash and log index of the log refused:
 
     * `{:unreadable_log, transaction_hash, log_index}`: the log is outside
-      that stretch, is not from the fleet's contracts, or is not exactly as
-      they emit it.
+      that stretch, is not from the fleet's contracts, is not exactly as
+      they emit it, or is a log of the fleet's own contracts about another
+      fleet's Key.
     * `{:conflicting_logs, transaction_hash, log_index}`: two different logs
       claim the same place.
     * `{:opening_missing, transaction_hash, log_index}`: a proposal does not
@@ -94,6 +112,9 @@ defmodule Keyfleet.Chain.Logs do
       {:ok, record} ->
         decode_each(logs, fleet, blocks, [record | records])
 
+      :other_fleet ->
+        decode_each(logs, fleet, blocks, records)
+
       :error ->
         {:error, {:unreadable_log, as_given(log, "transactionHash"), as_given(log, "logIndex")}}
     end
@@ -123,8 +144,7 @@ defmodule Keyfleet.Chain.Logs do
          {:ok, log_index} <- Abi.quantity(log_index),
          {:ok, words} <- words(topics, []),
          {:ok, data} <- Abi.bytes(data),
-         {:ok, {type, fields}} <-
-           route(fleet, String.downcase(address), String.downcase(topic0), words, data) do
+         {:ok, {type, fields}} <- read(fleet, String.downcase(address), topic0, words, data) do
       {:ok,
        {type,
         Map.merge(fields, %{
@@ -135,31 +155,79 @@ defmodule Keyfleet.Chain.Logs do
           log_index: log_index
         })}}
     else
+      :other_fleet -> :other_fleet
       _malformed -> :error
     end
   end
 
   defp decode_one(_log, _fleet, _blocks), do: :error
 
-  defp route(%{contract_address: address}, address, topic0, words, data) do
-    with :error <- OwnershipLog.decode(topic0, words, data),
-         :error <- RevealLog.decode(topic0, words, data),
-         do: MoneyLog.decode(:fleet, topic0, words, data)
+  # The log's record with its Keys named by their numbers in the fleet. A
+  # log of a shared contract about another fleet's Key is `:other_fleet`.
+  defp read(fleet, address, topic0, words, data) do
+    with {:ok, {owner, {type, fields}}} <- route(fleet, address, String.downcase(topic0), words, data) do
+      case local(fields, fleet) do
+        {:ok, fields} -> {:ok, {type, fields}}
+        :foreign when owner == :shared -> :other_fleet
+        :foreign -> :error
+      end
+    end
   end
 
-  defp route(%{votes_address: address}, address, topic0, words, data),
-    do: VotesLog.decode(topic0, words, data)
+  defp local(fields, fleet) do
+    Enum.reduce_while([:token_id, :author_key, :token_ids], {:ok, fields}, fn field, {:ok, acc} ->
+      case local_field(Map.get(acc, field), fleet) do
+        {:ok, nil} -> {:cont, {:ok, acc}}
+        {:ok, value} -> {:cont, {:ok, Map.put(acc, field, value)}}
+        :foreign -> {:halt, :foreign}
+      end
+    end)
+  end
+
+  defp local_field(nil, _fleet), do: {:ok, nil}
+
+  defp local_field(token_ids, fleet) when is_list(token_ids) do
+    Enum.reduce_while(token_ids, {:ok, []}, fn token_id, {:ok, numbers} ->
+      case Fleet.key_number(fleet, token_id) do
+        {:ok, number} -> {:cont, {:ok, [number | numbers]}}
+        :foreign -> {:halt, :foreign}
+      end
+    end)
+    |> then(fn
+      {:ok, numbers} -> {:ok, Enum.reverse(numbers)}
+      :foreign -> :foreign
+    end)
+  end
+
+  defp local_field(token_id, fleet), do: Fleet.key_number(fleet, token_id)
+
+  defp route(%{keys_address: address}, address, topic0, words, data) do
+    record =
+      with :error <- OwnershipLog.decode(topic0, words, data),
+           do: RevealLog.decode(topic0, words, data)
+
+    owned_by(:shared, record)
+  end
 
   defp route(%{shards_address: address}, address, topic0, words, data),
-    do: ShardsLog.decode(topic0, words, data)
+    do: owned_by(:shared, ShardsLog.decode(topic0, words, data))
+
+  defp route(%{manager_address: address}, address, topic0, words, data),
+    do: owned_by(:own, MoneyLog.decode(:fleet, topic0, words, data))
+
+  defp route(%{votes_address: address}, address, topic0, words, data),
+    do: owned_by(:own, VotesLog.decode(topic0, words, data))
 
   defp route(%{treasury_address: address}, address, topic0, words, data),
-    do: MoneyLog.decode(:treasury, topic0, words, data)
+    do: owned_by(:own, MoneyLog.decode(:treasury, topic0, words, data))
 
   defp route(%{rewards_address: address}, address, topic0, words, data),
-    do: MoneyLog.decode(:rewards, topic0, words, data)
+    do: owned_by(:own, MoneyLog.decode(:rewards, topic0, words, data))
 
   defp route(_fleet, _address, _topic0, _words, _data), do: :error
+
+  defp owned_by(owner, {:ok, record}), do: {:ok, {owner, record}}
+  defp owned_by(_owner, :error), do: :error
 
   defp words([], words), do: {:ok, Enum.reverse(words)}
 
