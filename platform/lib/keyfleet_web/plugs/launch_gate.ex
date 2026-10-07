@@ -99,6 +99,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   defp to_early(conn) do
     conn
+    |> reading_headers()
     |> put_resp_header("cache-control", "no-store")
     |> Phoenix.Controller.redirect(to: "/early")
   end
@@ -109,14 +110,18 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     |> send_resp(503, "This part of the site isn't open yet.\n")
   end
 
-  # The closed answers are plain, so they get the strict reading policy.
   defp unavailable(conn) do
     conn
-    |> Phoenix.Controller.put_secure_browser_headers(%{
-      "content-security-policy" => ContentSecurityPolicy.reading()
-    })
+    |> reading_headers()
     |> put_status(:service_unavailable)
     |> put_resp_header("retry-after", "3600")
     |> put_resp_header("cache-control", "no-store")
+  end
+
+  # The closed answers are plain, so they get the strict reading policy.
+  defp reading_headers(conn) do
+    Phoenix.Controller.put_secure_browser_headers(conn, %{
+      "content-security-policy" => ContentSecurityPolicy.reading()
+    })
   end
 end
