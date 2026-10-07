@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   its shared money once it is on chain: the latest reading of its treasury,
   its daily split, the advances still out and its latest money in and out.
   `detail/3` is one proposal with its votes, fifty to a page, its calls in
-  plain words, and where it stands as the vote contract says at the latest
+  plain words and exactly as carrying it out sends them, and where it stands as the vote contract says at the latest
   block: its status, the keys counted and each tally, never worked out here.
   Once the fleet is on chain, each carries the network its wallet buttons
   send on; the buttons' steps are built by `Keyfleet.WalletSteps`. A page
@@ -165,6 +165,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp details(proposal, fleet) do
     assets = Treasury.assets(fleet)
+    balances = balances(Treasury.get_reading!(fleet.id))
 
     %{
       proposer: proposal.proposer,
@@ -173,7 +174,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       opened_at: proposal.opened_at,
       execution_expiry: proposal.execution_expiry,
       carry_out_from: Proposals.waits?(proposal) && Proposals.carry_out_from(proposal),
-      calls: Enum.map(proposal.calls, &call(Actions.decode(&1, fleet), fleet, assets)),
+      calls: Enum.map(proposal.calls, &call(&1, fleet, assets, balances)),
       executor: proposal.execution && proposal.execution.executor,
       cancelled_by: proposal.cancellation && proposal.cancellation.cancelled_by
     }
@@ -191,48 +192,84 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  # One call carrying the proposal out makes, in plain words: `text`, then
-  # the wallet or token it names in full, if any.
-  defp call({:pay, asset, to, share}, _fleet, assets),
-    do: %{text: "Pay #{share_of(share, asset, assets)} to", address: to}
+  # The treasury's balance of each asset at its latest reading, if it has one.
+  defp balances(nil), do: %{}
+  defp balances(reading), do: Map.new(reading.assets, &{&1.asset, &1.held})
 
-  defp call({:advance, id, operator, asset, share, _purpose}, _fleet, assets),
+  # One call carrying the proposal out makes. In plain words: `text`, then
+  # the wallet or hash it names in full, if any, and for a payment or an
+  # advance what its share comes to at the treasury's latest balance. Then
+  # exactly what the vote contract sends: the contract, by name and address,
+  # the function, if it is one this site knows, and the call's data, so a
+  # voter can check the words against the call.
+  defp call(recorded, fleet, assets, balances) do
+    recorded
+    |> Actions.decode(fleet)
+    |> said(assets, balances)
+    |> Map.merge(%{
+      contract: contract_name(Actions.contract(recorded.target, fleet)),
+      target: recorded.target,
+      function: Actions.function(recorded.data),
+      data: recorded.data
+    })
+  end
+
+  defp said({:pay, asset, to, share}, assets, balances),
+    do: %{
+      text: "Pay #{share_of(share, asset, assets)} to",
+      address: to,
+      today: today(asset, share, assets, balances)
+    }
+
+  defp said({:advance, id, operator, asset, share, _purpose}, assets, balances),
     do: %{
       text: "Advance #{share_of(share, asset, assets)} (advance #{id}) to",
-      address: operator
+      address: operator,
+      today: today(asset, share, assets, balances)
     }
 
-  defp call({:rate, bps}, _fleet, _assets),
-    do: %{text: "Set the daily split to #{units(bps, 2)}%", address: nil}
+  defp said({:rate, bps}, _assets, _balances),
+    do: plain("Set the daily split to #{units(bps, 2)}%")
 
-  defp call({:signature, :approve, hash}, _fleet, _assets),
-    do: %{text: "Sign a message for the fleet:", address: hash}
+  defp said({:signature, :approve, hash}, _assets, _balances),
+    do: plain("Sign a message for the fleet:", hash)
 
-  defp call({:signature, :revoke, hash}, _fleet, _assets),
-    do: %{text: "Withdraw the fleet’s signature on", address: hash}
+  defp said({:signature, :revoke, hash}, _assets, _balances),
+    do: plain("Withdraw the fleet’s signature on", hash)
 
-  defp call({:edits, token_id, true}, _fleet, _assets),
-    do: %{text: "Stop Key #{Rules.grouped(token_id)} changing the workspace", address: nil}
+  defp said({:edits, token_id, true}, _assets, _balances),
+    do: plain("Stop Key #{Rules.grouped(token_id)} changing the workspace")
 
-  defp call({:edits, token_id, false}, _fleet, _assets),
-    do: %{text: "Let Key #{Rules.grouped(token_id)} change the workspace again", address: nil}
+  defp said({:edits, token_id, false}, _assets, _balances),
+    do: plain("Let Key #{Rules.grouped(token_id)} change the workspace again")
 
-  defp call({:launch, launch}, _fleet, _assets),
-    do: %{
-      text: "Launch #{launch.name} (#{launch.symbol}) through Autolaunch, for the treasury",
-      address: nil
-    }
+  defp said({:launch, launch}, _assets, _balances),
+    do: plain("Launch #{launch.name} (#{launch.symbol}) through Autolaunch, for the treasury")
 
-  defp call(:voted_split, _fleet, _assets),
-    do: %{text: "Run the daily split now", address: nil}
+  defp said(:voted_split, _assets, _balances), do: plain("Run the daily split now")
 
-  defp call({:admit_ousd, token}, _fleet, _assets),
-    do: %{text: "Add OUSD to the daily split:", address: token}
+  defp said({:admit_ousd, token}, _assets, _balances),
+    do: plain("Add OUSD to the daily split:", token)
 
-  defp call({:other, target, wei, _data}, _fleet, assets) when wei > 0,
-    do: %{text: "Send #{amount(wei, Treasury.native(), assets).text} and call", address: target}
+  defp said({:other, _target, _data}, _assets, _balances),
+    do: plain("A call Keyfleet doesn’t recognize. Check it before you vote.")
 
-  defp call({:other, target, 0, _data}, _fleet, _assets), do: %{text: "Call", address: target}
+  defp plain(text, address \\ nil), do: %{text: text, address: address, today: nil}
+
+  # What a share of the treasury's balance of `asset` comes to now, or nil
+  # before the treasury has been read.
+  defp today(asset, share, assets, balances) do
+    case balances do
+      %{^asset => held} -> amount(div(held * share, 1_000_000), asset, assets)
+      _unread -> nil
+    end
+  end
+
+  defp contract_name(:treasury), do: "Fleet treasury"
+  defp contract_name(:votes), do: "Fleet votes"
+  defp contract_name(:manager), do: "Fleet manager"
+  defp contract_name(:autolaunch), do: "Autolaunch"
+  defp contract_name(:other), do: "Not a Keyfleet contract"
 
   # A share of the treasury's balance of a token, in parts per million, as
   # the treasury pays it out when the proposal is carried out.

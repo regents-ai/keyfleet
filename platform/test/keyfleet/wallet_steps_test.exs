@@ -895,10 +895,10 @@ defmodule Keyfleet.WalletStepsTest do
       [{_target, 0, data}] = Actions.encode({:rate, 75}, fleet)
 
       assert Actions.decode(%{target: @third, value: 0, data: data}, fleet) ==
-               {:other, @third, 0, data}
+               {:other, @third, data}
 
-      assert Actions.decode(%{target: fleet.treasury_address, value: 1, data: data}, fleet) ==
-               {:other, fleet.treasury_address, 1, data}
+      assert Actions.function(data) == "setDailySplitBps(uint256)"
+      assert Actions.function(Call.encode("transferOwnership(address)", [@third])) == nil
     end
   end
 

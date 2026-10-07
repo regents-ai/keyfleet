@@ -24,6 +24,17 @@ defmodule Keyfleet.Proposals.Actions do
   @admit_ousd "admitOusd(address)"
   @edits "setEditsRestricted(uint256,bool)"
   @launch "launch((string,string,string,string,string,address))"
+  @functions [
+               @pay,
+               @advance,
+               @rate,
+               @approve_hash,
+               @revoke_hash,
+               @voted_split,
+               @admit_ousd,
+               @edits
+             ] ++
+               [@launch]
 
   @doc "The selector of the factory's launch call."
   def launch_selector, do: Call.selector(@launch)
@@ -74,9 +85,10 @@ defmodule Keyfleet.Proposals.Actions do
 
   @doc """
   What one recorded call does, as `encode/2` names it, plus `:voted_split`,
-  `{:admit_ousd, token}` and, for any other call, `{:other, target, wei,
-  data}`. A call is read as an action only when it is made to the contract
-  that action belongs to and sends no ETH.
+  `{:admit_ousd, token}` and, for any other call, `{:other, target, data}`.
+  A call is read as an action only when it is made to the contract that
+  action belongs to. The vote contract refuses a proposal whose calls send
+  ETH, so no recorded call does.
   """
   def decode(%{target: target, value: 0, data: "0x" <> _hex = data}, fleet) do
     {selector, arguments} = String.split_at(data, 10)
@@ -85,27 +97,46 @@ defmodule Keyfleet.Proposals.Actions do
          {:ok, action} <- action(contract(target, fleet), selector, bytes, fleet) do
       action
     else
-      _other -> {:other, target, 0, data}
+      _other -> {:other, target, data}
     end
   end
 
-  def decode(%{target: target, value: wei, data: data}, _fleet), do: {:other, target, wei, data}
-
-  defp contract(target, fleet) do
+  @doc """
+  Which of the fleet's contracts `target` is: `:treasury`, `:votes`,
+  `:manager`, `:autolaunch` for Autolaunch v2's factory, or `:other`.
+  """
+  def contract(target, fleet) do
     cond do
       target == fleet.treasury_address -> :treasury
       target == fleet.votes_address -> :votes
+      target == fleet.manager_address -> :manager
       target == fleet.autolaunch_factory_address -> :autolaunch
       true -> :other
     end
   end
 
+  @doc """
+  The signature of the function a call's `data` names, when it is one this
+  site's proposals make or read; otherwise nil.
+  """
+  def function("0x" <> _hex = data) do
+    selector = String.slice(data, 0, 10)
+    Enum.find(@functions, &(Call.selector(&1) == selector))
+  end
+
   defp action(contract, selector, bytes, fleet) do
     case {contract, selector} do
-      {:treasury, selector} -> treasury_action(selector, bytes)
-      {:votes, selector} -> if selector == Call.selector(@edits), do: edits(bytes, fleet), else: :error
-      {:autolaunch, selector} -> if selector == launch_selector(), do: launch(bytes), else: :error
-      _other -> :error
+      {:treasury, selector} ->
+        treasury_action(selector, bytes)
+
+      {:votes, selector} ->
+        if selector == Call.selector(@edits), do: edits(bytes, fleet), else: :error
+
+      {:autolaunch, selector} ->
+        if selector == launch_selector(), do: launch(bytes), else: :error
+
+      _other ->
+        :error
     end
   end
 

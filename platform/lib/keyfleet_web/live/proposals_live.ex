@@ -270,7 +270,16 @@ defmodule KeyfleetWeb.ProposalsLive do
         </section>
 
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
-          <h2 id="proposal-content-title">What it does</h2>
+          <h2 id="proposal-content-title">
+            What it does
+            <Regent.Primitives.tip
+              :if={@page.proposal.calls != []}
+              id="proposal-calls-tip"
+              label="About these calls"
+            >
+              Carrying it out makes exactly these calls, in this order. The words are Keyfleet’s reading of each one; the contract, function and data are what the network runs.
+            </Regent.Primitives.tip>
+          </h2>
           <p :if={@page.proposal.text} id="proposal-text" class="proposals-words">
             {@page.proposal.text}
           </p>
@@ -279,8 +288,27 @@ defmodule KeyfleetWeb.ProposalsLive do
           </p>
           <ol :if={@page.proposal.calls != []} id="proposal-calls" class="proposals-lines">
             <li :for={call <- @page.proposal.calls}>
-              <span>{call.text}</span>
-              <code :if={call.address}>{call.address}</code>
+              <p class="proposals-call-words">
+                <span>{call.text}</span>
+                <code :if={call.address}>{call.address}</code>
+              </p>
+              <p :if={call.today} class="proposals-detail">
+                About {call.today.text} at today’s balance
+              </p>
+              <dl class="proposals-call">
+                <div>
+                  <dt>Contract</dt>
+                  <dd>{call.contract} <code>{call.target}</code></dd>
+                </div>
+                <div>
+                  <dt>Function</dt>
+                  <dd><code>{call.function || "Unknown"}</code></dd>
+                </div>
+                <div>
+                  <dt>Data</dt>
+                  <dd><code class="proposals-call-data">{call.data}</code></dd>
+                </div>
+              </dl>
             </li>
           </ol>
           <p id="proposal-proposer" class="proposals-detail">
@@ -289,7 +317,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             <Regent.Primitives.tip id="proposal-content-tip" label="About the proposal’s text">
               {if @page.proposal.text,
                 do: "Its words match the code kept on the network:",
-                else: "Its words weren’t saved on KeyFleet. Its code on the network is"} {@page.proposal.content_hash}.
+                else: "Its words weren’t saved on Keyfleet. Its code on the network is"} {@page.proposal.content_hash}.
             </Regent.Primitives.tip>
           </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
@@ -1036,6 +1064,4 @@ abstain, of {keys(@proposal.counted)} counted</span>|
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)
-
-
 end

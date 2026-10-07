@@ -89,7 +89,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     # Where it stands is what the vote contract says at the latest block, so
     # the figures here are the chain's, not the votes this page recorded.
-    test "a proposal's page shows its calls in plain words, how it stands on chain and every vote",
+    test "a proposal's page shows its calls in plain words and exactly, how it stands on chain and every vote",
          %{conn: conn} do
       fleet = Fleets.get_fleet!(@fleet)
       paid = ProposalHelpers.wallet("b")
@@ -118,9 +118,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
           %{target: target, value: value, data: data}
         end
 
+      unknown = Call.encode("transferOwnership(address)", [paid])
+
       ProposalHelpers.proposal!(@fleet, 1,
-        calls: calls ++ [%{target: paid, value: 10 ** 18, data: "0x"}]
+        calls: calls ++ [%{target: paid, value: 0, data: unknown}]
       )
+
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 40_000_000)])
 
       for token_id <- 1..51, do: ProposalHelpers.vote!(@fleet, 1, @voter, :yes, [token_id])
       votes!(1, no: [52], abstain: [53, 54])
@@ -151,14 +155,30 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposal-content-tip", "0x" <> String.duplicate("d", 64))
 
       # Each call in a few words, with the wallet or code it names in full.
-      assert lines(view, "#proposal-calls li") == [
+      assert lines(view, "#proposal-calls .proposals-call-words") == [
                "Pay 12.5% of the treasury’s USDC to #{paid}",
                "Advance 10% of the treasury’s ETH (advance 5) to #{operator}",
                "Set the daily split to 0.75%",
                "Stop Key 12 changing the workspace",
                "Sign a message for the fleet: #{message}",
                "Launch Fleet Coin (FLT) through Autolaunch, for the treasury",
-               "Send 1 ETH and call #{paid}"
+               "A call Keyfleet doesn’t recognize. Check it before you vote."
+             ]
+
+      # A payment's share at the treasury's latest balance, and every call
+      # exactly as carrying it out sends it.
+      assert has_element?(view, "#proposal-calls li", "About 5 USDC at today’s balance")
+
+      assert cell_texts(view, "#proposal-calls li:first-child .proposals-call dd") == [
+               "Fleet treasury #{@treasury}",
+               "pay(address,address,uint32)",
+               hd(calls).data
+             ]
+
+      assert cell_texts(view, "#proposal-calls li:last-child .proposals-call dd") == [
+               "Not a Keyfleet contract #{paid}",
+               "Unknown",
+               unknown
              ]
 
       assert length(lines(view, "#proposal-votes li")) == 50

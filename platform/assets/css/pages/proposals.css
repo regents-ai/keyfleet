@@ -201,6 +201,43 @@
   border-bottom: 0;
 }
 
+.proposals-call-words {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+/* A call exactly as the network runs it: long addresses and data stay on
+   one line each and scroll inside the list, never the page. */
+.proposals-call {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.85rem;
+}
+
+.proposals-call div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.5rem;
+  min-width: 0;
+}
+
+.proposals-call dd {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposals-call-data {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
 /* Each asset's figures stand apart, since each is counted in its own units. */
 .proposals-balance {
   padding-block-start: 1rem;
