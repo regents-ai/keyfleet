@@ -13,7 +13,10 @@ its descriptions explain every field.
 
 ## Changing a command
 
-Change `commands.json` in the same commit as the route it describes, then check it:
+Write the change in [COMMANDS.md](COMMANDS.md) first: what the command does, who may run
+it, what it changes, its route, inputs, answer and refusals, the server's pseudo-code and
+its history. Then change `commands.json` in the same commit as the route it describes,
+and check it:
 
 ```sh
 make check-cli
@@ -25,9 +28,30 @@ newer format. It fails when the file does not fit the format, or when a command'
 operation, method or path is not in `platform/priv/public/openapi.json` or
 `platform/priv/static/api-contract.openapiv3.yaml`.
 
-Then pin the new commit in `regents-cli`'s `platforms.lock.json`.
+Once the route is on main, send the regents-cli chief a command change note. Only the
+regents-cli chief changes regents-cli: it moves the pin, tries each changed command and
+releases. The command line follows the site and never holds it back.
 
 ## What does not go here
 
 - Browser sign-in, which has no command.
 - The shared profile commands, which are `regents profile …` for every site.
+
+## Command change note
+
+The next note, sent once these commands' routes are on main:
+
+```text
+Site: keyfleet
+Commit on main: not yet (on kf/site-v03, unreleased)
+Added: presence mark <fleet>, proposals create <fleet>, proposals vote <fleet> <number>
+  <choice>, proposals cancel <fleet> <number>, proposals carry-out <fleet> <number>,
+  split run <fleet>, keys claim <fleet> <key> - each signed by the agent's own wallet
+  (wallet proof, audience keyfleet, on Base); each answers the transactions that wallet
+  sends itself, and Keyfleet sends nothing. proposals create also keeps the words.
+Changed: none
+Removed: none
+For callers: nothing; until a fleet's contracts are on Base these answer 409
+  fleet_not_on_chain.
+Docs: cli/COMMANDS.md#regents-keyfleet-presence-mark-fleet
+```

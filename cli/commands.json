@@ -4,7 +4,8 @@
   "platform": "keyfleet",
   "base_url": "https://keyfleet.ai",
   "notes": [
-    "Public reads need no wallet or sign-in."
+    "Public reads need no wallet or sign-in.",
+    "Commands that act on a fleet answer the transactions your own wallet sends on Base, in order. Keyfleet sends nothing."
   ],
   "commands": [
     {
@@ -39,8 +40,329 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": ["fleet_tech_classic", "fibonacci_syndicate", "fibonacci_cascade", "fleet_tech_accelerant"],
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
           "description": "The fleet."
+        }
+      ]
+    },
+    {
+      "command": "presence mark <fleet>",
+      "description": "Get the transactions that mark your keys present for 48 hours, for your wallet to send.",
+      "operation_id": "buildPresence",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/presence",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        }
+      ]
+    },
+    {
+      "command": "proposals create <fleet>",
+      "description": "Make a proposal with one of your keys: its words are kept, and you get the transaction for your wallet to send. Pipe the proposal on stdin, every value a string.",
+      "operation_id": "buildProposal",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/proposals/create",
+      "authority": "wallet-proof",
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        }
+      ],
+      "stdin_fields": [
+        {
+          "field": "kind",
+          "type": "string",
+          "required": true,
+          "description": "decision, pay, advance, rate, edits, signature or launch."
+        },
+        {
+          "field": "key",
+          "type": "string",
+          "required": true,
+          "description": "The key you propose with."
+        },
+        {
+          "field": "hours",
+          "type": "string",
+          "required": true,
+          "description": "How long voting stays open: 1, 6, 24 or 48."
+        },
+        {
+          "field": "text",
+          "type": "string",
+          "required": true,
+          "description": "The proposal's words, up to 4,000 bytes."
+        },
+        {
+          "field": "asset",
+          "type": "string",
+          "required": false,
+          "description": "pay and advance: the address of an asset the treasury pays in."
+        },
+        {
+          "field": "amount",
+          "type": "string",
+          "required": false,
+          "description": "pay and advance: the amount in whole tokens."
+        },
+        {
+          "field": "recipient",
+          "type": "string",
+          "required": false,
+          "description": "pay and advance: the wallet paid."
+        },
+        {
+          "field": "rate",
+          "type": "string",
+          "required": false,
+          "description": "rate: the daily split in percent, 0.1 to 2."
+        },
+        {
+          "field": "target",
+          "type": "string",
+          "required": false,
+          "description": "edits: the key whose workspace edits it restricts or frees."
+        },
+        {
+          "field": "restricted",
+          "type": "string",
+          "required": false,
+          "description": "edits: true to restrict, false to free."
+        },
+        {
+          "field": "signature",
+          "type": "string",
+          "required": false,
+          "description": "signature: approve or revoke."
+        },
+        {
+          "field": "hash",
+          "type": "string",
+          "required": false,
+          "description": "signature: the 32-byte message hash."
+        },
+        {
+          "field": "name",
+          "type": "string",
+          "required": false,
+          "description": "launch: the token's name."
+        },
+        {
+          "field": "symbol",
+          "type": "string",
+          "required": false,
+          "description": "launch: its symbol."
+        },
+        {
+          "field": "description",
+          "type": "string",
+          "required": false,
+          "description": "launch: what it is."
+        },
+        {
+          "field": "website",
+          "type": "string",
+          "required": false,
+          "description": "launch: its website."
+        },
+        {
+          "field": "image",
+          "type": "string",
+          "required": false,
+          "description": "launch: its image link."
+        }
+      ]
+    },
+    {
+      "command": "proposals vote <fleet> <number> <choice>",
+      "description": "Get the transaction that votes on a proposal with every key you may vote, for your wallet to send.",
+      "operation_id": "buildVote",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/proposals/vote",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        },
+        {
+          "name": "number",
+          "type": "integer",
+          "in": "body",
+          "field": "number",
+          "minimum": 1,
+          "description": "The proposal's number, as the fleet's proposals page shows it."
+        },
+        {
+          "name": "choice",
+          "type": "string",
+          "in": "body",
+          "field": "choice",
+          "enum": [
+            "yes",
+            "no",
+            "abstain"
+          ],
+          "description": "Your vote."
+        }
+      ]
+    },
+    {
+      "command": "proposals cancel <fleet> <number>",
+      "description": "Get the transaction that cancels a proposal made with your key, for your wallet to send.",
+      "operation_id": "buildCancel",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/proposals/cancel",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        },
+        {
+          "name": "number",
+          "type": "integer",
+          "in": "body",
+          "field": "number",
+          "minimum": 1,
+          "description": "The proposal's number, as the fleet's proposals page shows it."
+        }
+      ]
+    },
+    {
+      "command": "proposals carry-out <fleet> <number>",
+      "description": "Get the transaction that carries out an approved proposal, for your wallet to send. Anyone may.",
+      "operation_id": "buildCarryOut",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        },
+        {
+          "name": "number",
+          "type": "integer",
+          "in": "body",
+          "field": "number",
+          "minimum": 1,
+          "description": "The proposal's number, as the fleet's proposals page shows it."
+        }
+      ]
+    },
+    {
+      "command": "split run <fleet>",
+      "description": "See the fleet's daily split for each asset, and get the transaction that runs it, for your wallet to send. Anyone may, once a day.",
+      "operation_id": "buildSplit",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/split",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        }
+      ]
+    },
+    {
+      "command": "keys claim <fleet> <key>",
+      "description": "Get the transactions that claim what a key has earned, for your wallet to send. The money goes to the key's holder.",
+      "operation_id": "buildClaim",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
+      "authority": "wallet-proof",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "enum": [
+            "fleet_tech_classic",
+            "fibonacci_syndicate",
+            "fibonacci_cascade",
+            "fleet_tech_accelerant"
+          ],
+          "description": "The fleet."
+        },
+        {
+          "name": "key",
+          "type": "integer",
+          "in": "path",
+          "field": "token_id",
+          "minimum": 1,
+          "description": "The key's number."
         }
       ]
     }
