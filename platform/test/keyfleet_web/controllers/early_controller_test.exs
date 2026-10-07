@@ -59,19 +59,8 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   test "the page offers a key to roll" do
     page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
 
-    assert text(page, "#roller-title") == "Roll a new key"
-    assert text(page, "#key-roller button[type=button]") == "Roll a new key"
-
-    assert page
-           |> LazyHTML.query("#key-roller .roller__ladder-tiers li")
-           |> Enum.map(&LazyHTML.text/1) == [
-             "Common · 100",
-             "Uncommon · 80, 70, 60",
-             "Rare · 40, 25",
-             "Epic · 15, 7",
-             "Legendary · 2",
-             "Mythic · 1"
-           ]
+    assert text(page, "#roller-title") == "Roll an example Key"
+    assert text(page, "#key-roller button[type=button]") == "Roll an example Key"
   end
 
   test "the page loads only the key roller's script and nothing of sign-in" do

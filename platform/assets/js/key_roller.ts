@@ -1,7 +1,7 @@
 /**
- * The early-access page's key roller: "Roll a new key" draws a random seed, draws the key's eight
- * traits from it the way a minted key gets them, and paints the key's card. Every trait lists all
- * sixteen values it could have landed on, with the drawn one marked.
+ * The early-access page's key roller: "Roll an example Key" draws a random seed, draws the key's
+ * eight traits from it the way a minted key gets them, and paints the key's card. Every trait lists
+ * all sixteen values it could have landed on, with the drawn one marked, and its chance.
  */
 
 import {keyJob} from "./key_card/paint"
@@ -18,7 +18,8 @@ const el = <T extends HTMLElement>(tag: string, className: string, text = ""): T
   node.textContent = text
   return node
 }
-const odds = (weight: number): string => `${weight} in 1,000`
+/** A value's chance: its weight out of the 1,000 each trait shares, as a percentage. */
+const odds = (weight: number): string => `${weight / 10}%`
 const chip = (tier: number, text: string): HTMLElement => {
   const node = el("span", "roller__chip", text)
   node.dataset.tier = String(tier)

@@ -151,11 +151,7 @@ defmodule KeyfleetWeb.EarlyHTML do
 
       <section id="key-roller" class="roller" aria-labelledby="roller-title" data-key-roller>
         <p class="early__overline">Try a key</p>
-        <h2 id="roller-title" class="roller__title">Roll a new key</h2>
-        <p class="roller__lede">
-          One random number picks a key's eight traits, one after another. Each trait has 16 possible
-          values, so there are 4,294,967,296 possible cards.
-        </p>
+        <h2 id="roller-title" class="roller__title">Roll an example Key</h2>
         <div class="roller__stage" data-roller-stage data-state="painting">
           <canvas
             class="roller__canvas"
@@ -169,24 +165,11 @@ defmodule KeyfleetWeb.EarlyHTML do
           </p>
         </div>
         <Regent.Primitives.button type="button" class="roller__roll" data-roller-roll>
-          Roll a new key
+          Roll an example Key
         </Regent.Primitives.button>
         <p class="roller__status" aria-live="polite" data-roller-status></p>
         <div class="roller__tally" data-roller-tally></div>
         <div class="roller__traits" data-roller-traits></div>
-        <div class="roller__ladder">
-          <p class="roller__ladder-lede">
-            Each trait's 16 values share 1,000 chances. Open a trait to see every value it could land on.
-          </p>
-          <ul class="roller__ladder-tiers" aria-label="Chances out of 1,000 for each rarity">
-            <li class="roller__chip" data-tier="0">Common · 100</li>
-            <li class="roller__chip" data-tier="1">Uncommon · 80, 70, 60</li>
-            <li class="roller__chip" data-tier="2">Rare · 40, 25</li>
-            <li class="roller__chip" data-tier="3">Epic · 15, 7</li>
-            <li class="roller__chip" data-tier="4">Legendary · 2</li>
-            <li class="roller__chip" data-tier="5">Mythic · 1</li>
-          </ul>
-        </div>
       </section>
 
       <footer class="early__footer">
