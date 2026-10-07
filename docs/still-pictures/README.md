@@ -10,13 +10,13 @@ need their own go.
 
 - **Page.** The Key Lab, version 9 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv. A link of the form
   `#seed=0x…&key=N&fleet=classic&fleetNumber=1&open` opens that key's card with its top line.
-- **Draw.** `table.json` is the trait table file from that page: 8 traits of 16 values each, every trait's weights
-  adding up to 1,000. Its fingerprint is `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`.
+- **Draw.** The trait table file from that page now ships with the site as
+  `platform/priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json`, named by its fingerprint: 8 traits of 16 values each, every trait's weights adding up to 1,000.
 - **Keys.** `keys.json` holds eight fixed test keys. Seed n is `0x` followed by the sha256 of
   "keyfleet still test n".
 - **Rendering.** `render.mjs` opens each key in headless Chromium with reduced motion and saves the card as a
   767×959 PNG at `art/<table hash>/<slot>/<key>.png`.
-- **Parity.** `parity.exs` loads `table.json` through the site's own reader, `Keyfleet.Traits.table!/1`, which
+- **Parity.** `parity.exs` loads the table file through the site's own reader, `Keyfleet.Traits.table!/1`, which
   checks the fingerprint, then draws the same eight keys with `Keyfleet.Traits.draw/2` and compares them with what
   the page showed.
 
@@ -50,8 +50,9 @@ Until a key's traits are drawn, its metadata shows the Interim KeyFleet Access P
 
 1. **Nothing serves `/art/` yet.** The metadata already points there, but the site has no such files or route.
    Where pictures are stored and which job makes them is the production step that needs its own go.
-2. **The page lives outside the repository.** The Key Lab is an artifact. A server renderer would need the page,
-   or its drawing code, inside the repository at a fixed version.
+2. **The drawing code is in the repository, the page that runs it unattended is not.** `platform/assets/js/key_card`
+   holds the Key Lab's draw, card looks, painting and shader; the early-access page's key roller uses them. A
+   server renderer still needs a page that loads that code and saves the picture.
 3. **Fleets have no number yet.** The top line reads `<FLEET TYPE> #<fleet number> · NO. <key>`. The site records
    one number per fleet; no contract change is needed.
 
@@ -59,5 +60,5 @@ Until a key's traits are drawn, its metadata shows the Interim KeyFleet Access P
 
 ```sh
 node docs/still-pictures/render.mjs <saved Key Lab page> <out folder> classic 0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8 classic 1
-cd platform && MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs ../docs/still-pictures/table.json ../docs/still-pictures/keys.json <out folder>/report.json
+cd platform && MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json ../docs/still-pictures/keys.json <out folder>/report.json
 ```

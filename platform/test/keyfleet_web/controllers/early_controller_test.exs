@@ -28,6 +28,9 @@ defmodule KeyfleetWeb.EarlyControllerTest do
              "Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."
 
     assert text(page, "main") =~
+             "Every seat in a fleet is a key, and every key comes on its own card: eight traits, each drawn at random, from Common all the way to Mythic."
+
+    assert text(page, "main") =~
              "Keyfleet opens soon. Leave your email and we'll tell you when it does."
 
     assert text(page, "label[for=early-email]") == "Email"
@@ -53,12 +56,33 @@ defmodule KeyfleetWeb.EarlyControllerTest do
            ]
   end
 
-  test "the page loads no scripts and nothing of sign-in" do
+  test "the page offers a key to roll" do
+    page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
+
+    assert text(page, "#roller-title") == "Roll a new key"
+    assert text(page, "#key-roller button[type=button]") == "Roll a new key"
+
+    assert page
+           |> LazyHTML.query("#key-roller .roller__ladder-tiers li")
+           |> Enum.map(&LazyHTML.text/1) == [
+             "Common · 100",
+             "Uncommon · 80, 70, 60",
+             "Rare · 40, 25",
+             "Epic · 15, 7",
+             "Legendary · 2",
+             "Mythic · 1"
+           ]
+  end
+
+  test "the page loads only the key roller's script and nothing of sign-in" do
     conn = get(build_conn(), "/early")
     document = html_response(conn, 200)
     page = LazyHTML.from_document(document)
 
-    assert page |> LazyHTML.query("script:not([type='application/ld+json'])") |> Enum.count() == 0
+    assert page
+           |> LazyHTML.query("script:not([type='application/ld+json'])")
+           |> LazyHTML.attribute("src") == ["/assets/js/key_roller.js"]
+
     refute document =~ "privy"
     assert get_resp_header(conn, "content-security-policy") == [ContentSecurityPolicy.reading()]
     assert get_resp_header(conn, "referrer-policy") == ["no-referrer"]

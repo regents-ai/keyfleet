@@ -108,7 +108,7 @@ function generatedShaderModule(entry: keyof typeof moduleFile, wgsl: string): st
  * Entry: ${entry}
  * Inputs:
 ${sources.map(source => ` *   ${source}  sha256:${expectedShaderDigests[source]}`).join("\n")}
- * Resolver: @vgpu/wgsl 0.3.1 resolveShader(), validate: "off", minify: false.
+ * Resolver: @vgpu/wgsl 0.5.0 resolveShader(), validate: "off", minify: false.
  * Canonical virtual paths are resolved in memory; no path rewriting follows resolution.
  */
 

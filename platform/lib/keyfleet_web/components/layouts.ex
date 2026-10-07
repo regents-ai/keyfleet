@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.Layouts do
   @moduledoc """
   Root document layouts: `root` for the public pages and the persistent shell,
-  and `early` for the early-access page, which loads the stylesheet and nothing
-  else.
+  and `early` for the early-access page, which loads the stylesheet and the key
+  roller's script.
   """
 
   use KeyfleetWeb, :html

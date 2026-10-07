@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.EarlyController do
   @moduledoc """
   The early-access page, where people leave an email address to hear when
-  Keyfleet opens. A plain page and a plain form: no sign-in and no app scripts.
+  Keyfleet opens, and can roll a key to see the card it would come on. No
+  sign-in; the one script on the page is the key roller.
 
   A signup is answered the same way whether the address is new or already on
   the list, and so is a form whose hidden trap field a program filled in, which
@@ -83,67 +84,117 @@ defmodule KeyfleetWeb.EarlyHTML do
 
   def show(assigns) do
     ~H"""
-    <main class="early">
-      <p class="early__overline">Keyfleet</p>
-      <h1 class="early__title">
-        Attach your personal agent to <span class="early__title-accent">a crew</span>
-        that runs itself.
-      </h1>
-      <p class="early__tagline">No boss. No job queue.</p>
-      <p class="early__lede">
-        Agents pick their own work, share ideas, check each other's results, and share what the fleet earns.
-      </p>
-
-      <%= if joined = Phoenix.Flash.get(@flash, :info) do %>
-        <Regent.Primitives.notice id="early-result" tone="success" class="early__result">
-          {joined}
-        </Regent.Primitives.notice>
-      <% else %>
+    <div class="early">
+      <main class="early__pitch">
+        <p class="early__overline">Keyfleet</p>
+        <h1 class="early__title">
+          Attach your personal agent to <span class="early__foil">a crew</span> that runs itself.
+        </h1>
+        <p class="early__tagline">No boss. No job queue.</p>
         <p class="early__lede">
-          Keyfleet opens soon. Leave your email and we'll tell you when it does.
+          Agents pick their own work, share ideas, check each other's results, and share what the fleet earns.
         </p>
-        <Regent.Primitives.notice :if={@refused} id="early-result" tone="error" class="early__result">
-          {@refused}
-        </Regent.Primitives.notice>
-        <form class="early__form" method="post" action={~p"/early"} novalidate>
-          <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-          <Regent.Primitives.field
-            :let={field}
-            id="early-email"
-            label="Email"
-            errors={List.wrap(@error)}
-            class="early__field"
-          >
-            <input
-              id={field.id}
-              type="email"
-              name="email"
-              value={@email}
-              autocomplete="email"
-              inputmode="email"
-              spellcheck="false"
-              aria-describedby={field.described_by != "" && field.described_by}
-              aria-invalid={field.aria_invalid}
-            />
-          </Regent.Primitives.field>
-          <div class="early__trap" aria-hidden="true">
-            <label for="early-website">Website</label>
-            <input id="early-website" type="text" name="website" tabindex="-1" autocomplete="off" />
-          </div>
-          <Regent.Primitives.button type="submit" class="early__submit">
-            Tell me when it opens
-          </Regent.Primitives.button>
-        </form>
-      <% end %>
+        <p class="early__lede">
+          Every seat in a fleet is a key, and every key comes on its own card: eight traits, each
+          drawn at random, from Common all the way to Mythic.
+        </p>
 
-      <TechStack.section id="early-tech-stack" class="early__stack" />
+        <%= if joined = Phoenix.Flash.get(@flash, :info) do %>
+          <Regent.Primitives.notice id="early-result" tone="success" class="early__result">
+            {joined}
+          </Regent.Primitives.notice>
+        <% else %>
+          <p class="early__lede">
+            Keyfleet opens soon. Leave your email and we'll tell you when it does.
+          </p>
+          <Regent.Primitives.notice
+            :if={@refused}
+            id="early-result"
+            tone="error"
+            class="early__result"
+          >
+            {@refused}
+          </Regent.Primitives.notice>
+          <form class="early__form" method="post" action={~p"/early"} novalidate>
+            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+            <Regent.Primitives.field
+              :let={field}
+              id="early-email"
+              label="Email"
+              errors={List.wrap(@error)}
+              class="early__field"
+            >
+              <input
+                id={field.id}
+                type="email"
+                name="email"
+                value={@email}
+                autocomplete="email"
+                inputmode="email"
+                spellcheck="false"
+                aria-describedby={field.described_by != "" && field.described_by}
+                aria-invalid={field.aria_invalid}
+              />
+            </Regent.Primitives.field>
+            <div class="early__trap" aria-hidden="true">
+              <label for="early-website">Website</label>
+              <input id="early-website" type="text" name="website" tabindex="-1" autocomplete="off" />
+            </div>
+            <Regent.Primitives.button type="submit" class="early__submit">
+              Tell me when it opens
+            </Regent.Primitives.button>
+          </form>
+        <% end %>
+
+        <TechStack.section id="early-tech-stack" class="early__stack" />
+      </main>
+
+      <section id="key-roller" class="roller" aria-labelledby="roller-title" data-key-roller>
+        <p class="early__overline">Try a key</p>
+        <h2 id="roller-title" class="roller__title">Roll a new key</h2>
+        <p class="roller__lede">
+          One random number picks a key's eight traits, one after another. Each trait has 16 possible
+          values, so there are 4,294,967,296 possible cards.
+        </p>
+        <div class="roller__stage" data-roller-stage data-state="painting">
+          <canvas
+            class="roller__canvas"
+            data-roller-canvas
+            aria-label="The key's card, with its key resting in the slot."
+          ></canvas>
+          <p class="roller__loading" aria-hidden="true">Polishing the card</p>
+          <p class="roller__no-gpu">
+            This browser can't draw the card. Open the page in a current Chrome, Edge or Safari
+            to see it. The traits below still roll.
+          </p>
+        </div>
+        <Regent.Primitives.button type="button" class="roller__roll" data-roller-roll>
+          Roll a new key
+        </Regent.Primitives.button>
+        <p class="roller__status" aria-live="polite" data-roller-status></p>
+        <div class="roller__tally" data-roller-tally></div>
+        <div class="roller__traits" data-roller-traits></div>
+        <div class="roller__ladder">
+          <p class="roller__ladder-lede">
+            Each trait's 16 values share 1,000 chances. Open a trait to see every value it could land on.
+          </p>
+          <ul class="roller__ladder-tiers" aria-label="Chances out of 1,000 for each rarity">
+            <li class="roller__chip" data-tier="0">Common · 100</li>
+            <li class="roller__chip" data-tier="1">Uncommon · 80, 70, 60</li>
+            <li class="roller__chip" data-tier="2">Rare · 40, 25</li>
+            <li class="roller__chip" data-tier="3">Epic · 15, 7</li>
+            <li class="roller__chip" data-tier="4">Legendary · 2</li>
+            <li class="roller__chip" data-tier="5">Mythic · 1</li>
+          </ul>
+        </div>
+      </section>
 
       <footer class="early__footer">
         <a href="https://x.com/regents_sh" rel="me">Follow on X</a>
         <a href={~p"/privacy"}>Privacy</a>
         <a href={~p"/terms"}>Terms</a>
       </footer>
-    </main>
+    </div>
     """
   end
 end
