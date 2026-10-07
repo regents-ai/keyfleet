@@ -9,10 +9,10 @@
 import {keccak_256} from "@noble/hashes/sha3"
 import {hexToBytes} from "@noble/hashes/utils"
 
-import table from "../../../priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json"
+import table from "../../../priv/trait_tables/0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe.json"
 
 /** The table's fingerprint: keccak256 of the file, byte for byte. */
-export const TABLE_HASH = "0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8"
+export const TABLE_HASH = "0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe"
 
 export type TraitId = "exterior" | "metal" | "shell" | "foil" | "emblem" | "rim" | "patina" | "crown"
 export type TraitValue = {readonly name: string; readonly weight: number}
@@ -37,7 +37,7 @@ export const TRAITS: readonly Trait[] = table.traits.map(t => ({id: IDS[t.name],
 export const TIER_NAMES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic"] as const
 /** The rarity a weight out of 1,000 belongs to, 0 for Common up to 5 for Mythic. */
 export const tierOf = (weight: number): number =>
-  weight >= 100 ? 0 : weight >= 60 ? 1 : weight >= 25 ? 2 : weight >= 7 ? 3 : weight >= 2 ? 4 : 5
+  weight >= 100 ? 0 : weight >= 60 ? 1 : weight >= 25 ? 2 : weight >= 10 ? 3 : weight >= 5 ? 4 : 5
 
 export const traitOf = (id: TraitId): Trait => TRAITS.find(t => t.id === id)!
 export const weightOf = (trait: Trait, key: Key): number => trait.values.find(v => v.name === key[trait.id])!.weight

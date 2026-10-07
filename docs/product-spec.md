@@ -34,19 +34,19 @@ Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yT
 
 - **What a key looks like.** Each key's picture is its card, seen from the outside, as a still picture: no animation and no character. The key's handle matches the medallion icon, and a small 13-block Regents crown always sits in the bottom-left corner.
 - **Top line.** Every card reads `<FLEET TYPE> #<fleet number> · NO. <key number>`, for example `CLASSIC #1 · NO. 0072`. The site records one number per fleet; the contracts do not hold it.
-- **Eight traits, one shared table.** Exterior Design, Key Material, Card Shell, Foil, Emblem, Rim, Patina and Regents Crown, each with 16 values. That makes 4,294,967,296 possible cards. Every key in every fleet, including fleets selling at the same time, draws from the same table by the same rule, from its own random seed. The table's fingerprint is `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`.
-- **Rarity.** Each trait's weights add up to 1,000: seven Common values at 100 each, Uncommon 80, 70 and 60, Rare 40 and 25, Epic 15 and 7, Legendary 2 and Mythic 1. So a Mythic is 1 in 1,000 for each trait, and about 1 key in 125 holds at least one. Sean kept these odds on 6 Oct.
+- **Eight traits, one shared table.** Exterior Design, Key Material, Card Shell, Foil, Emblem, Rim, Patina and Regents Crown, each with 16 values. That makes 4,294,967,296 possible cards. Every key in every fleet, including fleets selling at the same time, draws from the same table by the same rule, from its own random seed. The table's fingerprint is `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`.
+- **Rarity.** Each trait's weights add up to 1,000: six Common values at 100 each, Uncommon 80, 74, 70 and 60, Rare 40, 25 and 25, Epic 15, Legendary 7 and Mythic 4. So a Mythic is 4 in 1,000 (0.4%) for each trait, and about 1 key in 32 holds at least one. Sean set these odds on 7 Oct; the values keep their places in each trait's list, so only how often each comes up changed.
 - **Luck differs between fleets.** Because each key is drawn on its own, a fleet may end with no Mythic keys or with several:
 
 | Keys sold in a fleet | Mythic keys, on average | Chance of none |
 | :--- | :--- | :--- |
-| 144 | 1.1 | 32% |
-| 377 | 3.0 | 5% |
-| 1,024 | 8.2 | 0.03% |
-| 2,000 | 15.9 | almost none |
+| 144 | 4.5 | 1% |
+| 377 | 11.9 | almost none |
+| 1,024 | 32.3 | almost none |
+| 2,000 | 63.1 | almost none |
 
 - **Before the reveal.** From mint until a key's traits are drawn and its own picture is ready, it shows the Interim KeyFleet Access Pass: a black card with an uncut key and the words INTERIM / KEYFLEET / ACCESS PASS in the Regents colours (Sean chose this Shadow look on 6 Oct). It is the same picture for every key in every fleet. The key's details then update to its own card.
-- **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass. Making each key's own picture after its reveal, and where those pictures are kept, still need building and Sean's go. The test run is recorded in `docs/still-pictures/README.md`.
+- **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass. After a key's reveal, a job draws its own picture, keeps it on IPFS through Regent's Lighthouse account and the key's details then name it. The test run is recorded in `docs/still-pictures/README.md`.
 
 ## Shared work and chat
 

@@ -10,8 +10,10 @@ need their own go.
 
 - **Page.** The Key Lab, version 9 of https://claude.ai/artifact/F2yTo8YVpAVCwQzWZcRRZv. A link of the form
   `#seed=0x…&key=N&fleet=classic&fleetNumber=1&open` opens that key's card with its top line.
-- **Draw.** The trait table file from that page now ships with the site as
-  `platform/priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json`, named by its fingerprint: 8 traits of 16 values each, every trait's weights adding up to 1,000.
+- **Draw.** The trait table file from that page, `0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8`, named by its fingerprint: 8 traits of 16 values
+  each, every trait's weights adding up to 1,000. It shipped with the site until 7 October 2026, when Sean's new odds
+  replaced it with `platform/priv/trait_tables/0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe.json`: the same values in the same places, with new weights.
+  Everything on this page was drawn from the 6 October table.
 - **Keys.** `keys.json` holds eight fixed test keys. Seed n is `0x` followed by the sha256 of
   "keyfleet still test n".
 - **Rendering.** `render.mjs` opens each key in headless Chromium with reduced motion and saves the card as a
@@ -64,7 +66,10 @@ Sean's "2. a" of 6 October 2026 asked for the per-key pictures, built locally fi
 
 ## Run it again
 
+The 6 October table is no longer in the tree; take it from the last commit that had it.
+
 ```sh
+git show aecccaa:platform/priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json > <out folder>/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json
 node docs/still-pictures/render.mjs <saved Key Lab page> <out folder> classic 0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8 classic 1
-cd platform && MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json ../docs/still-pictures/keys.json <out folder>/report.json
+cd platform && MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs <out folder>/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json ../docs/still-pictures/keys.json <out folder>/report.json
 ```
