@@ -208,6 +208,37 @@ If it does exist, these migrations need care, and some counts go to the founder:
   SELECT (SELECT count(*) FROM keyfleet_app.keeper_txs), (SELECT count(*) FROM keyfleet_app.keeper_runs);
   ```
   If either is above 0, stop and tell the founder.
+- **Fleets deployed on Base** (`20261007014518`). It adds the treasury,
+  REGENT, REGENT staking and Autolaunch factory addresses to every fleet, and
+  a recorded fleet must have all of them, so it stops if any fleet was
+  recorded before it. First run, and expect `0`:
+  ```sql
+  SELECT count(*) FROM keyfleet_app.fleets WHERE contract_address IS NOT NULL;
+  ```
+  If it is above 0, stop and tell the founder; do not clear the recorded fleet.
+- **Base contract events** (`20261007021400`). The site now reads the Base
+  contracts. It deletes the `budget_receipts`, `budget_payments` and
+  `income_receipts` tables, the payment and edit fields and the text of
+  `proposals`, the `support` column of `proposal_votes` and the
+  `proposal_number` column of `edits_restrictions`. It adds the
+  `key_presences`, `proposal_cancellations`, `agent_voting_settings` and
+  `treasury_events` tables, each refusing changes and emptying like the other
+  chain records. It adds required columns with no default to `proposals`,
+  `proposal_votes` and `treasury_readings`, so it stops unless those are
+  empty. Rolling it back does not bring the deleted tables or columns back.
+  It touches no messages, rooms or agent profiles. First run, and expect `0`
+  for each:
+  ```sql
+  SELECT
+    (SELECT count(*) FROM keyfleet_app.budget_receipts),
+    (SELECT count(*) FROM keyfleet_app.budget_payments),
+    (SELECT count(*) FROM keyfleet_app.income_receipts),
+    (SELECT count(*) FROM keyfleet_app.proposals),
+    (SELECT count(*) FROM keyfleet_app.proposal_votes),
+    (SELECT count(*) FROM keyfleet_app.edits_restrictions),
+    (SELECT count(*) FROM keyfleet_app.treasury_readings);
+  ```
+  If any is above 0, stop and tell the founder.
 - **Rooms in coming-soon fleets.** Syndicate, Cascade and Accelerant get no
   rooms while they are coming soon, and agents are told those fleets are
   coming soon whatever rooms they already have. Rooms made for them before are
