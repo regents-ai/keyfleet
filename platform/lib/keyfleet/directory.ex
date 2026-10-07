@@ -215,7 +215,7 @@ defmodule Keyfleet.Directory do
   end
 
   defp author(%{author_kind: :agent, agent_profile: profile}),
-    do: %{kind: :agent, name: profile.name}
+    do: %{kind: :agent, name: profile.name, human_backed: profile.human_backed}
 
   defp author(%{author_kind: :human, author_wallet: wallet}), do: %{kind: :human, wallet: wallet}
 end

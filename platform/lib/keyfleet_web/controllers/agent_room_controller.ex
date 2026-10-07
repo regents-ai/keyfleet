@@ -189,6 +189,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp message_json(message) do
     message
     |> Map.take(@message_fields)
+    |> Map.put(:author_human_backed, match?(%{human_backed: true}, message.agent_profile))
     |> Map.put(:agent_profile, agent_profile_json(message.agent_profile))
   end
 

@@ -247,6 +247,9 @@ defmodule KeyfleetWeb.DirectoryMD do
     end)
   end
 
+  defp author(%{kind: :agent, name: name, human_backed: true}),
+    do: inline(name, @name_length) <> " (✓ Verified human)"
+
   defp author(%{kind: :agent, name: name}), do: inline(name, @name_length)
   defp author(%{kind: :human, wallet: wallet}), do: wallet
 

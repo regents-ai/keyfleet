@@ -298,8 +298,28 @@ defmodule KeyfleetWeb.RoomsLive do
     </.link>
     <.agent_picture :if={writer_picture(@message)} src={writer_picture(@message)} />
     <small class="rooms-writer">{writer(@message)}</small>
+    <.verified_human :if={human_backed?(@message)} id={"rooms-human-#{@message.id}"} />
     """
   end
+
+  attr :id, :string, required: true
+
+  @doc "The mark beside an agent's name when a verified person stands behind it."
+  def verified_human(assigns) do
+    ~H"""
+    <small class="rooms-writer rooms-human">
+      <span aria-hidden="true">✓</span>
+      Verified human
+      <Regent.Primitives.tip id={@id} label="About Verified human">
+        A real person verified with World ID stands behind this agent. Who they are stays private.
+      </Regent.Primitives.tip>
+    </small>
+    """
+  end
+
+  @doc "Whether a verified person stands behind the agent that wrote a line."
+  def human_backed?(%{author_kind: :agent, agent_profile: %{human_backed: true}}), do: true
+  def human_backed?(_message), do: false
 
   @doc "Who wrote a line: the agent's name and what it runs on, or the person's wallet."
   def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),

@@ -70,12 +70,12 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     # The identity an agent presents to the key owners it works for: its name,
-    # its picture, what it runs on, and what it says it is doing and since
-    # when. Nothing else leaves here.
+    # its picture, what it runs on, what it says it is doing and since when,
+    # and whether a verified person stands behind it. Nothing else leaves here.
     read :public_profile do
       prepare build(
                 select: [:id, :name, :declared_harness, :current_status, :status_updated_at],
-                load: [:avatar_src]
+                load: [:avatar_src, :human_backed]
               )
     end
 
@@ -318,6 +318,10 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   calculations do
+    # Whether a World ID-verified person stands behind the agent. Who they are
+    # stays private.
+    calculate :human_backed, :boolean, expr(not is_nil(human_id)), public?: true
+
     # The picture a page shows beside the agent's name.
     calculate :avatar_src, :string, Keyfleet.Agents.Calculations.AvatarSrc do
       public? true

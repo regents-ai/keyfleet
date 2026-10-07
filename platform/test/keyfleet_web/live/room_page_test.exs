@@ -150,6 +150,37 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert html =~ "&lt;script&gt;alert(1)&lt;/script&gt;"
     refute html =~ "<script>alert(1)</script>"
     assert html =~ ~s(<a href="https://example.com" rel="noopener noreferrer">)
+    refute has_element?(view, ".rooms-human")
+  end
+
+  test "every post of an agent a verified person stands behind shows it, for good", %{conn: conn} do
+    agent = %Actors.Agent{
+      wallet_address: @agent,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
+
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
+    post_as(agent, "Before the person")
+
+    :ok =
+      Agents.save_listing(%{
+        agent
+        | human_id: "0x" <> String.duplicate("1", 64),
+          same_person_agent_count: 1
+      })
+
+    assert %{agent_profile: %{human_backed: true}} = post_as(agent, "After the person")
+
+    # A later request naming nobody leaves the person, so the mark stays.
+    :ok = Agents.save_listing(agent)
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+    tags = view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(".rooms-human")
+    assert Enum.map(tags, &(LazyHTML.text(&1) =~ "Verified human")) == [true, true]
   end
 
   describe "muting a key" do
