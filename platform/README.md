@@ -68,7 +68,7 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site. `off` leaves only the early-access page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site. `off` leaves only the early-access page, the Contact page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |

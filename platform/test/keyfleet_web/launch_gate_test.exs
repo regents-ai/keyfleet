@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
-  @closed_pages ~w(/ /docs /about /contact /opportunities /account /app/fleets/fibonacci_syndicate
+  @closed_pages ~w(/ /docs /about /opportunities /account /app/fleets/fibonacci_syndicate
                    /app/keys/fibonacci_syndicate/1 /fleets/fibonacci_syndicate /no-such-page)
   @closed_message "This part of the site isn't open yet."
 
@@ -138,11 +138,11 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert secure_headers(open) != %{}
   end
 
-  test "while closed, the early-access page, the legal pages, the operational files and the static files stay open" do
+  test "while closed, the early-access page, the contact and legal pages, the operational files and the static files stay open" do
     close_surfaces()
 
     for path <-
-          ~w(/early /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
+          ~w(/early /contact /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
             ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg) do
       assert get(build_conn(), path).status == 200, "#{path} closed"
     end
@@ -152,6 +152,9 @@ defmodule KeyfleetWeb.LaunchGateTest do
       assert response(conn, 200) =~ "# Keyfleet"
     end
 
+    contact = build_conn() |> put_req_header("accept", "text/markdown") |> get("/contact")
+    assert response(contact, 200) =~ "# Contact Keyfleet"
+
     assert get(build_conn(), "/healthz").resp_body == "ok"
   end
 
@@ -159,7 +162,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     close_surfaces()
 
     assert locations(get(build_conn(), "/sitemap.xml")) ==
-             Enum.map(~w(/early /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
+             Enum.map(~w(/early /contact /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
 
     open_surfaces()
 

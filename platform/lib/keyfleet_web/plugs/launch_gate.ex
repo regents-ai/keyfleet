@@ -4,10 +4,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   early-access page and nothing else. This plug runs in the endpoint before
   anything is served, and it is the one place that says what stays reachable:
 
-    * `/early` and its form, the Privacy Policy (`/privacy`) and the Terms of
-      Use (`/terms`), as pages or as Markdown;
+    * `/early` and its form, the Contact page (`/contact`), the Privacy Policy
+      (`/privacy`) and the Terms of Use (`/terms`), as pages or as Markdown;
     * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only those
-      three pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
+      four pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
       the keys the fleets' notebook hubs check this site's passes with;
     * the site's static files: its stylesheets, scripts, fonts, images and
       icons. The HTTP contract closes with the API it describes.
@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   alias KeyfleetWeb.{ContentSecurityPolicy, Refusal}
 
-  @open_pages ~w(/early /privacy /terms)
+  @open_pages ~w(/early /contact /privacy /terms)
   @open_files ~w(/healthz /robots.txt /sitemap.xml /.well-known/security.txt /.well-known/hub-jwks.json)
   @static_folders ~w(assets fonts images)
   @contract "api-contract.openapiv3.yaml"
