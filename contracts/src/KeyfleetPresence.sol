@@ -6,8 +6,8 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 /// @notice Which keys of one fleet are present: renewed within the last 48 hours under their
 /// current owner.
 /// @dev Inlined into `KeyfleetVotes`. A key is present for `WINDOW` seconds after its latest
-/// renewal, measured in block timestamps, never in blocks. Token ids fit in 32 bits, because the
-/// fleet never mints past `type(uint32).max`.
+/// renewal, measured in block timestamps, never in blocks. Token ids fit in 64 bits, because the
+/// collection never numbers a fleet past `KeyfleetKeys.MAX_FLEETS`, so no token id reaches 10^19.
 ///
 /// Present keys sit in one queue ordered by expiry, one entry per key. Every renewal expires
 /// exactly `WINDOW` after the block it lands in and block timestamps never go down, so appending
@@ -29,15 +29,15 @@ library KeyfleetPresence {
 
     /// @notice One key's place in the queue. A key is queued exactly when `expiresAt` is not zero.
     struct Node {
-        uint32 prev;
-        uint32 next;
+        uint64 prev;
+        uint64 next;
         uint64 expiresAt;
     }
 
     struct Queue {
         mapping(uint256 tokenId => Node) node;
-        uint32 head;
-        uint32 tail;
+        uint64 head;
+        uint64 tail;
         uint32 queued;
         uint48 revision;
         mapping(uint256 tokenId => Checkpoints.Trace208) activity;
@@ -46,12 +46,12 @@ library KeyfleetPresence {
     /// @notice Renews a key: moves it to the tail of the queue, expiring `WINDOW` from now, and
     /// records the renewal at a new revision.
     function touch(Queue storage queue, uint256 tokenId) internal returns (uint64 expiresAt) {
-        uint32 id = uint32(tokenId);
+        uint64 id = uint64(tokenId);
         if (queue.node[id].expiresAt != 0) _unlink(queue, id);
         else ++queue.queued;
 
         expiresAt = uint64(block.timestamp) + WINDOW;
-        uint32 tail = queue.tail;
+        uint64 tail = queue.tail;
         queue.node[id] = Node({prev: tail, next: 0, expiresAt: expiresAt});
         if (tail == 0) queue.head = id;
         else queue.node[tail].next = id;
@@ -63,7 +63,7 @@ library KeyfleetPresence {
     /// @notice Ends a key's presence because it changed hands, and records that at a new revision.
     /// Its earlier checkpoints stay.
     function clear(Queue storage queue, uint256 tokenId) internal {
-        uint32 id = uint32(tokenId);
+        uint64 id = uint64(tokenId);
         if (queue.node[id].expiresAt != 0) {
             _unlink(queue, id);
             --queue.queued;
@@ -75,9 +75,9 @@ library KeyfleetPresence {
     /// @return removed How many entries were popped.
     /// @return due Whether expired entries are still queued.
     function sweep(Queue storage queue, uint256 limit) internal returns (uint256 removed, bool due) {
-        uint32 head = queue.head;
+        uint64 head = queue.head;
         while (removed < limit && head != 0 && queue.node[head].expiresAt <= block.timestamp) {
-            uint32 next = queue.node[head].next;
+            uint64 next = queue.node[head].next;
             delete queue.node[head];
             head = next;
             ++removed;
@@ -115,10 +115,10 @@ library KeyfleetPresence {
         return renewedAt != 0 && renewedAt <= at && at < renewedAt + WINDOW;
     }
 
-    function _unlink(Queue storage queue, uint32 id) private {
+    function _unlink(Queue storage queue, uint64 id) private {
         Node storage linked = queue.node[id];
-        uint32 prev = linked.prev;
-        uint32 next = linked.next;
+        uint64 prev = linked.prev;
+        uint64 next = linked.next;
         if (prev == 0) queue.head = next;
         else queue.node[prev].next = next;
         if (next == 0) queue.tail = prev;

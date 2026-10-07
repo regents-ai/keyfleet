@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetKeys} from "./KeyfleetKeys.sol";
 
-/// @notice The shards of one fleet's keys: time-limited grants a key's owner gives to agent
-/// wallets, and each key's agent voting switch.
-/// @dev One instance is permanently bound to one fleet, which deploys it in its own constructor.
+/// @notice The shards of every key in the collection: time-limited grants a key's owner gives to
+/// agent wallets, and each key's agent voting switch.
+/// @dev One instance, shared by every fleet and permanently bound to the collection, deployed by the
+/// factory. Shards are kept by token id, and a key's token id names its fleet, so a shard of one
+/// fleet's key never reaches another fleet: each fleet's contracts accept only their own keys.
 /// A key's owner issues shards of any number of their keys to a wallet in one call, for 1 to 365
 /// days. A shard is active while it has not been ended, its time has not run out, and the key's
 /// `ownershipEpoch` is still the one it was issued under, so every shard of a key ends the moment
@@ -17,7 +19,7 @@ import {Keyfleet} from "./Keyfleet.sol";
 /// replaces its time.
 ///
 /// An active shard lets its wallet work in the key's workspace (decided off chain from this record)
-/// and mark the key present in the fleet's `KeyfleetVotes`. It also lets the wallet vote the key and
+/// and mark the key present in its fleet's `KeyfleetVotes`. It also lets the wallet vote the key and
 /// propose with it while the key's agent voting is on, which it is for every key unless its owner
 /// turned it off with `setAgentVoting`; a new owner always starts with it on. A shard is a record,
 /// not a token: it cannot be moved, sold or approved, and it carries no money. There is no
@@ -38,8 +40,8 @@ contract KeyfleetShards {
     /// @notice The most days a shard may be issued for.
     uint16 public constant MAX_DAYS = 365;
 
-    /// @notice The fleet whose keys issue shards here.
-    Keyfleet public immutable FLEET;
+    /// @notice The collection whose keys issue shards here.
+    KeyfleetKeys public immutable KEYS;
 
     /// @notice Raised every time who may act for a key changes: a shard issued, renewed or ended,
     /// or its agent voting turned on or off. Signed messages carry it, so any such change voids
@@ -51,7 +53,7 @@ contract KeyfleetShards {
     /// while this equals the key's current epoch, so a change of hands turns it back on.
     mapping(uint256 tokenId => uint64 epoch) private _agentVotingOffIn;
 
-    /// @notice The fleet address supplied at construction was zero.
+    /// @notice The collection address supplied at construction was zero.
     error ZeroAddress();
     /// @notice A call named no keys.
     error NoKeys();
@@ -79,11 +81,11 @@ contract KeyfleetShards {
     /// @param epoch The key's `ownershipEpoch` the setting belongs to.
     event AgentVotingSet(uint256 indexed tokenId, bool on, uint64 epoch);
 
-    /// @notice Binds this record to the fleet that deploys it.
-    /// @param fleet The fleet whose keys issue shards here.
-    constructor(Keyfleet fleet) {
-        if (address(fleet) == address(0)) revert ZeroAddress();
-        FLEET = fleet;
+    /// @notice Binds this record to the collection.
+    /// @param keys The collection whose keys issue shards here.
+    constructor(KeyfleetKeys keys) {
+        if (address(keys) == address(0)) revert ZeroAddress();
+        KEYS = keys;
     }
 
     /// @notice A wallet's latest shard of a key and whether it is active now.
@@ -109,7 +111,7 @@ contract KeyfleetShards {
     /// @notice Whether the key's shards may vote it and propose with it. On for every key unless its
     /// current owner turned it off.
     function agentVoting(uint256 tokenId) public view returns (bool) {
-        return _agentVotingOffIn[tokenId] != FLEET.ownershipEpoch(tokenId);
+        return _agentVotingOffIn[tokenId] != KEYS.ownershipEpoch(tokenId);
     }
 
     /// @notice Whether a wallet may vote a key and propose with it as the key's agent: it holds an
@@ -133,7 +135,7 @@ contract KeyfleetShards {
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
             _requireOwner(tokenId);
-            uint64 epoch = FLEET.ownershipEpoch(tokenId);
+            uint64 epoch = KEYS.ownershipEpoch(tokenId);
             _shards[tokenId][wallet] = Shard({expiresAt: expiresAt, epoch: epoch, ended: false});
             ++delegationRevision[tokenId];
             emit ShardIssued(tokenId, wallet, expiresAt, epoch);
@@ -150,7 +152,7 @@ contract KeyfleetShards {
             uint256 tokenId = tokenIds[i];
             Shard storage shard = _shards[tokenId][wallet];
             if (!_active(tokenId, shard)) revert ShardNotActive(tokenId, wallet);
-            if (msg.sender != wallet && msg.sender != FLEET.ownerOf(tokenId)) {
+            if (msg.sender != wallet && msg.sender != KEYS.ownerOf(tokenId)) {
                 revert NotAllowedToEnd(tokenId, wallet, msg.sender);
             }
             shard.ended = true;
@@ -170,7 +172,7 @@ contract KeyfleetShards {
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
             _requireOwner(tokenId);
-            uint64 epoch = FLEET.ownershipEpoch(tokenId);
+            uint64 epoch = KEYS.ownershipEpoch(tokenId);
             _agentVotingOffIn[tokenId] = on ? 0 : epoch;
             ++delegationRevision[tokenId];
             emit AgentVotingSet(tokenId, on, epoch);
@@ -178,13 +180,13 @@ contract KeyfleetShards {
     }
 
     function _requireOwner(uint256 tokenId) private view {
-        address owner = FLEET.ownerOf(tokenId);
+        address owner = KEYS.ownerOf(tokenId);
         if (msg.sender != owner) revert NotKeyOwner(tokenId, owner);
     }
 
     /// @dev Not ended, not expired, and issued under the key's current ownership. A shard never
     /// issued has epoch zero, which is never a key's epoch.
     function _active(uint256 tokenId, Shard storage shard) private view returns (bool) {
-        return !shard.ended && block.timestamp < shard.expiresAt && FLEET.ownershipEpoch(tokenId) == shard.epoch;
+        return !shard.ended && block.timestamp < shard.expiresAt && KEYS.ownershipEpoch(tokenId) == shard.epoch;
     }
 }

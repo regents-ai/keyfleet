@@ -5,15 +5,17 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetKeys} from "./KeyfleetKeys.sol";
+import {KeyfleetManager} from "./KeyfleetManager.sol";
 import {KeyfleetPresence} from "./KeyfleetPresence.sol";
 import {KeyfleetShards} from "./KeyfleetShards.sol";
 import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
+import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.sol";
 
 /// @notice The one fixed vote of a fleet: exact proposals decided by a growing electorate of keys.
-/// @dev One instance is permanently bound to one fleet. It is deployed straight after the fleet, at
-/// the address the fleet was given for it, and refuses to deploy for a fleet that names another
-/// controller. There are no councils, no moderators, no rule amendments, no quorum classes and no
+/// @dev One instance is permanently bound to one fleet, deployed by the factory with the fleet's three
+/// other contracts. Keys are named by their token ids in the shared collection, and every function
+/// that takes a key refuses a key of another fleet before anything else. There are no councils, no moderators, no rule amendments, no quorum classes and no
 /// configurable presets.
 ///
 /// A proposal names an author key, a content hash for its narrative, a closing time at most 48 hours
@@ -90,7 +92,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         bytes32 contentHash;
         bytes32 actionsHash;
         bytes32 proposalHash;
-        uint32 authorKey;
+        uint64 authorKey;
         uint48 openRevision;
         uint64 openedAt;
         uint64 closesAt;
@@ -104,14 +106,14 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         bool executed;
     }
 
-    /// @notice The fleet does not name this contract as its voting controller.
-    error WrongFleet(address fleet);
+    /// @notice The key belongs to another fleet.
+    error ForeignKey(uint256 tokenId);
     /// @notice No proposal carries this id.
     error UnknownProposal(uint256 proposalId);
     /// @notice No key with this id has been sold.
     error KeyNotMinted(uint256 tokenId);
-    /// @notice Only the fleet reports a key changing hands.
-    error OnlyFleet();
+    /// @notice Only the fleet's manager reports a key changing hands.
+    error OnlyManager();
     /// @notice Only the fleet's treasury, carrying out a proposal, may do this.
     error OnlyTreasury();
     /// @notice Expired presences are still queued after this call's sweep, so the count of present
@@ -209,7 +211,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @notice The EIP-712 type of a signed renewal. The key ids, epochs and delegation revisions
     /// are each hashed as EIP-712 arrays.
     bytes32 public constant PRESENT_TYPEHASH = keccak256(
-        "Present(address fleet,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
+        "Present(address manager,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,address signer,uint256 nonce,uint256 deadline)"
     );
     /// @notice The EIP-712 type of a signed ballot, a different type from a renewal. `choice` is 1
     /// for Yes, 2 for No and 3 for Abstain.
@@ -217,9 +219,13 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         "Ballot(uint256 proposalId,bytes32 proposalHash,uint256[] keyIds,uint64[] epochs,uint64[] delegationRevisions,uint8 choice,address signer,uint256 nonce,uint256 deadline)"
     );
 
-    /// @notice The fleet that deployed this controller and holds the keys that vote.
-    Keyfleet public immutable FLEET;
-    /// @notice The fleet's shard record, which says which wallets may act for a key.
+    /// @notice This fleet's number in the collection; only its keys vote here.
+    uint256 public immutable FLEET_ID;
+    /// @notice The fleet's manager, which reports its keys moving.
+    KeyfleetManager public immutable MANAGER;
+    /// @notice The shared key collection.
+    KeyfleetKeys public immutable KEYS;
+    /// @notice The shared shard record, which says which wallets may act for a key.
     KeyfleetShards public immutable SHARDS;
     /// @notice The fleet's treasury, which makes an approved proposal's calls.
     KeyfleetTreasury public immutable TREASURY;
@@ -236,14 +242,15 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     mapping(uint256 proposalId => Proposal proposal) private _proposals;
     KeyfleetPresence.Queue private _presence;
 
-    /// @notice Binds this controller to its fleet.
-    /// @param fleet The fleet whose keys vote here, which must name this contract's address as its
-    /// voting controller.
-    constructor(Keyfleet fleet) EIP712("KeyfleetVotes", "1") {
-        if (address(fleet.VOTES()) != address(this)) revert WrongFleet(address(fleet));
-        FLEET = fleet;
-        SHARDS = fleet.SHARDS();
-        TREASURY = fleet.TREASURY();
+    /// @notice Binds this controller to its fleet, from the wiring the factory holds while deploying it.
+    constructor() EIP712("KeyfleetVotes", "1") {
+        (IKeyfleetFactory factory, FleetWiring memory wiring) = KeyfleetWiring.read();
+        KeyfleetWiring.requireSelf(wiring.votes);
+        FLEET_ID = wiring.fleetId;
+        MANAGER = KeyfleetManager(wiring.manager);
+        KEYS = factory.KEYS();
+        SHARDS = factory.SHARDS();
+        TREASURY = KeyfleetTreasury(payable(wiring.treasury));
     }
 
     // --- views -----------------------------------------------------------
@@ -281,12 +288,12 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice The presence queue's ends and its entry count. `queued` includes expired entries
     /// no sweep has removed yet, so it is the exact count of present keys only when nothing is due.
-    function presenceQueue() external view returns (uint32 head, uint32 tail, uint32 queued) {
+    function presenceQueue() external view returns (uint64 head, uint64 tail, uint32 queued) {
         return (_presence.head, _presence.tail, _presence.queued);
     }
 
     /// @notice A key's queue entry: its neighbours and when it expires, all zero when not queued.
-    function presenceEntry(uint256 tokenId) external view returns (uint32 prev, uint32 next, uint64 expiresAt) {
+    function presenceEntry(uint256 tokenId) external view returns (uint64 prev, uint64 next, uint64 expiresAt) {
         KeyfleetPresence.Node storage node = _presence.node[tokenId];
         return (node.prev, node.next, node.expiresAt);
     }
@@ -318,7 +325,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     {
         bytes32 structHash = keccak256(
             bytes.concat(
-                abi.encode(PRESENT_TYPEHASH, address(FLEET)),
+                abi.encode(PRESENT_TYPEHASH, address(MANAGER)),
                 _keyState(tokenIds),
                 abi.encode(signer, _useNonce(signer), deadline)
             )
@@ -327,10 +334,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         _present(signer, tokenIds);
     }
 
-    /// @notice Ends a key's presence because it changed hands. Only the fleet calls this, from every
-    /// transfer.
+    /// @notice Ends a key's presence because it changed hands. Only the fleet's manager calls this,
+    /// from every transfer.
     function onKeyMoved(uint256 tokenId) external {
-        if (msg.sender != address(FLEET)) revert OnlyFleet();
+        if (msg.sender != address(MANAGER)) revert OnlyManager();
         _presence.clear(tokenId);
         emit PresenceCleared(tokenId);
     }
@@ -373,7 +380,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         Proposal storage stored = _proposals[proposalId];
         stored.contentHash = contentHash;
         stored.actionsHash = keccak256(abi.encode(calls));
-        stored.authorKey = uint32(authorKey);
+        stored.authorKey = uint64(authorKey);
         stored.openRevision = _presence.mark();
         stored.openedAt = uint64(block.timestamp);
         stored.closesAt = closesAt;
@@ -471,11 +478,13 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Sets whether a key's edits are restricted. Only the treasury may, so only an approved
     /// proposal's call can.
-    /// @param tokenId A key already sold.
+    /// @param tokenId A key of this fleet already sold.
     /// @param restricted True to restrict, false to lift it.
     function setEditsRestricted(uint256 tokenId, bool restricted) external {
         if (msg.sender != address(TREASURY)) revert OnlyTreasury();
-        if (tokenId == 0 || tokenId > FLEET.totalMinted()) revert KeyNotMinted(tokenId);
+        _requireOwnKey(tokenId);
+        uint256 keyNumber = KEYS.keyNumberOf(tokenId);
+        if (keyNumber == 0 || keyNumber > MANAGER.totalMinted()) revert KeyNotMinted(tokenId);
         editsRestricted[tokenId] = restricted;
         emit EditsRestrictionSet(tokenId, restricted);
     }
@@ -524,7 +533,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
                 address(TREASURY),
                 proposalId,
                 authorKey,
-                FLEET.ownershipEpoch(authorKey),
+                KEYS.ownershipEpoch(authorKey),
                 stored.contentHash,
                 stored.actionsHash,
                 stored.closesAt,
@@ -551,7 +560,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @dev Renews a key the caller has been authorised for.
     function _touch(uint256 tokenId) private {
         _presence.touch(tokenId);
-        emit Present(tokenId, uint64(block.timestamp), uint64(block.number), FLEET.ownershipEpoch(tokenId));
+        emit Present(tokenId, uint64(block.timestamp), uint64(block.number), KEYS.ownershipEpoch(tokenId));
     }
 
     /// @dev Renews keys for `account`, who has been authenticated as the caller or a signer.
@@ -559,7 +568,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (tokenIds.length == 0) revert NoKeys();
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
-            if (account != FLEET.ownerOf(tokenId) && !SHARDS.isActive(tokenId, account)) {
+            _requireOwnKey(tokenId);
+            if (account != KEYS.ownerOf(tokenId) && !SHARDS.isActive(tokenId, account)) {
                 revert NotAuthorizedForKey(tokenId, account);
             }
             _touch(tokenId);
@@ -567,10 +577,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     }
 
     /// @dev Who may vote a key, propose with it and cancel what it authored: its current owner, or
-    /// a wallet holding an active shard of it while the key's agent voting is on. A token id that is
-    /// not a minted key reverts in `ownerOf`.
+    /// a wallet holding an active shard of it while the key's agent voting is on. A key of another
+    /// fleet is refused first; a token id that is not a minted key reverts in `ownerOf`.
     function _requireGovernor(uint256 tokenId, address account) private view {
-        if (account != FLEET.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
+        _requireOwnKey(tokenId);
+        if (account != KEYS.ownerOf(tokenId) && !SHARDS.mayGovern(tokenId, account)) {
             revert NotAuthorizedForKey(tokenId, account);
         }
     }
@@ -585,7 +596,7 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         uint64[] memory revisions = new uint64[](tokenIds.length);
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             if (i != 0 && tokenIds[i] <= tokenIds[i - 1]) revert KeysNotAscending();
-            epochs[i] = FLEET.ownershipEpoch(tokenIds[i]);
+            epochs[i] = KEYS.ownershipEpoch(tokenIds[i]);
             revisions[i] = SHARDS.delegationRevision(tokenIds[i]);
         }
         return abi.encode(
@@ -605,6 +616,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (!SignatureChecker.isValidSignatureNow(signer, _hashTypedDataV4(structHash), signature)) {
             revert InvalidSignature(signer);
         }
+    }
+
+    /// @dev Refuses a key of another fleet.
+    function _requireOwnKey(uint256 tokenId) private view {
+        if (KEYS.fleetOf(tokenId) != FLEET_ID) revert ForeignKey(tokenId);
     }
 
     function _require(uint256 proposalId) private view returns (Proposal storage stored) {

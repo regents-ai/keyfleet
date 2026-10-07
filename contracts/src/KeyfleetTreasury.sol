@@ -9,20 +9,21 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetManager} from "./KeyfleetManager.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetVotes} from "./KeyfleetVotes.sol";
+import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.sol";
 import {IRegentLBPStrategyV2} from "./interfaces/IRegentLBPStrategyV2.sol";
 import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice The treasury of one fleet: the fleet's one payment address, the only place its free
 /// capital is held, and the only account of the fleet that approves a token.
-/// @dev One instance is permanently bound to one fleet. It is deployed straight after the fleet,
-/// at the address the fleet was given for it, and refuses to deploy for a fleet that names another
-/// treasury. Anyone paying the fleet pays this address, in USDC or any other token. The capital
-/// part of every purchase, a completed Cascade level's released surplus and anything sent to the
-/// fleet contract itself outside a purchase are sent here too.
+/// @dev One instance is permanently bound to one fleet, deployed by the factory with the fleet's
+/// three other contracts. Anyone paying the fleet pays this address, in USDC or any other token.
+/// The capital part of every purchase and a completed Cascade level's released reserve arrive here
+/// as REGENT, bought at the market price by the shared `KeyfleetRegentBuyer` in the same purchase;
+/// anything sent to the fleet's manager outside a purchase is sent here as it was paid.
 ///
 /// The treasury holds native ETH as well as tokens. It spends only by making the exact calls of a
 /// proposal the keys approved, which the fleet's `KeyfleetVotes` hands it when the proposal is
@@ -30,8 +31,8 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// the treasury itself as caller: `pay` sends a payment, and `advance` sends one and records it as
 /// an advance to an operator, which anyone may return with `returnAdvance` up to what is still
 /// outstanding. The fleet's owed protocol share passes through here inside one call and never
-/// stays: the fleet sends it and immediately asks for it to be deposited into REGENT revenue
-/// staking.
+/// stays: the manager sends it as USDC and immediately asks for it to be deposited into REGENT
+/// revenue staking.
 ///
 /// The fleet launches its own token through Autolaunch Revstake v2 by an approved proposal's call
 /// to the pinned factory, naming this treasury as the launch's treasury. Once that launch has
@@ -93,21 +94,21 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     uint256 public constant ETH_THRESHOLD = 0.05 ether;
 
     /// @notice The source tag every protocol share deposit carries:
-    /// `keccak256("keyfleet.protocol_share")`. The source reference is the fleet's address.
+    /// `keccak256("keyfleet.protocol_share")`. The source reference is the fleet's manager address.
     bytes32 public constant PROTOCOL_SHARE_TAG = keccak256("keyfleet.protocol_share");
 
     /// @dev The transient slot of the split-in-progress flag:
     /// `keccak256(abi.encode(uint256(keccak256("keyfleet.treasury.split_in_progress")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant SPLIT_IN_PROGRESS = 0xd9aca5cd3a42e97768814a58347bfab1c7bcba20bf1fb9c47c8b9d767310a900;
 
-    /// @notice The fleet this treasury holds the capital of.
-    Keyfleet public immutable FLEET;
+    /// @notice The manager of the fleet this treasury holds the capital of.
+    KeyfleetManager public immutable MANAGER;
     /// @notice The fleet's voting controller, the only account that hands the treasury calls to make.
     KeyfleetVotes public immutable VOTES;
     /// @notice The fleet's USDC.
     IERC20 public immutable USDC;
-    /// @notice Where the protocol share is deposited. On Base the deployment scripts require REGENT
-    /// revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.
+    /// @notice Where the protocol share is deposited, as the factory names it. On Base the
+    /// deployment scripts require REGENT revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.
     IRegentRevenueStaking public immutable REGENT_STAKING;
 
     /// @notice The fleet's reward ledger, which the daily split funds.
@@ -145,12 +146,8 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// approved proposal and not since revoked.
     mapping(bytes32 hash => bool approved) public approvedHash;
 
-    /// @notice The fleet does not name this contract as its treasury.
-    error WrongFleet(address fleet);
-    /// @notice The staking or REGENT address is zero.
-    error ZeroAddress();
-    /// @notice Only the fleet may ask for the protocol share to be deposited.
-    error OnlyFleet();
+    /// @notice Only the fleet's manager may ask for the protocol share to be deposited.
+    error OnlyManager();
     /// @notice Only the fleet's voting controller hands the treasury calls to make.
     error OnlyVotes();
     /// @notice Staking did not take exactly the amount approved for it.
@@ -222,26 +219,21 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         _;
     }
 
-    /// @notice Binds this treasury to its fleet, to the staking contract the protocol share goes
-    /// to, to REGENT and to the Autolaunch factory.
-    /// @param fleet The fleet, which must name this contract's address as its treasury.
-    /// @param staking REGENT revenue staking. Not zero.
-    /// @param regent REGENT. Not zero; its decimals are read once here for its threshold.
-    /// @param autolaunch The Autolaunch Revstake v2 factory. Not zero.
-    constructor(Keyfleet fleet, IRegentRevenueStaking staking, IERC20 regent, IRegentsAutolaunchFactoryV2 autolaunch) {
-        if (address(fleet.TREASURY()) != address(this)) revert WrongFleet(address(fleet));
-        if (address(staking) == address(0) || address(regent) == address(0) || address(autolaunch) == address(0)) {
-            revert ZeroAddress();
-        }
-        FLEET = fleet;
-        VOTES = fleet.VOTES();
-        USDC = fleet.USDC();
-        REWARDS = fleet.REWARDS();
-        REGENT_STAKING = staking;
-        REGENT = regent;
+    /// @notice Binds this treasury to its fleet's manager, voting controller and ledger, and to the
+    /// staking contract, REGENT and the Autolaunch factory the factory names, from the wiring the
+    /// factory holds while deploying it. REGENT's decimals are read once here for its threshold.
+    constructor() {
+        (IKeyfleetFactory factory, FleetWiring memory wiring) = KeyfleetWiring.read();
+        KeyfleetWiring.requireSelf(wiring.treasury);
+        MANAGER = KeyfleetManager(wiring.manager);
+        VOTES = KeyfleetVotes(wiring.votes);
+        REWARDS = KeyfleetRewards(wiring.rewards);
+        USDC = factory.USDC();
+        REGENT_STAKING = factory.REGENT_STAKING();
+        REGENT = factory.REGENT();
+        AUTOLAUNCH = factory.AUTOLAUNCH();
         USDC_THRESHOLD = _hundred(USDC);
-        REGENT_THRESHOLD = _hundred(regent);
-        AUTOLAUNCH = autolaunch;
+        REGENT_THRESHOLD = _hundred(REGENT);
     }
 
     /// @notice Whether the treasury is inside its split routine right now. The fleet's ledger
@@ -253,17 +245,17 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @notice Takes native ETH from anyone. It is free capital like any token the treasury holds.
     receive() external payable {}
 
-    /// @notice Deposits `amount` USDC, which the fleet has just sent here, into REGENT revenue
-    /// staking as the fleet's protocol share.
-    /// @dev Only the fleet calls this, in the same call that sends the amount. The approval is
+    /// @notice Deposits `amount` USDC, which the fleet's manager has just sent here, into REGENT
+    /// revenue staking as the fleet's protocol share.
+    /// @dev Only the manager calls this, in the same call that sends the amount. The approval is
     /// exact and is used up in the deposit; staking must report receiving exactly `amount` and
-    /// leave no allowance, or the whole call reverts and the share stays owed in the fleet. A
+    /// leave no allowance, or the whole call reverts and the share stays owed in the manager. A
     /// paused staking contract reverts the same way.
     function depositProtocolShare(uint256 amount) external nonReentrant {
-        if (msg.sender != address(FLEET)) revert OnlyFleet();
+        if (msg.sender != address(MANAGER)) revert OnlyManager();
         USDC.forceApprove(address(REGENT_STAKING), amount);
         uint256 received =
-            REGENT_STAKING.depositUSDC(amount, PROTOCOL_SHARE_TAG, bytes32(uint256(uint160(address(FLEET)))));
+            REGENT_STAKING.depositUSDC(amount, PROTOCOL_SHARE_TAG, bytes32(uint256(uint160(address(MANAGER)))));
         if (received != amount || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) {
             revert StakingDepositFailed(amount, received);
         }
@@ -429,7 +421,7 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @notice When anyone may next run the daily split: a day after the last run, or a day after
     /// the first mint before any run. Zero while no key has been minted.
     function nextRunAt() public view returns (uint256) {
-        uint256 firstMintAt = FLEET.firstMintAt();
+        uint256 firstMintAt = MANAGER.firstMintAt();
         if (firstMintAt == 0) return 0;
         return Math.max(lastRunAt, firstMintAt) + SPLIT_INTERVAL;
     }
@@ -440,7 +432,7 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         TransientSlot.BooleanSlot flag = SPLIT_IN_PROGRESS.asBoolean();
         flag.tstore(true);
         lastRunAt = uint64(block.timestamp);
-        uint256 keys = FLEET.totalMinted();
+        uint256 keys = MANAGER.totalMinted();
         uint256 bps = dailySplitBps;
         emit DailySplitRun(voted, keys, bps);
         _splitAsset(NATIVE, address(this).balance, ETH_THRESHOLD, keys, bps);

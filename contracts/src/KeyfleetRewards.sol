@@ -5,16 +5,20 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {Keyfleet} from "./Keyfleet.sol";
+import {KeyfleetKeys} from "./KeyfleetKeys.sol";
+import {KeyfleetManager} from "./KeyfleetManager.sol";
 import {KeyfleetShards} from "./KeyfleetShards.sol";
 import {KeyfleetTreasury} from "./KeyfleetTreasury.sol";
+import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.sol";
 
-/// @notice Per-fleet reward ledger. One instance is permanently bound to one fleet contract.
-/// @dev There is no admin, no upgrade path, and no exit other than `claim`. Two things fill it.
+/// @notice Per-fleet reward ledger. One instance is permanently bound to one fleet's manager.
+/// @dev Deployed by the factory with the fleet's three other contracts. There is no admin, no
+/// upgrade path, and no exit other than `claim`. Keys are named by their token ids in the shared
+/// collection, and only keys of this fleet are ever enrolled or claimed for. Two things fill it.
 ///
-/// The fleet writes its USDC obligations: the Accelerant rebate, credited straight to the holder
+/// The fleet's manager writes its USDC obligations: the Accelerant rebate, credited straight to the holder
 /// of the preceding key, and the Cascade repayment, allocated to the preceding level's cohort
-/// through a per-cohort cumulative index scaled by `PRECISION`. Cohort membership is the fleet's
+/// through a per-cohort cumulative index scaled by `PRECISION`. Cohort membership is the manager's
 /// decision: cohort 0 on Classic and Accelerant, and the key's level on the two Fibonacci presets.
 ///
 /// The treasury funds the daily split: the same whole amount per key for every minted key, in
@@ -29,7 +33,9 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
-    error OnlyFleet();
+    error OnlyManager();
+    /// @notice The key belongs to another fleet.
+    error ForeignKey(uint256 tokenId);
     /// @notice Only the fleet's treasury funds the split.
     error OnlyTreasury();
     /// @notice The treasury was not inside its split routine, so the call came from somewhere else
@@ -54,13 +60,17 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     /// @notice How the ledger names native ETH wherever it names an asset.
     address public constant NATIVE = address(0);
 
-    /// @notice The fleet contract that owns this ledger and holds the keys.
-    Keyfleet public immutable FLEET;
+    /// @notice This fleet's number in the collection.
+    uint256 public immutable FLEET_ID;
+    /// @notice The fleet's manager, the only writer of its obligations.
+    KeyfleetManager public immutable MANAGER;
+    /// @notice The shared key collection.
+    KeyfleetKeys public immutable KEYS;
     /// @notice The fleet's USDC, the one token of the cohort lane and of direct credits.
     address public immutable USDC;
     /// @notice The fleet's treasury, the only account that funds the split.
     KeyfleetTreasury public immutable TREASURY;
-    /// @notice The fleet's shard record, which says which wallets may claim for a key as its agent.
+    /// @notice The shared shard record, which says which wallets may claim for a key as its agent.
     KeyfleetShards public immutable SHARDS;
 
     /// @notice Assets reserved for credits, unsettled accruals, and retained rounding dust.
@@ -96,19 +106,20 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     /// agent of one of its keys.
     event Claimed(address indexed asset, address indexed account, address indexed by, uint256 amount);
 
-    constructor(Keyfleet fleet, address usdc, KeyfleetTreasury treasury, KeyfleetShards shards) {
-        if (
-            address(fleet) == address(0) || usdc == address(0) || address(treasury) == address(0)
-                || address(shards) == address(0)
-        ) revert ZeroAddress();
-        FLEET = fleet;
-        USDC = usdc;
-        TREASURY = treasury;
-        SHARDS = shards;
+    /// @notice Binds this ledger to its fleet, from the wiring the factory holds while deploying it.
+    constructor() {
+        (IKeyfleetFactory factory, FleetWiring memory wiring) = KeyfleetWiring.read();
+        KeyfleetWiring.requireSelf(wiring.rewards);
+        FLEET_ID = wiring.fleetId;
+        MANAGER = KeyfleetManager(wiring.manager);
+        KEYS = factory.KEYS();
+        USDC = address(factory.USDC());
+        TREASURY = KeyfleetTreasury(payable(wiring.treasury));
+        SHARDS = factory.SHARDS();
     }
 
-    modifier onlyFleet() {
-        if (msg.sender != address(FLEET)) revert OnlyFleet();
+    modifier onlyManager() {
+        if (msg.sender != address(MANAGER)) revert OnlyManager();
         _;
     }
 
@@ -140,7 +151,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     /// @notice Enrolls a key into a cohort at that cohort's current index and at every split
     /// index, so it earns nothing from earlier allocations. Enrollment is permanent and happens at
     /// most once per key. An asset first split later starts from zero, which every key shares.
-    function enrollKey(uint256 tokenId, uint256 cohortId) external onlyFleet {
+    function enrollKey(uint256 tokenId, uint256 cohortId) external onlyManager {
         if (_keyCohortPlusOne[tokenId] != 0) revert KeyAlreadyEnrolled();
         _keyCohortPlusOne[tokenId] = cohortId + 1;
         cohortSize[cohortId] += 1;
@@ -157,7 +168,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     /// @dev The full amount is reserved here, never at withdrawal. The tokens must already sit in
     /// this contract. The sub-unit remainder of the division stays behind as retained dust and is
     /// still counted as backed, so the reserve is never optimistic.
-    function allocateToCohort(address asset, uint256 cohortId, uint256 amount) external onlyFleet {
+    function allocateToCohort(address asset, uint256 cohortId, uint256 amount) external onlyManager {
         if (asset != USDC) revert UnknownAsset();
         if (amount == 0) revert ZeroAmount();
         uint256 size = cohortSize[cohortId];
@@ -171,7 +182,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     }
 
     /// @notice Credits one address directly with USDC, outside any index.
-    function credit(address asset, address account, uint256 amount) external onlyFleet {
+    function credit(address asset, address account, uint256 amount) external onlyManager {
         if (asset != USDC) revert UnknownAsset();
         if (account == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
@@ -195,10 +206,10 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
         _fundSplit(NATIVE, perKey, keys, address(this).balance);
     }
 
-    /// @notice Converts a key's accruals, in every asset, into pull credits for `owner`. The fleet
+    /// @notice Converts a key's accruals, in every asset, into pull credits for `owner`. The manager
     /// calls this before every ownership change so the outgoing owner keeps what the key earned
     /// under them.
-    function settleKey(uint256 tokenId, address owner) external onlyFleet {
+    function settleKey(uint256 tokenId, address owner) external onlyManager {
         if (owner == address(0)) revert ZeroAddress();
         _settleAll(tokenId, owner);
     }
@@ -212,7 +223,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
 
     /// @notice Settles `tokenIds` to their holders and pays out, for each of `assets`, the caller's
     /// own credit and the credit of every holder of those keys.
-    /// @dev The caller must hold each key or hold an active shard of it. Money for a key always
+    /// @dev Every key must be this fleet's. The caller must hold each key or hold an active shard of it. Money for a key always
     /// goes to the wallet holding it, never to an agent that pressed claim; the caller is paid only
     /// its own credit, which with no keys named is how a former holder collects. Each payment is
     /// one asset to one wallet, ETH by `Address.sendValue`, so a wallet that refuses ETH only stops
@@ -228,7 +239,8 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
         uint256 count = 1;
         for (uint256 i = 0; i < tokenIds.length; ++i) {
             uint256 tokenId = tokenIds[i];
-            address holder = FLEET.ownerOf(tokenId);
+            if (KEYS.fleetOf(tokenId) != FLEET_ID) revert ForeignKey(tokenId);
+            address holder = KEYS.ownerOf(tokenId);
             if (msg.sender != holder && !SHARDS.isActive(tokenId, msg.sender)) revert NotKeyHolderOrAgent(tokenId);
             _settleAll(tokenId, holder);
             if (!_listed(payees, count, holder)) payees[count++] = holder;
@@ -256,7 +268,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
 
     function _fundSplit(address asset, uint256 perKey, uint256 keys, uint256 balance) private {
         if (perKey == 0) revert ZeroAmount();
-        uint256 minted = FLEET.totalMinted();
+        uint256 minted = MANAGER.totalMinted();
         if (keys != minted) revert KeyCountChanged(keys, minted);
         uint256 reserved = backed[asset] + perKey * keys;
         if (balance < reserved) revert InsufficientBacking();
