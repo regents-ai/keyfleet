@@ -76,10 +76,10 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, "/api/v1/projects", "u_" <> _, _body}
   end
 
-  # Costly failure: someone who signed out of KeyFleet, on a shared computer,
+  # Costly failure: someone who signed out of Keyfleet, on a shared computer,
   # leaves the fleet's notebooks open to the next person at that browser, in a
   # new request or a notebook connection already open.
-  test "signing out of KeyFleet signs the notebooks out too", c do
+  test "signing out of Keyfleet signs the notebooks out too", c do
     session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
     lineage = session["session_lineage"]
     cookie = enter!(c.holder, lineage)
@@ -266,7 +266,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   ## The notebook host
 
-  # The lineage of a fresh KeyFleet sign-in for `person`.
+  # The lineage of a fresh Keyfleet sign-in for `person`.
   defp signed_in!(%Human{human_account_id: account_id}),
     do: SessionAuthorityHelpers.signed_in_session(account_id)["session_lineage"]
 

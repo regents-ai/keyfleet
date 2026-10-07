@@ -154,7 +154,7 @@ config :keyfleet, :notebooks,
   max_request_bytes: 32 * 1024 * 1024,
   hub_timeout_ms: 30_000
 
-# Each fleet's code lives in one private repository in KeyFleet's own code
+# Each fleet's code lives in one private repository in Keyfleet's own code
 # store, a Twigpine node at the private address `node` (runtime.exs reads
 # KEYFLEET_CODE_NODE), reached only through https://<host>/<fleet id>.git.
 # Requests to the store carry a pass signed with the notebook hubs' keys,

@@ -463,7 +463,7 @@ The coding agent can implement this build without inventing new governance polic
 
 ## Sources and provenance
 
-**Conversation sources:** the founder's latest build-now instructions; the supplied KeyFleet product one-pager; the Base governance v0.2 artifact for historical context only. The new daily split and simple-majority rule supersede incompatible recommendations. This document does not claim a fresh inspection of the live Keyfleet repository.
+**Conversation sources:** the founder's latest build-now instructions; the supplied Keyfleet product one-pager; the Base governance v0.2 artifact for historical context only. The new daily split and simple-majority rule supersede incompatible recommendations. This document does not claim a fresh inspection of the live Keyfleet repository.
 
 Public sources checked 6 October 2026, used only for the technical facts identified above:
 

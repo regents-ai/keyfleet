@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Refusal do
       {"The sign-in on this request couldn't be confirmed.",
        "Sign in again, then send the request again. A signed agent request carries exactly the body its operation takes."},
     "smart_wallet_on_base" =>
-      {"A smart wallet signs in to KeyFleet on Ethereum, where the Keys are, not on Base.",
+      {"A smart wallet signs in to Keyfleet on Ethereum, where the Keys are, not on Base.",
        "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain ethereum --force, then send the request again."},
     "authentication_unavailable" =>
       {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
@@ -69,7 +69,7 @@ defmodule KeyfleetWeb.Refusal do
       {"These bytes aren't the picture the upload was started for.",
        "Send exactly the file you named, with the content-type you named, or start again with POST /api/v1/agent/avatar/start."},
     "avatar_upload_expired" =>
-      {"This upload address has expired or isn't one KeyFleet gave.",
+      {"This upload address has expired or isn't one Keyfleet gave.",
        "Start again with POST /api/v1/agent/avatar/start, then send the picture within ten minutes."},
     "avatar_unavailable" =>
       {"Your picture can't be saved right now.", "Nothing was changed. Try again in a minute."},
@@ -134,22 +134,22 @@ defmodule KeyfleetWeb.Refusal do
     # A fleet's notebooks.
     "notebooks_not_found" =>
       {"There are no notebooks at this address.",
-       "Open a fleet's notebooks from its workspace on KeyFleet."},
+       "Open a fleet's notebooks from its workspace on Keyfleet."},
     "notebooks_sign_in" =>
       {"You aren't signed in to this fleet's notebooks.",
-       "Open them from the fleet's workspace on KeyFleet. An agent signs each request it sends here."},
+       "Open them from the fleet's workspace on Keyfleet. An agent signs each request it sends here."},
     "notebooks_link_used" =>
       {"This notebook link has been used already or has run out.",
-       "Open the notebooks again from the fleet's workspace on KeyFleet."},
+       "Open the notebooks again from the fleet's workspace on Keyfleet."},
     "notebooks_not_holder" =>
       {"Only holders of this fleet's Keys can open its notebooks.",
        "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},
     "notebooks_agent_profile" =>
-      {"This agent hasn't joined KeyFleet yet.",
+      {"This agent hasn't joined Keyfleet yet.",
        "Join first with POST /api/v1/agent/join/status, then send the request again."},
     "notebooks_tokens_refused" =>
       {"These notebooks don't hand out tokens or app connections.",
-       "Open the notebooks through KeyFleet. An agent signs each request it sends here."},
+       "Open the notebooks through Keyfleet. An agent signs each request it sends here."},
     "notebooks_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>
@@ -159,10 +159,10 @@ defmodule KeyfleetWeb.Refusal do
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",
-       "Copy a fleet's code from https://code.keyfleet.ai/<fleet id>.git, the address its workspace on KeyFleet shows."},
+       "Copy a fleet's code from https://code.keyfleet.ai/<fleet id>.git, the address its workspace on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
-       "Get one from the fleet's workspace on KeyFleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
+       "Get one from the fleet's workspace on Keyfleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
     "code_not_holder" =>
       {"Only holders of this fleet's Keys can use its code.",
        "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},

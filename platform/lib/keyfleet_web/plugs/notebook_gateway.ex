@@ -7,9 +7,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     * `/_keyfleet/enter?code=…` spends the one-time link "Open notebooks"
       made and sets this host's own sign-in cookie, then sends the browser to
-      `/`. The cookie names the fleet, the person's account and the KeyFleet
+      `/`. The cookie names the fleet, the person's account and the Keyfleet
       sign-in it came from; on another fleet's host it signs no one in, and
-      once that KeyFleet sign-in ends (signed out, another account, run out)
+      once that Keyfleet sign-in ends (signed out, another account, run out)
       it signs no one in either, checked on every request.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
@@ -23,7 +23,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   What reaches the hub carries a pass for that person or agent
   (`Keyfleet.Notebooks.Pass`) in place of any `Authorization`,
-  `X-KeyFleet-Assertion`, forwarded-identity or SIWA header the client sent,
+  `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
   and without this site's cookie. Answers stream straight back. A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.

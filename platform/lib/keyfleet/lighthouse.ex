@@ -1,6 +1,6 @@
 defmodule Keyfleet.Lighthouse do
   @moduledoc """
-  Regent's Lighthouse account, which keeps files on IPFS for good. KeyFleet
+  Regent's Lighthouse account, which keeps files on IPFS for good. Keyfleet
   keeps revealed keys' cards there (`Keyfleet.Keys.DrawPicture`).
 
   Configured under `:keyfleet, Keyfleet.Lighthouse`: its upload `url`, the

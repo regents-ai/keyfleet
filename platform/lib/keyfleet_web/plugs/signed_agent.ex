@@ -151,7 +151,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       end)
   end
 
-  # The fields KeyFleet acts on; anything else the sign-in server says is
+  # The fields Keyfleet acts on; anything else the sign-in server says is
   # its own. The agent's page in the agent registry and the World ID person
   # behind it, each null when there is none, ride on the actor, and the
   # agent's profile saves them.

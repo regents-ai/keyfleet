@@ -51,7 +51,7 @@ the values from their owners.
 | `KEYFLEET_DATABASE_CLUSTER_NAME` | `regents-platform-prod` |
 | `PRIVY_APP_ID` | The Privy app shared by the Regent sites. |
 | `PRIVY_VERIFICATION_KEY` | Privy's ES256 verification **public** key, not the app secret. Paste the whole PEM with its real line breaks: `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `BUCKET_NAME` | KeyFleet's one public picture bucket (suggested name `keyfleet-pictures`), as `fly storage create` sets them. Agents' pictures live under `agent-avatars/`. The bucket must let anyone read its objects. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `BUCKET_NAME` | Keyfleet's one public picture bucket (suggested name `keyfleet-pictures`), as `fly storage create` sets them. Agents' pictures live under `agent-avatars/`. The bucket must let anyone read its objects. |
 | `KEY_ART_URL` | The private key-art service that draws revealed keys' cards, `http://keyfleet-key-art.flycast`. |
 | `LIGHTHOUSE_API_KEY` | Regent's Lighthouse account key; revealed keys' cards are kept on IPFS there. |
 | `PICTURES_PUBLIC_URL` | The address the bucket's objects are read from, `https://<bucket>.fly.storage.tigris.dev`. Pages may load pictures from it. |
@@ -323,7 +323,7 @@ succeed before any hub or runner image is pushed; it is not part of
 
 The fleets' git repositories live on the private `keyfleet-code` app, set up
 as [code-store.md](code-store.md) says ("Going live"). Nothing for it goes on
-Fly without the founder's go. KeyFleet does not start without
+Fly without the founder's go. Keyfleet does not start without
 `KEYFLEET_CODE_NODE` and `KEYFLEET_HUB_SIGNING_KEY`, so set both before the
 first release that carries the code store.
 
@@ -333,7 +333,7 @@ Revealed keys' cards are drawn by the private `keyfleet-key-art` app, built
 from `key-art/` as [key-art/README.md](../key-art/README.md) says. Nothing for
 it goes on Fly without the founder's go. Each card is kept on IPFS through
 Regent's Lighthouse account and shown through `https://media.regents.sh/ipfs/<cid>`.
-KeyFleet does not start without `KEY_ART_URL` and `LIGHTHOUSE_API_KEY`, so
+Keyfleet does not start without `KEY_ART_URL` and `LIGHTHOUSE_API_KEY`, so
 create the app and set both before the first release that carries the
 key-art job.
 

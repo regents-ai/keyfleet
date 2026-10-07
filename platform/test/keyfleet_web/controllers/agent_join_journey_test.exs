@@ -390,7 +390,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     # ID person behind it onto its profile. The first person stays for good
     # (Sean, 7 Oct): a request naming nobody, or someone else, leaves them,
     # and one naming them again updates their count. What the sign-in server
-    # says beyond the fields KeyFleet uses is its own.
+    # says beyond the fields Keyfleet uses is its own.
     human_id = "0x" <> String.duplicate("1", 64)
 
     listed =

@@ -1,7 +1,7 @@
 defmodule Keyfleet.Notebooks.Handoff do
   @moduledoc """
   A link that opens a fleet's notebooks for one person, once, under the
-  KeyFleet sign-in it was made in (`session_authority_id`): the notebook
+  Keyfleet sign-in it was made in (`session_authority_id`): the notebook
   sign-in it sets lasts only as long as that one.
 
   Only the code's SHA-256 is kept. A link is spent by the one statement that

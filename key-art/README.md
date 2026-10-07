@@ -44,7 +44,7 @@ Nothing here goes on Fly without the founder's go.
 2. Deploy from the repository root:
    `fly deploy --config key-art/fly.toml --dockerfile key-art/Dockerfile --ignorefile key-art/Dockerfile.dockerignore --no-public-ips .`
 3. Set `KEY_ART_URL=http://keyfleet-key-art.flycast` on `keyfleet`, then release
-   KeyFleet.
+   Keyfleet.
 
 The machine sleeps when idle and wakes on the next draw; the job allows two and
 a half minutes for that.

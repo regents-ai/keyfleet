@@ -22,9 +22,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Pinned `postgres 17.7` in `platform/.tool-versions`, the server every environment runs.
 
-## 2026-09-22 — Renamed to KeyFleet
+## 2026-09-22 — Renamed to Keyfleet
 
-- Renamed the Ash Template placeholder to KeyFleet (`keyfleet`, `KeyFleet`,
+- Renamed the Ash Template placeholder to Keyfleet (`keyfleet`, `Keyfleet`,
   `keyfleet`, `KEYFLEET_`) with `scripts/init.sh`, which removed itself.
 
 ## 2026-09-22 — mint 1.10.1
@@ -231,7 +231,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   and error page carry no `data-theme` until a choice, the colour-scheme and
   theme-color tags follow the device, and the server no longer passes a theme
   through the LiveView session, the shell or the showcase pages. The shell mark
-  and KeyFleet's colour-scheme rules cover the no-choice case.
+  and Keyfleet's colour-scheme rules cover the no-choice case.
 
 ## 2026-09-28 — key map: Safari no longer stops on a light page
 
@@ -299,7 +299,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - elixir-utils is pinned at `5508072` and regents at `c927cdd0`, which names
   the same elixir-utils commit, so `regent_privy` needs no override. The SIWA
-  library at that commit accepts smart-wallet signatures checked on Base. KeyFleet has every signed agent request checked
+  library at that commit accepts smart-wallet signatures checked on Base. Keyfleet has every signed agent request checked
   by siwa-server (v16 accepts smart wallets), so agents whose wallet is a smart
   wallet can now sign in and send signed requests; ordinary wallets are
   unchanged. Sign-in still does not require an ERC-8004 token.
@@ -605,9 +605,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   away, and a background job takes them off the hub and adds the new holder.
   An agent's shard running out ends its access at that moment. Every fleet's
   hub is brought in step every ten minutes as well.
-- Signing out of KeyFleet signs the notebooks out too: a notebook open in that
-  browser closes, saying "You signed out of KeyFleet.", and the next request
-  there asks the person to open them again from KeyFleet.
+- Signing out of Keyfleet signs the notebooks out too: a notebook open in that
+  browser closes, saying "You signed out of Keyfleet.", and the next request
+  there asks the person to open them again from Keyfleet.
 - Background jobs run on Oban, in this site's own database schema.
 - New settings: `KEYFLEET_HUB_FLEETS` (each fleet's hub address) and
   `KEYFLEET_HUB_SIGNING_KEY` (the key that signs passes).
@@ -626,10 +626,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   http://localhost; Safari keeps it only over https, so the browser tests
   run their server over https with a certificate made for localhost.
 
-## 2026-10-04 — Each fleet's code, through KeyFleet
+## 2026-10-04 — Each fleet's code, through Keyfleet
 
 - Each fleet has one private git repository at
-  `https://code.keyfleet.ai/<fleet id>.git`, kept on KeyFleet's own copy of
+  `https://code.keyfleet.ai/<fleet id>.git`, kept on Keyfleet's own copy of
   Twigpine, which has no public address. Holders of the fleet's keys, and
   agents with a shard of one, copy it and send changes with git; nobody else
   can read it.
@@ -649,7 +649,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-04 — Agent sign-in reads only what it uses
 
 - Agent sign-in checks the fields of the sign-in server's answer that
-  KeyFleet acts on and leaves the rest alone, so a field the sign-in server
+  Keyfleet acts on and leaves the rest alone, so a field the sign-in server
   adds (such as how the wallet was proven, or its registry listing) no longer
   turns every agent away.
 - regents is pinned at `d1216640` and elixir-utils at `f30b2f2`, where wallet
@@ -661,19 +661,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - An agent's own profile answer (`join/status` and `profile/update`) carries `registry_listing` and `human_backed`, from the sign-in server's answer to that same request.
 - Who's here, the key list and the fleet pages show neither.
 
-## 2026-10-06 — KeyFleet is an agent's home base (joining guide 2.1.0)
+## 2026-10-06 — Keyfleet is an agent's home base (joining guide 2.1.0)
 
 - The joining guide (`skill.md`, version 2.1.0) has a new section 2: an agent
   works anywhere its owner allows, keeps a handoff, arranges check-ins and
   rechecks its shard when it comes back. A shard still gives no vote and moves
-  no money; the line telling agents to act nowhere outside KeyFleet is gone.
+  no money; the line telling agents to act nowhere outside Keyfleet is gone.
 - The About page heading now reads "A shard never touches the fleet's money".
-- `docs/product-spec.md` is the living product spec, with KeyFleet as an
+- `docs/product-spec.md` is the living product spec, with Keyfleet as an
   agent's home base rather than the edge of its world.
 
 ## 2026-10-06 — Ash 3.34.4 (HQ 106)
 
-- Ash moves from 3.33.11 to 3.34.4, which fixes EEF-CVE-2026-94201. ash_postgres is pinned to exactly 2.13.0, because 2.13.1 through 2.14.2 can write some records outside KeyFleet's own part of the shared database.
+- Ash moves from 3.33.11 to 3.34.4, which fixes EEF-CVE-2026-94201. ash_postgres is pinned to exactly 2.13.0, because 2.13.1 through 2.14.2 can write some records outside Keyfleet's own part of the shared database.
 - regents is pinned at `004307e6` (Regents v128) and elixir-utils at `467cba6`, the versions those libraries require.
 
 ## 2026-10-06 — Package rules in AGENTS.md
@@ -684,12 +684,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - An agent can set its own picture, shown in a small circle beside its name in Who's here, the key list, a key's page, the manage-key page, rooms and key threads. Without one, the site shows the picture made from its wallet, as people's accounts have.
 - Setting a picture takes two steps: a signed `POST /api/v1/agent/avatar/start` naming its SHA-256, length and type answers an address, good for ten minutes, where the picture's bytes go with an unsigned `PUT`. A picture is a PNG, JPEG or WebP of at most 512 KiB, each side 32 to 1,024 pixels. `POST /api/v1/agent/avatar/remove` takes it away.
-- Pictures are kept in the KeyFleet storage bucket and read from its own address, which the pages' content security policy now allows. A replaced or removed picture is deleted from the bucket afterwards.
+- Pictures are kept in the Keyfleet storage bucket and read from its own address, which the pages' content security policy now allows. A replaced or removed picture is deleted from the bucket afterwards.
 - The free-text `avatar` profile field is gone, with its column; the profile answers `avatar_url` instead. The site needs six new secrets before its next release (see `docs/deploy-checklist.md`).
 
 ## 2026-10-07 — Revealed keys' cards (KF-ART, local)
 
-- A revealed key's picture is now its own card. Each recorded reveal queues a job that has the private key-art service (`key-art/`) draw the card, keeps it on IPFS through Regent's Lighthouse account and records its IPFS address against that reveal. The metadata shows it at `https://media.regents.sh/ipfs/<cid>` and names `ipfs://<cid>` in `properties.card`. A reveal removed after a reorg takes its card's record with it, and the key's new seed gets a new card at a new address. While the card is being drawn the key keeps the Interim KeyFleet Access Pass, cached for 30 seconds; then its metadata names the card, cached for an hour.
+- A revealed key's picture is now its own card. Each recorded reveal queues a job that has the private key-art service (`key-art/`) draw the card, keeps it on IPFS through Regent's Lighthouse account and records its IPFS address against that reveal. The metadata shows it at `https://media.regents.sh/ipfs/<cid>` and names `ipfs://<cid>` in `properties.card`. A reveal removed after a reorg takes its card's record with it, and the key's new seed gets a new card at a new address. While the card is being drawn the key keeps the Interim Keyfleet Access Pass, cached for 30 seconds; then its metadata names the card, cached for an hour.
 - The site needs `KEY_ART_URL` and `LIGHTHOUSE_API_KEY` before its next release, and the `keyfleet-key-art` app must exist (see `docs/deploy-checklist.md`).
 
 ## 2026-10-07 — Saved "Verified human" marks (Sean "139. a", local)

@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.CodePassword do
 
   An agent's names the wallet it signed in with; the agent may use the code
   while that wallet holds one of the fleet's keys or a shard of one. A
-  person's names the KeyFleet sign-in it was made under and ends with it.
+  person's names the Keyfleet sign-in it was made under and ends with it.
   Either way, holding the key is checked again on use.
   """
 

@@ -12,7 +12,7 @@ defmodule Keyfleet.Notebooks do
 
   A person opens the notebooks from the fleet's workspace, which hands their
   browser a link that works once (`open/3`); the notebook sign-in it sets ends
-  when their KeyFleet sign-in does. When a key changes hands, a job
+  when their Keyfleet sign-in does. When a key changes hands, a job
   brings the fleet's hub in step (`Keyfleet.Notebooks.Roster`) and ends the
   open notebook connections of whoever lost their key (`end_access/2`).
   """
@@ -195,7 +195,7 @@ defmodule Keyfleet.Notebooks do
   defp hash(code), do: :crypto.hash(:sha256, code)
 
   @doc """
-  The person a notebook sign-in names, while the KeyFleet sign-in it was opened
+  The person a notebook sign-in names, while the Keyfleet sign-in it was opened
   under is still current: `{:ok, actor, topic}`, where `topic` is where that
   sign-in's ending is announced, or `:signed_out` once they signed out there,
   switched account or it ran out.

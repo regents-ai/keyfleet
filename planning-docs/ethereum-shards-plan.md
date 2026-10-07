@@ -31,7 +31,7 @@ Shards ("1a 2a 3 a 4a 5a 6a 7a 8a"):
    least 60% of all keys sold vote yes (keys that don't vote count against).
 7. The owner picks 1–365 days, default 30, and can end a shard early. The shard's own
    wallet can also step down.
-8. siwa-server is unchanged. It proves which wallet is asking; KeyFleet reads the shard
+8. siwa-server is unchanged. It proves which wallet is asking; Keyfleet reads the shard
    from its record of the chain to decide what that wallet may do.
 
 Fees and levels (29 Sep, after seeing the four fleet types):
@@ -101,4 +101,4 @@ for a shard, sign in".
 ## Open, not blocking the build
 
 - The Regents Safe address on Ethereum (the Base Safe is `0x9fa152B0…669a3e`).
-- Restricting marimo and ddocs (Sean is looking into it). The fleets' code is our own Twigpine store, reached only through KeyFleet (decision 16 a, 2026-10-04).
+- Restricting marimo and ddocs (Sean is looking into it). The fleets' code is our own Twigpine store, reached only through Keyfleet (decision 16 a, 2026-10-04).

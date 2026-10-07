@@ -148,7 +148,7 @@ if config_env() == :prod do
 
     config :keyfleet, :code, node: System.fetch_env!("KEYFLEET_CODE_NODE")
 
-    # KeyFleet's picture bucket (agents' pictures under agent-avatars/): the
+    # Keyfleet's picture bucket (agents' pictures under agent-avatars/): the
     # Tigris bucket `fly storage create` made and set these secrets for, and
     # the public address its objects are read from
     # (`https://<bucket>.fly.storage.tigris.dev`).

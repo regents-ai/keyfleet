@@ -1,4 +1,4 @@
-# Interim KeyFleet Access Pass
+# Interim Keyfleet Access Pass
 
 6 October 2026. Every key shows this picture from the moment it is minted until its traits are drawn and its own
 card picture is ready. Then the key's metadata is updated to its real picture, fleet type, fleet number and key

@@ -1,4 +1,4 @@
-# Lit Protocol for KeyFleet: one-page scope
+# Lit Protocol for Keyfleet: one-page scope
 
 6 October 2026, rewritten from Lit's current official documents. Research only:
 no contract, site, dependency or account was changed. Each claim names its source
@@ -38,12 +38,12 @@ not an audit by us.
 | Past migrations | "PKPs will not be migrated from Datil to Naga"; users had to make new keys [S3a]. | Whether anything carried from Naga to Chipotle. |
 | Agent wallets | Vincent Yield users were told to withdraw their funds before Datil shut down on 25 February 2026 [S3a]. The current docs don't mention Vincent. | Any successor; the earlier claim that Keychain replaced it was unsupported. |
 
-## What Lit could do for KeyFleet
+## What Lit could do for Keyfleet
 
 | Use | How | Contract change | Fit |
 | --- | --- | --- | --- |
-| **Fleet files usable outside our server** | An Action reads `ownerOf` and `shardOf` on Ethereum, checks the caller's wallet signature, then decrypts. Holders and agents could open a fleet's stored files without trusting KeyFleet's server. | None: both reads exist. | **Useful but narrow.** It suits the "home base, not the edge of the world" direction. marimo, dDocs and the code store still need the plain text on our server, so our own key-and-shard check still runs for them. |
-| **Bounded agent operations** | A key held in Lit signs only when an Action's rules pass: a budget cap, an approved vote, an expiry. | Depends on the authority model; anything touching the treasury does. | **The strongest fit**, but it waits on the founder's long-term agent-authority decision and on the current hold on KeyFleet contracts. |
+| **Fleet files usable outside our server** | An Action reads `ownerOf` and `shardOf` on Ethereum, checks the caller's wallet signature, then decrypts. Holders and agents could open a fleet's stored files without trusting Keyfleet's server. | None: both reads exist. | **Useful but narrow.** It suits the "home base, not the edge of the world" direction. marimo, dDocs and the code store still need the plain text on our server, so our own key-and-shard check still runs for them. |
+| **Bounded agent operations** | A key held in Lit signs only when an Action's rules pass: a budget cap, an approved vote, an expiry. | Depends on the authority model; anything touching the treasury does. | **The strongest fit**, but it waits on the founder's long-term agent-authority decision and on the current hold on Keyfleet contracts. |
 | **Custody for agents** | No current Lit product. | — | Not available. |
 
 **Cost** [S13]:
@@ -57,9 +57,9 @@ not an audit by us.
 
 ## Decision for Sean (HQ 79)
 
-**Should KeyFleet use Lit, and for what?**
+**Should Keyfleet use Lit, and for what?**
 
-- Using hosted Lit adds Lit's account, upgrade signers and root-key custody to KeyFleet's trust.
+- Using hosted Lit adds Lit's account, upgrade signers and root-key custody to Keyfleet's trust.
 - Self-hosting would need confidential hardware outside Fly.
 - No contract changes for options a or b.
 

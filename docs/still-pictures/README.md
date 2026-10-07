@@ -45,7 +45,7 @@ Drawn as Classic #1:
 | 7 | Tidewater | Star | `2332201c9eadf4cd8029e84d76885eef471f031bb81272aa6d0e5c268a84e423` |
 | 8 | Circuit | Wave | `3531cfec9ca32e4ab009cc0c5396f431d760120033ff10438ea29c0e9bd90bd0` |
 
-Until a key's traits are drawn, its metadata shows the Interim KeyFleet Access Pass instead; see
+Until a key's traits are drawn, its metadata shows the Interim Keyfleet Access Pass instead; see
 `interim-pass/README.md`.
 
 ## In the site (7 October 2026)
@@ -60,7 +60,7 @@ Sean's "2. a" of 6 October 2026 asked for the per-key pictures, built locally fi
   so this matters only when comparing with the Mac. Fly's amd64 machines have not been tried.
 - **Storing.** Each recorded reveal queues a job that draws the card, keeps it on IPFS through Regent's Lighthouse
   account and records its address against that reveal; the key's metadata then names it. Until then the key shows
-  the Interim KeyFleet Access Pass.
+  the Interim Keyfleet Access Pass.
 - **Fleet numbers.** Each fleet's top line comes from the site's catalog (`CLASSIC #1`, `SYNDICATE #1`, …); no
   contract change.
 

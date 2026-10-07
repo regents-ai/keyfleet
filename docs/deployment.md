@@ -373,7 +373,7 @@ example `https://keyfleet.ai/metadata/syndicate/`, and the lab manifest uses
 followed by the key's number, and the site answers it for every key sold:
 
 - until the key's traits are drawn, its name, a description, the Interim
-  KeyFleet Access Pass `/images/keys/interim-keyfleet-access-pass.png` (one
+  Keyfleet Access Pass `/images/keys/interim-keyfleet-access-pass.png` (one
   picture for every key in every fleet) and the attributes `Level` (for
   Syndicate and Cascade only) and `Status: Revealing`, with
   `Cache-Control: max-age=30`;

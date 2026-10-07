@@ -1,6 +1,6 @@
 defmodule Keyfleet.Repo.Migrations.NotebookSignIn do
   @moduledoc """
-  Each "Open notebooks" link names the KeyFleet sign-in it was made in, so the
+  Each "Open notebooks" link names the Keyfleet sign-in it was made in, so the
   notebook sign-in it sets ends with that one. The links' table comes with the
   notebooks, in the same release, so it holds no rows yet.
 

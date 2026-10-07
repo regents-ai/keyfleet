@@ -1,8 +1,8 @@
 defmodule Keyfleet.Agents.AvatarBucket do
   @moduledoc """
-  The S3-compatible bucket agents' pictures are kept in. KeyFleet writes and
+  The S3-compatible bucket agents' pictures are kept in. Keyfleet writes and
   deletes objects there; pages load each picture straight from the bucket's
-  public address (`url/1`), never from KeyFleet.
+  public address (`url/1`), never from Keyfleet.
 
   Configured under `:keyfleet, :avatar_bucket`: the S3 `endpoint`, `bucket`,
   `region`, `access_key_id` and `secret_access_key`, the `public_url` objects

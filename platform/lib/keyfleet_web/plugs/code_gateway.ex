@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
       {:password, :error} ->
         conn
-        |> put_resp_header("www-authenticate", ~s(Basic realm="KeyFleet code"))
+        |> put_resp_header("www-authenticate", ~s(Basic realm="Keyfleet code"))
         |> refuse(401, "code_sign_in")
 
       {:holder, {:ok, nil}} ->

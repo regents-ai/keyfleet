@@ -15,7 +15,7 @@ defmodule Keyfleet.Actors.Agent do
   and `verification_method` how SIWA proved the wallet. A plain wallet's
   signature (`:eoa_recovery`) proves its key, which is the same on every chain.
   A smart wallet's (`:erc1271`, `:erc6492`) proves it only on the chain it was
-  checked on, and KeyFleet's keys are on Ethereum, so a smart wallet counts
+  checked on, and Keyfleet's keys are on Ethereum, so a smart wallet counts
   only when it signed in on Ethereum.
 
   `registry_url`, `human_id` and `same_person_agent_count` are what the SIWA

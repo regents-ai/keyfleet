@@ -3,7 +3,7 @@ defmodule Keyfleet.Keys.KeyPicture do
   A reveal's card picture, kept on IPFS at `cid` (`Keyfleet.Lighthouse`).
   Only the picture job (`Keyfleet.Keys.DrawPicture`) records one, after
   Lighthouse has the picture; until then the key's metadata shows the Interim
-  KeyFleet Access Pass.
+  Keyfleet Access Pass.
 
   A picture belongs to one reveal, since the card is drawn from its seed:
   when an operator removes the reveal after a reorg, its picture record goes

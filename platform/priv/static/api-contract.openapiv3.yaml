@@ -1248,7 +1248,7 @@ components:
         invalid_avatar: the picture isn't a PNG, JPEG or WebP of at most 524288 bytes with each
         side 32 to 1024 pixels. avatar_mismatch: the bytes or their content-type aren't the picture
         the upload was started for. avatar_upload_expired: the upload address has expired or isn't
-        one KeyFleet gave. request_too_large: the bytes are longer than a picture may be.
+        one Keyfleet gave. request_too_large: the bytes are longer than a picture may be.
         avatar_unavailable: the picture can't be saved right now. Nothing was changed.
       content:
         application/json:

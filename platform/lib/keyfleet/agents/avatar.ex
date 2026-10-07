@@ -29,7 +29,7 @@ defmodule Keyfleet.Agents.Avatar do
   def max_bytes, do: @max_bytes
 
   @doc """
-  The declared upload, when it is one KeyFleet takes: `{:ok, declared}` or
+  The declared upload, when it is one Keyfleet takes: `{:ok, declared}` or
   `:error`.
   """
   @spec declare(map()) :: {:ok, declared()} | :error

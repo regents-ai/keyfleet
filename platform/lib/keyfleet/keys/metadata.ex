@@ -4,7 +4,7 @@ defmodule Keyfleet.Keys.Metadata do
   `baseTokenURI`, `<site>/metadata/<slot>/`, followed by the key's number.
 
   A key is known once its purchase is recorded. Until its reveal is recorded
-  it shows the Interim KeyFleet Access Pass, the same picture for every key in
+  it shows the Interim Keyfleet Access Pass, the same picture for every key in
   every fleet, and `Status: Revealing`. From then on it shows the traits drawn
   from its seed with the fleet's trait table, which change only if an
   operator corrects the reveal by hand after a reorg. While its card is being

@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
        c do
     asked = git(:get, "/#{@fleet}.git/info/refs?service=git-upload-pack", nil)
     assert asked.status == 401
-    assert get_resp_header(asked, "www-authenticate") == [~s(Basic realm="KeyFleet code")]
+    assert get_resp_header(asked, "www-authenticate") == [~s(Basic realm="Keyfleet code")]
 
     password = person_password!(c.holder)
     other = git(:get, "/#{@other_fleet}.git/info/refs?service=git-upload-pack", password)

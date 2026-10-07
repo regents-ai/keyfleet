@@ -1,7 +1,7 @@
 defmodule Keyfleet.Code do
   @moduledoc """
   Each fleet's shared code: one private git repository per fleet, kept in
-  KeyFleet's own code store (a Twigpine node on a private address) and reached
+  Keyfleet's own code store (a Twigpine node on a private address) and reached
   only through this site, at `https://<host>/<fleet id>.git`
   (`KeyfleetWeb.Plugs.CodeGateway`).
 
