@@ -473,6 +473,29 @@ it puts the system with Classic #1 on a plain local anvil, with stand-ins for
 USDC, WETH, REGENT, both pools, REGENT staking, the coordinator and the
 Autolaunch factory, for the site's anvil tests.
 
+**The Base-fork lab.** `contracts/script/BaseForkLab.s.sol`, run by
+`contracts/script/base-fork-lab.sh`, is no part of a release either: it puts the
+system with Classic #1 selling on a local fork of Base run as chain 31337, for
+the site on `http://localhost:4097`, so a wallet can buy a key with Base's own
+USDC through Base's own swap route. Everything comes from `base.json` except
+the chain id, the Safe and keeper (anvil's first two default accounts), the
+metadata addresses on the local site and a stand-in VRF coordinator. Every step
+refuses any chain but 31337.
+
+```sh
+anvil --fork-url https://base.drpc.org --chain-id 31337 --port 8546
+
+cd contracts
+export KEYFLEET_LAB=http://127.0.0.1:8546
+script/base-fork-lab.sh deploy <buyer address> [<buyer address> ...]
+script/base-fork-lab.sh fund <buyer address> [...]   # more buyers later
+script/base-fork-lab.sh fulfil                      # answer waiting card draws
+```
+
+`deploy` writes `contracts/deployments/base-fork-lab.json` in the shape of the
+release's deployed record (`base.deployed.json`), and gives each buyer 100 ETH
+and exactly 1,000 USDC. No key is bought.
+
 ## What the Safe does
 
 The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the

@@ -11,8 +11,8 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 
 /// @dev The fleet rules Sean set on 7 October 2026, each pinned on its own: the 60% approval of
-/// the present keys, rounded up, decided at closing; a key's 4-day wait from its mint; its
-/// automatic presence from day 4 to day 6; the 7-day opening in which no proposal may move money;
+/// the present keys, rounded up, decided at closing; a key's 2-day wait from its mint; its
+/// automatic presence from day 2 to day 4; the 7-day opening in which no proposal may move money;
 /// and the Accelerant step a creator chooses.
 contract KeyfleetRulesTest is KeyfleetFixture {
     address private constant ALICE = address(0xA11CE);
@@ -184,12 +184,12 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(OPERATOR), 1e6, "carried out in its last second");
     }
 
-    // --- 2. the 4-day wait from mint -------------------------------------
+    // --- 2. the 2-day wait from mint -------------------------------------
 
-    function test_aKeyWaitsFourDaysFromItsMint() public {
+    function test_aKeyWaitsTwoDaysFromItsMint() public {
         uint256 first = _buy(classic, ALICE);
-        uint64 maturesAt = uint64(block.timestamp) + 4 days;
-        assertEq(votes.KEY_MATURITY(), 4 days, "four days");
+        uint64 maturesAt = uint64(block.timestamp) + 2 days;
+        assertEq(votes.KEY_MATURITY(), 2 days, "two days");
         assertEq(votes.maturesAt(first), maturesAt, "from its mint");
 
         vm.warp(maturesAt - 1);
@@ -202,20 +202,20 @@ contract KeyfleetRulesTest is KeyfleetFixture {
 
         vm.warp(maturesAt);
         _present(first);
-        assertTrue(votes.isActive(first), "it takes part from its fourth day");
+        assertTrue(votes.isActive(first), "it takes part from its second day");
     }
 
     function test_aTransferDoesNotRestartTheWait() public {
         uint256 first = _buy(classic, ALICE);
-        uint64 maturesAt = uint64(block.timestamp) + 4 days;
-        vm.warp(block.timestamp + 3 days);
+        uint64 maturesAt = uint64(block.timestamp) + 2 days;
+        vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         keys.transferFrom(ALICE, BOB, first);
-        assertEq(votes.maturesAt(first), maturesAt, "still four days from the mint");
+        assertEq(votes.maturesAt(first), maturesAt, "still two days from the mint");
 
         vm.warp(maturesAt);
         _present(first);
-        assertTrue(votes.isActive(first), "the new holder takes part on the mint's fourth day");
+        assertTrue(votes.isActive(first), "the new holder takes part on the mint's second day");
     }
 
     function test_aKeyInItsWaitCannotVoteOnAnOpenProposal() public {
@@ -223,25 +223,25 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         _pastOpening();
         uint256 proposalId = _propose(first, new KeyfleetTreasury.Call[](0));
         uint256 fresh = _buy(classic, BOB);
-        uint64 maturesAt = uint64(block.timestamp) + 4 days;
+        uint64 maturesAt = uint64(block.timestamp) + 2 days;
         vm.prank(BOB);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.KeyTooNew.selector, fresh, maturesAt));
         votes.castBallot(proposalId, _ids(fresh), KeyfleetVotes.Choice.Yes);
     }
 
-    // --- 3. automatic presence from day 4 to day 6 -----------------------
+    // --- 3. automatic presence from day 2 to day 4 -----------------------
 
-    function test_aNewKeyIsPresentOnItsOwnFromDayFourToDaySix() public {
+    function test_aNewKeyIsPresentOnItsOwnFromDayTwoToDayFour() public {
         uint256 first = _buy(classic, ALICE);
-        uint64 startsAt = uint64(block.timestamp) + 4 days;
+        uint64 startsAt = uint64(block.timestamp) + 2 days;
         assertEq(votes.presentFrom(first), startsAt, "scheduled at its sale");
 
         vm.warp(startsAt - 1);
         assertFalse(votes.isActive(first), "not present during its wait");
         vm.warp(startsAt);
-        assertTrue(votes.isActive(first), "present from day 4 without pressing");
+        assertTrue(votes.isActive(first), "present from day 2 without pressing");
         vm.warp(startsAt + 2 days - 1);
-        assertTrue(votes.isActive(first), "until the end of day 6");
+        assertTrue(votes.isActive(first), "until the end of day 4");
         vm.warp(startsAt + 2 days);
         assertFalse(votes.isActive(first), "then only by pressing Present");
         _present(first);
@@ -275,7 +275,7 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     function test_aMoveBeforeTheStartKeepsItAndAMoveAfterEndsIt() public {
         uint256 first = _buy(classic, ALICE);
         uint256 second = _buy(classic, ALICE);
-        uint64 startsAt = uint64(block.timestamp) + 4 days;
+        uint64 startsAt = uint64(block.timestamp) + 2 days;
 
         vm.recordLogs();
         vm.prank(ALICE);
@@ -283,7 +283,7 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         assertFalse(_wasCleared(vm.getRecordedLogs()), "nothing to clear during the wait");
         assertEq(votes.presentFrom(first), startsAt, "the start stays");
         vm.warp(startsAt);
-        assertTrue(votes.isActive(first), "the new holder's key is present from day 4");
+        assertTrue(votes.isActive(first), "the new holder's key is present from day 2");
 
         vm.recordLogs();
         vm.prank(ALICE);
@@ -298,7 +298,7 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         (,, uint32 waiting) = votes.presenceList(KeyfleetPresence.Place.Waiting);
         assertEq(waiting, 3, "three waiting");
 
-        vm.warp(block.timestamp + 4 days);
+        vm.warp(block.timestamp + 2 days);
         (uint256 moved, bool due) = votes.sweepExpired(10);
         assertEq(moved, 3, "three started");
         assertFalse(due, "nothing left due");
