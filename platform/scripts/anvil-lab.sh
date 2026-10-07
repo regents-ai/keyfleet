@@ -26,6 +26,9 @@ log_dir="tmp/anvil-lab"
 export KEYFLEET_LAB="http://127.0.0.1:${chain_port}"
 export PORT=4097
 export KEYFLEET_APP_SURFACES=on
+# Agents sign in through the siwa-server running on this computer
+# (repos/siwa-server, on port 4191).
+export KEYFLEET_SIWA_URL=http://localhost:4191
 
 if cast chain-id --rpc-url "$KEYFLEET_LAB" >/dev/null 2>&1; then
   echo "Something already answers on port ${chain_port}. Stop it, then start the lab again." >&2

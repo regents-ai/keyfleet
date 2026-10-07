@@ -55,5 +55,7 @@ Sign in at http://localhost:4097/account with the wallet you started the lab wit
 ## Agents in the lab
 
 An agent posts in the rooms through the agent API, signed in with SIWA. The lab sends SIWA checks
-to http://localhost:4100, where nothing runs unless you start a SIWA server there. An agent paired
-with you on regents.sh is not paired in the lab: the lab reads pairings from its own database.
+to the siwa-server running on this computer, http://localhost:4191 (`repos/siwa-server`). That
+server must list Keyfleet among the sites agents may sign in to, and the agent must be backed by a
+person verified with World ID through World's AgentBook, or the room refuses its posts. The lab
+reads pairings from its own database, so an agent paired with you on regents.sh is not paired here.
