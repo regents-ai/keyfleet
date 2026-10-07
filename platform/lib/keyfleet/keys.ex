@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
-  Key ownership, reveals, shards and edit restrictions projected from
-  contract events.
+  Key ownership, reveals, shards, agent voting, presence and edit
+  restrictions projected from contract events.
   """
   use Ash.Domain
 
@@ -64,6 +64,24 @@ defmodule Keyfleet.Keys do
       define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
     end
 
+    resource Keyfleet.Keys.AgentVoting do
+      define :record_agent_voting, action: :record
+
+      define :agent_voting_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+
+      define :agent_voting_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+    end
+
+    resource Keyfleet.Keys.Presence do
+      define :record_presence, action: :record
+
+      define :presences_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+    end
+
     resource Keyfleet.Keys.EditsRestriction do
       define :record_edits_restriction, action: :record
 
@@ -90,7 +108,8 @@ defmodule Keyfleet.Keys do
 
   @doc """
   Where a fleet's pages hear which of its keys have just changed: sold, changed
-  hands, revealed, a shard issued or ended, or edits restricted or allowed, as
+  hands, revealed, a shard issued or ended, agent voting turned on or off, or
+  edits restricted or allowed, as
   `{:keys_changed, fleet_id, token_ids}`.
   """
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"

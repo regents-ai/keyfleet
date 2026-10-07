@@ -21,7 +21,31 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "asset",
+      "source": "number",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "author_key",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "proposer",
       "type": "text"
     },
     {
@@ -33,8 +57,95 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "amount",
-      "type": "decimal"
+      "source": "proposal_hash",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "content_hash",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "opened_at",
+      "type": "utc_datetime"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "closes_at",
+      "type": "utc_datetime"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "execution_expiry",
+      "type": "utc_datetime"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "opening_count",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "open_revision",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "calls",
+      "type": [
+        "array",
+        "map"
+      ]
     },
     {
       "allow_nil?": false,
@@ -129,7 +240,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "budget_receipts_fleet_id_fkey",
+        "name": "proposals_fleet_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -146,19 +257,43 @@
   "check_constraints": [
     {
       "attribute": [
-        "asset"
+        "number"
       ],
       "base_filter": null,
-      "check": "asset ~ '^0x[0-9a-f]{40}$'",
-      "name": "budget_receipts_asset_shape"
+      "check": "number > 0",
+      "name": "proposals_positive_number"
     },
     {
       "attribute": [
-        "amount"
+        "author_key"
       ],
       "base_filter": null,
-      "check": "amount >= 0",
-      "name": "budget_receipts_nonnegative_amount"
+      "check": "author_key > 0",
+      "name": "proposals_positive_author_key"
+    },
+    {
+      "attribute": [
+        "proposer"
+      ],
+      "base_filter": null,
+      "check": "proposer ~ '^0x[0-9a-f]{40}$'",
+      "name": "proposals_proposer_shape"
+    },
+    {
+      "attribute": [
+        "proposal_hash"
+      ],
+      "base_filter": null,
+      "check": "proposal_hash ~ '^0x[0-9a-f]{64}$'",
+      "name": "proposals_proposal_hash_shape"
+    },
+    {
+      "attribute": [
+        "content_hash"
+      ],
+      "base_filter": null,
+      "check": "content_hash ~ '^0x[0-9a-f]{64}$'",
+      "name": "proposals_content_hash_shape"
     },
     {
       "attribute": [
@@ -166,7 +301,7 @@
       ],
       "base_filter": null,
       "check": "block_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_receipts_block_hash_shape"
+      "name": "proposals_block_hash_shape"
     },
     {
       "attribute": [
@@ -174,7 +309,23 @@
       ],
       "base_filter": null,
       "check": "transaction_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_receipts_transaction_hash_shape"
+      "name": "proposals_transaction_hash_shape"
+    },
+    {
+      "attribute": [
+        "opening_count"
+      ],
+      "base_filter": null,
+      "check": "opening_count >= 0",
+      "name": "proposals_nonnegative_opening_count"
+    },
+    {
+      "attribute": [
+        "open_revision"
+      ],
+      "base_filter": null,
+      "check": "open_revision >= 0",
+      "name": "proposals_nonnegative_open_revision"
     },
     {
       "attribute": [
@@ -182,7 +333,7 @@
       ],
       "base_filter": null,
       "check": "block_number >= 0",
-      "name": "budget_receipts_nonnegative_block_number"
+      "name": "proposals_nonnegative_block_number"
     },
     {
       "attribute": [
@@ -190,7 +341,15 @@
       ],
       "base_filter": null,
       "check": "log_index >= 0",
-      "name": "budget_receipts_nonnegative_log_index"
+      "name": "proposals_nonnegative_log_index"
+    },
+    {
+      "attribute": [
+        "closes_at"
+      ],
+      "base_filter": null,
+      "check": "opened_at < closes_at AND closes_at <= execution_expiry",
+      "name": "proposals_times_in_order"
     },
     {
       "attribute": [
@@ -198,7 +357,7 @@
       ],
       "base_filter": null,
       "check": "record_seq > 0",
-      "name": "budget_receipts_positive_record_seq"
+      "name": "proposals_positive_record_seq"
     }
   ],
   "create_table_options": null,
@@ -236,27 +395,35 @@
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER immutable_budget_receipts ON keyfleet_app.budget_receipts;",
+      "down": "DROP FUNCTION keyfleet_app.refuse_proposal_record_change();",
       "global?": false,
-      "name": "immutable_budget_receipts_trigger",
-      "up": "CREATE TRIGGER immutable_budget_receipts BEFORE UPDATE OR DELETE ON keyfleet_app.budget_receipts\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "immutable_proposal_records_function",
+      "up": "CREATE FUNCTION keyfleet_app.refuse_proposal_record_change() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  RAISE EXCEPTION '% records cannot be changed or deleted', TG_TABLE_NAME USING ERRCODE = '23514';\nEND;\n$$;\n"
     },
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER untruncatable_budget_receipts ON keyfleet_app.budget_receipts;",
+      "down": "DROP TRIGGER immutable_proposals ON keyfleet_app.proposals;",
       "global?": false,
-      "name": "untruncatable_budget_receipts_trigger",
-      "up": "CREATE TRIGGER untruncatable_budget_receipts BEFORE TRUNCATE ON keyfleet_app.budget_receipts\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "immutable_proposals_trigger",
+      "up": "CREATE TRIGGER immutable_proposals BEFORE UPDATE OR DELETE ON keyfleet_app.proposals\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER untruncatable_proposals ON keyfleet_app.proposals;",
+      "global?": false,
+      "name": "untruncatable_proposals_trigger",
+      "up": "CREATE TRIGGER untruncatable_proposals BEFORE TRUNCATE ON keyfleet_app.proposals\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     }
   ],
   "has_create_action": true,
-  "hash": "753348D1C367D953C776ABEF8A1A66247366DD3C84A61C32B0100232DBDEEDD7",
+  "hash": "7325037B4A5C78AB0502C7C8B4BBF515E69E002C7B58C1014E518C07E40FA270",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_receipts_unique_chain_event_index",
+      "index_name": "proposals_unique_chain_event_index",
       "keys": [
         {
           "type": "atom",
@@ -274,7 +441,25 @@
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_receipts_unique_record_seq_index",
+      "index_name": "proposals_unique_number_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        },
+        {
+          "type": "atom",
+          "value": "number"
+        }
+      ],
+      "name": "unique_number",
+      "nils_distinct?": true,
+      "where": null
+    },
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "proposals_unique_record_seq_index",
       "keys": [
         {
           "type": "atom",
@@ -297,5 +482,5 @@
   },
   "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
-  "table": "budget_receipts"
+  "table": "proposals"
 }

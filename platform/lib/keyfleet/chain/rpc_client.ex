@@ -76,6 +76,17 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
+  @impl true
+  def get_balance(address, block_hash) do
+    with {:ok, result} <-
+           request("eth_getBalance", [address, %{blockHash: block_hash, requireCanonical: true}]) do
+      case Abi.quantity(result) do
+        {:ok, wei} -> {:ok, wei}
+        :error -> {:error, :invalid_balance}
+      end
+    end
+  end
+
   defp block(tag) do
     case request("eth_getBlockByNumber", [tag, false]) do
       {:ok, %{"hash" => "0x" <> digits = hash} = header} when byte_size(digits) == 64 ->

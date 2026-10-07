@@ -1,41 +1,39 @@
-defmodule Keyfleet.Treasury.BudgetReceipt do
+defmodule Keyfleet.Proposals.Cancellation do
   @moduledoc """
-  One amount the fleet's budget took in: a token that is not income, arrived
-  by bare transfer and recognized (a `SharedMoneyRecognized` log). `amount`
-  is in the asset's atomic units, any uint256. Only the chain reader writes it, and nothing ever
-  changes it.
-
-  `record_seq` is the fleet's count of proposal and budget records when it
-  was made.
+  One `ProposalCancelled` log: a recorded proposal cancelled by whoever could
+  vote its author key, which happens at most once. Only the chain reader
+  writes it, and nothing ever changes it.
   """
   use Ash.Resource,
-    domain: Keyfleet.Treasury,
+    domain: Keyfleet.Proposals,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   @max_bigint 9_223_372_036_854_775_807
 
   postgres do
-    table "budget_receipts"
+    table "proposal_cancellations"
     repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      check_constraint(:asset, "budget_receipts_asset_shape", check: "asset ~ '^0x[0-9a-f]{40}$'")
-
-      check_constraint(:amount, "budget_receipts_nonnegative_amount", check: "amount >= 0")
+      check_constraint(:cancelled_by, "proposal_cancellations_cancelled_by_shape",
+        check: "cancelled_by ~ '^0x[0-9a-f]{40}$'"
+      )
 
       for field <- [:block_hash, :transaction_hash] do
-        check_constraint(field, "budget_receipts_#{field}_shape",
+        check_constraint(field, "proposal_cancellations_#{field}_shape",
           check: "#{field} ~ '^0x[0-9a-f]{64}$'"
         )
       end
 
       for field <- [:block_number, :log_index] do
-        check_constraint(field, "budget_receipts_nonnegative_#{field}", check: "#{field} >= 0")
+        check_constraint(field, "proposal_cancellations_nonnegative_#{field}",
+          check: "#{field} >= 0"
+        )
       end
 
-      check_constraint(:record_seq, "budget_receipts_positive_record_seq",
+      check_constraint(:record_seq, "proposal_cancellations_positive_record_seq",
         check: "record_seq > 0"
       )
     end
@@ -46,22 +44,26 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
     end
 
     custom_statements do
-      statement :immutable_budget_receipts_trigger do
+      statement :immutable_proposal_cancellations_trigger do
         up("""
-        CREATE TRIGGER immutable_budget_receipts BEFORE UPDATE OR DELETE ON keyfleet_app.budget_receipts
+        CREATE TRIGGER immutable_proposal_cancellations BEFORE UPDATE OR DELETE ON keyfleet_app.proposal_cancellations
         FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down("DROP TRIGGER immutable_budget_receipts ON keyfleet_app.budget_receipts;")
+        down(
+          "DROP TRIGGER immutable_proposal_cancellations ON keyfleet_app.proposal_cancellations;"
+        )
       end
 
-      statement :untruncatable_budget_receipts_trigger do
+      statement :untruncatable_proposal_cancellations_trigger do
         up("""
-        CREATE TRIGGER untruncatable_budget_receipts BEFORE TRUNCATE ON keyfleet_app.budget_receipts
+        CREATE TRIGGER untruncatable_proposal_cancellations BEFORE TRUNCATE ON keyfleet_app.proposal_cancellations
         FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down("DROP TRIGGER untruncatable_budget_receipts ON keyfleet_app.budget_receipts;")
+        down(
+          "DROP TRIGGER untruncatable_proposal_cancellations ON keyfleet_app.proposal_cancellations;"
+        )
       end
     end
   end
@@ -71,22 +73,18 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
 
     create :record do
       public? false
+      accept [:fleet_id, :cancelled_by, :block_number, :block_hash, :transaction_hash, :log_index]
 
-      accept [
-        :fleet_id,
-        :asset,
-        :amount,
-        :block_number,
-        :block_hash,
-        :transaction_hash,
-        :log_index
-      ]
+      argument :proposal_number, :integer,
+        allow_nil?: false,
+        constraints: [min: 1, max: @max_bigint]
 
       upsert? true
       upsert_identity :unique_chain_event
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
+      change Keyfleet.Proposals.Changes.FindProposal
 
       change {Keyfleet.Chain.Changes.RecordOnce,
               identity: [:transaction_hash, :log_index],
@@ -122,12 +120,10 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
   attributes do
     uuid_primary_key :id
 
-    attribute :asset, :string,
+    attribute :cancelled_by, :string,
       allow_nil?: false,
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
-
-    attribute :amount, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,
@@ -161,9 +157,16 @@ defmodule Keyfleet.Treasury.BudgetReceipt do
       allow_nil? false
       public? true
     end
+
+    belongs_to :proposal, Keyfleet.Proposals.Proposal do
+      allow_nil? false
+      public? true
+    end
   end
 
   identities do
+    # A proposal is cancelled once.
+    identity :unique_cancellation, [:proposal_id]
     identity :unique_chain_event, [:transaction_hash, :log_index]
     identity :unique_record_seq, [:fleet_id, :record_seq]
   end

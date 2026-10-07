@@ -17,6 +17,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   @holder ProposalHelpers.wallet("1")
   @votes "0x" <> String.duplicate("9", 40)
   @fleet_contract "0x" <> String.duplicate("7", 40)
+  @eth "0x0000000000000000000000000000000000000000"
+  @day 86_400
   @rule KeyfleetWeb.ProposalsLive.approval_rule()
 
   setup do
@@ -47,19 +49,19 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
   test "anyone can read every proposal and where each one stands", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..7)
 
-    ProposalHelpers.proposal!(@fleet, 1, text: "Hire a designer", text_bytes: 15)
-    ProposalHelpers.proposal!(@fleet, 2)
-    votes!(2, true: [1, 2, 3, 4])
+    ProposalHelpers.proposal!(@fleet, 1)
+    closed!(2)
+    votes!(2, yes: [1, 2, 3, 4])
     ProposalHelpers.proposal!(@fleet, 3)
-    votes!(3, true: [1, 2, 3], false: [4])
-    ProposalHelpers.proposal!(@fleet, 4, kind: :pay)
-    votes!(4, true: [1, 2, 3, 4])
+    votes!(3, yes: [1, 2, 3], no: [4], abstain: [5])
+    closed!(4)
+    votes!(4, yes: [1])
     ProposalHelpers.execution!(@fleet, 4, @voter)
-    ProposalHelpers.proposal!(@fleet, 5, kind: :restrict_edits)
-    votes!(5, true: [1, 2, 3, 4, 5])
-    ProposalHelpers.execution!(@fleet, 5, @voter)
+    ProposalHelpers.proposal!(@fleet, 5)
+    ProposalHelpers.cancellation!(@fleet, 5, @voter)
+    # Three keys were present when it opened, and none of them voted.
+    closed!(6, opening_count: 3)
 
     {:ok, view, html} = live(conn, @list)
 
@@ -67,192 +69,113 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     refute html =~ "Vote counts are catching up."
 
     assert cards(view) == [
-             {"5", "Workspace edits for a key", "Carried out"},
-             {"4", "Payment from shared money", "Paid"},
-             {"3", "Decision", "Open"},
-             {"2", "Decision", "Approved"},
-             {"1", "Decision", "Open"}
+             {"6", "Not approved"},
+             {"5", "Cancelled"},
+             {"4", "Carried out"},
+             {"3", "Open"},
+             {"2", "Approved"},
+             {"1", "Open"}
            ]
 
-    assert has_element?(view, ~s([data-proposal="1"]), "Hire a designer")
-    assert has_element?(view, ~s([data-proposal="3"]), "3 yes, 1 no, of 7 keys sold")
+    assert text(view, ~s([data-proposal="3"] .proposals-detail)) ==
+             "3 yes, 1 no, 1 abstain, of 5 keys counted"
 
     view |> element(~s([data-proposal="2"] a)) |> render_click()
     assert_patch(view, "/app/fleets/#{@fleet}/proposals/2")
   end
 
-  # A key may vote again, and only its latest vote counts; a key sold later
-  # adds to the keys a proposal needs more than half of.
-  test "a key's latest vote counts, and a key sold later can take a passed proposal back to voting",
+  test "a proposal's page shows what it does, how it stands and every vote, fifty at a time",
        %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..3)
-    ProposalHelpers.proposal!(@fleet, 1)
-    votes!(1, true: [1], false: [2])
-    votes!(1, true: [2])
+    paid = ProposalHelpers.wallet("b")
 
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    {:ok, list, _html} = live(conn, @list)
-    assert has_element?(view, "#proposal-status", "Approved")
-    assert has_element?(view, "#proposal-yes", "2 keys")
-    assert has_element?(view, "#proposal-no", "0 keys")
-    assert has_element?(view, "#proposal-keys-sold", "3 keys")
-
-    ProposalHelpers.keys_sold!(@fleet, [4])
-
-    Phoenix.PubSub.broadcast(
-      Keyfleet.PubSub,
-      Proposals.topic(@fleet),
-      {:proposals_changed, @fleet}
+    ProposalHelpers.proposal!(@fleet, 1,
+      calls: [
+        %{target: paid, value: 10 ** 18, data: "0x"},
+        %{target: @usdc, value: 0, data: "0xa9059cbb"}
+      ]
     )
 
-    assert shows?(fn -> has_element?(view, "#proposal-status", "Open") end)
-    assert has_element?(view, "#proposal-keys-sold", "4 keys")
-
-    assert shows?(fn ->
-             has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no, of 4 keys sold")
-           end)
-  end
-
-  test "a withdrawn vote counts for neither side and is listed as withdrawn", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..3)
-    ProposalHelpers.proposal!(@fleet, 1)
-    votes!(1, true: [1, 2], false: [3])
-    votes!(1, nil: [2, 3])
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert has_element?(view, "#proposal-status", "Open")
-    assert has_element?(view, "#proposal-yes", "1 key")
-    assert has_element?(view, "#proposal-no", "0 keys")
-    assert [yes, no, withdrawn] = votes(view)
-    assert yes =~ ~r/^Yes.*with keys 1, 2$/
-    assert no =~ ~r/^No.*with key 3$/
-    assert withdrawn =~ ~r/^Withdrawn.*with keys 2, 3$/
-  end
-
-  test "a proposal's page shows its text, its outcome and every vote, fifty at a time", %{
-    conn: conn
-  } do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..120)
-    ProposalHelpers.proposal!(@fleet, 1, text: "Hire a designer\nfor the launch", text_bytes: 30)
-    for token_id <- 1..51, do: ProposalHelpers.vote!(@fleet, 1, @voter, true, [token_id])
+    for token_id <- 1..51, do: ProposalHelpers.vote!(@fleet, 1, @voter, :yes, [token_id])
+    votes!(1, no: [52], abstain: [53, 54])
 
     {:ok, view, _html} = live(conn, "#{@list}/1")
 
     assert has_element?(view, "#proposal-status", "Open")
-    # Its line breaks are kept as written.
+    assert has_element?(view, "#proposal-yes", "51 keys")
+    assert has_element?(view, "#proposal-no", "1 key")
+    assert has_element?(view, "#proposal-abstain", "2 keys")
+    assert has_element?(view, "#proposal-counted", "54 keys")
+    assert has_element?(view, ".proposals-rule", @rule)
+    assert text(view, "#proposal-proposer") == "Proposed by 0xffff..ffff with key 1"
+    assert has_element?(view, "#proposal-content", "0x" <> String.duplicate("d", 64))
+
+    # ETH is known by its address, so no token address is shown beside it,
+    # and a call with no data shows none.
+    assert lines(view, "#proposal-calls li") == [
+             "Calls 0xbbbb..bbbb with 1 ETH",
+             "Calls 0x8335..2913 #{RegentFormat.short_hash("0xa9059cbb")}"
+           ]
+
     assert view
            |> render()
            |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#proposal-text")
-           |> LazyHTML.text() ==
-             "Hire a designer\nfor the launch"
+           |> LazyHTML.query("#proposal-calls code.proposals-token")
+           |> LazyHTML.attribute("title") == ["0xa9059cbb"]
 
-    assert has_element?(view, "#proposal-yes", "51 keys")
-    assert has_element?(view, ".proposals-rule", @rule)
-    assert length(votes(view)) == 50
-    assert hd(votes(view)) =~ "with key 1"
+    assert length(lines(view, "#proposal-votes li")) == 50
+    assert hd(lines(view, "#proposal-votes li")) =~ ~r/^Yes .* with key 1$/
 
     view |> element("#proposal-more-votes") |> render_click()
-    assert [only] = votes(view)
-    assert only =~ "with key 51"
+    assert [yes, no, abstain] = lines(view, "#proposal-votes li")
+    assert yes =~ ~r/^Yes .* with key 51$/
+    assert no =~ ~r/^No .* with key 52$/
+    assert abstain =~ ~r/^Abstain .* with keys 53, 54$/
 
     view |> element("#proposal-first-votes") |> render_click()
-    assert length(votes(view)) == 50
+    assert length(lines(view, "#proposal-votes li")) == 50
+
+    # A proposal with no calls moves nothing.
+    ProposalHelpers.proposal!(@fleet, 2)
+    {:ok, view, _html} = live(conn, "#{@list}/2")
+    assert has_element?(view, "#proposal-no-calls", "It records a decision and moves nothing.")
   end
 
-  test "a payment names what it pays and to whom", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
-
-    ProposalHelpers.proposal!(@fleet, 1,
-      kind: :pay,
-      asset: @usdc,
-      amount: Decimal.new(12_500_000)
-    )
-
-    ProposalHelpers.proposal!(@fleet, 2,
-      kind: :pay,
-      asset: ProposalHelpers.wallet("c"),
-      amount: Decimal.new(1_234)
-    )
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-
-    assert fields(view, "#proposal-payment div") == [
-             {"Amount", "12.5 USDC"},
-             {"Paid to", ProposalHelpers.wallet("b")}
-           ]
-
-    refute has_element?(view, "#proposal-payment .proposals-token")
-
-    # An asset whose token has not been asked yet is shown as the chain
-    # holds it, with the token's address.
-    other_token = ProposalHelpers.wallet("c")
-    {:ok, other, _html} = live(conn, "#{@list}/2")
-
-    assert amount(other, "#proposal-payment div:first-child dd") ==
-             {"1,234 in the smallest units of token 0xcccc..cccc", other_token}
-
-    # Once the token has told its symbol and decimals, it is named, and its
-    # address is still beside it.
-    ProposalHelpers.asset_details!(@fleet, other_token, "WETH", 18)
-    {:ok, named, _html} = live(conn, "#{@list}/2")
-
-    assert amount(named, "#proposal-payment div:first-child dd") ==
-             {"0.000000000000001234 WETH 0xcccc..cccc", other_token}
-  end
-
-  # Only the fleet's own USDC, known by its address, is shown without one. A
-  # token anywhere else that calls itself USDC always has its address beside
-  # every amount of it.
+  # Only ETH and the fleet's own USDC, known by their addresses, are shown
+  # without one. A token anywhere else that calls itself USDC always has its
+  # address beside every amount of it.
   test "a token calling itself USDC is shown with its address", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
     fake = ProposalHelpers.wallet("d")
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
     ProposalHelpers.asset_details!(@fleet, fake, "USDC", 6)
 
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: fake, amount: 2_000_000)
-    ProposalHelpers.proposal!(@fleet, 2, kind: :pay, asset: @usdc, amount: 2_000_000)
-
     ProposalHelpers.treasury_reading!(@fleet, [
-      balance(@usdc, free_capital: 1_000_000),
-      balance(fake, free_capital: 1_000_000, backed: 3_000_000)
+      balance(@usdc, held: 1_000_000),
+      balance(fake, held: 1_000_000, backed: 3_000_000)
     ])
 
-    ProposalHelpers.income_receipt!(@fleet, asset: fake)
-    ProposalHelpers.budget_payment!(@fleet, asset: fake)
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC 0xdddd..dddd", fake}
-
-    {:ok, view, _html} = live(conn, "#{@list}/2")
-    assert amount(view, "#proposal-payment div:first-child dd") == {"2 USDC", nil}
+    money!(:paid, asset: fake, account: ProposalHelpers.wallet("b"), amount: 2_000_000)
 
     {:ok, view, _html} = live(conn, @list)
 
     assert fields(view, "[data-asset='#{fake}'] div") == [
              {"Shared money", "1 USDC 0xdddd..dddd"},
-             {"Set aside for key holders", "3 USDC 0xdddd..dddd"}
+             {"Waiting for key holders", "3 USDC 0xdddd..dddd"}
            ]
 
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", "1 USDC"},
-             {"Set aside for key holders", "0 USDC"}
+             {"Waiting for key holders", "0 USDC"}
            ]
 
     tokens =
       view
       |> render()
       |> LazyHTML.from_fragment()
-      |> LazyHTML.query(
-        "#proposals-income .proposals-token, #proposals-payments .proposals-token"
-      )
+      |> LazyHTML.query("#proposals-history .proposals-token")
       |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
 
-    assert tokens == List.duplicate({"0xdddd..dddd", fake}, 2)
+    assert tokens == [{"0xdddd..dddd", fake}]
   end
 
   # A token that will not tell its symbol or its decimals is never guessed at.
@@ -260,98 +183,42 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     conn: conn
   } do
     ChainHelpers.seed_cursor!(@fleet)
+    no_symbol = ProposalHelpers.wallet("c")
+    no_decimals = ProposalHelpers.wallet("d")
+    ProposalHelpers.asset_details!(@fleet, no_symbol, nil, 18)
+    ProposalHelpers.asset_details!(@fleet, no_decimals, "ODD", nil)
 
-    for {number, character, symbol, decimals} <- [{1, "c", nil, 18}, {2, "d", "ODD", nil}] do
-      asset = ProposalHelpers.wallet(character)
-      ProposalHelpers.asset_details!(@fleet, asset, symbol, decimals)
-      ProposalHelpers.proposal!(@fleet, number, kind: :pay, asset: asset, amount: 1_234_000)
+    ProposalHelpers.treasury_reading!(@fleet, [
+      balance(no_symbol, held: 1_234_000),
+      balance(no_decimals, held: 1_234_000)
+    ])
 
-      {:ok, view, _html} = live(conn, "#{@list}/#{number}")
+    {:ok, view, _html} = live(conn, @list)
 
-      assert amount(view, "#proposal-payment div:first-child dd") ==
-               {"1,234,000 in the smallest units of token #{RegentFormat.short_address(asset)}",
-                asset}
+    for asset <- [no_symbol, no_decimals] do
+      assert fields(view, "[data-asset='#{asset}'] div:first-child") == [
+               {"Shared money",
+                "1,234,000 in the smallest units of token #{RegentFormat.short_address(asset)}"}
+             ]
     end
-
-    # The fleet's USDC is known by its address even before its token has
-    # said what it is.
-    ProposalHelpers.proposal!(@fleet, 3, kind: :pay, asset: @usdc, amount: 1_234_000)
-    {:ok, view, _html} = live(conn, "#{@list}/3")
-
-    assert amount(view, "#proposal-payment div:first-child dd") ==
-             {"1,234,000 in USDC’s smallest units", nil}
   end
 
   # The contract holds any uint256, which is shown to the last digit.
   test "the largest amount the contract can hold is shown whole", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
     max = 2 ** 256 - 1
-
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay, asset: @usdc, amount: Decimal.new(max))
-
-    ProposalHelpers.treasury_reading!(@fleet, [
-      balance(@usdc, free_capital: max, backed: max)
-    ])
+    ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: max, backed: max)])
 
     whole =
       "115,792,089,237,316,195,423,570,985,008,687,907,853,269,984,665,640,564,039,457,584," <>
         "007,913,129.639935 USDC"
 
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert has_element?(view, "#proposal-payment", whole)
+    {:ok, view, _html} = live(conn, @list)
 
-    {:ok, list, _html} = live(conn, @list)
-
-    assert fields(list, "[data-asset='#{@usdc}'] div") == [
+    assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", whole},
-             {"Set aside for key holders", whole}
+             {"Waiting for key holders", whole}
            ]
-  end
-
-  test "a vote on a key's workspace edits names the key and the change", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..5)
-    ProposalHelpers.proposal!(@fleet, 1, kind: :restrict_edits)
-
-    ProposalHelpers.proposal!(@fleet, 2,
-      kind: :restrict_edits,
-      target_token_id: 1_234,
-      restricted: false
-    )
-
-    # Three fifths of the five keys sold.
-    votes!(2, true: [1, 2, 3])
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-
-    assert fields(view, "#proposal-edits div") == [
-             {"Key", "Key 2"},
-             {"Change", "Stop the key’s workspace edits"}
-           ]
-
-    assert has_element?(view, "#proposal-status", "Open")
-    assert has_element?(view, "#proposal-carry-out-button", "Stop the key’s workspace edits")
-
-    assert has_element?(
-             view,
-             "#proposal-carry-out-note-open",
-             "Yes votes aren’t yet 3 of every 5 keys sold"
-           )
-
-    {:ok, view, _html} = live(conn, "#{@list}/2")
-
-    assert fields(view, "#proposal-edits div") == [
-             {"Key", "Key 1,234"},
-             {"Change", "Let the key edit the workspace again"}
-           ]
-
-    assert has_element?(view, "#proposal-status", "Approved")
-
-    # Nothing about a key's edits on another kind of proposal.
-    ProposalHelpers.proposal!(@fleet, 3)
-    {:ok, view, _html} = live(conn, "#{@list}/3")
-    refute has_element?(view, "#proposal-edits")
   end
 
   test "while votes are still being read the page says so", %{conn: conn} do
@@ -418,7 +285,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     {:ok, list, _html} = live(conn, @list)
     assert has_element?(view, "#proposal-yes", "0 keys")
 
-    ProposalHelpers.vote!(@fleet, 1, @voter, true, [1, 2])
+    ProposalHelpers.vote!(@fleet, 1, @voter, :yes, [1, 2])
     assert has_element?(view, "#proposal-yes", "0 keys")
 
     Phoenix.PubSub.broadcast(
@@ -428,17 +295,19 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     )
 
     assert shows?(fn -> has_element?(view, "#proposal-yes", "2 keys") end)
-    assert shows?(fn -> has_element?(list, ~s([data-proposal="1"]), "2 yes, 0 no") end)
+
+    assert shows?(fn ->
+             text(list, ~s([data-proposal="1"] .proposals-detail)) =~ "2 yes, 0 no"
+           end)
   end
 
   test "a notice that balances were read has an open page show them", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     {:ok, view, _html} = live(conn, @list)
     assert has_element?(view, "#proposals-budget-pending")
 
-    ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, free_capital: 3_000_000)])
+    ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 3_000_000)])
     assert has_element?(view, "#proposals-budget-pending")
 
     Phoenix.PubSub.broadcast(
@@ -450,55 +319,88 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert shows?(fn -> has_element?(view, "[data-asset='#{@usdc}']", "3 USDC") end)
   end
 
-  test "the shared money shows what the fleet holds", %{conn: conn} do
+  test "the shared money shows what the fleet holds, shares and pays", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
     weth = ProposalHelpers.wallet("c")
-    as_of = ~U[2026-09-20 12:00:00Z]
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
+    operator = ProposalHelpers.wallet("d")
     ProposalHelpers.asset_details!(@fleet, weth, "WETH", 18)
 
     ProposalHelpers.treasury_reading!(
       @fleet,
       [
-        balance(@usdc, free_capital: 100_000_000, backed: 30_000_000),
-        balance(weth, free_capital: 2_000_000_000_000_000_000)
+        balance(@eth, held: 10 ** 18),
+        balance(@usdc, held: 100_000_000, backed: 30_000_000),
+        balance(weth, held: 2 * 10 ** 18)
       ],
-      block_time: as_of,
-      protocol_share_owed: Decimal.new(2_500_000)
+      block_time: ~U[2026-09-20 12:00:00Z],
+      protocol_share_owed: Decimal.new(2_500_000),
+      daily_split_bps: 75,
+      next_run_at: ~U[2026-09-21 12:00:00Z]
     )
 
-    ProposalHelpers.income_receipt!(@fleet, asset: @usdc)
-    ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
+    money!(:forwarded, asset: @usdc, by: @voter, amount: 10_000_000)
+    money!(:split_allocated, asset: @usdc, balance: 50_000_000, per_key: 250_000, keys: 4)
+    money!(:paid, asset: weth, account: ProposalHelpers.wallet("b"), amount: 5 * 10 ** 17)
+    money!(:protocol_share_sent, by: @voter, amount: 1_000_000)
+
+    money!(:advanced,
+      advance_id: 1,
+      account: operator,
+      asset: @usdc,
+      amount: 4_000_000,
+      purpose_hash: "0x" <> String.duplicate("e", 64)
+    )
+
+    money!(:advance_returned,
+      advance_id: 1,
+      by: operator,
+      amount: 1_000_000,
+      outstanding: 3_000_000
+    )
 
     {:ok, view, _html} = live(conn, @list)
 
+    assert fields(view, "[data-asset='#{@eth}'] div") == [
+             {"Shared money", "1 ETH"},
+             {"Waiting for key holders", "0 ETH"}
+           ]
+
     assert fields(view, "[data-asset='#{@usdc}'] div") == [
              {"Shared money", "100 USDC"},
-             {"Set aside for key holders", "30 USDC"}
+             {"Waiting for key holders", "30 USDC"}
            ]
 
     assert fields(view, "[data-asset='#{weth}'] div") == [
              {"Shared money", "2 WETH 0xcccc..cccc"},
-             {"Set aside for key holders", "0 WETH 0xcccc..cccc"}
+             {"Waiting for key holders", "0 WETH 0xcccc..cccc"}
+           ]
+
+    assert text(view, "#proposals-budget-as-of") ==
+             "Figures as of 20 September 2026 at 12:00 UTC."
+
+    assert fields(view, "#proposals-split div") == [
+             {"Shared with key holders each day", "0.75%"},
+             {"Next share", "21 September 2026 at 12:00 UTC"}
            ]
 
     assert fields(view, "#proposals-held div") == [{"Set aside for Regents", "2.5 USDC"}]
 
-    assert has_element?(
-             view,
-             "#proposals-budget-as-of",
-             "Figures as of 20 September 2026 at 12:00 UTC."
-           )
+    assert lines(view, "#proposals-advances li") == [
+             "3 USDC of 4 USDC still out with 0xdddd..dddd"
+           ]
 
-    assert has_element?(view, "#proposals-income li", "10 USDC paid to key holders")
-
-    assert has_element?(view, "#proposals-payments li", "5 USDC")
-    assert has_element?(view, "#proposals-payments li", "to #{ProposalHelpers.wallet("b")}")
+    # Newest first; an advance coming back changes only what is still out.
+    assert lines(view, "#proposals-history li") == [
+             "Advanced 4 USDC to 0xdddd..dddd",
+             "Sent to Regents 1 USDC",
+             "Paid 0.5 WETH 0xcccc..cccc to 0xbbbb..bbbb",
+             "Shared with key holders 1 USDC",
+             "Received 10 USDC"
+           ]
   end
 
   test "the shared money says what it doesn't know yet", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
 
     {:ok, view, _html} = live(conn, @list)
 
@@ -508,42 +410,30 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              "The shared money’s figures are still being read."
            )
 
-    assert has_element?(view, "#proposals-no-income", "No income yet.")
-
-    assert has_element?(
-             view,
-             "#proposals-no-payments",
-             "Nothing has been paid from the shared money yet."
-           )
+    assert has_element?(view, "#proposals-no-advances", "Nothing is out on an advance.")
+    assert has_element?(view, "#proposals-no-history", "No money has come in or gone out yet.")
 
     ProposalHelpers.treasury_reading!(
       @fleet,
-      [balance(@usdc, free_capital: 50_000_000)],
+      [balance(@usdc, held: 50_000_000)],
       block_time: ~U[2026-09-20 12:00:00Z],
       cascade_reserve: Decimal.new(7_000_000)
     )
 
-    for _payment <- 1..21, do: ProposalHelpers.budget_payment!(@fleet, asset: @usdc)
+    for _payment <- 1..21,
+        do: money!(:paid, asset: @usdc, account: ProposalHelpers.wallet("b"), amount: 1)
 
     {:ok, view, _html} = live(conn, @list)
 
-    assert fields(view, "[data-asset='#{@usdc}'] div") == [
-             {"Shared money", "50 USDC"},
-             {"Set aside for key holders", "0 USDC"}
-           ]
+    assert fields(view, "#proposals-split div") == [{"Shared with key holders each day", "1%"}]
 
     assert fields(view, "#proposals-held div") == [
              {"Held for the next level", "7 USDC"},
              {"Set aside for Regents", "0 USDC"}
            ]
 
-    assert view
-           |> render()
-           |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#proposals-payments li")
-           |> Enum.count() == 20
-
-    assert render(view) =~ "Earlier payments are not shown here."
+    assert length(lines(view, "#proposals-history li")) == 20
+    assert render(view) =~ "Earlier money in and out is not shown here."
   end
 
   # Until a fleet is on chain it has no shared money, and its page says nothing
@@ -566,14 +456,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   # page knows is said beside it, and the contract decides.
   test "the vote buttons take every press, however the vote stands", %{conn: conn} do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..3)
 
     ProposalHelpers.proposal!(@fleet, 1)
-    ProposalHelpers.vote!(@fleet, 1, @holder, true, [2])
-    ProposalHelpers.proposal!(@fleet, 2)
-    votes!(2, true: [1, 2])
-    ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
-    votes!(3, true: [1, 2])
+    ProposalHelpers.vote!(@fleet, 1, @holder, :yes, [2])
+    closed!(2)
+    votes!(2, yes: [1, 2])
+    closed!(3)
+    votes!(3, yes: [1, 2])
     ProposalHelpers.execution!(@fleet, 3, @voter)
     holder = signed_in_as(conn, @holder)
 
@@ -582,22 +471,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert votes_pressable?(view)
     assert has_element?(view, "#proposal-vote-closed[hidden]")
 
-    # Approved: a key can still change its vote until it is carried out.
+    # Approved: voting has closed, and the page says so beside the buttons.
     {:ok, view, _html} = live(holder, "#{@list}/2")
     assert has_element?(view, "#proposal-status", "Approved")
     assert votes_pressable?(view)
-    assert has_element?(view, "#proposal-vote-closed[hidden]")
+    assert has_element?(view, "#proposal-vote-closed:not([hidden])", "Voting has closed")
 
     # Carried out.
     {:ok, view, _html} = live(holder, "#{@list}/3")
-    assert has_element?(view, "#proposal-status", "Paid")
+    assert has_element?(view, "#proposal-status", "Carried out")
     assert votes_pressable?(view)
-
-    assert has_element?(
-             view,
-             "#proposal-vote-closed:not([hidden])",
-             "It has already been carried out"
-           )
 
     # Signed out.
     {:ok, view, _html} = live(conn, "#{@list}/1")
@@ -680,29 +563,29 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     conn: conn
   } do
     ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, [1])
+    gone = DateTime.utc_now() |> DateTime.add(-60) |> DateTime.truncate(:second)
 
     ProposalHelpers.proposal!(@fleet, 1)
-    ProposalHelpers.proposal!(@fleet, 2)
-    ProposalHelpers.proposal!(@fleet, 3, kind: :pay)
-    ProposalHelpers.proposal!(@fleet, 4, kind: :restrict_edits)
-    ProposalHelpers.proposal!(@fleet, 5, kind: :restrict_edits, restricted: false)
-    for number <- 2..5, do: votes!(number, true: [1])
+    closed!(2)
+    closed!(3)
+    closed!(4, opening_count: 1)
+    closed!(5)
+    closed!(6, execution_expiry: gone)
+    for number <- [2, 3, 5, 6], do: votes!(number, yes: [1])
     ProposalHelpers.execution!(@fleet, 3, @voter)
-    ProposalHelpers.execution!(@fleet, 5, @voter)
+    ProposalHelpers.cancellation!(@fleet, 5, @voter)
 
-    for {number, status, word, note} <- [
-          {1, "Open", "Record the decision", "Yes votes aren’t yet more than half"},
-          {2, "Approved", "Record the decision", nil},
-          {3, "Paid", "Make the payment", "It has already been carried out"},
-          {4, "Approved", "Stop the key’s workspace edits", nil},
-          {5, "Carried out", "Let the key edit the workspace again",
-           "It has already been carried out"}
+    for {number, status, note} <- [
+          {1, "Open", "Voting is still open"},
+          {2, "Approved", nil},
+          {3, "Carried out", "It has already been carried out"},
+          {4, "Not approved", "It wasn’t approved"},
+          {5, "Cancelled", "It was cancelled"},
+          {6, "Expired", "It can no longer be carried out"}
         ] do
       {:ok, view, _html} = live(conn, "#{@list}/#{number}")
       assert has_element?(view, "#proposal-status", status), "proposal #{number}"
       assert pressable?(view, "carry_out", ["#proposal-carry-out-button"]), "proposal #{number}"
-      assert has_element?(view, "#proposal-carry-out-button", word)
 
       shown = shown_notes(view, "#proposal-carry-out [id^=proposal-carry-out-note-]")
 
@@ -725,51 +608,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     assert carry_out.data == Call.encode("execute(uint256)", [2])
   end
 
-  # A carried-out payment's match: every key that didn't vote yes collects
-  # the same amount, paid to whoever holds it now.
-  test "a carried-out payment offers its match to collect", %{conn: conn} do
-    ChainHelpers.seed_cursor!(@fleet)
-    ProposalHelpers.keys_sold!(@fleet, 1..3)
-    ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay)
-    votes!(1, true: [1, 2])
-    execution = ProposalHelpers.execution!(@fleet, 1, @voter)
-    ProposalHelpers.proposal!(@fleet, 2)
-
-    {:ok, view, _html} = live(conn, "#{@list}/1")
-    assert has_element?(view, "#proposal-match[hidden]")
-    refute has_element?(view, "#proposal-match-pending[hidden]")
-    assert pressable?(view, "collect", ["#proposal-collect-button"])
-
-    ProposalHelpers.budget_payment!(@fleet,
-      asset: @usdc,
-      share: Decimal.new(2_500_000),
-      transaction_hash: execution.transaction_hash
-    )
-
-    {:ok, view, _html} = live(signed_in_as(conn, @holder), "#{@list}/1")
-
-    assert text(view, "#proposal-match") =~
-             "Every key sold when this was paid that didn’t vote yes can collect 2.5 USDC"
-
-    assert has_element?(view, "#proposal-match-pending[hidden]")
-
-    active!(view, "#proposal-collect-action", @holder)
-    view |> form("#proposal-collect-action-form", keys: "3") |> render_change()
-
-    assert_push_event(view, "onchain-steps:review", %{
-      component_id: "proposal-collect-action",
-      review: %{steps: [%{step: "collect", to: @votes} = collect]}
-    })
-
-    assert collect.data == Call.encode("collect(uint256,uint256[])", [1, [3]])
-    assert text(view, "#proposal-collect-action-line") == "Collects the match of key 3."
-
-    # Nothing to collect on a proposal that isn't a payment.
-    {:ok, view, _html} = live(conn, "#{@list}/2")
-    refute has_element?(view, "#proposal-collect")
-  end
-
   test "proposing and letting another wallet vote take every press, signed in or not", %{
     conn: conn
   } do
@@ -779,8 +617,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     ProposalHelpers.asset_details!(@fleet, weth, "WETH", 18)
 
     ProposalHelpers.treasury_reading!(@fleet, [
-      balance(@usdc, free_capital: 1),
-      balance(weth, free_capital: 1),
+      balance(@usdc, held: 1),
+      balance(weth, held: 1),
       balance(odd, [])
     ])
 
@@ -1053,16 +891,43 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   defp votes!(number, sides) do
-    for {support, token_ids} <- sides,
-        do: ProposalHelpers.vote!(@fleet, number, @voter, support, token_ids)
+    for {choice, token_ids} <- sides,
+        do: ProposalHelpers.vote!(@fleet, number, @voter, choice, token_ids)
   end
 
-  defp balance(asset, figures) do
-    Map.merge(
-      %{asset: asset, free_capital: 0, backed: 0},
-      Map.new(figures)
+  # Proposal `number`, its voting closed an hour ago, to be carried out
+  # within a day unless `attrs` says otherwise.
+  defp closed!(number, attrs \\ []) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    ProposalHelpers.proposal!(
+      @fleet,
+      number,
+      Keyword.merge(
+        [
+          opened_at: DateTime.add(now, -2 * @day),
+          closes_at: DateTime.add(now, -3600),
+          execution_expiry: DateTime.add(now, @day)
+        ],
+        attrs
+      )
     )
   end
+
+  # A money event of `kind`, its amounts given as whole numbers.
+  defp money!(kind, fields) do
+    ProposalHelpers.money_event!(
+      @fleet,
+      kind,
+      Enum.map(fields, fn
+        {field, value} when is_integer(value) -> {field, Decimal.new(value)}
+        field -> field
+      end)
+    )
+  end
+
+  defp balance(asset, figures),
+    do: Map.merge(%{asset: asset, held: 0, backed: 0}, Map.new(figures))
 
   defp cards(view) do
     view
@@ -1070,19 +935,25 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("[data-proposal]")
     |> Enum.map(fn card ->
-      [kind, status] =
-        card |> LazyHTML.query(".proposals-kind span") |> Enum.map(&text/1)
-
-      {card |> LazyHTML.attribute("data-proposal") |> hd(), kind, status}
+      {card |> LazyHTML.attribute("data-proposal") |> hd(),
+       card |> LazyHTML.query(".proposals-badge") |> text()}
     end)
   end
 
-  defp votes(view) do
+  # The words of each element matching `selector`, its parts apart, as the
+  # page stacks them, and spaces as one.
+  defp lines(view, selector) do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#proposal-votes li")
-    |> Enum.map(&text/1)
+    |> LazyHTML.query(selector)
+    |> Enum.map(fn line ->
+      line
+      |> LazyHTML.child_nodes()
+      |> Enum.map_join(" ", &LazyHTML.text/1)
+      |> String.split()
+      |> Enum.join(" ")
+    end)
   end
 
   defp fields(view, selector) do
@@ -1158,15 +1029,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
 
     init_test_session(conn, %{human_account_id: account.id})
-  end
-
-  # An amount's words, and the full address of its token, if it shows one.
-  defp amount(view, selector) do
-    node = view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
-    token = LazyHTML.query(node, ".proposals-token")
-
-    {text(node),
-     if(Enum.empty?(token), do: nil, else: token |> LazyHTML.attribute("title") |> hd())}
   end
 
   # Polls every tenth of a second, `tries` times.

@@ -199,14 +199,13 @@ defmodule Keyfleet.GraphTest do
     )
   end
 
-  # A carried-out proposal `number` restricting or allowing the key's edits.
+  # The key's edits restricted or allowed, as the `number`th setting on the chain.
   defp restrict!(token_id, restricted, number) do
     Keys.record_edits_restriction!(
       %{
         fleet_id: @fleet,
         token_id: token_id,
         restricted: restricted,
-        proposal_number: number,
         block_number: 20 + number,
         block_hash: "0x" <> String.duplicate("b", 64),
         transaction_hash: "0x" <> String.duplicate("e#{number}", 32),

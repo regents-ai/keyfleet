@@ -405,11 +405,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     sync.(@address, [general, general], 422)
 
     # Reading a proposal: recorded, not yet made, and no proposal at all.
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay)
-    ProposalHelpers.vote!(@fleet, 1, @owner, false, [1])
+    ProposalHelpers.proposal!(@fleet, 1)
+    ProposalHelpers.vote!(@fleet, 1, @owner, :no, [1])
     proposal = %{"number" => 1, "votes_after_seq" => 0}
 
-    assert %{"kind" => "pay", "no_votes" => 1} =
+    assert %{"status" => "open", "no_votes" => 1} =
              answer(c, c.signer, "POST", @proposal, @address, proposal, 200).body["proposal"]
 
     answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 99}, 404)

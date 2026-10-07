@@ -197,8 +197,7 @@ defmodule Keyfleet.ReleaseTest do
     assert table_names(config, "keyfleet_app") == [
              "agent_check_ins",
              "agent_profiles",
-             "budget_payments",
-             "budget_receipts",
+             "agent_voting_settings",
              "chain_cursors",
              "code_pushes",
              "code_repositories",
@@ -209,8 +208,8 @@ defmodule Keyfleet.ReleaseTest do
              "graph_events",
              "graph_objects",
              "graph_relations",
-             "income_receipts",
              "key_attachments",
+             "key_presences",
              "key_reveals",
              "linked_identities",
              "messages",
@@ -219,6 +218,7 @@ defmodule Keyfleet.ReleaseTest do
              "notebook_hubs",
              "oban_jobs",
              "oban_peers",
+             "proposal_cancellations",
              "proposal_executions",
              "proposal_votes",
              "proposals",
@@ -227,6 +227,7 @@ defmodule Keyfleet.ReleaseTest do
              "session_authorities",
              "shard_events",
              "treasury_asset_details",
+             "treasury_events",
              "treasury_readings"
            ]
   end

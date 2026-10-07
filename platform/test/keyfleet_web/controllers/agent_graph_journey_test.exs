@@ -1146,7 +1146,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         fleet_id: @fleet,
         token_id: token_id,
         restricted: true,
-        proposal_number: 1,
         block_number: 20,
         block_hash: "0x" <> String.duplicate("b", 64),
         transaction_hash: "0x" <> String.duplicate("e", 64),

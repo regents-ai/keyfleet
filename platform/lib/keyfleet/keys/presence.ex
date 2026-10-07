@@ -1,74 +1,74 @@
-defmodule Keyfleet.Treasury.BudgetPayment do
+defmodule Keyfleet.Keys.Presence do
   @moduledoc """
-  One `BudgetPaid` log: an approved payment paid out of the fleet's budget, with
-  the match it set aside: `share` for each key sold that did not vote yes,
-  `matched` in all, which those keys collect from the vote contract. Amounts
-  are in the asset's atomic units, any uint256. Only the chain reader writes
-  it, and nothing ever changes it.
+  One `Present` or `PresenceCleared` log of a fleet's vote contract: a key
+  renewed at `at`, present for 48 hours under the ownership epoch it was
+  renewed in, or a key that changed hands and stopped being present. Only
+  the chain reader writes it, and nothing ever changes it.
 
-  `record_seq` is the fleet's count of proposal and budget records when it
-  was made.
+  A key is renewed whenever it proposes, votes, cancels or is renewed on its
+  own. Whether a key was present when a proposal opened is worked out from
+  these records (`Keyfleet.Proposals.Calculations.LateKeys`), never stored.
   """
   use Ash.Resource,
-    domain: Keyfleet.Treasury,
+    domain: Keyfleet.Keys,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
   @max_bigint 9_223_372_036_854_775_807
 
   postgres do
-    table "budget_payments"
+    table "key_presences"
     repo(Keyfleet.Repo)
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      for field <- [:asset, :recipient] do
-        check_constraint(field, "budget_payments_#{field}_shape",
-          check: "#{field} ~ '^0x[0-9a-f]{40}$'"
-        )
-      end
+      # A renewal carries its time and the ownership it belongs to; a change of
+      # hands carries neither.
+      check_constraint(:kind, "key_presences_shape",
+        check: """
+        (kind = 'present' AND at IS NOT NULL AND ownership_epoch >= 1)
+        OR (kind = 'cleared' AND at IS NULL AND ownership_epoch IS NULL)
+        """
+      )
 
-      for field <- [:amount, :share, :matched] do
-        check_constraint(field, "budget_payments_nonnegative_#{field}", check: "#{field} >= 0")
-      end
+      check_constraint(:token_id, "key_presences_positive_token", check: "token_id > 0")
 
       for field <- [:block_hash, :transaction_hash] do
-        check_constraint(field, "budget_payments_#{field}_shape",
+        check_constraint(field, "key_presences_#{field}_shape",
           check: "#{field} ~ '^0x[0-9a-f]{64}$'"
         )
       end
 
       for field <- [:block_number, :log_index] do
-        check_constraint(field, "budget_payments_nonnegative_#{field}", check: "#{field} >= 0")
+        check_constraint(field, "key_presences_nonnegative_#{field}", check: "#{field} >= 0")
       end
-
-      check_constraint(:record_seq, "budget_payments_positive_record_seq",
-        check: "record_seq > 0"
-      )
     end
 
     custom_indexes do
       # What the second reading of the last blocks compares with.
       index([:fleet_id, :block_number])
+      # A key's last record before a proposal opened.
+      index([:fleet_id, :token_id, :block_number, :log_index])
     end
 
+    # The same refusal every proposal record has, which names the table.
     custom_statements do
-      statement :immutable_budget_payments_trigger do
+      statement :immutable_key_presences_trigger do
         up("""
-        CREATE TRIGGER immutable_budget_payments BEFORE UPDATE OR DELETE ON keyfleet_app.budget_payments
+        CREATE TRIGGER immutable_key_presences BEFORE UPDATE OR DELETE ON keyfleet_app.key_presences
         FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down("DROP TRIGGER immutable_budget_payments ON keyfleet_app.budget_payments;")
+        down("DROP TRIGGER immutable_key_presences ON keyfleet_app.key_presences;")
       end
 
-      statement :untruncatable_budget_payments_trigger do
+      statement :untruncatable_key_presences_trigger do
         up("""
-        CREATE TRIGGER untruncatable_budget_payments BEFORE TRUNCATE ON keyfleet_app.budget_payments
+        CREATE TRIGGER untruncatable_key_presences BEFORE TRUNCATE ON keyfleet_app.key_presences
         FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
         """)
 
-        down("DROP TRIGGER untruncatable_budget_payments ON keyfleet_app.budget_payments;")
+        down("DROP TRIGGER untruncatable_key_presences ON keyfleet_app.key_presences;")
       end
     end
   end
@@ -81,11 +81,10 @@ defmodule Keyfleet.Treasury.BudgetPayment do
 
       accept [
         :fleet_id,
-        :asset,
-        :recipient,
-        :amount,
-        :share,
-        :matched,
+        :kind,
+        :token_id,
+        :at,
+        :ownership_epoch,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -99,9 +98,7 @@ defmodule Keyfleet.Treasury.BudgetPayment do
       return_skipped_upsert? true
 
       change {Keyfleet.Chain.Changes.RecordOnce,
-              identity: [:transaction_hash, :log_index],
-              number: :proposal_seq,
-              block: :block_number}
+              identity: [:transaction_hash, :log_index], block: :block_number}
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second
@@ -132,16 +129,18 @@ defmodule Keyfleet.Treasury.BudgetPayment do
   attributes do
     uuid_primary_key :id
 
-    for field <- [:asset, :recipient] do
-      attribute field, :string,
-        allow_nil?: false,
-        public?: true,
-        constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
-    end
+    attribute :kind, :atom,
+      allow_nil?: false,
+      public?: true,
+      constraints: [one_of: [:present, :cleared]]
 
-    for field <- [:amount, :share, :matched] do
-      attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
-    end
+    attribute :token_id, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: @max_bigint]
+
+    attribute :at, :utc_datetime, public?: true
+    attribute :ownership_epoch, :integer, public?: true, constraints: [min: 1, max: @max_bigint]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,
@@ -156,11 +155,6 @@ defmodule Keyfleet.Treasury.BudgetPayment do
         public?: true,
         constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
     end
-
-    attribute :record_seq, :integer,
-      allow_nil?: false,
-      public?: true,
-      constraints: [min: 1, max: @max_bigint]
 
     attribute :observed_at, :utc_datetime_usec,
       allow_nil?: false,
@@ -179,6 +173,5 @@ defmodule Keyfleet.Treasury.BudgetPayment do
 
   identities do
     identity :unique_chain_event, [:transaction_hash, :log_index]
-    identity :unique_record_seq, [:fleet_id, :record_seq]
   end
 end

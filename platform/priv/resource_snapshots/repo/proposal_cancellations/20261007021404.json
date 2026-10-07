@@ -21,32 +21,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "asset",
+      "source": "cancelled_by",
       "type": "text"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "caller",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "amount",
-      "type": "decimal"
     },
     {
       "allow_nil?": false,
@@ -141,7 +117,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "income_receipts_fleet_id_fkey",
+        "name": "proposal_cancellations_fleet_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -152,33 +128,50 @@
       "size": null,
       "source": "fleet_id",
       "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "proposal_cancellations_proposal_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "proposals"
+      },
+      "scale": null,
+      "size": null,
+      "source": "proposal_id",
+      "type": "uuid"
     }
   ],
   "base_filter": null,
   "check_constraints": [
     {
       "attribute": [
-        "asset"
+        "cancelled_by"
       ],
       "base_filter": null,
-      "check": "asset ~ '^0x[0-9a-f]{40}$'",
-      "name": "income_receipts_asset_shape"
-    },
-    {
-      "attribute": [
-        "caller"
-      ],
-      "base_filter": null,
-      "check": "caller ~ '^0x[0-9a-f]{40}$'",
-      "name": "income_receipts_caller_shape"
-    },
-    {
-      "attribute": [
-        "amount"
-      ],
-      "base_filter": null,
-      "check": "amount >= 0",
-      "name": "income_receipts_nonnegative_amount"
+      "check": "cancelled_by ~ '^0x[0-9a-f]{40}$'",
+      "name": "proposal_cancellations_cancelled_by_shape"
     },
     {
       "attribute": [
@@ -186,7 +179,7 @@
       ],
       "base_filter": null,
       "check": "block_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "income_receipts_block_hash_shape"
+      "name": "proposal_cancellations_block_hash_shape"
     },
     {
       "attribute": [
@@ -194,7 +187,7 @@
       ],
       "base_filter": null,
       "check": "transaction_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "income_receipts_transaction_hash_shape"
+      "name": "proposal_cancellations_transaction_hash_shape"
     },
     {
       "attribute": [
@@ -202,7 +195,7 @@
       ],
       "base_filter": null,
       "check": "block_number >= 0",
-      "name": "income_receipts_nonnegative_block_number"
+      "name": "proposal_cancellations_nonnegative_block_number"
     },
     {
       "attribute": [
@@ -210,7 +203,7 @@
       ],
       "base_filter": null,
       "check": "log_index >= 0",
-      "name": "income_receipts_nonnegative_log_index"
+      "name": "proposal_cancellations_nonnegative_log_index"
     },
     {
       "attribute": [
@@ -218,7 +211,7 @@
       ],
       "base_filter": null,
       "check": "record_seq > 0",
-      "name": "income_receipts_positive_record_seq"
+      "name": "proposal_cancellations_positive_record_seq"
     }
   ],
   "create_table_options": null,
@@ -256,27 +249,41 @@
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER immutable_income_receipts ON keyfleet_app.income_receipts;",
+      "down": "DROP TRIGGER immutable_proposal_cancellations ON keyfleet_app.proposal_cancellations;",
       "global?": false,
-      "name": "immutable_income_receipts_trigger",
-      "up": "CREATE TRIGGER immutable_income_receipts BEFORE UPDATE OR DELETE ON keyfleet_app.income_receipts\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "immutable_proposal_cancellations_trigger",
+      "up": "CREATE TRIGGER immutable_proposal_cancellations BEFORE UPDATE OR DELETE ON keyfleet_app.proposal_cancellations\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     },
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER untruncatable_income_receipts ON keyfleet_app.income_receipts;",
+      "down": "DROP TRIGGER untruncatable_proposal_cancellations ON keyfleet_app.proposal_cancellations;",
       "global?": false,
-      "name": "untruncatable_income_receipts_trigger",
-      "up": "CREATE TRIGGER untruncatable_income_receipts BEFORE TRUNCATE ON keyfleet_app.income_receipts\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "untruncatable_proposal_cancellations_trigger",
+      "up": "CREATE TRIGGER untruncatable_proposal_cancellations BEFORE TRUNCATE ON keyfleet_app.proposal_cancellations\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     }
   ],
   "has_create_action": true,
-  "hash": "6B1F59D1998424D3BD9CF1C73E17E817D76D977A928747886C28FFF9E0F24AEB",
+  "hash": "F885DEFE2799D2158F8EECCDB48F9848D5F1B3A964E59120A04CC012985E9574",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "income_receipts_unique_chain_event_index",
+      "index_name": "proposal_cancellations_unique_cancellation_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "proposal_id"
+        }
+      ],
+      "name": "unique_cancellation",
+      "nils_distinct?": true,
+      "where": null
+    },
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "proposal_cancellations_unique_chain_event_index",
       "keys": [
         {
           "type": "atom",
@@ -294,7 +301,7 @@
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "income_receipts_unique_record_seq_index",
+      "index_name": "proposal_cancellations_unique_record_seq_index",
       "keys": [
         {
           "type": "atom",
@@ -317,5 +324,5 @@
   },
   "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
-  "table": "income_receipts"
+  "table": "proposal_cancellations"
 }

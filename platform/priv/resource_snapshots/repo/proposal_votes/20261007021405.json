@@ -21,7 +21,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "kind",
+      "source": "voter",
       "type": "text"
     },
     {
@@ -33,7 +33,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "asset",
+      "source": "choice",
       "type": "text"
     },
     {
@@ -45,32 +45,11 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "sender",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "amount",
-      "type": "decimal"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "net",
-      "type": "decimal"
+      "source": "token_ids",
+      "type": [
+        "array",
+        "bigint"
+      ]
     },
     {
       "allow_nil?": false,
@@ -165,7 +144,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "budget_receipts_fleet_id_fkey",
+        "name": "proposal_votes_fleet_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -176,41 +155,66 @@
       "size": null,
       "source": "fleet_id",
       "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "proposal_votes_proposal_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "proposals"
+      },
+      "scale": null,
+      "size": null,
+      "source": "proposal_id",
+      "type": "uuid"
     }
   ],
   "base_filter": null,
   "check_constraints": [
     {
       "attribute": [
-        "kind"
+        "voter"
       ],
       "base_filter": null,
-      "check": "kind IN ('deposit', 'surplus')",
-      "name": "budget_receipts_kind"
+      "check": "voter ~ '^0x[0-9a-f]{40}$'",
+      "name": "proposal_votes_voter_shape"
     },
     {
       "attribute": [
-        "asset"
+        "choice"
       ],
       "base_filter": null,
-      "check": "asset ~ '^0x[0-9a-f]{40}$'",
-      "name": "budget_receipts_asset_shape"
+      "check": "choice IN ('yes', 'no', 'abstain')",
+      "name": "proposal_votes_choice"
     },
     {
       "attribute": [
-        "sender"
+        "token_ids"
       ],
       "base_filter": null,
-      "check": "sender ~ '^0x[0-9a-f]{40}$'",
-      "name": "budget_receipts_sender_shape"
-    },
-    {
-      "attribute": [
-        "net"
-      ],
-      "base_filter": null,
-      "check": "net >= 0 AND net <= amount",
-      "name": "budget_receipts_net_within_amount"
+      "check": "cardinality(token_ids) > 0 AND 0 < ALL (token_ids)",
+      "name": "proposal_votes_some_keys"
     },
     {
       "attribute": [
@@ -218,7 +222,7 @@
       ],
       "base_filter": null,
       "check": "block_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_receipts_block_hash_shape"
+      "name": "proposal_votes_block_hash_shape"
     },
     {
       "attribute": [
@@ -226,7 +230,7 @@
       ],
       "base_filter": null,
       "check": "transaction_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_receipts_transaction_hash_shape"
+      "name": "proposal_votes_transaction_hash_shape"
     },
     {
       "attribute": [
@@ -234,7 +238,7 @@
       ],
       "base_filter": null,
       "check": "block_number >= 0",
-      "name": "budget_receipts_nonnegative_block_number"
+      "name": "proposal_votes_nonnegative_block_number"
     },
     {
       "attribute": [
@@ -242,7 +246,7 @@
       ],
       "base_filter": null,
       "check": "log_index >= 0",
-      "name": "budget_receipts_nonnegative_log_index"
+      "name": "proposal_votes_nonnegative_log_index"
     },
     {
       "attribute": [
@@ -250,11 +254,39 @@
       ],
       "base_filter": null,
       "check": "record_seq > 0",
-      "name": "budget_receipts_positive_record_seq"
+      "name": "proposal_votes_positive_record_seq"
     }
   ],
   "create_table_options": null,
   "custom_indexes": [
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "proposal_id",
+        "record_seq"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "proposal_id"
+        },
+        {
+          "type": "atom",
+          "value": "record_seq"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": null
+    },
     {
       "all_tenants?": false,
       "concurrently": false,
@@ -282,33 +314,84 @@
       "unique": false,
       "using": null,
       "where": null
+    },
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "token_ids"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "token_ids"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": "GIN",
+      "where": null
+    },
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "fleet_id",
+        "voter"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        },
+        {
+          "type": "atom",
+          "value": "voter"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": null
     }
   ],
   "custom_statements": [
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER immutable_budget_receipts ON keyfleet_app.budget_receipts;",
+      "down": "DROP TRIGGER immutable_proposal_votes ON keyfleet_app.proposal_votes;",
       "global?": false,
-      "name": "immutable_budget_receipts_trigger",
-      "up": "CREATE TRIGGER immutable_budget_receipts BEFORE UPDATE OR DELETE ON keyfleet_app.budget_receipts\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "immutable_proposal_votes_trigger",
+      "up": "CREATE TRIGGER immutable_proposal_votes BEFORE UPDATE OR DELETE ON keyfleet_app.proposal_votes\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     },
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER untruncatable_budget_receipts ON keyfleet_app.budget_receipts;",
+      "down": "DROP TRIGGER untruncatable_proposal_votes ON keyfleet_app.proposal_votes;",
       "global?": false,
-      "name": "untruncatable_budget_receipts_trigger",
-      "up": "CREATE TRIGGER untruncatable_budget_receipts BEFORE TRUNCATE ON keyfleet_app.budget_receipts\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "untruncatable_proposal_votes_trigger",
+      "up": "CREATE TRIGGER untruncatable_proposal_votes BEFORE TRUNCATE ON keyfleet_app.proposal_votes\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     }
   ],
   "has_create_action": true,
-  "hash": "A7FE107EAF67719F1AD84E197A0B00768DB4B0C14DA7A83B902558F32D3EE52F",
+  "hash": "9D30E897EF15F69F9175E1BC0913C5ED6921079FB364BD108D169FF40F92B5B6",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_receipts_unique_chain_event_index",
+      "index_name": "proposal_votes_unique_chain_event_index",
       "keys": [
         {
           "type": "atom",
@@ -326,7 +409,7 @@
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_receipts_unique_record_seq_index",
+      "index_name": "proposal_votes_unique_record_seq_index",
       "keys": [
         {
           "type": "atom",
@@ -349,5 +432,5 @@
   },
   "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
-  "table": "budget_receipts"
+  "table": "proposal_votes"
 }

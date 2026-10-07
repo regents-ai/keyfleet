@@ -18,13 +18,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.AgentListing
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
+  alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
+  alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
+  alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
@@ -301,7 +304,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
         <:notes>
           <p class="key-profile-detail">
-            Income in USDC waits here for the key until it is claimed.
+            Rewards wait here for the key until they are claimed.
           </p>
         </:notes>
         <:buttons :let={panel}>
@@ -556,14 +559,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   attr :rewards, :any, required: true
 
-  # The USDC the key has earned and not yet paid out, read after the window
-  # opens. The amount rolls when income arrives.
+  # What the key's holder can claim in each asset, read after the window
+  # opens. Each amount rolls when more arrives.
   defp rewards(%{rewards: :reading} = assigns), do: ~H"Reading…"
   defp rewards(%{rewards: :failed} = assigns), do: ~H"Couldn’t read rewards right now."
+  defp rewards(%{rewards: {:ok, []}} = assigns), do: ~H"None yet"
 
-  defp rewards(%{rewards: {:ok, amount}} = assigns) do
-    assigns = assign(assigns, :amount, FleetLive.usdc(amount))
-    ~H|<span data-count>{@amount}</span>|
+  defp rewards(%{rewards: {:ok, amounts}} = assigns) do
+    assigns = assign(assigns, :amounts, amounts)
+    ~H|<span :for={amount <- @amounts} data-count>{amount.text}</span>|
   end
 
   defp times(0), do: "Never"
@@ -671,7 +675,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp read_rewards(
          %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
          %{
-           key_profile: %{fleet_id: fleet_id, token_id: token_id, rewards: {:ok, _amount} = shown}
+           key_profile: %{
+             fleet_id: fleet_id,
+             token_id: token_id,
+             rewards: {:ok, _amounts} = shown
+           }
          }
        ),
        do: update(socket, :key_profile, &Map.put(&1, :rewards, shown))
@@ -694,14 +702,29 @@ defmodule KeyfleetWeb.KeyProfileLive do
   def refresh_rewards(socket), do: socket
 
   defp start_rewards_read(
-         %{assigns: %{fleet: fleet, key_profile: %{token_id: token_id}}} = socket
+         %{assigns: %{fleet: fleet, key_profile: %{token_id: token_id, holder: holder}}} = socket
        ) do
-    rewards = Map.take(fleet, [:fleet_id, :rewards_address, :usdc_address])
+    rewards = Map.take(fleet, [:fleet_id, :rewards_address])
     client = Chain.Client.configured()
-    start_async(socket, :rewards, fn -> RewardsWaiting.read(rewards, token_id, client) end)
+
+    start_async(socket, :rewards, fn ->
+      with {:ok, waiting} <- RewardsWaiting.read(rewards, token_id, holder, client) do
+        {:ok, shown_amounts(fleet.fleet_id, waiting)}
+      end
+    end)
   end
 
-  defp rewards_shown({:ok, {:ok, amount}}), do: {:ok, amount}
+  # Each asset with something to claim, the key's own and its holder's
+  # credit together, as every page shows an amount.
+  defp shown_amounts(fleet_id, waiting) do
+    assets = fleet_id |> Fleets.get_fleet!() |> Treasury.assets()
+
+    for %{asset: asset, accrued: accrued, credit: credit} <- waiting,
+        accrued + credit > 0,
+        do: ProposalsPage.amount(accrued + credit, asset, assets)
+  end
+
+  defp rewards_shown({:ok, {:ok, amounts}}), do: {:ok, amounts}
   defp rewards_shown(_failed), do: :failed
 
   # Each shard agent's registry listing and World ID mark are read live from

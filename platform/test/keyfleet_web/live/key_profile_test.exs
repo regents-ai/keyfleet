@@ -22,6 +22,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   @path "/app/fleets/fibonacci_cascade"
   @system %Actors.System{}
   @rewards "0x" <> String.duplicate("8", 40)
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  # Pinned from `cast sig` of each view function.
+  @reward_assets "0x880ec04e"
+  @accrued "0xbfe87f4d"
 
   # Key 12 was sold to a and passed to e, who also holds keys 3 and 20. Keys 1
   # to 20 are sold, so key 21 is the next on sale. No key has rewards waiting.
@@ -539,12 +543,16 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "are read once the window is open, which never waits for them", %{conn: conn} do
       test = self()
 
-      rewards_answer(fn _to, _data, _block_hash ->
-        send(test, {:reading, self()})
+      rewards_answer(fn
+        _to, @accrued <> _args, _block_hash ->
+          send(test, {:reading, self()})
 
-        receive do
-          :answer -> {:ok, <<2_500_000::256>>}
-        end
+          receive do
+            :answer -> {:ok, <<2_500_000::256>>}
+          end
+
+        _to, _data, _block_hash ->
+          {:ok, <<0::256>>}
       end)
 
       assert conn |> get(@path <> "?key=12") |> html_response(200) =~ "Reading…"
@@ -563,9 +571,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "opening the key ten times within 30 seconds reads the chain once", %{conn: conn} do
       test = self()
 
-      rewards_answer(fn to, _data, _block_hash ->
-        send(test, {:read, to})
-        {:ok, <<1_000_000::256>>}
+      rewards_answer(fn
+        to, @accrued <> _args, _block_hash ->
+          send(test, {:read, to})
+          {:ok, <<1_000_000::256>>}
+
+        _to, _data, _block_hash ->
+          {:ok, <<0::256>>}
       end)
 
       for _opening <- 1..10 do
@@ -596,15 +608,17 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "only the key on show takes its answer", %{conn: conn} do
       test = self()
 
-      rewards_answer(fn _to,
-                        <<_accrued_usdc::binary-size(74), token_id::binary-size(64)>>,
-                        _block_hash ->
-        token_id = String.to_integer(token_id, 16)
-        send(test, {:reading, token_id, self()})
+      rewards_answer(fn
+        _to, @accrued <> <<_usdc::binary-size(64), token_id::binary-size(64)>>, _block_hash ->
+          token_id = String.to_integer(token_id, 16)
+          send(test, {:reading, token_id, self()})
 
-        receive do
-          :answer -> {:ok, <<token_id * 1_000_000::256>>}
-        end
+          receive do
+            :answer -> {:ok, <<token_id * 1_000_000::256>>}
+          end
+
+        _to, _data, _block_hash ->
+          {:ok, <<0::256>>}
       end)
 
       {:ok, view, _html} = live(conn, @path <> "?key=12")
@@ -623,12 +637,21 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
   end
 
-  # What the fleet's rewards contract answers, at a head the chain has.
+  # What the fleet's contracts answer, at a head the chain has. Its reward
+  # ledger pays out USDC alone.
   defp rewards_answer(calls) do
     StubClient.put_chain(
       %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
       [],
-      calls: calls
+      calls: fn
+        @rewards, @reward_assets, _hash ->
+          {:ok,
+           <<32::256, 1::256, 0::96>> <>
+             Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)}
+
+        to, data, hash ->
+          calls.(to, data, hash)
+      end
     )
   end
 

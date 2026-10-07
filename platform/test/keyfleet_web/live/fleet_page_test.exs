@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Agents
-  alias Keyfleet.Chain.{OwnershipLog, Scanner, ShardsLog, StubClient}
+  alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -25,6 +25,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @agent "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @shard_issued RegentChain.Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
+  @shard_ended RegentChain.Event.topic0("ShardEnded(uint256,address,address)")
 
   setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
@@ -982,24 +984,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-now-elsewhere a[href="#{@path}/proposals"]))
     end
 
-    test "a payment carried out shows what it paid and to whom", %{conn: conn} do
-      recipient = "0x12ab" <> String.duplicate("0", 32) <> "cd34"
-      ProposalHelpers.asset_details!(@fleet, @usdc, "USDC", 6)
-
-      ProposalHelpers.proposal!(@fleet, 1,
-        kind: :pay,
-        asset: @usdc,
-        amount: 12_500_000,
-        recipient: recipient
-      )
-
+    test "a proposal carried out shows, linked to the proposal", %{conn: conn} do
+      ProposalHelpers.proposal!(@fleet, 1)
       ProposalHelpers.execution!(@fleet, 1, @owner)
 
       {:ok, view, _html} = live(conn, @path)
 
       line = ~s(#fleet-now-list li[data-kind="executed"])
       assert has_element?(view, ~s(#{line} a[data-proposal="1"]))
-      assert text(view, "#{line} .activity-line__text") =~ "12.5 USDC to 0x12ab..cd34"
+      assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out."
     end
 
     # The panels share one place beside the map: each button opens its own
@@ -1218,13 +1211,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   # `token_id` under its first owner, or the wallet named ending it.
   defp shard_log(:issued, token_id, block) do
     expires = DateTime.to_unix(DateTime.utc_now()) + 30 * 86_400
-    topics = [hd(ShardsLog.topics()), word(token_id), address_word(@agent)]
+    topics = [@shard_issued, word(token_id), address_word(@agent)]
     shards_log(topics, "0x" <> bare_word(expires) <> bare_word(1), block)
   end
 
   defp shard_log({:ended, by}, token_id, block) do
     topics = [
-      List.last(ShardsLog.topics()),
+      @shard_ended,
       word(token_id),
       address_word(@agent),
       address_word(by)

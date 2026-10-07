@@ -162,7 +162,9 @@ defmodule Keyfleet.MixProject do
         # Mutes add two: their domain and the OwnMute check.
         # Notebooks add two: the Hub and Handoff records, each with its domain.
         # Code adds two: the Repository and Push records, each with its domain.
-        "xref graph --label compile-connected --fail-above 45",
+        # The Base contracts add one: the presence, agent-voting, cancellation and
+        # treasury event records replace the budget, income and payment records.
+        "xref graph --label compile-connected --fail-above 46",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

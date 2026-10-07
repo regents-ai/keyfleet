@@ -1,9 +1,8 @@
 defmodule KeyfleetWeb.ProposalsLive do
   @moduledoc """
   A fleet's proposals, for anyone to read: what its key holders have put to
-  a vote, how each vote stands, and each proposal's text, payment or change
-  to a key's workspace edits with every vote cast on it; and beside them the
-  shared money they vote on.
+  a vote, how each vote stands, and each proposal's calls with every vote
+  cast on it; and beside them the shared money they vote on.
 
   Once the fleet is on chain, its wallet buttons sit beside what they act on:
   voting and carrying a proposal out on its own page, and proposing a
@@ -28,9 +27,32 @@ defmodule KeyfleetWeb.ProposalsLive do
   # records or balances changed before it reads them, so a burst is read once.
   @proposals_refresh_after 1_000
 
-  @status_words %{open: "Open", approved: "Approved"}
+  @status_words %{
+    open: "Open",
+    approved: "Approved",
+    rejected: "Not approved",
+    executed: "Carried out",
+    cancelled: "Cancelled",
+    execution_expired: "Expired"
+  }
 
-  @executed_words %{decision: "Recorded", pay: "Paid", restrict_edits: "Carried out"}
+  # What the page knows that the contract will refuse, said beside the button
+  # that carries a proposal out.
+  @carry_out_notes [
+    open: "Voting is still open, so carrying it out now will be refused.",
+    rejected: "It wasn’t approved, so carrying it out will be refused.",
+    executed: "It has already been carried out, so doing it again will be refused.",
+    cancelled: "It was cancelled, so carrying it out will be refused.",
+    execution_expired: "It can no longer be carried out, so doing it will be refused."
+  ]
+
+  @history_words %{
+    forwarded: "Received",
+    protocol_share_sent: "Sent to Regents",
+    paid: "Paid",
+    advanced: "Advanced",
+    split_allocated: "Shared with key holders"
+  }
 
   attr :page, :any, required: true, doc: "the proposals as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
@@ -73,7 +95,6 @@ defmodule KeyfleetWeb.ProposalsLive do
             data-proposal={proposal.number}
           >
             <p class="proposals-kind">
-              <span>{ProposalsPage.kind_name(proposal.kind)}</span>
               <span class="proposals-badge" data-status={proposal.status}>
                 {status_word(proposal)}
               </span>
@@ -83,7 +104,6 @@ defmodule KeyfleetWeb.ProposalsLive do
                 Proposal {proposal.number}
               </.link>
             </h3>
-            <p :if={proposal.gist} class="proposals-gist">{proposal.gist}</p>
             <p class="proposals-detail">
               <.tally proposal={proposal} />
             </p>
@@ -165,11 +185,22 @@ defmodule KeyfleetWeb.ProposalsLive do
               </dd>
             </div>
             <div>
-              <dt>Keys sold</dt>
-              <dd id="proposal-keys-sold">
+              <dt>Abstain</dt>
+              <dd id="proposal-abstain">
                 <Count.count
-                  id="proposal-keys-sold-count"
-                  value={@page.proposal.keys_sold}
+                  id="proposal-abstain-count"
+                  value={@page.proposal.abstain}
+                  one="key"
+                  many="keys"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Keys counted</dt>
+              <dd id="proposal-counted">
+                <Count.count
+                  id="proposal-counted-count"
+                  value={@page.proposal.counted}
                   one="key"
                   many="keys"
                 />
@@ -177,52 +208,44 @@ defmodule KeyfleetWeb.ProposalsLive do
             </div>
           </dl>
           <.approval_rule />
+          <p id="proposal-times" class="proposals-detail">
+            Opened {at(@page.proposal.opened_at)}. Voting closes {at(@page.proposal.closes_at)}. It can be carried out until {at(
+              @page.proposal.execution_expiry
+            )}.
+          </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
             Carried out by <.wallet address={@page.proposal.executor} />
+          </p>
+          <p :if={@page.proposal.cancelled_by} id="proposal-canceller" class="proposals-detail">
+            Cancelled by <.wallet address={@page.proposal.cancelled_by} />
           </p>
         </section>
 
         <.vote :if={@page.deployed?} page={@page} actor={@actor} proposal={@page.proposal} />
         <.carry_out :if={@page.deployed?} page={@page} actor={@actor} proposal={@page.proposal} />
-        <.collect
-          :if={@page.deployed? and @page.proposal.match != nil}
-          page={@page}
-          actor={@actor}
-          proposal={@page.proposal}
-        />
-
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
-          <h2 id="proposal-content-title">{ProposalsPage.kind_name(@page.proposal.kind)}</h2>
+          <h2 id="proposal-content-title">What it does</h2>
           <p id="proposal-proposer" class="proposals-detail">
             Proposed by <.wallet address={@page.proposal.proposer} />
+            with key {Rules.grouped(@page.proposal.author_key)}
           </p>
-
-          <dl :if={@page.proposal.pay} id="proposal-payment" class="proposals-fields">
-            <div>
-              <dt>Amount</dt>
-              <dd><.amount value={@page.proposal.pay.amount} /></dd>
-            </div>
-            <div>
-              <dt>Paid to</dt>
-              <dd><code>{@page.proposal.pay.recipient}</code></dd>
-            </div>
-          </dl>
-
-          <dl :if={@page.proposal.edits} id="proposal-edits" class="proposals-fields">
-            <div>
-              <dt>Key</dt>
-              <dd>Key {Rules.grouped(@page.proposal.edits.token_id)}</dd>
-            </div>
-            <div>
-              <dt>Change</dt>
-              <dd>{edits_word(@page.proposal.edits)}</dd>
-            </div>
-          </dl>
-
-          <.text text={@page.proposal.text} />
-          <p :if={@page.proposal.text_cut?} class="proposals-detail">
-            This proposal is longer than can be shown here. Its first 64 KB are shown.
+          <p id="proposal-content" class="proposals-detail">
+            Its text has the code <code>{@page.proposal.content_hash}</code>.
           </p>
+          <p :if={@page.proposal.calls == []} id="proposal-no-calls" class="proposals-detail">
+            It records a decision and moves nothing.
+          </p>
+          <ol :if={@page.proposal.calls != []} id="proposal-calls" class="proposals-lines">
+            <li :for={call <- @page.proposal.calls}>
+              <span :if={!call.value}>Calls <.wallet address={call.target} /></span>
+              <span :if={call.value}>
+                Calls <.wallet address={call.target} /> with <.amount value={call.value} />
+              </span>
+              <code :if={call.data != "0x"} class="proposals-token" title={call.data}>
+                {RegentFormat.short_hash(call.data)}
+              </code>
+            </li>
+          </ol>
         </section>
 
         <section class="proposals-panel proposals-votes" aria-labelledby="proposal-votes-title">
@@ -232,7 +255,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </p>
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
-              <span>{vote_word(vote.support)}</span>
+              <span>{vote_word(vote.choice)}</span>
               <span>{RegentFormat.short_address(vote.voter)}, with {key_list(vote.keys)}</span>
             </li>
           </ol>
@@ -260,8 +283,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   # Each key is one vote, so a vote names its keys: the voter's own, or those
   # of someone who let their wallet vote for them. A key may change its vote
-  # or withdraw it until the proposal is carried out. The contract decides
-  # which keys can vote.
+  # until voting closes. The contract decides which keys can vote.
   defp vote(assigns) do
     ~H"""
     <section id="proposal-vote" class="proposals-panel" aria-labelledby="proposal-vote-title">
@@ -293,9 +315,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           <p
             id="proposal-vote-closed"
             class="proposals-detail"
-            hidden={@proposal.status != :executed}
+            hidden={@proposal.status == :open}
           >
-            It has already been carried out, so a vote now will be refused.
+            Voting has closed, so a vote now will be refused.
           </p>
           <p class="proposals-detail">
             Type the numbers of the keys you’re voting with: your own, or those of someone who has let your wallet vote for them. Voting again with a key changes its vote.
@@ -329,15 +351,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :actor, :any, required: true
   attr :proposal, :map, required: true
 
-  # Anyone may carry out a proposal once enough of all the keys sold have
-  # voted yes: 3 of every 5 for a change to a key's edits, more than half for
-  # every other kind.
+  # Anyone may carry out an approved proposal once voting has closed, until
+  # it expires.
   defp carry_out(assigns) do
-    assigns =
-      assign(assigns,
-        needed: needed(assigns.proposal.kind),
-        carry_out_notes: carry_out_notes(assigns.proposal.kind)
-      )
+    assigns = assign(assigns, carry_out_notes: @carry_out_notes)
 
     ~H"""
     <section
@@ -357,7 +374,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       >
         <:notes>
           <p class="proposals-detail">
-            Anyone can carry out this proposal once {@needed} have voted yes.
+            Anyone can carry out this proposal once voting has closed and it was approved.
           </p>
           <p
             :for={{status, note} <- @carry_out_notes}
@@ -370,60 +387,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:notes>
         <:buttons>
           <Regent.Primitives.button id="proposal-carry-out-button" data-onchain-step="carry_out">
-            <span data-press-label>{carry_out_word(@proposal)}</span>
-          </Regent.Primitives.button>
-        </:buttons>
-      </.live_component>
-    </section>
-    """
-  end
-
-  attr :page, :map, required: true
-  attr :actor, :any, required: true
-  attr :proposal, :map, required: true
-
-  # A carried-out payment's matches: every key sold then that didn't vote yes
-  # may collect the same amount, paid to whoever holds the key now. Anyone
-  # may collect for any key.
-  defp collect(assigns) do
-    ~H"""
-    <section id="proposal-collect" class="proposals-panel" aria-labelledby="proposal-collect-title">
-      <h2 id="proposal-collect-title">Collect the match</h2>
-      <.live_component
-        module={WalletPanel}
-        id="proposal-collect-action"
-        class="proposals-action"
-        flow={:collect}
-        fleet={fleet(@page)}
-        actor={@actor}
-        proposal={@proposal.number}
-        inputs={%{"keys" => ""}}
-      >
-        <:fields :let={panel}>
-          <div class="proposals-form">
-            <.text_field
-              id="proposal-collect-keys"
-              name="keys"
-              label="Keys to collect for"
-              inputmode="numeric"
-              value={panel.inputs["keys"]}
-            >
-              Separate key numbers with commas.
-            </.text_field>
-          </div>
-        </:fields>
-        <:notes>
-          <p id="proposal-match" class="proposals-detail" hidden={not @proposal.match.read?}>
-            Every key sold when this was paid that didn’t vote yes can collect
-            <.amount :if={@proposal.match.read?} value={@proposal.match.share} />, paid to whoever holds the key now. Anyone can collect for any key, once.
-          </p>
-          <p id="proposal-match-pending" class="proposals-detail" hidden={@proposal.match.read?}>
-            Every key sold when this was paid that didn’t vote yes can collect the same amount, paid to whoever holds the key now. The amount is still being read.
-          </p>
-        </:notes>
-        <:buttons>
-          <Regent.Primitives.button id="proposal-collect-button" data-onchain-step="collect">
-            <span data-press-label>Collect</span>
+            <span data-press-label>Carry it out</span>
           </Regent.Primitives.button>
         </:buttons>
       </.live_component>
@@ -807,31 +771,30 @@ defmodule KeyfleetWeb.ProposalsLive do
       <.balances :if={@treasury.read?} treasury={@treasury} />
       <.regents_share page={@page} actor={@actor} treasury={@treasury} />
 
-      <h3>Income</h3>
-      <p :if={@treasury.income == []} id="proposals-no-income" class="proposals-detail">
-        No income yet.
+      <h3>Advances</h3>
+      <p :if={@treasury.advances == []} id="proposals-no-advances" class="proposals-detail">
+        Nothing is out on an advance.
       </p>
-      <ol :if={@treasury.income != []} id="proposals-income" class="proposals-lines">
-        <li :for={income <- @treasury.income} data-income={income.id}>
-          <span><.amount value={income.amount} /> paid to key holders</span>
+      <ol :if={@treasury.advances != []} id="proposals-advances" class="proposals-lines">
+        <li :for={advance <- @treasury.advances} data-advance={advance.id}>
+          <span><.amount value={advance.outstanding} /> of <.amount value={advance.amount} />
+          still out</span>
+          <span class="proposals-detail">with <.wallet address={advance.operator} /></span>
         </li>
       </ol>
-      <p :if={@treasury.earlier_income?} class="proposals-detail">
-        Earlier income is not shown here.
-      </p>
 
-      <h3>Payments</h3>
-      <p :if={@treasury.payments == []} id="proposals-no-payments" class="proposals-detail">
-        Nothing has been paid from the shared money yet.
+      <h3>Money in and out</h3>
+      <p :if={@treasury.history == []} id="proposals-no-history" class="proposals-detail">
+        No money has come in or gone out yet.
       </p>
-      <ol :if={@treasury.payments != []} id="proposals-payments" class="proposals-lines">
-        <li :for={payment <- @treasury.payments} data-payment={payment.id}>
-          <span><.amount value={payment.amount} /></span>
-          <span class="proposals-detail">to <code>{payment.recipient}</code></span>
+      <ol :if={@treasury.history != []} id="proposals-history" class="proposals-lines">
+        <li :for={line <- @treasury.history} data-history={line.id}>
+          <span>{history_word(line.kind)} <.amount value={line.amount} /></span>
+          <span :if={line.account} class="proposals-detail">to <.wallet address={line.account} /></span>
         </li>
       </ol>
-      <p :if={@treasury.earlier_payments?} class="proposals-detail">
-        Earlier payments are not shown here.
+      <p :if={@treasury.earlier?} class="proposals-detail">
+        Earlier money in and out is not shown here.
       </p>
     </section>
     """
@@ -849,15 +812,26 @@ defmodule KeyfleetWeb.ProposalsLive do
       >
         <div>
           <dt>Shared money</dt>
-          <dd><.amount value={balance.budget} count /></dd>
+          <dd><.amount value={balance.held} count /></dd>
         </div>
         <div>
-          <dt>Set aside for key holders</dt>
-          <dd><.amount value={balance.set_aside} count /></dd>
+          <dt>Waiting for key holders</dt>
+          <dd><.amount value={balance.backed} count /></dd>
         </div>
       </dl>
 
       <p id="proposals-budget-as-of" class="proposals-detail">Figures as of {at(@treasury.as_of)}.</p>
+
+      <dl id="proposals-split" class="proposals-facts">
+        <div>
+          <dt>Shared with key holders each day</dt>
+          <dd>{@treasury.split_rate}</dd>
+        </div>
+        <div :if={@treasury.next_run_at}>
+          <dt>Next share</dt>
+          <dd>{at(@treasury.next_run_at)}</dd>
+        </div>
+      </dl>
 
       <dl id="proposals-held" class="proposals-facts">
         <div :if={@treasury.reserve}>
@@ -915,11 +889,6 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
-  attr :text, :string, required: true
-
-  # Kept on one line with its text, since its line breaks are shown as written.
-  defp text(assigns), do: ~H|<p id="proposal-text" class="proposals-text">{@text}</p>|
-
   defp catching_up(assigns) do
     ~H"""
     <p id="proposals-catching-up" class="proposals-notice" role="status">
@@ -937,22 +906,9 @@ defmodule KeyfleetWeb.ProposalsLive do
   @doc "How a proposal is approved, as the pages say it."
   def approval_rule,
     do:
-      "Each key is one vote. A proposal is approved once more than half of all the keys sold " <>
-        "vote yes, or 3 of every 5 keys sold for a change to a key’s workspace edits, so a key that " <>
-        "doesn’t vote counts against it. There is no deadline: it stays open to votes until " <>
-        "someone carries it out."
-
-  defp needed(:restrict_edits), do: "3 of every 5 keys sold"
-  defp needed(_kind), do: "more than half of all the keys sold"
-
-  # What the page knows that the contract will likely refuse, said beside the
-  # button that carries a proposal out.
-  defp carry_out_notes(kind) do
-    [
-      open: "Yes votes aren’t yet #{needed(kind)}, so carrying it out now will be refused.",
-      executed: "It has already been carried out, so doing it again will be refused."
-    ]
-  end
+      "Each key is one vote. When voting closes, a proposal is approved if more than half of " <>
+        "the keys counted voted yes: the keys active when it opened, and any other key that " <>
+        "voted. A counted key that doesn’t vote counts against it."
 
   attr :id, :string, required: true
 
@@ -991,19 +947,13 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
-  defp carry_out_word(%{kind: :decision}), do: "Record the decision"
-  defp carry_out_word(%{kind: :pay}), do: "Make the payment"
-  defp carry_out_word(%{kind: :restrict_edits, edits: edits}), do: edits_word(edits)
+  defp history_word(kind), do: Map.fetch!(@history_words, kind)
 
-  defp edits_word(%{restricted?: true}), do: "Stop the key’s workspace edits"
-  defp edits_word(%{restricted?: false}), do: "Let the key edit the workspace again"
-
-  defp vote_word(true), do: "Yes"
-  defp vote_word(false), do: "No"
-  defp vote_word(nil), do: "Withdrawn"
+  defp vote_word(:yes), do: "Yes"
+  defp vote_word(:no), do: "No"
+  defp vote_word(:abstain), do: "Abstain"
 
   # Where a proposal stands, in the words its pages use.
-  defp status_word(%{status: :executed, kind: kind}), do: Map.fetch!(@executed_words, kind)
   defp status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
   attr :proposal, :map, required: true
@@ -1014,7 +964,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
     ~H|<span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@proposal.yes}</span>
 yes, <span data-count>{@proposal.no}</span>
-no, of {keys(@proposal.keys_sold)} sold</span>|
+no, <span data-count>{@proposal.abstain}</span>
+abstain, of {keys(@proposal.counted)} counted</span>|
   end
 
   defp keys(1), do: "1 key"

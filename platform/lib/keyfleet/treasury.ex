@@ -1,22 +1,27 @@
 defmodule Keyfleet.Treasury do
   @moduledoc """
-  A fleet's money as its contract reports it: amounts its budget took in,
-  income paid to the keys, payments out of the budget, the latest reading of
-  its balances, and the symbol and decimals of each asset they name. Recorded from the fleet's contracts by the chain
-  reader and by nothing else. The chain is the authority; these records only
-  mirror it.
+  A fleet's money as its contracts report it: every money event of its fleet
+  contract, treasury and reward ledger, the latest reading of its balances,
+  and the symbol and decimals of each token they name. Recorded from the
+  fleet's contracts by the chain reader and by nothing else. The chain is the
+  authority; these records only mirror it.
   """
   use Ash.Domain
 
   require Ash.Query
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.Treasury.{BudgetPayment, IncomeReceipt}
+  alias Keyfleet.Treasury.Event
 
   @latest 20
+  # How the contracts name ETH wherever they name an asset.
+  @native "0x0000000000000000000000000000000000000000"
   # The fleet's USDC, which its contract refuses to be deployed with unless
   # it has six decimals.
   @usdc_decimals 6
+  # What the history shows: money into the treasury, out of it, and shared
+  # with the keys by the daily split.
+  @history_kinds [:forwarded, :protocol_share_sent, :paid, :advanced, :split_allocated]
 
   resources do
     resource Keyfleet.Treasury.Reading do
@@ -27,124 +32,112 @@ defmodule Keyfleet.Treasury do
     resource Keyfleet.Treasury.AssetDetails do
       define :record_asset_details, action: :record
       define :asset_details, action: :of_fleet, args: [:fleet_id]
-      define :details_of_assets, action: :of_assets, args: [:fleet_id, :assets]
     end
 
-    resource Keyfleet.Treasury.BudgetReceipt do
-      define :record_budget_receipt, action: :record
+    resource Keyfleet.Treasury.Event do
+      define :record_event, action: :record
 
-      define :budget_receipts_recorded_in_blocks,
+      define :events_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
-    end
 
-    resource Keyfleet.Treasury.IncomeReceipt do
-      define :record_income_receipt, action: :record
-
-      define :income_receipts_recorded_in_blocks,
-        action: :recorded_in_blocks,
-        args: [:fleet_id, :from_block, :to_block]
-    end
-
-    resource Keyfleet.Treasury.BudgetPayment do
-      define :record_budget_payment, action: :record
-
-      define :budget_payments_recorded_in_blocks,
-        action: :recorded_in_blocks,
-        args: [:fleet_id, :from_block, :to_block]
+      define :latest_events, action: :latest_of_kinds, args: [:fleet_id, :kinds, :limit]
     end
   end
+
+  @doc "How the fleet's contracts name ETH."
+  def native, do: @native
 
   @doc """
-  Every budget receipt, income receipt and budget payment recorded from blocks
-  `from..to` of the fleet, so a second reading of them can be checked against
-  the record.
+  Every money event recorded from blocks `from..to` of the fleet, so a
+  second reading of them can be checked against the record.
   """
-  def recorded_in_blocks!(fleet_id, from, to) do
-    Enum.flat_map(
-      [
-        &budget_receipts_recorded_in_blocks!/4,
-        &income_receipts_recorded_in_blocks!/4,
-        &budget_payments_recorded_in_blocks!/4
-      ],
-      & &1.(fleet_id, from, to, actor: %System{})
-    )
-  end
+  def recorded_in_blocks!(fleet_id, from, to),
+    do: events_recorded_in_blocks!(fleet_id, from, to, actor: %System{})
 
   @doc """
   What an amount of the fleet's assets is shown with: `%{usdc: address,
   details: %{asset => {symbol, decimals}}}`, the fleet's USDC and each
-  asset's symbol and decimals as its token reported them, either nil when
-  the token has not said. `assets/2` reads the details of the `assets` named
-  only.
+  asset's symbol and decimals: ETH's own, USDC's, and every other token's as
+  it reported them, either nil when the token has not said.
   """
-  def assets(fleet), do: shown_with(fleet, asset_details!(fleet.id))
+  def assets(fleet) do
+    details =
+      fleet.id
+      |> asset_details!()
+      |> Map.new(&{&1.asset, {&1.symbol, &1.decimals}})
+      |> Map.merge(%{@native => {"ETH", 18}, fleet.usdc_address => {"USDC", @usdc_decimals}})
 
-  def assets(fleet, assets), do: shown_with(fleet, details_of_assets!(fleet.id, assets))
-
-  defp shown_with(fleet, details) do
-    %{usdc: fleet.usdc_address, details: Map.new(details, &{&1.asset, {&1.symbol, &1.decimals}})}
+    %{usdc: fleet.usdc_address, details: details}
   end
 
   @doc """
-  The tokens a payment can be proposed in, in the order the form lists them:
-  the fleet's USDC, then each token of the latest reading of its balances.
-  Each is `%{address: address, symbol: symbol, decimals: decimals, usdc?:
-  usdc?}`, symbol and decimals nil when the token has not said, and `usdc?`
-  true only for the fleet's own USDC, so a token calling itself USDC is never
-  taken for it. The fleet's USDC always has six decimals: its contract refuses
-  to be deployed with any other.
+  The assets the treasury holds and splits, in the order the latest reading
+  lists them, or just ETH, REGENT and USDC before the first reading. Each is
+  `%{address: address, symbol: symbol, decimals: decimals, usdc?: usdc?}`,
+  symbol and decimals nil when the token has not said, and `usdc?` true only
+  for the fleet's own USDC, so a token calling itself USDC is never taken for
+  it.
   """
   def payable_assets(fleet) do
     %{details: details} = assets(fleet)
 
     listed =
       case get_reading!(fleet.id) do
-        nil -> [fleet.usdc_address]
-        reading -> Enum.uniq([fleet.usdc_address | Enum.map(reading.assets, & &1.asset)])
+        nil -> [@native, fleet.regent_address, fleet.usdc_address]
+        reading -> Enum.map(reading.assets, & &1.asset)
       end
 
-    Enum.map(listed, fn
-      usdc when usdc == fleet.usdc_address ->
-        %{address: usdc, symbol: "USDC", decimals: @usdc_decimals, usdc?: true}
-
-      asset ->
-        case details[asset] do
-          {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-            %{address: asset, symbol: symbol, decimals: decimals, usdc?: false}
-
-          _unknown ->
-            %{address: asset, symbol: nil, decimals: nil, usdc?: false}
-        end
+    Enum.map(listed, fn asset ->
+      {symbol, decimals} = Map.get(details, asset, {nil, nil})
+      %{address: asset, symbol: symbol, decimals: decimals, usdc?: asset == fleet.usdc_address}
     end)
   end
 
   @doc """
-  The payment out of the fleet's budget that the transaction `hash` made, as
-  recorded, or nil: carrying out a payment proposal makes exactly one.
+  The fleet's latest #{@latest} money events in and out of its treasury and
+  of its daily split, newest first, and whether earlier ones were recorded.
   """
-  def payment_made_in(fleet_id, hash) do
-    BudgetPayment
-    |> Ash.Query.filter(fleet_id == ^fleet_id and transaction_hash == ^hash)
-    |> Ash.read_one!()
-  end
-
-  @doc """
-  The fleet's latest #{@latest} income receipts and budget payments,
-  newest first, and whether earlier ones were recorded.
-  """
-  def latest(fleet_id),
-    do: %{income: latest(IncomeReceipt, fleet_id), payments: latest(BudgetPayment, fleet_id)}
-
-  defp latest(resource, fleet_id) do
+  def latest(fleet_id) do
     {shown, earlier} =
-      resource
-      |> Ash.Query.filter(fleet_id == ^fleet_id)
-      |> Ash.Query.sort(record_seq: :desc)
-      |> Ash.Query.limit(@latest + 1)
-      |> Ash.read!()
+      fleet_id
+      |> latest_events!(@history_kinds, @latest + 1)
       |> Enum.split(@latest)
 
     %{shown: shown, earlier?: earlier != []}
+  end
+
+  @doc """
+  Each advance an approved proposal made that has not all come back, oldest
+  first, as `%{advance_id: id, operator: address, asset: address, amount:
+  amount, outstanding: amount, purpose_hash: hash}`.
+  """
+  def open_advances(fleet_id) do
+    events =
+      Event
+      |> Ash.Query.filter(fleet_id == ^fleet_id and kind in [:advanced, :advance_returned])
+      |> Ash.Query.sort(record_seq: :asc)
+      |> Ash.read!()
+
+    events
+    |> Enum.reduce(%{}, fn
+      %{kind: :advanced} = advance, open ->
+        Map.put(open, advance.advance_id, %{
+          advance_id: advance.advance_id,
+          operator: advance.account,
+          asset: advance.asset,
+          amount: advance.amount,
+          outstanding: advance.amount,
+          purpose_hash: advance.purpose_hash,
+          record_seq: advance.record_seq
+        })
+
+      %{kind: :advance_returned} = returned, open ->
+        Map.update!(open, returned.advance_id, &%{&1 | outstanding: returned.outstanding})
+    end)
+    |> Map.values()
+    |> Enum.reject(&Decimal.eq?(&1.outstanding, 0))
+    |> Enum.sort_by(& &1.record_seq)
+    |> Enum.map(&Map.delete(&1, :record_seq))
   end
 end

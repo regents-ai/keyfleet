@@ -21,8 +21,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "asset",
-      "type": "text"
+      "source": "token_id",
+      "type": "bigint"
     },
     {
       "allow_nil?": false,
@@ -33,44 +33,8 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "recipient",
-      "type": "text"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "amount",
-      "type": "decimal"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "share",
-      "type": "decimal"
-    },
-    {
-      "allow_nil?": false,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
-      "source": "matched",
-      "type": "decimal"
+      "source": "restricted",
+      "type": "boolean"
     },
     {
       "allow_nil?": false,
@@ -165,7 +129,7 @@
           "global": null,
           "strategy": null
         },
-        "name": "budget_payments_fleet_id_fkey",
+        "name": "edits_restrictions_fleet_id_fkey",
         "on_delete": null,
         "on_update": null,
         "primary_key?": true,
@@ -182,43 +146,11 @@
   "check_constraints": [
     {
       "attribute": [
-        "asset"
+        "token_id"
       ],
       "base_filter": null,
-      "check": "asset ~ '^0x[0-9a-f]{40}$'",
-      "name": "budget_payments_asset_shape"
-    },
-    {
-      "attribute": [
-        "recipient"
-      ],
-      "base_filter": null,
-      "check": "recipient ~ '^0x[0-9a-f]{40}$'",
-      "name": "budget_payments_recipient_shape"
-    },
-    {
-      "attribute": [
-        "amount"
-      ],
-      "base_filter": null,
-      "check": "amount >= 0",
-      "name": "budget_payments_nonnegative_amount"
-    },
-    {
-      "attribute": [
-        "share"
-      ],
-      "base_filter": null,
-      "check": "share >= 0",
-      "name": "budget_payments_nonnegative_share"
-    },
-    {
-      "attribute": [
-        "matched"
-      ],
-      "base_filter": null,
-      "check": "matched >= 0",
-      "name": "budget_payments_nonnegative_matched"
+      "check": "token_id > 0",
+      "name": "edits_restrictions_positive_token"
     },
     {
       "attribute": [
@@ -226,7 +158,7 @@
       ],
       "base_filter": null,
       "check": "block_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_payments_block_hash_shape"
+      "name": "edits_restrictions_block_hash_shape"
     },
     {
       "attribute": [
@@ -234,7 +166,7 @@
       ],
       "base_filter": null,
       "check": "transaction_hash ~ '^0x[0-9a-f]{64}$'",
-      "name": "budget_payments_transaction_hash_shape"
+      "name": "edits_restrictions_transaction_hash_shape"
     },
     {
       "attribute": [
@@ -242,7 +174,7 @@
       ],
       "base_filter": null,
       "check": "block_number >= 0",
-      "name": "budget_payments_nonnegative_block_number"
+      "name": "edits_restrictions_nonnegative_block_number"
     },
     {
       "attribute": [
@@ -250,7 +182,7 @@
       ],
       "base_filter": null,
       "check": "log_index >= 0",
-      "name": "budget_payments_nonnegative_log_index"
+      "name": "edits_restrictions_nonnegative_log_index"
     },
     {
       "attribute": [
@@ -258,7 +190,7 @@
       ],
       "base_filter": null,
       "check": "record_seq > 0",
-      "name": "budget_payments_positive_record_seq"
+      "name": "edits_restrictions_positive_record_seq"
     }
   ],
   "create_table_options": null,
@@ -290,33 +222,66 @@
       "unique": false,
       "using": null,
       "where": null
+    },
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "fleet_id",
+        "token_id",
+        "record_seq"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        },
+        {
+          "type": "atom",
+          "value": "token_id"
+        },
+        {
+          "type": "atom",
+          "value": "record_seq"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": null
     }
   ],
   "custom_statements": [
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER immutable_budget_payments ON keyfleet_app.budget_payments;",
+      "down": "DROP TRIGGER immutable_edits_restrictions ON keyfleet_app.edits_restrictions;",
       "global?": false,
-      "name": "immutable_budget_payments_trigger",
-      "up": "CREATE TRIGGER immutable_budget_payments BEFORE UPDATE OR DELETE ON keyfleet_app.budget_payments\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "immutable_edits_restrictions_trigger",
+      "up": "CREATE TRIGGER immutable_edits_restrictions BEFORE UPDATE OR DELETE ON keyfleet_app.edits_restrictions\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     },
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER untruncatable_budget_payments ON keyfleet_app.budget_payments;",
+      "down": "DROP TRIGGER untruncatable_edits_restrictions ON keyfleet_app.edits_restrictions;",
       "global?": false,
-      "name": "untruncatable_budget_payments_trigger",
-      "up": "CREATE TRIGGER untruncatable_budget_payments BEFORE TRUNCATE ON keyfleet_app.budget_payments\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+      "name": "untruncatable_edits_restrictions_trigger",
+      "up": "CREATE TRIGGER untruncatable_edits_restrictions BEFORE TRUNCATE ON keyfleet_app.edits_restrictions\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
     }
   ],
   "has_create_action": true,
-  "hash": "AD988794CA08901079E40FCDF98CA8AF4932FD21417BFF7FD24D32A14815ACF6",
+  "hash": "23B39DFA72EDCD443041E95D4CADCAA8A89F4A8B77A715620E382FE3486D7357",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_payments_unique_chain_event_index",
+      "index_name": "edits_restrictions_unique_chain_event_index",
       "keys": [
         {
           "type": "atom",
@@ -334,7 +299,7 @@
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "budget_payments_unique_record_seq_index",
+      "index_name": "edits_restrictions_unique_record_seq_index",
       "keys": [
         {
           "type": "atom",
@@ -357,5 +322,5 @@
   },
   "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
-  "table": "budget_payments"
+  "table": "edits_restrictions"
 }

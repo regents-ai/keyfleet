@@ -1,14 +1,19 @@
 defmodule Keyfleet.Proposals.Proposal do
   @moduledoc """
-  One proposal of a fleet's vote, from its `ProposalCreated` log and, for a
-  payment or a vote to restrict or restore a key's edits, the payload log
-  beside it. Only the chain reader
-  writes it, and nothing ever changes it.
+  One proposal of a fleet's vote, from its `ProposalCreated` log and the
+  renewal of its author key just before it, which says when it opened. Only
+  the chain reader writes it, and nothing ever changes it.
 
-  Every key is one vote, and a key's latest vote is the one that counts, so
-  `yes_keys` and `no_keys` count the keys whose latest vote is yes or no.
-  `keys_sold` is how many keys the fleet has sold, as far as its key history
-  has been read.
+  Its narrative is kept off the chain; `content_hash` is its hash. `calls`
+  are the exact calls the treasury makes, in order, if it is carried out.
+  `opening_count` is how many keys were present when it opened.
+
+  Every key has one vote, and its latest is the one that counts, so
+  `yes_keys`, `no_keys` and `abstain_keys` count the keys whose latest vote
+  is that choice. `late_keys` counts the keys that voted without having been
+  present when it opened, which the contract adds to the keys it needs more
+  than half of. Where it stands is
+  `Keyfleet.Proposals.status/2`.
 
   Its place on the chain is the `ProposalCreated` log's. `record_seq` is the
   fleet's count of proposal records when it was made.
@@ -19,7 +24,6 @@ defmodule Keyfleet.Proposals.Proposal do
     authorizers: [Ash.Policy.Authorizer]
 
   @max_bigint 9_223_372_036_854_775_807
-  @text_cap 65_536
 
   postgres do
     table "proposals"
@@ -27,46 +31,27 @@ defmodule Keyfleet.Proposals.Proposal do
     migration_defaults(observed_at: "fragment(\"(now() AT TIME ZONE 'utc')\")")
 
     check_constraints do
-      check_constraint(:number, "proposals_positive_number", check: "number > 0")
-
-      check_constraint(:kind, "proposals_kind",
-        check: "kind IN ('decision', 'pay', 'restrict_edits')"
-      )
-
-      check_constraint(:asset, "proposals_pay_fields",
-        check: "num_nonnulls(asset, amount, recipient) = CASE kind WHEN 'pay' THEN 3 ELSE 0 END"
-      )
-
-      check_constraint(:target_token_id, "proposals_restrict_edits_fields",
-        check:
-          "num_nonnulls(target_token_id, restricted) = CASE kind WHEN 'restrict_edits' THEN 2 ELSE 0 END"
-      )
-
-      check_constraint(:target_token_id, "proposals_positive_target_token_id",
-        check: "target_token_id > 0"
-      )
-
-      check_constraint(:text, "proposals_text_cap",
-        check: "octet_length(text) = least(text_bytes, #{@text_cap})"
-      )
-
-      check_constraint(:amount, "proposals_nonnegative_amount", check: "amount >= 0")
-
-      for field <- [:proposer, :asset, :recipient] do
-        check_constraint(field, "proposals_#{field}_shape",
-          check: "#{field} ~ '^0x[0-9a-f]{40}$'"
-        )
+      for field <- [:number, :author_key] do
+        check_constraint(field, "proposals_positive_#{field}", check: "#{field} > 0")
       end
 
-      for field <- [:digest, :text_sha256, :block_hash, :transaction_hash] do
+      check_constraint(:proposer, "proposals_proposer_shape",
+        check: "proposer ~ '^0x[0-9a-f]{40}$'"
+      )
+
+      for field <- [:proposal_hash, :content_hash, :block_hash, :transaction_hash] do
         check_constraint(field, "proposals_#{field}_shape",
           check: "#{field} ~ '^0x[0-9a-f]{64}$'"
         )
       end
 
-      for field <- [:opened_block, :block_number, :log_index] do
+      for field <- [:opening_count, :open_revision, :block_number, :log_index] do
         check_constraint(field, "proposals_nonnegative_#{field}", check: "#{field} >= 0")
       end
+
+      check_constraint(:closes_at, "proposals_times_in_order",
+        check: "opened_at < closes_at AND closes_at <= execution_expiry"
+      )
 
       check_constraint(:record_seq, "proposals_positive_record_seq", check: "record_seq > 0")
     end
@@ -74,7 +59,6 @@ defmodule Keyfleet.Proposals.Proposal do
     custom_indexes do
       # What the second reading of the last blocks compares with.
       index([:fleet_id, :block_number])
-      index([:fleet_id, :digest])
     end
 
     custom_statements do
@@ -121,18 +105,16 @@ defmodule Keyfleet.Proposals.Proposal do
       accept [
         :fleet_id,
         :number,
-        :kind,
+        :author_key,
         :proposer,
-        :opened_block,
-        :digest,
-        :text,
-        :text_bytes,
-        :text_sha256,
-        :asset,
-        :amount,
-        :recipient,
-        :target_token_id,
-        :restricted,
+        :proposal_hash,
+        :content_hash,
+        :opened_at,
+        :closes_at,
+        :execution_expiry,
+        :opening_count,
+        :open_revision,
+        :calls,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -161,8 +143,7 @@ defmodule Keyfleet.Proposals.Proposal do
     end
 
     # The fleet's proposals recorded before its record number `before_seq`
-    # (from the newest when nil), newest first, `limit` at most, with the
-    # start of their text.
+    # (from the newest when nil), newest first, `limit` at most.
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
@@ -172,24 +153,20 @@ defmodule Keyfleet.Proposals.Proposal do
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
 
-      prepare fn query, _context ->
-        query
-        |> Ash.Query.select([
-          :id,
-          :fleet_id,
-          :number,
-          :kind,
-          :proposer,
-          :asset,
-          :amount,
-          :recipient,
-          :target_token_id,
-          :restricted,
-          :record_seq,
-          :observed_at
-        ])
-        |> Ash.Query.load(:text_start)
-      end
+      prepare build(
+                select: [
+                  :id,
+                  :fleet_id,
+                  :number,
+                  :author_key,
+                  :proposer,
+                  :content_hash,
+                  :closes_at,
+                  :calls,
+                  :record_seq,
+                  :observed_at
+                ]
+              )
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second
@@ -225,55 +202,46 @@ defmodule Keyfleet.Proposals.Proposal do
       public?: true,
       constraints: [min: 1, max: @max_bigint]
 
-    attribute :kind, :atom,
+    # The key it was proposed with, and the wallet that proposed it: the key's
+    # owner or an agent holding a shard of it.
+    attribute :author_key, :integer,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:decision, :pay, :restrict_edits]]
+      constraints: [min: 1, max: @max_bigint]
 
     attribute :proposer, :string,
       allow_nil?: false,
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    # The block it was proposed in: a key that last moved before this block
-    # may vote on it.
-    attribute :opened_block, :integer,
-      allow_nil?: false,
-      public?: true,
-      constraints: [min: 0, max: @max_bigint]
-
-    attribute :digest, :string,
-      public?: true,
-      constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
-
-    # The proposal's text: its first 64 KiB as raw bytes, which need not be
-    # valid text, beside the full length and the SHA-256 of all of it.
-    attribute :text, :binary, allow_nil?: false, public?: true
-
-    attribute :text_bytes, :integer,
-      allow_nil?: false,
-      public?: true,
-      constraints: [min: 0, max: @max_bigint]
-
-    attribute :text_sha256, :string,
-      allow_nil?: false,
-      public?: true,
-      constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
-
-    # A payment's asset, amount in the asset's atomic units (any uint256) and
-    # recipient.
-    for field <- [:asset, :recipient] do
+    # The hash binding the whole proposal, which a signed ballot names, and the
+    # hash of its narrative.
+    for field <- [:proposal_hash, :content_hash] do
       attribute field, :string,
+        allow_nil?: false,
         public?: true,
-        constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+        constraints: [match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false]
     end
 
-    attribute :amount, :decimal, public?: true, constraints: [min: 0]
+    # When it opened, when ballots stop, and the first second it can no
+    # longer be carried out.
+    for field <- [:opened_at, :closes_at, :execution_expiry] do
+      attribute field, :utc_datetime, allow_nil?: false, public?: true
+    end
 
-    # A vote on a key's edits: the key, and whether its edits are to be
-    # restricted (true) or restored (false).
-    attribute :target_token_id, :integer, public?: true, constraints: [min: 1, max: @max_bigint]
-    attribute :restricted, :boolean, public?: true
+    # How many keys were present when it opened, and the presence revision
+    # the contract marked then.
+    attribute :opening_count, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 0, max: 4_294_967_295]
+
+    attribute :open_revision, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 0, max: 281_474_976_710_655]
+
+    attribute :calls, {:array, Keyfleet.Proposals.Call}, allow_nil?: false, public?: true
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,
@@ -310,35 +278,18 @@ defmodule Keyfleet.Proposals.Proposal do
 
     has_many :votes, Keyfleet.Proposals.Vote, public?: true
     has_one :execution, Keyfleet.Proposals.Execution, public?: true
-  end
-
-  aggregates do
-    exists :executed?, :execution, public?: true
+    has_one :cancellation, Keyfleet.Proposals.Cancellation, public?: true
   end
 
   calculations do
-    # The fleet's highest key number read: the contract numbers keys from 1
-    # in the order it sells them and never burns one.
-    calculate :keys_sold,
-              :integer,
-              expr(
-                fragment(
-                  "(SELECT coalesce(max(key.token_id), 0) FROM keyfleet_app.key_attachments AS key WHERE key.fleet_id = ?)",
-                  fleet_id
-                )
-              ),
-              public?: true
+    for choice <- [:yes, :no, :abstain] do
+      calculate :"#{choice}_keys",
+                :integer,
+                {Keyfleet.Proposals.Calculations.LatestVotes, choice: choice},
+                public?: true
+    end
 
-    calculate :yes_keys, :integer, {Keyfleet.Proposals.Calculations.LatestVotes, support: true},
-      public?: true
-
-    calculate :no_keys, :integer, {Keyfleet.Proposals.Calculations.LatestVotes, support: false},
-      public?: true
-
-    # The first bytes of a proposal's text, enough for 160
-    # characters, cut in the database so a page never loads whole texts.
-    calculate :text_start, :binary, expr(fragment("substring(? from 1 for 640)", text)),
-      public?: true
+    calculate :late_keys, :integer, Keyfleet.Proposals.Calculations.LateKeys, public?: true
   end
 
   identities do

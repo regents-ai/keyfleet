@@ -1,8 +1,10 @@
 defmodule Keyfleet.Treasury.Reading do
   @moduledoc """
-  A fleet's balances as its contracts held them at one block: the shared
-  money and reward backing of each token `Keyfleet.Chain.TreasuryReader`
-  reads, the Cascade completion reserve and the protocol share owed.
+  A fleet's money as its contracts held it at one block: what its treasury
+  holds and its reward ledger backs of each asset the daily split shares,
+  the split's rate, when it last ran and when anyone may next run it, the
+  launch token once bound, the Cascade completion reserve and the protocol
+  share owed.
 
   `Keyfleet.Chain.TreasuryReader` reads them every minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
@@ -28,6 +30,14 @@ defmodule Keyfleet.Treasury.Reading do
       for field <- [:block_number, :cascade_reserve, :protocol_share_owed] do
         check_constraint(field, "treasury_readings_nonnegative_#{field}", check: "#{field} >= 0")
       end
+
+      check_constraint(:daily_split_bps, "treasury_readings_daily_split_bps_range",
+        check: "daily_split_bps BETWEEN 0 AND 10000"
+      )
+
+      check_constraint(:launch_token, "treasury_readings_launch_token_shape",
+        check: "launch_token ~ '^0x[0-9a-f]{40}$'"
+      )
     end
   end
 
@@ -44,6 +54,10 @@ defmodule Keyfleet.Treasury.Reading do
         :block_time,
         :cascade_reserve,
         :protocol_share_owed,
+        :daily_split_bps,
+        :last_run_at,
+        :next_run_at,
+        :launch_token,
         :assets
       ]
 
@@ -56,6 +70,10 @@ defmodule Keyfleet.Treasury.Reading do
         :block_time,
         :cascade_reserve,
         :protocol_share_owed,
+        :daily_split_bps,
+        :last_run_at,
+        :next_run_at,
+        :launch_token,
         :assets
       ]
 
@@ -96,8 +114,25 @@ defmodule Keyfleet.Treasury.Reading do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
 
-    # USDC, the one income token, then each token a payment proposal not yet
-    # carried out names, as `Keyfleet.Chain.TreasuryReader` reads them.
+    # The daily split's rate, in basis points of each asset's balance; when
+    # it last ran, nil before its first run; and when anyone may next run it,
+    # nil while no key has been sold.
+    attribute :daily_split_bps, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 0, max: 10_000]
+
+    attribute :last_run_at, :utc_datetime, public?: true
+    attribute :next_run_at, :utc_datetime, public?: true
+
+    # The fleet's own launched token once bound to the split, and nil until
+    # then.
+    attribute :launch_token, :string,
+      public?: true,
+      constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+
+    # Each asset the daily split shares, in the order it splits them: ETH,
+    # REGENT, USDC, then OUSD once admitted, then the launch token once bound.
     attribute :assets, {:array, Keyfleet.Treasury.AssetBalance},
       allow_nil?: false,
       public?: true

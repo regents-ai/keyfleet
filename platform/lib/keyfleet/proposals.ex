@@ -1,7 +1,8 @@
 defmodule Keyfleet.Proposals do
   @moduledoc """
-  A fleet's proposals, the votes cast on them and their executions, recorded
-  from its vote contract by the chain reader and by nothing else. The chain
+  A fleet's proposals, the votes cast on them, their cancellations and their
+  executions, recorded from its vote contract by the chain reader and by
+  nothing else. The chain
   is the authority; these records only mirror it. Anyone may read them.
   """
   use Ash.Domain
@@ -11,13 +12,14 @@ defmodule Keyfleet.Proposals do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Keys.EditsRestriction
-  alias Keyfleet.Proposals.{Execution, Proposal, Vote}
-  alias Keyfleet.Treasury.{BudgetPayment, BudgetReceipt, IncomeReceipt}
+  alias Keyfleet.Proposals.{Cancellation, Execution, Proposal, Vote}
+  alias Keyfleet.Treasury.Event
 
   @page 20
   @changes_page 50
-  # What a proposal is shown with: its tally, the keys sold and its execution.
-  @summary [:yes_keys, :no_keys, :keys_sold, :execution]
+  # What a proposal is shown with: its tally, and its cancellation or
+  # execution.
+  @summary [:yes_keys, :no_keys, :abstain_keys, :late_keys, :cancellation, :execution]
 
   resources do
     resource Keyfleet.Proposals.Proposal do
@@ -50,6 +52,14 @@ defmodule Keyfleet.Proposals do
         args: [:fleet_id, :before_seq, :limit]
     end
 
+    resource Keyfleet.Proposals.Cancellation do
+      define :record_cancellation, action: :record
+
+      define :cancellations_recorded_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+    end
+
     resource Keyfleet.Proposals.Execution do
       define :record_execution, action: :record
 
@@ -67,62 +77,35 @@ defmodule Keyfleet.Proposals do
   def topic(fleet_id), do: "fleet:#{fleet_id}:proposals"
 
   @doc """
-  Where a proposal stands, as far as the fleet's history has been read,
-  loaded with `#{inspect(@summary)}`. A proposal has no deadline: it stays
-  open to votes until it is carried out. These are the contract's own
-  states.
+  Where a proposal stands at `now`, as far as the fleet's history has been
+  read, loaded with `#{inspect(@summary)}`. These are the contract's own
+  states (`KeyfleetVotes.status`):
 
-    * `:executed` once its execution is recorded;
-    * `:approved` while enough of all the keys sold have yes as their latest
-      vote for it to be carried out now: 3 of every 5 keys sold for a vote to
-      restrict or restore a key's edits, and more than half for every other
-      kind;
-    * `:open` otherwise. A key that has not voted counts against it, and so
-      does every key sold later.
+    * `:cancelled` and `:executed` once that is recorded;
+    * `:open` until it closes;
+    * then `:rejected` unless more than half of the keys present when it
+      opened and the keys that voted late voted yes;
+    * otherwise `:approved` until its execution expiry, and
+      `:execution_expired` from then on.
   """
-  def status(%Proposal{} = proposal) do
+  def status(%Proposal{} = proposal, now \\ DateTime.utc_now()) do
     cond do
+      proposal.cancellation -> :cancelled
       proposal.execution -> :executed
-      approved?(proposal) -> :approved
-      true -> :open
+      DateTime.before?(now, proposal.closes_at) -> :open
+      proposal.yes_keys <= div(proposal.opening_count + proposal.late_keys, 2) -> :rejected
+      DateTime.compare(now, proposal.execution_expiry) != :lt -> :execution_expired
+      true -> :approved
     end
   end
 
-  defp approved?(%Proposal{kind: :restrict_edits, yes_keys: yes, keys_sold: sold}),
-    do: yes * 5 >= sold * 3
-
-  defp approved?(%Proposal{yes_keys: yes, keys_sold: sold}), do: yes * 2 > sold
-
-  @doc "Each asset the fleet's payment proposals name, by address."
-  def payment_assets(fleet_id) do
-    Proposal
-    |> Ash.Query.filter(fleet_id == ^fleet_id and kind == :pay)
-    |> assets()
-  end
-
-  @doc "Each asset the fleet's payment proposals not yet carried out name, by address."
-  def open_payment_assets(fleet_id) do
-    Proposal
-    |> Ash.Query.filter(fleet_id == ^fleet_id and kind == :pay and not executed?)
-    |> assets()
-  end
-
-  defp assets(query) do
-    query
-    |> Ash.Query.distinct(:asset)
-    |> Ash.Query.select([:asset])
-    |> Ash.read!()
-    |> Enum.map(& &1.asset)
-    |> Enum.sort()
-  end
-
-  @doc "The fleet's proposal `number`, as `status/1` needs it, or nil."
+  @doc "The fleet's proposal `number`, as `status/2` needs it, or nil."
   def get_by_number(fleet_id, number),
     do: get_proposal!(fleet_id, number, load: @summary)
 
   @doc """
   The fleet's proposals below `before_number` (all of them for nil), newest
-  first, #{@page} at most, as `status/1` needs them, and whether older ones remain.
+  first, #{@page} at most, as `status/2` needs them, and whether older ones remain.
   """
   def list_page(fleet_id, before_number \\ nil) do
     Proposal
@@ -162,7 +145,7 @@ defmodule Keyfleet.Proposals do
   `changed_seq`, the last of them that touched it, and in that order.
   `next_cursor` is the last record read, to send as `after_seq` next time;
   `head_seq` the fleet's last record number, and `has_more` whether records
-  after `next_cursor` are waiting. Budget records and a key's edits being
+  after `next_cursor` are waiting. Money records and a key's edits being
   restricted or allowed are counted but touch no proposal; the execution that
   restricted or allowed them does.
   """
@@ -174,15 +157,7 @@ defmodule Keyfleet.Proposals do
     head_seq = if(cursor, do: cursor.proposal_seq, else: 0)
 
     {read, rest} =
-      [
-        Proposal,
-        Vote,
-        Execution,
-        EditsRestriction,
-        BudgetReceipt,
-        IncomeReceipt,
-        BudgetPayment
-      ]
+      [Proposal, Vote, Cancellation, Execution, EditsRestriction, Event]
       |> Enum.flat_map(&records_after(&1, fleet_id, after_seq, head_seq))
       |> Enum.sort()
       |> Enum.split(@changes_page)
@@ -227,7 +202,7 @@ defmodule Keyfleet.Proposals do
 
   defp proposal_of(%Proposal{id: id}), do: id
   defp proposal_of(%{proposal_id: id}), do: id
-  defp proposal_of(_budget_record), do: nil
+  defp proposal_of(_money_or_edits_record), do: nil
 
   @doc "The fleet's highest proposal number recorded so far, or 0."
   def highest_number!(fleet_id) do
@@ -238,14 +213,16 @@ defmodule Keyfleet.Proposals do
   end
 
   @doc """
-  Every proposal, vote and execution recorded from blocks `from..to` of the
-  fleet, so a second reading of them can be checked against the record.
+  Every proposal, vote, cancellation and execution recorded from blocks
+  `from..to` of the fleet, so a second reading of them can be checked against
+  the record.
   """
   def recorded_in_blocks!(fleet_id, from, to) do
     Enum.flat_map(
       [
         &proposals_recorded_in_blocks!/4,
         &votes_recorded_in_blocks!/4,
+        &cancellations_recorded_in_blocks!/4,
         &executions_recorded_in_blocks!/4
       ],
       & &1.(fleet_id, from, to, actor: %System{})

@@ -54,15 +54,13 @@ defmodule Keyfleet.KeyProfileTest do
 
       proposal!(@fleet, 1)
       proposal!(@fleet, 2)
-      vote!(@fleet, 1, holder, true, [3, 12])
-      vote!(@fleet, 2, holder, false, [12])
-      # A withdrawal is not a vote cast.
-      vote!(@fleet, 2, holder, nil, [12])
+      vote!(@fleet, 1, holder, :yes, [3, 12])
+      vote!(@fleet, 2, holder, :no, [12])
       # Other keys' votes, and key 12 of another fleet, are not key 12's.
-      vote!(@fleet, 1, wallet("b"), true, [120])
+      vote!(@fleet, 1, wallet("b"), :yes, [120])
       ChainHelpers.seed_cursor!("fibonacci_syndicate")
       proposal!("fibonacci_syndicate", 1)
-      vote!("fibonacci_syndicate", 1, holder, true, [12])
+      vote!("fibonacci_syndicate", 1, holder, :yes, [12])
 
       runner = %Actors.Agent{
         wallet_address: wallet("c"),

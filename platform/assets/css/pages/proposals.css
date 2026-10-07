@@ -97,8 +97,7 @@
 
 .proposals-rule,
 .proposals-detail,
-.proposals-facts dt,
-.proposals-fields dt {
+.proposals-facts dt {
   color: var(--color-fg-muted);
 }
 
@@ -147,12 +146,6 @@
   text-transform: uppercase;
 }
 
-.proposals-gist,
-.proposals-text {
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
 .proposals-detail {
   display: flex;
   flex-wrap: wrap;
@@ -160,32 +153,22 @@
   font-size: 0.9rem;
 }
 
-.proposals-facts,
-.proposals-fields {
+.proposals-facts {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: 0.6rem;
   width: 100%;
   margin: 0;
 }
 
-.proposals-facts {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-}
-
-.proposals-facts div,
-.proposals-fields div {
+.proposals-facts div {
   display: grid;
   gap: 0.2rem;
   min-width: 0;
 }
 
-.proposals-facts dd,
-.proposals-fields dd {
+.proposals-facts dd {
   margin: 0;
-}
-
-.proposals-fields dd {
-  white-space: pre-line;
 }
 
 .proposals-plan {

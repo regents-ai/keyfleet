@@ -1,12 +1,13 @@
 defmodule Keyfleet.ProposalHelpers do
   @moduledoc """
-  Records key sales, proposals, votes, executions, budget receipts, income,
-  budget payments, balance readings and asset details as the chain reader
-  would, without a chain. Each record gets a chain event of its own. The
-  fleet needs a cursor first, as `Keyfleet.ChainHelpers.seed_cursor!/2` makes.
+  Records key sales, proposals, votes, cancellations, executions, money
+  events, treasury readings and asset details as the chain reader would,
+  without a chain. Each record gets a chain event of its own. The fleet needs
+  a cursor first, as `Keyfleet.ChainHelpers.seed_cursor!/2` makes.
   """
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.MoneyLog
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
@@ -15,24 +16,29 @@ defmodule Keyfleet.ProposalHelpers do
   @block_hash "0x" <> String.duplicate("b", 64)
 
   @doc """
-  Proposal `number` of the fleet: a decision, unless `attrs` says otherwise.
-  A payment and a vote on a key's edits get the fields their kind carries.
+  Proposal `number` of the fleet, open for a day from a minute ago with no
+  calls and nobody active when it opened, unless `attrs` says otherwise.
   """
   def proposal!(fleet_id, number, attrs \\ %{}) do
-    attrs = Map.new(attrs)
-    kind = Map.get(attrs, :kind, :decision)
+    opened_at = DateTime.utc_now() |> DateTime.add(-60) |> DateTime.truncate(:second)
+    closes_at = DateTime.add(opened_at, 86_400)
 
     %{
       fleet_id: fleet_id,
       number: number,
-      kind: kind,
+      author_key: 1,
       proposer: wallet("f"),
-      opened_block: 1,
-      digest: "0x" <> String.duplicate("d", 64)
+      proposal_hash: hash(number),
+      content_hash: "0x" <> String.duplicate("d", 64),
+      opened_at: opened_at,
+      closes_at: closes_at,
+      execution_expiry: DateTime.add(closes_at, 86_400),
+      opening_count: 0,
+      open_revision: 1,
+      calls: []
     }
-    |> Map.merge(kind_fields(kind, number))
     |> Map.merge(event())
-    |> Map.merge(attrs)
+    |> Map.merge(Map.new(attrs))
     |> Proposals.record_proposal!(actor: @system)
   end
 
@@ -45,13 +51,13 @@ defmodule Keyfleet.ProposalHelpers do
     end
   end
 
-  @doc "A vote on proposal `number` by `voter` with `token_ids`, one vote per key."
-  def vote!(fleet_id, number, voter, support, token_ids) do
+  @doc "A vote of `choice` on proposal `number` by `voter` with `token_ids`, one vote per key."
+  def vote!(fleet_id, number, voter, choice, token_ids) do
     %{
       fleet_id: fleet_id,
       proposal_number: number,
       voter: voter,
-      support: support,
+      choice: choice,
       token_ids: token_ids
     }
     |> Map.merge(event())
@@ -65,12 +71,37 @@ defmodule Keyfleet.ProposalHelpers do
     |> Proposals.record_execution!(actor: @system)
   end
 
-  @doc "10 USDC-sized units of a token recognized into the budget, unless `attrs` says otherwise."
-  def budget_receipt!(fleet_id, attrs \\ %{}) do
-    %{fleet_id: fleet_id, asset: wallet("a"), amount: Decimal.new(10_000_000)}
+  @doc "Proposal `number` cancelled by `by`."
+  def cancellation!(fleet_id, number, by) do
+    %{fleet_id: fleet_id, proposal_number: number, cancelled_by: by}
     |> Map.merge(event())
-    |> Map.merge(Map.new(attrs))
-    |> Treasury.record_budget_receipt!(actor: @system)
+    |> Proposals.record_cancellation!(actor: @system)
+  end
+
+  @doc """
+  Key `token_id` present from `at`, as its renewal records it, or no longer
+  present, as its change of hands records it, for `at` nil.
+  """
+  def presence!(fleet_id, token_id, at) do
+    %{fleet_id: fleet_id, token_id: token_id}
+    |> Map.merge(
+      if(at,
+        do: %{kind: :present, at: at, ownership_epoch: 1},
+        else: %{kind: :cleared, at: nil, ownership_epoch: nil}
+      )
+    )
+    |> Map.merge(event())
+    |> Keys.record_presence!(actor: @system)
+  end
+
+  @doc "A money event of `kind` with `fields`, every other field empty."
+  def money_event!(fleet_id, kind, fields) do
+    MoneyLog.fields()
+    |> Map.new(&{&1, nil})
+    |> Map.merge(%{fleet_id: fleet_id, kind: kind})
+    |> Map.merge(Map.new(fields))
+    |> Map.merge(event())
+    |> Treasury.record_event!(actor: @system)
   end
 
   @doc "The symbol and decimals of `asset`, as its token reported them."
@@ -81,35 +112,7 @@ defmodule Keyfleet.ProposalHelpers do
     )
   end
 
-  @doc "Income of 10 USDC-sized units paid to the keys, unless `attrs` says otherwise."
-  def income_receipt!(fleet_id, attrs \\ %{}) do
-    %{
-      fleet_id: fleet_id,
-      asset: wallet("a"),
-      caller: wallet("f"),
-      amount: Decimal.new(10_000_000)
-    }
-    |> Map.merge(event())
-    |> Map.merge(Map.new(attrs))
-    |> Treasury.record_income_receipt!(actor: @system)
-  end
-
-  @doc "A payment of 5 USDC-sized units from the budget, unless `attrs` says otherwise."
-  def budget_payment!(fleet_id, attrs \\ %{}) do
-    %{
-      fleet_id: fleet_id,
-      asset: wallet("a"),
-      recipient: wallet("b"),
-      amount: Decimal.new(5_000_000),
-      share: Decimal.new(0),
-      matched: Decimal.new(0)
-    }
-    |> Map.merge(event())
-    |> Map.merge(Map.new(attrs))
-    |> Treasury.record_budget_payment!(actor: @system)
-  end
-
-  @doc "A reading of the fleet's balances with `assets`, taken at `block_time`."
+  @doc "A reading of the fleet's treasury with `assets`, taken now."
   def treasury_reading!(fleet_id, assets, attrs \\ %{}) do
     %{
       fleet_id: fleet_id,
@@ -119,6 +122,7 @@ defmodule Keyfleet.ProposalHelpers do
       block_time: DateTime.utc_now(),
       cascade_reserve: Decimal.new(0),
       protocol_share_owed: Decimal.new(0),
+      daily_split_bps: 100,
       assets: assets
     }
     |> Map.merge(Map.new(attrs))
@@ -127,24 +131,7 @@ defmodule Keyfleet.ProposalHelpers do
 
   def wallet(character), do: "0x" <> String.duplicate(character, 40)
 
-  defp kind_fields(kind, number) do
-    text = "Proposal #{number}"
-
-    text_fields = %{
-      text: text,
-      text_bytes: byte_size(text),
-      text_sha256: "0x" <> Base.encode16(:crypto.hash(:sha256, text), case: :lower)
-    }
-
-    Map.merge(text_fields, payload(kind))
-  end
-
-  defp payload(:decision), do: %{}
-
-  defp payload(:pay),
-    do: %{asset: wallet("a"), amount: Decimal.new(5_000_000), recipient: wallet("b")}
-
-  defp payload(:restrict_edits), do: %{target_token_id: 2, restricted: true}
+  defp hash(number), do: "0x" <> Base.encode16(<<number::256>>, case: :lower)
 
   # A chain event no other record has.
   defp event do
