@@ -20,6 +20,10 @@
 
 > 1. a 2. a 3. just do a normal swap with no restrictions. the REGENT liquidity will increase over time, and $10 buys are the norm for a long time 4. a 5. a 6. a 7. b 8. a 9. a 10. a 11. a - all votes always use the 'present denominator' 12. no, the cards for new keyfleets come from the same process as the original four. except use the interim art when a Key is minted, and then we have a backend process to create the real metadata and image and publish it, after which a metadata update from the owner will reveal the permanent card. 13. a 14. a - is it a few cents on Base too? 15. show this format: \<fleet type among the 4\>—\<fleet number in 00N format, or 1NNN format for large number\>—\<number in 00N format, or 1NNN format for large numbers\> 1. Also, the traits should have each of: the fleet type and the fleet number 16. a 17. a - but the images come from media.regents.sh I thought? from the media-web repo 18. a 19. 'Keyfleet' with KEYFLEET 20. b , 2.5% to 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e
 
+**Sean's follow-ups (7 Oct, verbatim, relayed):** "1. a 2. b - the brand is never KeyFleet , always Keyfleet. make a note". So the metadata base is fixed on keyfleet.ai with pictures on media.regents.sh, and the collection is named "Keyfleet".
+
+**Brand rule:** always "Keyfleet", never "KeyFleet", in this doc, contract names, NatSpec, tests and messages. (Sean's round 1 request above is quoted as he wrote it.)
+
 What each answer decides (round 2 numbering → id):
 
 | # | Id | Decision |
@@ -40,9 +44,9 @@ What each answer decides (round 2 numbering → id):
 | 14 | KF-SOL-23 | Regents' Chainlink subscription pays every draw: about half a US cent per Key on Base (3.4) |
 | 15 | KF-SOL-3 | Token id stays fleet × 10^10 + key; the Key's name reads `CLASSIC—001—072`; traits carry fleet type and fleet number (3.1) |
 | 16 | KF-SOL-4 | The Safe may add newer factories for new fleets |
-| 17 | KF-SOL-5 | The metadata address is fixed forever (3.4; the host is with Sean) |
+| 17 | KF-SOL-5 | The metadata address is fixed forever, on keyfleet.ai; pictures on media.regents.sh (3.4) |
 | 18 | KF-SOL-6 | The Chainlink coordinator is fixed forever |
-| 19 | KF-SOL-8 | Name "KeyFleet" (spelling being confirmed with Sean), symbol KEYFLEET |
+| 19 | KF-SOL-8 | Name "Keyfleet", symbol KEYFLEET |
 | 20 | KF-SOL-9 | ERC-2981 resale fee of 2.5% to the Regents Safe |
 
 **Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md), as changed by everything above. Supplies, splits, vote, presence, daily split and claim rules are unchanged. Those docs are brought up to date in step B7.
@@ -92,7 +96,7 @@ Each fleet is five contracts with no shared state. `Keyfleet` (14.6 KB runtime) 
 
 ### 3.1 What OpenSea sees
 
-- **One collection page.** `name()` is "KeyFleet" and `symbol()` KEYFLEET, fixed at deploy (Sean, KF-SOL-8; the spelling "KeyFleet" or "Keyfleet" is being confirmed and is one constant).
+- **One collection page.** `name()` is "Keyfleet" and `symbol()` KEYFLEET, fixed at deploy (Sean, KF-SOL-8).
 - **Collection details.** `contractURI()` (ERC-7572) returns a fixed URL for the collection page's picture and description.
 - **Key names.** Each Key's name in its metadata reads `<TYPE>—<fleet number>—<key number>`, with em dashes and each number padded to three digits, or four once it reaches 1,000, for example `CLASSIC—001—072` or `ACCELERANT—001—1204` (Sean, KF-SOL-3). Which fleet number shows is open question 3.
 - **Traits.** The traits include `Fleet type` and `Fleet number` (Sean), plus the fleet's name and the key number, so OpenSea's trait filter narrows the one collection to one fleet.
@@ -119,9 +123,8 @@ Every fleet gets a number from the collection when it is created: `1, 2, 3, ...`
 - **What a draw costs (Sean asked, KF-SOL-23).** Regents' subscription pays every draw, in ETH. The Base coordinator `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` charges the fulfilment gas plus a 60% premium. Sixteen real fulfilments read on 7 Oct cost between 0.0000017 and 0.0000053 ETH each: about 0.4 to 1.4 US cents with ETH at about 2,574 USD. A Key's draw, with a 100,000-gas callback, sits at the low end: **about half a cent per Key**, so less than "a few cents".
 - **One trait table for every fleet:** `TRAIT_TABLE_HASH` `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, fixed once on the collection (keyfleet main `3172c4a`). The earlier table appears nowhere in contracts, tests or scripts.
 - **`tokenURI(id)` = one fixed base + the id**, and it reverts for an id that has not been minted. The base is fixed forever (Sean, KF-SOL-5).
-  - The base points at each Key's **metadata** (the JSON with name, traits and a picture link). The design uses `https://keyfleet.ai/metadata/keys/` as a placeholder.
+  - The base points at each Key's **metadata** on keyfleet.ai (the JSON with name, traits and a picture link), `https://keyfleet.ai/metadata/keys/` (Sean, 7 Oct: "1. a").
   - The **pictures** are on media-web, at `https://media.regents.sh/ipfs/<cid>` (`platform/lib/keyfleet/keys/key_art.ex`). The metadata links to them. Sean is right that images come from media.regents.sh.
-  - Which host serves the metadata base forever is with Sean through the coordinator. It is one constant in the deploy manifest.
 - **ERC-4906:**
   - The collection emits `MetadataUpdate(tokenId)` when a seed is written.
   - `refreshMetadata(tokenId)` emits it again when the backend has published the permanent card (3.5).
