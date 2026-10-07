@@ -369,12 +369,12 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       |> Plug.Conn.put_req_header("x-key-id", wallet)
 
     # A plain wallet proves its key on either chain. A smart wallet is only
-    # proven on the chain it was checked on, and keys are held on Ethereum.
+    # proven on the chain it was checked on, and keys are held on Base.
     for {chain_id, method} <- [
           {8453, "eoa_recovery"},
           {1, "eoa_recovery"},
-          {1, "erc1271"},
-          {1, "erc6492"}
+          {8453, "erc1271"},
+          {8453, "erc6492"}
         ] do
       assert {:ok, %{assigns: %{agent_actor: actor}}} =
                KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(chain_id, method), nil)
@@ -433,16 +433,16 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       assert {:error, _} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, data, nil)
     end
 
-    # Signing in again on Base can't help a smart wallet, so it is told to use
-    # Ethereum rather than to sign in again.
+    # Signing in again on Ethereum can't help a smart wallet, so it is told
+    # to use Base rather than to sign in again.
     for method <- ["erc1271", "erc6492"] do
-      assert {:error, %{reason: :smart_wallet_on_base} = refusal} =
-               KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(8453, method), nil)
+      assert {:error, %{reason: :smart_wallet_on_ethereum} = refusal} =
+               KeyfleetWeb.Plugs.SignedAgent.accept(conn, signed_in.(1, method), nil)
 
       reply = KeyfleetWeb.Plugs.SignedAgent.deny(conn, refusal)
 
       assert {reply.status, Jason.decode!(reply.resp_body)} ==
-               {401, refused("smart_wallet_on_base")}
+               {401, refused("smart_wallet_on_ethereum")}
     end
   end
 

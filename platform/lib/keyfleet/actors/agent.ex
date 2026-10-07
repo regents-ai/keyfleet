@@ -12,8 +12,8 @@ defmodule Keyfleet.Actors.Agent do
   and `verification_method` how SIWA proved the wallet. A plain wallet's
   signature (`:eoa_recovery`) proves its key, which is the same on every chain.
   A smart wallet's (`:erc1271`, `:erc6492`) proves it only on the chain it was
-  checked on, and KeyFleet's keys are on Ethereum, so a smart wallet counts
-  only when it signed in on Ethereum.
+  checked on, and KeyFleet's keys are on Base, so a smart wallet counts only
+  when it signed in on Base.
   """
   @enforce_keys [:wallet_address, :chain_id, :verification_method, :audience]
   defstruct [:wallet_address, :chain_id, :verification_method, :audience, :credential_ref]
@@ -34,7 +34,7 @@ defmodule Keyfleet.Actors.Agent do
       })
       when is_binary(wallet) and
              ((method == :eoa_recovery and chain_id in [1, 8453]) or
-                (method in [:erc1271, :erc6492] and chain_id == 1)),
+                (method in [:erc1271, :erc6492] and chain_id == 8453)),
       do: Regex.match?(~r/\A0x[0-9a-f]{40}\z/, wallet)
 
   def valid?(_), do: false

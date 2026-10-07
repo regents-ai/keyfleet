@@ -51,7 +51,7 @@ defmodule Keyfleet.AgentProfilesTest do
           %{role: :agent},
           %{actor | wallet_address: "0xAB" <> String.duplicate("0", 38)},
           %{actor | wallet_address: "0x123"},
-          %{actor | verification_method: :erc1271},
+          %{actor | verification_method: :erc1271, chain_id: 1},
           %{actor | audience: "patchbay"}
         ] do
       assert {:error, error} = Agents.ensure_profile(input, actor: invalid)

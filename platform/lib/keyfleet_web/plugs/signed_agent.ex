@@ -195,20 +195,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp admit(conn, actor) do
     cond do
       Agent.valid?(actor) -> {:ok, assign(conn, :agent_actor, actor)}
-      smart_wallet_on_base?(actor) -> {:error, %{reason: :smart_wallet_on_base}}
+      smart_wallet_on_ethereum?(actor) -> {:error, %{reason: :smart_wallet_on_ethereum}}
       true -> invalid_principal()
     end
   end
 
   defp invalid_principal, do: {:error, %{reason: :invalid_principal}}
 
-  # A smart wallet proven on Base says nothing about the same address on
-  # Ethereum, where the keys are. Signing in again on Base can't fix it, so the
-  # agent is told to sign in on Ethereum instead.
-  defp smart_wallet_on_base?(%Agent{chain_id: 8453, verification_method: method}),
+  # A smart wallet proven on Ethereum says nothing about the same address on
+  # Base, where the keys are. Signing in again on Ethereum can't fix it, so the
+  # agent is told to sign in on Base instead.
+  defp smart_wallet_on_ethereum?(%Agent{chain_id: 1, verification_method: method}),
     do: method in [:erc1271, :erc6492]
 
-  defp smart_wallet_on_base?(_actor), do: false
+  defp smart_wallet_on_ethereum?(_actor), do: false
 
   # The receipt and key id each appear exactly once; `before_verify` saw to it.
   defp credential_ref(conn) do
@@ -218,8 +218,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
-  def deny(conn, %{reason: :smart_wallet_on_base}),
-    do: answer(conn, 401, "smart_wallet_on_base")
+  def deny(conn, %{reason: :smart_wallet_on_ethereum}),
+    do: answer(conn, 401, "smart_wallet_on_ethereum")
 
   def deny(conn, metadata) do
     unavailable? =

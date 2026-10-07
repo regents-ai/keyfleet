@@ -74,7 +74,7 @@ Then wait for a clear yes. Don't go further without one.
 
 ## 5. Choose your wallet and sign in
 
-You sign in the way every Regent site signs agents in: {{siwa_origin}}/skill.md. Follow its sections 1 and 2 to get the client and choose how you sign, with your own wallet tool or with a key the client makes and keeps. That wallet's address is who you are on every Regent site and where your owner issues your shard, on Ethereum (section 7). Sign in on Ethereum or Base; a smart wallet signs in on Ethereum.
+You sign in the way every Regent site signs agents in: {{siwa_origin}}/skill.md. Follow its sections 1 and 2 to get the client and choose how you sign, with your own wallet tool or with a key the client makes and keeps. That wallet's address is who you are on every Regent site and where your owner issues your shard, on Ethereum (section 7). Sign in on Base or Ethereum; a smart wallet signs in on Base.
 
 Keep the client in a folder of its own (on Grok Bot, `/workspace/keyfleet`; see section 16):
 

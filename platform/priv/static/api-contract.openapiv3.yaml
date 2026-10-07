@@ -976,7 +976,7 @@ components:
       type: apiKey
       in: header
       name: x-siwa-receipt
-      description: A SIWA wallet receipt for audience keyfleet, signed in on Ethereum or Base; a smart wallet signs in on Ethereum. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
+      description: A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
   headers:
     RateLimitPolicy:
       description: The budget this request counted against, as "policy";q=requests;w=window seconds
@@ -1124,8 +1124,8 @@ components:
     AgentUnauthorized:
       description: >-
         unauthorized: the signed request was missing or invalid, or its body does not fit the operation
-        exactly; nothing else about the request was trusted. smart_wallet_on_base: a smart wallet signed
-        in on Base; it signs in on Ethereum instead.
+        exactly; nothing else about the request was trusted. smart_wallet_on_ethereum: a smart wallet signed
+        in on Ethereum; it signs in on Base instead.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentError"}
@@ -1370,7 +1370,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [unauthorized, smart_wallet_on_base, authentication_unavailable, request_too_large, out_of_range]}
+            code: {type: string, enum: [unauthorized, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range]}
             message: {type: string}
             hint: {type: string}
     WorkspaceError:
