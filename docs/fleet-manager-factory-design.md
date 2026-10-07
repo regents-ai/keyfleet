@@ -6,7 +6,7 @@
 
 **Sean's request (7 Oct 2026, verbatim):** "For browsing on Opensea I would prefer if all of the Key NFTs in the different sets are part of the same collection address...but I want the NFTs to act as membership keys to different KeyfleetManager contracts that are created from a KeyFleetManagerFactory."
 
-**Relayed from the Keyfleet NFTs lane (7 Oct, not yet a contract requirement):** the first four fleets each get a pre-made 1,000-card deck; a key's random number picks its card from its fleet's deck. Keys 1,001 onward, and fleets 5 onward, use today's trait draw. Card titles count per type ("CLASSIC #1", a later second Classic fleet is "CLASSIC #2"). Section 3.5 covers it.
+**Relayed from the Keyfleet NFTs lane (7 Oct):** the first four fleets each get a pre-made 1,000-card deck; a key's random number picks its card from its fleet's deck. Keys 1,001 onward, and fleets 5 onward, use today's trait draw. Card titles count per type ("CLASSIC #1", a later second Classic fleet is "CLASSIC #2"). Sean's answer on how cards are dealt (7 Oct, verbatim): "The site picks; the deck fingerprint goes in the contract. And as long as it still works for the 1001 card, and N+1 cards to be created for any set of cards in a keyfleet." Section 3.5 covers it.
 
 **Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md). Nothing here changes a price, supply, split, vote rule, presence rule, daily split rule or claim rule. Only *where* things live changes.
 
@@ -36,7 +36,7 @@ Each fleet is five contracts with no shared state. `Keyfleet` (14.6 KB runtime) 
 
 | Contract | How many | Holds | Comes from |
 |---|---|---|---|
-| `KeyfleetKeys` | one | Who owns each key, which fleet it belongs to, ownership epochs, each key's VRF seed (and deck card, 3.5), the fleet registry, the sales switch per fleet | ERC-721 and reveal parts of `Keyfleet.sol` |
+| `KeyfleetKeys` | one | Who owns each key, which fleet it belongs to, ownership epochs, each key's VRF seed, each fleet's deck fingerprint and size (3.5), the fleet registry, the sales switch per fleet | ERC-721 and reveal parts of `Keyfleet.sol` |
 | `KeyfleetShards` | one | Agent shards and agent-voting switches, per key | `KeyfleetShards.sol`, rebound from one fleet to the collection |
 | `KeyfleetFactory` | one | Shared bindings (USDC, REGENT, staking, Autolaunch); nothing of value | new |
 | `KeyfleetManager` | one per fleet | Preset, prices, `totalMinted`, `firstMintAt`, Cascade reserve, owed protocol share, Fibonacci holding counts | sale and money parts of `Keyfleet.sol` |
@@ -75,19 +75,25 @@ The token id must carry both. Two ways (question 3):
 - **VRF moves into the collection, once.** One coordinator, subscription and gas lane for every fleet, and one VRF consumer for the Safe to add, instead of one per fleet. This matters: a Chainlink v2.5 subscription takes at most 100 consumers (to confirm against the Base coordinator in step B1), which per-fleet VRF would hit at fleet 101. Request, retry (`requestReveal`), callback rules, 3 confirmations, native payment and the never-reverting callback stay as written today. The seed stays `keccak256(TAG, chainid, collection, tokenId, word)`; the collection address and a collection-unique id keep every seed distinct.
 - **One trait table for every fleet.** The product spec already says every key in every fleet draws from one table, so `TRAIT_TABLE_HASH` is fixed once on the collection: `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, the table Sean set on 7 Oct (keyfleet main `3172c4a`, `platform/priv/trait_tables/<hash>.json`; each trait's weights sum to 1,000). It replaces the earlier table everywhere; when the build starts, the earlier value appears nowhere in contracts, tests or scripts.
 - **`tokenURI(id)` = one fixed base + the id**, for example `https://keyfleet.ai/metadata/keys/10000000072`. The site decodes the fleet from the id. Whether the base may ever move is question 5.
-- **ERC-4906:** the collection emits `MetadataUpdate(tokenId)` when a seed (and deck card) is written, so OpenSea refreshes that key, as today. The collection is the only contract that needs to emit it, since OpenSea listens to the collection address.
+- **ERC-4906:** the collection emits `MetadataUpdate(tokenId)` when a seed is written, so OpenSea refreshes that key, as today. The collection is the only contract that needs to emit it, since OpenSea listens to the collection address.
 
-### 3.5 Per-fleet card decks (relayed from the NFTs lane)
+### 3.5 Per-fleet card decks
 
-The rule the NFTs lane describes: a fleet created with a deck shows, for keys `1..deckSize`, the deck card its random number picks; every other key, and every fleet created without a deck, uses the trait draw. The contract does not need "the first four fleets" written into it: the Safe gives a deck when it creates those four and none afterwards.
+**Sean's answer (7 Oct, verbatim, relayed by the Keyfleet NFTs lane on KF-DECK-PICK):** "The site picks; the deck fingerprint goes in the contract. And as long as it still works for the 1001 card, and N+1 cards to be created for any set of cards in a keyfleet."
 
-What the contract must do so a deck cannot be swapped after the seeds are known (the same reason `TRAIT_TABLE_HASH` is fixed before the first sale):
+What that means, as chosen: **no repeats**. The site deals each decked key a card from the fleet's remaining cards, in the order the keys' reveals happened on chain, using each key's seed. The chain holds only the deck's fingerprint and size. A fleet created with a deck of `N` cards shows deck cards for keys `1..N`; key `N+1` onward (key 1,001 in a 1,000-card fleet), and every key of a fleet created without a deck, uses the trait draw. The contract does not need "the first four fleets" written into it: the Safe gives a deck when it creates those four and none afterwards.
 
-- `createFleet` takes a deck fingerprint and size (`deckHash`, `deckSize`, for example 1,000). The NFTs lane builds the four 1,000-card decks from the trait table above, and their fingerprints and sizes are what the Safe passes in. The collection records them with the fleet, forever. Zero means "no deck". The deck file must exist before the fleet is created.
-- Whether two keys may show the same card is question 7:
-  - **(a) Each card dealt once (recommended).** The callback deals from the fleet's remaining cards with a swap-and-pop map (Fisher–Yates, one step per key): `card = remaining[word mod left]`, the last remaining card moves into its place, `left` drops by one. It is recorded as `cardOf[tokenId]` and announced with the seed. Order is the order answers arrive, which nobody controls. Cost: about three more storage writes in the callback, so the callback gas limit rises from 100,000 to a measured ceiling (estimate 160,000); still far under the coordinator's 2,500,000 cap. The callback still never reverts.
-  - **(b) Independent picks.** `card = seed mod deckSize`, worked out off chain; nothing more on chain than the fingerprint. 1,000 keys would land on only about 632 different cards on average, so many repeats.
-- `tokenURI` does not change: the site serves the deck card's picture for those keys and the drawn card for the rest. The metadata adds a `Card` attribute.
+**On chain (all of it):**
+
+- `createFleet(preset, deckHash, deckSize)` records the deck fingerprint and size with the fleet, forever. Both zero means "no deck"; one zero and the other not is refused. Neither can ever change, so a deck cannot be swapped after any seed is known (the same reason `TRAIT_TABLE_HASH` is fixed before the first sale). The collection announces them in its fleet-registered event and returns them from `deckOf(fleet)`.
+- **No dealing on chain.** The reveal callback is unchanged from today: it writes the seed once, emits, never reverts, and keeps today's 100,000 callback gas limit. There is no card map and no `cardOf`.
+- The reveal event carries everything the deal needs: `KeyRevealed(tokenId, fleet, keyNumber, requestId, seed)`. The fleet and key number are in the event so it reads the same under either token id scheme (question 3). The deal order comes from the log itself: block number, then log index. A key whose first randomness request failed and was retried takes its place when its reveal actually lands.
+
+**Deck files (from the NFTs lane):** one file per fleet, holding 1,000 card seeds bound to trait table `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, cards indexed `0..999`, named by its keccak256, which is the `deckHash` the Safe passes to `createFleet`; `deckSize` is 1,000. Each file must be published before its fleet is created.
+
+**Anyone can check every card.** From the chain logs (`KeyRevealed` in block and log-index order, plus the fleet's `deckHash` and `deckSize`) and the published deck file whose keccak256 matches `deckHash`, anyone can recompute every key's card with the published dealing rule. The site holds no secret and makes no choice the chain does not fix. The dealing rule itself is the NFTs lane's to publish next to the deck files; the contract fixes its inputs. Since the order is final only once the reveals' blocks are final, the site deals from confirmed reveals.
+
+`tokenURI` does not change: the site serves the deck card's picture for decked keys and the drawn card for the rest. The metadata adds a `Card` attribute.
 
 ---
 
@@ -232,7 +238,7 @@ Run with three fleets of different presets on one collection, plus a handler tha
 7. The collection and factory hold no tokens or ETH and approve nothing.
 8. Each fleet's four contracts point at each other and at nothing else.
 9. Every invariant in today's suite (`test/invariant/*`: presence queue, electorate never shrinks, rewards backing, split exactness, segregation, agents never paid, bound launch is the fleet's own) holds in every fleet side by side.
-10. With a deck (question 7 a): no card is dealt twice in a fleet, cards dealt never exceed the deck size, keys after the deck have no card.
+10. A fleet's `deckHash` and `deckSize` never change after creation, and every reveal emits exactly one `KeyRevealed` carrying the key's own fleet and key number.
 
 Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT` in any contract, and Slither's delegatecall, arbitrary-send and reentrancy detectors run clean or are triaged.
 
@@ -271,7 +277,7 @@ Each step leaves `forge build` and `forge test` green, deletes what it replaces,
 | # | Step | Tests | Size |
 |---|---|---|---|
 | B0 | This design; Sean's answers recorded here | — | doc |
-| B1 | **`KeyfleetKeys` on its own.** Registry (written by a test factory), mint from a registered manager into its own fleet only, token ids (scheme per Q3), epochs, sales switch, reveal and retry, deck dealing (per Q7), `tokenURI`, `contractURI`, ERC-4906. Confirm the VRF consumer limit on a Base fork. | Mint refusals (unregistered, wrong fleet, sales off, existing id), only the Safe opens, ids and decoding, epoch bumps, hook goes only to the key's manager, reveal suite ported, deck: no repeats, deck size bound, callback never reverts and stays under its gas ceiling, golden draws unchanged | ~700 |
+| B1 | **`KeyfleetKeys` on its own.** Registry (written by a test factory), mint from a registered manager into its own fleet only, token ids (scheme per Q3), epochs, sales switch, reveal and retry, deck fingerprint and size per fleet, `tokenURI`, `contractURI`, ERC-4906. Confirm the VRF consumer limit on a Base fork. | Mint refusals (unregistered, wrong fleet, sales off, existing id), only the Safe opens, ids and decoding, epoch bumps, hook goes only to the key's manager, reveal suite ported, deck fingerprint and size recorded once and refused when half-given, `KeyRevealed` carries fleet, key number and seed, callback never reverts at today's gas limit, golden draws unchanged | ~700 |
 | B2 | **`KeyfleetFactory` and deployers.** CREATE2 prediction, transient wiring, constructor refusals, `createFleet` only by the Safe, fleets with and without decks, (Q4) adding a factory. | Wiring points both ways for every contract; wrong caller refused; a deployer called directly cannot produce a contract; transient wiring is empty after the call; sizes under limits; `createFleet` gas measured | ~500 |
 | B3 | **Cutover.** `KeyfleetManager` replaces `Keyfleet`; Rewards, Votes, Treasury and Shards rebound; own-key checks; 64-bit presence ids; fixture through the factory; every existing suite ported; `Keyfleet.sol` and `KeyfleetStack.sol` deleted. | All of today's suites pass with unchanged expectations (prices, splits, Cascade, rebate, presence, electorate, signatures, execution, split, launch, Lit); sales-off refusal on every preset; transfer-hook gas ceiling with five split assets | ~1,800, mostly mechanical test moves |
 | B4 | **Cross-fleet suite and multi-fleet invariants.** Every key-taking function with a foreign key; signed messages replayed across fleets; section 7.7 invariants with three fleets. | 7.7 at 256 runs × depth 100 or more | ~700 |
@@ -322,12 +328,7 @@ The build follows each recommendation until Sean answers; a different answer cha
 
 *Changes B1.*
 
-**7. For fleets with a card deck, can two keys show the same card?**
-- a) No: each card is dealt once, on chain, in the order the random numbers arrive. Each fleet's deck fingerprint is fixed when the fleet is created and can never change. *(recommended)*
-- b) Yes: each key picks independently, so a 1,000-key fleet would show only about 630 different cards. The fingerprint is still fixed at creation.
-- c) Decks stay off chain entirely; nothing fixes the deck, so it could be changed after keys are drawn.
-
-*Changes B1 and B2. Each deck file must exist before its fleet is created.*
+*Question 7 (whether two keys may show the same deck card) is answered: no repeats, dealt by the site, fingerprint on chain. Sean's words are in section 3.5.*
 
 **8. What is the collection called on OpenSea?**
 - a) "KeyFleet Keys", symbol KEYFLEET. *(recommended)*
