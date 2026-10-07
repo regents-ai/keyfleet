@@ -119,6 +119,15 @@ defmodule Keyfleet.Proposals do
     |> then(fn {proposals, older} -> {proposals, older != []} end)
   end
 
+  @doc "The fleet's proposals carried out, newest first, with their executions."
+  def executed(fleet_id) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and exists(execution, true))
+    |> Ash.Query.sort(number: :desc)
+    |> Ash.Query.load(:execution)
+    |> Ash.read!()
+  end
+
   defp below(query, nil), do: query
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
 

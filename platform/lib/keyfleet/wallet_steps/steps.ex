@@ -13,18 +13,20 @@ defmodule Keyfleet.WalletSteps.Steps do
 
   @flows [
     :buy,
-    :claim,
     :reveal,
-    :vote,
-    :carry_out,
-    :collect,
-    :propose_decision,
-    :propose_payment,
-    :propose_edits,
-    :delegate,
-    :send_share,
+    :claim,
+    :present,
     :issue_shard,
-    :end_shard
+    :end_shard,
+    :agent_voting,
+    :ballot,
+    :propose,
+    :cancel,
+    :carry_out,
+    :run_split,
+    :return_advance,
+    :send_share,
+    :launch_upkeep
   ]
 
   actions do
@@ -46,11 +48,11 @@ defmodule Keyfleet.WalletSteps.Steps do
 
       argument :proposal, :integer, constraints: [min: 1]
       argument :token_id, :integer, constraints: [min: 1]
+      argument :advance_id, :integer, constraints: [min: 1]
 
-      validate present(:proposal), where: argument_in(:flow, [:vote, :carry_out, :collect])
-
-      validate present(:token_id),
-        where: argument_in(:flow, [:claim, :reveal, :issue_shard, :end_shard])
+      validate present(:proposal), where: argument_in(:flow, [:ballot, :cancel, :carry_out])
+      validate present(:token_id), where: argument_in(:flow, [:claim, :reveal, :end_shard])
+      validate present(:advance_id), where: argument_in(:flow, [:return_advance])
 
       run Keyfleet.WalletSteps.Build
     end
