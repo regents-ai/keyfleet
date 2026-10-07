@@ -74,11 +74,13 @@ if config_env() != :test and rpc_url do
   config :keyfleet, :chain_nodes, Map.put(nodes, chain_id, rpc_url)
 end
 
-# Each fleet's trait table ships with the release, named by its hash; the
-# tests keep theirs with the other fixtures.
+# Each fleet's trait table, and card deck if it has one, ships with the
+# release, named by its hash; the tests keep theirs elsewhere.
 if config_env() != :test do
   config :keyfleet, Keyfleet.Traits,
     directory: Application.app_dir(:keyfleet, "priv/trait_tables")
+
+  config :keyfleet, Keyfleet.Decks, directory: Application.app_dir(:keyfleet, "priv/decks")
 end
 
 # The fleets' notebook hubs: KEYFLEET_HUB_FLEETS lists `fleet_id=address`
