@@ -1,28 +1,27 @@
 @import "@fontsource-variable/bricolage-grotesque/opsz.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
-/* The early-access page, dressed like the key cards: a dark ground lit by soft
-   glows in the six rarity colours, headlines in the cards' lettering, and a
-   foil edge on the key roller. On a wide screen what Keyfleet is and the email
-   form sit on the left and the roller on the right; on a phone the roller
-   follows the form.
+/* The early-access page in the Regents palette, with headlines in the key
+   cards' lettering. On a wide screen what Keyfleet is and the email form sit on
+   the left and the key roller on the right; on a phone the roller follows the
+   form.
 
-   The rarity colours belong to the cards, not to the site's palette, so they
-   are named here and used nowhere else. */
+   The six rarities climb the four Regents colours: Common in muted Platinum,
+   Uncommon in Platinum, Rare and Epic in Powder Blue, Legendary and Mythic in
+   Tangerine. Epic and Mythic are the filled ones. */
 @layer regents-product {
   .early {
-    --tier-0: #9aa3b2;
-    --tier-1: #6cc59a;
-    --tier-2: #5aa9ff;
-    --tier-3: #b07cff;
-    --tier-4: #f0b44c;
-    --tier-5: #ff6fae;
+    --tier-0: var(--color-fg-muted);
+    --tier-1: var(--color-fg);
+    --tier-2: var(--palette-powder-blue);
+    --tier-3: var(--palette-powder-blue);
+    --tier-4: var(--brand-accent);
+    --tier-5: var(--brand-accent);
     --early-display: "Bricolage Grotesque Variable", var(--font-family-sans);
     /* Headings take the cards' lettering instead of the site's pixel face. */
     --font-family-title: var(--early-display);
     --early-label: "IBM Plex Mono", var(--font-family-mono);
-    --early-stage: #0b0c10;
-    --early-foil: linear-gradient(110deg, var(--tier-5), var(--tier-4) 22%, var(--tier-1) 42%, var(--tier-2) 62%, var(--tier-3) 82%, var(--tier-5));
+    --early-stage: var(--palette-charcoal);
 
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -32,12 +31,7 @@
     margin-inline: auto;
     padding: clamp(2.5rem, 8svh, 5rem) 16px 1.5rem;
     color: var(--color-fg);
-    background:
-      radial-gradient(38rem 26rem at 8% 4%, color-mix(in srgb, var(--tier-3) 16%, transparent), transparent 70%),
-      radial-gradient(34rem 30rem at 92% 14%, color-mix(in srgb, var(--tier-5) 12%, transparent), transparent 70%),
-      radial-gradient(40rem 30rem at 70% 96%, color-mix(in srgb, var(--tier-2) 12%, transparent), transparent 70%),
-      radial-gradient(30rem 24rem at 4% 80%, color-mix(in srgb, var(--tier-4) 10%, transparent), transparent 70%),
-      var(--color-bg);
+    background: var(--color-bg);
   }
 
   @media (min-width: 64rem) {
@@ -60,7 +54,7 @@
     font-weight: 600;
     letter-spacing: .18em;
     text-transform: uppercase;
-    color: var(--tier-4);
+    color: var(--brand-accent);
   }
 
   .early__title {
@@ -72,27 +66,7 @@
     text-wrap: balance;
   }
 
-  /* The words in the cards' foil: the six rarity colours, drifting slowly. */
-  .early__foil {
-    background: var(--early-foil);
-    background-size: 220% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: early-foil 9s linear infinite;
-  }
-
-  @keyframes early-foil {
-    to { background-position: 220% 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .early__foil { animation: none; }
-  }
-
-  @media (forced-colors: active) {
-    .early__foil { background: none; color: CanvasText; }
-  }
+  .early__accent { color: var(--brand-accent); }
 
   .early__tagline {
     margin-block-start: var(--space-3);
@@ -133,7 +107,7 @@
   }
 
   /* The tech stack: a small heading and four short lines under the form, each
-     marked in one of the rarity colours. */
+     marked with a Powder Blue rule. */
   .early__stack { margin-block-start: var(--space-5); max-width: 36rem; }
 
   /* A small label rather than a headline, so it takes the label face. */
@@ -155,15 +129,12 @@
 
   .early__stack li {
     padding-inline-start: var(--space-2);
-    border-inline-start: 2px solid var(--tier-2);
+    border-inline-start: 2px solid var(--palette-powder-blue);
     color: var(--color-fg);
     font-size: .9375rem;
     line-height: 1.45;
   }
 
-  .early__stack li:nth-child(2) { border-color: var(--tier-1); }
-  .early__stack li:nth-child(3) { border-color: var(--tier-3); }
-  .early__stack li:nth-child(4) { border-color: var(--tier-4); }
 
   /* The field a person never sees and a program fills in. */
   .early__trap {
@@ -177,18 +148,16 @@
 
   /* ---------------- the key roller ---------------- */
 
-  /* A panel with a foil edge, like the rim of a card. */
   .roller {
     display: grid;
     gap: var(--space-3);
     align-content: start;
     min-width: 0;
     padding: clamp(1rem, 3vw, 1.75rem);
-    border: 1px solid transparent;
-    border-radius: 28px;
-    background:
-      linear-gradient(color-mix(in srgb, var(--color-bg) 88%, transparent), color-mix(in srgb, var(--color-bg) 88%, transparent)) padding-box,
-      var(--early-foil) border-box;
+    border: 1px solid var(--color-border);
+    border-block-start: 2px solid var(--brand-accent);
+    border-radius: var(--radius);
+    background: var(--color-surface);
   }
 
   .roller__title {
@@ -201,7 +170,7 @@
 
   .roller__lede { color: var(--color-fg-muted); line-height: 1.55; }
 
-  /* One canvas draws the whole card on its own dark studio ground, short
+  /* One canvas draws the whole card on a Charcoal ground, short
      enough that the roll button stays in view on a laptop. */
   .roller__stage {
     position: relative;
@@ -209,7 +178,7 @@
     width: min(100%, 60svh * 4 / 5);
     aspect-ratio: 4 / 5;
     overflow: hidden;
-    border-radius: 22px;
+    border-radius: var(--radius);
     border: 1px solid var(--color-border);
     background: var(--early-stage);
   }
@@ -270,15 +239,18 @@
   .early [data-tier="4"] { --tier: var(--tier-4); }
   .early [data-tier="5"] { --tier: var(--tier-5); }
 
+  /* Epic and Mythic are filled, with Charcoal letters on the colour. */
+  .early :is([data-tier="3"], [data-tier="5"]) { --tier-fill: var(--tier); --tier-ink: var(--palette-charcoal); }
+
   .roller__chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 5px 9px;
-    border: 1px solid currentColor;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--tier) 10%, transparent);
-    color: var(--tier);
+    border: 1px solid var(--tier);
+    border-radius: var(--radius);
+    background: var(--tier-fill, transparent);
+    color: var(--tier-ink, var(--tier));
     font-family: var(--early-label);
     font-size: .6875rem;
     font-weight: 600;
@@ -292,7 +264,6 @@
     content: "";
     width: 6px;
     height: 6px;
-    border-radius: 50%;
     background: currentColor;
   }
 
@@ -335,7 +306,7 @@
 
   .roller__trait[open] > .roller__trait-head::after { transform: rotate(225deg); }
 
-  .roller__trait-head:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 6px; }
+  .roller__trait-head:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
   .roller__trait-name {
     font-family: var(--early-label);
@@ -372,7 +343,8 @@
     .roller__trait-head::after { grid-area: mark; }
   }
 
-  /* Every value the trait could have given, the drawn one lit in its colour. */
+  /* Every value the trait could have given, the drawn one lit in its colour.
+     Each value's mark is an outline, or solid for the filled rarities. */
   .roller__values {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
@@ -388,23 +360,23 @@
     align-items: center;
     gap: 8px;
     padding: 5px 8px;
-    border-radius: 8px;
     font-size: .875rem;
   }
 
   .roller__value::before {
     content: "";
+    box-sizing: border-box;
     width: 8px;
     height: 8px;
-    border-radius: 50%;
-    background: var(--tier);
+    border: 1.5px solid var(--tier);
+    background: var(--tier-fill, transparent);
   }
 
   .roller__value-name { min-width: 0; overflow-wrap: anywhere; }
 
   .roller__value[aria-current="true"] {
-    background: color-mix(in srgb, var(--tier) 18%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier) 60%, transparent);
+    background: color-mix(in srgb, var(--tier) 14%, transparent);
+    box-shadow: inset 0 0 0 1px var(--tier);
     font-weight: 600;
   }
 
