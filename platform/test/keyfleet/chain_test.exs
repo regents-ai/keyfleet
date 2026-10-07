@@ -1,12 +1,13 @@
 defmodule Keyfleet.ChainTest do
   use ExUnit.Case, async: false
+  use Oban.Testing, repo: Keyfleet.Repo
 
   import ExUnit.CaptureIO
   import ExUnit.CaptureLog
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
+  alias Keyfleet.Chain.{OwnershipLog, ReadFleet, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -136,6 +137,32 @@ defmodule Keyfleet.ChainTest do
       assert {:error, _reason} = Scanner.step(fleet, StubClient)
       assert_received {:keys_changed, @fleet, [1]}
       assert Keys.current_key!(@fleet, 2) == nil
+    end
+
+    # The job reading a fleet never takes a node serving another chain at its
+    # word; a pass that read waits a few seconds and runs again, and one that
+    # failed is retried after a wait.
+    test "the reading job reads only its fleet's chain, then repeats or retries" do
+      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)], chain_id: 1)
+
+      assert capture_log(fn ->
+               assert {:cancel, {:wrong_chain, 1}} =
+                        perform_job(ReadFleet, %{fleet_id: @fleet})
+             end) =~ "node serves chain 1"
+
+      assert StubClient.log_requests() == []
+      assert current_keys() == []
+
+      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
+      assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 4}
+      assert [%{token_id: 1}] = current_keys()
+
+      malformed = %{log(2, 1, "b", @deployed + 12, 0) | "data" => "0x01"}
+      StubClient.put_chain(head(@deployed + 20), [malformed])
+
+      assert capture_log(fn ->
+               assert {:error, _reason} = perform_job(ReadFleet, %{fleet_id: @fleet})
+             end) =~ "tried again"
     end
 
     # One log the reader cannot make sense of holds the whole range back.

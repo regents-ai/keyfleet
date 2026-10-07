@@ -2,7 +2,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @moduledoc """
   Reads one deployed fleet's balances at the block the node last called its
   head, and keeps them as the fleet's `Keyfleet.Treasury.Reading`.
-  `Keyfleet.Chain.Repeat` runs it every minute.
+  `Keyfleet.Chain.ReadBalances` runs it every minute.
 
   A reading covers the income token the reward ledger lists (USDC, the only
   one) and each token a payment proposal not yet carried out names, and no

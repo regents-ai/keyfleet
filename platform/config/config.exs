@@ -28,9 +28,9 @@ config :keyfleet, Keyfleet.AgentListing, read_token: nil, req_options: []
 # (CVE-2026-82752).
 config :ash, default_string_length_count: :codepoints
 
-# Key ownership is read from each deployed fleet every few seconds, by the
-# JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
-config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interval_ms: 4_000
+# Each deployed fleet's history is read every few seconds, by the JSON-RPC
+# node that `KEYFLEET_RPC_URL` names at runtime (`Keyfleet.Chain.ReadFleet`).
+config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interval_seconds: 4
 
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
 # records: its name in the page's words, and the public node a wallet adds
@@ -114,9 +114,16 @@ config :keyfleet, Oban,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
-  # Making fleets' repositories in the code store waits on it too.
-  queues: [default: 5, notebook_hubs: 1, code_store: 2],
-  cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
+  # Making fleets' repositories in the code store waits on it too. Reading
+  # the fleets from the chain waits on a node, so it has its own queue: one
+  # long-lived history job per fleet and its minutely balance readings.
+  queues: [default: 5, notebook_hubs: 1, code_store: 2, chain: 10],
+  cron: [
+    crontab: [
+      {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
+      {"* * * * *", Keyfleet.Chain.Watch}
+    ]
+  ],
   pruner: [max_age: {7, :days}],
   lifeline: [rescue_after: {10, :minutes}]
 
