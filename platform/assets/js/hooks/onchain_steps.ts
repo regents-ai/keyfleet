@@ -1,6 +1,7 @@
 import type {Address, Hash, Hex} from "viem"
 
 import type {Hook} from "../hook_composition"
+import {offerPageTool, type PressButton} from "../page_tools"
 import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
 import {
   failure,
@@ -37,6 +38,8 @@ type OnchainStepsHook = Hook & {
   pushEventTo(target: HTMLElement, event: string, payload?: unknown): Promise<PromiseSettledResult<{reply: unknown}>[]>
   review?: Review
   clicked?: (event: Event) => void
+  pressButton?: PressButton
+  tool?: AbortController
   walletChanged?: () => void
 }
 
@@ -62,34 +65,38 @@ export const OnchainSteps: Hook = {
 
     // Every press runs on its own and reaches the wallet, even while an earlier
     // one is still there. A press whose step isn't on the page yet, or whose
-    // review no longer matches the form on screen, asks the server for the
-    // matching review and sends what comes back.
-    this.clicked = event => {
-      const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
-      const name = button?.dataset.onchainStep
-      if (!button || !name || !this.el.contains(button)) return
+    // review no longer matches the form, asks the server for the matching
+    // review and sends what comes back. The browser's own agent presses the
+    // same way, through the tool the group names (page_tools.ts).
+    this.pressButton = async (button, form) => {
+      const name = button.dataset.onchainStep!
       const release = mark(button)
-      const form = formInputs(this.el)
       const asks = asksServer(this.review, name, form)
       lost(this.el, false)
       // The server hears the press, and the form it was made from, before the
       // wallet does: a proposal's words are saved then. It never waits on this.
       push("step_pressed", {step: name, form})
 
-      if (activeEthereumWallet() && asks) {
-        void this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
-          .then(async ([result]) => {
-            // The server never heard the press, so it cannot say why; the page does.
-            if (result?.status !== "fulfilled") return lost(this.el, true)
-            const reply = result.value.reply as {review?: Review; send?: string}
-            if (reply.review && reply.send) await press(reply.review, reply.send, push)
-            else push("step_failed", {step: name, reason: "step_unknown"})
-          })
-          .catch(() => lost(this.el, true))
-          .finally(release)
-      } else {
-        void press(this.review, name, push).finally(release)
+      try {
+        if (!(activeEthereumWallet() && asks)) return await press(this.review, name, push)
+        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
+        // The server never heard the press, so it cannot say why; the page does.
+        if (result?.status !== "fulfilled") return lostPress(this.el)
+        const reply = result.value.reply as {review?: Review; send?: string}
+        if (reply.review && reply.send) return await press(reply.review, reply.send, push)
+        push("step_failed", {step: name, reason: "step_unknown"})
+        return {reason: "step_unknown"}
+      } catch {
+        return lostPress(this.el)
+      } finally {
+        release()
       }
+    }
+
+    this.clicked = event => {
+      const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
+      if (!button?.dataset.onchainStep || !this.el.contains(button)) return
+      void this.pressButton!(button, formInputs(this.el))
     }
     this.el.addEventListener("click", this.clicked)
 
@@ -99,9 +106,12 @@ export const OnchainSteps: Hook = {
     window.addEventListener("ash:wallet-state", this.walletChanged)
     this.walletChanged()
     window.dispatchEvent(new CustomEvent("ash:wallet-sync"))
+
+    this.tool = offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form}))
   },
 
   destroyed(this: OnchainStepsHook) {
+    this.tool?.abort()
     if (this.clicked) this.el.removeEventListener("click", this.clicked)
     if (this.walletChanged) window.removeEventListener("ash:wallet-state", this.walletChanged)
   },
@@ -184,6 +194,12 @@ function sameInputs(review: Record<string, string>, form: Record<string, string>
 function lost(root: HTMLElement, shown: boolean): void {
   const line = root.querySelector<HTMLElement>("[data-onchain-lost]")
   if (line) line.hidden = !shown
+}
+
+// A press that could not reach the server: the page says so, and so does the answer.
+function lostPress(root: HTMLElement): "lost" {
+  lost(root, true)
+  return "lost"
 }
 
 // Marked with a data attribute and CSS only: the button keeps taking presses.

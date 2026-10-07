@@ -83,6 +83,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         class="proposals-panel"
         fleet={fleet(@page)}
         actor={@actor}
+        tool="mark_present"
       />
 
       <section class="proposals-panel" aria-labelledby="proposals-list-title">
@@ -187,6 +188,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-vote-action"
             class="proposals-action"
             flow={:ballot}
+            tool="vote"
             fleet={fleet(@page)}
             actor={@actor}
             proposal={@page.proposal.number}
@@ -232,6 +234,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-carry-out-action"
             class="proposals-action"
             flow={:carry_out}
+            tool="carry_out"
             fleet={fleet(@page)}
             actor={@actor}
             proposal={@page.proposal.number}
@@ -247,6 +250,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-cancel-action"
             class="proposals-action"
             flow={:cancel}
+            tool="cancel_proposal"
             fleet={fleet(@page)}
             actor={@actor}
             proposal={@page.proposal.number}
@@ -410,6 +414,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="propose-action"
         class="proposals-action"
         flow={:propose}
+        tool="propose"
         fleet={fleet(@page)}
         actor={@actor}
         inputs={
@@ -732,6 +737,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       id="proposals-split-action"
       class="proposals-action"
       flow={:run_split}
+      tool="run_split"
       fleet={fleet(@page)}
       actor={@actor}
     >

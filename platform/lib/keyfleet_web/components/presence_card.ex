@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
   attr :fleet, :map, required: true, doc: "the fleet's `fleet_id` and `chain_id`"
   attr :actor, :any, required: true
   attr :token_id, :integer, default: nil, doc: "the one key, or nil for the wallet's own"
+  attr :tool, :string, default: nil, doc: "the browser tool that presses Mark present, if any"
   attr :class, :any, default: nil
 
   def card(assigns) do
@@ -34,6 +35,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
         fleet={@fleet}
         actor={@actor}
         token_id={@token_id}
+        tool={@tool}
       >
         <:notes :let={panel}>
           <ul :if={keys(panel) != []} id={"#{@id}-keys"} class="presence-keys">

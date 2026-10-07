@@ -308,6 +308,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         module={WalletPanel}
         id="key-profile-claim-action"
         flow={:claim}
+        tool="claim"
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
         token_id={@profile.token_id}

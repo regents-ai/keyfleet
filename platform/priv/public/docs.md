@@ -226,7 +226,7 @@ Wait as long as `Retry-After` says, then send the request again.
 
 ## Browser tools
 
-Every page offers a browser's own agent these tools through WebMCP (`document.modelContext`). Each reads one of the public documents as Markdown, needs no sign-in and changes nothing. The [tool manifest]({{origin}}/capabilities) describes them as JSON.
+A browser's own agent gets these tools through WebMCP (`document.modelContext`). `about` and `docs`, on every page, each read one of the public documents as Markdown, need no sign-in and change nothing. The others are offered only on the page whose wallet buttons they press: calling one is a press of that button, from the signed-in account's wallet, which asks the person to approve the transaction. A button the chain's state holds back answers why. The [tool manifest]({{origin}}/capabilities) describes them as JSON.
 
 {{tools}}
 

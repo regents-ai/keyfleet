@@ -16,7 +16,6 @@
       "requires": "none",
       "state_changing": false,
       "payment": "none",
-      "route": "GET /about",
       "scope": "site"
     },
     {
@@ -35,8 +34,256 @@
       "requires": "none",
       "state_changing": false,
       "payment": "none",
-      "route": "GET /docs",
       "scope": "site"
+    },
+    {
+      "name": "mark_present",
+      "title": "Mark keys present",
+      "description": "Press this page's Mark present: marks present for 48 hours every key the wallet holds, or holds an active shard of while the key's agent voting is on. A key present when a proposal opens is counted in its vote. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals"
+    },
+    {
+      "name": "propose",
+      "title": "Propose",
+      "description": "Fill this page's proposal form with these fields and press Propose: opens a vote of every key on what the proposal does. Fields left out keep what the form shows. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "What the proposal does.",
+            "enum": [
+              "decision",
+              "pay",
+              "advance",
+              "rate",
+              "edits",
+              "signature",
+              "launch"
+            ]
+          },
+          "key": {
+            "type": "string",
+            "description": "The number of the key it is made with: one the wallet holds, or holds a shard of while the key's agent voting is on."
+          },
+          "hours": {
+            "type": "string",
+            "description": "How long voting stays open.",
+            "enum": [
+              "1",
+              "6",
+              "24",
+              "48"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
+          },
+          "asset": {
+            "type": "string",
+            "description": "pay and advance: the address of the asset paid, one the page offers."
+          },
+          "amount": {
+            "type": "string",
+            "description": "pay and advance: the amount in whole tokens."
+          },
+          "recipient": {
+            "type": "string",
+            "description": "pay and advance: the address paid."
+          },
+          "rate": {
+            "type": "string",
+            "description": "rate: the daily split in percent, 0.1 to 2."
+          },
+          "target": {
+            "type": "string",
+            "description": "edits: the number of the key whose edits change."
+          },
+          "restricted": {
+            "type": "string",
+            "description": "edits: \"true\" restricts the key's edits, \"false\" allows them.",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "signature": {
+            "type": "string",
+            "description": "signature: \"approve\" signs the message for the fleet, \"revoke\" withdraws the signature.",
+            "enum": [
+              "approve",
+              "revoke"
+            ]
+          },
+          "hash": {
+            "type": "string",
+            "description": "signature: the message code (its 32-byte hash)."
+          },
+          "name": {
+            "type": "string",
+            "description": "launch: the token's name."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "launch: the token's symbol."
+          },
+          "description": {
+            "type": "string",
+            "description": "launch: the token's description."
+          },
+          "website": {
+            "type": "string",
+            "description": "launch: the token's website."
+          },
+          "image": {
+            "type": "string",
+            "description": "launch: the token's image address."
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "hours",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals"
+    },
+    {
+      "name": "run_split",
+      "title": "Run the daily split",
+      "description": "Press this page's Run split: shares each asset at or above its minimum, its balance times the rate, equally across every key sold. Anyone may, 24 hours after the last run; the split preview on the page shows what it shares. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals"
+    },
+    {
+      "name": "vote",
+      "title": "Vote",
+      "description": "Press one of this proposal's vote buttons: votes with every key the wallet holds, or holds an active shard of while the key's agent voting is on. Voting again changes the vote until voting closes. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "description": "The vote.",
+            "enum": [
+              "yes",
+              "no",
+              "abstain"
+            ]
+          }
+        },
+        "required": [
+          "choice"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals/NUMBER"
+    },
+    {
+      "name": "cancel_proposal",
+      "title": "Cancel proposal",
+      "description": "Press this proposal's Cancel proposal: cancels it while it is open or approved. Whoever may vote the key it was made with may cancel it. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals/NUMBER"
+    },
+    {
+      "name": "carry_out",
+      "title": "Carry it out",
+      "description": "Press this proposal's Carry it out: makes exactly the calls the proposal shows. Anyone may, once it is approved and voting has closed, for 48 hours. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID/proposals/NUMBER"
+    },
+    {
+      "name": "claim",
+      "title": "Claim",
+      "description": "Press one of the open key's Claim buttons: claims what the daily split shared with the key in one asset. It is always paid to the key's holder. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "string",
+            "description": "The address of the asset to claim, one the key's Claim buttons name."
+          }
+        },
+        "required": [
+          "asset"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/app/fleets/FLEET_ID?key=TOKEN_ID"
     }
   ]
 }

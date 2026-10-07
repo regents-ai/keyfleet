@@ -24,7 +24,9 @@ defmodule KeyfleetWeb.WalletPanel do
       and `chain_id`) and `actor` (the signed-in person, or nil);
     * `inputs`, each field the steps read with its first value; `proposal`,
       `token_id` or `advance_id` when the flow acts on one; `refresh`, anything whose
-      change means the steps are built again; and `class`;
+      change means the steps are built again; `tool`, the browser tool in
+      `priv/tool_manifest.json` that presses these buttons for a browser's own
+      agent (`assets/js/page_tools.ts`), if any; and `class`;
     * the slots `fields`, `notes` and `buttons`, each given the panel's state
       (`inputs`, `built`, `review`, `presses`, `signer`) to read.
 
@@ -119,6 +121,7 @@ defmodule KeyfleetWeb.WalletPanel do
        token_id: nil,
        advance_id: nil,
        refresh: nil,
+       tool: nil,
        class: nil,
        fields: [],
        notes: [],
@@ -367,7 +370,12 @@ defmodule KeyfleetWeb.WalletPanel do
       )
 
     ~H"""
-    <section id={@id} class={["wallet-panel", @class]} phx-hook="OnchainSteps">
+    <section
+      id={@id}
+      class={["wallet-panel", @class]}
+      phx-hook="OnchainSteps"
+      data-webmcp-tool={@tool}
+    >
       <form
         :if={@fields != []}
         id={"#{@id}-form"}
