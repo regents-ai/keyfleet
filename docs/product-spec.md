@@ -34,9 +34,9 @@ Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yT
 
 - **What a key looks like.** Each key's picture is its card, seen from the outside, as a still picture: no animation and no character. The key's handle matches the medallion icon, and a small 13-block Regents crown always sits in the bottom-left corner.
 - **Top line.** Every card reads `<FLEET TYPE> #<fleet number> · NO. <key number>`, for example `CLASSIC #1 · NO. 0072`. The site records one number per fleet; the contracts do not hold it.
-- **Eight traits, one shared table.** Exterior Design, Key Material, Card Shell, Foil, Emblem, Rim, Patina and Regents Crown, each with 16 values. That makes 4,294,967,296 possible cards. Every key in every fleet, including fleets selling at the same time, draws from the same table by the same rule, from its own random seed. The table's fingerprint is `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`.
+- **Eight traits, one shared table.** Exterior Design, Key Material, Card Shell, Foil, Emblem, Rim, Patina and Regents Crown, each with 16 values. That makes 4,294,967,296 possible cards. Every key in every fleet, including fleets selling at the same time, draws from the same table by the same rule, from its own random seed, except the first 1,000 keys of the first four fleets, which take a card from their fleet's deck (below). The table's fingerprint is `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`.
 - **Rarity.** Each trait's weights add up to 1,000: six Common values at 100 each, Uncommon 80, 74, 70 and 60, Rare 40, 25 and 25, Epic 15, Legendary 7 and Mythic 4. So a Mythic is 4 in 1,000 (0.4%) for each trait, and about 1 key in 32 holds at least one. Sean set these odds on 7 Oct; the values keep their places in each trait's list, so only how often each comes up changed.
-- **Luck differs between fleets.** Because each key is drawn on its own, a fleet may end with no Mythic keys or with several:
+- **Luck differs between fleets.** Because each key is drawn on its own (in the first four fleets, from key 1,001), a fleet may end with no Mythic keys or with several:
 
 | Keys sold in a fleet | Mythic keys, on average | Chance of none |
 | :--- | :--- | :--- |
@@ -44,6 +44,15 @@ Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yT
 | 377 | 11.9 | almost none |
 | 1,024 | 32.3 | almost none |
 | 2,000 | 63.1 | almost none |
+
+- **Card decks for the first four fleets.** Sean, 7 Oct: Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 each get a deck of 1,000 cards made in advance at the table's odds, each card a random seed drawn through the table. Keys 1 to 1,000 of those fleets each take a card from their fleet's deck, picked by the key's own random number; keys 1,001 onward, and every later fleet, draw their own card. A deck card prints the key's own top line. Each deck's hash and size go into its fleet's creation and can never change, so a deck is final before its fleet is created. Decks stay private until their fleet's 1,000th key has its card. Whether the chain or the site works out which card a key gets waits on Sean's answer to question 7 of the fleet factory design. `mix keyfleet.new_deck` makes a deck; the decks ship in `platform/priv/decks`, named by their hashes:
+
+| Fleet | Deck hash (1,000 cards) |
+| :--- | :--- |
+| Classic #1 | `0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7` |
+| Syndicate #1 | `0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706` |
+| Cascade #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` |
+| Accelerant #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` |
 
 - **Before the reveal.** From mint until a key's traits are drawn and its own picture is ready, it shows the Interim KeyFleet Access Pass: a black card with an uncut key and the words INTERIM / KEYFLEET / ACCESS PASS in the Regents colours (Sean chose this Shadow look on 6 Oct). It is the same picture for every key in every fleet. The key's details then update to its own card.
 - **Status.** The design, the table and the interim pass are done, and the site's metadata already names the pass. After a key's reveal, a job draws its own picture, keeps it on IPFS through Regent's Lighthouse account and the key's details then name it. The test run is recorded in `docs/still-pictures/README.md`.
