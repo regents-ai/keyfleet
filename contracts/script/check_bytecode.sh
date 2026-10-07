@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Refuses a build in which any of a fleet's five contracts can reach DELEGATECALL, CALLCODE or
-# SELFDESTRUCT. Each contract's deployed code is disassembled with `cast disassemble`, which steps
+# Refuses a build in which the collection, the factory and its deployers, the REGENT buyer, the
+# shard record or any of a fleet's four contracts can reach DELEGATECALL, CALLCODE or SELFDESTRUCT. Each contract's deployed code is disassembled with `cast disassemble`, which steps
 # over push data, and walked from its entry point: straight on until an instruction that ends the
 # path, and into every JUMPDEST whose offset reachable code pushes as a constant, which is how
 # Solidity names every jump target. Bytes nothing jumps to, such as the Classic price table at the
-# end of the fleet's code, are data and are not judged.
+# end of the manager's code, are data and are not judged. A deployer's runtime code is checked as
+# deployed; the code it places is checked under its own contract's name.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 status=0
-for contract in Keyfleet KeyfleetRewards KeyfleetShards KeyfleetVotes KeyfleetTreasury; do
+for contract in KeyfleetKeys KeyfleetFactory KeyfleetManagerDeployer KeyfleetVotesDeployer \
+  KeyfleetTreasuryDeployer KeyfleetRewardsDeployer KeyfleetRegentBuyer KeyfleetShards KeyfleetManager \
+  KeyfleetVotes KeyfleetTreasury KeyfleetRewards; do
   code=$(forge inspect "$contract" deployedBytecode)
   found=$(cast disassemble "$code" | awk '
     function hex(s,    i, n, c) {

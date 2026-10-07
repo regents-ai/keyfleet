@@ -500,17 +500,20 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         }
     }
 
-    /// @dev Tells the key's own fleet manager first, then bumps the ownership epoch, all before
-    /// ownership changes. There is no burn, so `to` is never zero.
+    /// @dev Checks the caller may move the key, then tells the key's own fleet manager, then bumps
+    /// the ownership epoch, all before ownership changes, so a caller without approval is refused
+    /// with ERC-721's own error before any fleet bookkeeping runs. There is no burn, so `to` is never
+    /// zero.
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
+        if (auth != address(0)) _checkAuthorized(from, auth, tokenId);
         IKeyfleetKeyHook(_fleets[fleetOf(tokenId)].manager).onKeyMoved(tokenId, from, to);
 
         uint64 epoch = ownershipEpoch[tokenId] + 1;
         ownershipEpoch[tokenId] = epoch;
         emit OwnershipEpoch(tokenId, epoch, from, to);
 
-        return super._update(to, tokenId, auth);
+        return super._update(to, tokenId, address(0));
     }
 
     function _baseURI() internal view override returns (string memory) {

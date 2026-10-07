@@ -2,7 +2,7 @@
 
 **Date:** 7 October 2026
 **Branch:** `kf/fleet-manager-factory`, from `kf/contracts-v03` at `10260c4`
-**Status:** round 3. Sean's answers to rounds 1 and 2 are recorded below, and the Foundry build has started on this branch. Nothing is deployed, broadcast, signed or pushed. Key sales stay off until the Safe's phase steps (section 6).
+**Status:** round 3, built. Sean's answers to rounds 1 and 2 are recorded below. Steps B1 to B6 are built and tested on this branch (section 12); B7's documents are being brought up to date. Nothing is deployed, broadcast, signed or pushed. Key sales stay off until the Safe's phase steps (section 6).
 
 **Sean's request, round 1 (7 Oct 2026, verbatim):** "For browsing on Opensea I would prefer if all of the Key NFTs in the different sets are part of the same collection address...but I want the NFTs to act as membership keys to different KeyfleetManager contracts that are created from a KeyFleetManagerFactory."
 
@@ -191,14 +191,14 @@ A fleet's economic inputs are its **type** (one of the four rule sets, with all 
 
 | | Minimal clones (EIP-1167) | Full deploys (chosen) |
 |---|---|---|
-| Gas to create a fleet | ~0.3M | ~10–12M for the four contracts (to measure) |
+| Gas to create a fleet | ~0.3M | 10.36M for a founding fleet; 10.7M to 11.0M for an open fleet with its creator's key 1, measured over mock pools |
 | `DELEGATECALL` | Every call to every fleet goes through one. Contradicts spec §4.2 and fails our own bytecode check | None anywhere |
 | Wiring | Storage, written by an `initialize` call; hijack risk | `immutable`, fixed by the constructor |
 | Per-call cost | A cold storage read per wiring lookup | Immutables cost nothing to read |
 
 Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a ~15M-gas open creation (four deploys, an on-chain profile, the first purchase with its swap) costs about 0.0001 ETH, roughly 0.25 USD, plus a small L1 data fee.
 
-**Per-transaction gas cap, to confirm:** Ethereum's Fusaka upgrade caps one transaction at 16,777,216 gas (EIP-7825). I could not confirm from chain reads whether Base enforces it. B3 measures open creation against that figure.
+**Per-transaction gas cap:** Ethereum's Fusaka upgrade caps one transaction at 16,777,216 gas (EIP-7825). I could not confirm from chain reads whether Base enforces it, so the build keeps every creation under it: the tests hold every type's open creation, with the longest description and image link, below the cap. Four founding fleets (about 41M together) cannot share one transaction, so the Safe creates them one per transaction (section 11).
 
 ### 4.3 How four contracts that point at each other get deployed at once
 
@@ -332,7 +332,7 @@ The swap takes the pool's price at that moment, with no minimum and no oracle: S
 - **Name:** 1 to 100 bytes, on chain. Plain letters are one byte each; an emoji or accented letter takes 2 to 4.
 - **Description:** 0 to 2,000 bytes, on chain.
 - **Image link:** optional, up to 512 bytes, on chain, stored as given.
-- **Starting price:** 10 to 1,000,000 USDC.
+- **Starting price:** 10 to 1,000,000 USDC, in whole cents.
 - **Joining requirements:** optional (section 9).
 - **Deadline** for the creation and the creator's key 1.
 
@@ -401,7 +401,8 @@ There is still no upgrade path, proxy, pause, burn, setter of economics, or `del
 
 - `purchase` holds the manager's lock and calls `KEYS.mint`, which calls back into the same manager (`onKeyMoved`) from inside `_update`. That callback does not take the manager's lock; it is `onlyKeys`, makes no token transfer and calls only the fleet's own Rewards and Votes bookkeeping.
 - `KEYS.mint` holds a collection-wide lock shared with `requestReveal`, so a receiver cannot mint again or add a second VRF request from inside `onERC721Received`.
-- Purchase order: checks (deadline, price, joining requirement), USDC in, split booked, swap of the treasury's part (7.5), enrol, mint (`onERC721Received`), Cascade completion, reveal request last (when the fleet has a deck).
+- Purchase order: checks (deadline, price, joining requirement), USDC in, then everything booked before any outside call: the price step, the split, an Accelerant rebate, the key's enrolment, the `Purchased` event, and a Cascade level completion with its repayment to the level before. Then the swap of the treasury's part (7.5), which runs the REGENT pool's hook, and last the mint (`onERC721Received`), which asks for the key's draw when the fleet has a deck. Because a level's repayment is booked before the mint, a receiver that passes on one of the repaid keys from inside its own `onERC721Received` takes that key's repayment with it as the outgoing owner.
+- Each joining requirement's `balanceOf` gets at most 100,000 gas and only its first 32 bytes are read, so a requirement contract that burns gas or answers at length cannot use up the gas a buyer brought for another requirement (KF-SOL-16 a).
 - The factory's `createFleet` holds its own lock across creation and key 1.
 - The transfer hook calls no untrusted code. The VRF callback is `onlyCoordinator`, writes once, never reverts, and makes no external call.
 
@@ -470,8 +471,8 @@ Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELF
 | `KeyfleetPresence` 32-bit ids | 64-bit ids. |
 | `script/KeyfleetStack.sol` | **Deleted.** |
 | `DeployKeyfleets.s.sol` (one fleet per run) | Deploys the system once. |
-| (none) | New: create-founding-fleet and advance-phase steps that write the Safe transactions; on anvil they are sent directly. |
-| `RecordKeyfleets.s.sol` | Records the system once, then each fleet from its `FleetCreated` event. |
+| (none) | New: `KeyfleetSafeSteps.s.sol`, with a founding-fleets step (one call per founding fleet still missing) and an advance-phase step (one call). On Base each step is simulated as the Safe and written as one Safe Transaction Builder file per call in `deployments/safe/`; on anvil the calls are sent directly. Adding the collection to the randomness subscription stays a Safe action done in the Chainlink app. |
+| `RecordKeyfleets.s.sol` | Writes one record, `deployments/<manifest>.deployed.json`: the system as the chain reports it, checked against the manifest, then every fleet the collection's registry lists, each checked to be the factory's own with its four contracts bound to each other. Reading the registry instead of `FleetCreated` events needs no log search and can be rerun at any time to add fleets created since. It refuses to write while the collection is not on the subscription, or on Base while the subscription is not the Safe's. |
 | `KeyfleetManifest.sol`, `deployments/*.json` | Shared bindings (including both swap pools and the v4 pool key, the keeper, the metadata base) plus the four founding fleets' type, deck and profile. |
 | `AnvilLab.s.sol` | Builds the factory, creates Classic #1, moves to phase 1 locally, buys two keys through a local swap route. |
 | `check_bytecode.sh` | Checks the new contract list. |
@@ -484,7 +485,7 @@ Nothing is deployed anywhere today, so nothing needs migrating.
 - Metadata at the fixed base, decoding fleet and key number. Key name `CLASSIC—001—072`; traits `Fleet type`, `Fleet number`, the fleet's name, key number, `Card`. Interim art until the permanent card is published; nothing for unminted ids; no guessable links (10.5).
 - The deck backend: on `FleetCreated` for an open fleet, build its deck, `setDeck` from the keeper wallet, then `requestReveal` the waiting keys; after publishing each permanent card, `refreshMetadata`.
 - Purchase targets the fleet's manager (with the Merkle proof when the fleet has a list); transfers and approvals the collection. The buy button shows "sales have not opened" from `salesOpen`, and may show a requirement reason when the receiving wallet certainly fails all of them at the latest block.
-- A create-a-fleet page for phase 3; a proposal builder for profile changes; `seed-deployment` takes the collection record plus each fleet record.
+- A create-a-fleet page for phase 3; a proposal builder for profile changes; `seed-deployment` takes the one record file, with the system and every fleet in it.
 
 ---
 
@@ -494,7 +495,7 @@ Each step leaves `forge build` and `forge test` green, deletes what it replaces,
 
 | # | Step | Tests |
 |---|---|---|
-| B0 | This design; Sean's answers recorded here | — |
+| B0 | This design; Sean's answers recorded here (done) | — |
 | B1 | **`KeyfleetKeys` on its own.** Registry, mint into its own fleet only, token ids, epochs, phases and sales switches, keeper and decks, reveal held until a deck, retry, `tokenURI`, `contractURI`, ERC-2981, ERC-4906 incl. refreshes. | Mint refusals, phase steps, deck set once and only before seeds, no draw without a deck, `tokenURI` reverts for unminted ids, royalty, epoch bumps, hook goes only to the key's manager, reveal suite ported, golden draws unchanged |
 | B2 | **`KeyfleetRegentBuyer`.** Fixed v3 and v4 route, both callbacks, nothing left behind. | Mock pools: callbacks from strangers or outside a swap refused, nothing left behind. Base fork (read-only): real quotes match; hook fee taken; gas measured |
 | B3 | **`KeyfleetFactory` and deployers.** CREATE2, transient wiring, founding fleets, open creation, adding a factory. | Wiring both ways; refusals; every bound on open creation; transient wiring empty after; sizes under limits; open creation gas measured against 16,777,216 |

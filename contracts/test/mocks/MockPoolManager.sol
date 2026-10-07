@@ -49,9 +49,9 @@ contract MockPoolManager is IUniswapV4PoolManager {
         hookData = data;
     }
 
-    function setReportedDelta(int256 delta) external {
+    function setReportedDelta(int256 reported) external {
         reportOverride = true;
-        reportedDelta = delta;
+        reportedDelta = reported;
     }
 
     function unlock(bytes calldata data) external returns (bytes memory result) {

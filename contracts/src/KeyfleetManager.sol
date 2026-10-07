@@ -67,6 +67,9 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     uint256 public constant MAX_DESCRIPTION_BYTES = 2000;
     /// @notice The longest fleet image link, in bytes.
     uint256 public constant MAX_IMAGE_LINK_BYTES = 512;
+    /// @notice The gas a joining requirement's `balanceOf` may use. A contract that needs more counts
+    /// as not met, so no requirement can spend the gas a buyer brought for another requirement.
+    uint256 public constant REQUIREMENT_READ_GAS = 100_000;
 
     /// @notice The factory that deployed this fleet.
     address public immutable FACTORY;
@@ -111,8 +114,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     Profile private _profile;
     Requirements private _requirements;
 
-    /// @notice An address argument was zero.
-    error ZeroAddress();
     /// @notice Only the factory may do this.
     error OnlyFactory();
     /// @notice Only the shared collection may do this.
@@ -479,10 +480,19 @@ contract KeyfleetManager is ReentrancyGuardTransient {
 
     /// @dev `account`'s balance of `token` by a read-only call; zero when the call reverts or does
     /// not answer one word.
-    function _balanceOf(address token, address account) private view returns (uint256) {
-        (bool ok, bytes memory data) = token.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, account));
-        if (!ok || data.length < 32) return 0;
-        return abi.decode(data, (uint256));
+    /// @dev `token.balanceOf(account)` with at most `REQUIREMENT_READ_GAS` gas and only the first
+    /// 32 bytes of the answer copied. A call that fails or answers with fewer than 32 bytes reads as
+    /// zero.
+    function _balanceOf(address token, address account) private view returns (uint256 held) {
+        bytes4 selector = IERC20.balanceOf.selector;
+        uint256 gasAllowed = REQUIREMENT_READ_GAS;
+        assembly ("memory-safe") {
+            let input := mload(0x40)
+            mstore(input, selector)
+            mstore(add(input, 4), and(account, 0xffffffffffffffffffffffffffffffffffffffff))
+            let ok := staticcall(gasAllowed, token, input, 36, 0, 32)
+            if and(ok, gt(returndatasize(), 31)) { held := mload(0) }
+        }
     }
 
     function _isFibonacci() private view returns (bool) {
