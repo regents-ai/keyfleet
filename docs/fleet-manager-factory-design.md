@@ -98,9 +98,9 @@ What that means, as chosen: **no repeats**. The site deals each decked key a car
 | CASCADE #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` | 1000 |
 | ACCELERANT #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` | 1000 |
 
-Whether the deck files stay private until later is a question the NFTs lane has with Sean. The contract only needs the fingerprint; the files can be published at any time and checked against it.
+Decks stay private. Only the rarities are public, as they are now. The contract holds only each deck's fingerprint and size, fixed when the fleet is created.
 
-**Anyone can check every card.** Once a deck file is published: from the chain logs (`KeyRevealed` in block and log-index order, plus the fleet's `deckHash` and `deckSize`) and the published deck file whose keccak256 matches `deckHash`, anyone can recompute every key's card with the published dealing rule. The site holds no secret and makes no choice the chain does not fix. The dealing rule itself is the NFTs lane's to publish next to the deck files; the contract fixes its inputs. Since the order is final only once the reveals' blocks are final, the site deals from confirmed reveals.
+The reveal order is final only once the reveals' blocks are final, so the site deals from confirmed reveals.
 
 `tokenURI` does not change: the site serves the deck card's picture for decked keys and the drawn card for the rest. The metadata adds a `Card` attribute.
 
