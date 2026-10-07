@@ -50,8 +50,9 @@ defmodule KeyfleetWeb.Router do
     }
   end
 
-  # The early-access page: no sign-in and no app scripts, so its root layout
-  # loads neither and it gets the strict reading policy.
+  # The early-access page: no sign-in and no app scripts, only the key roller,
+  # so its root layout loads that one script and it gets the strict reading
+  # policy.
   pipeline :early do
     plug :accepts, ["html"]
     plug :fetch_session

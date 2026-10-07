@@ -1,4 +1,5 @@
 import {expect, test, type Page} from "@playwright/test"
+import {rollerOnly} from "./support/early"
 
 // The harness boots one server with the default environment, where product surfaces are
 // open, so this file holds the open state honest end to end, and the early-access page,
@@ -46,13 +47,13 @@ async function openEarly(page: Page) {
 for (const viewport of [{width: 375, height: 812}, {width: 1440, height: 900}]) {
   // An address the form keeps is left by content_security_policy.spec.ts, whose
   // server never commits; this server's database is the ExUnit suite's.
-  test(`the early-access page fits ${viewport.width}px and refuses an unreadable address, with no scripts and nothing of sign-in`, async ({page}) => {
+  test(`the early-access page fits ${viewport.width}px and refuses an unreadable address, with only the key roller and nothing of sign-in`, async ({page}) => {
     await page.setViewportSize(viewport)
     const {requested, sideways} = await openEarly(page)
 
     expect(sideways).toBe(false)
     expect(requested.filter(url => /privy/i.test(url))).toEqual([])
-    expect(requested.filter(url => new URL(url).pathname.endsWith(".js"))).toEqual([])
+    expect(rollerOnly(requested)).toBe(true)
     await expect(page.getByRole("heading", {name: "Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
     await expect(page.getByRole("link", {name: "Follow on X"})).toHaveAttribute("href", "https://x.com/regents_sh")
     await expect(page.getByRole("link", {name: "Follow on X"})).toBeVisible()

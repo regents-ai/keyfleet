@@ -1,5 +1,5 @@
 # Draws each test key with the site's own trait reader and draw, Keyfleet.Traits, and compares with what the page showed.
-# From platform/: MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs <table.json> <keys.json> <report.json>
+# From platform/: MIX_ENV=test mix run --no-start ../docs/still-pictures/parity.exs <trait table file> <keys.json> <report.json>
 [table_path, keys_path, report_path] = System.argv()
 hash = Keyfleet.Traits.keccak256(File.read!(table_path))
 directory = Path.join(System.tmp_dir!(), "keyfleet-parity")

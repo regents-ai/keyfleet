@@ -1,5 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
+import {rollerOnly} from "./support/early"
 import {prepareFleet, sellKey, setSurfaces} from "./support/fleet_chain"
 
 // Every page is served under a content security policy
@@ -87,7 +88,7 @@ test("reading pages load with nothing refused", async ({page}) => {
   }
 })
 
-test("while closed, the homepage opens the early-access page, which takes an address with no scripts and nothing refused", async ({page}) => {
+test("while closed, the homepage opens the early-access page, which takes an address with only the key roller and nothing refused", async ({page}) => {
   const refusals = await watchRefusals(page)
   const requested: string[] = []
   page.on("request", request => requested.push(request.url()))
@@ -109,7 +110,7 @@ test("while closed, the homepage opens the early-access page, which takes an add
     await page.waitForLoadState("networkidle")
 
     expect(requested.filter(url => /privy/i.test(url))).toEqual([])
-    expect(requested.filter(url => new URL(url).pathname.endsWith(".js"))).toEqual([])
+    expect(rollerOnly(requested)).toBe(true)
     expect(refusals).toEqual([])
   } finally {
     setSurfaces(true)
