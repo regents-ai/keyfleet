@@ -52,9 +52,13 @@ defmodule Keyfleet.FleetRoomsTest do
       record(@fleet, 1)
       record("fleet_tech_classic", 2)
       # The wallet of an agent with a shard of key 1, proven as a smart wallet
-      # on Base only, or signed in for another site.
+      # on Ethereum only, or signed in for another site.
       runner = shard_agent("c", 1)
-      elsewhere = [%{runner | verification_method: :erc1271}, %{runner | audience: "elsewhere"}]
+
+      elsewhere = [
+        %{runner | verification_method: :erc1271, chain_id: 1},
+        %{runner | audience: "elsewhere"}
+      ]
 
       for actor <- [human("e"), owner(2), agent("d"), nil | elsewhere],
           slug <- ~w(general open-1) do

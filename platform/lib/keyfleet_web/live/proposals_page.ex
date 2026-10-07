@@ -4,30 +4,27 @@ defmodule KeyfleetWeb.ProposalsPage do
   chain reader recorded.
 
   `list/2` is the fleet's proposals, newest first, twenty to a page, with
-  its shared money once it is on chain: the latest reading of its balances,
-  and its latest income and payments. `detail/3` is one proposal with its
-  votes, fifty to a page. Once the fleet is on chain, each carries the
-  network its wallet buttons send on; the buttons' steps are built by
-  `Keyfleet.WalletSteps`. A page name that is not a proposal number is a
-  page that doesn't exist.
+  its shared money once it is on chain: the latest reading of its treasury,
+  its daily split, the advances still out and its latest money in and out.
+  `detail/3` is one proposal with its votes, fifty to a page, its calls in
+  plain words, and where it stands as the vote contract says at the latest
+  block: its status, the keys counted and each tally, never worked out here.
+  Once the fleet is on chain, each carries the network its wallet buttons
+  send on; the buttons' steps are built by `Keyfleet.WalletSteps`. A page
+  name that is not a proposal number is a page that doesn't exist.
   """
 
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.Actions
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.{Reads, VoteSteps}
   alias KeyfleetWeb.NotFoundError
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50
-  @text_cap 64 * 1024
-
-  @kinds %{
-    decision: "Decision",
-    pay: "Payment from shared money",
-    restrict_edits: "Workspace edits for a Key"
-  }
 
   @doc """
   The page of proposals below the one `params` names, if it names one, with
@@ -38,13 +35,12 @@ defmodule KeyfleetWeb.ProposalsPage do
 
     with_fleet(fleet_id, fn fleet, reading ->
       {proposals, older?} = Proposals.list_page(fleet_id, before)
-      balances = reading.deployed? && Treasury.get_reading!(fleet_id)
 
       Map.merge(reading, %{
         proposals: Enum.map(proposals, &summary/1),
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
-        treasury: reading.deployed? && treasury(fleet, balances),
+        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id)),
         propose: reading.deployed? && propose(fleet)
       })
     end)
@@ -68,6 +64,7 @@ defmodule KeyfleetWeb.ProposalsPage do
           Map.merge(reading, %{
             number: number,
             proposal: Map.merge(summary(proposal), details(proposal, fleet)),
+            on_chain: reading.deployed? && on_chain(fleet, proposal.number),
             votes: Enum.map(votes, &vote/1),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
             first_votes: if(votes_after > 0, do: path.([]))
@@ -87,32 +84,27 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
-  @doc "What a kind of proposal is called."
-  def kind_name(kind), do: Map.fetch!(@kinds, kind)
-
   @doc """
   An amount of an asset as every page shows it, `%{text: text, token: address
   | nil, symbol?: boolean}`, grouped: in its own units with its symbol when
   the token has reported both, and otherwise as the whole number the chain
   holds. `symbol?` says whether `text` ends in the symbol the token chose.
-  Every asset but the fleet's own USDC, known by its address, comes with its
-  address as `token`, so a token calling itself USDC is never taken for it.
-  `assets` is as `Keyfleet.Treasury.assets/1` reads them.
+  Every asset but the ones the fleet's deployment names (ETH, its USDC and
+  REGENT), known by their addresses, comes with its address as `token`, so a
+  token calling itself USDC is never taken for it. `assets` is as `Keyfleet.Treasury.assets/1`
+  reads them.
   """
-  def amount(atoms, asset, %{usdc: usdc, details: details}) do
+  def amount(atoms, asset, %{known: known, details: details}) do
     {text, symbol?} =
-      case {details[asset], asset == usdc} do
-        {{symbol, decimals}, _usdc?} when is_binary(symbol) and is_integer(decimals) ->
+      case details[asset] do
+        {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
           {"#{units(atoms, decimals)} #{symbol}", true}
 
-        {_unknown, true} ->
-          {"#{units(atoms, 0)} in USDC’s smallest units", false}
-
-        {_unknown, false} ->
+        _unknown ->
           {"#{units(atoms, 0)} in the smallest units of token", false}
       end
 
-    %{text: text, token: if(asset != usdc, do: asset), symbol?: symbol?}
+    %{text: text, token: if(asset not in known, do: asset), symbol?: symbol?}
   end
 
   defp with_fleet(fleet_id, read) do
@@ -133,9 +125,8 @@ defmodule KeyfleetWeb.ProposalsPage do
     end
   end
 
-  # The tokens the payment form lists by name: USDC, then the tokens of the
-  # latest reading (each token an open payment names). The form takes any
-  # other token by its address.
+  # The tokens a payment or an advance can be made in: ETH, REGENT, USDC and
+  # any other token the treasury splits, by name.
   defp propose(fleet),
     do: %{
       assets:
@@ -145,133 +136,185 @@ defmodule KeyfleetWeb.ProposalsPage do
         )
     }
 
-  # A token as the payment form names it: the fleet's own USDC by name, any
-  # other with its address beside its symbol, so a token calling itself USDC
-  # is never taken for it. One that hasn't said its decimals is paid in its
-  # smallest units.
-  defp pay_name(%{usdc?: true}), do: "USDC"
+  # A token as the payment form names it: those the fleet's deployment names
+  # by name, any other with its address beside its symbol, so a token
+  # calling itself USDC is never taken for it.
+  defp pay_name(%{known?: true, symbol: symbol}), do: symbol
 
-  defp pay_name(%{address: address, symbol: symbol, decimals: decimals})
-       when is_binary(symbol) and is_integer(decimals),
-       do: "#{symbol} #{RegentFormat.short_address(address)}"
+  defp pay_name(%{address: address, symbol: symbol}) when is_binary(symbol),
+    do: "#{symbol} #{RegentFormat.short_address(address)}"
 
-  defp pay_name(%{address: address}),
-    do: "Token #{RegentFormat.short_address(address)}, in its smallest units"
+  defp pay_name(%{address: address}), do: "Token #{RegentFormat.short_address(address)}"
 
   defp summary(proposal) do
     %{
       number: proposal.number,
-      kind: proposal.kind,
       status: Proposals.status(proposal),
-      keys_sold: proposal.keys_sold,
       yes: proposal.yes_keys,
       no: proposal.no_keys,
-      gist: gist(proposal)
+      abstain: proposal.abstain_keys,
+      counted: proposal.opening_count + proposal.late_keys,
+      closes_at: proposal.closes_at,
+      text: words(proposal.words)
     }
   end
 
-  defp gist(%{text: text}), do: text |> as_text() |> String.slice(0, 280)
+  # A proposal's words, shown only as saved under its own fingerprint.
+  defp words(nil), do: nil
+  defp words(%{text: text}), do: text
 
   defp details(proposal, fleet) do
+    assets = Treasury.assets(fleet)
+
     %{
       proposer: proposal.proposer,
-      text: as_text(proposal.text),
-      text_cut?: proposal.text_bytes > @text_cap,
-      pay: pay(proposal, fleet),
-      match: match(proposal, fleet),
-      edits: edits(proposal),
-      executor: proposal.execution && proposal.execution.executor
+      author_key: proposal.author_key,
+      content_hash: proposal.content_hash,
+      opened_at: proposal.opened_at,
+      execution_expiry: proposal.execution_expiry,
+      calls: Enum.map(proposal.calls, &call(Actions.decode(&1, fleet), fleet, assets)),
+      executor: proposal.execution && proposal.execution.executor,
+      cancelled_by: proposal.cancellation && proposal.cancellation.cancelled_by
     }
   end
 
-  defp pay(%{kind: :pay} = proposal, fleet),
-    do: %{
-      amount: amount(Decimal.to_integer(proposal.amount), proposal.asset, Treasury.assets(fleet)),
-      recipient: proposal.recipient
-    }
-
-  defp pay(_proposal, _fleet), do: nil
-
-  # What each key that didn't vote yes on a carried-out payment may collect,
-  # from the payment its execution made; unknown until the reader has
-  # recorded that payment.
-  defp match(%{kind: :pay, execution: %{transaction_hash: hash}}, fleet) do
-    case Treasury.payment_made_in(fleet.id, hash) do
-      nil ->
-        %{read?: false}
-
-      payment ->
-        %{
-          read?: true,
-          share: amount(Decimal.to_integer(payment.share), payment.asset, Treasury.assets(fleet))
-        }
+  # Where the proposal stands as the vote contract says now, read at the
+  # latest block, or `:unreadable` when the network can't be reached.
+  defp on_chain(fleet, number) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, standing} <- VoteSteps.proposal(reads, fleet, number),
+         {:ok, status} <- VoteSteps.chain_status(reads, fleet, number) do
+      Map.merge(standing, %{status: status, counted: standing.e0 + standing.late})
+    else
+      _unread -> :unreadable
     end
   end
 
-  defp match(_proposal, _fleet), do: nil
+  # One call carrying the proposal out makes, in plain words: `text`, then
+  # the wallet or token it names in full, if any.
+  defp call({:pay, asset, to, amount}, _fleet, assets),
+    do: %{text: "Pay #{amount(amount, asset, assets).text} to", address: to}
 
-  # Which key's workspace edits a vote restricts or restores.
-  defp edits(%{kind: :restrict_edits} = proposal),
-    do: %{token_id: proposal.target_token_id, restricted?: proposal.restricted}
+  defp call({:advance, id, operator, asset, amount, _purpose}, _fleet, assets),
+    do: %{
+      text: "Advance #{amount(amount, asset, assets).text} (advance #{id}) to",
+      address: operator
+    }
 
-  defp edits(_proposal), do: nil
+  defp call({:rate, bps}, _fleet, _assets),
+    do: %{text: "Set the daily split to #{units(bps, 2)}%", address: nil}
+
+  defp call({:signature, :approve, hash}, _fleet, _assets),
+    do: %{text: "Sign a message for the fleet:", address: hash}
+
+  defp call({:signature, :revoke, hash}, _fleet, _assets),
+    do: %{text: "Withdraw the fleet’s signature on", address: hash}
+
+  defp call({:edits, token_id, true}, _fleet, _assets),
+    do: %{text: "Stop key #{Rules.grouped(token_id)} changing the workspace", address: nil}
+
+  defp call({:edits, token_id, false}, _fleet, _assets),
+    do: %{text: "Let key #{Rules.grouped(token_id)} change the workspace again", address: nil}
+
+  defp call({:launch, launch}, _fleet, _assets),
+    do: %{
+      text: "Launch #{launch.name} (#{launch.symbol}) through Autolaunch, for the treasury",
+      address: nil
+    }
+
+  defp call(:voted_split, _fleet, _assets),
+    do: %{text: "Run the daily split now", address: nil}
+
+  defp call({:admit_ousd, token}, _fleet, _assets),
+    do: %{text: "Add OUSD to the daily split:", address: token}
+
+  defp call({:other, target, wei, _data}, _fleet, assets) when wei > 0,
+    do: %{text: "Send #{amount(wei, Treasury.native(), assets).text} and call", address: target}
+
+  defp call({:other, target, 0, _data}, _fleet, _assets), do: %{text: "Call", address: target}
 
   defp vote(vote) do
     %{
       id: vote.id,
       voter: vote.voter,
-      support: vote.support,
+      choice: vote.choice,
       keys: vote.token_ids
     }
   end
 
-  defp treasury(fleet, balances), do: treasury(fleet, balances, Treasury.assets(fleet))
-
-  defp treasury(fleet, nil, assets),
-    do: Map.merge(history(fleet.id, assets), %{read?: false, nothing_owed?: false})
-
-  defp treasury(fleet, balances, assets) do
-    usdc = &amount(Decimal.to_integer(&1), fleet.usdc_address, assets)
-
-    fleet.id
-    |> history(assets)
-    |> Map.merge(%{
-      read?: true,
-      as_of: balances.block_time,
-      balances: Enum.map(balances.assets, &balance(&1, assets)),
-      reserve: if(Decimal.gt?(balances.cascade_reserve, 0), do: usdc.(balances.cascade_reserve)),
-      owed: usdc.(balances.protocol_share_owed),
-      nothing_owed?: Decimal.eq?(balances.protocol_share_owed, 0)
-    })
-  end
-
-  defp balance(balance, assets) do
-    shown = &amount(&1, balance.asset, assets)
+  defp treasury(fleet, reading) do
+    assets = Treasury.assets(fleet)
+    %{shown: shown, earlier?: earlier?} = Treasury.latest(fleet.id)
 
     %{
-      asset: balance.asset,
-      budget: shown.(balance.free_capital),
-      set_aside: shown.(balance.backed)
+      history: Enum.map(shown, &event(&1, fleet, assets)),
+      earlier?: earlier?,
+      advances: Enum.map(Treasury.open_advances(fleet.id), &advance(&1, assets))
+    }
+    |> Map.merge(figures(fleet, reading, assets))
+  end
+
+  defp figures(_fleet, nil, _assets), do: %{read?: false}
+
+  defp figures(_fleet, reading, assets) do
+    %{
+      read?: true,
+      as_of: reading.block_time,
+      balances:
+        Enum.map(
+          reading.assets,
+          &%{
+            asset: &1.asset,
+            held: amount(&1.held, &1.asset, assets),
+            backed: amount(&1.backed, &1.asset, assets)
+          }
+        ),
+      split_rate: "#{units(reading.daily_split_bps, 2)}%",
+      next_run_at: reading.next_run_at
     }
   end
 
-  defp history(fleet_id, assets) do
-    %{income: income, payments: payments} = Treasury.latest(fleet_id)
-    shown = &amount(Decimal.to_integer(&1), &2.asset, assets)
+  # One line of the money history: what happened, how much and, for money
+  # paid or advanced, to whom.
+  defp event(%{kind: :split_allocated} = event, _fleet, assets) do
+    shared = Decimal.to_integer(event.per_key) * Decimal.to_integer(event.keys)
 
     %{
-      income:
-        Enum.map(
-          income.shown,
-          &%{id: &1.id, amount: shown.(&1.amount, &1)}
-        ),
-      earlier_income?: income.earlier?,
-      payments:
-        Enum.map(
-          payments.shown,
-          &%{id: &1.id, amount: shown.(&1.amount, &1), recipient: &1.recipient}
-        ),
-      earlier_payments?: payments.earlier?
+      id: event.id,
+      kind: event.kind,
+      amount: amount(shared, event.asset, assets),
+      account: nil
+    }
+  end
+
+  defp event(%{kind: :protocol_share_sent} = event, fleet, assets),
+    do: %{
+      id: event.id,
+      kind: event.kind,
+      amount: amount(Decimal.to_integer(event.amount), fleet.usdc_address, assets),
+      account: nil
+    }
+
+  defp event(event, _fleet, assets),
+    do: %{
+      id: event.id,
+      kind: event.kind,
+      amount: amount(Decimal.to_integer(event.amount), event.asset, assets),
+      account: if(event.kind in [:paid, :advanced], do: event.account)
+    }
+
+  # An advance still out, with what is left in whole tokens as a return of
+  # all of it is typed.
+  defp advance(advance, assets) do
+    outstanding = Decimal.to_integer(advance.outstanding)
+    decimals = assets.details |> Map.get(advance.asset, {nil, nil}) |> elem(1)
+
+    %{
+      id: Decimal.to_integer(advance.advance_id),
+      operator: advance.operator,
+      amount: amount(Decimal.to_integer(advance.amount), advance.asset, assets),
+      outstanding: amount(outstanding, advance.asset, assets),
+      typed: units(outstanding, decimals || 0) |> String.replace(",", "")
     }
   end
 
@@ -285,8 +328,6 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp seq!(nil), do: 0
   defp seq!(value), do: number!(value)
-
-  defp as_text(bytes), do: String.replace_invalid(bytes)
 
   @doc """
   `atoms` of a token with `decimals` places, in whole tokens, thousands

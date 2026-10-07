@@ -5,17 +5,18 @@ defmodule Keyfleet.Chain.Logs do
 
   Each log is sent, by its contract and topic0, to
   `Keyfleet.Chain.OwnershipLog`, `Keyfleet.Chain.RevealLog` or
-  `Keyfleet.Chain.BudgetLog`, for the fleet contract,
-  `Keyfleet.Chain.VotesLog`, for its vote contract, or
-  `Keyfleet.Chain.ShardsLog`, for its shard record, and carries its fleet and
-  its place on the chain. A payment or edit-restriction proposal is joined with the payload
-  log that follows it in the same transaction. A log the node lists twice is read once.
-  One log that cannot be read, two different logs in one place, or a proposal
-  and payload that do not pair up refuses the whole stretch, and the reason
-  names the log.
+  `Keyfleet.Chain.MoneyLog`, for the fleet contract,
+  `Keyfleet.Chain.VotesLog`, for its vote contract,
+  `Keyfleet.Chain.ShardsLog`, for its shard record, or
+  `Keyfleet.Chain.MoneyLog`, for its treasury and reward ledger, and carries
+  its fleet and its place on the chain. A proposal takes the time it opened
+  from the renewal of its author key logged just before it, in the same
+  transaction. A log the node lists twice is read once. One log that cannot
+  be read, two different logs in one place, or a proposal without its
+  author's renewal refuses the whole stretch, and the reason names the log.
   """
 
-  alias Keyfleet.Chain.BudgetLog
+  alias Keyfleet.Chain.MoneyLog
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.RevealLog
   alias Keyfleet.Chain.ShardsLog
@@ -24,10 +25,15 @@ defmodule Keyfleet.Chain.Logs do
 
   @doc "The topic0 of every event the reader asks for."
   def topics,
-    do: [
-      OwnershipLog.topic(),
-      RevealLog.topic() | VotesLog.topics() ++ BudgetLog.topics() ++ ShardsLog.topics()
-    ]
+    do:
+      Enum.concat([
+        [OwnershipLog.topic(), RevealLog.topic()],
+        MoneyLog.fleet_topics(),
+        VotesLog.topics(),
+        ShardsLog.topics(),
+        MoneyLog.treasury_topics(),
+        MoneyLog.rewards_topics()
+      ])
 
   @doc """
   The records in `logs`, read from blocks `from..to` of `fleet`, in (block,
@@ -39,10 +45,8 @@ defmodule Keyfleet.Chain.Logs do
       they emit it.
     * `{:conflicting_logs, transaction_hash, log_index}`: two different logs
       claim the same place.
-    * `{:payload_missing, transaction_hash, log_index}`: a payment or
-      edit-restriction proposal is not followed by its payload.
-    * `{:payload_without_proposal, transaction_hash, log_index}`: a payload
-      does not follow its proposal.
+    * `{:opening_missing, transaction_hash, log_index}`: a proposal does not
+      follow its author key's renewal in the same transaction.
   """
   def decode(logs, fleet, from, to) do
     with {:ok, records} <- decode_each(logs, fleet, from..to//1, []),
@@ -53,9 +57,9 @@ defmodule Keyfleet.Chain.Logs do
   @doc """
   Whether `records` can be made after the fleet's highest recorded proposal
   number, `highest`: each new proposal must be the next number, and each vote
-  and execution must name a proposal recorded by then. A proposal at or below
-  the highest is one read again, which recording compares with the record.
-  Key ownership, key reveal, budget and shard records name no proposal.
+  ballot, cancellation and execution must name a proposal recorded by then. A
+  proposal at or below the highest is one read again, which recording
+  compares with the record. Every other record names no proposal.
   """
   def in_sequence(records, highest) do
     Enum.reduce_while(records, highest, fn
@@ -140,7 +144,7 @@ defmodule Keyfleet.Chain.Logs do
   defp route(%{contract_address: address}, address, topic0, words, data) do
     with :error <- OwnershipLog.decode(topic0, words, data),
          :error <- RevealLog.decode(topic0, words, data),
-         do: BudgetLog.decode(topic0, words, data)
+         do: MoneyLog.decode(:fleet, topic0, words, data)
   end
 
   defp route(%{votes_address: address}, address, topic0, words, data),
@@ -148,6 +152,12 @@ defmodule Keyfleet.Chain.Logs do
 
   defp route(%{shards_address: address}, address, topic0, words, data),
     do: ShardsLog.decode(topic0, words, data)
+
+  defp route(%{treasury_address: address}, address, topic0, words, data),
+    do: MoneyLog.decode(:treasury, topic0, words, data)
+
+  defp route(%{rewards_address: address}, address, topic0, words, data),
+    do: MoneyLog.decode(:rewards, topic0, words, data)
 
   defp route(_fleet, _address, _topic0, _words, _data), do: :error
 
@@ -185,28 +195,22 @@ defmodule Keyfleet.Chain.Logs do
     end)
   end
 
-  # A payment or edit-restriction proposal takes its payload from the next
-  # log, which must be that kind's payload, for the same proposal, in the same
-  # transaction.
+  # A proposal opens at the time its author key is renewed, which the
+  # contract logs just before the proposal, in the same transaction.
   defp join([], records), do: {:ok, Enum.reverse(records)}
-
-  defp join([{:proposal, %{kind: :decision}} = proposal | rest], records),
-    do: join(rest, [proposal | records])
 
   defp join(
          [
-           {:proposal, %{kind: kind, number: number, transaction_hash: transaction} = proposal},
-           {kind, %{number: number, transaction_hash: transaction, payload: payload}} | rest
+           {:presence, %{kind: :present, token_id: key, at: at, transaction_hash: transaction}} =
+             renewal,
+           {:proposal, %{author_key: key, transaction_hash: transaction} = proposal} | rest
          ],
          records
        ),
-       do: join(rest, [{:proposal, Map.merge(proposal, payload)} | records])
+       do: join(rest, [{:proposal, Map.put(proposal, :opened_at, at)}, renewal | records])
 
   defp join([{:proposal, proposal} | _rest], _records),
-    do: {:error, {:payload_missing, proposal.transaction_hash, proposal.log_index}}
-
-  defp join([{kind, payload} | _rest], _records) when kind in [:pay, :restrict_edits],
-    do: {:error, {:payload_without_proposal, payload.transaction_hash, payload.log_index}}
+    do: {:error, {:opening_missing, proposal.transaction_hash, proposal.log_index}}
 
   defp join([record | rest], records), do: join(rest, [record | records])
 end

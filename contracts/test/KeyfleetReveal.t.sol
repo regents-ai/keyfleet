@@ -9,12 +9,16 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
+import {KeyfleetStack} from "../script/KeyfleetStack.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {VRFV2PlusClient} from "../src/vendor/chainlink/libraries/VRFV2PlusClient.sol";
+import {MockRegentRevenueStaking} from "./mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "./mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "./mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
-/// @dev Reports six decimals, as Ethereum USDC does, because a fleet refuses a USDC with any other.
+/// @dev Reports six decimals, as Base USDC does, because a fleet refuses a USDC with any other.
 contract RevealUsdc is ERC20 {
     constructor() ERC20("USD Coin", "USDC") {}
 
@@ -71,13 +75,27 @@ abstract contract RevealFixture is Test {
     }
 
     function _deployWith(Keyfleet.Randomness memory randomness, bytes32 traitTableHash) internal returns (Keyfleet) {
-        return new Keyfleet(
+        return KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            address(0x7EA5),
+            new MockRegentRevenueStaking(usdc),
+            new MockRegent(),
+            new MockAutolaunchFactory(),
             Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
             randomness,
             traitTableHash
+        );
+    }
+
+    /// @dev The fleet's constructor alone, for the refusals it makes.
+    function _construct(Keyfleet.Randomness memory randomness, bytes32 traitTableHash) internal returns (Keyfleet) {
+        return new Keyfleet(
+            KeyfleetPresets.Preset.FleetTechClassic,
+            usdc,
+            Keyfleet.Metadata("Keyfleet Classic", "KEYFLEET", "https://keyfleet.ai/metadata/classic/"),
+            randomness,
+            traitTableHash,
+            KeyfleetStack.companionsOfNextFleet()
         );
     }
 
@@ -157,7 +175,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// after the seeds are known.
     function test_constructorRefusesAZeroTraitTableHash() public {
         vm.expectRevert(Keyfleet.TraitTableHashZero.selector);
-        _deployWith(_randomness(), bytes32(0));
+        _construct(_randomness(), bytes32(0));
     }
 
     /// @dev Invariant: the coordinator holds code, because a call to an address without code would
@@ -166,11 +184,11 @@ contract KeyfleetRevealTest is RevealFixture {
         Keyfleet.Randomness memory randomness = _randomness();
         randomness.coordinator = IVRFCoordinatorV2Plus(address(0xC0DE));
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.CoordinatorMissing.selector, address(0xC0DE)));
-        _deployWith(randomness);
+        _construct(randomness, TRAIT_TABLE);
 
         randomness.coordinator = IVRFCoordinatorV2Plus(address(0));
         vm.expectRevert(abi.encodeWithSelector(Keyfleet.CoordinatorMissing.selector, address(0)));
-        _deployWith(randomness);
+        _construct(randomness, TRAIT_TABLE);
     }
 
     function test_supportsInterfaceReportsErc4906() public {

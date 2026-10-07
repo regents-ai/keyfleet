@@ -45,9 +45,8 @@ defmodule Keyfleet.Release do
 
   Recording the same manifest again changes nothing; a manifest naming other
   contracts for a bound fleet, or wiring that differs from the fleets already
-  bound, is refused and changes nothing. A running app reads only the fleets
-  that were deployed when it started, so it must be restarted before it reads
-  a newly bound fleet.
+  bound, is refused and changes nothing. The running site starts reading a
+  newly bound fleet within a minute (`Keyfleet.Chain.Watch`).
   """
   def seed_deployment(path), do: with_release_repo(fn -> seed_deployment!(path) end)
 

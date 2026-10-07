@@ -54,15 +54,13 @@ defmodule Keyfleet.KeyProfileTest do
 
       proposal!(@fleet, 1)
       proposal!(@fleet, 2)
-      vote!(@fleet, 1, holder, true, [3, 12])
-      vote!(@fleet, 2, holder, false, [12])
-      # A withdrawal is not a vote cast.
-      vote!(@fleet, 2, holder, nil, [12])
+      vote!(@fleet, 1, holder, :yes, [3, 12])
+      vote!(@fleet, 2, holder, :no, [12])
       # Other keys' votes, and key 12 of another fleet, are not key 12's.
-      vote!(@fleet, 1, wallet("b"), true, [120])
+      vote!(@fleet, 1, wallet("b"), :yes, [120])
       ChainHelpers.seed_cursor!("fibonacci_syndicate")
       proposal!("fibonacci_syndicate", 1)
-      vote!("fibonacci_syndicate", 1, holder, true, [12])
+      vote!("fibonacci_syndicate", 1, holder, :yes, [12])
 
       runner = %Actors.Agent{
         wallet_address: wallet("c"),
@@ -220,12 +218,16 @@ defmodule Keyfleet.KeyProfileTest do
     |> Fleets.get_fleet!()
     |> Fleets.record_deployment!(
       %{
-        chain_id: 1,
+        chain_id: 8453,
         contract_address: "0x" <> String.duplicate("7", 40),
         rewards_address: "0x" <> String.duplicate("8", 40),
         votes_address: "0x" <> String.duplicate("9", 40),
+        treasury_address: "0x" <> String.duplicate("7e", 20),
         shards_address: "0x" <> String.duplicate("6", 40),
-        usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+        regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+        autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
+        usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: @table_hash
       },

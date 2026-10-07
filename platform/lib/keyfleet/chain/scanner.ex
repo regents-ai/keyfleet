@@ -1,15 +1,18 @@
 defmodule Keyfleet.Chain.Scanner do
   @moduledoc """
   One pass over a deployed fleet's history: who holds each key, each key's
-  reveal, what its budget took in and paid out and the income paid to its
-  keys, from the fleet contract; its proposals, votes and executions, and
-  which keys' workspace edits a vote restricted, from its vote contract; and
-  the shards its keys' owners issued and ended, from its shard record.
+  reveal, and what it forwarded to its treasury or sent as the protocol
+  share, from the fleet contract; its proposals, votes, cancellations and
+  executions, which keys' workspace edits a proposal restricted, and each
+  key's presence, from its vote contract; the shards its keys' owners issued
+  and ended and whether those shards may vote, from its shard record; what
+  its treasury paid, advanced, got back and split, from its treasury; and
+  rewards settled and paid out, from its reward ledger.
 
-  Each pass reads the head, reads again the last 32 blocks it already
-  recorded (one Ethereum epoch, about six minutes), then records what
+  Each pass reads the head, reads again the last 30 blocks it already
+  recorded (about a minute of Base), then records what
   happened after them up to the head. Each stretch of blocks is one request
-  for all three contracts, and its records are made in the order the chain made
+  for all five contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
   whole, such as one whose logs are more than it sends at once, is asked for
   again in halves, down to single blocks, and each answered piece is recorded
@@ -24,8 +27,9 @@ defmodule Keyfleet.Chain.Scanner do
   now stands. The first piece that cannot be read ends the pass with
   the cursor there, and the next pass carries on from it: a single block the
   node will not answer, which is named in the error, or a piece with a
-  malformed or unknown log, a proposal without its payload, a proposal number
-  skipped, or a vote or execution for a proposal not recorded yet. That piece
+  malformed or unknown log, a proposal without its author key's renewal, a
+  proposal number skipped, or a vote, cancellation or execution for a
+  proposal not recorded yet. That piece
   records nothing. Recording is safe to repeat: a record read twice is made
   once and keeps its number. Nothing above the head this pass read is asked
   for, so a node that is behind reads as a shorter pass, never as missing
@@ -47,12 +51,11 @@ defmodule Keyfleet.Chain.Scanner do
   missing from a block whose hash still matches is the node answering
   inconsistently, so the pass fails and is retried instead.
 
-  A pass that made a new proposal or budget record, or sold a key, says so on
-  `Keyfleet.Proposals.topic/1`: a key sold adds to the keys a proposal needs
-  more than half of. One that recorded keys revealed, sold, changing hands,
-  issuing or ending shards, or having their edits restricted or allowed names
-  them all in one notice on `Keyfleet.Keys.topic/1`, wherever in the pass it
-  recorded them. Each is said
+  A pass that made a new proposal or money record says so on
+  `Keyfleet.Proposals.topic/1`. One that recorded keys revealed, sold,
+  changing hands, issuing or ending shards, turning their agent voting on or
+  off, or having their edits restricted or allowed names them all in one
+  notice on `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
   even if the pass then failed or stopped the fleet, and each is only a hint
   to read again.
   """
@@ -67,7 +70,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
 
-  @rescan_blocks 32
+  @rescan_blocks 30
   @max_range 10_000
   @system %System{}
 
@@ -160,7 +163,13 @@ defmodule Keyfleet.Chain.Scanner do
   defp each_piece(_fleet, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
   defp each_piece(fleet, from, to, client, acc, handle) do
-    addresses = [fleet.contract_address, fleet.votes_address, fleet.shards_address]
+    addresses = [
+      fleet.contract_address,
+      fleet.votes_address,
+      fleet.shards_address,
+      fleet.treasury_address,
+      fleet.rewards_address
+    ]
 
     case client.get_logs(addresses, Logs.topics(), from, to) do
       {:ok, logs} ->
@@ -248,7 +257,10 @@ defmodule Keyfleet.Chain.Scanner do
   defp make_record({:reveal, reveal}), do: Keys.record_reveal(reveal, @record_opts)
 
   defp make_record({:proposal, proposal}), do: Proposals.record_proposal(proposal, @record_opts)
-  defp make_record({:vote, vote}), do: Proposals.record_vote(vote, @record_opts)
+  defp make_record({:ballot, vote}), do: Proposals.record_vote(vote, @record_opts)
+
+  defp make_record({:cancellation, cancellation}),
+    do: Proposals.record_cancellation(cancellation, @record_opts)
 
   defp make_record({:execution, execution}),
     do: Proposals.record_execution(execution, @record_opts)
@@ -257,15 +269,9 @@ defmodule Keyfleet.Chain.Scanner do
     do: Keys.record_edits_restriction(restriction, @record_opts)
 
   defp make_record({:shard, event}), do: Keys.record_shard_event(event, @record_opts)
-
-  defp make_record({:budget_receipt, receipt}),
-    do: Treasury.record_budget_receipt(receipt, @record_opts)
-
-  defp make_record({:income, income}),
-    do: Treasury.record_income_receipt(income, @record_opts)
-
-  defp make_record({:budget_paid, payment}),
-    do: Treasury.record_budget_payment(payment, @record_opts)
+  defp make_record({:agent_voting, setting}), do: Keys.record_agent_voting(setting, @record_opts)
+  defp make_record({:presence, presence}), do: Keys.record_presence(presence, @record_opts)
+  defp make_record({:treasury_event, event}), do: Treasury.record_event(event, @record_opts)
 
   # A recorded event the second reading no longer finds means the same only
   # when its block is no longer the block that was recorded.
@@ -277,6 +283,8 @@ defmodule Keyfleet.Chain.Scanner do
     |> Keys.recorded_in_blocks!(from, to, actor: @system)
     |> Enum.concat(Keys.shard_events_in_blocks!(fleet.id, from, to, actor: @system))
     |> Enum.concat(Keys.edits_restrictions_in_blocks!(fleet.id, from, to, actor: @system))
+    |> Enum.concat(Keys.agent_voting_in_blocks!(fleet.id, from, to, actor: @system))
+    |> Enum.concat(Keys.presences_in_blocks!(fleet.id, from, to, actor: @system))
     |> Enum.concat(Proposals.recorded_in_blocks!(fleet.id, from, to))
     |> Enum.concat(Treasury.recorded_in_blocks!(fleet.id, from, to))
     |> Enum.reject(&MapSet.member?(seen, {&1.transaction_hash, &1.log_index}))
@@ -293,10 +301,9 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
-  # Every key revealed, sold, changing hands, issuing or ending a shard, or
-  # having its edits restricted or allowed in the pass is named once. A key
-  # sold changes how every open proposal stands, since passing takes more
-  # than half of all the keys sold.
+  # Every key revealed, sold, changing hands, issuing or ending a shard,
+  # turning its agent voting on or off, or having its edits restricted or
+  # allowed in the pass is named once.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
 
@@ -312,7 +319,9 @@ defmodule Keyfleet.Chain.Scanner do
 
     sharded =
       if now.shard_seq > before.shard_seq,
-        do: Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system),
+        do:
+          Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system) ++
+            Keys.agent_voting_recorded_since!(fleet_id, before.shard_seq, actor: @system),
         else: []
 
     restricted =
@@ -321,7 +330,7 @@ defmodule Keyfleet.Chain.Scanner do
           Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system),
         else: []
 
-    if now.proposal_seq > before.proposal_seq or Enum.any?(owned, &(&1.ownership_epoch == 1)) do
+    if now.proposal_seq > before.proposal_seq do
       Phoenix.PubSub.broadcast(
         Keyfleet.PubSub,
         Proposals.topic(fleet_id),

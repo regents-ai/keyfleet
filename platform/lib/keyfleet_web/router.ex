@@ -219,6 +219,13 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
     post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
+    post "/fleets/:fleet_id/presence", AgentChainController, :presence
+    post "/fleets/:fleet_id/proposals/create", AgentChainController, :propose
+    post "/fleets/:fleet_id/proposals/vote", AgentChainController, :vote
+    post "/fleets/:fleet_id/proposals/cancel", AgentChainController, :cancel
+    post "/fleets/:fleet_id/proposals/carry_out", AgentChainController, :carry_out
+    post "/fleets/:fleet_id/split", AgentChainController, :split
+    post "/fleets/:fleet_id/keys/:token_id/claim", AgentChainController, :claim
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
     post "/fleets/:fleet_id/graph/create", AgentGraphController, :create

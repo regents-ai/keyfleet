@@ -1,9 +1,11 @@
 defmodule Keyfleet.Fleets.Fleet do
   @moduledoc """
   A fixed fleet with a stable machine identity and display name, and once it is
-  deployed, the chain and contracts it lives at (its keys, reward ledger,
-  vote contract and shard record), the USDC its keys are paid in
-  and the hash of the trait table its keys' traits are drawn from.
+  deployed, the chain and the five contracts it lives at (its keys, reward
+  ledger, vote contract, treasury and shard record), the USDC its keys are paid
+  in, the REGENT token and staking contract its treasury pays Regents' share
+  through, the Autolaunch factory its launch token comes from, and the hash of
+  the trait table its keys' traits are drawn from.
   """
   use Ash.Resource,
     domain: Keyfleet.Fleets,
@@ -24,7 +26,7 @@ defmodule Keyfleet.Fleets.Fleet do
       # A deployment is recorded whole or not at all.
       check_constraint(:contract_address, "fleets_deployment_whole",
         check:
-          "num_nulls(chain_id, contract_address, rewards_address, votes_address, shards_address, usdc_address, deployed_block, trait_table_hash) IN (0, 8)",
+          "num_nulls(chain_id, contract_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, deployed_block, trait_table_hash) IN (0, 12)",
         message: "must record the whole deployment"
       )
 
@@ -32,8 +34,12 @@ defmodule Keyfleet.Fleets.Fleet do
             :contract_address,
             :rewards_address,
             :votes_address,
+            :treasury_address,
             :shards_address,
-            :usdc_address
+            :usdc_address,
+            :regent_address,
+            :regent_staking_address,
+            :autolaunch_factory_address
           ] do
         check_constraint(field, "fleets_#{field}_shape", check: "#{field} ~ '^0x[0-9a-f]{40}$'")
       end
@@ -68,8 +74,8 @@ defmodule Keyfleet.Fleets.Fleet do
 
     # Binds the fleet to its deployment once. Recording the same deployment
     # again changes nothing; a different one is refused, and so is one whose
-    # chain, USDC or trait table differs from another bound
-    # fleet's.
+    # chain, USDC, REGENT, staking contract, Autolaunch factory or trait table
+    # differs from another bound fleet's.
     update :record_deployment do
       public? false
       require_atomic? false
@@ -79,8 +85,12 @@ defmodule Keyfleet.Fleets.Fleet do
         :contract_address,
         :rewards_address,
         :votes_address,
+        :treasury_address,
         :shards_address,
         :usdc_address,
+        :regent_address,
+        :regent_staking_address,
+        :autolaunch_factory_address,
         :deployed_block,
         :trait_table_hash
       ]
@@ -90,8 +100,12 @@ defmodule Keyfleet.Fleets.Fleet do
         :contract_address,
         :rewards_address,
         :votes_address,
+        :treasury_address,
         :shards_address,
         :usdc_address,
+        :regent_address,
+        :regent_staking_address,
+        :autolaunch_factory_address,
         :deployed_block,
         :trait_table_hash
       ]
@@ -127,8 +141,12 @@ defmodule Keyfleet.Fleets.Fleet do
           :contract_address,
           :rewards_address,
           :votes_address,
+          :treasury_address,
           :shards_address,
-          :usdc_address
+          :usdc_address,
+          :regent_address,
+          :regent_staking_address,
+          :autolaunch_factory_address
         ] do
       attribute field, :string,
         public?: true,

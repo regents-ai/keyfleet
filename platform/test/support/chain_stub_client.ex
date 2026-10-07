@@ -22,12 +22,14 @@ defmodule Keyfleet.Chain.StubClient do
 
   @doc """
   Sets the head and the logs the chain answers with. `opts` may name the
-  `:chain_id` (1), `:block_hashes`, a map from block number to the hash
+  `:chain_id` (8453), `:block_hashes`, a map from block number to the hash
   that block has now, `:max_logs`, the most logs one answer may hold, as a
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
   `observations/0` returns, and `:calls`, a function answering each contract
-  read `call(to, data, block_hash)`, which by default answers none.
+  read `call(to, data, block_hash)`, which by default answers none, and
+  `:balances`, the ETH each address holds, by lowercase address (none by
+  default).
   """
   def put_chain(head, logs, opts \\ []), do: Process.put(__MODULE__, new_chain(head, logs, opts))
 
@@ -38,15 +40,19 @@ defmodule Keyfleet.Chain.StubClient do
   """
   def share_chain(head, opts), do: :persistent_term.put(__MODULE__, new_chain(head, [], opts))
 
+  @doc "Takes back the chain `share_chain/2` put."
+  def unshare_chain, do: :persistent_term.erase(__MODULE__)
+
   defp new_chain(head, logs, opts) do
     %{
       head: head,
       logs: logs,
-      chain_id: Keyword.get(opts, :chain_id, 1),
+      chain_id: Keyword.get(opts, :chain_id, 8453),
       block_hashes: Keyword.get(opts, :block_hashes, %{}),
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),
       calls: Keyword.get(opts, :calls, fn _to, _data, _block_hash -> {:error, :no_answer} end),
+      balances: Keyword.get(opts, :balances, %{}),
       log_requests: [],
       call_requests: [],
       observations: []
@@ -111,6 +117,9 @@ defmodule Keyfleet.Chain.StubClient do
 
     chain.calls.(to, data, block_hash)
   end
+
+  @impl true
+  def get_balance(address, _block_hash), do: {:ok, Map.get(chain().balances, address, 0)}
 
   defp chain do
     Enum.find_value([self() | Process.get(:"$callers", [])], &put_by/1) ||

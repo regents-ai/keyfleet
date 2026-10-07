@@ -4,9 +4,14 @@ pragma solidity 0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
+import {KeyfleetStack} from "./KeyfleetStack.sol";
+import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice Step one of two: deploys one fleet, and writes nothing.
-/// @dev Each fleet goes on chain on its own run.
+/// @dev Each fleet goes on chain on its own run, as three transactions from the same account: the
+/// fleet, which deploys its ledger and shard record itself, then its voting controller, then its
+/// treasury, each at the address the fleet was given for it.
 ///
 /// Forge simulates a script in full before it broadcasts anything, so any file this step wrote
 /// would be written by a dry run too, and by a broadcast that failed partway. The deployed
@@ -21,10 +26,9 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// fleet as a consumer afterwards.
 contract DeployKeyfleets is KeyfleetManifest {
     /// @notice Reads the named manifest for the named fleet and deploys it.
-    /// @dev The manifest name comes from `KEYFLEET_MANIFEST`, the fleet from `KEYFLEET_FLEET`
-    /// (`syndicate`, `cascade`, `classic` or `accelerant`) and the protocol treasury from
-    /// `KEYFLEET_PROTOCOL_TREASURY`. All three are required: there is no default, because a default
-    /// would pick a chain, a fleet or a treasury for the operator. Signing is the caller's
+    /// @dev The manifest name comes from `KEYFLEET_MANIFEST` and the fleet from `KEYFLEET_FLEET`
+    /// (`syndicate`, `cascade`, `classic` or `accelerant`). Both are required: there is no default,
+    /// because a default would pick a chain or a fleet for the operator. Signing is the caller's
     /// business — `--ledger` or `--trezor` — and this script never reads a private key. The record
     /// step reads the broadcast Forge writes, so the deployment is sent by Forge itself.
     function run() external {
@@ -35,17 +39,17 @@ contract DeployKeyfleets is KeyfleetManifest {
         vm.stopBroadcast();
     }
 
-    /// @notice Deploys the manifest's fleet.
+    /// @notice Deploys the manifest's fleet with its voting controller and treasury.
     /// @dev Reads no file and no environment variable, so this is the function the suite runs.
-    /// The fleet deploys its own reward ledger, voting controller and shard record in its own
-    /// constructor, so there is no window in which it exists without them.
     function deploy(Manifest memory manifest) public returns (Keyfleet fleet) {
         _requireManifestFitsChain(manifest);
 
-        fleet = new Keyfleet(
+        fleet = KeyfleetStack.deploy(
             _presets()[manifest.slot],
             IERC20(manifest.usdc),
-            manifest.protocolTreasury,
+            IRegentRevenueStaking(manifest.regentStaking),
+            IERC20(manifest.regent),
+            IRegentsAutolaunchFactoryV2(manifest.autolaunchFactory),
             Keyfleet.Metadata({
                 name: manifest.fleet.name, symbol: manifest.fleet.symbol, baseTokenURI: manifest.fleet.baseTokenURI
             }),

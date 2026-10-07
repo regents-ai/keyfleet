@@ -1,37 +1,46 @@
 defmodule KeyfleetWeb.ProposalJSON do
   @moduledoc """
-  Proposals as the agent API answers them. Amounts and times the contracts
-  hold as any uint are decimal strings. Text the chain holds as bytes is
-  answered as text, with any bytes that are not valid text replaced.
+  Proposals as the agent API answers them. Amounts the contracts hold as any
+  uint are decimal strings, and times are ISO 8601 in UTC. A proposal's text
+  is kept off the chain; `content_hash` is its hash, and `text` the words
+  saved under that hash, or null when nobody saved them.
   """
 
-  @preview_chars 500
-
   @doc "One proposal as a sync lists it."
-  def summary(%{proposal: proposal, status: status, changed_seq: changed_seq}) do
-    proposal
-    |> common(status)
-    |> Map.merge(%{
-      text_preview: proposal.text |> as_text() |> String.slice(0, @preview_chars),
-      changed_seq: changed_seq
-    })
-  end
+  def summary(%{proposal: proposal, status: status, changed_seq: changed_seq}),
+    do: proposal |> detail(status) |> Map.put(:changed_seq, changed_seq)
 
-  @doc "One proposal as `proposals/read` answers it, with its whole recorded text."
+  @doc "One proposal as `proposals/read` answers it."
   def detail(proposal, status) do
-    proposal
-    |> common(status)
-    |> Map.merge(%{
-      text: as_text(proposal.text),
-      text_sha256: proposal.text_sha256
-    })
+    %{
+      number: proposal.number,
+      status: status,
+      author_key: proposal.author_key,
+      proposer: proposal.proposer,
+      proposal_hash: proposal.proposal_hash,
+      content_hash: proposal.content_hash,
+      text: text(proposal.words),
+      opened_at: proposal.opened_at,
+      closes_at: proposal.closes_at,
+      execution_expiry: proposal.execution_expiry,
+      opening_count: proposal.opening_count,
+      late_votes: proposal.late_keys,
+      yes_votes: proposal.yes_keys,
+      no_votes: proposal.no_keys,
+      abstain_votes: proposal.abstain_keys,
+      calls: Enum.map(proposal.calls, &call/1),
+      executed: executed(proposal.execution),
+      cancelled: cancelled(proposal.cancellation),
+      transaction_hash: proposal.transaction_hash,
+      block_number: proposal.block_number
+    }
   end
 
   @doc "One vote: every key is one vote."
   def vote(vote) do
     %{
       voter: vote.voter,
-      support: vote.support,
+      choice: vote.choice,
       votes: vote.key_count,
       keys: vote.token_ids,
       transaction_hash: vote.transaction_hash,
@@ -40,40 +49,11 @@ defmodule KeyfleetWeb.ProposalJSON do
     }
   end
 
-  defp common(proposal, status) do
-    %{
-      number: proposal.number,
-      kind: proposal.kind,
-      status: status,
-      proposer: proposal.proposer,
-      opened_block: proposal.opened_block,
-      keys_sold: proposal.keys_sold,
-      yes_votes: proposal.yes_keys,
-      no_votes: proposal.no_keys,
-      digest: proposal.digest,
-      text_bytes: proposal.text_bytes,
-      pay: pay(proposal),
-      edits: edits(proposal),
-      executed: executed(proposal.execution),
-      transaction_hash: proposal.transaction_hash,
-      block_number: proposal.block_number
-    }
-  end
+  defp call(call),
+    do: %{target: call.target, value: Integer.to_string(call.value), data: call.data}
 
-  defp pay(%{kind: :pay} = proposal) do
-    %{
-      asset: proposal.asset,
-      amount: decimal(proposal.amount),
-      recipient: proposal.recipient
-    }
-  end
-
-  defp pay(_proposal), do: nil
-
-  defp edits(%{kind: :restrict_edits} = proposal),
-    do: %{token_id: proposal.target_token_id, restricted: proposal.restricted}
-
-  defp edits(_proposal), do: nil
+  defp text(nil), do: nil
+  defp text(%{text: text}), do: text
 
   defp executed(nil), do: nil
 
@@ -85,6 +65,13 @@ defmodule KeyfleetWeb.ProposalJSON do
     }
   end
 
-  defp as_text(bytes), do: String.replace_invalid(bytes)
-  defp decimal(value), do: Decimal.to_string(value, :normal)
+  defp cancelled(nil), do: nil
+
+  defp cancelled(cancellation) do
+    %{
+      cancelled_by: cancellation.cancelled_by,
+      transaction_hash: cancellation.transaction_hash,
+      block_number: cancellation.block_number
+    }
+  end
 end

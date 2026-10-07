@@ -1,32 +1,28 @@
 defmodule Keyfleet.Chain.TreasuryReader do
   @moduledoc """
-  Reads one deployed fleet's balances at the block the node last called its
-  head, and keeps them as the fleet's `Keyfleet.Treasury.Reading`.
-  `Keyfleet.Chain.Repeat` runs it every minute.
+  Reads one deployed fleet's money at the block the node last called its
+  head, and keeps it as the fleet's `Keyfleet.Treasury.Reading`.
+  `Keyfleet.Chain.ReadBalances` runs it every minute.
 
-  A reading covers the income token the reward ledger lists (USDC, the only
-  one) and each token a payment proposal not yet carried out names, and no
-  other: a token merely sent to the fleet is never read or shown. Every
-  figure of a reading comes from that one block: for each of those tokens,
-  the shared money and the reward backing, beside the Cascade reserve and the
-  protocol share owed to the Regents Safe. A reading
-  that fails in any part keeps nothing and is tried again at the next one. A
-  reading of a later block than the one kept replaces it and is announced as
-  `{:balances_changed, fleet_id}` on `Keyfleet.Proposals.topic/1`.
+  A reading covers each asset the treasury's daily split shares
+  (`splitAssets()`: ETH, REGENT, USDC, then OUSD once admitted and the launch
+  token once bound) and no other: a token merely sent to the treasury is
+  never read or shown. Every figure of a reading comes from that one block:
+  for each of those assets, what the treasury holds and what the reward
+  ledger backs, beside the split's rate, when it last ran and when anyone
+  may next run it, the launch token, the Cascade reserve and the protocol
+  share owed to REGENT staking. A reading that fails in any part keeps
+  nothing and is tried again at the next one. A reading of a later block
+  than the one kept replaces it and is announced as `{:balances_changed,
+  fleet_id}` on `Keyfleet.Proposals.topic/1`.
 
-  Once a reading's balances are kept, token symbols and decimals are read at
-  the same block; a reading that fails asks no token anything. A token that
-  refuses a call, answers with something else, or reports a symbol that is
-  not 1 to 32 bytes of text free of control and direction characters, has it
-  kept as unknown. What a call that fails otherwise means depends on whose
-  token it is:
-
-    * an income token is asked again at the next reading, with a warning,
-      since the node may have failed; and one whose symbol or decimals are
-      kept as unknown is asked again at every reading, so an earlier failure
-      heals;
-    * a token a payment proposal names, which anyone may write, is asked
-      once: a call that fails keeps it as unknown for good.
+  Once a reading is kept, the symbol and decimals of each of its tokens not
+  yet known in full are read at the same block; ETH, the fleet's USDC and
+  REGENT are known already. A token that refuses a call, answers with something else,
+  or reports a symbol that is not 1 to 32 bytes of text free of control and
+  direction characters, has it kept as unknown and is asked again at every
+  reading, as is one whose call failed, with a warning, since the node may
+  have failed.
   """
 
   require Logger
@@ -38,28 +34,36 @@ defmodule Keyfleet.Chain.TreasuryReader do
   alias RegentChain.Call
 
   # The calldata of each view read without an argument.
-  @reward_assets Call.encode("rewardAssets()", [])
+  @split_assets Call.encode("splitAssets()", [])
+  @daily_split_bps Call.encode("dailySplitBps()", [])
+  @last_run_at Call.encode("lastRunAt()", [])
+  @next_run_at Call.encode("nextRunAt()", [])
+  @launch_token Call.encode("launchToken()", [])
   @cascade_reserve Call.encode("cascadeReserve()", [])
   @protocol_share_owed Call.encode("protocolShareOwed()", [])
   @decimals Call.encode("decimals()", [])
   @symbol Call.encode("symbol()", [])
   @system %System{}
 
-  @doc "Reads the fleet's balances at the node's head and keeps them, then any unread token details."
+  @doc "Reads the fleet's money at the node's head and keeps it, then any unread token details."
   def read(fleet, client) do
     with {:ok, head} <- client.head(),
-         {:ok, [rewards]} <-
-           call(client, fleet.rewards_address, {@reward_assets, [{:array, :address}]}, head.hash),
-         {:ok, reading} <- read_balances(fleet, rewards, client, head) do
-      read_details(fleet, rewards, client, head.hash)
+         {:ok, reading} <- read_money(fleet, client, head) do
+      read_details(fleet, reading, client, head.hash)
       {:ok, reading}
     end
   end
 
-  defp read_balances(fleet, rewards, client, head) do
+  defp read_money(fleet, client, head) do
     at = &call(client, &1, &2, head.hash)
+    treasury = fleet.treasury_address
 
-    with {:ok, balances} <- balances(fleet, read_assets(fleet, rewards), at),
+    with {:ok, [assets]} <- at.(treasury, {@split_assets, [{:array, :address}]}),
+         {:ok, balances} <- balances(fleet, assets, client, at, head),
+         {:ok, [bps]} <- at.(treasury, {@daily_split_bps, [{:uint, 16}]}),
+         {:ok, [last_run_at]} <- at.(treasury, {@last_run_at, [{:uint, 63}]}),
+         {:ok, [next_run_at]} <- at.(treasury, {@next_run_at, [{:uint, 63}]}),
+         {:ok, [launch_token]} <- at.(treasury, {@launch_token, [:address]}),
          {:ok, [reserve]} <- at.(fleet.contract_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.contract_address, {@protocol_share_owed, [{:uint, 256}]}),
          {:ok, reading} <-
@@ -71,6 +75,10 @@ defmodule Keyfleet.Chain.TreasuryReader do
                block_time: head.timestamp,
                cascade_reserve: Decimal.new(reserve),
                protocol_share_owed: Decimal.new(owed),
+               daily_split_bps: bps,
+               last_run_at: time(last_run_at),
+               next_run_at: time(next_run_at),
+               launch_token: if(launch_token != Treasury.native(), do: launch_token),
                assets: balances
              },
              actor: @system
@@ -79,6 +87,10 @@ defmodule Keyfleet.Chain.TreasuryReader do
       {:ok, reading}
     end
   end
+
+  # The contracts say zero for a time that has not come about yet.
+  defp time(0), do: nil
+  defp time(seconds), do: DateTime.from_unix!(seconds)
 
   defp announce(fleet, reading) do
     unless Ash.Resource.get_metadata(reading, :upsert_skipped) do
@@ -90,56 +102,34 @@ defmodule Keyfleet.Chain.TreasuryReader do
     end
   end
 
-  # The income tokens in the reward ledger's order, then by address each token
-  # a payment proposal not yet carried out names.
-  defp read_assets(fleet, rewards),
-    do: Enum.uniq(rewards ++ Proposals.open_payment_assets(fleet.id))
+  # The symbol and decimals of the reading's tokens not yet read in full.
+  defp read_details(fleet, reading, client, block_hash) do
+    read = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
+    named = Treasury.known_assets(fleet)
 
-  # The symbol and decimals of the income tokens not yet read in full, and of
-  # the tokens only payment proposals name not yet read at all.
-  defp read_details(fleet, income, client, block_hash) do
-    known = Map.new(Treasury.asset_details!(fleet.id, actor: @system), &{&1.asset, &1})
-
-    income
-    |> Enum.reject(&complete?(known[&1]))
-    |> Enum.each(&read_held(fleet, &1, client, block_hash))
-
-    fleet.id
-    |> Proposals.payment_assets()
-    |> Enum.reject(&(&1 in income or Map.has_key?(known, &1)))
-    |> Enum.each(&read_named(fleet, &1, client, block_hash))
+    reading.assets
+    |> Enum.map(& &1.asset)
+    |> Enum.reject(&(Map.has_key?(named, &1) or complete?(read[&1])))
+    |> Enum.each(&read_token(fleet, &1, client, block_hash))
   end
 
   defp complete?(%{symbol: symbol, decimals: decimals}), do: symbol != nil and decimals != nil
   defp complete?(nil), do: false
 
-  # A call that fails may be the node's, so nothing is kept, and the asset is
-  # asked again at the next reading.
-  defp read_held(fleet, asset, client, block_hash) do
+  # A call that fails may be the node's, so nothing is kept, and the token
+  # is asked again at the next reading.
+  defp read_token(fleet, asset, client, block_hash) do
     with {:ok, symbol} <- detail(client, asset, {@symbol, :bytes}, block_hash),
          {:ok, decimals} <- detail(client, asset, {@decimals, {:uint, 8}}, block_hash) do
       record_details(fleet, asset, symbol, decimals)
     else
       {:error, reason} ->
         Logger.warning(
-          "Fleet #{fleet.id}: income token #{asset} was not read " <>
+          "Fleet #{fleet.id}: token #{asset} was not read " <>
             "(#{inspect(reason)}); it is asked again at the next reading."
         )
     end
   end
-
-  # Asked once: a call that fails is kept as the token not answering.
-  defp read_named(fleet, asset, client, block_hash) do
-    record_details(
-      fleet,
-      asset,
-      answered(detail(client, asset, {@symbol, :bytes}, block_hash)),
-      answered(detail(client, asset, {@decimals, {:uint, 8}}, block_hash))
-    )
-  end
-
-  defp answered({:ok, value}), do: value
-  defp answered({:error, _reason}), do: nil
 
   defp record_details(fleet, asset, symbol, decimals) do
     Treasury.record_asset_details!(
@@ -174,10 +164,10 @@ defmodule Keyfleet.Chain.TreasuryReader do
   defp hidden?(char) when char in 0x202A..0x202E or char in 0x2066..0x2069, do: true
   defp hidden?(_char), do: false
 
-  defp balances(fleet, assets, at) do
+  defp balances(fleet, assets, client, at, head) do
     assets
     |> Enum.reduce_while({:ok, []}, fn asset, {:ok, balances} ->
-      case balance(fleet, asset, at) do
+      case balance(fleet, asset, client, at, head) do
         {:ok, balance} -> {:cont, {:ok, [balance | balances]}}
         failure -> {:halt, failure}
       end
@@ -188,13 +178,24 @@ defmodule Keyfleet.Chain.TreasuryReader do
     end)
   end
 
-  defp balance(fleet, asset, at) do
-    free_capital = Call.encode("freeCapital(address)", [asset])
+  defp balance(fleet, asset, client, at, head) do
     backed = Call.encode("backed(address)", [asset])
 
-    with {:ok, [free]} <- at.(fleet.contract_address, {free_capital, [{:uint, 256}]}),
+    with {:ok, held} <- held(fleet, asset, client, at, head),
          {:ok, [backed]} <- at.(fleet.rewards_address, {backed, [{:uint, 256}]}) do
-      {:ok, %{asset: asset, free_capital: free, backed: backed}}
+      {:ok, %{asset: asset, held: held, backed: backed}}
+    end
+  end
+
+  defp held(fleet, asset, client, at, head) do
+    if asset == Treasury.native() do
+      case client.get_balance(fleet.treasury_address, head.hash) do
+        {:ok, wei} -> {:ok, wei}
+        {:error, reason} -> {:error, {fleet.treasury_address, reason}}
+      end
+    else
+      balance_of = Call.encode("balanceOf(address)", [fleet.treasury_address])
+      with {:ok, [held]} <- at.(asset, {balance_of, [{:uint, 256}]}), do: {:ok, held}
     end
   end
 

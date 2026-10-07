@@ -97,8 +97,7 @@
 
 .proposals-rule,
 .proposals-detail,
-.proposals-facts dt,
-.proposals-fields dt {
+.proposals-facts dt {
   color: var(--color-fg-muted);
 }
 
@@ -147,12 +146,6 @@
   text-transform: uppercase;
 }
 
-.proposals-gist,
-.proposals-text {
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
 .proposals-detail {
   display: flex;
   flex-wrap: wrap;
@@ -160,32 +153,22 @@
   font-size: 0.9rem;
 }
 
-.proposals-facts,
-.proposals-fields {
+.proposals-facts {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: 0.6rem;
   width: 100%;
   margin: 0;
 }
 
-.proposals-facts {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-}
-
-.proposals-facts div,
-.proposals-fields div {
+.proposals-facts div {
   display: grid;
   gap: 0.2rem;
   min-width: 0;
 }
 
-.proposals-facts dd,
-.proposals-fields dd {
+.proposals-facts dd {
   margin: 0;
-}
-
-.proposals-fields dd {
-  white-space: pre-line;
 }
 
 .proposals-plan {
@@ -243,4 +226,50 @@
   min-width: 0;
 }
 
+/* A table of figures per asset; it scrolls inside its panel on a narrow
+   screen rather than widening the page. */
+.proposals-table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.proposals-table th,
+.proposals-table td {
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.proposals-table th {
+  color: var(--color-fg-muted);
+  font-weight: 400;
+}
+
+.proposals-panel h2,
+.proposals-panel h3 {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A proposal's own words, as its proposer wrote them; in a list, the first
+   three lines. */
+.proposals-words {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.proposals-words--short {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 }

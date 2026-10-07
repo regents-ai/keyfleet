@@ -1,16 +1,11 @@
 // The read-only tools every page offers a browser's own agent (WebMCP draft,
 // document.modelContext). priv/tool_manifest.json describes each tool once;
 // this file only adds the public read behind it. Nothing here signs in, writes
-// or spends.
+// or spends; page_tools.ts offers the tools that press a page's wallet buttons.
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
-type Schema = {
-  type: "object"
-  properties: Record<string, {type: string; description: string}>
-  required: string[]
-  additionalProperties: false
-}
+import {inputProblem, type Schema} from "./tool_input"
 
 type Entry = {
   name: string
@@ -45,23 +40,6 @@ async function read(path: string, signal: AbortSignal | undefined): Promise<Repl
   const body = await response.text()
   if (response.ok) return {ok: true, status: response.status, data: body}
   return {ok: false, status: response.status, error: {message: body}}
-}
-
-// The browser does not check input against the schema, so each call is
-// checked here, and a refusal names the field and what it must be.
-function inputProblem(input: unknown, schema: Schema) {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) {
-    return "Send an object of named fields."
-  }
-  const unknown = Object.keys(input).find(key => !Object.hasOwn(schema.properties, key))
-  if (unknown) {
-    const fields = Object.keys(schema.properties)
-    return fields.length
-      ? `${unknown} is not a field of this tool; its fields are ${fields.join(", ")}.`
-      : `${unknown} is not a field of this tool; it takes none.`
-  }
-  const missing = schema.required.find(key => !Object.hasOwn(input, key))
-  return missing ? `${missing} is required.` : null
 }
 
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.

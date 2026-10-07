@@ -17,8 +17,8 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  # Ethereum makes a `latest` block about every twelve seconds; nothing here
-  # waits for `safe` or `finalized`.
+  # Base makes a `latest` block about every two seconds; nothing here waits
+  # for `safe` or `finalized`.
   @impl true
   def head do
     with {:ok, header} <- block("latest"), do: head_of(header)
@@ -73,6 +73,17 @@ defmodule Keyfleet.Chain.RpcClient do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @impl true
+  def get_balance(address, block_hash) do
+    with {:ok, result} <-
+           request("eth_getBalance", [address, %{blockHash: block_hash, requireCanonical: true}]) do
+      case Abi.quantity(result) do
+        {:ok, wei} -> {:ok, wei}
+        :error -> {:error, :invalid_balance}
+      end
     end
   end
 

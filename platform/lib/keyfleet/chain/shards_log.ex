@@ -3,7 +3,10 @@ defmodule Keyfleet.Chain.ShardsLog do
   Reads a fleet's `KeyfleetShards` logs into the fields `Keyfleet.Keys`
   records: `ShardIssued(uint256 indexed tokenId, address indexed wallet,
   uint64 expiresAt, uint64 epoch)` and `ShardEnded(uint256 indexed tokenId,
-  address indexed wallet, address indexed by)`, both as `{:shard, fields}`.
+  address indexed wallet, address indexed by)`, both as `{:shard, fields}`,
+  and `AgentVotingSet(uint256 indexed tokenId, bool on, uint64 epoch)`, as
+  `{:agent_voting, fields}`: whether the key's shards may vote and propose
+  while the key stays with the owner of that ownership epoch.
   """
 
   alias RegentChain.Abi
@@ -11,9 +14,10 @@ defmodule Keyfleet.Chain.ShardsLog do
 
   @issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
   @ended Event.topic0("ShardEnded(uint256,address,address)")
+  @agent_voting Event.topic0("AgentVotingSet(uint256,bool,uint64)")
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@issued, @ended]
+  def topics, do: [@issued, @ended, @agent_voting]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
@@ -55,6 +59,15 @@ defmodule Keyfleet.Chain.ShardsLog do
           ownership_epoch: nil,
           ended_by: ended_by
         }}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@agent_voting, [token_topic], data) do
+    with {:ok, token_id} when token_id > 0 <- Abi.word(token_topic, {:uint, 63}),
+         {:ok, [on, epoch]} when epoch > 0 <- Abi.decode(data, [:bool, {:uint, 63}]) do
+      {:ok, {:agent_voting, %{token_id: token_id, allowed: on, ownership_epoch: epoch}}}
     else
       _malformed -> :error
     end

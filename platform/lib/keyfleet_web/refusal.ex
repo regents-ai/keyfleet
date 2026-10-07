@@ -15,9 +15,9 @@ defmodule KeyfleetWeb.Refusal do
     "unauthorized" =>
       {"The sign-in on this request couldn't be confirmed.",
        "Sign in again, then send the request again. A signed agent request carries exactly the body its operation takes."},
-    "smart_wallet_on_base" =>
-      {"A smart wallet signs in to Keyfleet on Ethereum, where the Keys are, not on Base.",
-       "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain ethereum --force, then send the request again."},
+    "smart_wallet_on_ethereum" =>
+      {"A smart wallet signs in to Keyfleet on Base, where the Keys are, not on Ethereum.",
+       "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain base --force, then send the request again."},
     "authentication_unavailable" =>
       {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
     "request_too_large" =>
@@ -87,6 +87,15 @@ defmodule KeyfleetWeb.Refusal do
     "key_unknown" =>
       {"This fleet hasn't issued this Key, or its sale hasn't been seen yet.",
        "A Key sold moments ago is known shortly. Try again then."},
+    "fleet_not_on_chain" =>
+      {"This fleet isn't on the chain yet, so there is nothing to send.",
+       "Try again once its Keys are on sale. GET /api/v1/fleets/FLEET_ID shows the fleet."},
+    "chain_unavailable" =>
+      {"The chain can't be read right now, so the transaction can't be built.",
+       "Nothing was sent. Send the same request again in a minute."},
+    "invalid_proposal" =>
+      {"This proposal can't be built as written.",
+       "error.details.problem says what to fix. Correct it, then send the request again."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",
        "A sync lists the fleet's proposals and their numbers."},

@@ -1,0 +1,291 @@
+defmodule Keyfleet.WalletSteps.VoteSteps do
+  @moduledoc """
+  The steps of a fleet's vote: casting ballots, proposing, cancelling and
+  carrying a proposal out. `Keyfleet.WalletSteps.Build` describes what every
+  builder answers.
+
+  A ballot is cast with every key the signer may vote: those it holds, and
+  those it holds an active shard of while the key's agent voting is on. A
+  proposal is made with one key, and its calls come from the kind of proposal
+  chosen (`Keyfleet.Proposals.Actions`).
+  """
+
+  alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.Actions
+  alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.{Build, Reads, Typed}
+  alias RegentChain.{Call, Review}
+
+  # The contract's `Status`, in its order.
+  @statuses [:open, :approved, :rejected, :cancelled, :executed, :execution_expired]
+  # The contract's `Choice`, in its order from 1.
+  @choices [{"yes", 1}, {"no", 2}, {"abstain", 3}]
+  @execute "execute(uint256,(address,uint256,bytes)[])"
+  @propose "propose(uint256,bytes32,uint64,(address,uint256,bytes)[])"
+  # Each launch field's most bytes, as Autolaunch v2's factory takes them.
+  @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
+
+  @doc false
+  def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
+    candidates = Build.own_keys(fleet, signer)
+    figures = %{keys: [], status: nil}
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, status} <- status(reads, fleet, proposal),
+         {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "mayGovern") do
+      keys = for key <- candidates, match?({_holder, true}, standing[key]), do: key
+
+      reason =
+        cond do
+          status != :open -> :voting_closed
+          keys == [] -> :no_keys
+          true -> nil
+        end
+
+      steps =
+        for {name, choice} <- @choices do
+          Review.step(
+            name,
+            fleet.votes_address,
+            Call.encode("castBallot(uint256,uint256[],uint8)", [proposal, keys, choice])
+          )
+        end
+
+      {:ok, steps, %{keys: keys, status: status, blocked: every_choice(reason)}}
+    else
+      _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # Whoever may vote the proposal's key may cancel it while it is open or
+  # approved.
+  def steps(:cancel, %{fleet: fleet, signer: signer, proposal: proposal}) do
+    figures = %{status: nil}
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, status} <- status(reads, fleet, proposal),
+         {:ok, author} <- author_key(reads, fleet, proposal),
+         {:ok, %{^author => {_holder, governs?}}} <-
+           Reads.acting(reads, fleet, signer, [author], "mayGovern") do
+      reason =
+        cond do
+          status not in [:open, :approved] -> status
+          not governs? -> :not_your_key
+          true -> nil
+        end
+
+      {:ok,
+       [Review.step("cancel", fleet.votes_address, Call.encode("cancel(uint256)", [proposal]))],
+       %{status: status, blocked: if(reason, do: %{"cancel" => reason}, else: %{})}}
+    else
+      _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # Anyone may carry out an approved proposal, with its exact calls as the
+  # chain reader recorded them.
+  def steps(:carry_out, %{fleet: fleet, proposal: proposal}) do
+    figures = %{status: nil}
+
+    with %{calls: calls} <- Proposals.get_by_number(fleet.id, proposal),
+         {:ok, reads} <- Reads.at_head(),
+         {:ok, status} <- status(reads, fleet, proposal) do
+      data = Call.encode(@execute, [proposal, Enum.map(calls, &{&1.target, &1.value, &1.data})])
+      blocked = if status == :approved, do: %{}, else: %{"carry_out" => status}
+
+      {:ok, [Review.step("carry_out", fleet.votes_address, data)],
+       %{status: status, blocked: blocked}}
+    else
+      nil -> {:problem, :not_recorded, figures}
+      _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # One proposal of the kind chosen, made with the key typed, open to votes
+  # for the hours chosen from the latest block's own clock. Its text is
+  # hashed into the proposal; the text itself stays off the chain.
+  def steps(:propose, %{fleet: fleet, signer: signer, inputs: inputs}) do
+    kind = Build.field(inputs, "kind")
+
+    with {:ok, key} <- Build.typed(inputs, "key", &Typed.key/1, %{kind: kind}),
+         figures = %{kind: kind, key: key},
+         {:ok, hours} <- Build.typed(inputs, "hours", &Typed.hours/1, figures),
+         {:ok, text} <- Build.typed(inputs, "text", &Typed.text(&1, :text, 4_000), figures),
+         {:ok, reads} <- reads(figures),
+         {:ok, action, details} <- action(kind, fleet, inputs, reads, text, figures),
+         {:ok, %{^key => {_holder, governs?}}} <- acting(reads, fleet, signer, key, figures) do
+      closes_at = DateTime.to_unix(Reads.now(reads)) + hours * 3600
+      content_hash = content_hash(text)
+      calls = Actions.encode(action, fleet)
+
+      figures =
+        Map.merge(figures, %{
+          hours: hours,
+          closes_at: DateTime.from_unix!(closes_at),
+          content_hash: content_hash,
+          action: details,
+          blocked: if(governs?, do: %{}, else: %{"propose" => :not_your_key})
+        })
+
+      {:ok,
+       [
+         Review.step(
+           "propose",
+           fleet.votes_address,
+           Call.encode(@propose, [key, content_hash, closes_at, calls])
+         )
+       ], figures}
+    end
+  end
+
+  defp every_choice(nil), do: %{}
+  defp every_choice(reason), do: Map.new(@choices, fn {name, _choice} -> {name, reason} end)
+
+  @doc "The hash a proposal's text is kept on the chain as."
+  def content_hash(text),
+    do: "0x" <> Base.encode16(ExKeccak.hash_256(text), case: :lower)
+
+  defp action("decision", _fleet, _inputs, _reads, _text, _figures),
+    do: {:ok, :decision, :decision}
+
+  defp action("pay", fleet, inputs, _reads, _text, figures) do
+    with {:ok, asset, amount, to} <- payment(fleet, inputs, figures) do
+      {:ok, {:pay, asset.address, to, amount}, {:pay, asset, to, amount}}
+    end
+  end
+
+  # An advance is numbered with the number this proposal is about to take,
+  # which no other advance has.
+  defp action("advance", fleet, inputs, reads, text, figures) do
+    with {:ok, asset, amount, operator} <- payment(fleet, inputs, figures),
+         {:ok, count} <- read(reads, fleet.votes_address, "proposalCount()", figures) do
+      id = count + 1
+
+      {:ok, {:advance, id, operator, asset.address, amount, content_hash(text)},
+       {:advance, id, asset, operator, amount}}
+    end
+  end
+
+  defp action("rate", _fleet, inputs, _reads, _text, figures) do
+    with {:ok, bps} <- Build.typed(inputs, "rate", &Typed.rate/1, figures),
+         do: {:ok, {:rate, bps}, {:rate, bps}}
+  end
+
+  defp action("edits", _fleet, inputs, _reads, _text, figures) do
+    restricted? = Build.field(inputs, "restricted") == "true"
+
+    with {:ok, target} <- Build.typed(inputs, "target", &Typed.target/1, figures),
+         do: {:ok, {:edits, target, restricted?}, {:edits, target, restricted?}}
+  end
+
+  defp action("signature", _fleet, inputs, _reads, _text, figures) do
+    way = if Build.field(inputs, "signature") == "revoke", do: :revoke, else: :approve
+
+    with {:ok, hash} <- Build.typed(inputs, "hash", &Typed.hash/1, figures),
+         do: {:ok, {:signature, way, hash}, {:signature, way, hash}}
+  end
+
+  defp action("launch", _fleet, inputs, _reads, _text, figures) do
+    with {:ok, fields} <- Reads.each(@launch_fields, &launch_field(inputs, &1, figures)) do
+      launch = Map.new(fields)
+      {:ok, {:launch, launch}, {:launch, launch}}
+    end
+  end
+
+  defp action(_kind, _fleet, _inputs, _reads, _text, figures),
+    do: {:problem, :kind_unknown, figures}
+
+  defp launch_field(inputs, {name, bytes}, figures) do
+    with {:ok, value} <- Build.typed(inputs, "#{name}", &Typed.text(&1, name, bytes), figures),
+         do: {:ok, {name, value}}
+  end
+
+  # The token, amount and wallet of a payment or an advance: a token the
+  # treasury holds, by address, in whole tokens.
+  defp payment(fleet, inputs, figures) do
+    with {:ok, asset} <- asset(fleet, inputs, figures),
+         figures = Map.put(figures, :asset, asset),
+         {:ok, amount} <-
+           Build.typed(
+             inputs,
+             "amount",
+             &Typed.amount(&1, asset.decimals || 0, Typed.largest_uint256()),
+             figures
+           ),
+         {:ok, to} <-
+           Build.typed(inputs, "recipient", &Typed.address(&1, :recipient_unreadable), figures) do
+      {:ok, asset, amount, to}
+    end
+  end
+
+  defp asset(fleet, inputs, figures) do
+    case Enum.find(Treasury.payable_assets(fleet), &(&1.address == Build.field(inputs, "asset"))) do
+      nil -> {:problem, :asset_unreadable, figures}
+      asset -> {:ok, asset}
+    end
+  end
+
+  defp reads(figures) do
+    case Reads.at_head() do
+      {:ok, reads} -> {:ok, reads}
+      {:error, _reason} -> {:problem, :unread, figures}
+    end
+  end
+
+  defp read(reads, to, signature, figures) do
+    case Reads.one(reads, to, signature, [], {:uint, 256}) do
+      {:ok, value} -> {:ok, value}
+      {:error, _reason} -> {:problem, :unread, figures}
+    end
+  end
+
+  defp acting(reads, fleet, signer, key, figures) do
+    case Reads.acting(reads, fleet, signer, [key], "mayGovern") do
+      {:ok, standing} -> {:ok, standing}
+      {:error, _reason} -> {:problem, :unread, figures}
+    end
+  end
+
+  defp status(reads, fleet, proposal) do
+    with {:ok, index} <-
+           Reads.one(reads, fleet.votes_address, "status(uint256)", [proposal], {:uint, 8}),
+         status when status != nil <- Enum.at(@statuses, index) do
+      {:ok, status}
+    else
+      nil -> {:error, :unknown_status}
+      failure -> failure
+    end
+  end
+
+  @doc """
+  A proposal as the vote contract holds it now: its key counts at opening and
+  since, its tallies, and the key it was made with.
+  """
+  def proposal(reads, fleet, proposal) do
+    with {:ok, words} <-
+           Reads.many(
+             reads,
+             fleet.votes_address,
+             "proposal(uint256)",
+             [proposal],
+             proposal_types()
+           ) do
+      [_content, _actions, _hash, author, _revision, _opened, _closes, _expiry | counts] = words
+      [e0, late, yes, no, abstain, _cancelled, _executed] = counts
+
+      {:ok, %{author_key: author, e0: e0, late: late, yes: yes, no: no, abstain: abstain}}
+    end
+  end
+
+  defp proposal_types,
+    do:
+      [:bytes32, :bytes32, :bytes32, {:uint, 32}, {:uint, 48}] ++
+        List.duplicate({:uint, 64}, 3) ++ List.duplicate({:uint, 32}, 5) ++ [:bool, :bool]
+
+  defp author_key(reads, fleet, proposal) do
+    with {:ok, %{author_key: author}} <- proposal(reads, fleet, proposal), do: {:ok, author}
+  end
+
+  @doc "Where a proposal stands as the vote contract says now, read at the head."
+  def chain_status(reads, fleet, proposal), do: status(reads, fleet, proposal)
+end

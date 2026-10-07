@@ -5,68 +5,90 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
 
-  @fleet %{
-    fleet_id: "fibonacci_cascade",
-    rewards_address: "0x" <> String.duplicate("8", 40),
-    usdc_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-  }
+  @fleet %{fleet_id: "fibonacci_cascade", rewards_address: "0x" <> String.duplicate("8", 40)}
   @head_hash "0x" <> String.duplicate("c", 64)
+  @eth "0x0000000000000000000000000000000000000000"
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @holder "0x" <> String.duplicate("a", 40)
+
+  # Pinned from `cast sig` of each view function.
+  @reward_assets "0x880ec04e"
+  @accrued "0xbfe87f4d"
+  @credits "0x637cd7f0"
 
   setup do
     :ets.delete_all_objects(RewardsWaiting)
     :ok
   end
 
-  test "asks the fleet's rewards contract what the key has accrued in USDC, at the head" do
-    answering(fn _to, _data, _block_hash -> {:ok, <<2_500_000::256>>} end)
+  # The ledger's assets, then for each what the key has accrued and the
+  # holder's credit, all at the head. The ledger here says each key has
+  # accrued its own number, and the holder has 2 in credit.
+  test "asks the fleet's reward ledger what waits for the key and its holder in each asset" do
+    answering(fn
+      _to, @reward_assets, _hash ->
+        {:ok, addresses([@eth, @usdc])}
 
-    assert RewardsWaiting.read(@fleet, 12, StubClient) == {:ok, 2_500_000}
+      _to, @accrued <> args, _hash ->
+        {:ok, <<args |> String.slice(64, 64) |> String.to_integer(16)::256>>}
 
-    # accrued(address,uint256) with the fleet's USDC and key 12.
-    calldata =
-      "0xbfe87f4d" <>
-        String.duplicate("0", 24) <>
-        "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" <> String.duplicate("0", 62) <> "0c"
+      _to, @credits <> _args, _hash ->
+        {:ok, <<2::256>>}
+    end)
 
-    assert StubClient.call_requests() == [{@fleet.rewards_address, calldata, @head_hash}]
+    assert RewardsWaiting.read(@fleet, 12, @holder, StubClient) ==
+             {:ok,
+              [
+                %{asset: @eth, accrued: 12, credit: 2},
+                %{asset: @usdc, accrued: 12, credit: 2}
+              ]}
+
+    assert StubClient.call_requests() == [
+             {@fleet.rewards_address, @reward_assets, @head_hash},
+             {@fleet.rewards_address, @accrued <> arg(@eth) <> number(12), @head_hash},
+             {@fleet.rewards_address, @credits <> arg(@eth) <> arg(@holder), @head_hash},
+             {@fleet.rewards_address, @accrued <> arg(@usdc) <> number(12), @head_hash},
+             {@fleet.rewards_address, @credits <> arg(@usdc) <> arg(@holder), @head_hash}
+           ]
   end
 
   test "ten reads of one key within 30 seconds ask the chain once, and the next after asks again" do
-    answering(fn _to, _data, _block_hash -> {:ok, <<7::256>>} end)
-
-    for elapsed <- Enum.take_every(0..29_999, 3_333) do
-      assert RewardsWaiting.read(@fleet, 12, StubClient, 1_000_000 + elapsed) == {:ok, 7}
-    end
-
-    assert length(StubClient.call_requests()) == 1
-
-    assert RewardsWaiting.read(@fleet, 12, StubClient, 1_030_000) == {:ok, 7}
-    assert length(StubClient.call_requests()) == 2
-  end
-
-  test "each key is read for itself" do
-    answering(fn _to,
-                 "0xbfe87f4d" <> <<_usdc::binary-size(64), token_id::binary-size(64)>>,
-                 _block_hash ->
-      {:ok, <<String.to_integer(token_id, 16) * 1_000_000::256>>}
+    answering(fn
+      _to, @reward_assets, _hash -> {:ok, addresses([@usdc])}
+      _to, _data, _hash -> {:ok, <<7::256>>}
     end)
 
-    assert RewardsWaiting.read(@fleet, 3, StubClient) == {:ok, 3_000_000}
-    assert RewardsWaiting.read(@fleet, 20, StubClient) == {:ok, 20_000_000}
+    for elapsed <- Enum.take_every(0..29_999, 3_333) do
+      assert {:ok, [%{accrued: 7}]} =
+               RewardsWaiting.read(@fleet, 12, @holder, StubClient, 1_000_000 + elapsed)
+    end
+
+    assert length(StubClient.call_requests()) == 3
+
+    assert {:ok, _waiting} = RewardsWaiting.read(@fleet, 12, @holder, StubClient, 1_030_000)
+    assert length(StubClient.call_requests()) == 6
   end
 
   test "a read that fails keeps nothing, so the next one asks again" do
-    answering(fn _to, _data, _block_hash -> {:error, :chain_unavailable} end)
-    assert RewardsWaiting.read(@fleet, 12, StubClient) == {:error, :chain_unavailable}
+    answering(fn _to, _data, _hash -> {:error, :chain_unavailable} end)
+    assert RewardsWaiting.read(@fleet, 12, @holder, StubClient) == {:error, :chain_unavailable}
 
-    answering(fn _to, _data, _block_hash -> {:ok, <<1::256>>} end)
-    assert RewardsWaiting.read(@fleet, 12, StubClient) == {:ok, 1}
+    answering(fn
+      _to, @reward_assets, _hash -> {:ok, addresses([@usdc])}
+      _to, _data, _hash -> {:ok, <<1::256>>}
+    end)
+
+    assert {:ok, [%{accrued: 1, credit: 1}]} =
+             RewardsWaiting.read(@fleet, 12, @holder, StubClient)
   end
 
-  test "an answer that is not one number is a failure" do
-    answering(fn _to, _data, _block_hash -> {:ok, <<1::8>>} end)
+  test "an answer that is not what was asked for is a failure" do
+    answering(fn
+      _to, @reward_assets, _hash -> {:ok, addresses([@usdc])}
+      _to, _data, _hash -> {:ok, <<1::8>>}
+    end)
 
-    assert RewardsWaiting.read(@fleet, 12, StubClient) == {:error, :unreadable_answer}
+    assert RewardsWaiting.read(@fleet, 12, @holder, StubClient) == {:error, :unreadable_answer}
   end
 
   defp answering(calls) do
@@ -76,4 +98,11 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
       calls: calls
     )
   end
+
+  defp addresses(list),
+    do: <<32::256, length(list)::256>> <> Enum.map_join(list, &(<<0::96>> <> address(&1)))
+
+  defp address("0x" <> hex), do: Base.decode16!(hex, case: :lower)
+  defp arg("0x" <> hex), do: String.duplicate("0", 24) <> hex
+  defp number(value), do: <<value::256>> |> Base.encode16(case: :lower)
 end

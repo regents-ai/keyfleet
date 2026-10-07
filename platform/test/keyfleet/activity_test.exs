@@ -2,9 +2,7 @@ defmodule Keyfleet.ActivityTest do
   use ExUnit.Case, async: false
 
   import Keyfleet.ProposalHelpers,
-    only: [proposal!: 3, vote!: 5, execution!: 3, asset_details!: 4]
-
-  import Keyfleet.QueryHelpers, only: [queries_during: 1]
+    only: [proposal!: 3, vote!: 5, execution!: 3]
 
   alias Keyfleet.Activity
   alias Keyfleet.Actors
@@ -50,11 +48,11 @@ defmodule Keyfleet.ActivityTest do
       epoch!(2, 2, "b")
 
       proposal!(@fleet, 1, %{})
-      vote!(@fleet, 1, wallet("a"), true, [1, 3])
-      vote!(@fleet, 1, wallet("b"), false, [2])
-      proposal!(@fleet, 2, kind: :pay)
+      vote!(@fleet, 1, wallet("a"), :yes, [1, 3])
+      vote!(@fleet, 1, wallet("b"), :no, [2])
+      proposal!(@fleet, 2, %{})
       execution!(@fleet, 2, wallet("f"))
-      proposal!(@fleet, 3, kind: :restrict_edits)
+      proposal!(@fleet, 3, %{})
 
       post!(owner, "general", "Morning")
       post!(owner, "general", "Hull survey started")
@@ -117,7 +115,7 @@ defmodule Keyfleet.ActivityTest do
       # More votes than are read at once, all newer than both proposals.
       proposal!(@fleet, 1, %{})
       proposal!(@fleet, 2, %{})
-      Enum.each(1..120, &vote!(@fleet, 2, wallet("a"), true, [&1]))
+      Enum.each(1..120, &vote!(@fleet, 2, wallet("a"), :yes, [&1]))
 
       items = walk(30)
 
@@ -186,7 +184,7 @@ defmodule Keyfleet.ActivityTest do
       epoch!(4, 1, "a")
       epoch!(2, 2, "b")
       proposal!(@fleet, 2, %{})
-      vote!(@fleet, 2, wallet("a"), true, [1])
+      vote!(@fleet, 2, wallet("a"), :yes, [1])
       ChainHelpers.issue_shard!(@fleet, 3, wallet("d"))
 
       assert walk(cursor, 1, [first]) == whole
@@ -291,20 +289,20 @@ defmodule Keyfleet.ActivityTest do
              [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
   end
 
-  test "keys that withdrew their votes are counted apart from those that voted" do
+  test "keys that abstained are counted apart from those that voted yes or no" do
     proposal!(@fleet, 1, %{})
-    vote!(@fleet, 1, wallet("a"), true, [1, 2])
-    vote!(@fleet, 1, wallet("a"), false, [3])
-    vote!(@fleet, 1, wallet("a"), nil, [2, 3])
+    vote!(@fleet, 1, wallet("a"), :yes, [1, 2])
+    vote!(@fleet, 1, wallet("a"), :no, [3])
+    vote!(@fleet, 1, wallet("a"), :abstain, [4, 5])
 
     %{items: items} = Activity.page(@fleet, nil)
 
-    assert [%{number: 1, yes: yes, no: no, withdrawn: withdrawn}] =
+    assert [%{number: 1, yes: yes, no: no, abstain: abstain}] =
              for(%{kind: :votes, facts: facts} <- items, do: facts)
 
-    assert {yes, no, withdrawn} ==
+    assert {yes, no, abstain} ==
              {%{count: 2, token_ids: [1, 2]}, %{count: 1, token_ids: [3]},
-              %{count: 2, token_ids: [2, 3]}}
+              %{count: 2, token_ids: [4, 5]}}
   end
 
   describe "headline" do
@@ -349,7 +347,7 @@ defmodule Keyfleet.ActivityTest do
 
     test "finished work and a proposal carried out: the newer is featured", %{seen_at: seen_at} do
       task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
-      proposal!(@fleet, 1, kind: :pay)
+      proposal!(@fleet, 1, %{})
       # Carried out at the time the chain records were seen.
       execution!(@fleet, 1, wallet("f"))
       post!(human("a"), "general", "Paid")
@@ -435,38 +433,6 @@ defmodule Keyfleet.ActivityTest do
     assert expires_at == issued.expires_at
   end
 
-  test "a payment carries its token's details, read once however many payments a page holds" do
-    token = wallet("c")
-    asset_details!(@fleet, token, "FOO", 2)
-    asset_details!(@fleet, wallet("d"), "BAR", 0)
-    proposal!(@fleet, 1, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
-    execution!(@fleet, 1, wallet("f"))
-    {one, _page} = queries_during(fn -> Activity.page(@fleet, nil) end)
-
-    for number <- 2..5 do
-      proposal!(@fleet, number, kind: :pay, asset: token, amount: 1250, recipient: wallet("b"))
-      execution!(@fleet, number, wallet("f"))
-    end
-
-    {five, %{items: items}} = queries_during(fn -> Activity.page(@fleet, nil) end)
-
-    assert five == one
-
-    payments =
-      for %{kind: kind, facts: facts} <- items, kind in [:proposed, :executed], do: facts.payment
-
-    assert length(payments) == 10
-
-    assert Enum.uniq(payments) == [
-             %{
-               asset: token,
-               amount: 1250,
-               recipient: wallet("b"),
-               assets: %{usdc: nil, details: %{token => {"FOO", 2}}}
-             }
-           ]
-  end
-
   # Every page from the newest, `limit` items each, joined.
   defp walk(limit), do: walk(nil, limit, [])
 
@@ -537,7 +503,7 @@ defmodule Keyfleet.ActivityTest do
           seq: seq,
           event_id: "evt_#{seq}",
           type: type,
-          actor: "member:1:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
+          actor: "member:8453:0x#{String.duplicate("b2", 20)}:17@3/agent:#{@member_wallet}",
           timestamp: DateTime.to_iso8601(at),
           payload: payload
         }

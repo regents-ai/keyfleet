@@ -142,6 +142,22 @@ defmodule Keyfleet.DatabaseConfigTest do
            ]
   end
 
+  test "the anvil lab keeps its own local database, and never a remote one" do
+    lab = %{"USER" => "local-user", "KEYFLEET_LAB" => "http://127.0.0.1:8546"}
+    assert DatabaseConfig.runtime_config!(:dev, env(lab))[:database] == "keyfleet_lab_dev"
+
+    remote =
+      Map.merge(lab, %{
+        "KEYFLEET_DATABASE_CLUSTER_ID" => "dzx6qo6xqzvojpv5",
+        "KEYFLEET_DATABASE_CLUSTER_NAME" => "regents-platform-prod",
+        "DATABASE_POOLED_URL" => @pooled
+      })
+
+    assert_raise RuntimeError, "the anvil lab runs on its local database only", fn ->
+      DatabaseConfig.runtime_config!(:dev, env(remote))
+    end
+  end
+
   test "development accepts the exact production target and selects pooled access" do
     assert DatabaseConfig.runtime_config!(
              :dev,

@@ -1,0 +1,35 @@
+{
+  "chainId": 8453,
+  "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
+  "regent": "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07",
+  "autolaunchFactory": "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
+  "vrf": {
+    "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
+    "subscriptionId": "0",
+    "keyHash": "0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab"
+  },
+  "traitTableHash": "0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8",
+  "fleets": {
+    "syndicate": {
+      "name": "Keyfleet Syndicate",
+      "symbol": "KEYFLEET",
+      "baseTokenURI": "https://keyfleet.ai/metadata/syndicate/"
+    },
+    "cascade": {
+      "name": "Keyfleet Cascade",
+      "symbol": "KEYFLEET",
+      "baseTokenURI": "https://keyfleet.ai/metadata/cascade/"
+    },
+    "classic": {
+      "name": "Keyfleet Classic",
+      "symbol": "KEYFLEET",
+      "baseTokenURI": "https://keyfleet.ai/metadata/classic/"
+    },
+    "accelerant": {
+      "name": "Keyfleet Accelerant",
+      "symbol": "KEYFLEET",
+      "baseTokenURI": "https://keyfleet.ai/metadata/accelerant/"
+    }
+  }
+}

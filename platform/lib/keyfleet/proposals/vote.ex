@@ -1,9 +1,8 @@
 defmodule Keyfleet.Proposals.Vote do
   @moduledoc """
-  One `VoteCast` log: a set of keys voted for or against a recorded proposal,
-  one vote per key; or one `VoteWithdrawn` log, with `support` nil: the keys'
-  votes on it were withdrawn. Only the chain reader writes it, and nothing
-  ever changes it.
+  One `BallotCast` log: a set of keys voted yes, no or abstain on a recorded
+  proposal, one vote per key, each replacing any earlier vote of the key on
+  it. Only the chain reader writes it, and nothing ever changes it.
   """
   use Ash.Resource,
     domain: Keyfleet.Proposals,
@@ -19,6 +18,10 @@ defmodule Keyfleet.Proposals.Vote do
 
     check_constraints do
       check_constraint(:voter, "proposal_votes_voter_shape", check: "voter ~ '^0x[0-9a-f]{40}$'")
+
+      check_constraint(:choice, "proposal_votes_choice",
+        check: "choice IN ('yes', 'no', 'abstain')"
+      )
 
       check_constraint(:token_ids, "proposal_votes_some_keys",
         check: "cardinality(token_ids) > 0 AND 0 < ALL (token_ids)"
@@ -77,7 +80,7 @@ defmodule Keyfleet.Proposals.Vote do
       accept [
         :fleet_id,
         :voter,
-        :support,
+        :choice,
         :token_ids,
         :block_number,
         :block_hash,
@@ -133,7 +136,7 @@ defmodule Keyfleet.Proposals.Vote do
                   :id,
                   :fleet_id,
                   :proposal_id,
-                  :support,
+                  :choice,
                   :token_ids,
                   :record_seq,
                   :observed_at
@@ -148,7 +151,7 @@ defmodule Keyfleet.Proposals.Vote do
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @max_bigint]
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and not is_nil(support) and
+               fleet_id == ^arg(:fleet_id) and
                  fragment("? @> ARRAY[?]::bigint[]", token_ids, ^arg(:token_id))
              )
     end
@@ -157,7 +160,7 @@ defmodule Keyfleet.Proposals.Vote do
     read :by_voter do
       argument :fleet_id, :string, allow_nil?: false
       argument :voter, :string, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and voter == ^arg(:voter) and not is_nil(support))
+      filter expr(fleet_id == ^arg(:fleet_id) and voter == ^arg(:voter))
     end
   end
 
@@ -179,8 +182,10 @@ defmodule Keyfleet.Proposals.Vote do
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    # Nil when the keys' votes were withdrawn.
-    attribute :support, :boolean, public?: true
+    attribute :choice, :atom,
+      allow_nil?: false,
+      public?: true,
+      constraints: [one_of: [:yes, :no, :abstain]]
 
     attribute :token_ids, {:array, :integer},
       allow_nil?: false,

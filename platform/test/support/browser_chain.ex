@@ -3,7 +3,7 @@ defmodule Keyfleet.BrowserChain do
   The browser tests' chain. Called on the browser test server's own node, it
   sells and moves keys of one fleet, and issues and ends their shards, through
   the real chain reader, so a page open in the browser hears of them exactly
-  as it would from Ethereum.
+  as it would from Base.
 
   Every pass reads blocks well past the last one recorded, so the reader's
   second look at recent blocks never finds a record the made-up chain has
@@ -14,12 +14,15 @@ defmodule Keyfleet.BrowserChain do
   starts from the same unsold fleets.
 
   The pages' own chain reads are answered by one chain the server's pages
-  share. The keys are paid in USDC alone; a key offered rewards
-  (`offer_rewards!/3`) has them waiting, and for any other key the node
-  fails. No key has its seed yet: a key's request for its random draw was
-  accepted until `refuse_draw!/3` says it was turned down. A wallet has
-  allowed a fleet the USDC `allow!/2` names, and none until then. A step a page's wallet sent is on the chain once `land!/3`
-  puts it on the server's `Keyfleet.TestChainNode`.
+  share. A key sold or moved here is held by its new owner there too, and a
+  shard issued here is active there until it is ended here. The keys are
+  paid in USDC alone, and no wallet has a credit of its own; a key offered
+  rewards (`offer_rewards!/3`) has them waiting, and for any other key the
+  node fails. No key has its seed yet: a key's request for its random draw
+  was accepted until `refuse_draw!/3` says it was turned down. A wallet has
+  allowed a fleet the USDC `allow!/2` names, and none until then. A step a
+  page's wallet sent is on the chain once `land!/3` puts it on the server's
+  `Keyfleet.TestChainNode`.
   """
 
   alias Keyfleet.Actors.Agent
@@ -29,7 +32,6 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.Scanner
-  alias Keyfleet.Chain.ShardsLog
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
@@ -40,19 +42,23 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
+  alias RegentChain.Event
 
   @system %System{}
   @contract "0x" <> String.duplicate("5", 40)
-  @usdc "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-  @chain_id 1
+  @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+  @chain_id 8_453
   @accrued Call.selector("accrued(address,uint256)")
   @reward_assets Call.selector("rewardAssets()")
   @allowance Call.selector("allowance(address,address)")
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
-  @shard_issued ShardsLog.topics() |> hd()
-  @shard_ended ShardsLog.topics() |> List.last()
-  # A plain wallet's sign-in on Base counts on Ethereum, where the keys are.
+  @owner_of Call.selector("ownerOf(uint256)")
+  @credits Call.selector("credits(address,address)")
+  @shard_is_active Call.selector("isActive(uint256,address)")
+  @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
+  @shard_ended Event.topic0("ShardEnded(uint256,address,address)")
+  # A plain wallet signed in on Base, where the keys are.
   @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
     chain_id: 8_453,
@@ -98,7 +104,11 @@ defmodule Keyfleet.BrowserChain do
           contract_address: @contract,
           rewards_address: "0x" <> String.duplicate("6", 40),
           votes_address: "0x" <> String.duplicate("9", 40),
+          treasury_address: "0x" <> String.duplicate("7e", 20),
           shards_address: "0x" <> String.duplicate("4", 40),
+          regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
+          regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
+          autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
           usdc_address: @usdc,
           deployed_block: 1_000,
           trait_table_hash: "0x" <> String.duplicate("a", 64)
@@ -177,6 +187,25 @@ defmodule Keyfleet.BrowserChain do
     {:ok, <<amount::256>>}
   end
 
+  defp answer(_rewards, @credits <> _asset_and_account, _block_hash), do: {:ok, <<0::256>>}
+
+  # A key never sold has no owner, and the fleet refuses to name one.
+  defp answer(fleet, @owner_of <> token_id, _block_hash) do
+    case Map.fetch(answers(), {:owner, fleet, String.to_integer(token_id, 16)}) do
+      {:ok, owner} -> {:ok, address_bytes(owner)}
+      :error -> {:error, :reverted}
+    end
+  end
+
+  defp answer(
+         shards,
+         @shard_is_active <> <<token_id::binary-size(64), wallet::binary-size(64)>>,
+         _hash
+       ) do
+    key = {:shard, shards, String.to_integer(token_id, 16), "0x" <> String.slice(wallet, -40, 40)}
+    {:ok, <<if(Map.get(answers(), key, false), do: 1, else: 0)::256>>}
+  end
+
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
 
   defp answer(fleet, @reveal_requested_at <> token_id, _block_hash) do
@@ -226,6 +255,8 @@ defmodule Keyfleet.BrowserChain do
   def issue_shard!(fleet_id, token_id, wallet, days) do
     %{ownership_epoch: epoch} = Keys.current_key!(fleet_id, token_id)
     expires = DateTime.to_unix(DateTime.utc_now()) + days * 86_400
+    %{shards_address: shards} = Fleets.get_fleet!(fleet_id)
+    remember({:shard, shards, token_id, String.downcase(wallet)}, true)
 
     pass!(fleet_id, fn fleet, block ->
       [
@@ -243,6 +274,9 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "The shard of key `token_id` that `wallet` holds has been ended by `by`."
   def end_shard!(fleet_id, token_id, wallet, by) do
+    %{shards_address: shards} = Fleets.get_fleet!(fleet_id)
+    remember({:shard, shards, token_id, String.downcase(wallet)}, false)
+
     pass!(fleet_id, fn fleet, block ->
       [
         log(
@@ -318,6 +352,11 @@ defmodule Keyfleet.BrowserChain do
   # One pass over a chain whose next block holds the ownership `changes`, as
   # `{token_id, epoch, owner}`, and whose head is well past it.
   defp pass!(fleet_id, changes) when is_list(changes) do
+    %{contract_address: contract} = Fleets.get_fleet!(fleet_id)
+
+    for {token_id, _epoch, owner} <- changes,
+        do: remember({:owner, contract, token_id}, String.downcase(owner))
+
     pass!(fleet_id, fn fleet, block ->
       changes
       |> Enum.with_index()
@@ -368,6 +407,9 @@ defmodule Keyfleet.BrowserChain do
       "logIndex" => quantity(log_index)
     }
   end
+
+  defp address_bytes("0x" <> address),
+    do: <<0::96, Base.decode16!(address, case: :lower)::binary>>
 
   defp address_word("0x" <> address), do: "0x" <> String.duplicate("0", 24) <> address
 

@@ -3,9 +3,14 @@ defmodule Keyfleet.WalletSteps.Steps do
   One group of wallet buttons' steps, built for a signer as
   `Keyfleet.WalletSteps.Build` describes.
 
-  Only a signed-in person may build steps, and only for a wallet their
-  account links: the signer is checked against the actor's own wallets, never
-  taken from the page on trust.
+  Only a signed-in person or agent may build steps, and only for their own
+  wallet: one the person's account links, or the agent's own. The signer is
+  checked against the actor's own wallets, never taken from the request on
+  trust.
+
+  Anyone may read the figures some groups show, which are public on the
+  chain: the daily split's preview, whether keys are present, and the
+  fleet's launch. They are read the same way, and nothing is built to send.
   """
   use Ash.Resource,
     domain: Keyfleet.WalletSteps,
@@ -13,18 +18,20 @@ defmodule Keyfleet.WalletSteps.Steps do
 
   @flows [
     :buy,
-    :claim,
     :reveal,
-    :vote,
-    :carry_out,
-    :collect,
-    :propose_decision,
-    :propose_payment,
-    :propose_edits,
-    :delegate,
-    :send_share,
+    :claim,
+    :present,
     :issue_shard,
-    :end_shard
+    :end_shard,
+    :agent_voting,
+    :ballot,
+    :propose,
+    :cancel,
+    :carry_out,
+    :run_split,
+    :return_advance,
+    :send_share,
+    :launch_upkeep
   ]
 
   actions do
@@ -46,19 +53,36 @@ defmodule Keyfleet.WalletSteps.Steps do
 
       argument :proposal, :integer, constraints: [min: 1]
       argument :token_id, :integer, constraints: [min: 1]
+      argument :advance_id, :integer, constraints: [min: 1]
 
-      validate present(:proposal), where: argument_in(:flow, [:vote, :carry_out, :collect])
-
-      validate present(:token_id),
-        where: argument_in(:flow, [:claim, :reveal, :issue_shard, :end_shard])
+      validate present(:proposal), where: argument_in(:flow, [:ballot, :cancel, :carry_out])
+      validate present(:token_id), where: argument_in(:flow, [:claim, :reveal, :end_shard])
+      validate present(:advance_id), where: argument_in(:flow, [:return_advance])
 
       run Keyfleet.WalletSteps.Build
+    end
+
+    action :figures, :map do
+      description "What a group of wallet buttons shows, for anyone, with nothing to send."
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :flow, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:run_split, :present, :launch_upkeep]]
+
+      argument :token_id, :integer, constraints: [min: 1]
+
+      run Keyfleet.WalletSteps.Figures
     end
   end
 
   policies do
     policy action(:build) do
       authorize_if Keyfleet.WalletSteps.LinkedSigner
+    end
+
+    policy action(:figures) do
+      authorize_if always()
     end
   end
 end

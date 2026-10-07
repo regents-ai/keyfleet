@@ -110,16 +110,20 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert home |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["dark"]
   end
 
-  test "the tool manifest lists the two read tools and the docs list them too" do
+  test "the tool manifest lists every tool and the docs list them too" do
     manifest = build_conn() |> get("/capabilities") |> json_response(200)
-    assert Enum.map(manifest["tools"], & &1["name"]) == ["about", "docs"]
+
+    assert Enum.map(manifest["tools"], & &1["name"]) ==
+             ~w(about docs mark_present propose run_split vote cancel_proposal carry_out claim)
 
     for path <- ["/docs", "/llms.txt"] do
       body =
         build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
 
-      assert body =~ "| `about` | `GET /about` | Nothing |"
-      assert body =~ "| `docs` | `GET /docs` | Nothing |"
+      assert body =~ "| `about` | Every page | Nothing |"
+
+      assert body =~
+               "| `vote` | `/app/fleets/FLEET_ID/proposals/NUMBER` | Sign-in and a wallet on your account |"
     end
   end
 

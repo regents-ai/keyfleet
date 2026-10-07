@@ -6,11 +6,13 @@ defmodule Keyfleet.Keys.ShardEvent do
   ever changes it. `record_seq` is the fleet's count of shard records when it
   was recorded, which is the order the chain made them in.
 
-  A wallet holds one shard in a fleet at a time: each issue replaces what the
-  wallet held, and an end ends it. So a wallet's latest record says where it
-  stands, and a shard is active while that latest record is its issue, its
-  time has not run out and its key has not changed hands since. Whether a
-  shard is active is always worked out, never stored.
+  A wallet holds at most one shard of each key, and may hold shards of
+  several keys, as the shards contract keeps them by key and wallet: each
+  issue replaces what the wallet held of that key, and an end ends it. So a
+  wallet's latest record of a key says where it stands, and a shard is active
+  while that latest record is its issue, its time has not run out and its key
+  has not changed hands since. Whether a shard is active is always worked
+  out, never stored.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -66,8 +68,8 @@ defmodule Keyfleet.Keys.ShardEvent do
     custom_indexes do
       # What the second reading of the last blocks compares with.
       index([:fleet_id, :block_number])
-      # A wallet's latest record in a fleet, which says where it stands.
-      index([:fleet_id, :wallet, :record_seq])
+      # A wallet's latest record of a key, which says where it stands.
+      index([:fleet_id, :token_id, :wallet, :record_seq])
       # A key's shards.
       index([:fleet_id, :token_id])
       # A wallet's shards in every fleet.
@@ -164,19 +166,25 @@ defmodule Keyfleet.Keys.ShardEvent do
                sort: [record_seq: :desc], before: [:before_seq]}
     end
 
-    # The active shard one wallet holds in a fleet, if it holds one.
-    read :active_for_wallet do
+    # The active shard one wallet holds of a key, if it holds one.
+    read :active_of_key_held_by do
       argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false
       argument :wallet, :string, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and wallet == ^arg(:wallet) and active?)
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and
+                 wallet == ^arg(:wallet) and active?
+             )
+
       get? true
     end
 
-    # Every active shard one wallet holds, one per fleet at most.
+    # Every active shard one wallet holds, by fleet and then by key.
     read :active_held_by do
       argument :wallet, :string, allow_nil?: false
       filter expr(wallet == ^arg(:wallet) and active?)
-      prepare build(sort: [fleet_id: :asc])
+      prepare build(sort: [fleet_id: :asc, token_id: :asc])
     end
 
     # Every active shard of some of the fleet's keys, each key's by the time
@@ -282,15 +290,16 @@ defmodule Keyfleet.Keys.ShardEvent do
   end
 
   calculations do
-    # Whether this record is the wallet's latest in the fleet, read as one
+    # Whether this record is the wallet's latest of its key, read as one
     # scalar subquery because the table has no scope-free read to aggregate
     # over.
     calculate :latest?,
               :boolean,
               expr(
                 fragment(
-                  "NOT EXISTS (SELECT 1 FROM keyfleet_app.shard_events AS later WHERE later.fleet_id = ? AND later.wallet = ? AND later.record_seq > ?)",
+                  "NOT EXISTS (SELECT 1 FROM keyfleet_app.shard_events AS later WHERE later.fleet_id = ? AND later.token_id = ? AND later.wallet = ? AND later.record_seq > ?)",
                   fleet_id,
+                  token_id,
                   wallet,
                   record_seq
                 )

@@ -158,4 +158,12 @@
   width: 100%;
 }
 
+/* A heading with a tip beside it keeps the tip on its line. */
+.key-panel h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 }

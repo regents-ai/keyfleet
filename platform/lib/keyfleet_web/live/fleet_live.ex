@@ -36,6 +36,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.Count
+  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
@@ -48,6 +49,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
   alias KeyfleetWeb.WalletPanel
+  alias KeyfleetWeb.WalletWords
   alias KeyfleetWeb.WorkspacePage
 
   # A check-in status changes as time passes, so an open fleet page reads its
@@ -654,11 +656,6 @@ defmodule KeyfleetWeb.FleetLive do
 )}</.link>|
   end
 
-  defp activity_part(%{part: {:amount, text, token}} = assigns) do
-    assigns = assign(assigns, text: text, token: token)
-    ~H"{ActivityLines.amount_name(@text, @token)}"
-  end
-
   defp activity_part(assigns), do: ~H"{@part}"
 
   attr :fleet, :map, required: true
@@ -720,12 +717,14 @@ defmodule KeyfleetWeb.FleetLive do
         </p>
       </section>
 
+      <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} />
+
       <section aria-labelledby="fleet-contract-title">
-        <h3 id="fleet-contract-title">On Ethereum</h3>
+        <h3 id="fleet-contract-title">On Base</h3>
         <p :if={@fleet.contract_address} class="fleet-wallet">
           <a
             id="fleet-contract-link"
-            href={"https://etherscan.io/address/#{@fleet.contract_address}"}
+            href={"https://basescan.org/address/#{@fleet.contract_address}"}
             title={@fleet.contract_address}
             rel="noopener noreferrer"
             target="_blank"
@@ -733,7 +732,7 @@ defmodule KeyfleetWeb.FleetLive do
             <code>{RegentFormat.short_address(@fleet.contract_address)}</code>
           </a>
         </p>
-        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Ethereum yet</p>
+        <p :if={is_nil(@fleet.contract_address)} class="fleet-detail">Not on Base yet</p>
       </section>
     </aside>
     """
@@ -880,8 +879,10 @@ defmodule KeyfleetWeb.FleetLive do
       >
         Sales are still being counted, so this price may already have gone up. If it has,
         the purchase is refused and no USDC is taken, though your wallet still pays the
-        Ethereum network fee for trying.
+        network fee for trying.
       </p>
+
+      <FleetRisks.disclosure :if={@buy.price} id="buy-key-risks" />
 
       <.live_component
         module={WalletPanel}
@@ -903,25 +904,37 @@ defmodule KeyfleetWeb.FleetLive do
           <Regent.Primitives.button
             id="buy-key-button"
             data-onchain-step="buy"
-            hidden={not buy_shown?(panel)}
-            disabled={is_nil(@buy.price)}
-            aria-describedby={is_nil(@buy.price) && "buy-key-sold-out"}
+            disabled={is_nil(@buy.price) or WalletPanel.blocked(panel, "buy") != nil}
+            aria-describedby={
+              cond do
+                is_nil(@buy.price) -> "buy-key-sold-out"
+                WalletPanel.blocked(panel, "buy") -> "buy-key-button-why"
+                true -> nil
+              end
+            }
           >
             <span data-press-label>Buy Key {@buy.token_id && grouped(@buy.token_id)}</span>
           </Regent.Primitives.button>
           <span :if={is_nil(@buy.price)} id="buy-key-sold-out" class="wallet-panel-note">
             {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} Keys sold
           </span>
+          <span
+            :if={@buy.price && WalletPanel.blocked(panel, "buy")}
+            id="buy-key-button-why"
+            class="wallet-panel-why"
+          >
+            {WalletWords.blocked(WalletPanel.blocked(panel, "buy"))}
+          </span>
         </:buttons>
       </.live_component>
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
         You can still get a Key from someone who holds one: it moves like any other token on
-        Ethereum, though a Key that moves can’t vote on proposals already open.
+        Base.
       </p>
 
       <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Ethereum from your wallet. If your wallet hasn’t already allowed this
+        Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
         much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
       </p>
       <p :if={@buy.price && @buy.level} class="fleet-detail">
@@ -931,14 +944,107 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+
+  # The fleet's token launch, once an approved proposal has made one: four
+  # buttons anyone may press to settle its sale, add its token to the daily
+  # split, release the tokens set aside for the treasury and collect the
+  # pool's fees.
+  defp launch_upkeep(assigns) do
+    ~H"""
+    <section id="fleet-launch" aria-labelledby="fleet-launch-title">
+      <h3 id="fleet-launch-title">
+        Token launch
+        <Regent.Primitives.tip id="fleet-launch-tip" label="About the token launch">
+          A launch the fleet voted for sells its token through Autolaunch. Once the sale ends, anyone can settle it, add the token to the daily split, release the tokens set aside for the treasury, and collect the pool’s fees for it.
+        </Regent.Primitives.tip>
+      </h3>
+      <.live_component
+        module={WalletPanel}
+        id="fleet-launch-action"
+        flow={:launch_upkeep}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+      >
+        <:notes :let={panel}>
+          <dl :if={is_nil(@actor) and launched?(panel)} id="fleet-launch-facts" class="fleet-facts">
+            <div>
+              <dt>Token</dt>
+              <dd>
+                <code title={WalletPanel.figures(panel).token}>
+                  {RegentFormat.short_address(WalletPanel.figures(panel).token)}
+                </code>
+              </dd>
+            </div>
+            <div>
+              <dt>Sale</dt>
+              <dd id="fleet-launch-sale">{sale(panel)}</dd>
+            </div>
+            <div>
+              <dt>Daily split</dt>
+              <dd id="fleet-launch-split">
+                {if WalletPanel.figures(panel).bound?, do: "Included", else: "Not yet"}
+              </dd>
+            </div>
+          </dl>
+        </:notes>
+        <:buttons :let={panel}>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="settle"
+            id="fleet-launch-settle"
+          >
+            Settle sale
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="bind"
+            id="fleet-launch-bind"
+          >
+            Add to split
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="release"
+            id="fleet-launch-release"
+          >
+            Release tokens
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            :if={launched?(panel)}
+            panel={panel}
+            step="collect"
+            id="fleet-launch-collect"
+          >
+            Collect fees
+          </WalletPanel.step_button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  # Until an approved proposal has made a launch, there is nothing to upkeep.
+  defp launched?(panel), do: WalletPanel.figures(panel)[:launch_id] != nil
+
+  # Where the launch's sale stands, for a visitor, who sees no buttons.
+  defp sale(panel) do
+    case WalletPanel.figures(panel) do
+      %{lifecycle: :active, blocked: %{"settle" => :sale_running}} -> "On sale"
+      %{lifecycle: :active} -> "Ended, ready to settle"
+      %{lifecycle: :graduated} -> "Sold"
+      %{lifecycle: :failed} -> "Didn’t sell"
+      %{lifecycle: :none} -> "Not started"
+    end
+  end
+
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
   defp approve_shown?(_panel), do: false
-
-  # Buy shows when no approval is needed, or once one has been sent, so a
-  # press on it before the approval lands still reaches the wallet.
-  defp buy_shown?(panel),
-    do: not approve_shown?(panel) or WalletPanel.sent?(panel, "approve")
 
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
   def usdc(atoms) do

@@ -5,7 +5,11 @@ import {Script} from "forge-std/Script.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Keyfleet} from "../src/Keyfleet.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetStack} from "./KeyfleetStack.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockRegentRevenueStaking} from "../test/mocks/MockRegentRevenueStaking.sol";
+import {MockRegent} from "../test/mocks/MockRegent.sol";
+import {MockAutolaunchFactory} from "../test/mocks/MockAutolaunchFactory.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A six-decimal stand-in for USDC, as a fleet requires, that mints to whoever asks.
@@ -21,32 +25,77 @@ contract AnvilLabUsdc is ERC20 {
     }
 }
 
-/// @notice Puts one fleet on a plain local anvil for the anvil tests in `platform/`: the wallet
-/// buttons' steps and the rewards a key has waiting. Nothing here is for a real network: the
-/// sender is an account anvil has unlocked, and no private key is read.
-/// @dev The fleet is a Classic fleet whose protocol treasury is a fixed lab address, on a
-/// stand-in VRF coordinator whose subscription holds 0.1 ETH. Two keys are sold while the
-/// coordinator refuses every request, so neither key's reveal was ever accepted, and then the
-/// coordinator takes requests again. The fleet owes the protocol share of both sales, and the
-/// buyer holds and has approved the USDC for a third key, for the test to buy.
+/// @notice Puts one fleet on a plain local anvil: for the anvil tests in `platform/`, and for the
+/// local lab where a person tries every wallet button against the real contracts. Nothing here is
+/// for a real network: the sender is an account anvil has unlocked, and no private key is read.
+/// @dev The fleet is a Classic fleet whose protocol share goes to a stand-in REGENT staking
+/// contract, launching through a stand-in Autolaunch factory, on a stand-in VRF coordinator whose
+/// subscription holds 0.1 ETH. Two keys are sold while the coordinator refuses every request, so
+/// neither key's reveal was ever accepted, and then the coordinator takes requests again. The
+/// fleet owes the protocol share of both sales, the buyer holds and has approved the USDC for a
+/// third key, and the treasury holds 1 ETH, 500 REGENT and 500 USDC, enough of each for the daily
+/// split. The lab's start (`platform/lib/mix/tasks/keyfleet.anvil_lab.ex`) gives a person's wallet
+/// both keys.
 contract AnvilLab is Script {
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
-    address private constant TREASURY = address(0x7EA5);
+
+    Keyfleet private classic;
+    AnvilLabUsdc private usdc;
+    MockRegent private regent;
+    MockRegentRevenueStaking private regentStaking;
+    MockAutolaunchFactory private autolaunch;
 
     /// @notice Builds the lab, broadcast from `--sender`, which owns the subscription and buys
-    /// both keys.
-    function run() external returns (address fleet, address treasury, address shards) {
+    /// both keys, and returns where the fleet's five contracts and its stand-ins are.
+    function run()
+        external
+        returns (
+            address fleet,
+            address rewards,
+            address shards,
+            address votes,
+            address treasury,
+            address staking,
+            address usdcToken,
+            address regentToken,
+            address autolaunchFactory
+        )
+    {
         vm.startBroadcast();
-        AnvilLabUsdc usdc = new AnvilLabUsdc();
+        _deploy();
+        _sellTwoKeys();
+        _fundTreasury();
+        vm.stopBroadcast();
+
+        return (
+            address(classic),
+            address(classic.REWARDS()),
+            address(classic.SHARDS()),
+            address(classic.VOTES()),
+            address(classic.TREASURY()),
+            address(regentStaking),
+            address(usdc),
+            address(regent),
+            address(autolaunch)
+        );
+    }
+
+    function _deploy() private {
+        usdc = new AnvilLabUsdc();
+        regent = new MockRegent();
+        autolaunch = new MockAutolaunchFactory();
         MockVRFCoordinatorV2Plus vrf = new MockVRFCoordinatorV2Plus();
+        regentStaking = new MockRegentRevenueStaking(usdc);
         uint256 subscriptionId = vrf.createSubscription();
         vrf.fundSubscriptionWithNative{value: 0.1 ether}(subscriptionId);
 
-        Keyfleet classic = new Keyfleet(
+        classic = KeyfleetStack.deploy(
             KeyfleetPresets.Preset.FleetTechClassic,
             usdc,
-            TREASURY,
+            regentStaking,
+            regent,
+            autolaunch,
             Keyfleet.Metadata("Anvil Lab Classic", "ALC", "https://keyfleet.ai/metadata/anvil-lab/"),
             Keyfleet.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: subscriptionId, keyHash: KEY_HASH
@@ -54,15 +103,23 @@ contract AnvilLab is Script {
             TRAIT_TABLE
         );
         vrf.addConsumer(subscriptionId, address(classic));
+    }
 
+    function _sellTwoKeys() private {
+        MockVRFCoordinatorV2Plus vrf = MockVRFCoordinatorV2Plus(address(classic.VRF_COORDINATOR()));
         usdc.mint(3 * KeyfleetPresets.Q_USDC);
         usdc.approve(address(classic), 3 * KeyfleetPresets.Q_USDC);
         vrf.setRevertAll(true);
         classic.purchase(address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
         classic.purchase(address(0), KeyfleetPresets.Q_USDC, block.timestamp + 1 hours);
         vrf.setRevertAll(false);
-        vm.stopBroadcast();
+    }
 
-        return (address(classic), TREASURY, address(classic.SHARDS()));
+    function _fundTreasury() private {
+        address treasury = address(classic.TREASURY());
+        payable(treasury).transfer(1 ether);
+        regent.mint(treasury, 500 ether);
+        usdc.mint(500 * 1e6);
+        usdc.transfer(treasury, 500 * 1e6);
     }
 }

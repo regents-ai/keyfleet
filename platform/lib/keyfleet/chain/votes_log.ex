@@ -1,109 +1,94 @@
 defmodule Keyfleet.Chain.VotesLog do
   @moduledoc """
-  Reads the proposal, vote and execution logs of a fleet's `KeyfleetVotes`
-  contract into the fields `Keyfleet.Proposals` records.
+  Reads the logs of a fleet's `KeyfleetVotes` contract into the fields
+  `Keyfleet.Proposals` and `Keyfleet.Keys` record.
 
-  A payment or edit-restriction proposal is two logs: `ProposalCreated` and,
-  right after it in the same transaction, `PayProposed` or
-  `RestrictEditsProposed`. Each is read here on its own, as `{:proposal,
-  fields}` and `{:pay, %{number: n, payload: fields}}` or `{:restrict_edits,
-  %{number: n, payload: fields}}`; `Keyfleet.Chain.Logs` joins them.
+    * `ProposalCreated` is `{:proposal, fields}`, with the exact calls the
+      treasury makes if it is carried out. When it opened is not in it:
+      `Keyfleet.Chain.Logs` takes that from the author key's `Present` log
+      just before it.
+    * `BallotCast` is `{:ballot, fields}`: keys cast or replaced their
+      ballots, all with one choice. A key's latest ballot is the one that
+      counts.
+    * `ProposalCancelled` is `{:cancellation, fields}` and
+      `ProposalExecuted` `{:execution, fields}`.
+    * `EditsRestrictionSet` is `{:edits_restriction, fields}`: a carried-out
+      proposal restricted a key's workspace edits, or lifted that.
+    * `Present` and `PresenceCleared` are `{:presence, fields}`: a key was
+      renewed, present for 48 hours unless it changes hands first, or it
+      changed hands and stopped being present.
 
-  Every key is one vote, so a vote carries its keys and nothing else. A key
-  may vote again, and its latest vote is the one that counts. A
-  `VoteWithdrawn` log is read as a vote whose `support` is nil: the keys it
-  names count for neither side until they vote again.
-
-  A proposal's text is kept up to its first 64 KiB, as raw bytes that need
-  not be valid text, beside its full length and its SHA-256.
-
-  Carrying out an edit-restriction proposal also logs `EditsRestrictionSet`,
-  read as `{:edits_restriction, fields}`: the key it names and whether that
-  key's workspace edits are now restricted.
+  `Swept`, which only counts the expired presences it removed, is not read.
   """
 
   alias RegentChain.Abi
   alias RegentChain.Event
 
-  @created Event.topic0("ProposalCreated(uint256,uint8,address,uint64,bytes32,string)")
-  @pay Event.topic0("PayProposed(uint256,address,uint256,address)")
-  @restrict_edits Event.topic0("RestrictEditsProposed(uint256,uint256,bool)")
-  @vote Event.topic0("VoteCast(uint256,address,bool,uint256[])")
-  @withdrawn Event.topic0("VoteWithdrawn(uint256,address,uint256[])")
+  @created Event.topic0(
+             "ProposalCreated(uint256,uint256,address,bytes32,bytes32,uint64,uint64,uint32,uint48,(address,uint256,bytes)[])"
+           )
+  @ballot Event.topic0("BallotCast(uint256,address,uint8,uint256[])")
+  @cancelled Event.topic0("ProposalCancelled(uint256,address)")
   @executed Event.topic0("ProposalExecuted(uint256,address)")
-  @edits_set Event.topic0("EditsRestrictionSet(uint256,bool,uint256)")
+  @edits_set Event.topic0("EditsRestrictionSet(uint256,bool)")
+  @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
+  @cleared Event.topic0("PresenceCleared(uint256)")
 
-  @text_cap 65_536
-  @zero_digest "0x" <> String.duplicate("0", 64)
-  # The contract's `Kind` numbers, pinned in contracts/test/KeyfleetVotesTopics.t.sol.
-  @kinds %{0 => :decision, 1 => :pay, 2 => :restrict_edits}
+  # The contract's `Choice` numbers, pinned in contracts/test/KeyfleetVotesTopics.t.sol;
+  # `None` is never cast.
+  @choices %{1 => :yes, 2 => :no, 3 => :abstain}
+  # The words of `ProposalCreated`'s data before its calls.
+  @head_words 7
 
   @doc "The topic0 of every event read here."
-  def topics, do: [@created, @pay, @restrict_edits, @vote, @withdrawn, @executed, @edits_set]
+  def topics, do: [@created, @ballot, @cancelled, @executed, @edits_set, @present, @cleared]
 
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
   record; `:error` for any other log or a malformed one.
   """
-  def decode(@created, [id, kind, proposer], data) do
+  def decode(@created, [id, author, proposer], data) do
     with {:ok, number} <- number(id),
-         {:ok, kind} <- kind(kind),
+         {:ok, author_key} <- number(author),
          {:ok, proposer} <- Abi.word(proposer, :address),
-         {:ok, [opened_block, digest, text]} <-
-           Abi.decode(data, [{:uint, 63}, :bytes32, :bytes]) do
+         <<head::binary-size(@head_words * 32), calls::binary>> <- data,
+         {:ok, fields} <- head(head),
+         {:ok, calls} <- calls(calls) do
       {:ok,
        {:proposal,
-        Map.merge(
-          %{
-            number: number,
-            kind: kind,
-            proposer: proposer,
-            opened_block: opened_block,
-            digest: if(digest != @zero_digest, do: digest)
-          },
-          text(text)
-        )}}
-    else
-      _malformed -> :error
-    end
-  end
-
-  def decode(@pay, [id, asset, recipient], data) do
-    with {:ok, number} <- number(id),
-         {:ok, asset} <- Abi.word(asset, :address),
-         {:ok, recipient} <- Abi.word(recipient, :address),
-         {:ok, [amount]} <- Abi.decode(data, [{:uint, 256}]) do
-      {:ok,
-       {:pay,
-        %{
+        Map.merge(fields, %{
           number: number,
-          payload: %{asset: asset, amount: Decimal.new(amount), recipient: recipient}
-        }}}
+          author_key: author_key,
+          proposer: proposer,
+          calls: calls
+        })}}
     else
       _malformed -> :error
     end
   end
 
-  def decode(@restrict_edits, [id, target], data) do
+  def decode(@ballot, [id, voter], data) do
     with {:ok, number} <- number(id),
-         {:ok, target_token_id} <- number(target),
-         {:ok, [restricted]} <- Abi.decode(data, [:bool]) do
+         {:ok, voter} <- Abi.word(voter, :address),
+         {:ok, [choice, [_ | _] = token_ids]} <-
+           Abi.decode(data, [{:uint, 8}, {:array, {:uint, 63}}]),
+         {:ok, choice} <- Map.fetch(@choices, choice),
+         true <- Enum.all?(token_ids, &(&1 > 0)) do
       {:ok,
-       {:restrict_edits,
-        %{number: number, payload: %{target_token_id: target_token_id, restricted: restricted}}}}
+       {:ballot, %{proposal_number: number, voter: voter, choice: choice, token_ids: token_ids}}}
     else
       _malformed -> :error
     end
   end
 
-  def decode(@vote, [id, voter], data) do
-    with {:ok, [support, token_ids]} <- Abi.decode(data, [:bool, {:array, {:uint, 63}}]),
-         do: vote(id, voter, support, token_ids)
-  end
-
-  def decode(@withdrawn, [id, voter], data) do
-    with {:ok, [token_ids]} <- Abi.decode(data, [{:array, {:uint, 63}}]),
-         do: vote(id, voter, nil, token_ids)
+  def decode(@cancelled, [id, by], data) do
+    with {:ok, number} <- number(id),
+         {:ok, by} <- Abi.word(by, :address),
+         {:ok, []} <- Abi.decode(data, []) do
+      {:ok, {:cancellation, %{proposal_number: number, cancelled_by: by}}}
+    else
+      _malformed -> :error
+    end
   end
 
   def decode(@executed, [id, executor], data) do
@@ -116,13 +101,31 @@ defmodule Keyfleet.Chain.VotesLog do
     end
   end
 
-  def decode(@edits_set, [target, id], data) do
-    with {:ok, token_id} <- number(target),
-         {:ok, number} <- number(id),
+  def decode(@edits_set, [token], data) do
+    with {:ok, token_id} <- number(token),
          {:ok, [restricted]} <- Abi.decode(data, [:bool]) do
-      {:ok,
-       {:edits_restriction,
-        %{token_id: token_id, restricted: restricted, proposal_number: number}}}
+      {:ok, {:edits_restriction, %{token_id: token_id, restricted: restricted}}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@present, [token], data) do
+    with {:ok, token_id} <- number(token),
+         {:ok, [at, _block_number, epoch]} <-
+           Abi.decode(data, [{:uint, 63}, {:uint, 63}, {:uint, 63}]),
+         true <- epoch > 0,
+         {:ok, at} <- DateTime.from_unix(at) do
+      {:ok, {:presence, %{kind: :present, token_id: token_id, at: at, ownership_epoch: epoch}}}
+    else
+      _malformed -> :error
+    end
+  end
+
+  def decode(@cleared, [token], data) do
+    with {:ok, token_id} <- number(token),
+         {:ok, []} <- Abi.decode(data, []) do
+      {:ok, {:presence, %{kind: :cleared, token_id: token_id, at: nil, ownership_epoch: nil}}}
     else
       _malformed -> :error
     end
@@ -130,22 +133,90 @@ defmodule Keyfleet.Chain.VotesLog do
 
   def decode(_topic0, _topics, _data), do: :error
 
-  defp vote(id, voter, support, token_ids) do
-    with {:ok, number} <- number(id),
-         {:ok, voter} <- Abi.word(voter, :address),
-         [_ | _] <- token_ids,
-         true <- Enum.all?(token_ids, &(&1 > 0)) do
+  # The data's words before its calls, the last of which must point just past
+  # them, where the calls begin.
+  defp head(head) do
+    with {:ok, [proposal_hash, content_hash, closes_at, expiry, e0, open_revision, offset]} <-
+           words(head, [
+             :bytes32,
+             :bytes32,
+             {:uint, 63},
+             {:uint, 63},
+             {:uint, 32},
+             {:uint, 48},
+             {:uint, 256}
+           ]),
+         true <- offset == @head_words * 32,
+         {:ok, closes_at} <- DateTime.from_unix(closes_at),
+         {:ok, expiry} <- DateTime.from_unix(expiry) do
       {:ok,
-       {:vote,
-        %{
-          proposal_number: number,
-          voter: voter,
-          support: support,
-          token_ids: token_ids
-        }}}
+       %{
+         proposal_hash: proposal_hash,
+         content_hash: content_hash,
+         closes_at: closes_at,
+         execution_expiry: expiry,
+         opening_count: e0,
+         open_revision: open_revision
+       }}
     else
       _malformed -> :error
     end
+  end
+
+  defp words(bytes, types) do
+    for(<<word::binary-size(32) <- bytes>>, do: word)
+    |> Enum.zip(types)
+    |> each_ok(fn {word, type} -> Abi.word(word, type) end)
+  end
+
+  # `(address target, uint256 value, bytes data)[]` exactly as the contract
+  # encodes it: its length, then the offset of each call, each call placed
+  # right after the one before it, and nothing left over. Each call is read
+  # strictly by `RegentChain.Abi.decode/2`.
+  defp calls(<<0::256>>), do: {:ok, []}
+
+  defp calls(<<length::256, rest::binary>>)
+       when length > 0 and length <= div(byte_size(rest), 32 * 4) do
+    <<offsets::binary-size(32 * length), _calls::binary>> = rest
+    starts = for <<offset::256 <- offsets>>, do: offset
+    ends = Enum.drop(starts, 1) ++ [byte_size(rest)]
+
+    with [first | _] <- starts,
+         true <- first == 32 * length,
+         true <- Enum.all?(Enum.zip(starts, ends), fn {from, to} -> from < to end) do
+      starts
+      |> Enum.zip(ends)
+      |> each_ok(fn {from, to} -> call(binary_part(rest, from, to - from)) end)
+    else
+      _malformed -> :error
+    end
+  end
+
+  defp calls(_malformed), do: :error
+
+  defp call(bytes) do
+    case Abi.decode(bytes, [:address, {:uint, 256}, :bytes]) do
+      {:ok, [target, value, data]} ->
+        {:ok, %{target: target, value: value, data: "0x" <> Base.encode16(data, case: :lower)}}
+
+      :error ->
+        :error
+    end
+  end
+
+  # `fun` applied to each of `items`, in order, while each answers `{:ok, value}`.
+  defp each_ok(items, fun) do
+    items
+    |> Enum.reduce_while({:ok, []}, fn item, {:ok, values} ->
+      case fun.(item) do
+        {:ok, value} -> {:cont, {:ok, [value | values]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> then(fn
+      {:ok, values} -> {:ok, Enum.reverse(values)}
+      :error -> :error
+    end)
   end
 
   defp number(topic) do
@@ -153,17 +224,5 @@ defmodule Keyfleet.Chain.VotesLog do
       {:ok, number} when number > 0 -> {:ok, number}
       _malformed -> :error
     end
-  end
-
-  defp kind(topic) do
-    with {:ok, value} <- Abi.word(topic, {:uint, 8}), do: Map.fetch(@kinds, value)
-  end
-
-  defp text(text) do
-    %{
-      text: binary_part(text, 0, min(byte_size(text), @text_cap)),
-      text_bytes: byte_size(text),
-      text_sha256: "0x" <> Base.encode16(:crypto.hash(:sha256, text), case: :lower)
-    }
   end
 end

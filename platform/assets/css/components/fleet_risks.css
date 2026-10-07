@@ -1,0 +1,12 @@
+@layer regents-product {
+/* How a fleet decides (KeyfleetWeb.Components.FleetRisks), said before a
+   key is bought or a shard issued: short lines in the muted ink. */
+
+.fleet-risks ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  color: var(--color-fg-muted);
+}
+}

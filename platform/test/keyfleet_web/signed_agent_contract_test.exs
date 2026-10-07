@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.ChainViews
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -41,6 +42,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
   @graph "/api/v1/agent/fleets/{fleet_id}/graph/"
   @proposal "/api/v1/agent/fleets/{fleet_id}/proposals/read"
+  @presence "/api/v1/agent/fleets/{fleet_id}/presence"
+  @propose "/api/v1/agent/fleets/{fleet_id}/proposals/create"
+  @vote "/api/v1/agent/fleets/{fleet_id}/proposals/vote"
+  @cancel "/api/v1/agent/fleets/{fleet_id}/proposals/cancel"
+  @carry_out "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out"
+  @split "/api/v1/agent/fleets/{fleet_id}/split"
+  @claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim"
 
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
   @picture %{
@@ -90,6 +98,32 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
+    {"POST", @presence, [], %{}},
+    {"POST", @propose, [],
+     %{
+       "kind" => "launch",
+       "key" => "2",
+       "hours" => "24",
+       "text" => "Launch the fleet's token",
+       "asset" => "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+       "amount" => "1",
+       "recipient" => "0x" <> String.duplicate("a", 40),
+       "rate" => "1",
+       "target" => "1",
+       "restricted" => "true",
+       "signature" => "approve",
+       "hash" => String.duplicate("a", 64),
+       "name" => "Probe",
+       "symbol" => "PRB",
+       "description" => "A probe",
+       "website" => "https://example.com",
+       "image" => "https://example.com/probe.png"
+     }},
+    {"POST", @vote, [], %{"number" => 1, "choice" => "yes"}},
+    {"POST", @cancel, [], %{"number" => 1}},
+    {"POST", @carry_out, [], %{"number" => 1}},
+    {"POST", @split, [], %{}},
+    {"POST", @claim, [], %{}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
@@ -161,6 +195,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    # The site's server reads the test's chain.
+    ChainViews.share!()
     {:ok, signer} = Siwa.LocalSigner.new()
     record_owner(1, @owner)
     record_owner(2, signer.address)
@@ -312,7 +348,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
     assert shard["step_down"]["data"] ==
-             RegentChain.Call.encode("end(uint256,address)", [1, holder.address])
+             RegentChain.Call.encode("end(uint256[],address)", [[1], holder.address])
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
@@ -432,15 +468,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     sync.(@address, [general, general], 422)
 
     # Reading a proposal: recorded, not yet made, and no proposal at all.
-    ProposalHelpers.proposal!(@fleet, 1, kind: :pay)
-    ProposalHelpers.vote!(@fleet, 1, @owner, false, [1])
+    ProposalHelpers.proposal!(@fleet, 1)
+    ProposalHelpers.vote!(@fleet, 1, @owner, :no, [1])
     proposal = %{"number" => 1, "votes_after_seq" => 0}
 
-    assert %{"kind" => "pay", "no_votes" => 1} =
+    assert %{"status" => "open", "no_votes" => 1} =
              answer(c, c.signer, "POST", @proposal, @address, proposal, 200).body["proposal"]
 
     answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 99}, 404)
     answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 0}, 422)
+
+    # Acting on chain: each route builds what the agent's own wallet sends,
+    # from the chain read at its latest block, and sends nothing itself.
+    chain_routes(c, own, unsold)
 
     # Creating rooms: new, taken, a name taken, malformed, by an outsider, and
     # past the limit.
@@ -553,6 +593,115 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answered -- documented == []
   end
 
+  # The agent holds key 2 and proposal 1 is recorded, open on the chain. A
+  # fleet whose contracts aren't recorded yet has nothing to build.
+  defp chain_routes(c, own, unsold) do
+    fleet = Fleets.get_fleet!(@fleet)
+    wallet = String.downcase(c.signer.address)
+    usdc = fleet.usdc_address
+    owner = {fleet.contract_address, "ownerOf(uint256)", [2], {"address", [wallet]}}
+    uint = &{&1, &2, &3, {"uint256", [&4]}}
+    status = {fleet.votes_address, "status(uint256)", [1], {"uint8", [0]}}
+    offchain = Map.put(@address, "fleet_id", "fleet_tech_classic")
+    words = %{"kind" => "decision", "key" => "2", "hours" => "24", "text" => "Survey the hull"}
+
+    for {template, body} <- [
+          {@presence, %{}},
+          {@propose, words},
+          {@vote, %{"number" => 1, "choice" => "yes"}},
+          {@cancel, %{"number" => 1}},
+          {@carry_out, %{"number" => 1}},
+          {@split, %{}},
+          {@claim, %{}}
+        ] do
+      assert answer(c, c.signer, "POST", template, offchain, body, 409).body ==
+               refused("fleet_not_on_chain")
+    end
+
+    ChainViews.put!([
+      owner,
+      {fleet.votes_address, "presenceEntry(uint256)", [2], {"uint32,uint32,uint64", [0, 0, 0]}},
+      {fleet.votes_address, "presenceQueue()", [], {"uint32,uint32,uint32", [0, 0, 0]}}
+    ])
+
+    assert %{"keys" => [%{"token_id" => 2, "present_until" => nil}], "transactions" => sent} =
+             answer(c, c.signer, "POST", @presence, @address, %{}, 200).body
+
+    assert Enum.map(sent, &{&1["name"], &1["blocked"]}) == [{"present", nil}, {"sweep", nil}]
+
+    ChainViews.put!([owner, {fleet.votes_address, "presenceEntry(uint256)", [2], :revert}])
+
+    assert answer(c, c.signer, "POST", @presence, @address, %{}, 503).body ==
+             refused("chain_unavailable")
+
+    # Proposing keeps the words before the wallet sends anything.
+    ChainViews.put!([owner])
+    made = answer(c, c.signer, "POST", @propose, @address, words, 200).body
+    assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
+    assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
+
+    unreadable = answer(c, c.signer, "POST", @propose, @address, %{words | "hours" => "5"}, 422)
+    assert unreadable.body["error"]["code"] == "invalid_proposal"
+
+    ChainViews.put!([owner, status])
+    vote = %{"number" => 1, "choice" => "no"}
+
+    assert %{"keys" => [2], "transactions" => [ballot]} =
+             answer(c, c.signer, "POST", @vote, @address, vote, 200).body
+
+    assert ballot["name"] == "no"
+
+    ChainViews.put!([owner, status, author(fleet, 1, 2)])
+    answer(c, c.signer, "POST", @cancel, @address, %{"number" => 1}, 200)
+
+    ChainViews.put!([{fleet.votes_address, "status(uint256)", [1], {"uint8", [0]}}])
+
+    assert [%{"blocked" => "Voting still open"}] =
+             answer(c, c.signer, "POST", @carry_out, @address, %{"number" => 1}, 200).body[
+               "transactions"
+             ]
+
+    for template <- [@vote, @cancel, @carry_out] do
+      body = Map.take(vote, ["number"]) |> Map.merge(if template == @vote, do: vote, else: %{})
+      answer(c, c.signer, "POST", template, @address, %{body | "number" => 99}, 404)
+      answer(c, c.signer, "POST", template, @address, %{body | "number" => 0}, 422)
+    end
+
+    ChainViews.put!([
+      {fleet.treasury_address, "splitAssets()", [], {"address[]", [[usdc]]}},
+      uint.(fleet.treasury_address, "dailySplitBps()", [], 50),
+      uint.(fleet.treasury_address, "lastRunAt()", [], 0),
+      uint.(fleet.treasury_address, "nextRunAt()", [], 0),
+      uint.(fleet.contract_address, "totalMinted()", [], 0),
+      {usdc, "decimals()", [], {"uint8", [6]}},
+      uint.(usdc, "balanceOf(address)", [fleet.treasury_address], 0)
+    ])
+
+    assert [%{"name" => "run_split", "blocked" => "No keys sold yet"}] =
+             answer(c, c.signer, "POST", @split, @address, %{}, 200).body["transactions"]
+
+    ChainViews.put!([
+      owner,
+      {fleet.rewards_address, "rewardAssets()", [], {"address[]", [[usdc]]}},
+      uint.(fleet.rewards_address, "accrued(address,uint256)", [usdc, 2], 2_000_000),
+      uint.(fleet.rewards_address, "credits(address,address)", [usdc, wallet], 0)
+    ])
+
+    assert %{"paid_to" => ^wallet, "waiting" => [%{"amount" => "2000000", "symbol" => "USDC"}]} =
+             answer(c, c.signer, "POST", @claim, own, %{}, 200).body
+
+    answer(c, c.signer, "POST", @claim, unsold, %{}, 404)
+  end
+
+  # Proposal `number` on the chain, made with `key`.
+  defp author(fleet, number, key) do
+    zero = "0x" <> String.duplicate("0", 64)
+
+    {fleet.votes_address, "proposal(uint256)", [number],
+     {"bytes32,bytes32,bytes32,uint32,uint48,uint64,uint64,uint64,uint32,uint32,uint32,uint32,uint32,bool,bool",
+      [zero, zero, zero, key, 1, 0, 0, 0, 3, 1, 2, 1, 0, false, false]}}
+  end
+
   # Signs and sends one request, and holds its answer to the contract.
   defp answer(c, signer, method, template, address, body, status) do
     response = send_signed(c, signer, method, fill(template, address), Jason.encode!(body))
@@ -615,7 +764,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @key_read},
       {"POST", @key_send},
       {"POST", @sync},
-      {"POST", @proposal}
+      {"POST", @proposal},
+      {"POST", @presence},
+      {"POST", @propose},
+      {"POST", @vote},
+      {"POST", @cancel},
+      {"POST", @carry_out},
+      {"POST", @split},
+      {"POST", @claim}
     ]
   end
 
@@ -623,6 +779,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp body_cap(@send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@key_send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@sync), do: 32 * 1024
+  defp body_cap(@propose), do: 4_000 * 12 + 8 * 1024
   defp body_cap(_template), do: 4096
 
   defp empty_or_minimal(@join), do: %{"name" => "Probe", "declared_harness" => "local"}
@@ -641,7 +798,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     }
 
   defp empty_or_minimal(@proposal), do: %{"number" => 1, "votes_after_seq" => 0}
-  defp empty_or_minimal(@avatar_start), do: @picture
+
+  defp empty_or_minimal(@propose),
+    do: %{"kind" => "decision", "key" => "2", "hours" => "24", "text" => "Away"}
+
+  defp empty_or_minimal(@vote), do: %{"number" => 1, "choice" => "yes"}
+  defp empty_or_minimal(@cancel), do: %{"number" => 1}
+  defp empty_or_minimal(@carry_out), do: %{"number" => 1}
   defp empty_or_minimal(_template), do: %{}
 
   # The signed-request check refuses a body it does not admit before anything

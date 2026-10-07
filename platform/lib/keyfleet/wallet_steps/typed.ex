@@ -8,14 +8,14 @@ defmodule Keyfleet.WalletSteps.Typed do
   alias RegentChain.Address
 
   @largest_uint256 Integer.pow(2, 256) - 1
-  @zero_code "0x" <> String.duplicate("0", 64)
 
   @doc "The largest number a `uint256` holds."
   def largest_uint256, do: @largest_uint256
 
   @doc """
-  Key numbers separated by commas or spaces, like `3, 7, 12`, each sent as
-  written. Nothing typed is `:no_keys`.
+  Key numbers separated by commas or spaces, like `3, 7, 12`, in order and
+  each once, as the contracts take a batch of keys. Nothing typed is
+  `:no_keys`.
   """
   def keys(text) do
     case String.split(text, ~r/[\s,]+/, trim: true) do
@@ -24,7 +24,8 @@ defmodule Keyfleet.WalletSteps.Typed do
 
       entries ->
         if Enum.all?(entries, &Regex.match?(~r/\A\d+\z/, &1)),
-          do: entries |> Enum.map(&String.to_integer/1) |> in_range(),
+          do:
+            entries |> Enum.map(&String.to_integer/1) |> Enum.sort() |> Enum.uniq() |> in_range(),
           else: {:error, :keys_unreadable}
     end
   end
@@ -114,16 +115,50 @@ defmodule Keyfleet.WalletSteps.Typed do
   end
 
   @doc """
-  A document code: 64 characters, 0 to 9 and a to f, with or without `0x`.
-  Nothing typed is the zero code, which points to no document.
+  A daily split rate written as a percent, like `0.5`, in basis points:
+  from 0.1% to 2%, to two decimal places.
   """
-  def document_code(text) do
+  def rate(text) do
+    with {:ok, hundredths} <- amount(text, 2, @largest_uint256),
+         true <- hundredths in 10..200 do
+      {:ok, hundredths}
+    else
+      _other -> {:error, :rate_unreadable}
+    end
+  end
+
+  @doc "How many hours a proposal is open to votes: one of the choices the form offers."
+  def hours(text) do
+    case Integer.parse(String.trim(text)) do
+      {hours, ""} when hours in [1, 6, 24, 48] -> {:ok, hours}
+      _other -> {:error, :hours_unreadable}
+    end
+  end
+
+  @doc """
+  A 32-byte hash: 64 characters, 0 to 9 and a to f, with or without `0x`,
+  lowercased.
+  """
+  def hash(text) do
     entry = text |> String.trim() |> String.downcase()
 
+    case Regex.run(~r/\A(?:0x)?([0-9a-f]{64})\z/, entry) do
+      [_whole, hex] -> {:ok, "0x" <> hex}
+      nil -> {:error, :hash_unreadable}
+    end
+  end
+
+  @doc """
+  Text up to `bytes` long, trimmed; nothing typed is `{:missing, name}` and
+  more is `{:too_long, name, bytes}`.
+  """
+  def text(text, name, bytes) do
+    entry = String.trim(text)
+
     cond do
-      entry == "" -> {:ok, @zero_code}
-      match = Regex.run(~r/\A(?:0x)?([0-9a-f]{64})\z/, entry) -> {:ok, "0x" <> List.last(match)}
-      true -> {:error, :document_code}
+      entry == "" -> {:error, {:missing, name}}
+      byte_size(entry) > bytes -> {:error, {:too_long, name, bytes}}
+      true -> {:ok, entry}
     end
   end
 end

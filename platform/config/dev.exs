@@ -33,6 +33,16 @@ config :keyfleet, Keyfleet.Keys.KeyArt, url: "http://127.0.0.1:4890"
 # LIGHTHOUSE_API_KEY; without one the picture job waits and tries again.
 config :keyfleet, Keyfleet.Lighthouse, api_key: System.get_env("LIGHTHOUSE_API_KEY")
 
+# The anvil lab (docs/anvil-lab.md): KEYFLEET_LAB names a local anvil node,
+# and the fleets' wallet buttons send on its chain instead of Base.
+case System.get_env("KEYFLEET_LAB") do
+  lab when lab in [nil, ""] ->
+    :ok
+
+  lab ->
+    config :keyfleet, :wallet_chains, %{31_337 => %{name: "Keyfleet lab", rpc_url: lab}}
+end
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

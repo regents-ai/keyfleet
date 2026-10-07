@@ -1,8 +1,10 @@
 defmodule Keyfleet.Chain.RewardsWaiting do
   @moduledoc """
-  The USDC one key has earned and not yet had paid out: what the fleet's
-  `KeyfleetRewards.accrued(usdc, tokenId)` answers at the block the node
-  last called its head.
+  What one key's holder can claim from the fleet's reward ledger, in each
+  asset it pays (`rewardAssets()`): what the key has accrued and not yet had
+  settled (`accrued(asset, tokenId)`), and the holder's credit, which a
+  claim pays out with it (`credits(asset, holder)`). Read at the block the
+  node last called its head.
 
   An answer is kept for 30 seconds in a table this process owns, so a key
   opened again and again in that time is read from the chain once. A read
@@ -15,6 +17,7 @@ defmodule Keyfleet.Chain.RewardsWaiting do
 
   @table __MODULE__
   @kept_ms 30_000
+  @reward_assets Call.encode("rewardAssets()", [])
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
@@ -25,35 +28,57 @@ defmodule Keyfleet.Chain.RewardsWaiting do
   end
 
   @doc """
-  The atomic USDC waiting for key `token_id` of `fleet`, which names its
-  `fleet_id`, `rewards_address` and `usdc_address`, as `{:ok, amount}`, or
-  the chain's `{:error, reason}`. An answer read less than 30 seconds before
-  `now`, in monotonic milliseconds, is given again without asking the chain.
+  What waits for key `token_id` of `fleet`, which names its `fleet_id` and
+  `rewards_address`, held by `holder`: `{:ok, [%{asset: asset, accrued:
+  amount, credit: amount}]}` in the ledger's order, amounts in the asset's
+  atomic units, or the chain's `{:error, reason}`. An answer read less than
+  30 seconds before `now`, in monotonic milliseconds, is given again without
+  asking the chain.
   """
-  def read(fleet, token_id, client, now \\ System.monotonic_time(:millisecond)) do
-    key = {fleet.fleet_id, token_id}
+  def read(fleet, token_id, holder, client, now \\ System.monotonic_time(:millisecond)) do
+    key = {fleet.fleet_id, token_id, holder}
 
     case :ets.lookup(@table, key) do
-      [{^key, amount, read_at}] when now - read_at < @kept_ms -> {:ok, amount}
-      _unread_or_old -> read_chain(fleet, token_id, client, key, now)
+      [{^key, waiting, read_at}] when now - read_at < @kept_ms -> {:ok, waiting}
+      _unread_or_old -> read_chain(fleet, token_id, holder, client, key, now)
     end
   end
 
-  defp read_chain(fleet, token_id, client, key, now) do
-    data = Call.encode("accrued(address,uint256)", [fleet.usdc_address, token_id])
+  defp read_chain(fleet, token_id, holder, client, key, now) do
+    at = &call(client, fleet.rewards_address, &1, &2, &3)
 
     with {:ok, head} <- client.head(),
-         {:ok, returned} <- client.call(fleet.rewards_address, data, head.hash),
-         {:ok, [amount]} <- decode(returned) do
-      :ets.insert(@table, {key, amount, now})
-      {:ok, amount}
+         {:ok, [assets]} <- at.(@reward_assets, {:array, :address}, head.hash),
+         {:ok, waiting} <- each_asset(assets, token_id, holder, at, head.hash) do
+      :ets.insert(@table, {key, waiting, now})
+      {:ok, waiting}
     end
   end
 
-  defp decode(returned) do
-    case Abi.decode(returned, [{:uint, 256}]) do
-      {:ok, values} -> {:ok, values}
-      :error -> {:error, :unreadable_answer}
+  defp each_asset(assets, token_id, holder, at, block_hash) do
+    Enum.reduce_while(assets, {:ok, []}, fn asset, {:ok, waiting} ->
+      accrued = Call.encode("accrued(address,uint256)", [asset, token_id])
+      credit = Call.encode("credits(address,address)", [asset, holder])
+
+      with {:ok, [accrued]} <- at.(accrued, {:uint, 256}, block_hash),
+           {:ok, [credit]} <- at.(credit, {:uint, 256}, block_hash) do
+        {:cont, {:ok, [%{asset: asset, accrued: accrued, credit: credit} | waiting]}}
+      else
+        failure -> {:halt, failure}
+      end
+    end)
+    |> then(fn
+      {:ok, waiting} -> {:ok, Enum.reverse(waiting)}
+      failure -> failure
+    end)
+  end
+
+  defp call(client, to, data, type, block_hash) do
+    with {:ok, returned} <- client.call(to, data, block_hash) do
+      case Abi.decode(returned, [type]) do
+        {:ok, values} -> {:ok, values}
+        :error -> {:error, :unreadable_answer}
+      end
     end
   end
 end

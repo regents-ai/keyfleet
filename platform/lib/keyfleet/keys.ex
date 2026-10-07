@@ -1,7 +1,8 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
-  Key ownership, reveals, shards and edit restrictions projected from
-  contract events, and which revealed keys have their card picture.
+  Key ownership, reveals, shards, agent voting, presence and edit
+  restrictions projected from contract events, and which revealed Keys have
+  their card picture.
   """
   use Ash.Domain
 
@@ -61,13 +62,31 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :before_seq, :limit]
 
       define :active_shard,
-        action: :active_for_wallet,
-        args: [:fleet_id, :wallet],
+        action: :active_of_key_held_by,
+        args: [:fleet_id, :token_id, :wallet],
         not_found_error?: false
 
       define :active_shards_held_by, action: :active_held_by, args: [:wallet]
       define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
       define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
+    end
+
+    resource Keyfleet.Keys.AgentVoting do
+      define :record_agent_voting, action: :record
+
+      define :agent_voting_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
+
+      define :agent_voting_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+    end
+
+    resource Keyfleet.Keys.Presence do
+      define :record_presence, action: :record
+
+      define :presences_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
     end
 
     resource Keyfleet.Keys.EditsRestriction do
@@ -96,7 +115,8 @@ defmodule Keyfleet.Keys do
 
   @doc """
   Where a fleet's pages hear which of its keys have just changed: sold, changed
-  hands, revealed, a shard issued or ended, or edits restricted or allowed, as
+  hands, revealed, a shard issued or ended, agent voting turned on or off, or
+  edits restricted or allowed, as
   `{:keys_changed, fleet_id, token_ids}`.
   """
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"
@@ -108,7 +128,7 @@ defmodule Keyfleet.Keys do
   Keys rank by the order they were sold, the first key sold ranking highest. A
   person is the highest-ranked key their wallets hold, and `wallet` is the one
   holding it. An agent is the highest-ranked key its wallet holds, or else the
-  key of the shard it holds in the fleet, and `wallet` is its own. Everything
+  highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
   either writes in the fleet is written as that key.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
@@ -132,7 +152,7 @@ defmodule Keyfleet.Keys do
   defp held_or_shard(fleet_id, wallet, actor),
     do:
       held_identity_key!(fleet_id, [wallet], actor: actor) ||
-        active_shard!(fleet_id, wallet, actor: actor)
+        Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
 
   @doc """
   Up to `limit` of the fleet's keys numbered 1 to `minted` that have no

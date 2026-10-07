@@ -53,17 +53,13 @@ defmodule Keyfleet.Activity do
       true when the wallet ended its own shard, false when the key's owner
       did. A shard that runs out, or whose key changes hands, ends without an
       item.
-    * `:proposed`: `number`, `kind` (`:decision`, `:pay` or
-      `:restrict_edits`), `proposer` (`%{wallet: wallet, token_id: n |
-      nil}`, the lowest key the wallet holds today), `gist` (the first 160
-      characters of its text), `edits` (`%{token_id: n, restricted: bool}`
-      or nil) and `payment` (`%{asset: address, amount: atomic units,
-      recipient: address, assets: assets}` or nil, where `assets` is the
-      fleet's USDC and the asset's symbol and decimals, as
-      `Keyfleet.Treasury.assets/1` has them).
-    * `:votes`: consecutive votes on one proposal: `number`, and `yes` and
-      `no`, each `%{count: keys, token_ids: up to three, lowest first}`.
-    * `:executed`: `number`, `kind`, `payment` and `edits` as for `:proposed`.
+    * `:proposed`: `number`, `proposer` (`%{wallet: wallet, token_id: n |
+      nil}`, the lowest key the wallet holds today) and `calls`, how many
+      calls the treasury makes if it is carried out.
+    * `:votes`: consecutive votes on one proposal: `number`, and `yes`, `no`
+      and `abstain`, each `%{count: keys, token_ids: up to three, lowest
+      first}`.
+    * `:executed`: `number`.
     * `:open_question` (from `headline/2` only): `goal` (an item) and
       `question`, as `Keyfleet.Graph.open_question/1` finds them.
 
@@ -103,13 +99,11 @@ defmodule Keyfleet.Activity do
   """
 
   alias Keyfleet.Agents
-  alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
-  alias Keyfleet.Treasury
 
   @type position :: nil | integer() | {DateTime.t(), term()}
   @type cursor :: %{
@@ -135,7 +129,6 @@ defmodule Keyfleet.Activity do
   @post_gap 3_600_000_000
   @post_span 21_600_000_000
   @listed_keys 3
-  @excerpt 160
   @recent 7 * 86_400
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
 
@@ -474,7 +467,7 @@ defmodule Keyfleet.Activity do
       )
 
     rest = rest ++ Enum.drop(records, @group_cap)
-    sides = Enum.group_by(votes, & &1.support)
+    sides = Enum.group_by(votes, & &1.choice)
 
     item =
       entry(
@@ -484,9 +477,9 @@ defmodule Keyfleet.Activity do
         List.last(votes).record_seq,
         %{
           number: first.proposal_number,
-          yes: tally(sides[true]),
-          no: tally(sides[false]),
-          withdrawn: tally(sides[nil])
+          yes: tally(sides[:yes]),
+          no: tally(sides[:no]),
+          abstain: tally(sides[:abstain])
         }
       )
 
@@ -500,12 +493,11 @@ defmodule Keyfleet.Activity do
         proposal.observed_at,
         :proposed,
         proposal.record_seq,
-        Map.merge(offer(proposal), %{
+        %{
           number: proposal.number,
-          kind: proposal.kind,
           proposer: {:holder, proposal.proposer},
-          gist: gist(proposal)
-        })
+          calls: length(proposal.calls)
+        }
       )
 
     [item | group_records(rest)]
@@ -515,14 +507,12 @@ defmodule Keyfleet.Activity do
     do: [execution_entry(execution) | group_records(rest)]
 
   defp execution_entry(execution) do
-    %{proposal: proposal} = execution
-
     entry(
       "executed:#{execution.record_seq}",
       execution.observed_at,
       :executed,
       execution.record_seq,
-      Map.merge(offer(proposal), %{number: proposal.number, kind: proposal.kind})
+      %{number: execution.proposal_number}
     )
   end
 
@@ -532,33 +522,6 @@ defmodule Keyfleet.Activity do
     token_ids = votes |> Enum.flat_map(& &1.token_ids) |> Enum.uniq() |> Enum.sort()
     %{count: length(token_ids), token_ids: Enum.take(token_ids, @listed_keys)}
   end
-
-  # What a payment pays, or which key's edits a vote restricts or restores.
-  defp offer(%{kind: :pay} = proposal) do
-    %{
-      payment: %{
-        asset: proposal.asset,
-        amount: Decimal.to_integer(proposal.amount),
-        recipient: proposal.recipient,
-        assets: {:assets, proposal.asset}
-      },
-      edits: nil
-    }
-  end
-
-  defp offer(%{kind: :restrict_edits} = proposal) do
-    %{
-      payment: nil,
-      edits: %{token_id: proposal.target_token_id, restricted: proposal.restricted}
-    }
-  end
-
-  defp offer(_proposal), do: %{payment: nil, edits: nil}
-
-  defp gist(%{text_start: bytes}), do: text(bytes, @excerpt)
-
-  # Chain texts are bytes that need not be valid text.
-  defp text(bytes, length), do: bytes |> String.replace_invalid() |> String.slice(0, length)
 
   # Workspace changes.
   defp graph_entry(event) do
@@ -632,7 +595,7 @@ defmodule Keyfleet.Activity do
   defp agent(profile), do: %{id: profile.id, name: profile.name}
 
   # Naming: the facts hold references (`{:actor, token_id, wallet}`,
-  # `{:holder, wallet}`, `{:item, id}` and `{:assets, asset}`), looked up
+  # `{:holder, wallet}` and `{:item, id}`), looked up
   # together for the whole page, a batch per kind of reference.
   defp name([], _fleet_id), do: []
 
@@ -652,7 +615,7 @@ defmodule Keyfleet.Activity do
 
   defp refs(ref)
        when is_tuple(ref) and
-              elem(ref, 0) in [:actor, :holder, :item, :assets],
+              elem(ref, 0) in [:actor, :holder, :item],
        do: [ref]
 
   defp refs(_value), do: []
@@ -661,8 +624,7 @@ defmodule Keyfleet.Activity do
     %{
       actor: agents_by_wallet(refs[:actor]),
       holder: holders(fleet_id, refs[:holder]),
-      item: items(fleet_id, refs[:item]),
-      assets: assets(fleet_id, refs[:assets])
+      item: items(fleet_id, refs[:item])
     }
   end
 
@@ -696,14 +658,6 @@ defmodule Keyfleet.Activity do
     |> Map.new(&{&1.id, &1})
   end
 
-  # The page's payments' assets are read once for all of them.
-  defp assets(_fleet_id, nil), do: nil
-
-  defp assets(fleet_id, refs) do
-    assets = refs |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
-    fleet_id |> Fleets.get_fleet!() |> Treasury.assets(assets)
-  end
-
   defp resolve(facts, names) when is_map(facts) and not is_struct(facts),
     do: Map.new(facts, fn {key, value} -> {key, resolve(value, names)} end)
 
@@ -723,9 +677,6 @@ defmodule Keyfleet.Activity do
       object -> %{id: id, type: object.type, title: object.title}
     end
   end
-
-  defp resolve({:assets, asset}, %{assets: assets}),
-    do: %{assets | details: Map.take(assets.details, [asset])}
 
   defp resolve(value, _names), do: value
 

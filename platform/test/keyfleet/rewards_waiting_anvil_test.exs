@@ -12,7 +12,8 @@ defmodule Keyfleet.RewardsWaitingAnvilTest do
 
   @contracts Path.expand("../../../contracts", __DIR__)
   @buyer "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-  @claimable "claimable(address,address,uint256[])(uint256)"
+  @accrued "accrued(address,uint256)(uint256)"
+  @credits "credits(address,address)(uint256)"
 
   setup do
     :ets.delete_all_objects(RewardsWaiting)
@@ -21,7 +22,8 @@ defmodule Keyfleet.RewardsWaitingAnvilTest do
     %{url: url, fleet: fleet}
   end
 
-  test "a key's rewards are what its holder could claim for it", %{url: url, fleet: fleet} do
+  test "a key's rewards are what the ledger says it has accrued and its holder has in credit",
+       %{url: url, fleet: fleet} do
     rewards = cast_call!(url, fleet, "REWARDS()(address)")
     usdc = cast_call!(url, fleet, "USDC()(address)")
     cohort = cast_call!(url, rewards, "keyCohort(uint256)(uint256)", ["1"])
@@ -39,21 +41,15 @@ defmodule Keyfleet.RewardsWaitingAnvilTest do
       "5000001"
     ])
 
-    shown = %{
-      fleet_id: "fleet_tech_classic",
-      rewards_address: String.downcase(rewards),
-      usdc_address: String.downcase(usdc)
-    }
-
-    claimable = fn keys -> cast_call!(url, rewards, @claimable, [usdc, @buyer, keys]) end
+    shown = %{fleet_id: "fleet_tech_classic", rewards_address: String.downcase(rewards)}
+    asset = String.downcase(usdc)
+    credit = String.to_integer(cast_call!(url, rewards, @credits, [usdc, @buyer]))
 
     for token_id <- [1, 2] do
-      assert {:ok, waiting} = RewardsWaiting.read(shown, token_id, RpcClient)
-      assert waiting == 2_500_000
+      assert {:ok, [%{asset: ^asset, accrued: 2_500_000, credit: ^credit}]} =
+               RewardsWaiting.read(shown, token_id, String.downcase(@buyer), RpcClient)
 
-      assert waiting ==
-               String.to_integer(claimable.("[#{token_id}]")) -
-                 String.to_integer(claimable.("[]"))
+      assert cast_call!(url, rewards, @accrued, [usdc, "#{token_id}"]) == "2500000"
     end
   end
 

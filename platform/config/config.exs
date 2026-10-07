@@ -36,21 +36,21 @@ config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage",
 # (CVE-2026-82752).
 config :ash, default_string_length_count: :codepoints
 
-# Key ownership is read from each deployed fleet every few seconds, by the
-# JSON-RPC node that `KEYFLEET_RPC_URL` names at runtime.
-config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, poll_interval_ms: 4_000
+# Each deployed fleet's history is read every few seconds, by the JSON-RPC
+# node that `KEYFLEET_RPC_URL` names at runtime (`Keyfleet.Chain.ReadFleet`).
+config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interval_seconds: 4
 
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
 # records: its name in the page's words, and the public node a wallet adds
 # it with when the wallet doesn't know it yet. The site's own node never
 # reaches a page.
-config :keyfleet, :wallet_chains, %{1 => %{name: "Ethereum", rpc_url: "https://eth.merkle.io"}}
+config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
 
 # The node the server reads each chain through, by chain id: the steps a
 # page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
 # the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
 # such as a private node or a lab fork, and this address never reaches a page.
-config :keyfleet, :chain_nodes, %{1 => "https://eth.merkle.io"}
+config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
 
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
@@ -124,9 +124,16 @@ config :keyfleet, Oban,
   # machine), so two roster runs never set up or change one hub together.
   # Making fleets' repositories in the code store waits on it too.
   # Deleting agents' replaced pictures from their bucket waits on it too.
-  # Drawing revealed keys' cards waits on the key-art service, one at a time.
-  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2, key_art: 1],
-  cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
+  # Drawing revealed Keys' cards waits on the key-art service, one at a time.
+  # Reading the fleets from the chain waits on a node, so it has its own queue:
+  # one long-lived history job per fleet and its minutely balance readings.
+  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2, key_art: 1, chain: 10],
+  cron: [
+    crontab: [
+      {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
+      {"* * * * *", Keyfleet.Chain.Watch}
+    ]
+  ],
   pruner: [max_age: {7, :days}],
   lifeline: [rescue_after: {10, :minutes}]
 

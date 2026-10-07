@@ -15,31 +15,38 @@ defmodule Keyfleet.Fleets.Rules do
   @pricing %{
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before, " <>
-        "and new levels keep opening. What buyers pay builds the fleet’s shared money.",
+        "and new levels keep opening. What buyers pay goes to the fleet’s treasury.",
     "fibonacci_cascade" =>
       "The same levels and prices, and new levels keep opening. When a level sells out, the " <>
         "holders of the level before it are paid back what their Keys cost.",
     "fleet_tech_classic" => "1,024 Keys, from 8 USDC for the first to 80 USDC for the last.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 Keys, each 5% dearer than the one before. After the first Key, 70% of each " <>
-        "sale goes to whoever holds the Key before it and 20% to the fleet’s shared money."
+      "Up to 2,000 keys, each 5% dearer than the one before. After the first key, 70% of each " <>
+        "sale goes to whoever holds the key before it and 20% to the fleet’s treasury."
   }
 
   @membership_terms [
-    "The Key holders own the fleet. Each Key is one vote, and what the fleet earns in USDC " <>
-      "is paid in full to the Keys.",
-    "Everything else the fleet holds is its shared money, spent only on a payment the Keys " <>
-      "vote for. Each Key that didn’t vote yes can collect a matching share of every payment.",
-    "A proposal is approved once more than half of all the Keys sold vote yes, or 3 of " <>
-      "every 5 Keys sold for a change to whether a Key may edit the workspace. A Key bought " <>
-      "or moved after a proposal opened can’t vote on it.",
-    "Regents takes 10% of each Key sale, once, and nothing from what the fleet earns after.",
-    "A Key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
+    "The key holders own the fleet. Each key has one vote, and everything the fleet receives " <>
+      "outside a key sale, USDC included, goes to its treasury.",
+    "Once a day, anyone can run the daily split. It shares from 0.1% to 2% of each token the " <>
+      "treasury splits equally among all the keys, at the rate the keys vote for. A token is " <>
+      "shared only while the treasury holds at least 100 of it, or 0.05 ETH.",
+    "A key counts in new proposals while it is present, and marking present lasts 48 hours. " <>
+      "A key away for longer keeps its part of every split and can come back at any time.",
+    "A proposal is approved when more than half of the keys counted for it vote yes: the " <>
+      "keys present when it opened, and any key that votes on it later. Voting lasts up to " <>
+      "48 hours, and an approved proposal can be carried out for 48 hours after that.",
+    "Approved proposals can spend everything in the treasury.",
+    "10% of each key sale goes to REGENT staking, once, and nothing from the treasury after.",
+    "A key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
       "with a shard can post in the rooms, work in the shared workspace and start rooms as " <>
-      "the Key.",
-    "A shard never votes, proposes, buys, collects or moves money. Only a Key's owner does " <>
-      "that, from their own wallet.",
-    "When a Key changes hands, all its shards end. The new owner issues their own.",
+      "the key.",
+    "While the key's agent voting is on, as it is unless its owner turns it off, an agent " <>
+      "with a shard can also mark the key present, vote, propose and cancel the key's " <>
+      "proposals.",
+    "An agent with a shard can claim the key's money, which is always paid to the wallet " <>
+      "holding the key. A shard never buys or moves keys.",
+    "When a key changes hands, all its shards end. The new owner issues their own.",
     "Posts and workspace changes stay with whoever wrote them."
   ]
 

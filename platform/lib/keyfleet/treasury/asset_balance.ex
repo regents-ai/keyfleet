@@ -1,10 +1,10 @@
 defmodule Keyfleet.Treasury.AssetBalance do
   @moduledoc """
-  One asset in a `Keyfleet.Treasury.Reading`: the fleet's budget in it
-  (`freeCapital`) and what the reward ledger holds for the key holders in it
-  (`backed`). Amounts are in the asset's atomic units, any uint256; its
-  symbol and decimals are its
-  `Keyfleet.Treasury.AssetDetails`.
+  One asset the daily split shares, in a `Keyfleet.Treasury.Reading`: what
+  the fleet's treasury holds of it (`held`) and what its reward ledger holds
+  for the keys and their former holders (`backed`). Amounts are in the
+  asset's atomic units, any uint256; ETH is the zero address. A token's
+  symbol and decimals are its `Keyfleet.Treasury.AssetDetails`.
   """
   use Ash.Resource, data_layer: :embedded
 
@@ -16,7 +16,7 @@ defmodule Keyfleet.Treasury.AssetBalance do
 
     # Whole numbers, which keep all 78 digits a uint256 can have in the
     # stored reading.
-    for field <- [:free_capital, :backed] do
+    for field <- [:held, :backed] do
       attribute field, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
     end
   end

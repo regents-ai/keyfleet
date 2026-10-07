@@ -305,7 +305,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
              201
 
     proposal = ProposalHelpers.proposal!("fibonacci_syndicate", 1)
-    ProposalHelpers.vote!("fibonacci_syndicate", 1, @owner, true, [1])
+    ProposalHelpers.vote!("fibonacci_syndicate", 1, @owner, :yes, [1])
 
     first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "coding" => 0}))
     assert first.status == 200
@@ -315,12 +315,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
              "items" => [
                %{
                  "number" => 1,
-                 "kind" => "decision",
-                 "status" => "approved",
+                 "status" => "open",
                  "yes_votes" => 1,
                  "no_votes" => 0,
-                 "keys_sold" => 1,
-                 "text_preview" => "Proposal 1",
+                 "abstain_votes" => 0,
                  "changed_seq" => 2
                }
              ],
@@ -333,10 +331,9 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     read = send_signed(c, "POST", @read_proposal, ~s({"number":1,"votes_after_seq":0}))
     assert read.status == 200
-    assert read.body["proposal"]["text"] == "Proposal 1"
-    assert read.body["proposal"]["text_sha256"] == proposal.text_sha256
+    assert read.body["proposal"]["content_hash"] == proposal.content_hash
 
-    assert [%{"voter" => @owner, "support" => true, "votes" => 1, "keys" => [1], "seq" => 2}] =
+    assert [%{"voter" => @owner, "choice" => "yes", "votes" => 1, "keys" => [1], "seq" => 2}] =
              read.body["votes"]
 
     assert {read.body["votes_next_cursor"], read.body["votes_has_more"]} == {2, false}

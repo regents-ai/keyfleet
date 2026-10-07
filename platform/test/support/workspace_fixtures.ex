@@ -260,5 +260,5 @@ defmodule Keyfleet.WorkspaceFixtures do
 
   defp by(opts), do: Keyword.get(opts, :by, 17)
 
-  defp principal(opts), do: "member:1:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
+  defp principal(opts), do: "member:8453:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
 end

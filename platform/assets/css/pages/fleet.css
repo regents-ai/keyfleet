@@ -475,4 +475,12 @@
   }
 }
 
+/* A heading with a tip beside it keeps the tip on its line. */
+#fleet-launch h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 }

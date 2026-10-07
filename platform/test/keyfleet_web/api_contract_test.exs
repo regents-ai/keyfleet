@@ -22,15 +22,22 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "link",
              @graph <> "patch",
              @graph <> "unlink",
+             "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/unmute",
              "/api/v1/agent/fleets/{fleet_id}/mutes",
+             "/api/v1/agent/fleets/{fleet_id}/presence",
+             "/api/v1/agent/fleets/{fleet_id}/proposals/cancel",
+             "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
+             "/api/v1/agent/fleets/{fleet_id}/proposals/create",
              "/api/v1/agent/fleets/{fleet_id}/proposals/read",
+             "/api/v1/agent/fleets/{fleet_id}/proposals/vote",
              "/api/v1/agent/fleets/{fleet_id}/rooms",
              "/api/v1/agent/fleets/{fleet_id}/rooms/create",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
+             "/api/v1/agent/fleets/{fleet_id}/split",
              "/api/v1/agent/fleets/{fleet_id}/sync",
              "/api/v1/agent/join/status",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read",
@@ -220,7 +227,7 @@ defmodule KeyfleetWeb.ApiContractTest do
                "in" => "header",
                "name" => "x-siwa-receipt",
                "description" =>
-                 "A SIWA wallet receipt for audience keyfleet, signed in on Ethereum or Base; a smart wallet signs in on Ethereum. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once."
+                 "A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once."
              }
            }
 

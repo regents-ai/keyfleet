@@ -12,28 +12,22 @@ defmodule KeyfleetWeb.ActivityLines do
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
     * `{:quote, text}`: words a member wrote;
-    * `{:proposal, number}`: a proposal;
-    * `{:amount, text, token}`: an amount paid in a token other than the
-      fleet's USDC, as `KeyfleetWeb.ProposalsPage.amount/3` words it with
-      the symbol the token chose, and the token's address.
+    * `{:proposal, number}`: a proposal.
 
-  Every member's words and every token's symbol in the parts have been through
+  Every member's words in the parts have been through
   `KeyfleetWeb.DirectoryMD.visible/1`, so none can hide or reverse the
   sentence around them, wherever the sentence is shown. Numbers are written
   the one way every page writes them, "Key 1,234".
 
   `text/1` joins the parts for a web page, which escapes them itself.
-  `markdown/1` joins them for Markdown, passing every member's words and
-  every amount in a token's own symbol through
+  `markdown/1` joins them for Markdown, passing every member's words through
   `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
-  either. Both quote an amount in a token's own symbol, so the symbol can't
-  pass for the site's words, such as whom the fleet paid.
+  either.
   """
 
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph
   alias KeyfleetWeb.DirectoryMD
-  alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WorkspacePage
 
   @created %{
@@ -47,9 +41,8 @@ defmodule KeyfleetWeb.ActivityLines do
   }
 
   # How long words the site didn't write may run in Markdown, by what they
-  # are. An amount fits whole: any uint256 at up to 255 decimals, and its
-  # token's symbol.
-  @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160, amount: 400}
+  # are.
+  @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160}
 
   @doc "The item as one sentence for a web page."
   def text(item), do: item |> parts() |> Enum.map_join(&shown/1) |> capitalized()
@@ -140,11 +133,11 @@ defmodule KeyfleetWeb.ActivityLines do
     ]
 
   def parts(%{kind: :proposed, facts: f}),
-    do: [holder(f.proposer), " put ", proposal(f), " to a vote" | proposal_gist(f)]
+    do: [holder(f.proposer), " put ", proposal(f), " to a vote."]
 
   def parts(%{kind: :votes, facts: f}) do
     votes =
-      [voted(f.yes, :yes), voted(f.no, :no), voted(f.withdrawn, :withdrawn)]
+      [voted(f.yes, :yes), voted(f.no, :no), voted(f.abstain, :abstain)]
       |> Enum.reject(&is_nil/1)
       |> Enum.intersperse([" and "])
       |> List.flatten()
@@ -152,14 +145,7 @@ defmodule KeyfleetWeb.ActivityLines do
     votes ++ [" on ", proposal(f), "."]
   end
 
-  def parts(%{kind: :executed, facts: %{kind: :decision} = f}),
-    do: [proposal(f), " was recorded as decided."]
-
-  def parts(%{kind: :executed, facts: %{kind: :pay} = f}),
-    do: ["The fleet paid " | paid(f.payment)] ++ [" (", proposal(f), ")."]
-
-  def parts(%{kind: :executed, facts: %{kind: :restrict_edits, edits: edits} = f}),
-    do: ["The fleet " <> edits_done(edits) <> " (", proposal(f), ")."]
+  def parts(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
 
   def parts(%{kind: :open_question, facts: f}),
     do: ["For ", item(f.goal), ": ", words(f.question)]
@@ -279,43 +265,6 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
 
-  defp proposal_gist(%{kind: :restrict_edits, edits: edits} = facts),
-    do: [" to " <> edits_asked(edits) | gist(facts)]
-
-  defp proposal_gist(%{kind: :pay, payment: payment} = facts),
-    do: [" to pay " | paid(payment)] ++ gist(facts)
-
-  defp proposal_gist(facts), do: gist(facts)
-
-  defp gist(%{gist: gist}), do: [": ", words(gist)]
-
-  # "12.5 USDC to 0x12ab..cd34".
-  defp paid(payment) do
-    amount = ProposalsPage.amount(payment.amount, payment.asset, payment.assets)
-    [amount(amount), " to #{RegentFormat.short_address(payment.recipient)}"]
-  end
-
-  # The fleet's USDC, and a token that hasn't said its symbol, are named in
-  # the site's words; any other token by the symbol it chose.
-  defp amount(%{text: text, token: nil}), do: visible(text)
-
-  defp amount(%{text: text, token: token, symbol?: false}),
-    do: "#{text} #{RegentFormat.short_address(token)}"
-
-  defp amount(%{text: text, token: token, symbol?: true}), do: {:amount, visible(text), token}
-
-  defp edits_asked(%{token_id: token_id, restricted: true}),
-    do: "stop Key #{Rules.grouped(token_id)} editing the workspace"
-
-  defp edits_asked(%{token_id: token_id, restricted: false}),
-    do: "let Key #{Rules.grouped(token_id)} edit the workspace again"
-
-  defp edits_done(%{token_id: token_id, restricted: true}),
-    do: "stopped Key #{Rules.grouped(token_id)} editing the workspace"
-
-  defp edits_done(%{token_id: token_id, restricted: false}),
-    do: "let Key #{Rules.grouped(token_id)} edit the workspace again"
-
   defp voted(%{count: 0}, _word), do: nil
 
   defp voted(%{count: count, token_ids: token_ids}, side) do
@@ -326,8 +275,7 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"
-  defp did(:withdrawn, 1), do: " withdrew its vote"
-  defp did(:withdrawn, _count), do: " withdrew their votes"
+  defp did(:abstain, _count), do: " abstained"
 
   # "A", "A and B", "A, B and C", "A, B, C and 2 others".
   defp listing(parts, 0), do: joined(parts)
@@ -348,9 +296,6 @@ defmodule KeyfleetWeb.ActivityLines do
   @doc ~S|How a proposal is named on a page: "Proposal 12".|
   def proposal_name(number), do: "Proposal #{Rules.grouped(number)}"
 
-  @doc ~S|How an amount in a token's own symbol is named on a page: "“3 FOO” 0xabcd..ef01".|
-  def amount_name(text, token), do: "“#{text}” #{RegentFormat.short_address(token)}"
-
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
   defp shown({:item, _id, nil}), do: "an item"
@@ -359,7 +304,6 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:agent, name}), do: name
   defp shown({:quote, text}), do: "“#{text}”"
   defp shown({:proposal, number}), do: proposal_name(number)
-  defp shown({:amount, text, token}), do: amount_name(text, token)
 
   defp marked(text) when is_binary(text), do: text
   defp marked({:key, token_id, nil}), do: key_name(token_id, nil)
@@ -373,9 +317,6 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:agent, name}), do: said(name, :agent)
   defp marked({:quote, text}), do: said(text, :quote)
   defp marked({:proposal, number}), do: proposal_name(number)
-
-  defp marked({:amount, text, token}),
-    do: said(text, :amount) <> " " <> RegentFormat.short_address(token)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
 

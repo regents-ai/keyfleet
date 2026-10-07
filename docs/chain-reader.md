@@ -1,49 +1,87 @@
 # Reading the fleets from the chain
 
-The app reads each deployed fleet's `OwnershipEpoch` events from Ethereum and
-records who holds every key. From the same contract it records each key's
-reveal (`KeyRevealed`: the Chainlink VRF request and the seed its traits are
-drawn from), income paid to the keys (`IncomeRecognized`), shared money taken
-in (`SharedMoneyRecognized`, for a token that is not the income token) and
-payments out of shared money (`BudgetPaid`, with the match per key and the
-total set aside for the keys that did not vote yes). From the fleet's vote
-contract it records every proposal, vote, withdrawn vote and execution
-(`ProposalCreated`, with the block it opened in, and `PayProposed` or
-`RestrictEditsProposed` beside it for a payment or a change to a key's
-workspace edits; `VoteCast`, `VoteWithdrawn` and `ProposalExecuted`). A payment
-keeps its asset, amount, recipient and reason; a change to a key's edits keeps
-the key and whether it stops or allows them, and carrying one out records
-`EditsRestrictionSet`, which says whether that key's edits are now restricted.
-The reader does not record `Collected`, the vote contract's log of matches paid
-out. From the fleet's shard contract (`KeyfleetShards`) it records every shard
-a key's owner issues (`ShardIssued`: the key, the wallet, when the shard runs
-out and the key's ownership it lasts for) and every shard ended early
-(`ShardEnded`, with who ended it). Whether a shard is active is worked out each
-time it is asked, never stored: it is the wallet's latest shard record, it has
-not run out, and its key has not changed hands since it was issued.
+The app reads each deployed fleet's five contracts on Base (chain 8453) and
+records what happened in them, in the order the chain made it:
 
-Apart from those passes, so a slow node never holds them up, it reads every
-minute, at the head, the fleet's income token (USDC, the only one) and every
-token a payment proposal not yet carried out names, and no other: a token
-merely sent to the fleet is never read or shown. For each of those it reads the
-shared money and the reward backing, beside the Cascade reserve and the
-protocol share owed to the Regents Safe. Once those balances are kept, it reads token symbols and decimals at the same block; a
-reading that fails asks no token anything. A token that refuses, or reports a
-symbol that is not 1 to 32 bytes of text free of control and direction
-characters, has it kept as unknown and its amounts shown in whole units.
-Another failed call depends on whose token it is. For an income token it may
-be the node's, so nothing is kept, a warning is logged and the token is asked
-again at the next reading; an income token kept with its symbol or decimals
-unknown is also asked again at every reading, so an earlier failure heals. A
-token only a payment proposal names, which anyone may write, is asked once, and
-a failed call keeps it as unknown for good. Every amount outside the fleet's
-own USDC is shown with its token's address. Every key is one vote, so a vote
-records the keys it names and a proposal's tally, `yes_keys` and `no_keys`,
-counts keys; a key's latest vote is the one that counts, and a withdrawn vote
-counts for neither side. It records at the head, from the latest block, and
-never waits for Ethereum's `safe` or `finalized` blocks. A change in the
-chain's history is not repaired automatically: the reader stops that fleet and
-an operator fixes the record by hand, as below.
+- **The fleet contract** (`Keyfleet`): who holds every key (`OwnershipEpoch`),
+  each key's reveal (`KeyRevealed`: the Chainlink VRF request and the seed its
+  traits are drawn from), an asset sent to the fleet by mistake and forwarded
+  to its treasury (`ForwardedToTreasury`) and the protocol share sent to
+  REGENT staking (`ProtocolShareSent`).
+- **The vote contract** (`KeyfleetVotes`): every proposal with the calls it
+  will make (`ProposalCreated`), each ballot and the keys it names
+  (`BallotCast`: yes, no or abstain), cancellations (`ProposalCancelled`),
+  executions (`ProposalExecuted`), a key's workspace edits restricted or
+  allowed by a proposal carried out (`EditsRestrictionSet`), and each key's
+  presence (`Present`, a key renewed for 48 hours, and `PresenceCleared`, a
+  key that changed hands). A proposal's text is kept off the chain; the
+  record keeps its content hash.
+- **The shard record** (`KeyfleetShards`): every shard a key's owner issues
+  (`ShardIssued`: the key, the wallet, when it runs out and the key's
+  ownership it lasts for), every shard ended early (`ShardEnded`, with who
+  ended it) and whether a key's shards may vote and propose for it
+  (`AgentVotingSet`).
+- **The treasury** (`KeyfleetTreasury`): payments (`Paid`), advances
+  (`Advanced`, `AdvanceReturned`), each daily split run (`DailySplitRun`) and
+  what it did with each asset (`SplitAllocated`, `SplitSkipped`,
+  `SplitTransferFailed`), a new split rate (`DailySplitRateSet`), OUSD
+  admitted (`OusdAdmitted`), the fleet's launch token bound
+  (`LaunchTokenBound`) and each hash the treasury signs approved or revoked
+  (`SignatureHashApproved`, `SignatureHashRevoked`).
+- **The reward ledger** (`KeyfleetRewards`): a key's rewards settled to its
+  holder (`Settled`) and credit paid out (`Claimed`).
+
+No other log of these contracts is read; the request for logs names only
+these events. The money events all go into one table, `treasury_events`, one
+row per event with only that event's fields filled.
+
+Every key is one vote. A key's latest ballot is the one that counts, and a
+proposal's tally counts keys. Whether a key was present when a proposal
+opened, and so which ballots came from keys that were not, is worked out from
+the presence records each time it is asked, never stored. Whether a shard is
+active is worked out the same way: it is the wallet's latest shard record, it
+has not run out, and its key has not changed hands since it was issued.
+
+Apart from that history, and so a slow node never holds it up, the app reads
+every minute, at the head, what the treasury holds and what the reward ledger
+backs for each asset the daily split shares (`splitAssets()`: ETH, REGENT,
+USDC, then OUSD once admitted and the launch token once bound) and no other:
+a token merely sent to the treasury is never read or shown. The same reading
+keeps the split's rate, when it last ran and when anyone may next run it, the
+launch token, the Cascade reserve and the protocol share owed to REGENT
+staking. A reading that fails in any part keeps nothing and is tried again a
+minute later. Once a reading is kept, the symbol and decimals of each of its
+tokens not yet known in full are read at the same block; ETH and the fleet's
+USDC are known already. A token that refuses, or reports a symbol that is not
+1 to 32 bytes of text free of control and direction characters, is kept as
+unknown and asked again at every reading, and its amounts are shown in whole
+units. Every amount outside ETH and the fleet's own USDC is shown with its
+token's address.
+
+The app records at the head, from the latest block, and never waits for Base's
+`safe` or `finalized` blocks. A change in the chain's history is not repaired
+automatically: the reader stops that fleet and an operator fixes the record by
+hand, as below.
+
+## How it runs
+
+The reading is Oban work:
+
+- `Keyfleet.Chain.Watch` runs every minute from the Oban cron. Where a node
+  is configured, it makes sure each deployed fleet has a reading job and
+  queues a reading of its balances.
+- `Keyfleet.Chain.ReadFleet` is one job per fleet, on whichever machine took
+  it (queue `chain`). Each run proves the node serves the fleet's chain, makes
+  one pass over the fleet's history and waits four seconds before the next. A
+  pass that fails is retried after a wait that doubles up to a minute; after
+  20 failures the job is given up, and the watch starts a fresh one within a
+  minute.
+- `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet.
+
+Each pass reads the head, reads again the last 30 blocks it already recorded
+(about a minute of Base), then records what happened after them up to the
+head, in stretches of at most 10,000 blocks. A stretch is one request for all
+five contracts.
 
 ## Turning it on
 
@@ -51,22 +89,22 @@ an operator fixes the record by hand, as below.
    it is a secret:
 
    ```sh
-   fly secrets set KEYFLEET_RPC_URL=<Ethereum JSON-RPC URL>
+   fly secrets set KEYFLEET_RPC_URL=<Base JSON-RPC URL>
    ```
 
-   With no `KEYFLEET_RPC_URL` the reader does not run. A node on any chain other
-   than the one the manifest names is refused and logged, and nothing is read.
+   With no `KEYFLEET_RPC_URL` nothing is read. A node on any chain other than
+   the one a fleet was deployed on is refused and logged, and nothing is read.
    The site also reads what a page's wallet buttons sent through this node
-   (`:chain_nodes`); unset, it reads them from Ethereum's public node.
+   (`:chain_nodes`); unset, it reads them from Base's public node.
 
 2. Bind the fleet to its deployment. Each fleet is deployed and recorded on its
    own, so this runs once per fleet. Copy the deployed manifest that
    `RecordKeyfleets` wrote for it onto a machine (`fly ssh sftp shell`, then
-   `put contracts/deployments/ethereum.classic.deployed.json /tmp/ethereum.classic.deployed.json`)
+   `put contracts/deployments/base.classic.deployed.json /tmp/base.classic.deployed.json`)
    and run:
 
    ```sh
-   fly ssh console -C "/app/bin/seed-deployment /tmp/ethereum.classic.deployed.json"
+   fly ssh console -C "/app/bin/seed-deployment /tmp/base.classic.deployed.json"
    ```
 
    It binds that fleet alone, opens its five fixed rooms and five open rooms,
@@ -85,23 +123,21 @@ an operator fixes the record by hand, as below.
    with a server error and changes nothing recorded; the format is in
    `docs/deployment.md`.
 
-3. Restart the app (`fly apps restart <app>`). The reader starts only for the
-   fleets that were bound when the app started.
+3. Nothing to restart: the watch starts reading a newly bound fleet within a
+   minute.
 
-While a fleet has not been read to within 50 blocks (about ten minutes) of the
-head in the last two minutes, or while it is stopped, nobody can post in its
-rooms or change its workspace; pages still load, and the fleet page shows that
-its sales figures are catching up.
+While a fleet's head was last read more than two minutes ago, or its record
+is 300 blocks (about ten minutes) or more behind that head, or while it is
+stopped, nobody can post in its rooms or change its workspace; pages still
+load and say the record is catching up.
 
 ## What a stop means
 
-A second reading of the last 32 blocks (one Ethereum epoch, about six and a
-half minutes) found an ownership change, reveal,
-proposal, vote, execution, budget receipt, income receipt or budget payment
-that reads differently from the record, or a recorded one gone from a block whose hash is
-no longer the recorded one. A proposal number
-recorded twice, or a proposal executed twice, stops the fleet the same way. The
-app logs, at error level:
+A second reading of the last 30 blocks found an ownership change, reveal,
+proposal, ballot, cancellation, execution, presence, edit restriction, shard
+record, agent-voting setting or money event that reads differently from the
+record, or a recorded one gone from a block whose hash is no longer the
+recorded one. The app logs, at error level:
 
 ```
 Fleet <fleet id> stopped: the chain disagrees with the record at block <N>. It is stopped at block <S>. ...
@@ -113,43 +149,42 @@ already stopped at: a stop only ever moves to an earlier block, so
 `rescan_from` is always the earliest disagreement found. A piece read again
 that disagrees with its record names the earlier of the recorded piece's block
 and the block it was read from, since the recorded one's block is what
-changed. The piece of blocks
-holding `N` recorded nothing; pieces before it, already checked, keep what they
-recorded. A recorded change missing from a block whose hash still matches is a
-node fault, not a stop: the app logs a warning and retries.
+changed. The piece of blocks holding `N` recorded nothing; pieces before it,
+already checked, keep what they recorded. A recorded event missing from a
+block whose hash still matches is a node fault, not a stop: the pass fails
+and is retried.
 
 A reveal is checked by its seed, not by its place on the chain. A key's
 `KeyRevealed` read again from another block, with the same request and seed,
 is the reveal already recorded, and a recorded reveal missing from its block
 is no stop. A `KeyRevealed` for a revealed key with a different seed or request
 stops the fleet at the earlier of the recorded reveal's block and the block it
-was read from, and nothing is recorded. Chainlink
-VRF draws the seed from the request's block, so a change in history deep enough
-to drop that block can bring a different seed; that is a real reorg, corrected
-as below.
+was read from, and nothing is recorded. Chainlink VRF draws the seed from the
+request's block, so a change in history deep enough to drop that block can
+bring a different seed; that is a real reorg, corrected as below.
 
 ## When a stretch is not read
 
-The reader asks for a stretch of blocks in one request. A node that will not
-answer it whole is asked for it again in halves, down to single blocks, and
-each answered piece is recorded before the next is asked for. A piece is
-recorded whole or not at all, in one transaction with the fleet's cursor
-moved past it, so the cursor always stands just after the last piece
-recorded. When the reader cannot record a piece, that piece and everything
-after it are left for the next pass, which carries on from the cursor. The
-app logs at warning level and tries again:
+A node that will not answer a stretch whole is asked for it again in halves,
+down to single blocks, and each answered piece is recorded before the next is
+asked for. A piece is recorded whole or not at all, in one transaction with
+the fleet's cursor moved past it, so the cursor always stands just after the
+last piece recorded. When the reader cannot record a piece, that piece and
+everything after it are left for the next pass, which carries on from the
+cursor. The app logs at warning level and tries again:
 
 ```
-Reading fleet <fleet id> failed, retrying in <ms> ms: <reason>
+Reading fleet <fleet id> failed; it is tried again: <reason>
 ```
 
 A reason about one log names it by transaction hash and log index:
 `:unreadable_log` (not exactly as the contracts emit it), `:conflicting_logs`
-(two different logs in one place), `:payload_missing` or
-`:payload_without_proposal` (a payment or workspace-edits proposal and the log
-that carries its details, one without the other). Numbering reasons name the block:
-`:proposal_number_skipped` and `:proposal_not_recorded`. All of these mean the
-node answered wrongly; point `KEYFLEET_RPC_URL` at another provider.
+(two different logs in one place) or `:opening_missing` (a proposal without
+its author key's renewal before it in the same transaction). Numbering
+reasons name the block: `:proposal_number_skipped` and
+`:proposal_not_recorded` (a ballot, cancellation or execution for a proposal
+not recorded yet). All of these mean the node answered wrongly; point
+`KEYFLEET_RPC_URL` at another provider.
 
 If the node will not answer even one block, the reason is
 `{:block_unanswered, block, reason}`, naming that block and what the node
@@ -168,17 +203,18 @@ SELECT DISTINCT block_number, block_hash
 FROM (
   SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveals
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_presences
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_cancellations
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_receipts
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.income_receipts
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.budget_payments
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.edits_restrictions
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.shard_events
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.agent_voting_settings
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.treasury_events
 ) AS recorded
 WHERE fleet_id = :'fleet'
-  AND block_number >= (SELECT rescan_from - 32 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
+  AND block_number >= (SELECT rescan_from - 30 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
 ORDER BY block_number;
 ```
 
@@ -188,32 +224,31 @@ on a stale fork reports different hashes too, and correcting from it would
 delete records that are right.
 
 ```sh
-cast block <block_number> --field hash --rpc-url <a second Ethereum provider>
+cast block <block_number> --field hash --rpc-url <a second Base provider>
 ```
 
 The fork is the lowest block whose hash differs from the recorded one; call it
 `F`. If the first block listed already differs, the fork is older: lower the
-`- 32` in the query until the first block listed matches. If every hash matches,
+`- 30` in the query until the first block listed matches. If every hash matches,
 the chain has not changed and the node answered wrongly: point
 `KEYFLEET_RPC_URL` at another provider, change no records, and clear the stop.
 
 ## Correcting the record
 
-Run in one transaction, with `fleet` and `from_block = F` set. Every ownership,
-reveal, proposal, vote, execution, budget receipt, income receipt, budget
-payment, edit restriction and shard record of that fleet at or after `F` is
-removed, and the cursor goes back to `F`, so the reader records the chain's
-current history from there. A shard counts only under its key's current
-ownership record, so shards issued under a removed ownership record stop
-counting with it. The ownership, proposal, budget, income, reveal, edit
-restriction and shard records made again from `F` on get new record numbers,
-higher than any removed, so every reader of the list sees them as new. A key whose reveal is removed shows as still being revealed
-until its reveal is read again. Its card's record goes with the reveal, and the
-card is drawn again for the new seed, at a new address.
+Run in one transaction, with `fleet` and `from_block = F` set. Every record of
+that fleet in the eleven tables above at or after `F` is removed, and the
+cursor goes back to `F`, so the reader records the chain's current history
+from there. A shard counts only under its key's current ownership record, so
+shards issued under a removed ownership record stop counting with it. The
+numbered records made again from `F` on get new numbers, higher than any
+removed, so every reader of the list sees them as new. A key whose reveal is
+removed shows as still being revealed until its reveal is read again. The
+balance reading is not part of the history; the next one, a minute later,
+replaces it.
 
-Nothing tells a fleet page already open that records were removed: it keeps
-showing the removed owners and reveals until it reconnects or is loaded again,
-and it hears about the records made again from `F` as the reader makes them.
+Nothing tells a page already open that records were removed: it keeps showing
+them until it reconnects or is loaded again, and it hears about the records
+made again from `F` as the reader makes them.
 
 A pass that was already running when the fleet stopped cannot undo the
 correction. A pass records each piece, and moves the cursor, only while the
@@ -225,16 +260,16 @@ info level:
 Fleet <fleet id>: the cursor moved underneath a pass that left it at block <N>, or the fleet was stopped; the pass ended and wrote nothing more.
 ```
 
-The first pass after the stop is cleared starts from `F`. The same line is
-normal when two passes run at once: the slower one ends instead of moving the
-cursor back.
+The first pass after the stop is cleared starts from `F`.
 
 The tables refuse deletes with a row trigger and emptying with a statement
 trigger. Nothing here uses `TRUNCATE`; only the delete triggers are switched off,
 by name, and on again before the commit, so a failure anywhere rolls all of it
 back with the trigger still on. `ALTER TABLE` needs a superuser or the table's
 owner, and it locks new records out of those tables for every fleet until the
-commit, so run the block below in one go and keep it short.
+commit, so run the block below in one go and keep it short. Records that
+point at others go first: ballots, cancellations and executions before their
+proposals.
 
 ```sql
 \set fleet 'fibonacci_syndicate'
@@ -242,82 +277,62 @@ commit, so run the block below in one go and keep it short.
 
 BEGIN;
 
--- The ownership records from the fork on are removed. The row trigger that
--- refuses deletes is off for this statement only, inside this transaction.
+-- Each table: the row trigger that refuses deletes is off for this
+-- statement only, inside this transaction.
 ALTER TABLE keyfleet_app.key_attachments DISABLE TRIGGER immutable_key_epochs;
-
 DELETE FROM keyfleet_app.key_attachments
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs;
 
--- The reveals from the fork on, the same way.
 ALTER TABLE keyfleet_app.key_reveals DISABLE TRIGGER immutable_key_reveals;
-
 DELETE FROM keyfleet_app.key_reveals
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
 
--- The proposal records from the fork on are removed the same way:
--- executions and votes first, since they point at proposals.
-ALTER TABLE keyfleet_app.proposal_executions DISABLE TRIGGER immutable_proposal_executions;
+ALTER TABLE keyfleet_app.key_presences DISABLE TRIGGER immutable_key_presences;
+DELETE FROM keyfleet_app.key_presences
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.key_presences ENABLE TRIGGER immutable_key_presences;
 
+ALTER TABLE keyfleet_app.proposal_executions DISABLE TRIGGER immutable_proposal_executions;
 DELETE FROM keyfleet_app.proposal_executions
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.proposal_executions ENABLE TRIGGER immutable_proposal_executions;
 
-ALTER TABLE keyfleet_app.proposal_votes DISABLE TRIGGER immutable_proposal_votes;
+ALTER TABLE keyfleet_app.proposal_cancellations DISABLE TRIGGER immutable_proposal_cancellations;
+DELETE FROM keyfleet_app.proposal_cancellations
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.proposal_cancellations ENABLE TRIGGER immutable_proposal_cancellations;
 
+ALTER TABLE keyfleet_app.proposal_votes DISABLE TRIGGER immutable_proposal_votes;
 DELETE FROM keyfleet_app.proposal_votes
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.proposal_votes ENABLE TRIGGER immutable_proposal_votes;
 
 ALTER TABLE keyfleet_app.proposals DISABLE TRIGGER immutable_proposals;
-
 DELETE FROM keyfleet_app.proposals
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.proposals ENABLE TRIGGER immutable_proposals;
 
--- And the budget records.
-ALTER TABLE keyfleet_app.budget_receipts DISABLE TRIGGER immutable_budget_receipts;
-
-DELETE FROM keyfleet_app.budget_receipts
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
-ALTER TABLE keyfleet_app.budget_receipts ENABLE TRIGGER immutable_budget_receipts;
-
-ALTER TABLE keyfleet_app.income_receipts DISABLE TRIGGER immutable_income_receipts;
-
-DELETE FROM keyfleet_app.income_receipts
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
-ALTER TABLE keyfleet_app.income_receipts ENABLE TRIGGER immutable_income_receipts;
-
-ALTER TABLE keyfleet_app.budget_payments DISABLE TRIGGER immutable_budget_payments;
-
-DELETE FROM keyfleet_app.budget_payments
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
-ALTER TABLE keyfleet_app.budget_payments ENABLE TRIGGER immutable_budget_payments;
-
--- The edit restrictions and shard records.
 ALTER TABLE keyfleet_app.edits_restrictions DISABLE TRIGGER immutable_edits_restrictions;
-
 DELETE FROM keyfleet_app.edits_restrictions
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.edits_restrictions ENABLE TRIGGER immutable_edits_restrictions;
 
 ALTER TABLE keyfleet_app.shard_events DISABLE TRIGGER immutable_shard_events;
-
 DELETE FROM keyfleet_app.shard_events
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-
 ALTER TABLE keyfleet_app.shard_events ENABLE TRIGGER immutable_shard_events;
+
+ALTER TABLE keyfleet_app.agent_voting_settings DISABLE TRIGGER immutable_agent_voting_settings;
+DELETE FROM keyfleet_app.agent_voting_settings
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.agent_voting_settings ENABLE TRIGGER immutable_agent_voting_settings;
+
+ALTER TABLE keyfleet_app.treasury_events DISABLE TRIGGER immutable_treasury_events;
+DELETE FROM keyfleet_app.treasury_events
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.treasury_events ENABLE TRIGGER immutable_treasury_events;
 
 -- The reader starts again at the fork.
 UPDATE keyfleet_app.chain_cursors

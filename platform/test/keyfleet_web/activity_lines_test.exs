@@ -10,10 +10,6 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - an item whose title has nothing to see still has words to link
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
-  # - a payment names its amount as the proposal pages do, and whom it paid;
-  #   an amount in a symbol a token chose is quoted, so it can't pass for
-  #   the site's words, is escaped in Markdown, and names the token's
-  #   address; the site's own words are never quoted
 
   @post %{
     id: "post:1",
@@ -86,7 +82,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
         number: 12,
         yes: %{count: 1, token_ids: [1234]},
         no: %{count: 0, token_ids: []},
-        withdrawn: %{count: 0, token_ids: []}
+        abstain: %{count: 0, token_ids: []}
       }
     }
 
@@ -96,151 +92,17 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert ActivityLines.markdown(votes) == "Key 1,234 voted yes on Proposal 12."
   end
 
-  test "keys that withdrew their votes are said to have withdrawn them" do
+  test "keys that abstained are said to have abstained" do
     facts = %{
       number: 12,
       yes: %{count: 0, token_ids: []},
       no: %{count: 1, token_ids: [5]},
-      withdrawn: %{count: 2, token_ids: [3, 4]}
+      abstain: %{count: 2, token_ids: [3, 4]}
     }
 
     votes = %{id: "votes:1", at: ~U[2026-09-25 12:00:00Z], kind: :votes, facts: facts}
 
     assert ActivityLines.text(votes) ==
-             "Key 5 voted no and Keys 3 and 4 withdrew their votes on Proposal 12."
-
-    one = %{
-      votes
-      | facts: %{facts | no: %{count: 0, token_ids: []}, withdrawn: %{count: 1, token_ids: [3]}}
-    }
-
-    assert ActivityLines.text(one) == "Key 3 withdrew its vote on Proposal 12."
-  end
-
-  @usdc "0x" <> String.duplicate("e", 40)
-  @token "0x" <> String.duplicate("c", 40)
-  @recipient "0x12ab" <> String.duplicate("0", 32) <> "cd34"
-
-  test "a payment carried out names its amount and whom it paid" do
-    in_usdc = paid(@usdc, {"USDC", 6}, 12_500_000)
-    assert ActivityLines.text(in_usdc) == "The fleet paid 12.5 USDC to 0x12ab..cd34 (Proposal 3)."
-    assert ActivityLines.markdown(in_usdc) == ActivityLines.text(in_usdc)
-
-    in_token = paid(@token, {"*X*", 2}, 1250)
-
-    assert ActivityLines.text(in_token) ==
-             "The fleet paid “12.5 *X*” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-
-    assert ActivityLines.markdown(in_token) ==
-             ~S"The fleet paid “12.5 \*X\*” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-  end
-
-  test "a token's symbol can't pass for whom the fleet paid, or hide anything" do
-    faked = paid(@token, {"USDC to 0xdead..beef and", 2}, 1250)
-
-    assert ActivityLines.text(faked) ==
-             "The fleet paid “12.5 USDC to 0xdead..beef and” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-
-    assert ActivityLines.markdown(faked) ==
-             "The fleet paid “12.5 USDC to 0xdead..beef and” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-
-    hidden = paid(@token, {"F\u200BO\u{E0041}O\u2028X", 2}, 1250)
-
-    assert ActivityLines.text(hidden) ==
-             "The fleet paid “12.5 FOO X” 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-
-    assert ActivityLines.markdown(hidden) == ActivityLines.text(hidden)
-  end
-
-  test "a token that hasn't said its symbol is named in the site's words, unquoted" do
-    unknown = paid(@token, {nil, nil}, 1250)
-
-    assert ActivityLines.text(unknown) ==
-             "The fleet paid 1,250 in the smallest units of token 0xcccc..cccc to 0x12ab..cd34 (Proposal 3)."
-
-    assert ActivityLines.markdown(unknown) == ActivityLines.text(unknown)
-  end
-
-  test "a payment put to a vote names its amount and whom it would pay" do
-    proposed = %{
-      id: "proposal:1",
-      at: ~U[2026-09-25 12:00:00Z],
-      kind: :proposed,
-      facts: %{
-        number: 3,
-        kind: :pay,
-        proposer: %{wallet: @recipient, token_id: 4},
-        gist: "Pay the designer",
-        edits: nil,
-        payment: payment(@usdc, {"USDC", 6}, 12_500_000)
-      }
-    }
-
-    assert ActivityLines.text(proposed) ==
-             "The holder of Key 4 put Proposal 3 to a vote to pay 12.5 USDC to 0x12ab..cd34: “Pay the designer”"
-  end
-
-  test "a vote on a key's edits names the key and what would change" do
-    asked = fn restricted ->
-      %{
-        id: "proposal:1",
-        at: ~U[2026-09-25 12:00:00Z],
-        kind: :proposed,
-        facts: %{
-          number: 5,
-          kind: :restrict_edits,
-          proposer: %{wallet: @recipient, token_id: 4},
-          gist: "Key 1234 keeps deleting findings",
-          edits: %{token_id: 1234, restricted: restricted},
-          payment: nil
-        }
-      }
-    end
-
-    assert ActivityLines.text(asked.(true)) ==
-             "The holder of Key 4 put Proposal 5 to a vote to stop Key 1,234 editing the workspace: “Key 1234 keeps deleting findings”"
-
-    assert ActivityLines.text(asked.(false)) ==
-             "The holder of Key 4 put Proposal 5 to a vote to let Key 1,234 edit the workspace again: “Key 1234 keeps deleting findings”"
-  end
-
-  test "a carried-out vote on a key's edits says what the fleet did" do
-    done = fn restricted ->
-      %{
-        id: "executed:1",
-        at: ~U[2026-09-25 12:00:00Z],
-        kind: :executed,
-        facts: %{
-          number: 5,
-          kind: :restrict_edits,
-          edits: %{token_id: 7, restricted: restricted},
-          payment: nil
-        }
-      }
-    end
-
-    assert ActivityLines.text(done.(true)) ==
-             "The fleet stopped Key 7 editing the workspace (Proposal 5)."
-
-    assert ActivityLines.text(done.(false)) ==
-             "The fleet let Key 7 edit the workspace again (Proposal 5)."
-  end
-
-  defp paid(asset, details, amount) do
-    %{
-      id: "executed:1",
-      at: ~U[2026-09-25 12:00:00Z],
-      kind: :executed,
-      facts: %{number: 3, kind: :pay, edits: nil, payment: payment(asset, details, amount)}
-    }
-  end
-
-  defp payment(asset, details, amount) do
-    %{
-      asset: asset,
-      amount: amount,
-      recipient: @recipient,
-      assets: %{usdc: @usdc, details: %{asset => details}}
-    }
+             "Key 5 voted no and Keys 3 and 4 abstained on Proposal 12."
   end
 end

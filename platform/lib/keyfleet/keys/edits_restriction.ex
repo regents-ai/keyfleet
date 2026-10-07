@@ -1,7 +1,8 @@
 defmodule Keyfleet.Keys.EditsRestriction do
   @moduledoc """
   One `EditsRestrictionSet` log of a fleet's vote contract: a proposal carried
-  out that restricted a key's workspace edits, or allowed them again. Only the
+  out that restricted a key's workspace edits, or allowed them again; its
+  execution is logged in the same transaction. Only the
   chain reader writes it, and nothing ever changes it. It is numbered with the
   fleet's proposal records, in the order the chain made them.
 
@@ -23,10 +24,6 @@ defmodule Keyfleet.Keys.EditsRestriction do
 
     check_constraints do
       check_constraint(:token_id, "edits_restrictions_positive_token", check: "token_id > 0")
-
-      check_constraint(:proposal_number, "edits_restrictions_positive_proposal",
-        check: "proposal_number > 0"
-      )
 
       for field <- [:block_hash, :transaction_hash] do
         check_constraint(field, "edits_restrictions_#{field}_shape",
@@ -82,7 +79,6 @@ defmodule Keyfleet.Keys.EditsRestriction do
         :fleet_id,
         :token_id,
         :restricted,
-        :proposal_number,
         :block_number,
         :block_hash,
         :transaction_hash,
@@ -158,12 +154,6 @@ defmodule Keyfleet.Keys.EditsRestriction do
       constraints: [min: 1, max: @max_bigint]
 
     attribute :restricted, :boolean, allow_nil?: false, public?: true
-
-    # The proposal whose carrying out set it.
-    attribute :proposal_number, :integer,
-      allow_nil?: false,
-      public?: true,
-      constraints: [min: 1, max: @max_bigint]
 
     for field <- [:block_number, :log_index] do
       attribute field, :integer,

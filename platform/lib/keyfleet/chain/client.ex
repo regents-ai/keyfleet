@@ -31,6 +31,14 @@ defmodule Keyfleet.Chain.Client do
   @callback call(to :: String.t(), data :: String.t(), block_hash :: String.t()) ::
               {:ok, binary()} | {:error, term()}
 
+  @doc """
+  The ETH `address` holds, in wei, at the block whose hash is `block_hash`. A
+  block that is no longer on the chain is an error, never another block's
+  answer.
+  """
+  @callback get_balance(address :: String.t(), block_hash :: String.t()) ::
+              {:ok, non_neg_integer()} | {:error, term()}
+
   @doc "The client this application is configured with."
   def configured, do: Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:client]
 end

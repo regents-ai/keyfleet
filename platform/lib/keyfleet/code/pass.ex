@@ -6,7 +6,7 @@ defmodule Keyfleet.Code.Pass do
 
   `fleet` names the one repository it opens and `scope` what it allows:
   `push` (copy and send changes, for the key holder whose wallet is `sub`, as
-  `did:pkh:eip155:1:<wallet>`), `read` (copy) or `create` (make the
+  `did:pkh:eip155:8453:<wallet>`, the key's chain), `read` (copy) or `create` (make the
   repository), the last two with `sub` `keyfleet`. It lasts
   `pass_ttl_seconds`.
   """
@@ -17,7 +17,7 @@ defmodule Keyfleet.Code.Pass do
   @audience "keyfleet-code"
 
   @doc "A pass to send changes to the fleet's code as the holder of `wallet`."
-  def push(fleet_id, wallet), do: mint(fleet_id, "push", "did:pkh:eip155:1:" <> wallet)
+  def push(fleet_id, wallet), do: mint(fleet_id, "push", "did:pkh:eip155:8453:" <> wallet)
 
   @doc "A pass to copy the fleet's code, for a key whose edits are restricted."
   def read(fleet_id), do: mint(fleet_id, "read", "keyfleet")

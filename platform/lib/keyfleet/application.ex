@@ -19,10 +19,8 @@ defmodule Keyfleet.Application do
         # hands clears its holder at once, through PubSub.
         Keyfleet.AccessCache,
         agents_listener_child(),
-        # A key's profile reads its rewards wherever the site runs, so their
-        # table stands apart from the fleets' readers below.
+        # A key's profile reads its rewards wherever the site runs.
         Keyfleet.Chain.RewardsWaiting,
-        chain_child(),
         graph_children(),
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
         # {Keyfleet.Worker, arg},
@@ -63,13 +61,6 @@ defmodule Keyfleet.Application do
   defp metrics_child do
     if Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint),
       do: KeyfleetWeb.Metrics
-  end
-
-  # Fleets are read from the chain only where a node is configured, which the
-  # test build never is.
-  defp chain_child do
-    if Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:rpc_url],
-      do: Keyfleet.Chain.Supervisor
   end
 
   # The projectors read each fleet's log through its writer, so they start
