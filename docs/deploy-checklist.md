@@ -2,7 +2,7 @@
 
 The steps, in order, for the first launch of the website at keyfleet.ai. Key
 sales stay off throughout: they need the founder's word, and not before the
-contracts are complete and deployed on Ethereum (see "Before any key is sold").
+contracts are complete and deployed on Base (see "Before any key is sold").
 Commands run from `platform/` unless a step says otherwise. Anything marked
 **not verified** was not tried before this list was written.
 
@@ -158,8 +158,8 @@ If it does exist, these migrations need care, and some counts go to the founder:
 - **Failed launch block** (`20260927092503`). It adds the optional
   `failed_launch_block` column to `treasury_readings`, approved for
   production. Nothing to check; `20260929064211` removes it again.
-- **No token launches** (`20260929064211`). Fleets no longer launch tokens,
-  and keys, money and votes are on Ethereum. It deletes the
+- **No token launches** (`20260929064211`). Fleets no longer launch tokens.
+  It deletes the
   `graph_launch_plan_revisions` and `proposal_launch_envelopes` tables, the
   `kind` column of `budget_receipts`, the `l1_fee_wei` column of `keeper_txs`,
   the `envelope_hash` column of `proposals` and the `failed_launch_block`
@@ -264,26 +264,24 @@ Do not run it, or deploy the contracts, as part of this launch.
 ## Before any key is sold
 
 Key sales stay off until the founder explicitly says so, and not before the
-fleet contracts are complete and deployed on Ethereum. The fully owned fleet
-rules the founder decided on 27 and 29 September 2026 are built in
-`contracts/src`; the [contracts README](../contracts/README.md#status) lists
-them. These must still be done first, in order:
+fleet contracts are complete and deployed on Base (chain 8453). The five
+contracts of a fleet are built to the Build Now spec v0.3 in `contracts/src`;
+the [contracts README](../contracts/README.md) describes them. These must still
+be done first, in order:
 
 1. **The contracts complete.** The founder decides when they are complete,
-   including the trait table and key art the deploy step requires. Deferred
-   until each fleet type is next: Fibonacci late-entry capture and the Cascade
-   reserve of a level that never completes. A deployed fleet can never be
-   changed.
-2. **The protocol treasury given to every deployment.** The founder chose the
-   Regents Safe on Ethereum, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, on
-   29 September 2026. Every fleet is deployed with
-   `KEYFLEET_PROTOCOL_TREASURY` set to exactly this address, which the fleet
-   keeps for good as its `PROTOCOL_TREASURY`. The input has no default: the
-   deployment step stops without it, and on Ethereum both the deployment and
-   the record steps refuse any other address (see
-   [deployment.md](deployment.md#what-a-manifest-says)).
+   including the trait table and key art the deploy step requires. A deployed
+   fleet can never be changed.
+2. **The site reads the new contracts.** The chain reader, wallet steps and
+   deployment record are brought to the five Base contracts before any fleet is
+   recorded.
 3. **An outside audit.**
-4. **Deployed on Ethereum** with the founder's go, then recorded as below.
+4. **Deployed on Base** with the founder's go, following
+   [deployment.md](deployment.md): each fleet's treasury deposits the 10%
+   protocol share into REGENT revenue staking,
+   `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`, and the randomness
+   subscription is owned by the Regents Safe on Base,
+   `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. Then recorded as below.
 
 ## Opening a fleet later
 
@@ -292,7 +290,7 @@ only after everything in "Before any key is sold" is done;
 [deployment.md](deployment.md) has the contract steps: each fleet is deployed
 with `KEYFLEET_FLEET` set to that one fleet. Recording its deployed manifest
 with
-`/app/bin/seed-deployment /tmp/ethereum.<fleet>.deployed.json` (see
+`/app/bin/seed-deployment /tmp/base.<fleet>.deployed.json` (see
 [chain-reader.md](chain-reader.md)) binds that fleet alone, opens its rooms and
 puts its keys on sale, all at once: if the fleet cannot be opened, nothing is
 recorded. It refuses a fleet whose chain, USDC or trait table differs from a

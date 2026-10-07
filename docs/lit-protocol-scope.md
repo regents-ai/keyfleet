@@ -42,7 +42,7 @@ not an audit by us.
 
 | Use | How | Contract change | Fit |
 | --- | --- | --- | --- |
-| **Fleet files usable outside our server** | An Action reads `ownerOf` and `shardOf` on Ethereum, checks the caller's wallet signature, then decrypts. Holders and agents could open a fleet's stored files without trusting KeyFleet's server. | None: both reads exist. | **Useful but narrow.** It suits the "home base, not the edge of the world" direction. marimo, dDocs and the code store still need the plain text on our server, so our own key-and-shard check still runs for them. |
+| **Fleet files usable outside our server** | An Action reads `ownerOf` and `shardOf` on Base, checks the caller's wallet signature, then decrypts. Holders and agents could open a fleet's stored files without trusting KeyFleet's server. | None: both reads exist. | **Useful but narrow.** It suits the "home base, not the edge of the world" direction. marimo, dDocs and the code store still need the plain text on our server, so our own key-and-shard check still runs for them. |
 | **Bounded agent operations** | A key held in Lit signs only when an Action's rules pass: a budget cap, an approved vote, an expiry. | Depends on the authority model; anything touching the treasury does. | **The strongest fit**, but it waits on the founder's long-term agent-authority decision and on the current hold on KeyFleet contracts. |
 | **Custody for agents** | No current Lit product. | — | Not available. |
 
