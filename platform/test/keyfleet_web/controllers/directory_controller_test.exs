@@ -88,16 +88,16 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     lines = conn |> get("/fleets.md") |> response(200) |> String.split("\n")
 
-    assert ("1 key sold · new levels keep opening · next key: Key 2 for 10 USDC. " <>
-              "One wallet may hold 1 key of level 1.") in lines
+    assert ("1 Key sold · new levels keep opening · next Key: Key 2 for 10 USDC. " <>
+              "One wallet may hold 1 Key of level 1.") in lines
 
-    assert ("0 of 1,024 keys sold · 1,024 left · next key: Key 1 for 8 USDC. " <>
-              "No limit on keys per wallet.") in lines
+    assert ("0 of 1,024 Keys sold · 1,024 left · next Key: Key 1 for 8 USDC. " <>
+              "No limit on Keys per wallet.") in lines
   end
 
   test "a fleet coming soon is listed by name, and its page says only that it is coming soon",
        %{conn: conn} do
-    soon = "Coming soon. It has no keys for sale and can’t be joined yet."
+    soon = "Coming soon. It has no Keys for sale and can’t be joined yet."
 
     index = conn |> get("/fleets.md") |> response(200)
     [_before, cascade] = String.split(index, "## Keyfleet Cascade\n\n")

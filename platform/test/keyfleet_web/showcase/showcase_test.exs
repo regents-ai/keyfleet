@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
   test "key map page sends every fleet's keys and shows the chosen key" do
     {:ok, view, html} = live(local_conn(), "/showcase/key-map")
     assert html =~ ~s(id="key-map-fibonacci")
-    assert html =~ "No key chosen yet."
+    assert html =~ "No Key chosen yet."
 
     render_hook(view, "keymap_ready", %{})
     assert_reply(view, %{minted: 17_768, max_supply: nil, mine: mine, agent: agent})
@@ -146,7 +146,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
     assert render_hook(view, "show_fleet", %{"value" => "hexagon"}) =~ ~s(id="key-map-fibonacci")
 
     html = view |> element("button", "Classic") |> render_click()
-    assert html =~ ~s(id="key-map-classic") and html =~ "No key chosen yet."
+    assert html =~ ~s(id="key-map-classic") and html =~ "No Key chosen yet."
     render_hook(view, "keymap_ready", %{})
     assert_reply(view, %{minted: 1_023, max_supply: 1_024, mine: mine})
     assert byte_size(Base.decode64!(mine)) <= 128

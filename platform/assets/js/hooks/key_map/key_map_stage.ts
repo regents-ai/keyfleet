@@ -258,7 +258,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
       if (!state) return
       const key = nextHeldKey(state, cursorKey())
       if (key) focusKey(key)
-      else status.textContent = "You don’t hold any keys in this fleet."
+      else status.textContent = "You don’t hold any Keys in this fleet."
     },
 
     focusLevel(level) {

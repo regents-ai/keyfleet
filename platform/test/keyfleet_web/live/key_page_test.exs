@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
 
     assert html =~ "Key 1"
-    assert html =~ "You own this key."
+    assert html =~ "You own this Key."
     refute has_element?(view, "#key-no-shards")
     refute has_element?(view, "#key-edits-restricted")
 
@@ -78,7 +78,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     for conn <- [signed_in_as(conn, @stranger), conn] do
       {:ok, view, html} = live(conn, @path)
 
-      refute html =~ "You own this key."
+      refute html =~ "You own this Key."
       assert has_element?(view, "#key-shard-#{@agent}", "Orbit runner")
       refute has_element?(view, "#key-shard-end-#{@agent}")
       refute has_element?(view, "#key-shard-renew-#{@agent}")
@@ -94,13 +94,13 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     ChainHelpers.issue_shard!(@fleet, 1, @bare, -1)
 
     {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-    assert has_element?(view, "#key-no-shards", "This key has no shards.")
+    assert has_element?(view, "#key-no-shards", "This Key has no shards.")
 
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
     epoch!(2, @stranger)
 
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
-    assert html =~ "You own this key."
+    assert html =~ "You own this Key."
     assert has_element?(view, "#key-no-shards")
   end
 
@@ -124,14 +124,14 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
     assert has_element?(
              view,
              "#key-edits-restricted",
-             "A vote of the fleet has stopped this key and its shards changing the workspace."
+             "A vote of the fleet has stopped this Key and its shards changing the workspace."
            )
   end
 
   test "a key nobody has been issued shows nothing but says so", %{conn: conn} do
     {:ok, _view, html} = conn |> signed_in_as(@owner) |> live("/app/keys/fibonacci_cascade/9")
 
-    assert html =~ "This key isn’t here yet"
+    assert html =~ "This Key isn’t here yet"
     refute html =~ "Orbit runner"
   end
 

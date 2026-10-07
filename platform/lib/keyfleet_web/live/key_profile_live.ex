@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <ul :if={@profile.traits} class="key-profile-traits">
         <li :for={trait <- @profile.traits}>
           {trait.trait}: {trait.value}
-          <span class="key-profile-muted">({share(trait.share)} of keys)</span>
+          <span class="key-profile-muted">({share(trait.share)} of Keys)</span>
         </li>
       </ul>
     </section>
@@ -152,7 +152,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </dl>
       <form method="dialog">
         <Regent.Primitives.button id="key-profile-buy" type="submit" value="fleet-get-key">
-          Buy key {Rules.grouped(@profile.token_id)}
+          Buy Key {Rules.grouped(@profile.token_id)}
         </Regent.Primitives.button>
       </form>
     </section>
@@ -164,7 +164,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp facts(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-facts-title">
-      <h3 id="key-profile-facts-title">About this key</h3>
+      <h3 id="key-profile-facts-title">About this Key</h3>
       <dl class="key-profile-facts">
         <div :if={@profile.level}>
           <dt>Level</dt>
@@ -339,7 +339,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
         <:notes>
           <p class="key-profile-detail">
-            Income in USDC waits here for the key until it is claimed.
+            Income in USDC waits here for the Key until it is claimed.
           </p>
         </:notes>
         <:buttons :let={panel}>
@@ -381,10 +381,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
         <:notes :let={panel}>
           <p :if={is_nil(@actor)} class="key-profile-detail">
-            This key’s traits are still being drawn. Sign in to ask again if its draw was turned down.
+            This Key’s traits are still being drawn. Sign in to ask again if its draw was turned down.
           </p>
           <p :if={WalletPanel.has_step?(panel, "reveal")} class="key-profile-detail">
-            This key’s traits haven’t been drawn yet, because the request for its random draw was turned down. Anyone can ask again.
+            This Key’s traits haven’t been drawn yet, because the request for its random draw was turned down. Anyone can ask again.
           </p>
         </:notes>
         <:buttons :let={panel}>
@@ -472,7 +472,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
       <h3 id="key-profile-thread-title">Messages to Key {Rules.grouped(@profile.token_id)}</h3>
       <p :if={@profile.messages == 0} class="key-profile-muted">
-        Nobody has written to this key yet.
+        Nobody has written to this Key yet.
       </p>
       <ol
         id="key-profile-thread"
@@ -532,7 +532,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </div>
 
       <p :if={@profile.composer == :no_key} class="key-profile-muted">
-        Only people who hold a key in {@fleet.name} can write here. Everyone can read.
+        Only people who hold a Key in {@fleet.name} can write here. Everyone can read.
       </p>
 
       <p :if={@profile.composer == :refreshing} class="key-profile-muted">
@@ -552,7 +552,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         Recent posts by Key {Rules.grouped(@profile.token_id)}
       </h3>
       <p :if={@profile.recent_posts == []} class="key-profile-muted">
-        This key hasn’t posted in the fleet’s rooms yet.
+        This Key hasn’t posted in the fleet’s rooms yet.
       </p>
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>

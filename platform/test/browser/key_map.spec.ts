@@ -84,7 +84,7 @@ async function fling(page: Page, from: Point, dx: number) {
 test.describe("key map", () => {
   test("a click chooses the key under it", async ({page}) => {
     const {errors} = await openMap(page, "Accelerant")
-    await expect(selected(page)).toHaveText("No key chosen yet.")
+    await expect(selected(page)).toHaveText("No Key chosen yet.")
     const target = await tile(page, 1_999)
     await page.mouse.click(target.x, target.y)
     await expect(selected(page)).toHaveText("Key 1,999 chosen.")
@@ -103,7 +103,7 @@ test.describe("key map", () => {
     await page.mouse.up()
     expect(await movedSince(page, before)).toEqual({x: -200, y: 0})
     await settle(page)
-    await expect(selected(page)).toHaveText("No key chosen yet.")
+    await expect(selected(page)).toHaveText("No Key chosen yet.")
   })
 
   test("a press while the map coasts stops it and chooses nothing", async ({page}) => {
@@ -118,7 +118,7 @@ test.describe("key map", () => {
     const stopped = await mapAt(page)
     await page.waitForTimeout(250)
     expect(await movedSince(page, stopped)).toEqual({x: 0, y: 0})
-    await expect(selected(page)).toHaveText("No key chosen yet.")
+    await expect(selected(page)).toHaveText("No Key chosen yet.")
   })
 
   test("the wheel pans the map and leaves the page where it is", async ({page}) => {
@@ -207,7 +207,7 @@ test.describe("key map", () => {
     const status = stage.locator("[aria-live=polite]")
     await stage.focus()
     await page.keyboard.press("Home")
-    await expect(status).toHaveText("Next key, 2,000.")
+    await expect(status).toHaveText("Next Key, 2,000.")
     await page.keyboard.press("ArrowRight")
     await expect(status).toHaveText("Key 1,999.")
     await page.keyboard.press("ArrowUp")
@@ -323,7 +323,7 @@ test.describe("key map by touch", () => {
     await touch(cdp, "touchEnd", [])
     expect(await movedSince(page, before)).toEqual({x: -100, y: 0})
     await settle(page)
-    await expect(selected(page)).toHaveText("No key chosen yet.")
+    await expect(selected(page)).toHaveText("No Key chosen yet.")
   })
 
   test("a second finger is ignored", async ({page}) => {
@@ -358,6 +358,6 @@ test.describe("key map by touch", () => {
     const stopped = await mapAt(page)
     await page.waitForTimeout(250)
     expect(await movedSince(page, stopped)).toEqual({x: 0, y: 0})
-    await expect(selected(page)).toHaveText("No key chosen yet.")
+    await expect(selected(page)).toHaveText("No Key chosen yet.")
   })
 })

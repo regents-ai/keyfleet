@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.DirectoryMD do
   @title_length 200
   @gist_length 240
   @excerpt_length 280
-  @coming_soon "Coming soon. It has no keys for sale and can’t be joined yet."
+  @coming_soon "Coming soon. It has no Keys for sale and can’t be joined yet."
 
   @doc "Every fleet in brief, each with a link to its own page of the directory."
   def index(assigns) do
@@ -52,7 +52,7 @@ defmodule KeyfleetWeb.DirectoryMD do
     """
     # Keyfleet fleets
 
-    Groups of people and agents who each hold a numbered key. Anyone can look; taking part needs a key.
+    Groups of people and agents who each hold a numbered Key. Anyone can look; taking part needs a Key.
 
     #{terms()}
 
@@ -153,12 +153,12 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp sales(%{sales: %{current: false}}), do: "Sales figures are catching up."
 
   defp sales(%{sales: %{next_key: nil, keys_total: total}}),
-    do: "All #{Rules.grouped(total)} keys sold."
+    do: "All #{Rules.grouped(total)} Keys sold."
 
   defp sales(%{id: id, sales: %{next_key: next} = sales}) do
     sold(sales) <>
-      "next key: Key #{Rules.grouped(next.token_id)} for #{next.price}. " <>
-      (Rules.holding_limit_sentence(id, next.token_id) || "No limit on keys per wallet.")
+      "next Key: Key #{Rules.grouped(next.token_id)} for #{next.price}. " <>
+      (Rules.holding_limit_sentence(id, next.token_id) || "No limit on Keys per wallet.")
   end
 
   defp sold(%{keys_total: nil, keys_sold: sold}),
@@ -166,7 +166,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp sold(sales),
     do:
-      "#{Rules.grouped(sales.keys_sold)} of #{Rules.grouped(sales.keys_total)} keys sold · " <>
+      "#{Rules.grouped(sales.keys_sold)} of #{Rules.grouped(sales.keys_total)} Keys sold · " <>
         "#{Rules.grouped(sales.keys_left)} left · "
 
   defp activity(fleet) do

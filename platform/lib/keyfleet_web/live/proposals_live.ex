@@ -49,10 +49,10 @@ defmodule KeyfleetWeb.ProposalsLive do
         </p>
         <h1 tabindex="-1">Proposals</h1>
         <p :if={@page.treasury} class="proposals-lede">
-          What this fleet’s key holders have put to a vote, and the shared money they vote on.
+          What this fleet’s Key holders have put to a vote, and the shared money they vote on.
         </p>
         <p :if={!@page.treasury} class="proposals-lede">
-          What this fleet’s key holders have put to a vote.
+          What this fleet’s Key holders have put to a vote.
         </p>
       </header>
 
@@ -155,13 +155,13 @@ defmodule KeyfleetWeb.ProposalsLive do
             <div>
               <dt>Yes</dt>
               <dd id="proposal-yes">
-                <Count.count id="proposal-yes-count" value={@page.proposal.yes} one="key" many="keys" />
+                <Count.count id="proposal-yes-count" value={@page.proposal.yes} one="Key" many="Keys" />
               </dd>
             </div>
             <div>
               <dt>No</dt>
               <dd id="proposal-no">
-                <Count.count id="proposal-no-count" value={@page.proposal.no} one="key" many="keys" />
+                <Count.count id="proposal-no-count" value={@page.proposal.no} one="Key" many="Keys" />
               </dd>
             </div>
             <div>
@@ -170,8 +170,8 @@ defmodule KeyfleetWeb.ProposalsLive do
                 <Count.count
                   id="proposal-keys-sold-count"
                   value={@page.proposal.keys_sold}
-                  one="key"
-                  many="keys"
+                  one="Key"
+                  many="Keys"
                 />
               </dd>
             </div>
@@ -285,7 +285,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               inputmode="numeric"
               value={panel.inputs["keys"]}
             >
-              Each key is one vote. Separate key numbers with commas.
+              Each Key is one vote. Separate Key numbers with commas.
             </.text_field>
           </div>
         </:fields>
@@ -298,7 +298,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             It has already been carried out, so a vote now will be refused.
           </p>
           <p class="proposals-detail">
-            Type the numbers of the keys you’re voting with: your own, or those of someone who has let your wallet vote for them. Voting again with a key changes its vote.
+            Type the numbers of the Keys you’re voting with: your own, or those of someone who has let your wallet vote for them. Voting again with a Key changes its vote.
           </p>
         </:notes>
         <:buttons>
@@ -317,7 +317,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             variant="secondary"
             data-onchain-step="withdraw"
           >
-            <span data-press-label>Withdraw these keys’ votes</span>
+            <span data-press-label>Withdraw these Keys’ votes</span>
           </Regent.Primitives.button>
         </:buttons>
       </.live_component>
@@ -408,17 +408,17 @@ defmodule KeyfleetWeb.ProposalsLive do
               inputmode="numeric"
               value={panel.inputs["keys"]}
             >
-              Separate key numbers with commas.
+              Separate Key numbers with commas.
             </.text_field>
           </div>
         </:fields>
         <:notes>
           <p id="proposal-match" class="proposals-detail" hidden={not @proposal.match.read?}>
-            Every key sold when this was paid that didn’t vote yes can collect
-            <.amount :if={@proposal.match.read?} value={@proposal.match.share} />, paid to whoever holds the key now. Anyone can collect for any key, once.
+            Every Key sold when this was paid that didn’t vote yes can collect
+            <.amount :if={@proposal.match.read?} value={@proposal.match.share} />, paid to whoever holds the Key now. Anyone can collect for any Key, once.
           </p>
           <p id="proposal-match-pending" class="proposals-detail" hidden={@proposal.match.read?}>
-            Every key sold when this was paid that didn’t vote yes can collect the same amount, paid to whoever holds the key now. The amount is still being read.
+            Every Key sold when this was paid that didn’t vote yes can collect the same amount, paid to whoever holds the Key now. The amount is still being read.
           </p>
         </:notes>
         <:buttons>
@@ -440,7 +440,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-decision" class="proposals-panel" aria-labelledby="propose-decision-title">
       <h2 id="propose-decision-title">Propose a decision</h2>
       <p class="proposals-detail">
-        Records what the key holders agree to once more than half of all the keys sold vote yes. Nothing is paid by it.
+        Records what the Key holders agree to once more than half of all the Keys sold vote yes. Nothing is paid by it.
       </p>
       <.live_component
         module={WalletPanel}
@@ -484,7 +484,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="propose-payment" class="proposals-panel" aria-labelledby="propose-payment-title">
       <h2 id="propose-payment-title">Propose a payment</h2>
       <p class="proposals-detail">
-        Pays from the fleet’s shared money once more than half of all the keys sold vote yes. Every payment is matched: each key that didn’t vote yes can then collect the payment divided by the number of yes votes, so a payment spends only the yes keys’ own share.
+        Pays from the fleet’s shared money once more than half of all the Keys sold vote yes. Every payment is matched: each Key that didn’t vote yes can then collect the payment divided by the number of yes votes, so a payment spends only the yes Keys’ own share.
       </p>
       <.live_component
         module={WalletPanel}
@@ -582,9 +582,9 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp propose_edits(assigns) do
     ~H"""
     <section id="propose-edits" class="proposals-panel" aria-labelledby="propose-edits-title">
-      <h2 id="propose-edits-title">Restrict or allow a key’s edits</h2>
+      <h2 id="propose-edits-title">Restrict or allow a Key’s edits</h2>
       <p class="proposals-detail">
-        Stops a key and its shards changing the workspace, or lets them again. They can still read it and chat. Needs 3 of every 5 keys sold to vote yes.
+        Stops a Key and its shards changing the workspace, or lets them again. They can still read it and chat. Needs 3 of every 5 Keys sold to vote yes.
       </p>
       <.live_component
         module={WalletPanel}
@@ -601,7 +601,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             <.text_field
               id="propose-edits-target"
               name="target"
-              label="The key whose edits this is about"
+              label="The Key whose edits this is about"
               inputmode="numeric"
               value={panel.inputs["target"]}
             />
@@ -650,7 +650,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="voting-delegate" class="proposals-panel" aria-labelledby="voting-delegate-title">
       <h2 id="voting-delegate-title">Let another wallet vote for you</h2>
       <p class="proposals-detail">
-        It can vote and propose with every key you hold, until you stop it. It never holds your keys or their rewards, and you can still vote yourself.
+        It can vote and propose with every Key you hold, until you stop it. It never holds your Keys or their rewards, and you can still vote yourself.
       </p>
       <.live_component
         module={WalletPanel}
@@ -705,7 +705,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     >
       <:notes>
         <p class="proposals-detail">
-          10% of every key sale is set aside for Regents. It is sent to Regents once a day, and anyone can send it sooner.
+          10% of every Key sale is set aside for Regents. It is sent to Regents once a day, and anyone can send it sooner.
         </p>
         <p id="proposals-nothing-owed" class="proposals-detail" hidden={!@treasury.nothing_owed?}>
           Nothing is set aside right now, so sending will be refused.
@@ -773,8 +773,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   defp key_field(assigns) do
     ~H"""
-    <.text_field id={@id} name="key" label="Propose with key" inputmode="numeric" value={@value}>
-      A key you hold, or one whose holder has let your wallet vote for them. Proposing doesn’t use its vote.
+    <.text_field id={@id} name="key" label="Propose with Key" inputmode="numeric" value={@value}>
+      A Key you hold, or one whose holder has let your wallet vote for them. Proposing doesn’t use its vote.
     </.text_field>
     """
   end
@@ -813,7 +813,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       </p>
       <ol :if={@treasury.income != []} id="proposals-income" class="proposals-lines">
         <li :for={income <- @treasury.income} data-income={income.id}>
-          <span><.amount value={income.amount} /> paid to key holders</span>
+          <span><.amount value={income.amount} /> paid to Key holders</span>
         </li>
       </ol>
       <p :if={@treasury.earlier_income?} class="proposals-detail">
@@ -852,7 +852,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <dd><.amount value={balance.budget} count /></dd>
         </div>
         <div>
-          <dt>Set aside for key holders</dt>
+          <dt>Set aside for Key holders</dt>
           <dd><.amount value={balance.set_aside} count /></dd>
         </div>
       </dl>
@@ -937,13 +937,13 @@ defmodule KeyfleetWeb.ProposalsLive do
   @doc "How a proposal is approved, as the pages say it."
   def approval_rule,
     do:
-      "Each key is one vote. A proposal is approved once more than half of all the keys sold " <>
-        "vote yes, or 3 of every 5 keys sold for a change to a key’s workspace edits, so a key that " <>
+      "Each Key is one vote. A proposal is approved once more than half of all the Keys sold " <>
+        "vote yes, or 3 of every 5 Keys sold for a change to a Key’s workspace edits, so a Key that " <>
         "doesn’t vote counts against it. There is no deadline: it stays open to votes until " <>
         "someone carries it out."
 
-  defp needed(:restrict_edits), do: "3 of every 5 keys sold"
-  defp needed(_kind), do: "more than half of all the keys sold"
+  defp needed(:restrict_edits), do: "3 of every 5 Keys sold"
+  defp needed(_kind), do: "more than half of all the Keys sold"
 
   # What the page knows that the contract will likely refuse, said beside the
   # button that carries a proposal out.
@@ -995,8 +995,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp carry_out_word(%{kind: :pay}), do: "Make the payment"
   defp carry_out_word(%{kind: :restrict_edits, edits: edits}), do: edits_word(edits)
 
-  defp edits_word(%{restricted?: true}), do: "Stop the key’s workspace edits"
-  defp edits_word(%{restricted?: false}), do: "Let the key edit the workspace again"
+  defp edits_word(%{restricted?: true}), do: "Stop the Key’s workspace edits"
+  defp edits_word(%{restricted?: false}), do: "Let the Key edit the workspace again"
 
   defp vote_word(true), do: "Yes"
   defp vote_word(false), do: "No"
@@ -1017,11 +1017,11 @@ yes, <span data-count>{@proposal.no}</span>
 no, of {keys(@proposal.keys_sold)} sold</span>|
   end
 
-  defp keys(1), do: "1 key"
-  defp keys(count), do: "#{count} keys"
+  defp keys(1), do: "1 Key"
+  defp keys(count), do: "#{count} Keys"
 
-  defp key_list([token_id]), do: "key #{token_id}"
-  defp key_list(token_ids), do: "keys #{Enum.join(token_ids, ", ")}"
+  defp key_list([token_id]), do: "Key #{token_id}"
+  defp key_list(token_ids), do: "Keys #{Enum.join(token_ids, ", ")}"
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
 

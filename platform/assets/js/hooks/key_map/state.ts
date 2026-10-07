@@ -143,7 +143,7 @@ export const grouped = (value: number) => grouping.format(value)
 /** What the map reads out when the keyboard cursor lands on a key. */
 export function describeKey(grid: KeyMapGrid, state: KeyMapState, key: number) {
   const level = grid.levelOf(key)
-  const parts = [key === nextKey(state) ? `Next key, ${grouped(key)}` : `Key ${grouped(key)}`]
+  const parts = [key === nextKey(state) ? `Next Key, ${grouped(key)}` : `Key ${grouped(key)}`]
   if (level) parts.push(`level ${level}`)
   if (hasBit(state.mine, key)) parts.push("yours")
   if (hasBit(state.agent, key)) parts.push("has an agent")

@@ -71,7 +71,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   allowUsdc(me, Number(BigInt(`0x${first.transaction.data.slice(-64)}`)))
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
-  await expect(sentLine(page, first.hash)).toContainText("Approved. Now press Buy key.")
+  await expect(sentLine(page, first.hash)).toContainText("Approved. Now press Buy Key.")
   await expect(page.locator("#buy-key-approve")).toBeHidden()
 
   await page.locator("#buy-key-button").click()
@@ -197,7 +197,7 @@ test("a key whose draw was turned down gets Try again: every press reaches the w
     "Sent.",
   )
   await expect(page.locator("#key-profile-reveal-action-line")).toHaveText(
-    "The request for this key’s random draw was accepted. The draw is on its way, and the key’s traits show here when it arrives.",
+    "The request for this Key’s random draw was accepted. The draw is on its way, and the Key’s traits show here when it arrives.",
   )
   await expect(again).toHaveCount(0)
 

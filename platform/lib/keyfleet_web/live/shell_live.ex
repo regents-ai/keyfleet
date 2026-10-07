@@ -179,7 +179,7 @@ defmodule KeyfleetWeb.ShellLive do
       {:error, :not_holder} ->
         {:noreply,
          assign(socket,
-           notebooks_notice: "Only holders of this fleet’s keys can open its notebooks."
+           notebooks_notice: "Only holders of this fleet’s Keys can open its notebooks."
          )}
 
       {:error, _error} ->
@@ -217,7 +217,7 @@ defmodule KeyfleetWeb.ShellLive do
 
       {:error, :not_holder} ->
         {:noreply,
-         assign(socket, code_notice: "Only holders of this fleet’s keys can use its code.")}
+         assign(socket, code_notice: "Only holders of this fleet’s Keys can use its code.")}
 
       {:error, _error} ->
         {:noreply,

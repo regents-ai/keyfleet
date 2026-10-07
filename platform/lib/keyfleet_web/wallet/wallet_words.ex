@@ -44,55 +44,55 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp says(:claim, %{waiting: waiting}),
     do:
-      "Waiting for this key: " <>
+      "Waiting for this Key: " <>
         (waiting |> Enum.reject(&(&1.amount == 0)) |> Enum.map_join(", ", &token_amount/1)) <>
         ". Each token is claimed with its own button."
 
   defp says(:vote, %{keys: keys}),
-    do: "Voting, changing or withdrawing uses #{key_words(keys)}. Each key is one vote."
+    do: "Voting, changing or withdrawing uses #{key_words(keys)}. Each Key is one vote."
 
   defp says(:collect, %{keys: keys}), do: "Collects the match of #{key_words(keys)}."
 
   defp says(:propose_decision, %{key: key}),
-    do: "Proposes this decision with key #{Rules.grouped(key)}."
+    do: "Proposes this decision with Key #{Rules.grouped(key)}."
 
   defp says(:propose_payment, %{key: key, asset: asset, amount: amount, recipient: recipient}) do
     paid = asset |> Map.delete(:address) |> Map.merge(%{asset: asset.address, amount: amount})
 
     "Proposes paying #{token_amount(paid)} to " <>
-      "#{RegentFormat.short_address(recipient)}, with key #{Rules.grouped(key)}."
+      "#{RegentFormat.short_address(recipient)}, with Key #{Rules.grouped(key)}."
   end
 
   defp says(:propose_edits, %{key: key, target: target, restricted: true}),
     do:
-      "Proposes stopping key #{Rules.grouped(target)} and its shards changing the workspace, " <>
-        "with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
+      "Proposes stopping Key #{Rules.grouped(target)} and its shards changing the workspace, " <>
+        "with Key #{Rules.grouped(key)}. Needs 3 of every 5 Keys sold."
 
   defp says(:propose_edits, %{key: key, target: target, restricted: false}),
     do:
-      "Proposes letting key #{Rules.grouped(target)} and its shards change the workspace " <>
-        "again, with key #{Rules.grouped(key)}. Needs 3 of every 5 keys sold."
+      "Proposes letting Key #{Rules.grouped(target)} and its shards change the workspace " <>
+        "again, with Key #{Rules.grouped(key)}. Needs 3 of every 5 Keys sold."
 
   defp says(:issue_shard, %{token_id: token_id, wallet: wallet, days: days}),
     do:
-      "Issues #{RegentFormat.short_address(wallet)} a shard of key #{Rules.grouped(token_id)} " <>
+      "Issues #{RegentFormat.short_address(wallet)} a shard of Key #{Rules.grouped(token_id)} " <>
         "for #{days(days)}. Issuing again to a wallet with a shard renews it."
 
   defp says(:delegate, %{delegate: delegate}),
     do:
-      "Lets #{RegentFormat.short_address(delegate)} vote and propose with every key you hold, " <>
+      "Lets #{RegentFormat.short_address(delegate)} vote and propose with every Key you hold, " <>
         "or stops any other wallet voting for you."
 
   defp says(_flow, _figures), do: nil
 
-  defp problem(:no_keys), do: "Type the numbers of the keys to use, like 3, 7, 12."
+  defp problem(:no_keys), do: "Type the numbers of the Keys to use, like 3, 7, 12."
   defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
-  defp problem(:key_too_large), do: "That key number is larger than any key number can be."
-  defp problem(:no_key), do: "Name the key you’re proposing with, like 12."
-  defp problem(:no_target), do: "Name the key whose edits this is about, like 12."
-  defp problem(:target_unreadable), do: "Name the key whose edits this is about, like 12."
+  defp problem(:key_too_large), do: "That Key number is larger than any Key number can be."
+  defp problem(:no_key), do: "Name the Key you’re proposing with, like 12."
+  defp problem(:no_target), do: "Name the Key whose edits this is about, like 12."
+  defp problem(:target_unreadable), do: "Name the Key whose edits this is about, like 12."
   defp problem(:days_unreadable), do: "A shard lasts from 1 to 365 whole days."
-  defp problem(:key_unreadable), do: "Name the key you’re proposing with, like 12."
+  defp problem(:key_unreadable), do: "Name the Key you’re proposing with, like 12."
 
   defp problem(:amount_commas),
     do: "Use a point for decimals, like 12.5. Commas can only group thousands, like 1,250."
@@ -116,19 +116,19 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:unread),
     do: "Ethereum can’t be read right now. This tries again in a few seconds."
 
-  defp problem(:nothing_waiting), do: "Nothing is waiting for this key right now."
-  defp problem(:sold_out), do: "Every key in this fleet has been sold."
+  defp problem(:nothing_waiting), do: "Nothing is waiting for this Key right now."
+  defp problem(:sold_out), do: "Every Key in this fleet has been sold."
 
   defp problem(:reveal_requested),
     do:
-      "The request for this key’s random draw was accepted. The draw is on its way, and " <>
-        "the key’s traits show here when it arrives."
+      "The request for this Key’s random draw was accepted. The draw is on its way, and " <>
+        "the Key’s traits show here when it arrives."
 
-  defp problem(:revealed), do: "This key’s traits have been drawn. They show here in a moment."
+  defp problem(:revealed), do: "This Key’s traits have been drawn. They show here in a moment."
 
   @doc "A sent step's title, from the review it was sent from."
   def title(%{name: "approve"}), do: "Approve USDC"
-  def title(%{name: "buy"}), do: "Buy key"
+  def title(%{name: "buy"}), do: "Buy Key"
   def title(%{name: "yes"} = entry), do: "Vote yes#{with_keys(entry)}"
   def title(%{name: "no"} = entry), do: "Vote no#{with_keys(entry)}"
   def title(%{name: "withdraw"} = entry), do: "Withdraw the votes#{with_keys(entry)}"
@@ -148,8 +148,8 @@ defmodule KeyfleetWeb.WalletWords do
   defp with_keys(%{review: %{inputs: %{"keys" => keys}}}) do
     case String.split(keys, ~r/[\s,]+/, trim: true) do
       [] -> ""
-      [key] -> ", key #{key}"
-      keys -> ", keys #{Enum.join(keys, ", ")}"
+      [key] -> ", Key #{key}"
+      keys -> ", Keys #{Enum.join(keys, ", ")}"
     end
   end
 
@@ -163,30 +163,30 @@ defmodule KeyfleetWeb.WalletWords do
   def outcome(entry, %{state: :reverted} = shown), do: %{shown | words: reverted(entry.name)}
   def outcome(_entry, shown), do: shown
 
-  defp confirmed("approve"), do: "Approved. Now press Buy key."
-  defp confirmed("buy"), do: "Done. The key is yours, and this page shows it in a few seconds."
+  defp confirmed("approve"), do: "Approved. Now press Buy Key."
+  defp confirmed("buy"), do: "Done. The Key is yours, and this page shows it in a few seconds."
 
   defp confirmed(vote) when vote in ["yes", "no"],
     do: "Done. The count here catches up in a few seconds."
 
-  defp confirmed("withdraw"), do: "Done. Those keys have no vote on this proposal now."
+  defp confirmed("withdraw"), do: "Done. Those Keys have no vote on this proposal now."
 
   defp confirmed("carry_out"),
     do: "Done. It has been carried out, and this page shows it in a few seconds."
 
-  defp confirmed("collect"), do: "Done. Each key’s match was paid to whoever holds it."
+  defp confirmed("collect"), do: "Done. Each Key’s match was paid to whoever holds it."
 
   defp confirmed("propose"),
     do: "Done. Your proposal joins the list in a few seconds, and it is open to votes."
 
-  defp confirmed("delegate"), do: "Done. That wallet can now vote and propose with your keys."
-  defp confirmed("clear"), do: "Done. No other wallet can vote your keys now."
+  defp confirmed("delegate"), do: "Done. That wallet can now vote and propose with your Keys."
+  defp confirmed("clear"), do: "Done. No other wallet can vote your Keys now."
   defp confirmed("send"), do: "Done. Regents’ share has been sent to Regents."
   defp confirmed("claim-" <> _asset), do: "Done. It was paid to your wallet."
 
   defp confirmed("reveal"),
     do:
-      "Sent. If the draw was accepted this time, the key’s traits show here once it " <>
+      "Sent. If the draw was accepted this time, the Key’s traits show here once it " <>
         "arrives; if it was turned down again, Try again is back."
 
   defp confirmed("issue"),
@@ -204,38 +204,38 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp reverted("buy"),
     do:
-      "The purchase didn’t go through and no USDC was taken. The key may have sold or its " <>
+      "The purchase didn’t go through and no USDC was taken. The Key may have sold or its " <>
         "price risen, the time to buy may have run out, or the wallet may not hold or have " <>
         "approved enough USDC. The figures above are read again now."
 
   defp reverted(vote) when vote in ["yes", "no"],
     do:
-      "This vote didn’t go through and nothing changed. A key may already have this vote, " <>
+      "This vote didn’t go through and nothing changed. A Key may already have this vote, " <>
         "may have changed hands after the proposal opened, or may be neither yours nor held " <>
         "by someone who let your wallet vote for them; or the proposal was already carried out."
 
   defp reverted("withdraw"),
     do:
-      "Nothing was withdrawn. A key may have no vote on this proposal, may be neither yours " <>
+      "Nothing was withdrawn. A Key may have no vote on this proposal, may be neither yours " <>
         "nor held by someone who let your wallet vote for them, or the proposal was already " <>
         "carried out."
 
   defp reverted("carry_out"),
     do:
       "This wasn’t carried out and nothing moved. Yes votes may not be enough yet (more " <>
-        "than half of all the keys sold, or 3 of every 5 for a change to a key’s workspace " <>
+        "than half of all the Keys sold, or 3 of every 5 for a change to a Key’s workspace " <>
         "edits), it may already have been carried out, or a payment and its matches may not " <>
         "fit in the shared money."
 
   defp reverted("collect"),
     do:
-      "Nothing was collected. A key may have voted yes, may already have collected, or may " <>
+      "Nothing was collected. A Key may have voted yes, may already have collected, or may " <>
         "have been sold after the payment was made."
 
   defp reverted("propose"),
     do:
-      "The proposal wasn’t made. The key may be neither yours nor held by someone who let " <>
-        "your wallet vote for them, or a key it is about may not have been sold yet."
+      "The proposal wasn’t made. The Key may be neither yours nor held by someone who let " <>
+        "your wallet vote for them, or a Key it is about may not have been sold yet."
 
   defp reverted(delegate) when delegate in ["delegate", "clear"],
     do: "This didn’t go through and nothing changed."
@@ -245,23 +245,23 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp reverted("claim-" <> _asset),
     do:
-      "Nothing was claimed. The key may not be held by the wallet that sent this, or nothing " <>
+      "Nothing was claimed. The Key may not be held by the wallet that sent this, or nothing " <>
         "is waiting for it any more."
 
   defp reverted("reveal"),
-    do: "Nothing was asked. The key’s draw may already be on its way, or its traits drawn."
+    do: "Nothing was asked. The Key’s draw may already be on its way, or its traits drawn."
 
   defp reverted("issue"),
     do:
-      "No shard was issued. The key may not be held by the wallet that sent this, the wallet " <>
-        "may be the key’s own, or it may already hold a shard of another key in this fleet."
+      "No shard was issued. The Key may not be held by the wallet that sent this, the wallet " <>
+        "may be the Key’s own, or it may already hold a shard of another Key in this fleet."
 
   defp reverted("end-" <> _wallet),
-    do: "The shard didn’t end. It may have ended already, or the key may have changed hands."
+    do: "The shard didn’t end. It may have ended already, or the Key may have changed hands."
 
   defp reverted("renew-" <> _wallet),
     do:
-      "The shard wasn’t renewed. The key may not be held by the wallet that sent this, or the " <>
+      "The shard wasn’t renewed. The Key may not be held by the wallet that sent this, or the " <>
         "shard may have ended."
 
   defp reverted(_step), do: "This did not go through and nothing moved."
@@ -285,6 +285,6 @@ defmodule KeyfleetWeb.WalletWords do
   defp days(1), do: "1 day"
   defp days(days), do: "#{days} days"
 
-  defp key_words([key]), do: "key #{Rules.grouped(key)}"
-  defp key_words(keys), do: "keys #{Enum.map_join(keys, ", ", &Rules.grouped/1)}"
+  defp key_words([key]), do: "Key #{Rules.grouped(key)}"
+  defp key_words(keys), do: "Keys #{Enum.map_join(keys, ", ", &Rules.grouped/1)}"
 end

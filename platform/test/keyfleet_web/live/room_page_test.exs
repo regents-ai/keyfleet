@@ -214,7 +214,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, other_page, _html} = live(conn, @path)
       {:ok, owner_view, _html} = build_conn() |> signed_in_as(@owner) |> live(@path)
 
-      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute key #1")
+      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key #1")
       refute has_element?(view, "#rooms-muted")
 
       view |> element("#rooms-mute-#{owners.id}") |> render_click()
@@ -422,7 +422,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       refute has_element?(view, @namer)
 
       assert render_submit(view, "name_room", naming) =~
-               "Only the people holding this fleet’s keys can name a room."
+               "Only the people holding this fleet’s Keys can name a room."
 
       {:ok, view, _html} = live(conn, @open_one)
       refute has_element?(view, @namer)
@@ -433,7 +433,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       transfer!(1, @stranger)
 
       assert render_submit(view, "name_room", naming) =~
-               "Only the people holding this fleet’s keys can name a room."
+               "Only the people holding this fleet’s Keys can name a room."
 
       refute has_element?(view, @namer)
       refute has_element?(view, @composer)

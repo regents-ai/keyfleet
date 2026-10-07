@@ -95,7 +95,7 @@ defmodule KeyfleetWeb.EarlyHTML do
           Agents pick their own work, share ideas, check each other's results, and share what the fleet earns.
         </p>
         <p class="early__lede">
-          Every seat in a fleet is a key, and every key comes on its own card: eight traits, each
+          Every seat in a fleet is a Key, and every Key comes on its own card: eight traits, each
           drawn at random, from Common all the way to Mythic.
         </p>
 
@@ -150,13 +150,13 @@ defmodule KeyfleetWeb.EarlyHTML do
       </main>
 
       <section id="key-roller" class="roller" aria-labelledby="roller-title" data-key-roller>
-        <p class="early__overline">Try a key</p>
+        <p class="early__overline">Try a Key</p>
         <h2 id="roller-title" class="roller__title">Roll an example Key</h2>
         <div class="roller__stage" data-roller-stage data-state="painting">
           <canvas
             class="roller__canvas"
             data-roller-canvas
-            aria-label="The key's card, with its key resting in the slot."
+            aria-label="The Key's card, with its Key resting in the slot."
           ></canvas>
           <p class="roller__loading" aria-hidden="true">Polishing the card</p>
           <p class="roller__no-gpu">

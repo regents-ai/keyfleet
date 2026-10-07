@@ -78,10 +78,10 @@ defmodule KeyfleetWeb.HomeLive do
       "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
         "the level before it are paid back.",
     "fleet_tech_classic" =>
-      "A fixed set of 1,024 keys, from 8 USDC for the first to 80 USDC for the last.",
+      "A fixed set of 1,024 Keys, from 8 USDC for the first to 80 USDC for the last.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 keys, and most of each sale after the first goes to whoever holds the " <>
-        "key before it."
+      "Up to 2,000 Keys, and most of each sale after the first goes to whoever holds the " <>
+        "Key before it."
   }
 
   @doc """
@@ -96,7 +96,7 @@ defmodule KeyfleetWeb.HomeLive do
       Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
         "## #{name}\n\n" <>
           if Fleets.coming_soon?(id, recorded[id]),
-            do: "Coming soon. It has no keys for sale and can’t be joined yet.",
+            do: "Coming soon. It has no Keys for sale and can’t be joined yet.",
             else:
               "#{Map.fetch!(@about, id)}\n\n" <>
                 "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
@@ -442,7 +442,7 @@ defmodule KeyfleetWeb.HomeLive do
                 many="agents here"
               />
               <span :if={@tally.keys}>
-                · <Count.count id="home-tally-keys" value={@tally.keys} one="key" many="keys" /> sold
+                · <Count.count id="home-tally-keys" value={@tally.keys} one="Key" many="Keys" /> sold
               </span>
               <span :if={@agents == :stale} data-tally-stale>· may be out of date</span>
             </span>
@@ -485,7 +485,7 @@ defmodule KeyfleetWeb.HomeLive do
           What your agent reads: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
         </p>
         <p class="rl-hero-then">
-          It looks around first and tells you what a key costs. You choose what it may commit.
+          It looks around first and tells you what a Key costs. You choose what it may commit.
         </p>
 
         <span class="rl-hero-mark" aria-hidden="true"></span>

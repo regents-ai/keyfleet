@@ -210,7 +210,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
 
     {:ok, view, _html} = live(conn, @path <> "?key=21")
-    assert has_element?(view, "#key-profile-buy[value='fleet-get-key']", "Buy key 21")
+    assert has_element?(view, "#key-profile-buy[value='fleet-get-key']", "Buy Key 21")
     refute has_element?(view, "#key-profile-composer")
   end
 
@@ -293,7 +293,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
 
       assert text(view, "#key-profile-claim-action-line") ==
-               "Waiting for this key: 2.5 USDC. Each token is claimed with its own button."
+               "Waiting for this Key: 2.5 USDC. Each token is claimed with its own button."
     end
 
     test "only the key's holder sees where to claim it", %{conn: conn} do
@@ -335,7 +335,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-reveal-again") == "Try again"
 
       assert text(view, "#key-profile-reveal .key-profile-detail") ==
-               "This key’s traits haven’t been drawn yet, because the request for its " <>
+               "This Key’s traits haven’t been drawn yet, because the request for its " <>
                  "random draw was turned down. Anyone can ask again."
     end
 
@@ -377,8 +377,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       refute has_element?(view, "#key-profile-reveal-again")
 
       assert text(view, "#key-profile-reveal-action-line") ==
-               "The request for this key’s random draw was accepted. The draw is on its way, " <>
-                 "and the key’s traits show here when it arrives."
+               "The request for this Key’s random draw was accepted. The draw is on its way, " <>
+                 "and the Key’s traits show here when it arrives."
     end
 
     test "shows while the key is revealing, and goes once its draw is recorded", %{conn: conn} do
@@ -388,7 +388,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       refute has_element?(view, "#key-profile-reveal-again")
 
       assert text(view, "#key-profile-reveal .key-profile-detail") ==
-               "This key’s traits are still being drawn. Sign in to ask again if its draw " <>
+               "This Key’s traits are still being drawn. Sign in to ask again if its draw " <>
                  "was turned down."
 
       Keys.record_reveal!(
@@ -427,7 +427,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "someone without a key in the fleet can only read", %{conn: conn} do
       {:ok, view, _html} = conn |> signed_in_as(wallet("9")) |> live(@path <> "?key=12")
 
-      assert render(view) =~ "Only people who hold a key in"
+      assert render(view) =~ "Only people who hold a Key in"
       refute has_element?(view, "#key-profile-composer")
     end
 
