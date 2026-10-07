@@ -61,8 +61,8 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp action({:rate, bps}), do: "Sets the daily split to #{ProposalsPage.units(bps, 2)}%."
 
-  defp action({:edits, target, true}), do: "Restricts key #{Rules.grouped(target)}’s edits."
-  defp action({:edits, target, false}), do: "Allows key #{Rules.grouped(target)}’s edits."
+  defp action({:edits, target, true}), do: "Restricts Key #{Rules.grouped(target)}’s edits."
+  defp action({:edits, target, false}), do: "Allows Key #{Rules.grouped(target)}’s edits."
   defp action({:signature, :approve, _hash}), do: "Signs the message for the fleet."
   defp action({:signature, :revoke, _hash}), do: "Withdraws the fleet’s signature."
   defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
@@ -90,13 +90,13 @@ defmodule KeyfleetWeb.WalletWords do
       |> Map.take([:symbol, :decimals, :usdc?, :known?])
       |> Map.merge(%{asset: asset.address, amount: amount})
 
-  defp problem(:no_keys), do: "Type key numbers, like 3, 7, 12."
+  defp problem(:no_keys), do: "Type Key numbers, like 3, 7, 12."
   defp problem(:keys_unreadable), do: "Key numbers are whole numbers, like 3, 7, 12."
-  defp problem(:key_too_large), do: "No key has that number."
-  defp problem(:no_key), do: "Type the key you’re proposing with."
-  defp problem(:key_unreadable), do: "A key is a whole number, like 12."
-  defp problem(:no_target), do: "Type the key this is about."
-  defp problem(:target_unreadable), do: "A key is a whole number, like 12."
+  defp problem(:key_too_large), do: "No Key has that number."
+  defp problem(:no_key), do: "Type the Key you’re proposing with."
+  defp problem(:key_unreadable), do: "A Key is a whole number, like 12."
+  defp problem(:no_target), do: "Type the Key this is about."
+  defp problem(:target_unreadable), do: "A Key is a whole number, like 12."
   defp problem(:days_unreadable), do: "From 1 to 365 days."
   defp problem(:share_unreadable), do: "From 0.0001% to 99%."
   defp problem(:rate_unreadable), do: "From 0.1% to 2%."
@@ -128,8 +128,8 @@ defmodule KeyfleetWeb.WalletWords do
   defp field_name(:image), do: "The image link"
 
   @doc "Why a button can't be pressed now, in a few words."
-  def blocked(:not_your_key), do: "Not your key"
-  def blocked(:no_keys), do: "No keys to use"
+  def blocked(:not_your_key), do: "Not your Key"
+  def blocked(:no_keys), do: "No Keys to use"
   def blocked(:nothing_to_claim), do: "Nothing to claim"
   def blocked(:own_wallet), do: "That’s your wallet"
   def blocked(:shard_ended), do: "Already ended"
@@ -141,8 +141,9 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:executed), do: "Already carried out"
   def blocked(:cancelled), do: "Cancelled"
   def blocked(:execution_expired), do: "Expired"
-  def blocked(:no_keys_sold), do: "No keys sold yet"
+  def blocked(:no_keys_sold), do: "No Keys sold yet"
   def blocked({:opens_at, opens_at}), do: "Opens #{at(opens_at)}"
+  def blocked({:carry_out_from, from}), do: "From #{at(from)}"
   def blocked(:advance_returned), do: "Fully returned"
   def blocked(:above_outstanding), do: "More than is owed"
   def blocked(:not_enough), do: "Not enough in your wallet"
@@ -159,7 +160,7 @@ defmodule KeyfleetWeb.WalletWords do
 
   @doc "A sent step's title, from the review it was sent from."
   def title(%{name: "approve"}), do: "Approve"
-  def title(%{name: "buy"}), do: "Buy key"
+  def title(%{name: "buy"}), do: "Buy Key"
   def title(%{name: "reveal"}), do: "Ask again for the draw"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
   def title(%{name: "present"}), do: "Mark present"
@@ -193,11 +194,11 @@ defmodule KeyfleetWeb.WalletWords do
   def outcome(_entry, shown), do: shown
 
   defp confirmed("approve"), do: "Approved. Now press the next button."
-  defp confirmed("buy"), do: "Done. The key is yours."
-  defp confirmed("claim-" <> _asset), do: "Done. Paid to the key’s holder."
+  defp confirmed("buy"), do: "Done. The Key is yours."
+  defp confirmed("claim-" <> _asset), do: "Done. Paid to the Key’s holder."
   defp confirmed("present"), do: "Done. Present for 48 hours."
   defp confirmed("propose"), do: "Done. It’s open to votes."
-  defp confirmed("run_split"), do: "Done. Shared with every key."
+  defp confirmed("run_split"), do: "Done. Shared with every Key."
   defp confirmed("send_share"), do: "Done. Sent to Regents."
   defp confirmed(_step), do: "Done."
 
@@ -205,8 +206,8 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("buy"), do: "Not bought. No USDC was taken."
   defp reverted("reveal"), do: "Nothing asked. The draw may be on its way."
   defp reverted("claim-" <> _asset), do: "Nothing claimed."
-  defp reverted("present"), do: "Not marked. A key may have changed hands."
-  defp reverted("propose"), do: "Not proposed. Tidy up first, or check the key."
+  defp reverted("present"), do: "Not marked. A Key may have changed hands."
+  defp reverted("propose"), do: "Not proposed. Tidy up first, or check the Key."
 
   defp reverted(choice) when choice in ["yes", "no", "abstain"],
     do: "Not counted. Voting may have closed."

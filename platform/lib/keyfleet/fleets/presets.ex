@@ -102,15 +102,6 @@ defmodule Keyfleet.Fleets.Presets do
   def fibonacci_level_price(level) when is_integer(level) and level >= 1,
     do: step(@q_usdc, level - 1, 120)
 
-  @doc """
-  How many keys of one Fibonacci level a single wallet may hold: one for levels
-  1 to 7, then a tenth of the level's supply, rounded down.
-  """
-  def fibonacci_holding_limit(level) when level in 1..7, do: 1
-
-  def fibonacci_holding_limit(level) when is_integer(level) and level >= 8,
-    do: div(fibonacci_level_supply(level), 10)
-
   @doc "An Accelerant primary mint's price: 10 USDC for the first, then ×1.05 per mint, rounded up."
   def accelerant_price(mint_index) when mint_index in 0..(@accelerant_max_keys - 1)//1,
     do: step(@q_usdc, mint_index, 105)

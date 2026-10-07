@@ -1,69 +1,64 @@
 defmodule Keyfleet.Fleets.Rules do
   @moduledoc """
-  Each fleet's rules in plain words: how it prices its keys, how many keys one
-  wallet may hold, and the terms every member joins under, with the numbers
-  in them written the one way every page writes them.
+  Each fleet's rules in plain words: how it prices its Keys and the terms
+  every member joins under, with the numbers in them written the one way
+  every page writes them.
 
   The fleet page and the open fleet directory say these the same way, so they
   are written once, here. The homepage says none of them; it only writes its
   numbers through `keys/1` and `grouped/1`.
   """
 
-  alias Keyfleet.Fleets.Presets
-
-  # How each fleet prices its keys and where a buyer's payment goes.
+  # How each fleet prices its Keys and where a buyer's payment goes.
   @pricing %{
     "fibonacci_syndicate" =>
       "Keys come in levels of 2, 3, 5, 8 and on, each level 20% dearer than the one before, " <>
-        "and new levels keep opening. What buyers pay goes to the fleet’s treasury.",
+        "and new levels keep opening. 90% of what buyers pay goes to the fleet’s treasury " <>
+        "as REGENT.",
     "fibonacci_cascade" =>
       "The same levels and prices, and new levels keep opening. When a level sells out, the " <>
         "holders of the level before it are paid back what their Keys cost.",
-    "fleet_tech_classic" => "1,024 Keys, from 10 USDC for the first to 100 USDC for the last.",
+    "fleet_tech_classic" =>
+      "1,024 Keys, from 10 USDC for the first to 100 USDC for the last. 90% of each sale " <>
+        "goes to the fleet’s treasury as REGENT.",
     "fleet_tech_accelerant" =>
-      "Up to 2,000 keys, each 5% dearer than the one before. After the first key, 70% of each " <>
-        "sale goes to whoever holds the key before it and 20% to the fleet’s treasury."
+      "Up to 2,000 Keys, each 5% dearer than the one before. After the first Key, 70% of each " <>
+        "sale goes to whoever holds the Key before it and 20% to the fleet’s treasury as REGENT."
   }
 
   @membership_terms [
-    "The key holders own the fleet. Each key has one vote, and everything the fleet receives " <>
-      "outside a key sale, USDC included, goes to its treasury.",
+    "The Key holders own the fleet. Each Key has one vote, and everything the fleet receives " <>
+      "outside a Key sale, USDC included, goes to its treasury.",
+    "10% of each Key sale stays USDC and goes to REGENT staking, once, and nothing from the " <>
+      "treasury after.",
     "Once a day, anyone can run the daily split. It shares from 0.1% to 2% of each token the " <>
-      "treasury splits equally among all the keys, at the rate the keys vote for. A token is " <>
-      "shared only while the treasury holds at least 100 of it, or 0.05 ETH.",
-    "A key counts in new proposals while it is present, and marking present lasts 48 hours. " <>
-      "A key away for longer keeps its part of every split and can come back at any time.",
-    "A proposal is approved when more than half of the keys counted for it vote yes: the " <>
-      "keys present when it opened, and any key that votes on it later. Voting lasts up to " <>
-      "48 hours, and an approved proposal can be carried out for 48 hours after that.",
-    "Approved proposals can spend everything in the treasury.",
-    "10% of each key sale goes to REGENT staking, once, and nothing from the treasury after.",
-    "A key's owner can issue shards of it to agents' wallets, for 1 to 365 days. An agent " <>
+      "treasury splits equally among all the Keys, at the rate the Keys vote for, starting " <>
+      "at 0.5%. A token is shared only while the treasury holds at least 100 of it, or 0.05 ETH.",
+    "A new Key waits 2 days before it can propose or vote. It is present on its own from " <>
+      "day 2 to day 4; after that its holder marks it present, which lasts 48 hours. A Key " <>
+      "away for longer keeps its part of every split and can come back at any time.",
+    "Every vote lasts 24 hours, and a vote can be changed until it closes. A proposal is " <>
+      "approved when at least 60% of the Keys counted for it vote yes, rounded up, so one " <>
+      "Key counted can approve it alone. The Keys counted are those present when it opened, " <>
+      "and any Key that votes on it later. An approved proposal can be carried out for 48 " <>
+      "hours after voting closes.",
+    "For the first 7 days of sales, proposals can only change the fleet’s profile, its daily " <>
+      "split and who may edit the workspace. After that, approved proposals can spend " <>
+      "everything in the treasury.",
+    "A Key’s owner can issue shards of it to agents’ wallets, for 1 to 365 days. An agent " <>
       "with a shard can post in the rooms, work in the shared workspace and start rooms as " <>
-      "the key.",
-    "While the key's agent voting is on, as it is unless its owner turns it off, an agent " <>
-      "with a shard can also mark the key present, vote, propose and cancel the key's " <>
+      "the Key.",
+    "While the Key’s agent voting is on, as it is unless its owner turns it off, an agent " <>
+      "with a shard can also mark the Key present, vote, propose and cancel the Key’s " <>
       "proposals.",
-    "An agent with a shard can claim the key's money, which is always paid to the wallet " <>
-      "holding the key. A shard never buys or moves keys.",
-    "When a key changes hands, all its shards end. The new owner issues their own.",
+    "An agent with a shard can claim the Key’s money, which is always paid to the wallet " <>
+      "holding the Key. A shard never buys or moves Keys.",
+    "When a Key changes hands, all its shards end. The new owner issues their own.",
     "Posts and workspace changes stay with whoever wrote them."
   ]
 
-  @doc "One sentence on how a fleet prices its keys and where a buyer's payment goes."
+  @doc "How a fleet prices its Keys and where a buyer's payment goes."
   def pricing(fleet_id), do: Map.fetch!(@pricing, fleet_id)
-
-  @doc """
-  How many keys of `token_id`'s level one wallet may hold, as a sentence, for
-  the two Fibonacci fleets; `nil` for Classic and Accelerant, which set no
-  limit.
-  """
-  def holding_limit_sentence(fleet_id, token_id) do
-    if Presets.levelled?(fleet_id) do
-      level = Presets.fibonacci_level_of(token_id)
-      "One wallet may hold #{keys(Presets.fibonacci_holding_limit(level))} of level #{level}."
-    end
-  end
 
   @doc "The terms every member of every fleet joins under, one sentence each."
   def membership_terms, do: @membership_terms

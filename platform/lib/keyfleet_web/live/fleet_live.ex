@@ -937,9 +937,6 @@ defmodule KeyfleetWeb.FleetLive do
         Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
         much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
       </p>
-      <p :if={@buy.price && @buy.level} class="fleet-detail">
-        {Rules.holding_limit_sentence(@fleet.fleet_id, @buy.token_id)}
-      </p>
     </section>
     """
   end

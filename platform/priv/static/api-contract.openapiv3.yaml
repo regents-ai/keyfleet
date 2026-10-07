@@ -710,8 +710,9 @@ paths:
       operationId: buildCarryOut
       description: >-
         The transaction that carries out an approved proposal, with the calls it was made with.
-        Anyone may carry one out, for 48 hours after its vote closes. Nothing is sent here: the
-        signing wallet sends it itself, on Base.
+        Anyone may carry one out. A proposal that moves money waits a day after its vote closes,
+        then has 48 hours; any other has 48 hours from when its vote closes. Nothing is sent here:
+        the signing wallet sends it itself, on Base.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -2531,13 +2532,12 @@ components:
     FleetNextKey:
       type: object
       additionalProperties: false
-      required: [token_id, price_atomic_usdc, price, level, holding_limit]
+      required: [token_id, price_atomic_usdc, price, level]
       properties:
         token_id: {type: integer, minimum: 1}
         price_atomic_usdc: {type: integer, minimum: 1, description: The price in millionths of one USDC}
         price: {type: string, description: "The same price written out, such as 10 USDC"}
         level: {type: [integer, "null"], minimum: 1, description: The Key's level in a Fibonacci fleet; null elsewhere}
-        holding_limit: {type: [integer, "null"], minimum: 1, description: How many Keys of this level one wallet may hold; null where there is no limit}
     FleetDetail:
       type: object
       additionalProperties: false

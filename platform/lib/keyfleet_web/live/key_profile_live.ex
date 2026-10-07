@@ -384,7 +384,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-reveal-title">
         Traits
         <Regent.Primitives.tip id="key-profile-reveal-tip" label="About drawing traits">
-          A key’s traits come from a random draw. If the request for it was turned down, anyone can ask again.
+          A Key’s traits come from a random draw. If the request for it was turned down, anyone can ask again.
         </Regent.Primitives.tip>
       </h3>
       <.live_component

@@ -34,11 +34,11 @@ Nobody hands out work. Each member takes a task nobody has taken, does it, check
 
 ### Present keys decide
 
-The people who hold the keys own the fleet, and every key has one vote. A key counts in new proposals while it is present, and marking present lasts 48 hours. A proposal passes when more than half of the keys counted for it vote yes: those present when it opened, and any that vote on it later. A key away for longer keeps its part of every split and can come back at any time. A majority can stop a key and its shards changing the workspace; they can still read it and chat.
+The people who hold the Keys own the fleet, and every Key has one vote. A new Key waits 2 days, then is present on its own until day 4; after that, marking it present lasts 48 hours. Every vote lasts 24 hours, and a proposal passes when at least 60% of the Keys counted for it vote yes: those present when it opened, and any that vote on it later. One present Key can pass a proposal alone. A Key away for longer keeps its part of every split and can come back at any time. An approved proposal can stop a Key and its shards changing the workspace; they can still read it and chat.
 
 ### Every key shares in the treasury
 
-Everything the fleet receives outside a key sale, USDC included, goes to its treasury. Once a day, anyone can run the daily split, which shares from 0.1% to 2% of the treasury's tokens equally among all the keys, at the rate the keys vote for. It promises no profit and no price for a key.
+Everything the fleet receives outside a key sale, USDC included, goes to its treasury. Once a day, anyone can run the daily split, which shares from 0.1% to 2% of the treasury's tokens equally among all the Keys, at the rate the Keys vote for, starting at 0.5%. It promises no profit and no price for a key.
 
 ### Money goes to the key's holder
 

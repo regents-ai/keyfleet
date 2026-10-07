@@ -155,13 +155,10 @@ defmodule Keyfleet.Directory do
   defp next_key(_id, %{next_token_id: nil}), do: nil
 
   defp next_key(id, %{next_token_id: token_id, next_price: price}) do
-    level = if Presets.levelled?(id), do: Presets.fibonacci_level_of(token_id)
-
     %{
       token_id: token_id,
       price_atomic_usdc: price,
-      level: level,
-      holding_limit: level && Presets.fibonacci_holding_limit(level)
+      level: if(Presets.levelled?(id), do: Presets.fibonacci_level_of(token_id))
     }
   end
 

@@ -92,15 +92,23 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   end
 
   # Anyone may carry out an approved proposal, with its exact calls as the
-  # chain reader recorded them.
+  # chain reader recorded them, once its wait after voting is over: the vote
+  # contract refuses it before then.
   def steps(:carry_out, %{fleet: fleet, proposal: proposal}) do
     figures = %{status: nil}
 
-    with %{calls: calls} <- Proposals.get_by_number(fleet.id, proposal),
+    with %{calls: calls} = recorded <- Proposals.get_by_number(fleet.id, proposal),
          {:ok, reads} <- Reads.at_head(),
          {:ok, status} <- status(reads, fleet, proposal) do
       data = Call.encode(@execute, [proposal, Enum.map(calls, &{&1.target, &1.value, &1.data})])
-      blocked = if status == :approved, do: %{}, else: %{"carry_out" => status}
+      from = Proposals.carry_out_from(recorded)
+
+      blocked =
+        cond do
+          status != :approved -> %{"carry_out" => status}
+          DateTime.before?(Reads.now(reads), from) -> %{"carry_out" => {:carry_out_from, from}}
+          true -> %{}
+        end
 
       {:ok, [Review.step("carry_out", fleet.votes_address, data)],
        %{status: status, blocked: blocked}}

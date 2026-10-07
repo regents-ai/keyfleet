@@ -44,7 +44,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     {"pay", "Payment"},
     {"advance", "Advance"},
     {"rate", "Daily split rate"},
-    {"edits", "A key’s edits"},
+    {"edits", "A Key’s edits"},
     {"signature", "Signature"},
     {"launch", "Token launch"}
   ]
@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     protocol_share_sent: "Sent to Regents",
     paid: "Paid",
     advanced: "Advanced",
-    split_allocated: "Shared with key holders"
+    split_allocated: "Shared with Key holders"
   }
 
   attr :page, :any, required: true, doc: "the proposals as read, or `:unreadable`"
@@ -226,7 +226,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <h2 id="proposal-carry-out-title">
             Carry it out
             <Regent.Primitives.tip id="proposal-carry-out-tip" label="About carrying it out">
-              Anyone can carry out an approved proposal once voting has closed, until its time runs out. It makes exactly the calls below.
+              Anyone can carry out an approved proposal until its time runs out. A proposal that moves money waits a day after voting closes, then has 48 hours; any other can be carried out once voting closes. It makes exactly the calls below.
             </Regent.Primitives.tip>
           </h2>
           <.live_component
@@ -350,30 +350,30 @@ defmodule KeyfleetWeb.ProposalsLive do
         <div>
           <dt>Yes</dt>
           <dd id="proposal-yes">
-            <Count.count id="proposal-yes-count" value={@on_chain.yes} one="key" many="keys" />
+            <Count.count id="proposal-yes-count" value={@on_chain.yes} one="Key" many="Keys" />
           </dd>
         </div>
         <div>
           <dt>No</dt>
           <dd id="proposal-no">
-            <Count.count id="proposal-no-count" value={@on_chain.no} one="key" many="keys" />
+            <Count.count id="proposal-no-count" value={@on_chain.no} one="Key" many="Keys" />
           </dd>
         </div>
         <div>
           <dt>Abstain</dt>
           <dd id="proposal-abstain">
-            <Count.count id="proposal-abstain-count" value={@on_chain.abstain} one="key" many="keys" />
+            <Count.count id="proposal-abstain-count" value={@on_chain.abstain} one="Key" many="Keys" />
           </dd>
         </div>
         <div>
           <dt>
             Keys counted
-            <Regent.Primitives.tip id="proposal-counted-tip" label="About keys counted">
+            <Regent.Primitives.tip id="proposal-counted-tip" label="About Keys counted">
               {@on_chain.e0} present when it opened, and {@on_chain.late} more that voted since.
             </Regent.Primitives.tip>
           </dt>
           <dd id="proposal-counted">
-            <Count.count id="proposal-counted-count" value={@on_chain.counted} one="key" many="keys" />
+            <Count.count id="proposal-counted-count" value={@on_chain.counted} one="Key" many="Keys" />
           </dd>
         </div>
       </dl>
@@ -381,6 +381,10 @@ defmodule KeyfleetWeb.ProposalsLive do
         <div>
           <dt>Closes</dt>
           <dd id="proposal-closes">{at(@proposal.closes_at)}</dd>
+        </div>
+        <div :if={@proposal.carry_out_from}>
+          <dt>Can be carried out from</dt>
+          <dd id="proposal-carry-out-from">{at(@proposal.carry_out_from)}</dd>
         </div>
         <div>
           <dt>Carry out by</dt>
@@ -602,7 +606,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               <th scope="col">
                 Set aside
                 <Regent.Primitives.tip id="proposals-backed-tip" label="About set aside">
-                  Already shared with keys and waiting to be claimed. It isn’t the treasury’s to spend.
+                  Already shared with Keys and waiting to be claimed. It isn’t the treasury’s to spend.
                 </Regent.Primitives.tip>
               </th>
             </tr>
@@ -739,7 +743,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         <h3 id="proposals-split-title">
           Split preview
           <Regent.Primitives.tip id="proposals-split-tip" label="About the daily split">
-            Once a day anyone can run the split. Each asset at or above its minimum shares its balance times the rate, divided equally across every key sold.
+            Once a day anyone can run the split. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
           </Regent.Primitives.tip>
         </h3>
         <table
@@ -752,7 +756,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               <th scope="col">Asset</th>
               <th scope="col">Balance</th>
               <th scope="col">Minimum</th>
-              <th scope="col">Per key</th>
+              <th scope="col">Per Key</th>
             </tr>
           </thead>
           <tbody>
@@ -926,9 +930,11 @@ defmodule KeyfleetWeb.ProposalsLive do
   @doc "How a proposal is approved, as the pages say it."
   def approval_rule,
     do:
-      "Each key is one vote. When voting closes, a proposal is approved if more than half of " <>
-        "the keys counted voted yes: the keys active when it opened, and any other key that " <>
-        "voted. A counted key that doesn’t vote counts against it."
+      "Each Key is one vote, and a vote can be changed until voting closes, 24 hours after " <>
+        "the proposal opened. It is approved if at least 60% of the Keys counted voted yes, " <>
+        "rounded up, so one Key counted can approve it alone. The Keys counted are those " <>
+        "present when it opened, and any other Key that voted. A counted Key that doesn’t " <>
+        "vote counts against it."
 
   attr :id, :string, required: true
 

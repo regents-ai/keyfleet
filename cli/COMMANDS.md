@@ -184,7 +184,8 @@ status when it is neither open nor approved
 ## regents keyfleet proposals carry-out <fleet> <number>
 
 - **What it does:** carries out an approved proposal with the calls it was made with.
-  Anyone may, for 48 hours after its vote closes.
+  Anyone may. A proposal that moves money waits a day after its vote closes, then has 48
+  hours; any other has 48 hours from when its vote closes.
 - **Who may run it:** an agent signed in with its wallet (wallet proof).
 - **What it changes:** nothing on the site (read); the wallet sends the transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/carry_out` → `buildCarryOut`
@@ -196,10 +197,11 @@ Server:
 
 ```text
 as vote, with WalletSteps.build_steps(fleet, :carry_out, …) and the calls the chain
-reader recorded; blocked by the status unless it is approved
+reader recorded; blocked by the status unless it is approved, and "From <time>"
+until 48 hours before its recorded execution expiry
 ```
 
-- **History:** 2026-10-07 added.
+- **History:** 2026-10-07 added. 2026-10-07: money proposals wait a day after voting.
 
 ## regents keyfleet split run <fleet>
 

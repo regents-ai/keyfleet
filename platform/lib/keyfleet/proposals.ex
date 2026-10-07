@@ -122,6 +122,18 @@ defmodule Keyfleet.Proposals do
   def vote_hours, do: 24
 
   @doc """
+  When an approved proposal can first be carried out: 48 hours before its
+  execution expiry, as the vote contract recorded it. A proposal that moves
+  money waits a day after voting closes; any other can be carried out as soon
+  as voting closes.
+  """
+  def carry_out_from(%Proposal{execution_expiry: expiry}), do: DateTime.add(expiry, -48, :hour)
+
+  @doc "Whether a proposal waits after voting closes before it can be carried out."
+  def waits?(%Proposal{closes_at: closes_at} = proposal),
+    do: DateTime.after?(carry_out_from(proposal), closes_at)
+
+  @doc """
   How many Yes votes approve a proposal `voters` Keys may vote on: 60% of
   them, rounded up, as `KeyfleetVotes.approvalsNeeded` counts. One present
   Key can approve a proposal on its own.

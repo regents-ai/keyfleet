@@ -155,11 +155,8 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp sales(%{sales: %{next_key: nil, keys_total: total}}),
     do: "All #{Rules.grouped(total)} Keys sold."
 
-  defp sales(%{id: id, sales: %{next_key: next} = sales}) do
-    sold(sales) <>
-      "next Key: Key #{Rules.grouped(next.token_id)} for #{next.price}. " <>
-      (Rules.holding_limit_sentence(id, next.token_id) || "No limit on Keys per wallet.")
-  end
+  defp sales(%{sales: %{next_key: next} = sales}),
+    do: sold(sales) <> "next Key: Key #{Rules.grouped(next.token_id)} for #{next.price}."
 
   defp sold(%{keys_total: nil, keys_sold: sold}),
     do: "#{Rules.keys(sold)} sold · new levels keep opening · "

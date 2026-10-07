@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
       <h2 id={"#{@id}-title"} class="presence-title">
         Present
         <Regent.Primitives.tip id={"#{@id}-tip"} label="About being present">
-          A present key is counted when a proposal opens. Marking it lasts 48 hours, and voting or proposing with it marks it too.
+          A present Key is counted when a proposal opens. A new Key waits 2 days, then is present on its own until day 4. After that, marking it present lasts 48 hours, and voting or proposing with it marks it too.
         </Regent.Primitives.tip>
       </h2>
       <.live_component
@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
           <p :if={maintenance?(panel)} id={"#{@id}-maintenance"} class="presence-maintenance">
             Maintenance needed
             <Regent.Primitives.tip id={"#{@id}-maintenance-tip"} label="About maintenance">
-              Some keys’ presence has lapsed. Tidy up clears them, and a proposal can be made again. Anyone can press it.
+              Some Keys’ presence has lapsed. Tidy up clears them, and a proposal can be made again. Anyone can press it.
             </Regent.Primitives.tip>
           </p>
         </:notes>

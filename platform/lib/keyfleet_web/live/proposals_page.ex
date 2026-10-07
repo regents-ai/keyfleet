@@ -172,6 +172,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       content_hash: proposal.content_hash,
       opened_at: proposal.opened_at,
       execution_expiry: proposal.execution_expiry,
+      carry_out_from: Proposals.waits?(proposal) && Proposals.carry_out_from(proposal),
       calls: Enum.map(proposal.calls, &call(Actions.decode(&1, fleet), fleet, assets)),
       executor: proposal.execution && proposal.execution.executor,
       cancelled_by: proposal.cancellation && proposal.cancellation.cancelled_by
@@ -211,10 +212,10 @@ defmodule KeyfleetWeb.ProposalsPage do
     do: %{text: "Withdraw the fleet’s signature on", address: hash}
 
   defp call({:edits, token_id, true}, _fleet, _assets),
-    do: %{text: "Stop key #{Rules.grouped(token_id)} changing the workspace", address: nil}
+    do: %{text: "Stop Key #{Rules.grouped(token_id)} changing the workspace", address: nil}
 
   defp call({:edits, token_id, false}, _fleet, _assets),
-    do: %{text: "Let key #{Rules.grouped(token_id)} change the workspace again", address: nil}
+    do: %{text: "Let Key #{Rules.grouped(token_id)} change the workspace again", address: nil}
 
   defp call({:launch, launch}, _fleet, _assets),
     do: %{

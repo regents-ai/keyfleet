@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-agent-voting-title">
             Agent voting
             <Regent.Primitives.tip id="key-agent-voting-tip" label="About agent voting">
-              When it’s on, the key’s shards can vote and propose with it. It stays as set until changed, even across new shards.
+              When it’s on, the Key’s shards can vote and propose with it. It stays as set until changed, even across new shards.
             </Regent.Primitives.tip>
           </h2>
 
@@ -227,7 +227,7 @@ defmodule KeyfleetWeb.KeysLive do
   # The keys named whose shards may vote now, or nil for none.
   defp voting(panel) do
     case WalletPanel.figures(panel) do
-      %{voting: [_key | _more] = keys} -> Enum.map_join(keys, ", ", &"key #{Rules.grouped(&1)}")
+      %{voting: [_key | _more] = keys} -> Enum.map_join(keys, ", ", &"Key #{Rules.grouped(&1)}")
       _none -> nil
     end
   end
