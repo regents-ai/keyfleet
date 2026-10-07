@@ -4,7 +4,9 @@ defmodule Keyfleet.Chain.VotesLog do
   `Keyfleet.Proposals` and `Keyfleet.Keys` record.
 
     * `ProposalCreated` is `{:proposal, fields}`, with the exact calls the
-      treasury makes if it is carried out. When it opened is not in it:
+      treasury makes if it is carried out. The first second it may be carried
+      out is not kept: it is always its execution expiry less 48 hours
+      (`Keyfleet.Proposals.carry_out_from/1`). When it opened is not in it:
       `Keyfleet.Chain.Logs` takes that from the author key's `Present` log
       just before it.
     * `BallotCast` is `{:ballot, fields}`: keys cast or replaced their
@@ -27,7 +29,7 @@ defmodule Keyfleet.Chain.VotesLog do
   alias RegentChain.Event
 
   @created Event.topic0(
-             "ProposalCreated(uint256,uint256,address,bytes32,bytes32,uint64,uint64,uint32,uint48,(address,uint256,bytes)[])"
+             "ProposalCreated(uint256,uint256,address,bytes32,bytes32,uint64,uint64,uint64,uint32,uint48,(address,uint256,bytes)[])"
            )
   @ballot Event.topic0("BallotCast(uint256,address,uint8,uint256[])")
   @cancelled Event.topic0("ProposalCancelled(uint256,address)")
@@ -41,7 +43,7 @@ defmodule Keyfleet.Chain.VotesLog do
   # `None` is never cast.
   @choices %{1 => :yes, 2 => :no, 3 => :abstain}
   # The words of `ProposalCreated`'s data before its calls.
-  @head_words 7
+  @head_words 8
 
   @doc "The topic0 of every event read here."
   def topics,
@@ -152,10 +154,12 @@ defmodule Keyfleet.Chain.VotesLog do
   # The data's words before its calls, the last of which must point just past
   # them, where the calls begin.
   defp head(head) do
-    with {:ok, [proposal_hash, content_hash, closes_at, expiry, e0, open_revision, offset]} <-
+    with {:ok,
+          [proposal_hash, content_hash, closes_at, _executable_at, expiry, e0, open_revision, offset]} <-
            words(head, [
              :bytes32,
              :bytes32,
+             {:uint, 63},
              {:uint, 63},
              {:uint, 63},
              {:uint, 32},

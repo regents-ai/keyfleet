@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   @status_words %{
     open: "Open",
+    waiting: "Approved, waiting",
     approved: "Approved",
     rejected: "Not approved",
     executed: "Carried out",
@@ -410,7 +411,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="propose-title">
         Propose
         <Regent.Primitives.tip id="propose-tip" label="About proposing">
-          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment or advance names one token and a share of the treasury’s balance of it. Approved proposals are carried out exactly as written.
+          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment or advance names one token and a share of the treasury’s balance of it when it is carried out, a day after its vote passes. Approved proposals are carried out exactly as written.
         </Regent.Primitives.tip>
       </h2>
       <.live_component

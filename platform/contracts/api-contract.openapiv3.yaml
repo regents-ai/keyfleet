@@ -2932,14 +2932,15 @@ components:
         has_more: {type: boolean, description: True while records after next_cursor are waiting}
     ProposalStatus:
       type: string
-      enum: [open, approved, rejected, executed, cancelled, execution_expired]
+      enum: [open, waiting, approved, rejected, executed, cancelled, execution_expired]
       description: >-
         The contract's states, as far as the site has read. open: voting has not closed.
-        approved: voting closed with more than half of the keys counted voting yes, and it can be
-        carried out until execution_expiry. rejected: voting closed without that. The keys
-        counted are opening_count, the keys active when it opened, and late_votes, the keys that
-        voted without having been. execution_expired: approved, but not carried out in time.
-        executed and cancelled: carried out, or cancelled, on chain.
+        waiting: voting closed with at least 60% of the keys counted voting yes, rounded up, and
+        the proposal moves money, so it waits a day before it can be carried out. approved: voting
+        passed and it can be carried out until execution_expiry. rejected: voting closed without
+        that. The keys counted are opening_count, the keys present when it opened, and late_votes,
+        the keys that voted without having been. execution_expired: approved, but not carried out
+        in time. executed and cancelled: carried out, or cancelled, on chain.
     UintString:
       type: string
       pattern: '^(0|[1-9][0-9]{0,77})$'
@@ -3164,7 +3165,7 @@ components:
         key: {type: string, description: "The key the proposal is made with, in decimal"}
         text: {type: string, description: "The proposal's words, at most 4000 bytes once trimmed"}
         asset: {type: string, description: "The address of an asset the treasury pays in"}
-        share: {type: string, description: "The share of the treasury's balance of the asset, in percent, 0.0001 to 99, with at most four decimals; the transaction names what that share is at the latest block"}
+        share: {type: string, description: "The share of the treasury's balance of the asset, in percent, 0.0001 to 99, with at most four decimals; the treasury pays that share of its balance when the proposal is carried out"}
         recipient: {type: string, description: "A full wallet address"}
         rate: {type: string, description: "The daily split in percent, 0.1 to 2, with at most two decimals"}
         target: {type: string, description: "The key whose workspace edits it restricts or frees, in decimal"}

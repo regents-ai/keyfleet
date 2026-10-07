@@ -15,8 +15,8 @@ defmodule Keyfleet.Proposals.Actions do
   alias Keyfleet.Fleets.Fleet
   alias RegentChain.{Abi, Call}
 
-  @pay "pay(address,address,uint256)"
-  @advance "advance(uint256,address,address,uint256,bytes32)"
+  @pay "pay(address,address,uint32)"
+  @advance "advance(uint256,address,address,uint32,bytes32)"
   @rate "setDailySplitBps(uint256)"
   @approve_hash "approveSignatureHash(bytes32)"
   @revoke_hash "revokeSignatureHash(bytes32)"
@@ -32,8 +32,9 @@ defmodule Keyfleet.Proposals.Actions do
   The calls of one kind of proposal, as `{target, wei, calldata}`:
 
     * `:decision`, no call;
-    * `{:pay, asset, to, amount}` and `{:advance, id, operator, asset,
-      amount, purpose}` from the treasury;
+    * `{:pay, asset, to, share}` and `{:advance, id, operator, asset,
+      share, purpose}` from the treasury, `share` in parts per million of
+      the treasury's balance of `asset` when the proposal is carried out;
     * `{:rate, bps}`, the daily split's rate;
     * `{:signature, :approve | :revoke, hash}`;
     * `{:edits, token_id, restricted?}`, `token_id` the fleet's Key number;
@@ -41,11 +42,11 @@ defmodule Keyfleet.Proposals.Actions do
   """
   def encode(:decision, _fleet), do: []
 
-  def encode({:pay, asset, to, amount}, fleet),
-    do: [treasury(fleet, Call.encode(@pay, [asset, to, amount]))]
+  def encode({:pay, asset, to, share}, fleet),
+    do: [treasury(fleet, Call.encode(@pay, [asset, to, share]))]
 
-  def encode({:advance, id, operator, asset, amount, purpose}, fleet),
-    do: [treasury(fleet, Call.encode(@advance, [id, operator, asset, amount, purpose]))]
+  def encode({:advance, id, operator, asset, share, purpose}, fleet),
+    do: [treasury(fleet, Call.encode(@advance, [id, operator, asset, share, purpose]))]
 
   def encode({:rate, bps}, fleet), do: [treasury(fleet, Call.encode(@rate, [bps]))]
 
@@ -111,13 +112,13 @@ defmodule Keyfleet.Proposals.Actions do
   defp treasury_action(selector, bytes) do
     cond do
       selector == Call.selector(@pay) ->
-        with {:ok, [asset, to, amount]} <- Abi.decode(bytes, [:address, :address, {:uint, 256}]),
-             do: {:ok, {:pay, asset, to, amount}}
+        with {:ok, [asset, to, share]} <- Abi.decode(bytes, [:address, :address, {:uint, 32}]),
+             do: {:ok, {:pay, asset, to, share}}
 
       selector == Call.selector(@advance) ->
-        with {:ok, [id, operator, asset, amount, purpose]} <-
-               Abi.decode(bytes, [{:uint, 256}, :address, :address, {:uint, 256}, :bytes32]),
-             do: {:ok, {:advance, id, operator, asset, amount, purpose}}
+        with {:ok, [id, operator, asset, share, purpose]} <-
+               Abi.decode(bytes, [{:uint, 256}, :address, :address, {:uint, 32}, :bytes32]),
+             do: {:ok, {:advance, id, operator, asset, share, purpose}}
 
       selector == Call.selector(@rate) ->
         with {:ok, [bps]} <- Abi.decode(bytes, [{:uint, 256}]), do: {:ok, {:rate, bps}}

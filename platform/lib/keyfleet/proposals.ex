@@ -104,7 +104,8 @@ defmodule Keyfleet.Proposals do
     * `:open` until it closes;
     * then `:rejected` unless at least `approvals_needed/1` of the Keys
       present when it opened and the Keys that voted late voted yes;
-    * otherwise `:approved` until its execution expiry, and
+    * otherwise `:waiting` until it can be carried out
+      (`carry_out_from/1`), then `:approved` until its execution expiry, and
       `:execution_expired` from then on.
   """
   def status(%Proposal{} = proposal, now \\ DateTime.utc_now()) do
@@ -113,6 +114,7 @@ defmodule Keyfleet.Proposals do
       proposal.execution -> :executed
       DateTime.before?(now, proposal.closes_at) -> :open
       proposal.yes_keys < approvals_needed(proposal.opening_count + proposal.late_keys) -> :rejected
+      DateTime.before?(now, carry_out_from(proposal)) -> :waiting
       DateTime.compare(now, proposal.execution_expiry) != :lt -> :execution_expired
       true -> :approved
     end

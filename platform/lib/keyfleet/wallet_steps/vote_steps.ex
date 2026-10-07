@@ -19,11 +19,11 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   alias RegentChain.{Call, Review}
 
   # The contract's `Status`, in its order.
-  @statuses [:open, :approved, :rejected, :cancelled, :executed, :execution_expired]
+  @statuses [:open, :waiting, :approved, :rejected, :cancelled, :executed, :execution_expired]
   # The contract's `Choice`, in its order from 1.
   @choices [{"yes", 1}, {"no", 2}, {"abstain", 3}]
   @execute "execute(uint256,(address,uint256,bytes)[])"
-  @propose "propose(uint256,bytes32,uint64,(address,uint256,bytes)[])"
+  @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
   # Each launch field's most bytes, as Autolaunch v2's factory takes them.
   @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
   # The kinds of proposal whose calls move money, which the vote contract
@@ -66,8 +66,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  # Whoever may vote the proposal's key may cancel it while it is open or
-  # approved.
+  # Whoever may vote the proposal's key may cancel it until it is carried
+  # out: while it is open, waiting or approved.
   def steps(:cancel, %{fleet: fleet, signer: signer, proposal: proposal}) do
     figures = %{status: nil}
 
@@ -78,7 +78,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
            Reads.acting(reads, fleet, signer, [author], "mayGovern") do
       reason =
         cond do
-          status not in [:open, :approved] -> status
+          status not in [:open, :waiting, :approved] -> status
           not governs? -> :not_your_key
           true -> nil
         end
@@ -92,8 +92,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   end
 
   # Anyone may carry out an approved proposal, with its exact calls as the
-  # chain reader recorded them, once its wait after voting is over: the vote
-  # contract refuses it before then.
+  # chain reader recorded them. A proposal that moves money waits a day after
+  # its vote passes, and the vote contract refuses it until then.
   def steps(:carry_out, %{fleet: fleet, proposal: proposal}) do
     figures = %{status: nil}
 
@@ -105,8 +105,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
       blocked =
         cond do
+          status == :waiting -> %{"carry_out" => {:carry_out_from, from}}
           status != :approved -> %{"carry_out" => status}
-          DateTime.before?(Reads.now(reads), from) -> %{"carry_out" => {:carry_out_from, from}}
           true -> %{}
         end
 
@@ -118,9 +118,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  # One proposal of the kind chosen, made with the Key typed, open to votes
-  # for `Keyfleet.Proposals.vote_hours/0` from the latest block's own clock. Its text is
-  # hashed into the proposal; the text itself stays off the chain. The vote
+  # One proposal of the kind chosen, made with the Key typed. The vote
+  # contract keeps it open to votes for `Keyfleet.Proposals.vote_hours/0`;
+  # `closes_at` is when that ends if it is made at the latest block. Its text
+  # is hashed into the proposal; the text itself stays off the chain. The vote
   # contract refuses a Key sold less than two days ago, and a proposal that
   # moves money during the fleet's first 7 days of sales, so those presses are
   # certain to fail.
@@ -163,12 +164,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          Review.step(
            "propose",
            fleet.votes_address,
-           Call.encode(@propose, [
-             Fleet.onchain_token_id(fleet, key),
-             content_hash,
-             closes_at,
-             calls
-           ])
+           Call.encode(@propose, [Fleet.onchain_token_id(fleet, key), content_hash, calls])
          )
        ], figures}
     end
@@ -186,7 +182,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
   defp action("pay", fleet, inputs, reads, _text, figures) do
     with {:ok, asset, share, amount, to} <- payment(fleet, inputs, reads, figures) do
-      {:ok, {:pay, asset.address, to, amount}, {:pay, asset, to, share, amount}}
+      {:ok, {:pay, asset.address, to, share}, {:pay, asset, to, share, amount}}
     end
   end
 
@@ -197,7 +193,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          {:ok, count} <- read(reads, fleet.votes_address, "proposalCount()", figures) do
       id = count + 1
 
-      {:ok, {:advance, id, operator, asset.address, amount, content_hash(text)},
+      {:ok, {:advance, id, operator, asset.address, share, content_hash(text)},
        {:advance, id, asset, operator, share, amount}}
     end
   end
@@ -238,8 +234,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
   # The token, share and wallet of a payment or an advance: a token the
   # treasury holds, by address, and a share of the treasury's balance of it,
-  # in parts per million. The vote contract takes an amount, so the share is
-  # turned into one at the latest block's balance.
+  # in parts per million. The treasury pays that share of its balance when the
+  # proposal is carried out; `amount` is what it comes to at the latest block.
   defp payment(fleet, inputs, reads, figures) do
     with {:ok, asset} <- asset(fleet, inputs, figures),
          figures = Map.put(figures, :asset, asset),

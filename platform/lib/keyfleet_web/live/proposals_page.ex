@@ -193,12 +193,12 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   # One call carrying the proposal out makes, in plain words: `text`, then
   # the wallet or token it names in full, if any.
-  defp call({:pay, asset, to, amount}, _fleet, assets),
-    do: %{text: "Pay #{amount(amount, asset, assets).text} to", address: to}
+  defp call({:pay, asset, to, share}, _fleet, assets),
+    do: %{text: "Pay #{share_of(share, asset, assets)} to", address: to}
 
-  defp call({:advance, id, operator, asset, amount, _purpose}, _fleet, assets),
+  defp call({:advance, id, operator, asset, share, _purpose}, _fleet, assets),
     do: %{
-      text: "Advance #{amount(amount, asset, assets).text} (advance #{id}) to",
+      text: "Advance #{share_of(share, asset, assets)} (advance #{id}) to",
       address: operator
     }
 
@@ -233,6 +233,18 @@ defmodule KeyfleetWeb.ProposalsPage do
     do: %{text: "Send #{amount(wei, Treasury.native(), assets).text} and call", address: target}
 
   defp call({:other, target, 0, _data}, _fleet, _assets), do: %{text: "Call", address: target}
+
+  # A share of the treasury's balance of a token, in parts per million, as
+  # the treasury pays it out when the proposal is carried out.
+  defp share_of(share, asset, %{details: details}) do
+    name =
+      case details[asset] do
+        {symbol, _decimals} when is_binary(symbol) -> symbol
+        _unknown -> "token #{RegentFormat.short_address(asset)}"
+      end
+
+    "#{units(share, 4)}% of the treasury’s #{name}"
+  end
 
   defp vote(vote) do
     %{

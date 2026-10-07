@@ -24,6 +24,7 @@ defmodule Keyfleet.Treasury.Event do
   @max_bigint 9_223_372_036_854_775_807
   @addresses [:asset, :account, :by]
   @numbers [
+    :share,
     :amount,
     :balance,
     :per_key,

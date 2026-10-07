@@ -11,7 +11,9 @@ defmodule Keyfleet.Chain.MoneyLog do
   REGENT staking (`:protocol_share_sent`).
 
   From its treasury (`treasury_topics/0`): a proposal's payment (`:paid`),
-  advance (`:advanced`) and an advance coming back (`:advance_returned`);
+  advance (`:advanced`), each a share of the treasury's balance of the asset
+  in parts per million and the amount it came to, and an advance coming back
+  (`:advance_returned`);
   each daily split run (`:daily_split_run`) and what it did with each bound
   asset (`:split_allocated`, `:split_skipped`, `:split_transfer_failed`); a
   new split rate (`:daily_split_rate_set`); OUSD admitted
@@ -30,6 +32,7 @@ defmodule Keyfleet.Chain.MoneyLog do
     :asset,
     :account,
     :by,
+    :share,
     :amount,
     :balance,
     :per_key,
@@ -55,11 +58,11 @@ defmodule Keyfleet.Chain.MoneyLog do
         {:protocol_share_sent, [by: :address], [amount: {:uint, 256}]}
     },
     treasury: %{
-      "Paid(address,address,uint256)" =>
-        {:paid, [asset: :address, account: :address], [amount: {:uint, 256}]},
-      "Advanced(uint256,address,address,uint256,bytes32)" =>
+      "Paid(address,address,uint32,uint256)" =>
+        {:paid, [asset: :address, account: :address], [share: {:uint, 32}, amount: {:uint, 256}]},
+      "Advanced(uint256,address,address,uint32,uint256,bytes32)" =>
         {:advanced, [advance_id: {:uint, 256}, account: :address, asset: :address],
-         [amount: {:uint, 256}, purpose_hash: :bytes32]},
+         [share: {:uint, 32}, amount: {:uint, 256}, purpose_hash: :bytes32]},
       "AdvanceReturned(uint256,address,uint256,uint256)" =>
         {:advance_returned, [advance_id: {:uint, 256}, by: :address],
          [amount: {:uint, 256}, outstanding: {:uint, 256}]},
