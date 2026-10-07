@@ -140,7 +140,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
       {%{author_kind: :human, author_wallet: wallet, as_key: as_key, agent_profile_id: nil}, nil}
 
   defp author(%Agent{} = actor, as_key, wallet) do
-    profile = Keyfleet.Agents.get_my_profile!(actor: actor)
+    profile = Keyfleet.Agents.get_my_profile!(actor: actor, load: [:human_backed])
 
     {%{author_kind: :agent, author_wallet: wallet, as_key: as_key, agent_profile_id: profile.id},
      profile}

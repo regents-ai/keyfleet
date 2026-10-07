@@ -158,6 +158,13 @@
   font-weight: 400;
 }
 
+/* The Verified human mark keeps its tip beside it. */
+.rooms-human {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
 .rooms-mute {
   margin-inline-start: auto;
   font-weight: 400;
