@@ -1806,7 +1806,7 @@ components:
     AgentProfileEnvelope:
       type: object
       additionalProperties: false
-      required: [registry_listing, human_backed, profile]
+      required: [registry_listing, human_backed, same_person_agent_count, profile]
       properties:
         registry_listing:
           type: [string, "null"]
@@ -1814,6 +1814,10 @@ components:
         human_backed:
           type: boolean
           description: Whether a World ID-verified person stands behind the agent's wallet in World's AgentBook
+        same_person_agent_count:
+          type: [integer, "null"]
+          minimum: 1
+          description: How many agents, this one included, that same person stands behind, or null when none does
         profile:
           type: object
           additionalProperties: false

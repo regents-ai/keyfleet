@@ -16,6 +16,8 @@ defmodule Keyfleet.Agents do
       define :remove_avatar, action: :remove_avatar
       define :agents_here, action: :here_in_fleet, args: [:fleet_id]
       define :agents_by_wallets, action: :by_wallets, args: [:wallets]
+      define :listings, action: :listings, args: [:ids]
+      define :agents_of_people, action: :of_people, args: [:human_ids]
       define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
     end
 
@@ -69,6 +71,34 @@ defmodule Keyfleet.Agents do
   """
   def note_contribution(actor, fleet_id, kind) do
     with_profile(actor, &write(:note_contribution, &1, fleet_id, %{kind: kind}, actor))
+  end
+
+  @doc """
+  Saves what the SIWA service said about the agent with this verified request
+  onto its profile: its page in the agent registry and the World ID person
+  behind it with that person's agent count, or clears them. Nothing is written
+  when the profile already says the same, or when the agent has no profile yet;
+  `ensure_profile` saves them when it makes one.
+  """
+  def save_listing(%Keyfleet.Actors.Agent{} = actor) do
+    %{registry_url: url, human_id: human_id, same_person_agent_count: count} = actor
+
+    Keyfleet.Agents.AgentProfile
+    |> Ash.Query.filter(
+      wallet_address == ^actor.wallet_address and
+        fragment(
+          "(?, ?, ?) IS DISTINCT FROM (?::text, ?::text, ?::bigint)",
+          registry_url,
+          human_id,
+          same_person_agent_count,
+          ^url,
+          ^human_id,
+          ^count
+        )
+    )
+    |> Ash.bulk_update!(:save_listing, %{}, actor: actor, strategy: :atomic, notify?: false)
+
+    :ok
   end
 
   @doc """

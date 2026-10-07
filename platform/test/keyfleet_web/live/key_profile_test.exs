@@ -39,11 +39,6 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     epoch!(3, 1, wallet("e"))
     epoch!(20, 1, wallet("e"))
 
-    # Agents have no registry listing unless a test says otherwise.
-    Req.Test.stub(Keyfleet.AgentListing, fn conn ->
-      Req.Test.json(conn, %{data: %{activity: [], agentRegistration: nil, agentBook: nil}})
-    end)
-
     :ok
   end
 
@@ -113,56 +108,41 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
              "Check-ins working · last check-in just now · no contributions yet"
   end
 
-  test "an agent holding a shard shows its registry listing and World ID mark, read live",
+  test "an agent holding a shard shows its saved registry listing and World ID mark",
        %{conn: conn} do
     listed = wallet("c")
     plain = wallet("d")
     human_id = "0x" <> String.duplicate("7", 64)
 
-    for {wallet, name} <- [{listed, "Orbit runner"}, {plain, "Plain runner"}] do
+    # Orbit runner's person stands behind three agents; Keyfleet knows one
+    # more of them, Night runner, which holds no shard here.
+    for {wallet, name, listing} <- [
+          {listed, "Orbit runner",
+           %{
+             registry_url: "https://www.8004scan.io/agents/base/97609",
+             human_id: human_id,
+             same_person_agent_count: 3
+           }},
+          {wallet("9"), "Night runner", %{human_id: human_id, same_person_agent_count: 3}},
+          {plain, "Plain runner", %{}}
+        ] do
       Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"},
-        actor: %Actors.Agent{
-          wallet_address: wallet,
-          chain_id: 8_453,
-          verification_method: :eoa_recovery,
-          audience: "keyfleet"
-        }
+        actor:
+          struct!(
+            Actors.Agent,
+            Map.merge(listing, %{
+              wallet_address: wallet,
+              chain_id: 8_453,
+              verification_method: :eoa_recovery,
+              audience: "keyfleet"
+            })
+          )
       )
-
-      ChainHelpers.issue_shard!(@fleet, 12, wallet)
     end
 
-    Req.Test.stub(Keyfleet.AgentListing, fn conn ->
-      assert conn.request_path == "/api/shared/siwa/activity"
-
-      assert Plug.Conn.get_req_header(conn, "authorization") == [
-               "Bearer test-activity-read-token"
-             ]
-
-      {:ok, raw, conn} = Plug.Conn.read_body(conn)
-      %{"wallet_address" => wallet, "since" => _since} = Jason.decode!(raw)
-
-      Req.Test.json(conn, %{
-        data:
-          if wallet == listed do
-            %{
-              activity: [],
-              agentRegistration: %{
-                agentId: "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:97609",
-                tokenId: "97609",
-                profileUrl: "https://siwa.regents.sh/agents/registrations/1",
-                registryUrl: "https://www.8004scan.io/agents/base/97609"
-              },
-              agentBook: %{humanId: human_id}
-            }
-          else
-            %{activity: [], agentRegistration: nil, agentBook: nil}
-          end
-      })
-    end)
+    for wallet <- [listed, plain], do: ChainHelpers.issue_shard!(@fleet, 12, wallet)
 
     {:ok, view, _html} = live(conn, @path <> "?key=12")
-    render_async(view)
 
     assert has_element?(
              view,
@@ -170,9 +150,14 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
              "Registry listing"
            )
 
-    assert has_element?(view, "#key-profile-human-#{listed}", "Human-backed (World ID)")
+    assert has_element?(view, "#key-profile-human-#{listed}", "Verified human")
+
+    assert text(view, "#key-profile-same-person-#{listed}") ==
+             "1 of 3 agents run by the same person, with Night runner"
+
     refute has_element?(view, "#key-profile-registry-#{plain}")
-    refute has_element?(view, "#key-profile-human-#{plain}")
+    assert has_element?(view, "#key-profile-human-#{plain}", "No verified human")
+    refute has_element?(view, "#key-profile-same-person-#{plain}")
     refute render(view) =~ human_id
   end
 

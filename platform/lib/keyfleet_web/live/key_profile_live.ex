@@ -16,7 +16,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   import KeyfleetWeb.Components.AgentPicture
   import Phoenix.LiveView, only: [push_patch: 2, start_async: 3, stream: 4]
 
-  alias Keyfleet.AgentListing
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets.Rules
@@ -218,8 +217,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd :if={@profile.shards != []} id="key-profile-shards">
             <ul class="key-profile-shards">
               <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
-                <.shard_agent shard={shard} listing={@profile.listings[shard.wallet]} />
-                · until {day(shard.expires_at)}
+                <.shard_agent shard={shard} /> · until {day(shard.expires_at)}
               </li>
             </ul>
           </dd>
@@ -237,7 +235,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :shard, :map, required: true
-  attr :listing, :map, default: nil, doc: "the agent's registry listing, once it has been read"
 
   # The agent holding a shard, as its check-ins say, or its wallet while no
   # agent has signed in with it.
@@ -249,21 +246,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <.agent_picture src={@shard.agent.avatar_src} />
     {@shard.agent.name} · {@shard.agent.harness}
     <a
-      :if={@listing && @listing.registry_url}
+      :if={@shard.agent.registry_url}
       id={"key-profile-registry-#{@shard.wallet}"}
-      href={@listing.registry_url}
+      href={@shard.agent.registry_url}
       target="_blank"
       rel="noopener"
     >
       Registry listing
     </a>
-    <span
-      :if={@listing && @listing.human_backed?}
-      id={"key-profile-human-#{@shard.wallet}"}
-      class="key-profile-status"
-    >
-      Human-backed (World ID)
-    </span>
+    <.human_backing wallet={@shard.wallet} agent={@shard.agent} />
     <CheckIns.status
       id={"key-profile-check-in-#{@shard.wallet}"}
       class="key-profile-status"
@@ -277,6 +268,51 @@ defmodule KeyfleetWeb.KeyProfileLive do
     </span>
     """
   end
+
+  attr :wallet, :string, required: true
+  attr :agent, :map, required: true
+
+  # Two states only: a person verified with World ID stands behind the agent,
+  # or none does. What each means waits in its tip; who the person is never
+  # shows.
+  defp human_backing(%{agent: %{backing: %{human_backed: true}}} = assigns) do
+    ~H"""
+    <span id={"key-profile-human-#{@wallet}"} class="key-profile-status">
+      <span aria-hidden="true">✓</span>
+      Verified human
+      <Regent.Primitives.tip id={"key-profile-human-tip-#{@wallet}"} label="About Verified human">
+        A real person verified with World ID stands behind this agent. Who they are stays private.
+      </Regent.Primitives.tip>
+    </span>
+    <span
+      :if={@agent.backing.same_person_agent_count >= 2}
+      id={"key-profile-same-person-#{@wallet}"}
+      class="key-profile-status"
+    >
+      1 of {@agent.backing.same_person_agent_count} agents run by the same person{same_person(
+        @agent.same_person
+      )}
+    </span>
+    """
+  end
+
+  defp human_backing(assigns) do
+    ~H"""
+    <span id={"key-profile-human-#{@wallet}"} class="key-profile-status">
+      No verified human
+      <Regent.Primitives.tip id={"key-profile-human-tip-#{@wallet}"} label="About No verified human">
+        The agent's person can vouch for it with World ID.
+        <a href="https://siwa.regents.sh/skill.md" target="_blank" rel="noopener noreferrer">
+          Step 7
+        </a>
+      </Regent.Primitives.tip>
+    </span>
+    """
+  end
+
+  # The same person's other agents Keyfleet knows, by name.
+  defp same_person([]), do: ""
+  defp same_person(names), do: ", with " <> Enum.join(names, ", ")
 
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
@@ -637,17 +673,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   def handle_async(:rewards, _result, socket), do: {:noreply, socket}
 
-  # A shard agent's registry listing, once read. One for a key no longer open,
-  # or that could not be read, is dropped.
-  def handle_async(
-        {:listing, wallet},
-        {:ok, {fleet_id, token_id, {:ok, listing}}},
-        %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id}}} = socket
-      ),
-      do: {:noreply, update(socket, :key_profile, &put_in(&1.listings[wallet], listing))}
-
-  def handle_async({:listing, _wallet}, _result, socket), do: {:noreply, socket}
-
   @doc "The profile of the key the address names, open over its fleet's page."
   def read_key_profile(socket, fleet, token_id, before) do
     profile = Profile.read(fleet.fleet_id, token_id, ShellLive.human_actor(socket))
@@ -662,12 +687,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
         news: nil,
         notice: nil,
         draft: "",
-        send_key: Ash.UUID.generate(),
-        listings: %{}
+        send_key: Ash.UUID.generate()
       })
     )
     |> read_rewards(before)
-    |> read_listings()
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
 
@@ -710,25 +733,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp rewards_shown({:ok, {:ok, amount}}), do: {:ok, amount}
   defp rewards_shown(_failed), do: :failed
 
-  # Each shard agent's registry listing and World ID mark are read live from
-  # the sign-in server once the window is open, so the window never waits for
-  # it. Agents already read keep theirs; one whose read failed is tried again
-  # when the shards are next read.
-  defp read_listings(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
-    %{fleet_id: fleet_id, token_id: token_id, shards: shards, listings: listings} = profile
-
-    for %{wallet: wallet, agent: %{}} <- shards,
-        not is_map_key(listings, wallet),
-        reduce: socket do
-      socket ->
-        start_async(socket, {:listing, wallet}, fn ->
-          {fleet_id, token_id, AgentListing.read(wallet)}
-        end)
-    end
-  end
-
-  defp read_listings(socket), do: socket
-
   # The messages written to a key; the next key on sale has none yet.
   defp key_thread(%{issued?: true, thread: thread}), do: thread
   defp key_thread(%{issued?: false}), do: []
@@ -758,10 +762,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
         :key_profile,
         profile
         |> Map.delete(:thread)
-        |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key, :listings]))
+        |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
       )
       |> read_rewards(%{key_profile: shown})
-      |> read_listings()
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
       socket
@@ -851,9 +854,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
   @doc "The open key's shards, as their agents' check-ins say now."
   def refresh_key_shards(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
     do:
-      socket
-      |> assign(:key_profile, %{shown | shards: Profile.shards(shown.fleet_id, shown.token_id)})
-      |> read_listings()
+      assign(socket, :key_profile, %{
+        shown
+        | shards: Profile.shards(shown.fleet_id, shown.token_id)
+      })
 
   def refresh_key_shards(socket), do: socket
 end
