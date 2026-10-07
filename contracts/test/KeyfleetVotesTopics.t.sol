@@ -186,4 +186,35 @@ contract KeyfleetVotesTopicsTest is Test {
             KeyfleetTreasury.OusdAdmitted.selector, 0xebcf2752fcd8a14f6710aaeea4dff961f9fe5e076a8a719afc5b286405520d78
         );
     }
+
+    /// @dev A key marked present, and its mark cleared when the key changes hands or its presence
+    /// runs out, which the presence card reads.
+    function test_presenceTopics() public pure {
+        assertEq(KeyfleetVotes.Present.selector, 0x65494834b9ecadf1a0a1aa43098094d1784705df5b74020daae186d31b9d5d19);
+        assertEq(
+            KeyfleetVotes.PresenceCleared.selector, 0x3a7956ae06b201a0d818ed191ba804d3cbe825deec03291fae84299fc9b2ae8f
+        );
+    }
+
+    /// @dev A key's rewards settled to its holder, recorded beside each claim.
+    function test_settledTopic() public pure {
+        assertEq(KeyfleetRewards.Settled.selector, 0xbfed4c9aef0cc82058a0d9ecf93fff780a20d63bb650b7fcde95bf639097b402);
+    }
+
+    /// @dev The fleet's launch token bound to its treasury, and the signature hashes a proposal
+    /// approves or revokes.
+    function test_launchAndSignatureTopics() public pure {
+        assertEq(
+            KeyfleetTreasury.LaunchTokenBound.selector,
+            0x8d7b7447fbb1198714566de25638e562cbbad2f5d24d09970b1793414994acf4
+        );
+        assertEq(
+            KeyfleetTreasury.SignatureHashApproved.selector,
+            0x78cba52b865a35eb982d79c8f8c7226f18a37db81001cc4edeb11a495ea17b81
+        );
+        assertEq(
+            KeyfleetTreasury.SignatureHashRevoked.selector,
+            0x7e49e1e3d94a832d547af8b63cf8178a42412db0ec293cde6d88e34df5ce80f8
+        );
+    }
 }
