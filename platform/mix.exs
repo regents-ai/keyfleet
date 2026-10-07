@@ -164,7 +164,7 @@ defmodule Keyfleet.MixProject do
         # Code adds two: the Repository and Push records, each with its domain.
         # The Base contracts add one: the presence, agent-voting, cancellation and
         # treasury event records replace the budget, income and payment records.
-        "xref graph --label compile-connected --fail-above 46",
+        "xref graph --label compile-connected --fail-above 49",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
