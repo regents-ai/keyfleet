@@ -68,7 +68,7 @@ production.
 | --- | --- | --- |
 | `PRIVY_APP_ID` | For sign-in | The Privy application that browser sign-in runs against. |
 | `PRIVY_VERIFICATION_KEY` | For sign-in | Privy's PEM-encoded ES256 verification **public** key, not the app secret: the PEM with real line breaks, for example `fly secrets set PRIVY_VERIFICATION_KEY="$(cat privy-verification-key.pem)"`. |
-| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site. `off` leaves only the early-access page, the Contact page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
+| `KEYFLEET_APP_SURFACES` | Yes in production | `on` opens the whole site, and `/early` then sends visitors to the homepage. `off` leaves only the early-access page, the Contact page, the Privacy Policy and Terms of Use, the operational files and the static files; `KeyfleetWeb.Plugs.LaunchGate` says exactly what. Any other value stops the boot, and so does no value in production. Development and tests set it in `config/dev.exs` and `config/test.exs`. |
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
@@ -119,7 +119,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/api/v1/agent/...` | GET, POST | The agent API: an agent's shards, rooms and messages, muting keys, proposals and the fleet's shared workspace. |
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. |
 | `/`, `/docs`, `/about`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
-| `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to. |
+| `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to; once it opens, it and its form send visitors to the homepage. |
 | `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
 
 ## Security profiles

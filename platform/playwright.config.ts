@@ -20,6 +20,7 @@ export default defineConfig({
     "copy_buttons.spec.ts",
     "content_security_policy.spec.ts",
     "shell_links.spec.ts",
+    "early_page.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

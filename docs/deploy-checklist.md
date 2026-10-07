@@ -43,7 +43,7 @@ the values from their owners.
 | --- | --- |
 | `PHX_HOST` | `keyfleet.ai` |
 | `SECRET_KEY_BASE` | A fresh random secret of at least 64 bytes (`mix phx.gen.secret`). |
-| `KEYFLEET_APP_SURFACES` | `on` opens the whole site. `off` shows only the early-access page (`/early`, where visitors leave an email address), the Privacy Policy and Terms of Use, `/healthz`, `/robots.txt`, `/sitemap.xml` and `/.well-known/security.txt`: every other page sends visitors to `/early`, and the API, sign-in and agent files answer 503. The site will not start without it, or with any other value. |
+| `KEYFLEET_APP_SURFACES` | `on` opens the whole site, and `/early` then sends visitors to the homepage. `off` shows only the early-access page (`/early`, where visitors leave an email address), the Privacy Policy and Terms of Use, `/healthz`, `/robots.txt`, `/sitemap.xml` and `/.well-known/security.txt`: every other page sends visitors to `/early`, and the API, sign-in and agent files answer 503. The site will not start without it, or with any other value. |
 | `DATABASE_POOLED_URL` | The shared production database, as the running site signs in to it: the login `keyfleet-runtime`, which has the `writer` role. Its host must be `direct.dzx6qo6xqzvojpv5.flympg.net`, with no port other than 5432 and nothing after `?`. |
 | `DATABASE_DIRECT_URL` | The same database, as the release command `/app/bin/migrate` signs in to it: the login `keyfleet-migrate`, which has the `schema_admin` role. Same host rule. |
 | `KEYFLEET_DATABASE_TARGET_MODE` | `production` |

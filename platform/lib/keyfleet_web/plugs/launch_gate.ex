@@ -21,8 +21,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   A LiveView already open in a browser moves over its socket, which no plug
   sees; `KeyfleetWeb.Live.LaunchGateHook` sends it to `/early` too.
 
-  With the switch on, every request passes. The setting is read on each
-  request, so a deploy opens or closes the site without rebuilding the release.
+  With the switch on, every request passes except `/early`: the early-access
+  page and its form have done their job, so they send visitors to the
+  homepage. The setting is read on each request, so a deploy opens or closes
+  the site without rebuilding the release.
   """
 
   import Plug.Conn
@@ -55,10 +57,17 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    if app_surfaces_enabled?() or open?(conn),
-      do: conn,
-      else: conn |> closed() |> halt()
+    cond do
+      app_surfaces_enabled?() -> opened(conn)
+      open?(conn) -> conn
+      true -> conn |> closed() |> halt()
+    end
   end
+
+  defp opened(%Plug.Conn{request_path: "/early"} = conn),
+    do: conn |> send_to("/") |> halt()
+
+  defp opened(conn), do: conn
 
   defp open?(%Plug.Conn{request_path: path}) when path in @open_pages or path in @open_files,
     do: true
@@ -97,11 +106,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     RegentAgentAccess.negotiate(get_req_header(conn, "accept"), formats) == "html"
   end
 
-  defp to_early(conn) do
+  defp to_early(conn), do: send_to(conn, "/early")
+
+  # Not kept by browsers: the switch can change between two requests.
+  defp send_to(conn, path) do
     conn
     |> reading_headers()
     |> put_resp_header("cache-control", "no-store")
-    |> Phoenix.Controller.redirect(to: "/early")
+    |> Phoenix.Controller.redirect(to: path)
   end
 
   defp markdown_line(conn) do

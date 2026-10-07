@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
            )
   end
 
-  test "while open, the homepage is itself and the early-access page stays available" do
+  test "while open, the homepage is itself and the early-access page and its form send visitors to it" do
     home = get(build_conn(), "/")
 
     title =
@@ -184,7 +184,14 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
     assert home.status == 200
     assert title == "No boss. No job queue. Just a crew that runs itself."
-    assert get(build_conn(), "/early").status == 200
+
+    for early <- [
+          get(build_conn(), "/early"),
+          post(build_conn(), "/early", %{"email" => "ada@example.com"})
+        ] do
+      assert redirected_to(early, 302) == "/"
+      assert get_resp_header(early, "cache-control") == ["no-store"]
+    end
   end
 
   test "a mount arriving over the socket is sent to the early-access page instead" do

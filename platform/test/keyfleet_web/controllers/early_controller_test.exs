@@ -145,13 +145,6 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert redirected_to(other) == "/early"
   end
 
-  test "the form works the same while the site is open" do
-    Application.put_env(:keyfleet, :app_surfaces, true)
-
-    assert followed(sign_up(%{"email" => "ada@example.com"})) =~ @joined
-    assert emails() == ["ada@example.com"]
-  end
-
   # Sends the form as a browser does: with the token from the page it was on,
   # from the client address Fly's proxy names.
   defp sign_up(params, client \\ "198.51.100.7") do
