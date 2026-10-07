@@ -45,6 +45,17 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   end
 
   defp serve(conn) do
+    if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?() do
+      serve_open(conn)
+    else
+      conn
+      |> put_resp_header("cache-control", "no-store")
+      |> put_resp_header("retry-after", "3600")
+      |> Refusal.json(503, "not_open_yet")
+    end
+  end
+
+  defp serve_open(conn) do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
     with {:route, {:ok, fleet_id, need, target}} <- {:route, route(conn)},

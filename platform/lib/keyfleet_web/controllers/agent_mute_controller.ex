@@ -12,19 +12,36 @@ defmodule KeyfleetWeb.AgentMuteController do
 
   def index(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id)
 
+  @max_token_id 9_223_372_036_854_775_807
+
   def create(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
-    case Rooms.mute_key(fleet_id, String.to_integer(token_id), actor: conn.assigns.agent_actor) do
-      {:ok, _mute} -> answer(conn, fleet_id)
+    with {:ok, token_id} <- token_id(token_id),
+         {:ok, _mute} <- Rooms.mute_key(fleet_id, token_id, actor: conn.assigns.agent_actor) do
+      answer(conn, fleet_id)
+    else
+      {:error, :invalid_token_id} -> Refusal.json(conn, 422, "invalid_request")
       {:error, error} -> refuse(conn, error)
     end
   end
 
   def delete(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
-    case Rooms.unmute_key(fleet_id, String.to_integer(token_id), actor: conn.assigns.agent_actor) do
-      {:ok, _mute} -> answer(conn, fleet_id)
+    with {:ok, token_id} <- token_id(token_id),
+         {:ok, _mute} <- Rooms.unmute_key(fleet_id, token_id, actor: conn.assigns.agent_actor) do
+      answer(conn, fleet_id)
+    else
+      {:error, :invalid_token_id} -> Refusal.json(conn, 422, "invalid_request")
       {:error, error} -> refuse(conn, error)
     end
   end
+
+  defp token_id(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {number, ""} when number > 0 and number <= @max_token_id -> {:ok, number}
+      _ -> {:error, :invalid_token_id}
+    end
+  end
+
+  defp token_id(_value), do: {:error, :invalid_token_id}
 
   defp answer(conn, fleet_id) do
     case Rooms.mutes_in_fleet(fleet_id, actor: conn.assigns.agent_actor) do
