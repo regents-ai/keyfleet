@@ -1,5 +1,13 @@
 defmodule Keyfleet.Agents.AgentProfile do
-  @moduledoc "A stable product identity for one verified SIWA wallet."
+  @moduledoc """
+  A stable product identity for one verified SIWA wallet.
+
+  Each verified request from the agent saves what the SIWA service says about
+  it: its page in the agent registry, and the World ID person behind it with
+  that person's agent count (`RegentAgents.HumanBacking`), or clears them. Pages
+  show what was saved. The person's number only groups their agents; it is
+  never shown, logged or answered.
+  """
   use Ash.Resource,
     domain: Keyfleet.Agents,
     data_layer: AshPostgres.DataLayer,
@@ -10,6 +18,20 @@ defmodule Keyfleet.Agents.AgentProfile do
   postgres do
     table "agent_profiles"
     repo(Keyfleet.Repo)
+
+    check_constraints do
+      check_constraint(:same_person_agent_count, "agent_profiles_human_backing_complete",
+        check:
+          "(human_id IS NULL AND same_person_agent_count IS NULL) OR " <>
+            "(human_id IS NOT NULL AND same_person_agent_count IS NOT NULL AND " <>
+            "same_person_agent_count >= 1)",
+        message: "must name the person and their agent count together"
+      )
+    end
+
+    custom_indexes do
+      index([:human_id], name: "agent_profiles_human_index", where: "human_id IS NOT NULL")
+    end
   end
 
   actions do
@@ -24,6 +46,9 @@ defmodule Keyfleet.Agents.AgentProfile do
       ]
 
       change set_attribute(:wallet_address, actor(:wallet_address))
+      change set_attribute(:registry_url, actor(:registry_url))
+      change set_attribute(:human_id, actor(:human_id))
+      change set_attribute(:same_person_agent_count, actor(:same_person_agent_count))
       upsert? true
       upsert_identity :unique_wallet
       upsert_fields []
@@ -94,6 +119,31 @@ defmodule Keyfleet.Agents.AgentProfile do
       prepare build(select: [:id, :wallet_address, :name])
     end
 
+    # What the SIWA service said about the agent in this verified request,
+    # written only when it differs from what is saved.
+    update :save_listing do
+      change set_attribute(:registry_url, actor(:registry_url))
+      change set_attribute(:human_id, actor(:human_id))
+      change set_attribute(:same_person_agent_count, actor(:same_person_agent_count))
+    end
+
+    # What the SIWA service last said about some agents: their registry page
+    # and the World ID person behind each. Only trusted code reads the
+    # person's number back, to group the agents; it is never shown.
+    read :listings do
+      argument :ids, {:array, :uuid}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(id in ^arg(:ids))
+      prepare build(select: [:id, :registry_url, :human_id, :same_person_agent_count])
+    end
+
+    # The agents the same World ID people stand behind, to list a person's
+    # other agents beside one of them.
+    read :of_people do
+      argument :human_ids, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(human_id in ^arg(:human_ids))
+      prepare build(select: [:id, :name, :human_id], sort: [name: :asc, id: :asc])
+    end
+
     update :edit_my_profile do
       atomic_upgrade_with :get_my_profile
 
@@ -129,7 +179,14 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   policies do
-    policy action([:public_profile, :here_in_fleet, :here_in_fleets, :by_wallets]) do
+    policy action([
+             :public_profile,
+             :here_in_fleet,
+             :here_in_fleets,
+             :by_wallets,
+             :listings,
+             :of_people
+           ]) do
       authorize_if always()
     end
 
@@ -139,13 +196,22 @@ defmodule Keyfleet.Agents.AgentProfile do
              :get_my_profile,
              :edit_my_profile,
              :set_avatar,
-             :remove_avatar
+             :remove_avatar,
+             :save_listing
            ]) do
       authorize_if Keyfleet.Checks.AgentActor
     end
 
     policy action_type([:read, :update]) do
-      authorize_if action([:public_profile, :here_in_fleet, :here_in_fleets, :by_wallets])
+      authorize_if action([
+                     :public_profile,
+                     :here_in_fleet,
+                     :here_in_fleets,
+                     :by_wallets,
+                     :listings,
+                     :of_people
+                   ])
+
       authorize_if expr(wallet_address == ^actor(:wallet_address))
     end
   end
@@ -157,6 +223,21 @@ defmodule Keyfleet.Agents.AgentProfile do
       allow_nil? false
       writable? false
       constraints match: ~r/\A0x[0-9a-f]{40}\z/, max_length: 42
+    end
+
+    attribute :registry_url, :string do
+      writable? false
+      constraints match: ~r/\Ahttps:\/\//
+    end
+
+    attribute :human_id, :string do
+      writable? false
+      sensitive? true
+    end
+
+    attribute :same_person_agent_count, :integer do
+      writable? false
+      constraints min: 1
     end
 
     attribute :name, :string,

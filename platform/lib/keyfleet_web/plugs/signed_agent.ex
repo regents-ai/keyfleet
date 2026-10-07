@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
   alias Keyfleet.Actors.Agent
-  alias Keyfleet.AgentListing
   alias Keyfleet.Agents.CheckInStatus
+  alias RegentAgents.HumanBacking
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
@@ -152,8 +152,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   # The fields KeyFleet acts on; anything else the sign-in server says is
-  # its own. The agent's registry listing and World ID mark are kept for this
-  # request only, so the agent's own profile answer can show them.
+  # its own. The agent's page in the agent registry and the World ID person
+  # behind it, each null when there is none, ride on the actor, and the
+  # agent's profile saves them.
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(
         conn,
@@ -181,26 +182,44 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       when is_binary(expires) and is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
-    actor = %Agent{
-      wallet_address: wallet,
-      chain_id: chain_id,
-      verification_method: Map.fetch!(@verification_methods, method),
-      audience: "keyfleet",
-      credential_ref: credential_ref(conn)
-    }
+    with {:ok, registry_url} <- registry_url(registration),
+         {:ok, backing} <- HumanBacking.read(book) do
+      actor =
+        struct!(
+          Agent,
+          Map.merge(backing, %{
+            wallet_address: wallet,
+            chain_id: chain_id,
+            verification_method: Map.fetch!(@verification_methods, method),
+            audience: "keyfleet",
+            credential_ref: credential_ref(conn),
+            registry_url: registry_url
+          })
+        )
 
-    conn
-    |> assign(:agent_listing, AgentListing.from_sign_in(registration, book))
-    |> admit(actor)
+      admit(conn, actor)
+    else
+      :error -> invalid_principal()
+    end
   end
 
   def accept(_conn, _data, _context), do: invalid_principal()
 
+  defp registry_url(nil), do: {:ok, nil}
+  defp registry_url(%{"registryUrl" => "https://" <> _rest = url}), do: {:ok, url}
+  defp registry_url(_other), do: :error
+
   defp admit(conn, actor) do
     cond do
-      Agent.valid?(actor) -> {:ok, assign(conn, :agent_actor, actor)}
-      smart_wallet_on_base?(actor) -> {:error, %{reason: :smart_wallet_on_base}}
-      true -> invalid_principal()
+      Agent.valid?(actor) ->
+        :ok = Keyfleet.Agents.save_listing(actor)
+        {:ok, assign(conn, :agent_actor, actor)}
+
+      smart_wallet_on_base?(actor) ->
+        {:error, %{reason: :smart_wallet_on_base}}
+
+      true ->
+        invalid_principal()
     end
   end
 

@@ -691,3 +691,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - A revealed key's picture is now its own card. Each recorded reveal queues a job that has the private key-art service (`key-art/`) draw the card, keeps it on IPFS through Regent's Lighthouse account and records its IPFS address against that reveal. The metadata shows it at `https://media.regents.sh/ipfs/<cid>` and names `ipfs://<cid>` in `properties.card`. A reveal removed after a reorg takes its card's record with it, and the key's new seed gets a new card at a new address. While the card is being drawn the key keeps the Interim KeyFleet Access Pass, cached for 30 seconds; then its metadata names the card, cached for an hour.
 - The site needs `KEY_ART_URL` and `LIGHTHOUSE_API_KEY` before its next release, and the `keyfleet-key-art` app must exist (see `docs/deploy-checklist.md`).
+
+## 2026-10-07 — Saved "Verified human" marks (Sean "139. a", local)
+
+- Each signed agent request saves what the sign-in server says about the agent onto its profile: its page in the agent registry, and the World ID person behind it with how many agents that person stands behind. A request that names neither clears them. The person's number only groups their agents; it is never shown, logged or answered.
+- A key's page reads the saved values instead of asking the sign-in server when it opens. Each agent holding a shard shows "✓ Verified human" or "No verified human", each with a tip, and "1 of N agents run by the same person" with the names of that person's other agents Keyfleet knows, when N is 2 or more. The old "Human-backed (World ID)" label is gone.
+- The agent's profile answer adds `same_person_agent_count`, the same field every Regent site uses.
+- `regent_agents` is pinned to Regents `253319d1`, whose pairing saves the same two values. Migration `agent_human_backing` adds `registry_url`, `human_id` and `same_person_agent_count` to `agent_profiles`. `SIWA_ACTIVITY_READ_TOKEN` is no longer read.

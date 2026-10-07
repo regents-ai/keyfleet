@@ -27,7 +27,6 @@ defmodule Keyfleet.RuntimeConfigTest do
       "KEYFLEET_HUB_FLEETS",
       "KEYFLEET_HUB_SIGNING_KEY",
       "KEYFLEET_CODE_NODE",
-      "SIWA_ACTIVITY_READ_TOKEN",
       "AWS_ACCESS_KEY_ID",
       "AWS_SECRET_ACCESS_KEY",
       "AWS_ENDPOINT_URL_S3",
@@ -325,7 +324,6 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("KEYFLEET_SIWA_URL", "https://siwa.example.test")
     System.put_env("KEYFLEET_HUB_SIGNING_KEY", ~s({"keys":[]}))
     System.put_env("KEYFLEET_CODE_NODE", "http://code-store.example.test")
-    System.put_env("SIWA_ACTIVITY_READ_TOKEN", "activity-read-token")
     System.put_env("AWS_ACCESS_KEY_ID", "bucket-access-key")
     System.put_env("AWS_SECRET_ACCESS_KEY", "bucket-secret-key")
     System.put_env("AWS_ENDPOINT_URL_S3", "https://storage.example.test")

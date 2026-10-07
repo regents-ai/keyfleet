@@ -18,10 +18,6 @@ config :regent_agents,
   account: {Keyfleet.Agents, :account},
   ash_domains: [RegentAgents]
 
-# An agent's registry listing and World ID mark, read live from the sign-in
-# server with its activity read token (SIWA_ACTIVITY_READ_TOKEN).
-config :keyfleet, Keyfleet.AgentListing, read_token: nil, req_options: []
-
 # Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
 # its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
 # load pictures from. Each environment names its bucket.

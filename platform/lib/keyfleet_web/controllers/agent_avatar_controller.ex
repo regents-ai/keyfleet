@@ -19,6 +19,15 @@ defmodule KeyfleetWeb.AgentAvatarController do
 
   @salt "agent avatar upload"
   @ticket_seconds 10 * 60
+  # The ticket is signed, not sealed, so it names the agent and nothing the
+  # SIWA service said about it.
+  @ticket_actor_fields [
+    :wallet_address,
+    :chain_id,
+    :verification_method,
+    :audience,
+    :credential_ref
+  ]
 
   def start(conn, params) do
     actor = conn.assigns.agent_actor
@@ -29,7 +38,7 @@ defmodule KeyfleetWeb.AgentAvatarController do
         Phoenix.Token.sign(conn, @salt, %{
           profile_id: profile_id,
           declared: declared,
-          agent: Map.from_struct(actor)
+          agent: Map.take(actor, @ticket_actor_fields)
         })
 
       json(conn, %{

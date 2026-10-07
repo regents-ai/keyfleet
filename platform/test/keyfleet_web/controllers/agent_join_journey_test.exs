@@ -74,7 +74,10 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, %{signed | body: changed}).status == 401
     first = send_request(c, signed)
     assert first.status == 200
-    assert %{"registry_listing" => nil, "human_backed" => false} = first.body
+
+    assert %{"registry_listing" => nil, "human_backed" => false, "same_person_agent_count" => nil} =
+             first.body
+
     profile = first.body["profile"]
     assert profile["wallet_address"] == c.signer.address
     assert profile["name"] == "Wallet agent"
@@ -383,9 +386,12 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                {chain_id, String.to_existing_atom(method)}
     end
 
-    # The agent's registry listing and World ID mark are kept for the request,
-    # without the person's number. What the sign-in server says beyond the
-    # fields KeyFleet uses is its own.
+    # Each verified request saves the agent's registry listing and the World
+    # ID person behind it onto its profile, and a request that names neither
+    # clears them. What the sign-in server says beyond the fields KeyFleet
+    # uses is its own.
+    human_id = "0x" <> String.duplicate("1", 64)
+
     listed =
       Map.merge(good, %{
         "agentRegistration" => %{
@@ -394,20 +400,32 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
           "profileUrl" => "https://siwa.regents.sh/agents/registrations/1",
           "registryUrl" => "https://www.8004scan.io/agents/base/97609"
         },
-        "agentBook" => %{"humanId" => "0x" <> String.duplicate("1", 64)},
+        "agentBook" => %{"humanId" => human_id, "agentCount" => 2},
         "somethingNew" => true
       })
 
-    assert {:ok,
-            %{
-              assigns: %{
-                agent_actor: %{wallet_address: ^wallet},
-                agent_listing: %{
-                  registry_url: "https://www.8004scan.io/agents/base/97609",
-                  human_backed?: true
-                }
-              }
-            }} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, listed, nil)
+    {:ok, %{assigns: %{agent_actor: plain}}} =
+      KeyfleetWeb.Plugs.SignedAgent.accept(conn, good, nil)
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Wallet agent", declared_harness: "Hermes Agent"},
+      actor: plain
+    )
+
+    assert {:ok, %{assigns: %{agent_actor: %{wallet_address: ^wallet} = actor}}} =
+             KeyfleetWeb.Plugs.SignedAgent.accept(conn, listed, nil)
+
+    refute inspect(actor) =~ human_id
+
+    assert %{
+             registry_url: "https://www.8004scan.io/agents/base/97609",
+             human_id: ^human_id,
+             same_person_agent_count: 2
+           } = Keyfleet.Agents.get_my_profile!(actor: actor)
+
+    assert {:ok, _conn} = KeyfleetWeb.Plugs.SignedAgent.accept(conn, good, nil)
+
+    assert %{registry_url: nil, human_id: nil, same_person_agent_count: nil} =
+             Keyfleet.Agents.get_my_profile!(actor: actor)
 
     invalid =
       [

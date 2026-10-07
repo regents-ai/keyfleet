@@ -186,8 +186,9 @@ defmodule Keyfleet.Keys.Profile do
   @doc """
   The key's active shards, soonest to run out first and a hundred at most:
   each wallet, when its shard runs out, and the agent behind it with what its
-  check-ins with the fleet say, or nil when the wallet has not signed in as an
-  agent yet.
+  check-ins with the fleet say, its saved registry page and World ID mark, and
+  the other agents here the same person stands behind, or nil when the wallet
+  has not signed in as an agent yet.
   """
   def shards(fleet_id, token_id) do
     shards =
@@ -201,23 +202,40 @@ defmodule Keyfleet.Keys.Profile do
       |> Agents.check_ins_in_fleet!(for(%{agent_profile: %{id: id}} <- shards, do: id))
       |> Map.new(&{&1.agent_profile_id, &1})
 
+    listings =
+      for(%{agent_profile: %{id: id}} <- shards, do: id)
+      |> Agents.listings!()
+      |> Map.new(&{&1.id, &1})
+
+    people =
+      for(%{human_id: "0x" <> _number = human_id} <- Map.values(listings), do: human_id)
+      |> Enum.uniq()
+      |> Agents.agents_of_people!()
+      |> Enum.group_by(& &1.human_id)
+
     now = DateTime.utc_now()
 
     Enum.map(shards, fn shard ->
       %{
         wallet: shard.wallet,
         expires_at: shard.expires_at,
-        agent: shard.agent_profile && agent(shard.agent_profile, check_ins, now)
+        agent:
+          shard.agent_profile &&
+            agent(shard.agent_profile, check_ins, listings[shard.agent_profile.id], people, now)
       }
     end)
   end
 
-  defp agent(agent, check_ins, now) do
+  defp agent(agent, check_ins, listing, people, now) do
     check_in = Map.get(check_ins, agent.id)
     {status, label} = CheckInStatus.derive(check_in, now)
 
     %{
       name: agent.name,
+      registry_url: listing.registry_url,
+      backing: RegentAgents.HumanBacking.describe(listing),
+      same_person:
+        for(other <- Map.get(people, listing.human_id, []), other.id != agent.id, do: other.name),
       avatar_src: agent.avatar_src,
       harness: agent.declared_harness,
       status: agent.current_status,

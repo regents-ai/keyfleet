@@ -39,11 +39,6 @@ config :regent_agents,
   siwa: [url: siwa_url, audience: "keyfleet"],
   req_options: [plug: {Req.Test, RegentAgents.Broker}]
 
-# An agent's listing is answered by `Req.Test`.
-config :keyfleet, Keyfleet.AgentListing,
-  read_token: "test-activity-read-token",
-  req_options: [plug: {Req.Test, Keyfleet.AgentListing}]
-
 # Agents' pictures go to a bucket answered by `Req.Test`.
 config :keyfleet, :avatar_bucket,
   endpoint: "https://storage.test",

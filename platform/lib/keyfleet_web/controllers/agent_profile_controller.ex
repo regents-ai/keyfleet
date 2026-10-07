@@ -3,6 +3,7 @@ defmodule KeyfleetWeb.AgentProfileController do
 
   alias Keyfleet.Agents.Avatar
   alias KeyfleetWeb.Refusal
+  alias RegentAgents.HumanBacking
 
   def status(conn, %{"name" => name, "declared_harness" => harness}) do
     case Keyfleet.Agents.ensure_profile(%{name: name, declared_harness: harness},
@@ -30,14 +31,14 @@ defmodule KeyfleetWeb.AgentProfileController do
 
   defp invalid_profile(conn), do: Refusal.json(conn, 422, "invalid_profile")
 
-  # The agent's page in the agent registry and whether a World ID-verified
-  # person stands behind it, as the sign-in server said for this request.
+  # The agent's page in the agent registry, whether a World ID-verified person
+  # stands behind it and how many agents that person stands behind, as its
+  # profile saved them from this request.
   defp respond_profile(conn, profile) do
-    %{registry_url: registry_url, human_backed?: human_backed?} = conn.assigns.agent_listing
-
-    json(conn, %{
-      registry_listing: registry_url,
-      human_backed: human_backed?,
+    profile
+    |> HumanBacking.describe()
+    |> Map.merge(%{
+      registry_listing: profile.registry_url,
       profile:
         profile
         |> Map.take([
@@ -54,5 +55,6 @@ defmodule KeyfleetWeb.AgentProfileController do
         ])
         |> Map.put(:avatar_url, Avatar.url(profile))
     })
+    |> then(&json(conn, &1))
   end
 end
