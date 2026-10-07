@@ -11,6 +11,9 @@ import {hexToBytes} from "@noble/hashes/utils"
 
 import table from "../../../priv/trait_tables/0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8.json"
 
+/** The table's fingerprint: keccak256 of the file, byte for byte. */
+export const TABLE_HASH = "0x154aa5ac0169cf32835eee2e49c284f8626122e17ed66a82c7629257e63be3e8"
+
 export type TraitId = "exterior" | "metal" | "shell" | "foil" | "emblem" | "rim" | "patina" | "crown"
 export type TraitValue = {readonly name: string; readonly weight: number}
 export type Trait = {readonly id: TraitId; readonly name: string; readonly values: readonly TraitValue[]}

@@ -3,7 +3,10 @@ defmodule Keyfleet.Actors.Agent do
   Product principal constructed by trusted code after SIWA wallet verification.
 
   This struct is not proof by itself and must never be deserialized from client
-  input. Its authority covers the wallet's profile, not NFTs or fleet finances.
+  input. The one place it is rebuilt is a picture upload, from the upload
+  ticket this site signed for it after verifying the agent's signed request
+  (`KeyfleetWeb.AgentAvatarController`). Its authority covers the wallet's
+  profile, not NFTs or fleet finances.
 
   `credential_ref` names the signed request's credential, `sha256:` over its
   receipt and key id, so an audit record can cite it without holding it.

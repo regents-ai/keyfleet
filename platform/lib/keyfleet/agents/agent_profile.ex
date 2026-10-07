@@ -16,7 +16,6 @@ defmodule Keyfleet.Agents.AgentProfile do
     create :ensure_profile do
       accept [
         :name,
-        :avatar,
         :declared_harness,
         :proficiencies,
         :interests,
@@ -31,16 +30,26 @@ defmodule Keyfleet.Agents.AgentProfile do
       return_skipped_upsert? true
     end
 
+    # A profile by its id, only ever the actor's own (see the policies);
+    # `get_and_lock_for_update` re-reads the profile a picture change locks
+    # with it.
+    read :read do
+      primary? true
+    end
+
     read :get_my_profile do
       get? true
       filter expr(wallet_address == ^actor(:wallet_address))
     end
 
     # The identity an agent presents to the key owners it works for: its name,
-    # what it runs on, and what it says it is doing and since when. Nothing
-    # else leaves here.
+    # its picture, what it runs on, and what it says it is doing and since
+    # when. Nothing else leaves here.
     read :public_profile do
-      prepare build(select: [:id, :name, :declared_harness, :current_status, :status_updated_at])
+      prepare build(
+                select: [:id, :name, :declared_harness, :current_status, :status_updated_at],
+                load: [:avatar_src]
+              )
     end
 
     # The agents holding an active shard of one of the fleet's keys, with
@@ -57,6 +66,7 @@ defmodule Keyfleet.Agents.AgentProfile do
         query
         |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
         |> Ash.Query.load(
+          avatar_src: %{},
           key: %{fleet_id: fleet_id},
           check_ins: Ash.Query.filter(Keyfleet.Agents.CheckIn, fleet_id == ^fleet_id)
         )
@@ -89,7 +99,6 @@ defmodule Keyfleet.Agents.AgentProfile do
 
       accept [
         :name,
-        :avatar,
         :declared_harness,
         :proficiencies,
         :interests,
@@ -99,6 +108,24 @@ defmodule Keyfleet.Agents.AgentProfile do
 
       change Keyfleet.Agents.Changes.TrackProfileActivity
     end
+
+    # The agent's own picture, already stored in the bucket under `avatar_key`
+    # (`Keyfleet.Agents.store_avatar/4`). The picture it replaces is deleted
+    # after the change commits.
+    update :set_avatar do
+      require_atomic? false
+      accept [:avatar_key]
+      require_attributes [:avatar_key]
+      change get_and_lock_for_update()
+      change Keyfleet.Agents.Changes.ReplaceAvatar
+    end
+
+    update :remove_avatar do
+      require_atomic? false
+      change get_and_lock_for_update()
+      change set_attribute(:avatar_key, nil)
+      change Keyfleet.Agents.Changes.ReplaceAvatar
+    end
   end
 
   policies do
@@ -106,7 +133,14 @@ defmodule Keyfleet.Agents.AgentProfile do
       authorize_if always()
     end
 
-    policy action([:ensure_profile, :get_my_profile, :edit_my_profile]) do
+    policy action([
+             :read,
+             :ensure_profile,
+             :get_my_profile,
+             :edit_my_profile,
+             :set_avatar,
+             :remove_avatar
+           ]) do
       authorize_if Keyfleet.Checks.AgentActor
     end
 
@@ -130,7 +164,16 @@ defmodule Keyfleet.Agents.AgentProfile do
       public?: true,
       constraints: [min_length: 1, max_length: 120]
 
-    attribute :avatar, :string, public?: true, constraints: [max_length: 2048]
+    # Where the agent's own picture is kept in the bucket, or nil when it has
+    # none: `agent-avatars/<profile id>/<upload id>.<png|jpg|webp>`
+    # (`Keyfleet.Agents.Avatar`).
+    attribute :avatar_key, :string,
+      public?: true,
+      constraints: [
+        max_length: 200,
+        match:
+          ~r"\Aagent-avatars/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(png|jpg|webp)\z"
+      ]
 
     attribute :declared_harness, :string,
       allow_nil?: false,
@@ -177,6 +220,11 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   calculations do
+    # The picture a page shows beside the agent's name.
+    calculate :avatar_src, :string, Keyfleet.Agents.Calculations.AvatarSrc do
+      public? true
+    end
+
     # When this agent last checked in with the fleet.
     calculate :last_check_in_at,
               :utc_datetime_usec,

@@ -62,6 +62,17 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was changed. Correct the field, then send the request again."},
     "profile_not_found" =>
       {"This wallet has no agent profile yet.", "Make one with POST /api/v1/agent/join/status."},
+    "invalid_avatar" =>
+      {"A picture is a PNG, JPEG or WebP of at most 512 KiB, each side 32 to 1,024 pixels.",
+       "Nothing was changed. Send a picture that fits, starting with POST /api/v1/agent/avatar/start."},
+    "avatar_mismatch" =>
+      {"These bytes aren't the picture the upload was started for.",
+       "Send exactly the file you named, with the content-type you named, or start again with POST /api/v1/agent/avatar/start."},
+    "avatar_upload_expired" =>
+      {"This upload address has expired or isn't one KeyFleet gave.",
+       "Start again with POST /api/v1/agent/avatar/start, then send the picture within ten minutes."},
+    "avatar_unavailable" =>
+      {"Your picture can't be saved right now.", "Nothing was changed. Try again in a minute."},
     "ownership_refreshing" =>
       {"Key ownership in this fleet is being brought up to date.",
        "Nothing was written. Send the same request again shortly."},

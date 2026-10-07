@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       generated_at: generated_at,
       note: @note,
       terms: fleet.terms,
-      agents: fleet.agents,
+      agents: Enum.map(fleet.agents, &agent/1),
       work:
         Map.new(fleet.work, fn {kind, items} -> {kind, Enum.map(items, &item(fleet, &1))} end),
       rooms: Enum.map(fleet.rooms, &Map.put(&1, :url, room_url(fleet.id, &1.slug))),
@@ -82,6 +82,10 @@ defmodule KeyfleetWeb.DirectoryJSON do
       )
     )
   end
+
+  # The picture beside an agent's name is for the pages; the directory
+  # names agents by name and wallet.
+  defp agent(agent), do: Map.delete(agent, :avatar_src)
 
   defp post(fleet, post) do
     post

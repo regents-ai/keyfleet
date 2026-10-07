@@ -94,6 +94,8 @@ defmodule Keyfleet.Keys.KeyReveal do
               number: :reveal_seq,
               fields: [:request_id, :seed],
               block: :block_number}
+
+      change Keyfleet.Keys.Changes.QueuePicture
     end
 
     # The keys revealed after the fleet's reveal number `after_seq`, oldest first.

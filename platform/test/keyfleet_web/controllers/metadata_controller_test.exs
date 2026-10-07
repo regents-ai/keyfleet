@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.MetadataControllerTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
   import KeyfleetWeb.RefusalHelpers
 
@@ -8,6 +9,9 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.Keys.DrawPicture
+  alias Keyfleet.Keys.KeyArt
+  alias Keyfleet.Lighthouse
   alias Keyfleet.Traits
 
   @path "/metadata/{slot}/{token_id}"
@@ -58,8 +62,9 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   end
 
   # The traits are the fixture table's golden draw for this seed, the same
-  # draw contracts/test/KeyfleetTraitDraw.t.sol pins.
-  test "a revealed key shows its drawn traits and may be kept for an hour", %{
+  # draw contracts/test/KeyfleetTraitDraw.t.sol pins. A reveal queues its
+  # card's drawing; until the card is in the bucket the key keeps the pass.
+  test "a revealed key shows its traits, then its card once drawn, kept for an hour", %{
     conn: conn,
     site: site
   } do
@@ -67,22 +72,75 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     reveal!("fibonacci_cascade", 3, seed)
     reveal!("fleet_tech_accelerant", 1, seed)
 
+    args = %{reveal_id: Keys.get_reveal!("fibonacci_cascade", 3).id}
+    assert_enqueued(worker: DrawPicture, args: args)
+
+    revealed = %{
+      "name" => "Keyfleet Cascade #3",
+      "description" => "Key 3 of Keyfleet Cascade.",
+      "attributes" => [
+        %{"trait_type" => "Level", "value" => 2},
+        %{"trait_type" => "Hull", "value" => "Steel"},
+        %{"trait_type" => "Sky", "value" => "Noon"},
+        %{"trait_type" => "Mark", "value" => "Star"}
+      ],
+      "properties" => %{"seed" => seed, "trait_table_hash" => @table_hash}
+    }
+
+    drawing = get(conn, "/metadata/cascade/3")
+    assert get_resp_header(drawing, "cache-control") == ["max-age=30"]
+
+    assert json_response(drawing, 200) ==
+             Map.put(revealed, "image", "#{site}/images/keys/interim-keyfleet-access-pass.png")
+
+    test = self()
+    png = <<0x89, "PNG\r\n", 0x1A, "\n", "card">>
+
+    Req.Test.stub(KeyArt, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test, {:draw, conn.request_path, JSON.decode!(body)})
+      conn |> Plug.Conn.put_resp_content_type("image/png") |> Plug.Conn.send_resp(200, png)
+    end)
+
+    # Lighthouse's own answer, not its JavaScript library's (which wraps it in `data`).
+    cid = "QmUHDKv3NNL1mrg4NTW4WwJqetzwZbGNitdjr2G6Z5Xe6s"
+
+    Req.Test.stub(Lighthouse, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      [auth] = Plug.Conn.get_req_header(conn, "authorization")
+      send(test, {:lighthouse, conn.method, conn.request_path, auth, body})
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, JSON.encode!(%{Name: "cascade-3.png", Hash: cid, Size: "42"}))
+    end)
+
+    assert perform_job(DrawPicture, args) == :ok
+
+    assert_received {:draw, "/draw",
+                     %{
+                       "seed" => ^seed,
+                       "top_line" => "CASCADE #1 · NO. 0003",
+                       "table" => @table_hash
+                     }}
+
+    assert_received {:lighthouse, "POST", "/api/v0/add", "Bearer test-lighthouse-key", body}
+    assert body =~ ~s(name="file"; filename="cascade-3.png")
+    assert body =~ "content-type: image/png"
+    assert body =~ png
+
+    # Drawn once: another run leaves the card as it is.
+    assert perform_job(DrawPicture, args) == :ok
+    refute_received {:draw, _path, _body}
+
     cascade = get(conn, "/metadata/cascade/3")
 
     assert get_resp_header(cascade, "cache-control") == ["public, max-age=3600"]
 
-    assert json_response(cascade, 200) == %{
-             "name" => "Keyfleet Cascade #3",
-             "description" => "Key 3 of Keyfleet Cascade.",
-             "image" => "#{site}/art/#{@table_hash}/cascade/3.png",
-             "attributes" => [
-               %{"trait_type" => "Level", "value" => 2},
-               %{"trait_type" => "Hull", "value" => "Steel"},
-               %{"trait_type" => "Sky", "value" => "Noon"},
-               %{"trait_type" => "Mark", "value" => "Star"}
-             ],
-             "properties" => %{"seed" => seed, "trait_table_hash" => @table_hash}
-           }
+    assert json_response(cascade, 200) ==
+             revealed
+             |> Map.put("image", "https://media.regents.sh/ipfs/#{cid}")
+             |> put_in(["properties", "card"], "ipfs://#{cid}")
 
     accelerant = get(conn, "/metadata/accelerant/1")
 

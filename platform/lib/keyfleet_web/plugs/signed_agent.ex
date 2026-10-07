@@ -10,6 +10,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @shards_path "/api/v1/agent/shards"
+  # An agent's picture: a signed start names the upload, whose bytes then go
+  # to the address it answers, outside this plug (`AgentAvatarController`).
+  @avatar_start_path "/api/v1/agent/avatar/start"
+  @avatar_remove_path "/api/v1/agent/avatar/remove"
   # The fleet, the room and the key a request is about are part of the signed
   # path, in the same canonical spelling the product's own addresses use.
   @fleet ~S"[a-z][a-z0-9_]{0,62}"
@@ -30,7 +34,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
-  @editable ~w(name avatar declared_harness proficiencies interests service_ideas current_status)
+  @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
   # Separate transport bound from Ash field limits: the broker embeds these raw
   # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
   @update_max_body 24 * 1024
@@ -253,6 +257,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp supported?("POST", @join_path), do: true
   defp supported?("POST", @update_path), do: true
+  defp supported?("POST", @avatar_start_path), do: true
+  defp supported?("POST", @avatar_remove_path), do: true
   defp supported?("GET", @shards_path), do: true
 
   defp supported?("GET", path),
@@ -299,6 +305,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
   defp check_body(@shards_path, params), do: admit(params == %{})
+
+  defp check_body(
+         @avatar_start_path,
+         %{"sha256" => sha256, "byte_size" => size, "content_type" => type} = params
+       ),
+       do:
+         admit(
+           map_size(params) == 3 and is_binary(sha256) and is_integer(size) and is_binary(type)
+         )
+
+  defp check_body(@avatar_start_path, _params), do: :invalid
+  defp check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   defp check_body(path, params) do
     cond do

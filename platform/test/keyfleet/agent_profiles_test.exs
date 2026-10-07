@@ -107,7 +107,6 @@ defmodule Keyfleet.AgentProfilesTest do
         original,
         %{
           name: "Updated",
-          avatar: "https://example.test/a.png",
           proficiencies: ["Elixir"],
           interests: ["Testing"],
           service_ideas: ["Review"],

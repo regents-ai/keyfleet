@@ -44,6 +44,26 @@ config :keyfleet, Keyfleet.AgentListing,
   read_token: "test-activity-read-token",
   req_options: [plug: {Req.Test, Keyfleet.AgentListing}]
 
+# Agents' pictures go to a bucket answered by `Req.Test`.
+config :keyfleet, :avatar_bucket,
+  endpoint: "https://storage.test",
+  bucket: "keyfleet-avatars",
+  region: "auto",
+  access_key_id: "test-access-key",
+  secret_access_key: "test-secret-key",
+  public_url: "https://keyfleet-avatars.storage.test",
+  req_options: [plug: {Req.Test, Keyfleet.Agents.AvatarBucket}]
+
+# The key-art service is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Keys.KeyArt,
+  url: "https://key-art.test",
+  req_options: [plug: {Req.Test, Keyfleet.Keys.KeyArt}]
+
+# Lighthouse is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Lighthouse,
+  api_key: "test-lighthouse-key",
+  req_options: [plug: {Req.Test, Keyfleet.Lighthouse}]
+
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,

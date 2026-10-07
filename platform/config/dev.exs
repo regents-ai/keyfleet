@@ -15,6 +15,27 @@ config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 # The local sign-in server's activity read token, when it has one.
 config :keyfleet, Keyfleet.AgentListing, read_token: System.get_env("SIWA_ACTIVITY_READ_TOKEN")
 
+# Agents' pictures go to an S3-compatible store run on this computer, with a
+# bucket anyone may read:
+#
+#     docker run -d --name keyfleet-avatars -p 127.0.0.1:4880:9000 \
+#       -e MINIO_ROOT_USER=keyfleet-local -e MINIO_ROOT_PASSWORD=keyfleet-local-secret \
+#       -e MINIO_DEFAULT_BUCKETS=keyfleet-avatars:download bitnamilegacy/minio:2025.7.23
+config :keyfleet, :avatar_bucket,
+  endpoint: "http://127.0.0.1:4880",
+  bucket: "keyfleet-avatars",
+  region: "auto",
+  access_key_id: "keyfleet-local",
+  secret_access_key: "keyfleet-local-secret",
+  public_url: "http://127.0.0.1:4880/keyfleet-avatars"
+
+# The key-art service, run on this computer from `key-art/` (`PORT=4890 npm start`).
+config :keyfleet, Keyfleet.Keys.KeyArt, url: "http://127.0.0.1:4890"
+
+# Cards drawn on this computer go to Lighthouse only with a key of its own in
+# LIGHTHOUSE_API_KEY; without one the picture job waits and tries again.
+config :keyfleet, Keyfleet.Lighthouse, api_key: System.get_env("LIGHTHOUSE_API_KEY")
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

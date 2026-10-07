@@ -1,0 +1,11 @@
+# Only what the key-art image is built from.
+*
+!platform/package.json
+!platform/package-lock.json
+!platform/assets/js/key_card
+!platform/priv/trait_tables
+!key-art/package.json
+!key-art/package-lock.json
+!key-art/page
+!key-art/build.mjs
+!key-art/server.mjs

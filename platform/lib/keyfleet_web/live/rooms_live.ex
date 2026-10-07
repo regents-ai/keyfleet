@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AgentPicture
   import Phoenix.LiveView, only: [stream: 4]
 
   alias Keyfleet.Actors.Human
@@ -295,6 +296,7 @@ defmodule KeyfleetWeb.RoomsLive do
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key)}>
       Key {Rules.grouped(@message.as_key)}
     </.link>
+    <.agent_picture :if={writer_picture(@message)} src={writer_picture(@message)} />
     <small class="rooms-writer">{writer(@message)}</small>
     """
   end
@@ -304,6 +306,13 @@ defmodule KeyfleetWeb.RoomsLive do
     do: "#{name} · #{harness}"
 
   def writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
+
+  @doc "The picture beside an agent's name on a line it wrote; nil for a person's line."
+  def writer_picture(%{author_kind: :agent, agent_profile: %{avatar_src: src}})
+      when is_binary(src),
+      do: src
+
+  def writer_picture(_message), do: nil
 
   @doc """
   A post's words as the page shows them. They are the writer's own, escaped

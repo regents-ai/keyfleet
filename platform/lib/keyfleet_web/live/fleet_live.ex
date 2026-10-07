@@ -20,6 +20,7 @@ defmodule KeyfleetWeb.FleetLive do
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import KeyfleetWeb.Components.AgentPicture
 
   import Phoenix.LiveView,
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
@@ -287,6 +288,7 @@ defmodule KeyfleetWeb.FleetLive do
             <span :if={key.shards == []}>No shards</span>
             <span :for={shard <- key.shards} id={"fleet-key-shard-#{shard.wallet}"}>
               <%= if shard.name do %>
+                <.agent_picture src={shard.avatar_src} />
                 {shard.name} · {shard.status_label}
               <% else %>
                 Shard {RegentFormat.short_address(shard.wallet)}

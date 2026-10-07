@@ -218,6 +218,7 @@ defmodule Keyfleet.Keys.Profile do
 
     %{
       name: agent.name,
+      avatar_src: agent.avatar_src,
       harness: agent.declared_harness,
       status: agent.current_status,
       status_updated_at: agent.status_updated_at,

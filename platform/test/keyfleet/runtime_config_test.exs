@@ -27,7 +27,15 @@ defmodule Keyfleet.RuntimeConfigTest do
       "KEYFLEET_HUB_FLEETS",
       "KEYFLEET_HUB_SIGNING_KEY",
       "KEYFLEET_CODE_NODE",
-      "SIWA_ACTIVITY_READ_TOKEN"
+      "SIWA_ACTIVITY_READ_TOKEN",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_ENDPOINT_URL_S3",
+      "AWS_REGION",
+      "BUCKET_NAME",
+      "PICTURES_PUBLIC_URL",
+      "KEY_ART_URL",
+      "LIGHTHOUSE_API_KEY"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -318,6 +326,14 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("KEYFLEET_HUB_SIGNING_KEY", ~s({"keys":[]}))
     System.put_env("KEYFLEET_CODE_NODE", "http://code-store.example.test")
     System.put_env("SIWA_ACTIVITY_READ_TOKEN", "activity-read-token")
+    System.put_env("AWS_ACCESS_KEY_ID", "bucket-access-key")
+    System.put_env("AWS_SECRET_ACCESS_KEY", "bucket-secret-key")
+    System.put_env("AWS_ENDPOINT_URL_S3", "https://storage.example.test")
+    System.put_env("AWS_REGION", "auto")
+    System.put_env("BUCKET_NAME", "keyfleet-avatars")
+    System.put_env("PICTURES_PUBLIC_URL", "https://keyfleet-avatars.storage.example.test")
+    System.put_env("KEY_ART_URL", "http://key-art.example.test")
+    System.put_env("LIGHTHOUSE_API_KEY", "lighthouse-api-key")
   end
 
   defp put_pooled_url do

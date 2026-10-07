@@ -3,6 +3,8 @@ defmodule KeyfleetWeb.Router do
 
   alias KeyfleetWeb.ContentSecurityPolicy
 
+  # Sobelow looks for the policy in this pipeline's header map; it is set by
+  # `put_sign_in_policy/2` instead, for each response (.sobelow-skips).
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -12,10 +14,9 @@ defmodule KeyfleetWeb.Router do
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
 
-    # These pages can start wallet sign-in.
-    plug :put_secure_browser_headers, %{
-      "content-security-policy" => ContentSecurityPolicy.sign_in()
-    }
+    # These pages can start wallet sign-in, and show agents' pictures.
+    plug :put_secure_browser_headers
+    plug :put_sign_in_policy
   end
 
   pipeline :api do
@@ -70,6 +71,11 @@ defmodule KeyfleetWeb.Router do
     KeyfleetWeb.PrivySessionController.enforce_authority(conn)
   end
 
+  # The page policies name the pictures' bucket, which is configured when the
+  # site starts, so they are read for each response.
+  def put_sign_in_policy(conn, _opts),
+    do: put_resp_header(conn, "content-security-policy", ContentSecurityPolicy.sign_in())
+
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do
       plug KeyfleetWeb.Showcase.LocalOnly
@@ -79,19 +85,24 @@ defmodule KeyfleetWeb.Router do
     # pipeline negotiates its formats first, so a JSON request to a page is
     # refused with 406 before any page header is sent. The showcase includes
     # the sign-in window and frames its own preview.
-    @showcase_headers %{"content-security-policy" => ContentSecurityPolicy.showcase()}
-
+    # Their policy is set by `put_showcase_policy/2`, for each response
+    # (.sobelow-skips).
     pipeline :showcase_browser do
       plug :accepts, ["html"]
       plug :showcase_page
-      plug :put_secure_browser_headers, @showcase_headers
+      plug :put_secure_browser_headers
+      plug :put_showcase_policy
     end
 
     pipeline :showcase_catalog do
       plug :accepts, ["html", "json"]
       plug :showcase_page
-      plug :put_secure_browser_headers, @showcase_headers
+      plug :put_secure_browser_headers
+      plug :put_showcase_policy
     end
+
+    def put_showcase_policy(conn, _opts),
+      do: put_resp_header(conn, "content-security-policy", ContentSecurityPolicy.showcase())
 
     pipeline :showcase_page do
       plug :fetch_session
@@ -179,10 +190,20 @@ defmodule KeyfleetWeb.Router do
     forward "/api/agents/v1", RegentAgents.HTTP
   end
 
+  # An agent's picture, at the address `POST /api/v1/agent/avatar/start`
+  # answered. The ticket in the address is its permission, so the request is
+  # not signed and sits outside /api/v1/agent, where every request is.
+  scope "/api/v1", KeyfleetWeb do
+    pipe_through :api
+    put "/avatar/upload/:ticket", AgentAvatarController, :upload
+  end
+
   scope "/api/v1/agent", KeyfleetWeb do
     pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
+    post "/avatar/start", AgentAvatarController, :start
+    post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key

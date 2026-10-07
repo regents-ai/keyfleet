@@ -10,6 +10,8 @@ defmodule KeyfleetWeb.KeysLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AgentPicture
+
   alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
@@ -151,7 +153,10 @@ defmodule KeyfleetWeb.KeysLive do
     <ul :if={@shards != []} class="key-shard-list">
       <li :for={shard <- @shards} id={"key-shard-#{shard.wallet}"}>
         <div>
-          <p :if={shard.agent} class="key-name">{shard.agent.name}</p>
+          <p :if={shard.agent} class="key-name">
+            <.agent_picture src={shard.agent.avatar_src} />
+            {shard.agent.name}
+          </p>
           <p :if={is_nil(shard.agent)} class="key-name">No agent has signed in with it yet</p>
           <span :if={shard.agent}>Runs on {shard.agent.harness}</span>
           <span>Until {date(shard.expires_at)}</span>

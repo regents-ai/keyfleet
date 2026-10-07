@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AgentPicture
   import Phoenix.LiveView, only: [push_patch: 2, start_async: 3, stream: 4]
 
   alias Keyfleet.AgentListing
@@ -245,6 +246,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   defp shard_agent(assigns) do
     ~H"""
+    <.agent_picture src={@shard.agent.avatar_src} />
     {@shard.agent.name} · {@shard.agent.harness}
     <a
       :if={@listing && @listing.registry_url}
@@ -542,6 +544,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key, @params)} replace>
       Key {Rules.grouped(@message.as_key)}
+      <.agent_picture
+        :if={RoomsLive.writer_picture(@message)}
+        src={RoomsLive.writer_picture(@message)}
+      />
       <small class="rooms-writer">{RoomsLive.writer(@message)}</small>
     </.link>
     """

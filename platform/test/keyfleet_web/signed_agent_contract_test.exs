@@ -26,6 +26,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @join "/api/v1/agent/join/status"
   @update "/api/v1/agent/profile/update"
   @shards "/api/v1/agent/shards"
+  @avatar_start "/api/v1/agent/avatar/start"
+  @avatar_remove "/api/v1/agent/avatar/remove"
   @mutes "/api/v1/agent/fleets/{fleet_id}/mutes"
   @mute "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute"
   @unmute "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/unmute"
@@ -41,6 +43,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @proposal "/api/v1/agent/fleets/{fleet_id}/proposals/read"
 
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
+  @picture %{
+    "sha256" => String.duplicate("a", 64),
+    "byte_size" => 100,
+    "content_type" => "image/png"
+  }
 
   # One valid value for every field each body documents, at each object the
   # body holds: the top of the body, or a place inside it. `{:one_of, n}` picks
@@ -50,7 +57,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @update, [],
      %{
        "name" => "Probe",
-       "avatar" => "https://example.com/probe.png",
        "declared_harness" => "local",
        "proficiencies" => ["research"],
        "interests" => ["chips"],
@@ -58,6 +64,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "current_status" => "probing"
      }},
     {"GET", @shards, [], %{}},
+    {"POST", @avatar_start, [], @picture},
+    {"POST", @avatar_remove, [], %{}},
     {"GET", @mutes, [], %{}},
     {"POST", @mute, [], %{}},
     {"POST", @unmute, [], %{}},
@@ -264,6 +272,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     # Before the agent has a profile.
     answer(c, c.signer, "POST", @update, @address, %{"current_status" => "early"}, 404)
+    answer(c, c.signer, "POST", @avatar_start, @address, @picture, 404)
+    answer(c, c.signer, "POST", @avatar_remove, @address, %{}, 404)
 
     # Joining and editing.
     joining = %{"name" => "Probe", "declared_harness" => "local"}
@@ -272,6 +282,23 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @update, @address, %{"current_status" => "Surveying"}, 200)
     answer(c, c.signer, "POST", @update, @address, %{"name" => String.duplicate("n", 121)}, 422)
     answer(c, stranger, "POST", @join, @address, %{joining | "name" => "Stranger"}, 200)
+
+    # A picture: started, too large to start, and removed.
+    assert %{"method" => "PUT", "content_type" => "image/png"} =
+             answer(c, c.signer, "POST", @avatar_start, @address, @picture, 200).body
+
+    answer(
+      c,
+      c.signer,
+      "POST",
+      @avatar_start,
+      @address,
+      %{@picture | "byte_size" => 524_289},
+      422
+    )
+
+    assert answer(c, c.signer, "POST", @avatar_remove, @address, %{}, 200).body ==
+             %{"avatar_url" => nil}
 
     # Shards: none, then the one key 1's owner issued, with the transaction
     # that ends it.
@@ -575,6 +602,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @join},
       {"POST", @update},
       {"GET", @shards},
+      {"POST", @avatar_start},
+      {"POST", @avatar_remove},
       {"GET", @mutes},
       {"POST", @mute},
       {"POST", @unmute},
@@ -612,6 +641,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     }
 
   defp empty_or_minimal(@proposal), do: %{"number" => 1, "votes_after_seq" => 0}
+  defp empty_or_minimal(@avatar_start), do: @picture
   defp empty_or_minimal(_template), do: %{}
 
   # The signed-request check refuses a body it does not admit before anything
