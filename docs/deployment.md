@@ -377,14 +377,19 @@ followed by the key's number, and the site answers it for every key sold:
   picture for every key in every fleet) and the attributes `Level` (for
   Syndicate and Cascade only) and `Status: Revealing`, with
   `Cache-Control: max-age=30`;
-- once they are drawn, the same with its traits in place of `Status`, the
-  picture `/art/<traitTableHash>/<slot>/<number>.png`, and `properties` holding
-  its `seed` and `trait_table_hash`, with
+- once they are drawn, the same with its traits in place of `Status` and
+  `properties` holding its `seed` and `trait_table_hash`. While its card is
+  being drawn it keeps the pass, with `Cache-Control: max-age=30`; once the
+  card is kept on IPFS, the picture is `https://media.regents.sh/ipfs/<cid>`
+  and `properties.card` is `ipfs://<cid>`, with
   `Cache-Control: public, max-age=3600`, so a reveal corrected by hand after a
-  reorg and newly delivered pictures show within the hour;
+  reorg shows within the hour;
 - a slot that is not one of the four, or a key not yet sold, is 404.
 
-The pictures are not served yet; the art agent delivers them at those paths.
+Each recorded reveal queues a `key_art` job that has the private key-art
+service (`key-art/`, at `KEY_ART_URL`) draw the card, keeps it on IPFS through
+Regent's Lighthouse account (`LIGHTHOUSE_API_KEY`) and records its address
+against that reveal; see [key-art/README.md](../key-art/README.md).
 
 **Random key traits.** Every key's traits come from Chainlink VRF v2.5 and
 nothing else. One

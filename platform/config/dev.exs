@@ -29,6 +29,13 @@ config :keyfleet, :avatar_bucket,
   secret_access_key: "keyfleet-local-secret",
   public_url: "http://127.0.0.1:4880/keyfleet-avatars"
 
+# The key-art service, run on this computer from `key-art/` (`PORT=4890 npm start`).
+config :keyfleet, Keyfleet.Keys.KeyArt, url: "http://127.0.0.1:4890"
+
+# Cards drawn on this computer go to Lighthouse only with a key of its own in
+# LIGHTHOUSE_API_KEY; without one the picture job waits and tries again.
+config :keyfleet, Keyfleet.Lighthouse, api_key: System.get_env("LIGHTHOUSE_API_KEY")
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

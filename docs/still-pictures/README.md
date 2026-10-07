@@ -27,7 +27,7 @@ need their own go.
 | Draws on a computer with no graphics chip | Yes. Chromium's CPU renderer (SwiftShader, the kind a Fly machine would use) drew all eight with no errors. |
 | Same picture every time | Yes. Separate CPU runs gave byte-identical files for all eight keys. |
 | Same traits as the site | Yes, 8 of 8 traits for all eight keys, through the site's own table reader and draw. |
-| Picture path matches the key's metadata | Yes. Metadata names `<site>/art/<table hash>/<slot>/<key>.png`; the slot is the fleet's name, such as `classic`. |
+| Picture address matches the key's metadata | Yes. Metadata names the card at `https://media.regents.sh/ipfs/<cid>` and `ipfs://<cid>`, the address IPFS gives its bytes. |
 | Never changes once made | Yes. The table's fingerprint is part of the path, and the same seed, table and top line always give the same bytes. |
 
 Drawn as Classic #1:
@@ -46,15 +46,21 @@ Drawn as Classic #1:
 Until a key's traits are drawn, its metadata shows the Interim KeyFleet Access Pass instead; see
 `interim-pass/README.md`.
 
-## Gaps before this can go live
+## In the site (7 October 2026)
 
-1. **Nothing serves `/art/` yet.** The metadata already points there, but the site has no such files or route.
-   Where pictures are stored and which job makes them is the production step that needs its own go.
-2. **The drawing code is in the repository, the page that runs it unattended is not.** `platform/assets/js/key_card`
-   holds the Key Lab's draw, card looks, painting and shader; the early-access page's key roller uses them. A
-   server renderer still needs a page that loads that code and saves the picture.
-3. **Fleets have no number yet.** The top line reads `<FLEET TYPE> #<fleet number> · NO. <key>`. The site records
-   one number per fleet; no contract change is needed.
+Sean's "2. a" of 6 October 2026 asked for the per-key pictures, built locally first.
+
+- **Drawing.** [key-art/](../../key-art/README.md) is a small private service: one page bundles the site's own
+  `platform/assets/js/key_card` code and draws the card off screen; `POST /draw` answers the PNG. On this Mac all
+  eight test keys came out byte-identical to the table above, through the site's own client too.
+- **On Linux.** In the service's image (Chromium's CPU renderer on arm64) every key draws the same bytes every time,
+  but about 1% of pixels, mostly letter edges, differ slightly from the Mac's. A picture never changes once stored,
+  so this matters only when comparing with the Mac. Fly's amd64 machines have not been tried.
+- **Storing.** Each recorded reveal queues a job that draws the card, keeps it on IPFS through Regent's Lighthouse
+  account and records its address against that reveal; the key's metadata then names it. Until then the key shows
+  the Interim KeyFleet Access Pass.
+- **Fleet numbers.** Each fleet's top line comes from the site's catalog (`CLASSIC #1`, `SYNDICATE #1`, …); no
+  contract change.
 
 ## Run it again
 

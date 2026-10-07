@@ -5,3 +5,7 @@ local-only-*
 .env.*
 !.env.example
 .envrc
+
+# The key-art service's packages and built page.
+/key-art/node_modules/
+/key-art/dist/

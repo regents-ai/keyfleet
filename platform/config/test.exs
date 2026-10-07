@@ -54,6 +54,16 @@ config :keyfleet, :avatar_bucket,
   public_url: "https://keyfleet-avatars.storage.test",
   req_options: [plug: {Req.Test, Keyfleet.Agents.AvatarBucket}]
 
+# The key-art service is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Keys.KeyArt,
+  url: "https://key-art.test",
+  req_options: [plug: {Req.Test, Keyfleet.Keys.KeyArt}]
+
+# Lighthouse is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Lighthouse,
+  api_key: "test-lighthouse-key",
+  req_options: [plug: {Req.Test, Keyfleet.Lighthouse}]
+
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,

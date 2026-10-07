@@ -27,6 +27,13 @@ config :keyfleet, Keyfleet.AgentListing, read_token: nil, req_options: []
 # load pictures from. Each environment names its bucket.
 config :keyfleet, :avatar_bucket, req_options: []
 
+# The key-art service that draws revealed keys' cards (`key-art/`).
+config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
+
+# Regent's Lighthouse account, which keeps revealed keys' cards on IPFS for
+# good (`Keyfleet.Lighthouse`). Production sets its `api_key`.
+config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage", req_options: []
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks
@@ -121,7 +128,8 @@ config :keyfleet, Oban,
   # machine), so two roster runs never set up or change one hub together.
   # Making fleets' repositories in the code store waits on it too.
   # Deleting agents' replaced pictures from their bucket waits on it too.
-  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2],
+  # Drawing revealed keys' cards waits on the key-art service, one at a time.
+  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2, key_art: 1],
   cron: [crontab: [{"*/10 * * * *", Keyfleet.Notebooks.Reconcile}]],
   pruner: [max_age: {7, :days}],
   lifeline: [rescue_after: {10, :minutes}]

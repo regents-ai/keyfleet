@@ -149,8 +149,9 @@ if config_env() == :prod do
 
     config :keyfleet, :code, node: System.fetch_env!("KEYFLEET_CODE_NODE")
 
-    # KeyFleet's picture bucket (agents' pictures under agent-avatars/): the Tigris bucket `fly storage create` made and set
-    # these secrets for, and the public address its objects are read from
+    # KeyFleet's picture bucket (agents' pictures under agent-avatars/): the
+    # Tigris bucket `fly storage create` made and set these secrets for, and
+    # the public address its objects are read from
     # (`https://<bucket>.fly.storage.tigris.dev`).
     config :keyfleet, :avatar_bucket,
       endpoint: System.fetch_env!("AWS_ENDPOINT_URL_S3"),
@@ -159,6 +160,13 @@ if config_env() == :prod do
       access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
       secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY"),
       public_url: System.fetch_env!("PICTURES_PUBLIC_URL")
+
+    # The key-art service that draws revealed keys' cards, at its private
+    # Flycast address (`http://keyfleet-key-art.flycast`).
+    config :keyfleet, Keyfleet.Keys.KeyArt, url: System.fetch_env!("KEY_ART_URL")
+
+    # Regent's Lighthouse account, which keeps revealed keys' cards on IPFS.
+    config :keyfleet, Keyfleet.Lighthouse, api_key: System.fetch_env!("LIGHTHOUSE_API_KEY")
 
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,

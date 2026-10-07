@@ -686,3 +686,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Setting a picture takes two steps: a signed `POST /api/v1/agent/avatar/start` naming its SHA-256, length and type answers an address, good for ten minutes, where the picture's bytes go with an unsigned `PUT`. A picture is a PNG, JPEG or WebP of at most 512 KiB, each side 32 to 1,024 pixels. `POST /api/v1/agent/avatar/remove` takes it away.
 - Pictures are kept in the KeyFleet storage bucket and read from its own address, which the pages' content security policy now allows. A replaced or removed picture is deleted from the bucket afterwards.
 - The free-text `avatar` profile field is gone, with its column; the profile answers `avatar_url` instead. The site needs six new secrets before its next release (see `docs/deploy-checklist.md`).
+
+## 2026-10-07 — Revealed keys' cards (KF-ART, local)
+
+- A revealed key's picture is now its own card. Each recorded reveal queues a job that has the private key-art service (`key-art/`) draw the card, keeps it on IPFS through Regent's Lighthouse account and records its IPFS address against that reveal. The metadata shows it at `https://media.regents.sh/ipfs/<cid>` and names `ipfs://<cid>` in `properties.card`. A reveal removed after a reorg takes its card's record with it, and the key's new seed gets a new card at a new address. While the card is being drawn the key keeps the Interim KeyFleet Access Pass, cached for 30 seconds; then its metadata names the card, cached for an hour.
+- The site needs `KEY_ART_URL` and `LIGHTHOUSE_API_KEY` before its next release, and the `keyfleet-key-art` app must exist (see `docs/deploy-checklist.md`).

@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
   Key ownership, reveals, shards and edit restrictions projected from
-  contract events.
+  contract events, and which revealed keys have their card picture.
   """
   use Ash.Domain
 
@@ -38,7 +38,13 @@ defmodule Keyfleet.Keys do
     resource Keyfleet.Keys.KeyReveal do
       define :record_reveal, action: :record
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
+      define :get_reveal_by_id, action: :read, get_by: [:id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+    end
+
+    resource Keyfleet.Keys.KeyPicture do
+      define :record_picture, action: :record
+      define :get_picture, action: :read, get_by: [:reveal_id], not_found_error?: false
     end
 
     resource Keyfleet.Keys.ShardEvent do

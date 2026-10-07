@@ -7,12 +7,28 @@ defmodule Keyfleet.Fleets do
   # The fleets in the order the site shows them. Classic opens first; the
   # others show as coming soon until the founder opens them, one at a time,
   # by marking them `coming_soon?: false` here or by recording their
-  # deployment.
+  # deployment. `card` is the fleet's type and number as its keys' cards
+  # print them: each is the first fleet of its type.
   @catalog [
-    %{id: "fleet_tech_classic", name: "Keyfleet Classic", coming_soon?: false},
-    %{id: "fibonacci_syndicate", name: "Keyfleet Syndicate", coming_soon?: true},
-    %{id: "fibonacci_cascade", name: "Keyfleet Cascade", coming_soon?: true},
-    %{id: "fleet_tech_accelerant", name: "Keyfleet Accelerant", coming_soon?: true}
+    %{
+      id: "fleet_tech_classic",
+      name: "Keyfleet Classic",
+      card: "CLASSIC #1",
+      coming_soon?: false
+    },
+    %{
+      id: "fibonacci_syndicate",
+      name: "Keyfleet Syndicate",
+      card: "SYNDICATE #1",
+      coming_soon?: true
+    },
+    %{id: "fibonacci_cascade", name: "Keyfleet Cascade", card: "CASCADE #1", coming_soon?: true},
+    %{
+      id: "fleet_tech_accelerant",
+      name: "Keyfleet Accelerant",
+      card: "ACCELERANT #1",
+      coming_soon?: true
+    }
   ]
 
   resources do
@@ -25,11 +41,20 @@ defmodule Keyfleet.Fleets do
   end
 
   @doc """
-  The fixed catalog's fleets as `%{id: id, name: name, coming_soon?: marked}`,
+  The fixed catalog's fleets as `%{id: id, name: name, card: card, coming_soon?: marked}`,
   in the order the site shows them. `coming_soon?` is the catalog's mark
   alone; `coming_soon?/2` says whether a fleet is coming soon.
   """
   def catalog, do: @catalog
+
+  @doc """
+  The top line of a key's card: the fleet's type and number, then the key's
+  number, such as `CLASSIC #1 · NO. 0072`.
+  """
+  def card_top_line(fleet_id, token_id) do
+    %{card: card} = Enum.find(@catalog, &(&1.id == fleet_id))
+    "#{card} · NO. #{token_id |> Integer.to_string() |> String.pad_leading(4, "0")}"
+  end
 
   @doc "The machine ids of the fixed catalog, in catalog order."
   def catalog_ids, do: Enum.map(@catalog, & &1.id)
@@ -85,6 +110,12 @@ defmodule Keyfleet.Fleets do
 
   @doc "The fleet in a deployment's `slot`, such as `syndicate`, or `nil` for no such slot."
   def slot_fleet_id(slot), do: Map.get(@manifest_slots, slot)
+
+  @doc "The deployment slot of the fleet `fleet_id`, such as `classic`."
+  def slot(fleet_id) do
+    {slot, ^fleet_id} = Enum.find(@manifest_slots, &(elem(&1, 1) == fleet_id))
+    slot
+  end
 
   @doc """
   Binds one fleet to the deployment a deployed manifest describes, the JSON

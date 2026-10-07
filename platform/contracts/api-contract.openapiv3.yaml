@@ -915,9 +915,10 @@ paths:
       operationId: getKeyMetadata
       description: >-
         A key's ERC-721 metadata, at the address its fleet's tokenURI gives: the fleet's metadata
-        base followed by the key's number. Until the key's traits are drawn it shows the fleet's
-        waiting picture and Status Revealing, and may be cached for 30 seconds. Once drawn, the
-        key shows its traits and may be cached for an hour. Needs no sign-in.
+        base followed by the key's number. Until the key's traits are drawn it shows the waiting
+        picture and Status Revealing, and may be cached for 30 seconds. Once drawn, the key shows
+        its traits; it keeps the waiting picture, cached for 30 seconds, while its card is being
+        drawn, then shows its card and may be cached for an hour. Needs no sign-in.
       parameters:
         - {$ref: "#/components/parameters/Slot"}
         - {$ref: "#/components/parameters/TokenId"}
@@ -3006,7 +3007,9 @@ components:
         description: {type: string, minLength: 1}
         image:
           type: string
-          description: The key's picture, at an address that names the trait table it was drawn from
+          description: >-
+            The key's card, kept on IPFS and shown through Regent's media address, or the waiting
+            picture while the card is being drawn
           pattern: '^https?://'
         attributes:
           type: array
@@ -3025,6 +3028,10 @@ components:
               type: string
               description: keccak256 of the trait table file, fixed in the fleet's contract
               pattern: '^0x[0-9a-f]{64}$'
+            card:
+              type: string
+              description: The card's IPFS address, once it is drawn
+              pattern: '^ipfs://(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58})$'
     KeyAttribute:
       type: object
       additionalProperties: false

@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.MetadataController do
   @moduledoc """
   Serves each key's ERC-721 metadata at the path its fleet's `tokenURI`
-  names. A key still being revealed is cached for 30 seconds and a revealed
-  key for an hour, so a record corrected by hand and new pictures show soon.
+  names. A key still being revealed, or whose card is still being drawn, is
+  cached for 30 seconds and a key with its card for an hour, so the card shows
+  soon after it is drawn and a record corrected by hand soon after that.
   """
   use KeyfleetWeb, :controller
 
@@ -10,7 +11,7 @@ defmodule KeyfleetWeb.MetadataController do
 
   def show(conn, %{"slot" => slot, "token_id" => token_id}) do
     case Metadata.for_key(slot, token_id, KeyfleetWeb.Endpoint.url()) do
-      {:revealing, metadata} ->
+      {waiting, metadata} when waiting in [:revealing, :drawing] ->
         conn |> put_resp_header("cache-control", "max-age=30") |> json(metadata)
 
       {:revealed, metadata} ->

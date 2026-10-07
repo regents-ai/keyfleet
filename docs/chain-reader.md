@@ -208,7 +208,8 @@ ownership record, so shards issued under a removed ownership record stop
 counting with it. The ownership, proposal, budget, income, reveal, edit
 restriction and shard records made again from `F` on get new record numbers,
 higher than any removed, so every reader of the list sees them as new. A key whose reveal is removed shows as still being revealed
-until its reveal is read again.
+until its reveal is read again. Its card's record goes with the reveal, and the
+card is drawn again for the new seed, at a new address.
 
 Nothing tells a fleet page already open that records were removed: it keeps
 showing the removed owners and reveals until it reconnects or is loaded again,

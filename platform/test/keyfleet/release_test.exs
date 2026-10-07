@@ -211,6 +211,7 @@ defmodule Keyfleet.ReleaseTest do
              "graph_relations",
              "income_receipts",
              "key_attachments",
+             "key_pictures",
              "key_reveals",
              "linked_identities",
              "messages",

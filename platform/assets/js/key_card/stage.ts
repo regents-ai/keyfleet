@@ -1,9 +1,10 @@
 /**
- * Puts a key's card on a canvas with WebGPU. The card is a still picture, drawn again only when
- * the key changes or the canvas changes size.
+ * Puts a key's card on a canvas with WebGPU, or draws it once into an off-screen picture. On a
+ * canvas the card is a still picture, drawn again only when the key changes or the canvas
+ * changes size.
  */
 
-import {effect, frame, init, sampler, surface, texture, type Effect, type Gpu, type Surface, type Texture} from "vgpu"
+import {effect, frame, init, sampler, surface, target, texture, type Effect, type Gpu, type Surface, type Texture} from "vgpu"
 
 import {CARD_WGSL} from "./shader"
 import type {CardJob, Layers} from "./paint"
@@ -13,6 +14,25 @@ const STAGE_ZOOM = 0.84
 const TEX_NAMES = ["extAlb", "extAux", "extMat", "keyAlb", "keyAux"] as const
 type Textures = Record<(typeof TEX_NAMES)[number], Texture>
 
+const upload = (gpu: Gpu, layer: Layers, bytes: Uint8Array<ArrayBuffer>): Texture => {
+  const t = texture(gpu, {kind: "2d", size: [layer.w, layer.h], format: "rgba8unorm", usage: ["texture_binding", "copy_dst"]})
+  gpu.gpu.queue.writeTexture({texture: t.gpu}, bytes, {bytesPerRow: layer.w * 4}, [layer.w, layer.h, 1])
+  return t
+}
+
+const uploadCard = (gpu: Gpu, {exterior: e, key: k}: CardJob["paint"]): Textures => ({
+  extAlb: upload(gpu, e, e.alb),
+  extAux: upload(gpu, e, e.aux),
+  extMat: upload(gpu, e, e.mat),
+  keyAlb: upload(gpu, k, k.alb),
+  keyAux: upload(gpu, k, k.aux),
+})
+
+/** The page's GPU, or nothing when the browser has no WebGPU. */
+const start = (): Promise<Gpu | null> => init().catch(() => null)
+
+const linear = (gpu: Gpu) => sampler(gpu, {minFilter: "linear", magFilter: "linear"})
+
 export type Stage = {
   /** Paints a card and shows it. When two overlap, the newer one wins. */
   show(make: () => Promise<CardJob>): Promise<void>
@@ -20,14 +40,10 @@ export type Stage = {
 
 /** A stage on `canvas`, or nothing when the browser has no WebGPU. */
 export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | null> {
-  let gpu: Gpu
-  try {
-    gpu = await init()
-  } catch {
-    return null
-  }
+  const gpu = await start()
+  if (!gpu) return null
   const out: Surface = surface(gpu, canvas, {dpr: [1, 1.75]})
-  const samp = sampler(gpu, {minFilter: "linear", magFilter: "linear"})
+  const samp = linear(gpu)
   let fx: Effect | null = null
   let textures: Textures | null = null
   let ticket = 0
@@ -37,25 +53,12 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
   }
   new ResizeObserver(draw).observe(canvas)
 
-  const upload = (layer: Layers, bytes: Uint8Array<ArrayBuffer>): Texture => {
-    const t = texture(gpu, {kind: "2d", size: [layer.w, layer.h], format: "rgba8unorm", usage: ["texture_binding", "copy_dst"]})
-    gpu.gpu.queue.writeTexture({texture: t.gpu}, bytes, {bytesPerRow: layer.w * 4}, [layer.w, layer.h, 1])
-    return t
-  }
-
   return {
     async show(make) {
       const mine = ++ticket
       const {paint, uniforms} = await make()
       if (mine !== ticket) return
-      const {exterior: e, key: k} = paint
-      const next: Textures = {
-        extAlb: upload(e, e.alb),
-        extAux: upload(e, e.aux),
-        extMat: upload(e, e.mat),
-        keyAlb: upload(k, k.alb),
-        keyAux: upload(k, k.aux),
-      }
+      const next = uploadCard(gpu, paint)
       const old = textures
       textures = next
       const params = {res: out.size, zoom: STAGE_ZOOM, ...uniforms}
@@ -71,4 +74,22 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
       draw()
     },
   }
+}
+
+/**
+ * Draws a key's card once into an off-screen picture `size` pixels across and answers its pixels,
+ * four bytes (red, green, blue, alpha) each, row by row from the top; or nothing when the
+ * browser has no WebGPU.
+ */
+export async function drawStill(job: CardJob, size: readonly [number, number]): Promise<Uint8Array | null> {
+  const gpu = await start()
+  if (!gpu) return null
+  const out = target(gpu, {size, format: "rgba8unorm"})
+  const fx = effect(gpu, CARD_WGSL, {
+    label: "key-card",
+    set: {u: {res: out.size, zoom: STAGE_ZOOM, ...job.uniforms}, ...uploadCard(gpu, job.paint), samp: linear(gpu)},
+  })
+  await fx.compile({colors: [out.format]})
+  frame(gpu, f => f.pass(out, fx))
+  return out.color.read({mipLevel: 0, region: "all"})
 }
