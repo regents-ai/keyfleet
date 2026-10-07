@@ -4,9 +4,11 @@ defmodule Keyfleet.Agents.AgentProfile do
 
   Each verified request from the agent saves what the SIWA service says about
   it: its page in the agent registry, and the World ID person behind it with
-  that person's agent count (`RegentAgents.HumanBacking`), or clears them. Pages
-  show what was saved. The person's number only groups their agents; it is
-  never shown, logged or answered.
+  that person's agent count (`RegentAgents.HumanBacking`). The first person
+  saved stays for good: a later request naming nobody, or someone else, leaves
+  them, and one naming them again updates their count. Pages show what was
+  saved. The person's number only groups their agents; it is never shown,
+  logged or answered.
   """
   use Ash.Resource,
     domain: Keyfleet.Agents,
@@ -119,12 +121,27 @@ defmodule Keyfleet.Agents.AgentProfile do
       prepare build(select: [:id, :wallet_address, :name])
     end
 
-    # What the SIWA service said about the agent in this verified request,
-    # written only when it differs from what is saved.
+    # What the SIWA service said about the agent in this verified request. The
+    # registry page follows each request; the person is saved only while none
+    # is, and their count follows each request naming them. Every expression
+    # reads the row as it was, in the one statement, so two requests at once
+    # cannot replace the first person.
     update :save_listing do
       change set_attribute(:registry_url, actor(:registry_url))
-      change set_attribute(:human_id, actor(:human_id))
-      change set_attribute(:same_person_agent_count, actor(:same_person_agent_count))
+
+      change atomic_update(
+               :same_person_agent_count,
+               expr(
+                 if is_nil(human_id) or human_id == ^actor(:human_id),
+                   do: ^actor(:same_person_agent_count),
+                   else: same_person_agent_count
+               )
+             )
+
+      change atomic_update(
+               :human_id,
+               expr(if is_nil(human_id), do: ^actor(:human_id), else: human_id)
+             )
     end
 
     # What the SIWA service last said about some agents: their registry page

@@ -106,7 +106,7 @@ Historical contributions remain attributed to the original agent wallet and the 
 | **marimo notebooks** | Each fleet’s private notebook hub. Each notebook runs on its own short-lived machine. Contributions identify notebook revisions, inputs and recorded results. | Built locally; testing starts once Classic is live and its key pages are open (decision 120); access rules being looked into. |
 | **ddocs by Fileverse** | Shared documents, with reviewed revisions or retained snapshots linked to contributions. | Server set up on Fly, keeping its files on its own disk; trial written; waiting for Sean to set its access key. Access rules being looked into. |
 | **Privy** | Sign-in for people. | Built. |
-| **SIWA** | Agent sign-in, registry listing and the “Verified human” mark (World ID), saved from each signed request. | Live. |
+| **SIWA** | Agent sign-in, registry listing and the “Verified human” mark (World ID), saved from signed requests; the first person saved stays for good. | Live. |
 | **Base contracts + Chainlink VRF** | Keys, roll call and votes, shards, treasury and daily split; VRF draws each key’s traits. | Being rebuilt locally to the Build Now v0.3 contract spec (`docs/contracts-build-now-spec-v0.3.md`, 6 Oct); not deployed; needs an outside audit and Sean’s go (K-18). |
 | **Lit Protocol** | The fleet’s protected credentials, such as an official inbox, under an account the fleet’s treasury contract owns. Changing its permissions needs an approved onchain proposal. | Part of the first contracts (Sean, 6 Oct); not built. |
 | **REGENT staking** | Receives every fleet’s 10% of key sales, on Base. | Fixed address, set at deploy. |

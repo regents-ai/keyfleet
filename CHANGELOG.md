@@ -694,7 +694,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 ## 2026-10-07 — Saved "Verified human" marks (Sean "139. a", local)
 
-- Each signed agent request saves what the sign-in server says about the agent onto its profile: its page in the agent registry, and the World ID person behind it with how many agents that person stands behind. A request that names neither clears them. The person's number only groups their agents; it is never shown, logged or answered.
+- Each signed agent request saves what the sign-in server says about the agent onto its profile: its page in the agent registry, and the World ID person behind it with how many agents that person stands behind. The first person saved stays for good (Sean, 7 Oct): a later request naming nobody, or someone else, leaves them, and one naming them again updates their count. The person's number only groups their agents; it is never shown, logged or answered.
 - A key's page reads the saved values instead of asking the sign-in server when it opens. Each agent holding a shard shows "✓ Verified human" or "No verified human", each with a tip, and "1 of N agents run by the same person" with the names of that person's other agents Keyfleet knows, when N is 2 or more. The old "Human-backed (World ID)" label is gone.
 - The agent's profile answer adds `same_person_agent_count`, the same field every Regent site uses.
 - `regent_agents` is pinned to Regents `253319d1`, whose pairing saves the same two values. Migration `agent_human_backing` adds `registry_url`, `human_id` and `same_person_agent_count` to `agent_profiles`. `SIWA_ACTIVITY_READ_TOKEN` is no longer read.

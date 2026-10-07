@@ -5,6 +5,7 @@ defmodule Keyfleet.Agents do
   """
   use Ash.Domain
 
+  import Ash.Expr, only: [expr: 1]
   require Ash.Query
 
   resources do
@@ -75,30 +76,31 @@ defmodule Keyfleet.Agents do
 
   @doc """
   Saves what the SIWA service said about the agent with this verified request
-  onto its profile: its page in the agent registry and the World ID person
-  behind it with that person's agent count, or clears them. Nothing is written
-  when the profile already says the same, or when the agent has no profile yet;
+  onto its profile: its page in the agent registry, and the World ID person
+  behind it with that person's agent count. The first person saved stays; a
+  request naming nobody or someone else leaves them. Nothing is written when
+  the request changes nothing, or when the agent has no profile yet;
   `ensure_profile` saves them when it makes one.
   """
   def save_listing(%Keyfleet.Actors.Agent{} = actor) do
-    %{registry_url: url, human_id: human_id, same_person_agent_count: count} = actor
-
     Keyfleet.Agents.AgentProfile
-    |> Ash.Query.filter(
-      wallet_address == ^actor.wallet_address and
-        fragment(
-          "(?, ?, ?) IS DISTINCT FROM (?::text, ?::text, ?::bigint)",
-          registry_url,
-          human_id,
-          same_person_agent_count,
-          ^url,
-          ^human_id,
-          ^count
-        )
-    )
+    |> Ash.Query.filter(wallet_address == ^actor.wallet_address)
+    |> Ash.Query.filter(^listing_changes(actor))
     |> Ash.bulk_update!(:save_listing, %{}, actor: actor, strategy: :atomic, notify?: false)
 
     :ok
+  end
+
+  # The profiles this request would change: a new registry page, or a person
+  # where none is saved, or a new count for the person saved.
+  defp listing_changes(%{registry_url: url, human_id: nil}),
+    do: expr(fragment("? IS DISTINCT FROM ?::text", registry_url, ^url))
+
+  defp listing_changes(%{registry_url: url, human_id: person, same_person_agent_count: count}) do
+    expr(
+      fragment("? IS DISTINCT FROM ?::text", registry_url, ^url) or is_nil(human_id) or
+        (human_id == ^person and same_person_agent_count != ^count)
+    )
   end
 
   @doc """
