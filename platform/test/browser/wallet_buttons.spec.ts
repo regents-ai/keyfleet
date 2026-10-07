@@ -71,7 +71,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   allowUsdc(me, Number(BigInt(`0x${first.transaction.data.slice(-64)}`)))
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
-  await expect(sentLine(page, first.hash)).toContainText("Approved. Now press Buy key.")
+  await expect(sentLine(page, first.hash)).toContainText("Approved. Now press the next button.")
   await expect(page.locator("#buy-key-approve")).toBeHidden()
 
   await page.locator("#buy-key-button").click()
@@ -83,7 +83,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   // A purchase the contract refuses says so, and Buy stays to press again.
   landStep(bought.hash, bought.transaction, false)
   await expect(sentLine(page, bought.hash)).toHaveAttribute("data-state", "reverted")
-  await expect(sentLine(page, bought.hash)).toContainText("The purchase didn’t go through and no USDC was taken.")
+  await expect(sentLine(page, bought.hash)).toContainText("Not bought. No USDC was taken.")
   await page.locator("#buy-key-button").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(4)
   expect(errors).toEqual([])
@@ -166,7 +166,7 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   expect(errors).toEqual([])
 })
 
-test("a key whose draw was turned down gets Try again: every press reaches the wallet, and the server says when the draw is on its way", async ({
+test("a key whose draw was turned down can be asked again: every press reaches the wallet, and the server says when the draw is on its way", async ({
   page,
 }) => {
   const key = sellKey(fleet, stranger)
@@ -180,7 +180,7 @@ test("a key whose draw was turned down gets Try again: every press reaches the w
 
   // Anyone may ask again, not only the key's holder: pressed twice, both reach the wallet.
   const again = page.locator("#key-profile-reveal-again")
-  await expect(again).toHaveText("Try again")
+  await expect(again).toHaveText("Ask again")
   await again.click()
   await again.click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)
@@ -194,17 +194,17 @@ test("a key whose draw was turned down gets Try again: every press reaches the w
   refuseDraw(fleet, key, false)
   landStep(first.hash, first.transaction, true)
   await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${first.hash}"])`)).toContainText(
-    "Sent.",
+    "Done.",
   )
-  await expect(page.locator("#key-profile-reveal-action-line")).toHaveText(
-    "The request for this key’s random draw was accepted. The draw is on its way, and the key’s traits show here when it arrives.",
-  )
-  await expect(again).toHaveCount(0)
+  // The chain now has the request, so another is certain to be refused: the
+  // button stays, turned off, and says why.
+  await expect(again).toBeDisabled()
+  await expect(page.locator("#key-profile-reveal-again-why")).toHaveText("Draw on its way")
 
   // The repeat reaches the chain, which refuses it.
   landStep(second.hash, second.transaction, false)
   await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${second.hash}"])`)).toContainText(
-    "Nothing was asked.",
+    "Nothing asked. The draw may be on its way.",
   )
   expect(errors).toEqual([])
 })
