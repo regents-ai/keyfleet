@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentShardController do
   @moduledoc """
-  The signed-in agent's active shards, one per fleet at most: the key each
-  lets it act as, until when, whether a vote of the fleet has stopped that key
+  The signed-in agent's active shards, one per key: the key each lets it act
+  as, until when, whether a vote of the fleet has stopped that key
   changing the workspace, and the transaction that ends the shard, for the
   agent's own wallet to send when it steps down.
   """
@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.AgentShardController do
       step_down: %{
         chain_id: shard.fleet.chain_id,
         to: shard.fleet.shards_address,
-        data: Call.encode("end(uint256,address)", [shard.token_id, wallet]),
+        data: Call.encode("end(uint256[],address)", [[shard.token_id], wallet]),
         value: "0"
       }
     }

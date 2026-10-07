@@ -1865,7 +1865,7 @@ components:
           properties:
             chain_id: {type: integer, minimum: 1}
             to: {$ref: "#/components/schemas/AgentWallet"}
-            data: {type: string, pattern: '^0x96f0fa4d[0-9a-f]{128}$', description: "end(uint256 tokenId, address wallet)"}
+            data: {type: string, pattern: '^0x8dbf85b7[0-9a-f]{256}$', description: "end(uint256[] tokenIds, address wallet), with the one key"}
             value: {type: string, const: "0"}
     AgentShardList:
       type: object

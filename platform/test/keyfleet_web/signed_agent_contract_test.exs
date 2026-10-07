@@ -285,7 +285,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
     assert shard["step_down"]["data"] ==
-             RegentChain.Call.encode("end(uint256,address)", [1, holder.address])
+             RegentChain.Call.encode("end(uint256[],address)", [[1], holder.address])
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
