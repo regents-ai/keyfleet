@@ -30,6 +30,11 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.CanonicalHost
   plug KeyfleetWeb.Plugs.ContractHeaders
 
+  # Every answer, including the launch gate's and the Markdown and refusals the
+  # plugs below give before the router, lets browser agents use the tools this
+  # site's pages register, and no other site's.
+  plug :allow_page_tools
+
   # While the site is closed, only the early-access page, the legal pages, the
   # operational files and the static files get past this.
   plug KeyfleetWeb.Plugs.LaunchGate
@@ -58,11 +63,6 @@ defmodule KeyfleetWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
-
-  # Every answer, including the Markdown and refusals the plugs below give
-  # before the router, lets browser agents use the tools this site's pages
-  # register, and no other site's.
-  plug :allow_page_tools
 
   # One budget per client address, shared by the health check and every /api
   # path, answered or not. Every answer, including a signed agent request
