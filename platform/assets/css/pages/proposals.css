@@ -257,4 +257,19 @@
   gap: 0.5rem;
 }
 
+/* A proposal's own words, as its proposer wrote them; in a list, the first
+   three lines. */
+.proposals-words {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.proposals-words--short {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 }

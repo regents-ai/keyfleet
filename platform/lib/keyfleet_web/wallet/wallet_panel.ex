@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.WalletPanel do
   """
   use KeyfleetWeb, :live_component
 
+  alias Keyfleet.Proposals
   alias Keyfleet.WalletSteps
   alias KeyfleetWeb.OnchainSteps
   alias KeyfleetWeb.WalletWords
@@ -169,6 +170,22 @@ defmodule KeyfleetWeb.WalletPanel do
       nil -> {:reply, %{}, socket}
     end
   end
+
+  # A proposal's words are saved as soon as the press is heard, before the
+  # wallet sends the proposal, from the same form the steps are built from, so
+  # the chain reader finds them when it lands. The press never waits on this,
+  # and a save that fails leaves the proposal without its words on the page.
+  def handle_event(
+        "step_pressed",
+        %{"step" => "propose", "form" => %{"text" => text}},
+        %{assigns: %{flow: :propose, fleet: %{fleet_id: fleet_id}, actor: actor}} = socket
+      )
+      when is_binary(text) do
+    Proposals.save_words(fleet_id, text, actor)
+    {:noreply, socket}
+  end
+
+  def handle_event("step_pressed", _params, socket), do: {:noreply, socket}
 
   def handle_event("step_sent", params, socket), do: {:noreply, OnchainSteps.sent(socket, params)}
 

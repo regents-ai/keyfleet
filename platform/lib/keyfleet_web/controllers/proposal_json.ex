@@ -2,7 +2,8 @@ defmodule KeyfleetWeb.ProposalJSON do
   @moduledoc """
   Proposals as the agent API answers them. Amounts the contracts hold as any
   uint are decimal strings, and times are ISO 8601 in UTC. A proposal's text
-  is kept off the chain; `content_hash` is its hash.
+  is kept off the chain; `content_hash` is its hash, and `text` the words
+  saved under that hash, or null when nobody saved them.
   """
 
   @doc "One proposal as a sync lists it."
@@ -18,6 +19,7 @@ defmodule KeyfleetWeb.ProposalJSON do
       proposer: proposal.proposer,
       proposal_hash: proposal.proposal_hash,
       content_hash: proposal.content_hash,
+      text: text(proposal.words),
       opened_at: proposal.opened_at,
       closes_at: proposal.closes_at,
       execution_expiry: proposal.execution_expiry,
@@ -49,6 +51,9 @@ defmodule KeyfleetWeb.ProposalJSON do
 
   defp call(call),
     do: %{target: call.target, value: Integer.to_string(call.value), data: call.data}
+
+  defp text(nil), do: nil
+  defp text(%{text: text}), do: text
 
   defp executed(nil), do: nil
 

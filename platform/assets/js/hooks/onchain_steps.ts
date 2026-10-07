@@ -72,6 +72,9 @@ export const OnchainSteps: Hook = {
       const form = formInputs(this.el)
       const asks = asksServer(this.review, name, form)
       lost(this.el, false)
+      // The server hears the press, and the form it was made from, before the
+      // wallet does: a proposal's words are saved then. It never waits on this.
+      push("step_pressed", {step: name, form})
 
       if (activeEthereumWallet() && asks) {
         void this.pushEventTo(this.el, "prepare_and_send", {form, step: name})

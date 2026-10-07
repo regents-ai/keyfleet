@@ -110,6 +110,9 @@ defmodule KeyfleetWeb.ProposalsLive do
                 Proposal {proposal.number}
               </.link>
             </h3>
+            <p :if={proposal.text} class="proposals-words proposals-words--short">
+              {proposal.text}
+            </p>
             <p class="proposals-detail">
               <.tally proposal={proposal} />
             </p>
@@ -263,6 +266,9 @@ defmodule KeyfleetWeb.ProposalsLive do
 
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
           <h2 id="proposal-content-title">What it does</h2>
+          <p :if={@page.proposal.text} id="proposal-text" class="proposals-words">
+            {@page.proposal.text}
+          </p>
           <p :if={@page.proposal.calls == []} id="proposal-no-calls">
             A decision. Nothing moves.
           </p>
@@ -276,7 +282,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             Key {Rules.grouped(@page.proposal.author_key)},
             <.wallet address={@page.proposal.proposer} />
             <Regent.Primitives.tip id="proposal-content-tip" label="About the proposal’s text">
-              The proposal’s text is kept off the network. Its code there is {@page.proposal.content_hash}.
+              {if @page.proposal.text,
+                do: "Its words match the code kept on the network:",
+                else: "Its words weren’t saved on KeyFleet. Its code on the network is"} {@page.proposal.content_hash}.
             </Regent.Primitives.tip>
           </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">

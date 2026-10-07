@@ -4,7 +4,8 @@ defmodule Keyfleet.Proposals.Proposal do
   renewal of its author key just before it, which says when it opened. Only
   the chain reader writes it, and nothing ever changes it.
 
-  Its narrative is kept off the chain; `content_hash` is its hash. `calls`
+  Its narrative is kept off the chain; `content_hash` is its hash, and
+  `words` the narrative saved under it (`Keyfleet.Proposals.Words`). `calls`
   are the exact calls the treasury makes, in order, if it is carried out.
   `opening_count` is how many keys were present when it opened.
 
@@ -279,6 +280,13 @@ defmodule Keyfleet.Proposals.Proposal do
     has_many :votes, Keyfleet.Proposals.Vote, public?: true
     has_one :execution, Keyfleet.Proposals.Execution, public?: true
     has_one :cancellation, Keyfleet.Proposals.Cancellation, public?: true
+
+    # Its words, as its fleet saved them under its fingerprint, if anyone did.
+    has_one :words, Keyfleet.Proposals.Words do
+      no_attributes? true
+      filter expr(fleet_id == parent(fleet_id) and content_hash == parent(content_hash))
+      public? true
+    end
   end
 
   calculations do

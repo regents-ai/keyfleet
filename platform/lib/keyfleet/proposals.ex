@@ -4,6 +4,10 @@ defmodule Keyfleet.Proposals do
   executions, recorded from its vote contract by the chain reader and by
   nothing else. The chain
   is the authority; these records only mirror it. Anyone may read them.
+
+  A proposal's words are kept here too, saved by whoever proposes and shown
+  only with the proposal whose fingerprint they match
+  (`Keyfleet.Proposals.Words`).
   """
   use Ash.Domain
 
@@ -14,12 +18,13 @@ defmodule Keyfleet.Proposals do
   alias Keyfleet.Keys.EditsRestriction
   alias Keyfleet.Proposals.{Cancellation, Execution, Proposal, Vote}
   alias Keyfleet.Treasury.Event
+  alias Keyfleet.WalletSteps.Typed
 
   @page 20
   @changes_page 50
-  # What a proposal is shown with: its tally, and its cancellation or
-  # execution.
-  @summary [:yes_keys, :no_keys, :abstain_keys, :late_keys, :cancellation, :execution]
+  # What a proposal is shown with: its tally, its words, and its
+  # cancellation or execution.
+  @summary [:yes_keys, :no_keys, :abstain_keys, :late_keys, :words, :cancellation, :execution]
 
   resources do
     resource Keyfleet.Proposals.Proposal do
@@ -38,6 +43,10 @@ defmodule Keyfleet.Proposals do
       define :proposals_recorded_before,
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
+    end
+
+    resource Keyfleet.Proposals.Words do
+      define :write_words, action: :write, args: [:fleet_id, :text]
     end
 
     resource Keyfleet.Proposals.Vote do
@@ -71,6 +80,16 @@ defmodule Keyfleet.Proposals do
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
     end
+  end
+
+  @doc """
+  Saves the words typed for a proposal of `fleet_id`, as its steps read them
+  (`Keyfleet.WalletSteps.Typed.text/3`), so they match the fingerprint the
+  proposal carries. Words that can't be a proposal's are not saved.
+  """
+  def save_words(fleet_id, typed, actor) do
+    with {:ok, text} <- Typed.text(typed, :text, 4_000),
+         do: write_words(fleet_id, text, actor: actor)
   end
 
   @doc "Where the reader says a fleet's proposal records may have changed."

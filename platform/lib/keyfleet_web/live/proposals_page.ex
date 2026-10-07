@@ -154,9 +154,14 @@ defmodule KeyfleetWeb.ProposalsPage do
       no: proposal.no_keys,
       abstain: proposal.abstain_keys,
       counted: proposal.opening_count + proposal.late_keys,
-      closes_at: proposal.closes_at
+      closes_at: proposal.closes_at,
+      text: words(proposal.words)
     }
   end
+
+  # A proposal's words, shown only as saved under its own fingerprint.
+  defp words(nil), do: nil
+  defp words(%{text: text}), do: text
 
   defp details(proposal, fleet) do
     assets = Treasury.assets(fleet)

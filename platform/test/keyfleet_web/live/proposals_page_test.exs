@@ -634,6 +634,39 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#propose-action-line") == "From 0.1% to 2%."
     end
 
+    # The words are saved as the press starts, before the wallet answers, and
+    # shown only with a proposal whose fingerprint on the chain is theirs.
+    test "a proposal's words are saved at the press and shown with the proposal they match",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}]) ++ on_chain(1, :open) ++ on_chain(2, :open)
+      )
+
+      words = "Hire a designer\nfor the fleet's page."
+
+      {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      view
+      |> with_target("#propose-action")
+      |> render_hook("step_pressed", %{
+        "step" => "propose",
+        "form" => %{"kind" => "decision", "key" => "7", "hours" => "24", "text" => "  #{words} "}
+      })
+
+      ProposalHelpers.proposal!(@fleet, 1, content_hash: keccak(words))
+      ProposalHelpers.proposal!(@fleet, 2, content_hash: keccak("Other words"))
+
+      {:ok, matched, _html} = live(conn, "#{@list}/1")
+      assert text(matched, "#proposal-text") == "Hire a designer for the fleet's page."
+
+      {:ok, unmatched, _html} = live(conn, "#{@list}/2")
+      refute has_element?(unmatched, "#proposal-text")
+      assert has_element?(unmatched, "#proposal-content-tip", "weren’t saved")
+    end
+
     test "proposing with a key the wallet may not use stays in view, saying why", %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, [7], @other)
 

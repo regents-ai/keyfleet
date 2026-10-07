@@ -2598,7 +2598,7 @@ components:
     ProposalSummary:
       type: object
       additionalProperties: false
-      required: [number, status, author_key, proposer, proposal_hash, content_hash, opened_at, closes_at, execution_expiry, opening_count, late_votes, yes_votes, no_votes, abstain_votes, calls, executed, cancelled, transaction_hash, block_number, changed_seq]
+      required: [number, status, author_key, proposer, proposal_hash, content_hash, text, opened_at, closes_at, execution_expiry, opening_count, late_votes, yes_votes, no_votes, abstain_votes, calls, executed, cancelled, transaction_hash, block_number, changed_seq]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         status: {$ref: "#/components/schemas/ProposalStatus"}
@@ -2612,6 +2612,12 @@ components:
         content_hash:
           $ref: "#/components/schemas/ChainHash"
           description: The hash of its text, which is kept off the chain
+        text:
+          type: [string, "null"]
+          maxLength: 4000
+          description: >-
+            Its words, as its proposer saved them on KeyFleet, shown only when they hash to
+            content_hash; null when nobody saved them
         opened_at: {type: string, format: date-time}
         closes_at: {type: string, format: date-time, description: When voting closes}
         execution_expiry: {type: string, format: date-time, description: When it can no longer be carried out}
@@ -2619,12 +2625,12 @@ components:
           type: integer
           minimum: 0
           maximum: 4294967295
-          description: The keys active when it opened
+          description: The keys present when it opened
         late_votes:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys that voted without having been active when it opened
+          description: The keys that voted without having been present when it opened
         yes_votes:
           type: integer
           minimum: 0
@@ -2653,7 +2659,7 @@ components:
     ProposalDetail:
       type: object
       additionalProperties: false
-      required: [number, status, author_key, proposer, proposal_hash, content_hash, opened_at, closes_at, execution_expiry, opening_count, late_votes, yes_votes, no_votes, abstain_votes, calls, executed, cancelled, transaction_hash, block_number]
+      required: [number, status, author_key, proposer, proposal_hash, content_hash, text, opened_at, closes_at, execution_expiry, opening_count, late_votes, yes_votes, no_votes, abstain_votes, calls, executed, cancelled, transaction_hash, block_number]
       properties:
         number: {type: integer, minimum: 1, maximum: 9223372036854775807}
         status: {$ref: "#/components/schemas/ProposalStatus"}
@@ -2667,6 +2673,12 @@ components:
         content_hash:
           $ref: "#/components/schemas/ChainHash"
           description: The hash of its text, which is kept off the chain
+        text:
+          type: [string, "null"]
+          maxLength: 4000
+          description: >-
+            Its words, as its proposer saved them on KeyFleet, shown only when they hash to
+            content_hash; null when nobody saved them
         opened_at: {type: string, format: date-time}
         closes_at: {type: string, format: date-time, description: When voting closes}
         execution_expiry: {type: string, format: date-time, description: When it can no longer be carried out}
@@ -2674,12 +2686,12 @@ components:
           type: integer
           minimum: 0
           maximum: 4294967295
-          description: The keys active when it opened
+          description: The keys present when it opened
         late_votes:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: The keys that voted without having been active when it opened
+          description: The keys that voted without having been present when it opened
         yes_votes:
           type: integer
           minimum: 0
