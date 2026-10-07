@@ -14,8 +14,6 @@ defmodule Keyfleet.AnvilLab do
   import ExUnit.Assertions
   import ExUnit.Callbacks, only: [on_exit: 1]
 
-  @contracts Path.expand("../../../contracts", __DIR__)
-  @script "script/AnvilLab.s.sol:AnvilLab"
   @base_fee "10000000"
   # Anvil's own chain id.
   @chain_id 31_337
@@ -108,26 +106,5 @@ defmodule Keyfleet.AnvilLab do
   Builds the lab on the anvil at `url`, sent from `sender`, and returns the
   addresses `AnvilLab` returned, by name, in lower case.
   """
-  def lab!(url, sender) do
-    {output, status} =
-      System.cmd(
-        "forge",
-        ["script", @script, "--rpc-url", url, "--broadcast", "--slow", "--unlocked"] ++
-          ["--sender", sender, "--json"],
-        cd: @contracts,
-        stderr_to_stdout: true
-      )
-
-    assert status == 0, "AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}"
-
-    output
-    |> String.split("\n")
-    |> Enum.find_value(fn line ->
-      case Jason.decode(line) do
-        {:ok, %{"returns" => returns}} -> returns
-        _other -> nil
-      end
-    end)
-    |> Map.new(fn {name, %{"value" => address}} -> {name, String.downcase(address)} end)
-  end
+  def lab!(url, sender), do: Mix.Tasks.Keyfleet.AnvilLab.deploy!(url, sender)
 end

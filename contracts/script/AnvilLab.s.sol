@@ -34,7 +34,8 @@ contract AnvilLabUsdc is ERC20 {
 /// neither key's reveal was ever accepted, and then the coordinator takes requests again. The
 /// fleet owes the protocol share of both sales, the buyer holds and has approved the USDC for a
 /// third key, and the treasury holds 1 ETH, 500 REGENT and 500 USDC, enough of each for the daily
-/// split. With `ANVIL_LAB_HOLDER` set, that wallet is given both keys, 1 ETH and 10,000 USDC.
+/// split. The lab's start (`platform/lib/mix/tasks/keyfleet.anvil_lab.ex`) gives a person's wallet
+/// both keys.
 contract AnvilLab is Script {
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
@@ -65,8 +66,6 @@ contract AnvilLab is Script {
         _deploy();
         _sellTwoKeys();
         _fundTreasury();
-        address holder = vm.envOr("ANVIL_LAB_HOLDER", address(0));
-        if (holder != address(0)) _give(holder);
         vm.stopBroadcast();
 
         return (
@@ -122,14 +121,5 @@ contract AnvilLab is Script {
         regent.mint(treasury, 500 ether);
         usdc.mint(500 * 1e6);
         usdc.transfer(treasury, 500 * 1e6);
-    }
-
-    function _give(address holder) private {
-        address sender = classic.ownerOf(1);
-        classic.transferFrom(sender, holder, 1);
-        classic.transferFrom(sender, holder, 2);
-        payable(holder).transfer(1 ether);
-        usdc.mint(10_000 * 1e6);
-        usdc.transfer(holder, 10_000 * 1e6);
     }
 }
