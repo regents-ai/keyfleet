@@ -89,9 +89,18 @@ What that means, as chosen: **no repeats**. The site deals each decked key a car
 - **No dealing on chain.** The reveal callback is unchanged from today: it writes the seed once, emits, never reverts, and keeps today's 100,000 callback gas limit. There is no card map and no `cardOf`.
 - The reveal event carries everything the deal needs: `KeyRevealed(tokenId, fleet, keyNumber, requestId, seed)`. The fleet and key number are in the event so it reads the same under either token id scheme (question 3). The deal order comes from the log itself: block number, then log index. A key whose first randomness request failed and was retried takes its place when its reveal actually lands.
 
-**Deck files (from the NFTs lane):** one file per fleet, holding 1,000 card seeds bound to trait table `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, cards indexed `0..999`, named by its keccak256, which is the `deckHash` the Safe passes to `createFleet`; `deckSize` is 1,000. Each file must be published before its fleet is created.
+**Deck files (from the NFTs lane):** one file per fleet, JSON `{"fleet", "table", "cards": [1,000 0x-prefixed 32-byte card seeds]}`, cards indexed `0..999`, all bound to trait table `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`. `deckHash` is keccak256 of the file's exact bytes; `deckSize` is 1,000. The file must exist, and its fingerprint be fixed, before its fleet is created. The four `createFleet` inputs (keyfleet branch `kf/fleet-decks` at `44295e5`, local and unpushed):
 
-**Anyone can check every card.** From the chain logs (`KeyRevealed` in block and log-index order, plus the fleet's `deckHash` and `deckSize`) and the published deck file whose keccak256 matches `deckHash`, anyone can recompute every key's card with the published dealing rule. The site holds no secret and makes no choice the chain does not fix. The dealing rule itself is the NFTs lane's to publish next to the deck files; the contract fixes its inputs. Since the order is final only once the reveals' blocks are final, the site deals from confirmed reveals.
+| Fleet | `deckHash` | `deckSize` |
+|---|---|---|
+| CLASSIC #1 | `0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7` | 1000 |
+| SYNDICATE #1 | `0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706` | 1000 |
+| CASCADE #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` | 1000 |
+| ACCELERANT #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` | 1000 |
+
+Whether the deck files stay private until later is a question the NFTs lane has with Sean. The contract only needs the fingerprint; the files can be published at any time and checked against it.
+
+**Anyone can check every card.** Once a deck file is published: from the chain logs (`KeyRevealed` in block and log-index order, plus the fleet's `deckHash` and `deckSize`) and the published deck file whose keccak256 matches `deckHash`, anyone can recompute every key's card with the published dealing rule. The site holds no secret and makes no choice the chain does not fix. The dealing rule itself is the NFTs lane's to publish next to the deck files; the contract fixes its inputs. Since the order is final only once the reveals' blocks are final, the site deals from confirmed reveals.
 
 `tokenURI` does not change: the site serves the deck card's picture for decked keys and the drawn card for the rest. The metadata adds a `Card` attribute.
 
