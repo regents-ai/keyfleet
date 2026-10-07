@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
 
   def header_links(assigns) do
     ~H"""
+    <.apps_menu id={"#{@id}-apps"} />
     <a
       id={@id}
       href="https://x.com/regents_sh"
@@ -31,6 +32,44 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     </a>
     """
   end
+
+  attr :id, :string, required: true
+
+  def apps_menu(assigns) do
+    assigns =
+      assign(assigns, :apps, [
+        {"Patchbay", "https://patchbay.help"},
+        {"Autolaunch", "https://autolaunch.sh"},
+        {"Keyfleet", "https://keyfleet.ai"},
+        {"Techtree", "https://techtree.sh"},
+        {"Protocol", "https://regents.sh/stake"},
+        {"Account", "https://regents.sh/account"}
+      ])
+
+    ~H"""
+    <button
+      id={"#{@id}-button"}
+      class="rg-button rg-button--quiet"
+      type="button"
+      popovertarget={@id}
+      aria-label="Regents apps"
+    >
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <rect :for={{x, y} <- app_dots()} x={x} y={y} width="4" height="4" />
+      </svg>
+    </button>
+    <nav id={@id} class="regents-apps" popover aria-labelledby={"#{@id}-title"}>
+      <h2 id={"#{@id}-title"}>Regents Labs apps</h2>
+      <ul>
+        <li :for={{name, url} <- @apps}>
+          <a href={url} target="_blank" rel="noopener noreferrer">{name}</a>
+        </li>
+      </ul>
+    </nav>
+    """
+  end
+
+  defp app_dots, do: for(x <- [2, 10, 18], y <- [2, 10, 18], do: {x, y})
 
   attr :kind, :atom, required: true
 

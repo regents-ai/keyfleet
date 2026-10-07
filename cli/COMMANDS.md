@@ -2,7 +2,9 @@
 
 Every `regents keyfleet` command, written before it is built. A command that is not
 described here does not exist yet. `commands.json` is the same list in the form the
-command line reads; [README.md](README.md) says how a change travels.
+command line reads; [README.md](README.md) says how a change travels. `make check-cli`
+checks that every command in `commands.json` has its section here. Run `regents keyfleet
+--help` for the released command line.
 
 Every command also takes `--json`, `--base-url URL` (also `KEYFLEET_BASE_URL`) and
 `--timeout-ms N`. A refusal prints the site's `code`, `message` and `hint` and exits
@@ -49,7 +51,7 @@ way. Refusals every one of them shares:
 - **Refusals:** 503 `not_open_yet` or `directory_unavailable`.
 - **History:** added before this file.
 
-## regents keyfleet fleets get \<fleet\>
+## regents keyfleet fleets get <fleet>
 
 - **What it does:** reads one fleet, with its rooms, agents and work.
 - **Who may run it:** anyone (public).
@@ -62,7 +64,7 @@ way. Refusals every one of them shares:
 - **Refusals:** 404 `fleet_unknown`; 503 `not_open_yet` or `directory_unavailable`.
 - **History:** added before this file.
 
-## regents keyfleet presence mark \<fleet\>
+## regents keyfleet presence mark <fleet>
 
 - **What it does:** marks present, for 48 hours, every key the wallet holds or holds an
   active shard of while the key's agent voting is on. A key present when a proposal
@@ -90,7 +92,7 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   the chain reader recorded them.
 - **History:** 2026-10-07 added.
 
-## regents keyfleet proposals create \<fleet\>
+## regents keyfleet proposals create <fleet>
 
 - **What it does:** makes a proposal with one of the wallet's keys. Its words are kept
   on Keyfleet and shown with the proposal once it is on the chain; the chain holds only
@@ -131,7 +133,7 @@ answer the step, blocked "Not your key" unless the wallet may vote the key
 - **Server needs:** the `proposal_words` table; the chain read at the latest block.
 - **History:** 2026-10-07 added.
 
-## regents keyfleet proposals vote \<fleet\> \<number\> \<choice\>
+## regents keyfleet proposals vote <fleet> <number> <choice>
 
 - **What it does:** votes `yes`, `no` or `abstain` on a proposal with every key the
   wallet holds, or holds an active shard of while the key's agent voting is on.
@@ -156,7 +158,7 @@ answer the chosen step; blocked "Voting closed" or "No keys to use" when so
   latest block.
 - **History:** 2026-10-07 added.
 
-## regents keyfleet proposals cancel \<fleet\> \<number\>
+## regents keyfleet proposals cancel <fleet> <number>
 
 - **What it does:** cancels a proposal while it is open or approved. Whoever may vote
   the key it was made with may cancel it.
@@ -176,7 +178,7 @@ status when it is neither open nor approved
 
 - **History:** 2026-10-07 added.
 
-## regents keyfleet proposals carry-out \<fleet\> \<number\>
+## regents keyfleet proposals carry-out <fleet> <number>
 
 - **What it does:** carries out an approved proposal with the calls it was made with.
   Anyone may, for 48 hours after its vote closes.
@@ -196,7 +198,7 @@ reader recorded; blocked by the status unless it is approved
 
 - **History:** 2026-10-07 added.
 
-## regents keyfleet split run \<fleet\>
+## regents keyfleet split run <fleet>
 
 - **What it does:** shows the fleet's daily split for each asset the treasury splits
   (the balance, the least it splits from, and what each key would get now), and gives
@@ -220,7 +222,7 @@ answer the step; blocked "No keys sold yet" or "Opens <time>" when so
 
 - **History:** 2026-10-07 added.
 
-## regents keyfleet keys claim \<fleet\> \<key\>
+## regents keyfleet keys claim <fleet> <key>
 
 - **What it does:** claims what a key has earned, one transaction for each asset it is
   paid in. The money goes to the key's holder, whoever sends them.
