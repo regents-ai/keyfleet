@@ -9,7 +9,7 @@
 #   direnv exec /Users/sean/Documents/regent/repos/keyfleet/platform scripts/anvil-lab.sh 0xYourWallet [0xAnother ...]
 #
 # Run it from this platform directory. Every start is a fresh fork of Base and
-# a fresh lab database (keyfleet_lab_dev). Ctrl-C stops the site and the chain
+# a fresh lab database (keyfleet_lab_8546_dev). Ctrl-C stops the site and the chain
 # together.
 
 set -euo pipefail
@@ -27,8 +27,8 @@ export KEYFLEET_LAB="http://127.0.0.1:${chain_port}"
 export PORT=4097
 export KEYFLEET_APP_SURFACES=on
 # Agents sign in through the siwa-server running on this computer
-# (repos/siwa-server, on port 4191).
-export KEYFLEET_SIWA_URL=http://localhost:4191
+# (repos/siwa-server, on port 4191), for the audience "keyfleet".
+export KEYFLEET_SIWA_URL=http://127.0.0.1:4191
 
 if cast chain-id --rpc-url "$KEYFLEET_LAB" >/dev/null 2>&1; then
   echo "Something already answers on port ${chain_port}. Stop it, then start the lab again." >&2

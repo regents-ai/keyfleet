@@ -142,9 +142,9 @@ defmodule Keyfleet.DatabaseConfigTest do
            ]
   end
 
-  test "the anvil lab keeps its own local database, and never a remote one" do
+  test "each anvil lab keeps its own local database, and never a remote one" do
     lab = %{"USER" => "local-user", "KEYFLEET_LAB" => "http://127.0.0.1:8546"}
-    assert DatabaseConfig.runtime_config!(:dev, env(lab))[:database] == "keyfleet_lab_dev"
+    assert DatabaseConfig.runtime_config!(:dev, env(lab))[:database] == "keyfleet_lab_8546_dev"
 
     remote =
       Map.merge(lab, %{

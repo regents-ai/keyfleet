@@ -28,24 +28,24 @@ defmodule Keyfleet.DatabaseConfig do
     getenv |> database_url!("DATABASE_POOLED_URL", role) |> serving()
   end
 
-  # The anvil lab (docs/anvil-lab.md) keeps its own local database, and never
-  # a remote one.
+  # Each anvil lab (docs/anvil-lab.md) keeps its own local database, named by
+  # its chain's port, and never a remote one.
   def runtime_config!(:dev, getenv) do
-    case {remote_target(getenv), getenv.("KEYFLEET_LAB") not in [nil, ""]} do
-      {:local, lab?} ->
+    case {remote_target(getenv), getenv.("KEYFLEET_LAB")} do
+      {:local, lab} ->
         [
           username: getenv.("USER"),
           password: nil,
           hostname: "127.0.0.1",
           port: 5432,
-          database: if(lab?, do: "keyfleet_lab_dev", else: "keyfleet_dev"),
+          database: local_database(lab),
           pool_size: 2
         ]
 
-      {:remote, false} ->
+      {:remote, lab} when lab in [nil, ""] ->
         database_url!(getenv, "DATABASE_POOLED_URL", :remote)
 
-      {:remote, true} ->
+      {:remote, _lab} ->
         raise @lab_remote_error
     end
   end
@@ -205,6 +205,9 @@ defmodule Keyfleet.DatabaseConfig do
   rescue
     _error -> value
   end
+
+  defp local_database(lab) when lab in [nil, ""], do: "keyfleet_dev"
+  defp local_database(lab), do: "keyfleet_lab_#{URI.parse(lab).port}_dev"
 
   defp present?(value), do: is_binary(value) and String.trim(value) != ""
 end
