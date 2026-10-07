@@ -1411,8 +1411,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     }
   end
 
-  defp address_word("0x" <> hex), do: "0x" <> String.pad_leading(hex, 64, "0")
-
   defp chain_head(number),
     do: %{number: number, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()}
 
