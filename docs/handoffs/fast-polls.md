@@ -86,7 +86,14 @@ pushed, not deployed.
 
 - Push and release need Sean's go through the Keyfleet chief.
 - The earlier fast-poll tables are live on v30 behind a closed site; the drop
-  migration removes them at release, which needs Sean's go.
+  migration removes them at release, which needs Sean's go. Before release, a
+  read-only count of `poll_sessions`, `poll_seats`, `poll_rounds`, `poll_votes`
+  and `poll_events` in production should be 0, or Sean accepts losing what is
+  in them (Sentinel, 8 Oct). None is on the protected-table list.
+- Sentinel CLEAR on f1da0e8 (23:05Z). Its Low note about two clocks does not
+  apply: Ash replaces `now()` in the `Vote.in_poll` filter with the app's
+  `DateTime.utc_now()` before the query is sent (`AshSql.Expr.as_of_or_now/1`),
+  the same clock `Polls.open?/2` uses.
 - The breaking-changes date in the guide should be set to the release date.
 - The regents-cli lane builds the five `polls` commands.
 - Arena connector: not started; needs a separate go.
