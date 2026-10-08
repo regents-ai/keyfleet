@@ -30,7 +30,6 @@ defmodule Keyfleet.Dms.Message do
   @max_body 4_000
   @max_parts 8
   @max_page 200
-  @max_keys 100
 
   postgres do
     table "dm_messages"
@@ -114,8 +113,14 @@ defmodule Keyfleet.Dms.Message do
       return_skipped_upsert? true
 
       validate Keyfleet.Graph.Validations.KnownFleet
-      validate {Keyfleet.Rooms.Validations.IssuedKey, argument: :to_token_id}
-      validate {Keyfleet.Dms.Validations.TwoKeys, from: :from_token_id, to: :to_token_id}
+      # The box on the page is drawn before it holds anything; these wait for
+      # both Keys, and an empty one is refused as required.
+      validate {Keyfleet.Rooms.Validations.IssuedKey, argument: :to_token_id},
+        where: present([:fleet_id, :to_token_id])
+
+      validate {Keyfleet.Dms.Validations.TwoKeys, from: :from_token_id, to: :to_token_id},
+        where: present([:from_token_id, :to_token_id])
+
       change Keyfleet.Dms.Changes.LimitSends
       change Keyfleet.Dms.Changes.SendMessage
     end
@@ -168,11 +173,7 @@ defmodule Keyfleet.Dms.Message do
 
       argument :token_ids, {:array, :integer},
         allow_nil?: false,
-        constraints: [
-          min_length: 1,
-          max_length: @max_keys,
-          items: [min: 1, max: @bigint]
-        ]
+        constraints: [items: [min: 1, max: @bigint]]
 
       argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, default: 50, constraints: [min: 1, max: @max_page]

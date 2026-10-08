@@ -1,0 +1,613 @@
+defmodule KeyfleetWeb.DmsLive do
+  @moduledoc """
+  One Key's direct messages: its inbox, and its conversation with one other
+  Key of the same fleet. Only whoever holds the Key now sees them; the page is
+  read as the signed-in person, and `Keyfleet.Dms` decides who that is.
+
+  Things that change as the person uses the page keep their space: the line
+  that says why something didn't go through sits under the box, with room
+  kept for it, and the conversation's settings keep their place whether or
+  not the conversation has started.
+  """
+
+  use KeyfleetWeb, :html
+
+  import Phoenix.LiveView, only: [stream: 4, push_patch: 2]
+
+  alias Keyfleet.Chain
+  alias Keyfleet.Dms
+  alias Keyfleet.Dms.Errors.SendLimitError
+  alias Keyfleet.Dms.Message
+  alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias KeyfleetWeb.KeysLive
+  alias KeyfleetWeb.PageRead
+  alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.ShellLive
+  alias Phoenix.Socket.Broadcast
+
+  @thread_page 100
+  # A page left open keeps the latest two hundred messages.
+  @thread_kept 200
+  @failed "That didn’t go through. Try again."
+  @auto_delete [
+    {"Never", ""},
+    {"1 day", "1"},
+    {"7 days", "7"},
+    {"30 days", "30"},
+    {"90 days", "90"}
+  ]
+
+  attr :dms, :any, required: true, doc: "the inbox as read, or `:unreadable`"
+
+  def inbox(assigns) do
+    ~H"""
+    <article id="dms-page" class="rooms-page dms-page">
+      <.heading dms={@dms} title="Messages" />
+      <.closed :if={not open?(@dms)} dms={@dms} />
+
+      <section
+        :if={open?(@dms)}
+        id="dms-inbox"
+        class="rooms-panel"
+        aria-labelledby="dms-inbox-title"
+      >
+        <h2 id="dms-inbox-title">Inbox</h2>
+        <p :if={@dms.conversations == []} class="rooms-detail">No messages yet</p>
+        <.conversation_list dms={@dms} conversations={@dms.conversations} />
+      </section>
+
+      <section
+        :if={open?(@dms) and @dms.blocked != []}
+        id="dms-blocked"
+        class="rooms-panel"
+        aria-labelledby="dms-blocked-title"
+      >
+        <h2 id="dms-blocked-title">
+          Blocked
+          <Regent.Primitives.tip id="dms-blocked-tip" label="About blocked Keys">
+            Messages from Keys this Key blocked wait here. Unblock a Key from its conversation.
+          </Regent.Primitives.tip>
+        </h2>
+        <.conversation_list dms={@dms} conversations={@dms.blocked} />
+      </section>
+    </article>
+    """
+  end
+
+  attr :dms, :any, required: true, doc: "the conversation as read, or `:unreadable`"
+  attr :messages, :any, required: true, doc: "its latest messages, oldest first"
+  attr :form, Phoenix.HTML.Form, default: nil
+  attr :notice, :string, default: nil
+  attr :confirm_delete, :boolean, default: false
+
+  def conversation(assigns) do
+    ~H"""
+    <article id="dms-page" class="rooms-page dms-page">
+      <.heading
+        dms={@dms}
+        title={if open?(@dms), do: "Key #{Rules.grouped(@dms.other_token_id)}", else: "Messages"}
+      />
+      <.closed :if={not open?(@dms)} dms={@dms} />
+
+      <div :if={open?(@dms)} class="rooms-grid">
+        <section class="rooms-panel dms-settings" aria-label="Conversation settings">
+          <.link id="dms-back" patch={inbox_path(@dms)}>All messages</.link>
+          <.link id="dms-other-key" patch={"/app/keys/#{@dms.fleet_id}/#{@dms.other_token_id}"}>
+            Key {Rules.grouped(@dms.other_token_id)}’s page
+          </.link>
+
+          <form id="dms-auto-delete" class="dms-auto-delete" phx-change="dm_auto_delete">
+            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete after">
+              <select
+                id={field.id}
+                name="days"
+                disabled={is_nil(@dms.conversation)}
+                aria-describedby={field.described_by != "" && field.described_by}
+              >
+                <option
+                  :for={{label, value} <- auto_delete_options()}
+                  value={value}
+                  selected={value == auto_delete_value(@dms.conversation)}
+                >
+                  {label}
+                </option>
+              </select>
+            </Regent.Primitives.field>
+          </form>
+
+          <Regent.Primitives.button
+            :if={not @dms.blocked?}
+            id="dms-block"
+            type="button"
+            variant="secondary"
+            phx-click="dm_block"
+          >
+            Block
+          </Regent.Primitives.button>
+          <Regent.Primitives.button
+            :if={@dms.blocked?}
+            id="dms-unblock"
+            type="button"
+            variant="secondary"
+            phx-click="dm_unblock"
+          >
+            Unblock
+          </Regent.Primitives.button>
+
+          <div class="dms-delete">
+            <Regent.Primitives.button
+              :if={not @confirm_delete}
+              id="dms-ask-delete"
+              type="button"
+              variant="quiet"
+              disabled={is_nil(@dms.conversation)}
+              phx-click="dm_ask_delete"
+            >
+              Delete conversation
+            </Regent.Primitives.button>
+            <p :if={@confirm_delete} class="rooms-detail">Delete for both Keys?</p>
+            <div :if={@confirm_delete} class="dms-delete-choices">
+              <Regent.Primitives.button id="dms-delete" type="button" phx-click="dm_delete">
+                Delete
+              </Regent.Primitives.button>
+              <Regent.Primitives.button
+                id="dms-keep"
+                type="button"
+                variant="quiet"
+                phx-click="dm_keep"
+              >
+                Keep
+              </Regent.Primitives.button>
+            </div>
+          </div>
+        </section>
+
+        <section class="rooms-panel rooms-thread" aria-labelledby="dms-thread-title">
+          <h2 id="dms-thread-title">
+            Key {Rules.grouped(@dms.token_id)} and Key {Rules.grouped(@dms.other_token_id)}
+          </h2>
+          <p :if={@dms.blocked?} id="dms-blocked-note" class="rooms-detail">Blocked</p>
+          <p :if={@dms.last_seq == 0} class="rooms-detail">No messages yet</p>
+
+          <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
+            <li :for={{dom_id, message} <- @messages} id={dom_id}>
+              <p class="rooms-author">
+                <.link patch={"/app/keys/#{@dms.fleet_id}/#{message.from_token_id}"}>
+                  Key {Rules.grouped(message.from_token_id)}
+                </.link>
+                <small class="rooms-writer">{writer(message)}</small>
+              </p>
+              <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
+              <.parts parts={message.parts} />
+              <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+            </li>
+          </ol>
+
+          <.form
+            for={@form}
+            id="dms-composer"
+            class="rooms-composer"
+            phx-change="validate_dm"
+            phx-submit="send_dm"
+          >
+            <Regent.Primitives.field
+              :let={field}
+              id="dms-composer-body"
+              class="rooms-field"
+              label="Message"
+            >
+              <textarea
+                id={field.id}
+                name={@form[:body].name}
+                rows="3"
+                maxlength="4000"
+                required
+                phx-debounce="300"
+                aria-describedby={field.described_by != "" && field.described_by}
+              >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["body"])}</textarea>
+            </Regent.Primitives.field>
+            <Regent.Primitives.button type="submit">Send</Regent.Primitives.button>
+          </.form>
+
+          <p id="dms-notice" class="dms-notice" role="status" aria-live="polite">{@notice}</p>
+        </section>
+      </div>
+    </article>
+    """
+  end
+
+  attr :dms, :any, required: true
+  attr :title, :string, required: true
+
+  defp heading(assigns) do
+    ~H"""
+    <header class="rooms-heading">
+      <p class="rooms-kicker">{kicker(@dms)}</p>
+      <h1 tabindex="-1">{@title}</h1>
+    </header>
+    """
+  end
+
+  attr :dms, :any, required: true
+
+  # What someone sees in place of a Key's messages they can't open.
+  defp closed(assigns) do
+    ~H"""
+    <section id="dms-closed" class="rooms-panel">
+      <h2>{closed_reason(@dms)}</h2>
+      <p :if={@dms == :unreadable}>Refresh the page to try again.</p>
+    </section>
+    """
+  end
+
+  attr :dms, :map, required: true
+  attr :conversations, :list, required: true
+
+  defp conversation_list(assigns) do
+    ~H"""
+    <ul :if={@conversations != []} class="dms-list">
+      <li :for={conversation <- @conversations} id={"dms-conversation-#{conversation.id}"}>
+        <.link patch={conversation_path(@dms, Dms.other_key(conversation, @dms.token_id))}>
+          Key {Rules.grouped(Dms.other_key(conversation, @dms.token_id))}
+        </.link>
+        <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
+        <small :if={conversation.last_at} class="rooms-detail">
+          {RoomsLive.stamp(conversation.last_at)}
+        </small>
+      </li>
+    </ul>
+    """
+  end
+
+  attr :parts, :list, required: true
+
+  # A message's extra parts: words, a link (a file is always a link), or data.
+  defp parts(assigns) do
+    ~H"""
+    <ul :if={@parts != []} class="dms-parts">
+      <li :for={part <- @parts}>
+        <span :if={part["kind"] == "text"}>{part["text"]}</span>
+        <a
+          :if={part["kind"] == "link"}
+          href={part["url"]}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {part["name"] || part["url"]}
+        </a>
+        <pre :if={part["kind"] == "data"}><code>{Jason.encode!(part["data"], pretty: true)}</code></pre>
+      </li>
+    </ul>
+    """
+  end
+
+  defp open?(%{holder?: true}), do: true
+  defp open?(_dms), do: false
+
+  defp kicker(%{fleet_name: name, token_id: token_id}) when is_binary(name),
+    do: "#{name} · Key #{Rules.grouped(token_id)}"
+
+  defp kicker(_dms), do: "Keyfleet"
+
+  defp closed_reason(:unreadable), do: "This page couldn’t be loaded."
+  defp closed_reason(%{fleet_name: nil}), do: "This fleet doesn’t exist."
+  defp closed_reason(%{refreshing?: true}), do: KeysLive.refreshing()
+  defp closed_reason(_dms), do: "Only this Key’s holder can read its messages."
+
+  defp inbox_path(%{fleet_id: fleet_id, token_id: token_id}),
+    do: "/app/keys/#{fleet_id}/#{token_id}/dms"
+
+  defp conversation_path(dms, other_token_id), do: "#{inbox_path(dms)}/#{other_token_id}"
+
+  defp preview(%{last_body: nil}, _token_id), do: "No messages"
+  defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
+  defp preview(%{last_body: body}, _token_id), do: body
+
+  # Who wrote as the Key: the agent that wrote it, or the holder's wallet.
+  defp writer(%{via_agent: %{name: name}}), do: name
+  defp writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
+
+  defp auto_delete_options, do: @auto_delete
+
+  defp auto_delete_value(%{auto_delete_days: days}) when is_integer(days),
+    do: Integer.to_string(days)
+
+  defp auto_delete_value(_conversation), do: ""
+
+  @doc """
+  What the page shows for the address: one Key's inbox (`:dms`), or its
+  conversation with another Key (`:dm`). Someone who doesn't hold the Key now
+  is told so, and nothing of its messages is read.
+  """
+  def read_dms(socket, route_id, fleet_id, token_id, other_token_id) do
+    case PageRead.run("messages", fn ->
+           show(socket, route_id, fleet_id, token_id, other_token_id)
+         end) do
+      {:ok, socket} ->
+        socket
+
+      {:error, _failure} ->
+        socket
+        |> assign(dms: :unreadable, dm_form: nil, dm_notice: nil)
+        |> stream(:dm_thread, [], reset: true)
+    end
+  end
+
+  defp show(socket, route_id, fleet_id, token_id, other_token_id) do
+    shown = %{
+      fleet_id: fleet_id,
+      token_id: token_id,
+      other_token_id: other_token_id,
+      fleet_name: fleet_name(fleet_id),
+      refreshing?: not Chain.fresh?(fleet_id),
+      holder?: false
+    }
+
+    socket
+    |> assign(dm_notice: nil, dm_confirm_delete: false)
+    |> show_view(route_id, shown, ShellLive.human_actor(socket))
+  end
+
+  defp show_view(socket, :dms, shown, actor) do
+    case read_inbox(shown, actor) do
+      {:ok, inbox} -> assign(socket, dms: Map.merge(shown, inbox), dm_form: nil)
+      :closed -> assign(socket, dms: shown, dm_form: nil)
+    end
+  end
+
+  defp show_view(socket, :dm, %{fleet_name: nil} = shown, _actor), do: close(socket, shown)
+
+  defp show_view(socket, :dm, shown, actor) do
+    %{fleet_id: fleet_id, token_id: token_id, other_token_id: other} = shown
+
+    case Dms.get_conversation(fleet_id, token_id, other, actor: actor) do
+      {:ok, conversation} -> open_conversation(socket, shown, conversation, actor)
+      {:error, %Ash.Error.Forbidden{}} -> close(socket, shown)
+      {:error, failure} -> raise failure
+    end
+  end
+
+  defp close(socket, shown) do
+    socket
+    |> assign(dms: shown, dm_form: nil)
+    |> stream(:dm_thread, [], reset: true)
+  end
+
+  defp open_conversation(socket, shown, conversation, actor) do
+    %{fleet_id: fleet_id, token_id: token_id, other_token_id: other} = shown
+    block = Dms.get_block!(fleet_id, token_id, other, actor: actor)
+
+    messages =
+      fleet_id
+      |> Dms.latest_in_conversation!(token_id, other, %{limit: @thread_page}, actor: actor)
+      |> Enum.reverse()
+
+    socket
+    |> assign(
+      :dms,
+      Map.merge(shown, %{
+        holder?: true,
+        conversation: conversation,
+        blocked?: block != nil,
+        last_seq: last_seq(messages, 0)
+      })
+    )
+    |> new_form()
+    |> stream(:dm_thread, messages, reset: true, limit: -@thread_kept)
+  end
+
+  defp read_inbox(%{fleet_name: nil}, _actor), do: :closed
+
+  defp read_inbox(%{fleet_id: fleet_id, token_id: token_id}, actor) do
+    with {:ok, conversations} <- Dms.inbox(fleet_id, token_id, actor: actor),
+         {:ok, blocked} <- Dms.inbox(fleet_id, token_id, %{blocked: true}, actor: actor) do
+      {:ok, %{holder?: true, conversations: conversations, blocked: blocked}}
+    else
+      {:error, %Ash.Error.Forbidden{}} -> :closed
+      {:error, failure} -> raise failure
+    end
+  end
+
+  defp fleet_name(fleet_id) do
+    case Enum.find(Fleets.catalog(), &(&1.id == fleet_id)) do
+      %{name: name} -> name
+      nil -> nil
+    end
+  end
+
+  # A message is sent as the Key on show to the other Key, with a fresh key
+  # that settles a repeat here rather than in the browser. Only the words come
+  # from the box; the key stays with it until a message goes through, so
+  # sending again after a refusal can never send twice.
+  defp new_form(%{assigns: %{dms: dms}} = socket) do
+    server_side = %{
+      "fleet_id" => dms.fleet_id,
+      "from_token_id" => dms.token_id,
+      "to_token_id" => dms.other_token_id,
+      "idempotency_key" => Ash.UUID.generate()
+    }
+
+    form =
+      AshPhoenix.Form.for_create(Message, :send,
+        actor: ShellLive.human_actor(socket),
+        as: "dm",
+        transform_params: fn params, _action ->
+          params |> Map.take(["body"]) |> Map.merge(server_side)
+        end
+      )
+
+    assign(socket, :dm_form, to_form(form))
+  end
+
+  @doc "What the conversation page does with a message, its settings, a block and a delete."
+  def handle_event("validate_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket),
+    do: {:noreply, update(socket, :dm_form, &AshPhoenix.Form.validate(&1, params))}
+
+  def handle_event("send_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket) do
+    case AshPhoenix.Form.submit(socket.assigns.dm_form, params: params) do
+      {:ok, _message} ->
+        {:noreply, socket |> assign(:dm_notice, nil) |> new_form() |> show_new_messages()}
+
+      {:error, form} ->
+        {:noreply,
+         assign(socket, dm_form: form, dm_notice: send_refusal(form, socket.assigns.dms))}
+    end
+  end
+
+  def handle_event(
+        "dm_auto_delete",
+        %{"days" => days},
+        %{assigns: %{dms: %{conversation: %{}}}} = socket
+      ) do
+    %{dms: dms} = socket.assigns
+    days = if days == "", do: nil, else: days
+
+    case Dms.set_auto_delete(dms.conversation, days, actor: ShellLive.human_actor(socket)) do
+      {:ok, conversation} ->
+        {:noreply, assign(socket, dms: %{dms | conversation: conversation}, dm_notice: nil)}
+
+      {:error, _refused} ->
+        {:noreply, assign(socket, :dm_notice, @failed)}
+    end
+  end
+
+  def handle_event(event, _params, %{assigns: %{dms: %{blocked?: _} = dms}} = socket)
+      when event in ["dm_block", "dm_unblock"] do
+    case change_block(event, dms, ShellLive.human_actor(socket)) do
+      {:ok, _block} ->
+        {:noreply, assign(socket, dms: %{dms | blocked?: event == "dm_block"}, dm_notice: nil)}
+
+      {:error, _refused} ->
+        {:noreply, assign(socket, :dm_notice, @failed)}
+    end
+  end
+
+  def handle_event("dm_ask_delete", _params, %{assigns: %{dms: %{conversation: %{}}}} = socket),
+    do: {:noreply, assign(socket, :dm_confirm_delete, true)}
+
+  def handle_event("dm_keep", _params, socket),
+    do: {:noreply, assign(socket, :dm_confirm_delete, false)}
+
+  def handle_event("dm_delete", _params, %{assigns: %{dms: %{conversation: %{}} = dms}} = socket) do
+    case Dms.delete_conversation(dms.conversation, actor: ShellLive.human_actor(socket)) do
+      :ok ->
+        {:noreply, push_patch(socket, to: inbox_path(dms))}
+
+      {:error, _refused} ->
+        {:noreply, assign(socket, dm_notice: @failed, dm_confirm_delete: false)}
+    end
+  end
+
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp change_block("dm_block", dms, actor),
+    do: Dms.block_key(dms.fleet_id, dms.token_id, dms.other_token_id, actor: actor)
+
+  defp change_block("dm_unblock", dms, actor),
+    do: Dms.unblock_key(dms.fleet_id, dms.token_id, dms.other_token_id, actor: actor)
+
+  @doc """
+  A new or deleted conversation of the Key on show. The inbox reads itself
+  again; the open conversation reads only the messages after the last one it
+  shows, or empties when it was the one deleted.
+  """
+  def handle_info(%Broadcast{event: "dm_head", payload: %{seq: seq} = head}, socket) do
+    case socket.assigns.dms do
+      %{holder?: true, conversation: _} = dms when seq > dms.last_seq ->
+        {:noreply, if(in_conversation?(dms, head), do: show_new_messages(socket), else: socket)}
+
+      %{holder?: true, conversations: _} ->
+        {:noreply, reread_inbox(socket)}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info(%Broadcast{event: "dm_deleted", payload: %{conversation_id: id}}, socket) do
+    case socket.assigns.dms do
+      %{holder?: true, conversation: %{id: ^id}} = dms ->
+        {:noreply,
+         socket
+         |> assign(
+           dms: %{dms | conversation: nil, last_seq: 0},
+           dm_notice: "This conversation was deleted.",
+           dm_confirm_delete: false
+         )
+         |> stream(:dm_thread, [], reset: true)}
+
+      %{holder?: true, conversations: _} ->
+        {:noreply, reread_inbox(socket)}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
+  # Before its first message the conversation on show has no id yet, and any
+  # new message may be the one that opens it.
+  defp in_conversation?(%{conversation: nil}, _head), do: true
+  defp in_conversation?(%{conversation: %{id: id}}, %{conversation_id: id}), do: true
+  defp in_conversation?(_dms, _head), do: false
+
+  defp reread_inbox(%{assigns: %{dms: dms}} = socket) do
+    case read_inbox(dms, ShellLive.human_actor(socket)) do
+      {:ok, inbox} -> assign(socket, :dms, Map.merge(dms, inbox))
+      :closed -> assign(socket, :dms, %{dms | holder?: false})
+    end
+  end
+
+  # Only the messages after the last one on the page are read and added to it.
+  # The conversation is read again too, so a first message gives the page the
+  # conversation it opened.
+  defp show_new_messages(%{assigns: %{dms: dms}} = socket) do
+    actor = ShellLive.human_actor(socket)
+    %{fleet_id: fleet_id, token_id: token_id, other_token_id: other} = dms
+
+    messages =
+      Dms.read_conversation!(fleet_id, token_id, other, %{after_seq: dms.last_seq}, actor: actor)
+
+    conversation = Dms.get_conversation!(fleet_id, token_id, other, actor: actor)
+
+    socket
+    |> assign(:dms, %{
+      dms
+      | conversation: conversation,
+        last_seq: last_seq(messages, dms.last_seq)
+    })
+    |> stream(:dm_thread, messages, limit: -@thread_kept)
+  end
+
+  defp last_seq([], shown), do: shown
+  defp last_seq(messages, _shown), do: List.last(messages).seq
+
+  # Why a message didn't go through, in the line kept for it under the box.
+  defp send_refusal(form, dms) do
+    case Ash.Error.to_error_class(form.source.source.errors) do
+      %Ash.Error.Forbidden{} ->
+        if Chain.fresh?(dms.fleet_id),
+          do: "Only this Key’s holder can send from it.",
+          else: KeysLive.refreshing()
+
+      %Ash.Error.Invalid{errors: errors} ->
+        cond do
+          Enum.any?(errors, &match?(%SendLimitError{}, &1)) ->
+            "This Key has sent 300 messages in the last hour. Try again later."
+
+          Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
+            "Key #{Rules.grouped(dms.other_token_id)} isn’t sold yet."
+
+          Enum.any?(errors, &match?(%{field: :body}, &1)) ->
+            "Write a message first."
+
+          true ->
+            @failed
+        end
+
+      _other ->
+        @failed
+    end
+  end
+end

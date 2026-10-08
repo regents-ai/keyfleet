@@ -65,9 +65,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
                     ~w(asset share recipient rate target restricted signature hash name symbol description website image)
   @choices ~w(yes no abstain)
   # A direct message's parts sit beside its words, so it fits the same body
-  # as a post; a catch-up names up to a hundred Keys.
+  # as a post.
   @max_dm_parts 8
-  @max_dm_keys 100
   @auto_delete_days [nil, 1, 7, 30, 90]
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
@@ -372,8 +371,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Regex.match?(@mute_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
-      Regex.match?(@dm_inbox_path, path) -> admit(params == %{})
-      Regex.match?(@dm_changes_path, path) -> check_dm_changes_body(params)
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
@@ -434,17 +431,32 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_chain_body("keys/" <> _claim, params), do: admit(params == %{})
   defp check_chain_body(_op, _params), do: :invalid
 
+  # "inbox" for a Key's conversations and blocks, "changes" for catching up,
+  # or what is done in one conversation.
   defp dm_op(path) do
     case Regex.run(@dm_path, path, capture: :all_but_first) do
       [op] -> op
-      nil -> nil
+      nil -> dm_key_op(path)
+    end
+  end
+
+  defp dm_key_op(path) do
+    cond do
+      Regex.match?(@dm_inbox_path, path) -> "inbox"
+      Regex.match?(@dm_changes_path, path) -> "changes"
+      true -> nil
     end
   end
 
   # A message names its words, the send key it is filed under and its parts;
-  # auto-delete names its days, null to keep messages; the rest say nothing
-  # more than their path. The Key a message is from is always the path's.
+  # auto-delete names its days, null to keep messages; catching up names only
+  # where to start; the rest say nothing more than their path. The Key a
+  # message is from is always the path's.
   defp check_dm_body("read", params), do: check_read_body(params)
+
+  defp check_dm_body("changes", %{"after_seq" => after_seq} = params)
+       when map_size(params) == 1 and is_integer(after_seq),
+       do: in_range(after_seq in 0..@max_seq)
 
   defp check_dm_body("send", %{"body" => body, "idempotency_key" => key} = params) do
     parts = Map.get(params, "parts", [])
@@ -460,22 +472,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        when map_size(params) == 1 and (is_nil(days) or is_integer(days)),
        do: in_range(days in @auto_delete_days)
 
-  defp check_dm_body(op, params) when op in ~w(delete block unblock), do: admit(params == %{})
+  defp check_dm_body(op, params) when op in ~w(inbox delete block unblock),
+    do: admit(params == %{})
+
   defp check_dm_body(_op, _params), do: :invalid
-
-  defp check_dm_changes_body(%{"after_seq" => after_seq, "token_ids" => token_ids} = params)
-       when map_size(params) == 2 and is_integer(after_seq) and is_list(token_ids) and
-              token_ids != [] do
-    if Enum.all?(token_ids, &is_integer/1),
-      do:
-        in_range(
-          after_seq in 0..@max_seq and length(token_ids) <= @max_dm_keys and
-            Enum.all?(token_ids, &(&1 in 1..@max_seq))
-        ),
-      else: :invalid
-  end
-
-  defp check_dm_changes_body(_params), do: :invalid
 
   defp graph_op(path) do
     case Regex.run(@graph_path, path, capture: :all_but_first) do

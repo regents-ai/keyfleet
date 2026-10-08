@@ -165,7 +165,10 @@ defmodule Keyfleet.MixProject do
         # Notebooks add two: the Hub and Handoff records, each with its domain.
         # Code adds two: the Repository and Push records, each with its domain.
         # Keys' pictures and the Base contracts' event records each add to it.
-        "xref graph --label compile-connected --fail-above 50",
+        # Direct messages add six: their domain's edge to the Conversation, Message
+        # and Block records, and each record's KeyHolder check. The branch they
+        # were built on already stood at 51.
+        "xref graph --label compile-connected --fail-above 57",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -29,12 +29,19 @@ defmodule Keyfleet.Dms.Checks.KeyHolder do
     fleet_id = value(subject, :fleet_id)
     named = opts |> Keyword.fetch!(:keys) |> Enum.flat_map(&List.wrap(value(subject, &1)))
 
-    named != [] and is_binary(fleet_id) and Keyfleet.Chain.fresh?(fleet_id) and
+    named != [] and is_binary(fleet_id) and
       held?(named, held(actor, fleet_id), Keyword.get(opts, :match, :all))
   end
 
-  @doc "The Keys `actor` may read and send as in the fleet now, as numbers."
-  def held(actor, fleet_id), do: Enum.map(Keys.held_keys(actor, fleet_id), & &1.token_id)
+  @doc """
+  The Keys `actor` may read and send as in the fleet now, as numbers; none
+  while the fleet's key ownership is not fresh.
+  """
+  def held(actor, fleet_id) do
+    if Keyfleet.Chain.fresh?(fleet_id),
+      do: Enum.map(Keys.held_keys(actor, fleet_id), & &1.token_id),
+      else: []
+  end
 
   defp held?(named, held, :all), do: Enum.all?(named, &(&1 in held))
   defp held?(named, held, :any), do: Enum.any?(named, &(&1 in held))

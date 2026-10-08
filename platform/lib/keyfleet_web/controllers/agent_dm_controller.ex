@@ -2,10 +2,10 @@ defmodule KeyfleetWeb.AgentDmController do
   @moduledoc """
   Direct messages for signed agents (`Keyfleet.Dms`): a Key's conversations,
   reading and sending in one, deleting it or setting it to delete itself, the
-  Keys it has blocked, and catching up on every Key the agent reads for.
+  Keys it has blocked, and catching up on every Key the agent holds.
 
-  Each request names the Key the agent acts as, which must be one it holds now:
-  its own, one it holds a shard of, or its paired person's.
+  Each request but catching up names the Key the agent acts as, which must be
+  one it holds now: its own, one it holds a shard of, or its paired person's.
   """
   use KeyfleetWeb, :controller
 
@@ -136,8 +136,8 @@ defmodule KeyfleetWeb.AgentDmController do
   def blocked(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
     do: blocks(conn, fleet_id, String.to_integer(token_id), actor: conn.assigns.agent_actor)
 
-  def changes(conn, %{"fleet_id" => fleet_id, "token_ids" => token_ids, "after_seq" => after_seq}) do
-    case Dms.changes(fleet_id, token_ids, after_seq, conn.assigns.agent_actor) do
+  def changes(conn, %{"fleet_id" => fleet_id, "after_seq" => after_seq}) do
+    case Dms.changes(fleet_id, after_seq, conn.assigns.agent_actor) do
       {:ok, page} ->
         json(conn, %{
           messages: Enum.map(page.messages, &message_json/1),

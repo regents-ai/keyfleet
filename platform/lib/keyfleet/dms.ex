@@ -22,8 +22,8 @@ defmodule Keyfleet.Dms do
      blocking Key's number (`Keyfleet.Dms.Block`). A blocked Key's messages
      still save, and its conversation shows in the blocker's Blocked inbox
      instead of the main one (`Keyfleet.Dms.Conversation`'s `:inbox` read, its
-     `blocked` argument). Catch-up leaves out what a blocked Key sent
-     (`Keyfleet.Dms.Message`'s `:changes` read).
+     `blocked` argument). Catch-up (`changes/3`) leaves out what a blocked Key
+     sent (`Keyfleet.Dms.Message`'s `:changes` read).
   2. **Only between Keys of the same fleet.** A conversation and each of its
      messages carry one `fleet_id`, and a send names its fleet once
      (`Keyfleet.Dms.Message`'s `:send` action).
@@ -34,8 +34,9 @@ defmodule Keyfleet.Dms do
      after 1, 7, 30 or 90 days, or keep them (`:set_auto_delete`). A scheduled
      job removes expired messages every hour (`Keyfleet.Dms.Message`'s
      `:remove_expired` and its `oban` schedule).
-  4. **No notifications; files only as links.** A new message tells only the
-     pages open on either Key's inbox (`inbox_topic/2`); nothing else is sent.
+  4. **No notifications; files only as links.** A new message tells only what
+     listens on either Key's inbox (`inbox_topic/2`, `inbox_topics/2`): open
+     pages and waiting agents. Nothing else is sent.
      A message carries a file only as a `link` part (`Keyfleet.Dms.Part`). Room
      mutes are unchanged and do not touch DMs; there is no DM mute.
 
@@ -45,6 +46,7 @@ defmodule Keyfleet.Dms do
   """
   use Ash.Domain
 
+  alias Keyfleet.Dms.Checks.KeyHolder
   alias Keyfleet.Dms.Conversation
 
   @changes_page 50
@@ -98,16 +100,26 @@ defmodule Keyfleet.Dms do
   def inbox_topic(fleet_id, token_id), do: "dms:#{fleet_id}:#{token_id}"
 
   @doc """
-  What an agent has not read yet of its Keys' messages in a fleet: the
-  messages to or from any of `token_ids` after `after_seq`, oldest first, at
-  most #{@changes_page} at a time, without those a Key it is reading for has
-  blocked. `{:ok, %{messages, next_cursor, has_more}}`; send `next_cursor` as
-  `after_seq` next time. Every Key named must be one `actor` holds now
-  (`Keyfleet.Keys.held_keys/2`), or the read is forbidden. Nothing is marked
-  as read, and asking again is always safe.
+  The topics of every Key `actor` holds now in the fleet (`inbox_topic/2`),
+  by the rule its reads and sends are checked by; none while the fleet's key
+  ownership is not fresh. They are the Keys `changes/3` reads for.
   """
-  def changes(fleet_id, token_ids, after_seq, actor) do
-    case read_changes(fleet_id, token_ids, %{after_seq: after_seq, limit: @changes_page + 1},
+  def inbox_topics(fleet_id, actor),
+    do: Enum.map(KeyHolder.held(actor, fleet_id), &inbox_topic(fleet_id, &1))
+
+  @doc """
+  What `actor` has not read yet of its Keys' messages in a fleet: the messages
+  to or from any Key it holds now (`inbox_topics/2`'s Keys) after `after_seq`,
+  oldest first, at most #{@changes_page} at a time, without those a Key it
+  reads for has blocked. `{:ok, %{messages, next_cursor, has_more}}`; send
+  `next_cursor` as `after_seq` next time. An actor holding no Key of the fleet
+  now is forbidden. Nothing is marked as read, and asking again is always safe.
+  """
+  def changes(fleet_id, after_seq, actor) do
+    case read_changes(
+           fleet_id,
+           KeyHolder.held(actor, fleet_id),
+           %{after_seq: after_seq, limit: @changes_page + 1},
            actor: actor,
            load: [:via_agent]
          ) do

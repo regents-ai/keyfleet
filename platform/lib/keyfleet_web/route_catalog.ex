@@ -50,6 +50,20 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :keys
     },
     %Entry{
+      path_pattern: "/app/keys/:fleet_id/:token_id/dms",
+      live_action: :dms,
+      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
+      reserved_values: %{},
+      route_spec_id: :dms
+    },
+    %Entry{
+      path_pattern: "/app/keys/:fleet_id/:token_id/dms/:other_token_id",
+      live_action: :dm,
+      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id, other_token_id: :token_id},
+      reserved_values: %{},
+      route_spec_id: :dm
+    },
+    %Entry{
       path_pattern: "/app/fleets/:fleet_id/rooms/:slug",
       live_action: :rooms,
       parameter_schema: %{fleet_id: :fleet_id, slug: :slug},
@@ -91,6 +105,8 @@ defmodule KeyfleetWeb.RouteCatalog do
     account: {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, %{}},
     fleet: {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, %{}},
     keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
+    dms: {:dms, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
+    dm: {:dm, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
     rooms: {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, %{}},
     workspace:
       {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},

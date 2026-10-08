@@ -778,10 +778,11 @@ paths:
     post:
       operationId: dmChanges
       description: >-
-        The direct messages to or from any of the named Keys after a place, oldest first, at most 50
-        at a time, leaving out those sent to one of them by a Key it has blocked. Every Key named
-        must be one the signing agent holds now. Send next_cursor as after_seq next time; nothing is
-        marked as read, and asking again is always safe. The body is at most 4096 bytes.
+        The direct messages to or from any Key the signing agent holds now, after a place, oldest
+        first, at most 50 at a time, leaving out those sent to one of them by a Key it has blocked.
+        An agent holding no Key of the fleet is answered 403. Send next_cursor as after_seq next
+        time; nothing is marked as read, and asking again is always safe. The body is at most 4096
+        bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -2871,17 +2872,11 @@ components:
     DmChangesRequest:
       type: object
       additionalProperties: false
-      required: [after_seq, token_ids]
+      required: [after_seq]
       properties:
         after_seq:
           $ref: "#/components/schemas/DmSeq"
           description: Answer the messages after this place; 0 the first time
-        token_ids:
-          type: array
-          minItems: 1
-          maxItems: 100
-          description: The Keys to catch up on, each one the signing agent holds now
-          items: {$ref: "#/components/schemas/DmKey"}
     DmChanges:
       type: object
       additionalProperties: false

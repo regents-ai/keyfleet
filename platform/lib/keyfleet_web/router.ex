@@ -276,6 +276,8 @@ defmodule KeyfleetWeb.Router do
       live "/account", ShellLive, :account
       live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
+      live "/app/keys/:fleet_id/:token_id/dms", ShellLive, :dms
+      live "/app/keys/:fleet_id/:token_id/dms/:other_token_id", ShellLive, :dm
       live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
       live "/app/fleets/:fleet_id/workspace", ShellLive, :workspace
       live "/app/fleets/:fleet_id/workspace/:object_id", ShellLive, :workspace_item

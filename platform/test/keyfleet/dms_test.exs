@@ -32,7 +32,10 @@ defmodule Keyfleet.DmsTest do
              Dms.read_conversation(@fleet, 1, 2, actor: human("e"))
 
     assert {:error, %Ash.Error.Forbidden{}} = Dms.inbox(@fleet, 2, actor: human("a"))
-    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, [2], 0, human("e"))
+    assert {:ok, %{messages: []}} = Dms.changes(@fleet, 0, human("e"))
+    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, 0, human("f"))
+    assert Dms.inbox_topics(@fleet, human("e")) == ["dms:#{@fleet}:5"]
+    assert Dms.inbox_topics(@fleet, human("f")) == []
 
     assert [%{body: "Hello"}] = Dms.read_conversation!(@fleet, 2, 1, actor: human("b"))
   end
@@ -48,7 +51,7 @@ defmodule Keyfleet.DmsTest do
              Dms.inbox!(@fleet, 2, %{blocked: true}, actor: human("b"))
 
     assert {:ok, %{messages: [%{body: "From a friend"}]}} =
-             Dms.changes(@fleet, [2], 0, human("b"))
+             Dms.changes(@fleet, 0, human("b"))
   end
 
   test "deleting a conversation removes its messages for both sides" do
