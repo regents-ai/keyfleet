@@ -941,15 +941,15 @@ contract CollectionHandler is Test {
         }
         KeyfleetManager manager = KeyfleetManager(regentBuyer.nextInQueue());
         bytes4 expected;
-        if (maxUsdc == 0) expected = KeyfleetRegentBuyer.PieceEmpty.selector;
-        else if (block.timestamp < opensAt) expected = KeyfleetRegentBuyer.PieceTooSoon.selector;
+        if (block.timestamp < opensAt) expected = KeyfleetRegentBuyer.PieceTooSoon.selector;
         else if (address(manager) == address(0)) expected = KeyfleetRegentBuyer.NothingQueued.selector;
         uint256 pending;
         uint256 piece;
         uint256 treasuryRegent;
         if (address(manager) != address(0)) {
             pending = manager.pendingConversion();
-            piece = Math.min(pending, Math.min(maxUsdc, regentBuyer.PIECE_USDC()));
+            piece =
+                Math.min(pending, Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC()));
             treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
         }
         vm.prank(_stranger(callerSeed, 0));

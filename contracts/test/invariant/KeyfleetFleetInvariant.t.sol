@@ -118,7 +118,8 @@ contract FleetHandler is Test {
         }
     }
 
-    /// @dev Runs the next piece, of at most `maxSeed` bounded to two full pieces, once it is due.
+    /// @dev Runs the next piece, of at most `maxSeed` bounded to two full pieces and sometimes zero,
+    /// once it is due.
     /// The fleet at the head of the queue hands over exactly its piece, its treasury gets exactly
     /// the REGENT that buys at the stand-in market's one REGENT per USDC, and no USDC, and the next
     /// piece waits in proportion to this one.
@@ -131,11 +132,14 @@ contract FleetHandler is Test {
         address treasury = address(f.TREASURY());
         uint256 pending = f.pendingConversion();
         uint256[3] memory before = [usdc.balanceOf(address(f)), usdc.balanceOf(treasury), regent.balanceOf(treasury)];
-        uint256 maxUsdc = bound(maxSeed, 1, 2 * FULL_PIECE);
+        uint256 maxUsdc = bound(maxSeed, 0, 2 * FULL_PIECE);
         regentBuyer.convert(maxUsdc);
         uint256 piece = pending - f.pendingConversion();
-        if (piece != Math.min(pending, Math.min(maxUsdc, regentBuyer.PIECE_USDC()))) {
-            _breach("a piece was other than the smallest of its booking, the ask and a full piece");
+        uint256 ask = Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC());
+        if (piece != Math.min(pending, ask)) {
+            _breach(
+                "a piece was other than the smaller of its booking and the ask held between 1 USDC and a full piece"
+            );
         }
         if (regentBuyer.nextPieceAt() != block.timestamp + Math.ceilDiv(15 minutes * piece, FULL_PIECE)) {
             _breach("the next piece's wait is out of proportion");

@@ -317,26 +317,37 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(regentBuyer.nextPieceAt(), block.timestamp + 15 minutes);
     }
 
-    /// @dev Invariant: dust waits in proportion too, rounded up to at least a second, so it cannot
-    /// take a whole 15-minute slot nor run twice in a block.
-    function test_DustWaitsASecondRoundedUp() public {
+    /// @dev Invariant: a request under 1 USDC, zero included, converts 1 USDC and holds the next
+    /// piece back 4 seconds, so a run of tiny requests cannot keep full pieces out.
+    function test_ATinyRequestConvertsTheMinimumPiece() public {
         KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
-        regentBuyer.convert(1);
-        assertEq(fleet.pendingConversion(), 900e6 - 1, "one atomic unit");
-        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 1, "waits one second");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, block.timestamp + 1));
-        regentBuyer.convert(1);
-
-        vm.warp(block.timestamp + 1);
+        uint256 out = regentBuyer.convert(1);
+        assertEq(out, _regentFor(1e6), "1 USDC, not one atomic unit");
+        assertEq(fleet.pendingConversion(), 899e6);
         // 1 USDC is 3.6 seconds of the rate, rounded up to 4.
-        regentBuyer.convert(1e6);
-        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 4);
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 4, "waits 4 seconds");
+
+        vm.warp(block.timestamp + 4);
+        regentBuyer.convert(0);
+        assertEq(fleet.pendingConversion(), 898e6, "zero asks for the minimum too");
     }
 
-    function test_ConvertOfNothingReverts() public {
-        _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
-        vm.expectRevert(KeyfleetRegentBuyer.PieceEmpty.selector);
-        regentBuyer.convert(0);
+    /// @dev Invariant: a fleet with less than the minimum left converts all of it, waiting in
+    /// proportion rounded up to at least a second, so two pieces never run in one block.
+    function test_ARemainderUnderTheMinimumConvertsWhole() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        regentBuyer.convert(900e6 - 5e5 - 3 * FULL_PIECE);
+        for (uint256 i; i < 3; ++i) {
+            vm.warp(regentBuyer.nextPieceAt());
+            regentBuyer.convert(FULL_PIECE);
+        }
+        assertEq(fleet.pendingConversion(), 5e5, "half a USDC left");
+
+        vm.warp(regentBuyer.nextPieceAt());
+        regentBuyer.convert(1);
+        assertEq(fleet.pendingConversion(), 0, "the whole remainder");
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 2, "1.8 seconds, rounded up");
+        assertEq(regentBuyer.queueLength(), 0, "and the fleet leaves the queue");
     }
 
     /// @dev Invariant: a fleet whose full piece moves the price too far is not stuck at the front;

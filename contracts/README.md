@@ -766,6 +766,7 @@ does not name exactly WETH and REGENT (`RouteInvalid`). It records
 | Constant | Value |
 | --- | --- |
 | `PIECE_USDC` | 250 USDC (250,000,000), the most one piece turns into REGENT |
+| `MIN_PIECE_USDC` | 1 USDC (1,000,000), the least one piece turns into REGENT unless the fleet has less left |
 | `PIECE_INTERVAL` | 15 minutes, the wait after a full piece, across every fleet; a smaller piece waits in proportion |
 | `MAX_PRICE_MOVE_BPS` | 100, so a piece may move the route's price by at most 1% |
 
@@ -776,10 +777,11 @@ most once (`isQueued`). `queueLength()`, `nextInQueue()`, `queueHead()` and
 `queueTail()` read it.
 
 `convert(maxUsdc)` may be called by anyone; nothing checks who the caller is.
-It refuses `maxUsdc` of zero (`PieceEmpty`), any time before `nextPieceAt()`
-(`PieceTooSoon(opensAt)`) and an empty queue (`NothingQueued`). It takes the
-fleet at the front of the queue, asks that manager for a piece of at most
-`maxUsdc` and at most `PIECE_USDC` (`takePiece`), swaps it and returns the
+It refuses any time before `nextPieceAt()` (`PieceTooSoon(opensAt)`) and an
+empty queue (`NothingQueued`). It takes the fleet at the front of the queue,
+asks that manager for a piece of `maxUsdc` held between `MIN_PIECE_USDC`
+(1 USDC) and `PIECE_USDC` (`takePiece`), which the manager cuts to what it has
+left, swaps it and returns the
 REGENT the treasury received. A fleet that still has USDC booked afterwards goes
 to the back of the queue. The keeper asks for `250000000`; anyone may ask for
 less, for example when a full piece would fail the 1% rule.
@@ -802,10 +804,13 @@ the same however long the queue is. A piece that fails the 1% rule keeps its
 fleet at the front, and a smaller piece, which moves the price less, can then
 be taken, so a thin pool converts slowly instead of stopping the line.
 Consequences, accepted: anyone who creates many fleets puts each of them in the
-queue, and each takes a turn; and anyone may take a tiny piece just before the
-keeper's full one, which sends the front fleet to the back and makes the full
-piece wait a few seconds. It cannot take a whole 15-minute turn, because a tiny
-piece waits only in proportion, and each try costs its caller a transaction.
+queue, and each takes a turn; and anyone may take a 1 USDC piece just before
+the keeper's full one, which sends the front fleet to the back and makes the
+full piece wait 4 seconds. Done first in every block, that still converts real
+USDC at about nine tenths of the full rate, because no piece is smaller than
+1 USDC and each holds the next back 4 seconds; it does the keeper's work for it,
+and each try costs its caller a transaction. A pool so thin that 1 USDC moves
+its price by 1% stops converting until it deepens.
 
 Each piece swaps exactly its USDC on the v3 pool, paid straight from the
 manager into the pool in `uniswapV3SwapCallback`; swaps the WETH that came out

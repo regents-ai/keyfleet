@@ -17,7 +17,8 @@ import {IUniswapV4PoolManager, IUnlockCallback, V4PoolKey, V4SwapParams} from ".
 /// @dev Shared by every fleet. A purchase never swaps: each fleet's manager books the treasury's
 /// part as `pendingConversion` and joins this contract's queue of fleets waiting for REGENT. Anyone
 /// may call `convert(maxUsdc)`, which turns one piece of the first queued fleet's booked USDC into
-/// REGENT: at most `PIECE_USDC` (250 USDC), and less when the caller names less. A piece holds the
+/// REGENT: at most `PIECE_USDC` (250 USDC), and less when the caller names less, but never under
+/// `MIN_PIECE_USDC` (1 USDC) unless that is all the fleet has left. A piece holds the
 /// next one back for its share of `PIECE_INTERVAL`, 15 minutes for a full piece and in proportion
 /// for a smaller one, rounded up to the second, so across every fleet at most 250 USDC turns into
 /// REGENT every 15 minutes and never two pieces in one block. A fleet with USDC still booked goes to
@@ -72,8 +73,6 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     /// @notice The last piece's share of `PIECE_INTERVAL` has not passed yet.
     /// @param nextPieceAt The first second the next piece may run.
     error PieceTooSoon(uint256 nextPieceAt);
-    /// @notice The caller named a piece of no USDC.
-    error PieceEmpty();
     /// @notice The piece moved the route's price by more than `MAX_PRICE_MOVE_BPS`.
     /// @param move The move, scaled by 1e18: 1e16 is 1%.
     error PriceMoved(uint256 move);
@@ -99,6 +98,10 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
 
     /// @notice The most USDC one piece turns into REGENT: 250 USDC.
     uint256 public constant PIECE_USDC = 250e6;
+    /// @notice The least USDC one piece turns into REGENT, unless the fleet has less left: 1 USDC.
+    /// A smaller request is raised to it, so a piece always does real work and holds the next one
+    /// back for at least 4 seconds; a run of tiny pieces cannot keep full ones out.
+    uint256 public constant MIN_PIECE_USDC = 1e6;
     /// @notice How long a full piece holds the next one back, across every fleet: 15 minutes. A
     /// smaller piece holds it back in proportion.
     uint256 public constant PIECE_INTERVAL = 15 minutes;
@@ -215,16 +218,15 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     /// @notice Turns one piece of the first queued fleet's booked USDC into REGENT for its treasury,
     /// at the market price. Anyone may call it, and may name a smaller piece, for instance when a
     /// full one would move the price more than 1%.
-    /// @dev Only from `nextPieceAt`. The fleet's manager hands over the least of its booking,
-    /// `PIECE_USDC` and `maxUsdc`, and approves exactly that; the piece then holds the next one back
-    /// for `PIECE_INTERVAL` times its share of `PIECE_USDC`, rounded up to the second, which also
-    /// keeps two pieces out of one block. The fleet goes to the back of the queue if it still has
+    /// @dev Only from `nextPieceAt`. The fleet's manager hands over the least of its booking and
+    /// `maxUsdc` held between `MIN_PIECE_USDC` and `PIECE_USDC`, and approves exactly that; the
+    /// piece then holds the next one back for `PIECE_INTERVAL` times its share of `PIECE_USDC`,
+    /// rounded up to the second, which also keeps two pieces out of one block. The fleet goes to the back of the queue if it still has
     /// USDC booked. Locked, so the REGENT pool's hook cannot start a second piece inside the first.
     /// @param maxUsdc The most USDC the caller wants this piece to be; above `PIECE_USDC` counts as
-    /// `PIECE_USDC`.
+    /// `PIECE_USDC` and below `MIN_PIECE_USDC` as `MIN_PIECE_USDC`.
     /// @return regentOut The REGENT the fleet's treasury received.
     function convert(uint256 maxUsdc) external nonReentrant returns (uint256 regentOut) {
-        if (maxUsdc == 0) revert PieceEmpty();
         uint256 opensAt = nextPieceAt;
         if (block.timestamp < opensAt) revert PieceTooSoon(opensAt);
         uint64 head = queueHead;
@@ -234,7 +236,7 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         queueHead = head + 1;
         isQueued[address(manager)] = false;
 
-        (uint256 usdcIn, address recipient) = manager.takePiece(Math.min(maxUsdc, PIECE_USDC));
+        (uint256 usdcIn, address recipient) = manager.takePiece(Math.max(Math.min(maxUsdc, PIECE_USDC), MIN_PIECE_USDC));
         nextPieceAt = uint64(block.timestamp + Math.ceilDiv(PIECE_INTERVAL * usdcIn, PIECE_USDC));
         regentOut = _swap(address(manager), usdcIn, recipient);
         if (manager.pendingConversion() != 0 && !isQueued[address(manager)]) _push(address(manager));
