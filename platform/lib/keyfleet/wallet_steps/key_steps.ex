@@ -120,13 +120,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # fail. Tidy up clears presences that have lapsed, which anyone may do. A
   # visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
-    candidates =
-      cond do
-        token_id -> [token_id]
-        signer -> Build.own_keys(fleet, signer)
-        true -> []
-      end
-
+    candidates = present_candidates(fleet, signer, token_id)
     figures = %{keys: [], maintenance?: false}
 
     with {:ok, reads} <- Reads.at_head(),
@@ -147,19 +141,11 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         )
       ]
 
-      blocked =
-        cond do
-          keys == [] and token_id -> %{"present" => :not_your_key}
-          keys == [] -> %{"present" => :no_keys}
-          too_new? -> %{"present" => :too_new}
-          true -> %{}
-        end
-
       {:ok, steps,
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
          maintenance?: maintenance?,
-         blocked: blocked
+         blocked: present_blocked(keys, token_id, too_new?)
        }}
     else
       _unread -> {:problem, :unread, figures}
@@ -267,6 +253,18 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
 
+  # The Keys a presence step covers: the one named, else the signer's own.
+  defp present_candidates(_fleet, _signer, token_id) when is_integer(token_id), do: [token_id]
+  defp present_candidates(_fleet, nil, nil), do: []
+  defp present_candidates(fleet, signer, nil), do: Build.own_keys(fleet, signer)
+
+  defp present_blocked([], token_id, _too_new?) when is_integer(token_id),
+    do: %{"present" => :not_your_key}
+
+  defp present_blocked([], nil, _too_new?), do: %{"present" => :no_keys}
+  defp present_blocked(_keys, _token_id, true), do: %{"present" => :too_new}
+  defp present_blocked(_keys, _token_id, false), do: %{}
+
   # The Key on offer at the price the page shows, bought from the fleet's
   # manager, which takes the USDC. The wallet approves exactly that price when
   # its USDC allowance to the manager is below it, and until it does the
@@ -274,6 +272,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # purchase names the price as its most, so a Key that has since cost more is
   # refused and no USDC is taken. Founding fleets ask nothing of buyers, so the
   # purchase carries no proof.
+
   defp buy(%{fleet: fleet, signer: signer}, progress) do
     price = progress.next_price
     figures = %{token_id: progress.next_token_id, price: price, max_supply: progress.max_supply}
